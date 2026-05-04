@@ -64,24 +64,24 @@ Ethernet8      N/A     100,317             0                 0            N/A   
 """  # noqa: E501
 
 intf_fec_counters_fec_hist = """\
-Symbol Errors Per Codeword      Codewords
-----------------------------  -----------
-BIN0                              1000000
-BIN1                               900000
-BIN2                               800000
-BIN3                               700000
-BIN4                               600000
-BIN5                               500000
-BIN6                               400000
-BIN7                               300000
-BIN8                                    0
-BIN9                                    0
-BIN10                                   0
-BIN11                                   0
-BIN12                                   0
-BIN13                                   0
-BIN14                                   0
-BIN15                                   0
+Symbol Errors Per Codeword      Codewords  Last Updated
+----------------------------  -----------  -------------------
+BIN0                              1000000  2024-03-26 00:59:56
+BIN1                               900000  N/A
+BIN2                               800000  N/A
+BIN3                               700000  N/A
+BIN4                               600000  N/A
+BIN5                               500000  N/A
+BIN6                               400000  N/A
+BIN7                               300000  N/A
+BIN8                                    0  N/A
+BIN9                                    0  N/A
+BIN10                                   0  N/A
+BIN11                                   0  N/A
+BIN12                                   0  N/A
+BIN13                                   0  N/A
+BIN14                                   0  N/A
+BIN15                                   0  N/A
 """
 
 intf_fec_counters_period = """\
@@ -516,6 +516,25 @@ class TestPortStat(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == intf_fec_counters_fec_hist
+
+    def test_show_intf_counters_fec_histogram_relative_timestamp(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"],
+            ["--relative-timestamp", "Ethernet0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        # Verify the extra column header is present
+        assert 'Relative Time' in result.output
+        # BIN0 has a timestamp so it should show a relative time (e.g. "days ago")
+        assert 'ago' in result.output
+        # BIN1 has no timestamp so it should show N/A in the relative column
+        lines = result.output.strip().split('\n')
+        # Header line, separator line, then 16 data lines
+        bin1_line = lines[3]  # BIN1 is the second data row
+        # BIN1 should have two N/A entries (Last Updated and Relative Time)
+        assert bin1_line.count('N/A') == 2
 
     def test_show_intf_fec_counters_period(self):
         runner = CliRunner()
