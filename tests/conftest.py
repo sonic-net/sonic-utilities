@@ -235,6 +235,14 @@ def _reset_between_files():
     _CppDBConfig.load_sonic_db_config(db_config_path)
     _CppDBConfig.load_sonic_global_db_config(global_db_config_path)
 
+    # Clear sonic_platform mocks injected by test files at module import time.
+    # With --dist loadfile, xdist workers are reused; mocks from one file
+    # (e.g. sfputil_test.py) can pollute subsequent files (e.g. watchdogutil_test.py).
+    # Tests that need the mock will re-inject it when their module is imported.
+    for k in list(sys.modules):
+        if k == 'sonic_platform' or k.startswith('sonic_platform.') or k.startswith('sonic_platform_base.'):
+            sys.modules.pop(k, None)
+
 
 generated_services_list = [
     'warmboot-finalizer.service',
@@ -268,6 +276,7 @@ generated_services_list = [
     'syncd.service',
     'snmp.timer',
     'telemetry.timer']
+
 
 @pytest.fixture(autouse=True)
 def setup_env():
