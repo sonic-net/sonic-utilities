@@ -47,6 +47,7 @@ import signal
 import traceback
 import subprocess
 import concurrent.futures
+import ijson
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
@@ -385,38 +386,81 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
-def fetch_routes(cmd):
+def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
-    Fetch routes using the given command.
+    Fetch routes using vtysh and parse with ijson for streaming JSON parsing.
+    This handles large route tables efficiently by processing each prefix entry
+    as it becomes available instead of loading the entire JSON into memory.
+
+    Returns (missing_routes, failing_routes) tuple.
     """
-    output = subprocess.check_output(cmd, text=True)
-    return json.loads(output)
+    missing_routes = []
+    failing_routes = []
+
+    asic_id = []
+    if namespace is not multi_asic.DEFAULT_NAMESPACE:
+        asic_id = ['-n', str(multi_asic.get_asic_id_from_name(namespace))]
+
+    if ipv6:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ipv6 route json"]
+    else:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ip route json"]
+
+    def process_route_entry(prefix, route_entry):
+        """Process a single route entry and add to missing/failing lists if needed."""
+        if route_entry.get('protocol') in ('connected', 'kernel', 'static'):
+            return
+        if route_entry.get('vrfName') != 'default':
+            return
+        if not route_entry.get('selected', False):
+            return
+        if not route_entry.get('offloaded', False):
+            missing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol', '')})
+        if route_entry.get('failed', False):
+            failing_routes.append(prefix)
+
+    try:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
+            try:
+                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
+                    if isinstance(route_entries, list):
+                        for route_entry in route_entries:
+                            process_route_entry(prefix, route_entry)
+                    else:
+                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+
+            except (ijson.JSONError, UnicodeDecodeError, Exception) as e:
+                proc.kill()
+                proc.wait()
+                raise RuntimeError(f"Failed to parse FRR route JSON: {e}") from e
+
+            return_code = proc.wait()
+            if return_code != 0:
+                print_message(syslog.LOG_WARNING, f"vtysh exited with return code {return_code}")
+
+    except FileNotFoundError:
+        raise RuntimeError(f"Command '{cmd[0]}' not found")
+
+    return missing_routes, failing_routes
 
 
 def get_frr_routes_parallel(namespace):
     """
-    Read routes from zebra through CLI command for IPv4 and IPv6 in parallel
-    :return combined IPv4 and IPv6 routes dictionary.
+    Read routes from zebra through CLI command for IPv4 and IPv6 in parallel.
+    :return (missed_routes, failed_routes) tuple combining IPv4 and IPv6 results.
     """
-    if namespace == multi_asic.DEFAULT_NAMESPACE:
-        v4_route_cmd = ['show', 'ip', 'route', 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', 'json']
-    else:
-        v4_route_cmd = ['show', 'ip', 'route', '-n', namespace, 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', '-n', namespace, 'json']
-
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_v4 = executor.submit(fetch_routes, v4_route_cmd)
-        future_v6 = executor.submit(fetch_routes, v6_route_cmd)
+        future_v4 = executor.submit(fetch_routes, ipv6=False, namespace=namespace)
+        future_v6 = executor.submit(fetch_routes, ipv6=True, namespace=namespace)
 
-        # Wait for both results to complete
-        v4_routes = future_v4.result()
-        v6_routes = future_v6.result()
+        v4_miss_rt, v4_fail_rt = future_v4.result()
+        v6_miss_rt, v6_fail_rt = future_v6.result()
 
-    # Combine both IPv4 and IPv6 routes
-    v4_routes.update(v6_routes)
-    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, v4_routes))
-    return v4_routes
+    missed_rt = v4_miss_rt + v6_miss_rt
+    failed_rt = v4_fail_rt + v6_fail_rt
+    print_message(syslog.LOG_DEBUG, "FRR Missing Routes: namespace={}, routes={}".format(namespace, missed_rt))
+    print_message(syslog.LOG_DEBUG, "FRR Failed Routes: namespace={}, routes={}".format(namespace, failed_rt))
+    return missed_rt, failed_rt
 
 
 def get_interfaces(namespace):
@@ -669,35 +713,14 @@ def is_feature_bgp_enabled(namespace):
 def check_frr_pending_routes(namespace):
     """
     Check FRR routes for offload flag presence by executing "show ip route json"
-    Returns a list of routes that have no offload flag.
+    Returns a tuple (missed_routes, failed_routes).
     """
 
     missed_rt = []
+    failed_rt = []
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
-        missed_rt = []
-        failed_rt = []
-        frr_routes = get_frr_routes_parallel(namespace)
-
-        for route_prefix, entries in frr_routes.items():
-            for entry in entries:
-                if entry['protocol'] in ('connected', 'kernel', 'static'):
-                    continue
-
-                # TODO: Also handle VRF routes. Currently this script does not check for VRF routes so it would be incorrect for us
-                # to assume they are installed in ASIC_DB, so we don't handle them.
-                if entry['vrfName'] != 'default':
-                    continue
-
-                # skip if this bgp source prefix is not selected as best
-                if not entry.get('selected', False):
-                    continue
-
-                if not entry.get('offloaded', False):
-                    missed_rt.append(entry)
-
-                if entry.get('failed', False):
-                    failed_rt.append(route_prefix)
+        missed_rt, failed_rt = get_frr_routes_parallel(namespace)
 
         if not missed_rt and not failed_rt:
             break

@@ -563,7 +563,7 @@ TEST_DATA = {
         RESULT: {
             DEFAULTNS: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True}
+                    {"prefix": "10.10.196.12/31", "protocol": "bgp"}
                 ],
             },
         },
@@ -977,7 +977,7 @@ TEST_DATA = {
         RESULT: {
             ASIC1: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True}
+                    {"prefix": "10.10.196.12/31", "protocol": "bgp"}
                 ],
             },
         },
@@ -1505,8 +1505,7 @@ TEST_DATA = {
         RESULT: {
             ASIC0: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.20/31", "vrfName": "default", "protocol": "bgp",
-                     "selected": True, "offloaded": False, "failed": True}
+                    {"prefix": "10.10.196.20/31", "protocol": "bgp"}
                 ],
                 "failed_FRR_routes": [
                     "10.10.196.12/31",
@@ -1599,10 +1598,8 @@ TEST_DATA = {
         RESULT: {
             DEFAULTNS: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp",
-                     "selected": True, "offloaded": False},
-                    {"prefix": "192.168.1.0/24", "vrfName": "default", "protocol": "bgp",
-                     "selected": True, "offloaded": False, "failed": True}
+                    {"prefix": "10.10.196.12/31", "protocol": "bgp"},
+                    {"prefix": "192.168.1.0/24", "protocol": "bgp"}
                 ],
                 "failed_FRR_routes": [
                     "10.10.196.20/31",
