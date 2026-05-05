@@ -86,6 +86,7 @@ class TestInterfaceFecStats(TestCase):
     @classmethod
     def setup_class(cls):
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        dbconnector.load_database_config()
 
     def _capture(self, port_name=None, display_type='stats'):
         buf = StringIO()
