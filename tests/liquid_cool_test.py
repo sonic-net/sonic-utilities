@@ -38,7 +38,7 @@ class TestLeakControl(object):
         assert "system" in result.output
         assert "enabled" in result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'system_leak_policy': 'enabled'}
+            'LEAK_CONTROL_POLICY', 'policy', {'system_leak_policy': 'enabled'}
         )
 
     def test_leak_control_system_disabled(self):
@@ -47,7 +47,7 @@ class TestLeakControl(object):
         assert result.exit_code == 0, result.output
         assert "disabled" in result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'system_leak_policy': 'disabled'}
+            'LEAK_CONTROL_POLICY', 'policy', {'system_leak_policy': 'disabled'}
         )
 
     def test_leak_control_rack_mgr_enabled(self):
@@ -55,7 +55,7 @@ class TestLeakControl(object):
         result = self._invoke(['leak-control', 'rack_mgr', 'enabled'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'rack_mgr_leak_policy': 'enabled'}
+            'LEAK_CONTROL_POLICY', 'policy', {'rack_mgr_leak_policy': 'enabled'}
         )
 
     def test_leak_control_rack_mgr_disabled(self):
@@ -63,7 +63,7 @@ class TestLeakControl(object):
         result = self._invoke(['leak-control', 'rack_mgr', 'disabled'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'rack_mgr_leak_policy': 'disabled'}
+            'LEAK_CONTROL_POLICY', 'policy', {'rack_mgr_leak_policy': 'disabled'}
         )
 
     def test_leak_control_invalid_policy_type(self):
@@ -96,7 +96,7 @@ class TestLeakAction(object):
         result = self._invoke(['leak-action', 'system', 'critical', 'power_off'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'system_critical_leak_action': 'power_off'}
+            'LEAK_CONTROL_POLICY', 'policy', {'system_critical_leak_action': 'power_off'}
         )
 
     def test_leak_action_system_critical_graceful_shutdown(self):
@@ -104,7 +104,7 @@ class TestLeakAction(object):
         result = self._invoke(['leak-action', 'system', 'critical', 'graceful_shutdown'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'system_critical_leak_action': 'graceful_shutdown'}
+            'LEAK_CONTROL_POLICY', 'policy', {'system_critical_leak_action': 'graceful_shutdown'}
         )
 
     def test_leak_action_system_critical_syslog_only(self):
@@ -112,7 +112,7 @@ class TestLeakAction(object):
         result = self._invoke(['leak-action', 'system', 'critical', 'syslog_only'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'system_critical_leak_action': 'syslog_only'}
+            'LEAK_CONTROL_POLICY', 'policy', {'system_critical_leak_action': 'syslog_only'}
         )
 
     def test_leak_action_system_minor_syslog_only(self):
@@ -120,7 +120,7 @@ class TestLeakAction(object):
         result = self._invoke(['leak-action', 'system', 'minor', 'syslog_only'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'system_minor_leak_action': 'syslog_only'}
+            'LEAK_CONTROL_POLICY', 'policy', {'system_minor_leak_action': 'syslog_only'}
         )
 
     def test_leak_action_rack_mgr_critical_syslog_only(self):
@@ -128,7 +128,7 @@ class TestLeakAction(object):
         result = self._invoke(['leak-action', 'rack_mgr', 'critical', 'syslog_only'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'rack_mgr_critical_alert_action': 'syslog_only'}
+            'LEAK_CONTROL_POLICY', 'policy', {'rack_mgr_critical_alert_action': 'syslog_only'}
         )
 
     def test_leak_action_rack_mgr_minor_syslog_only(self):
@@ -136,7 +136,7 @@ class TestLeakAction(object):
         result = self._invoke(['leak-action', 'rack_mgr', 'minor', 'syslog_only'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'config', {'rack_mgr_minor_alert_action': 'syslog_only'}
+            'LEAK_CONTROL_POLICY', 'policy', {'rack_mgr_minor_alert_action': 'syslog_only'}
         )
 
     def test_leak_action_invalid_action(self):

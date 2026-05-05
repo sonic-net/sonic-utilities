@@ -2,7 +2,7 @@ import click
 import utilities_common.cli as clicommon
 
 LEAK_CONTROL_POLICY_TABLE = 'LEAK_CONTROL_POLICY'
-LEAK_CONTROL_POLICY_KEY = 'config'
+LEAK_CONTROL_POLICY_KEY = 'policy'
 
 VALID_POLICIES = ('system', 'rack_mgr')
 VALID_SEVERITIES = ('critical', 'minor')
