@@ -2,6 +2,7 @@ import click
 import json
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
+from sonic_py_common import device_info
 from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
 from tabulate import tabulate
@@ -275,6 +276,14 @@ def detailed(_db, trapid, group):
               show_default=True, help='Namespace name or all')
 def stats(namespace):
     """Show copp policer statistics with per-color breakdown"""
+
+    # broadcom-xgs only -- matches the gate in sonic-swss FlexCounterOrch.
+    version_info = device_info.get_sonic_version_info() or {}
+    if (version_info.get("asic_type") != "broadcom" or
+            version_info.get("asic_subtype") == "broadcom-dnx"):
+        click.echo("show copp stats is not supported on this platform "
+                   "(only broadcom-xgs ASICs supported).")
+        return
 
     cmd = ['coppstat']
     if namespace is not None:

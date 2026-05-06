@@ -693,6 +693,13 @@ def flowcnt_trap():
 @cli.command()
 def copp():
     """ Clear COPP statistics """
+    # broadcom-xgs only -- matches the gate in sonic-swss FlexCounterOrch.
+    version_info = device_info.get_sonic_version_info() or {}
+    if (version_info.get("asic_type") != "broadcom" or
+            version_info.get("asic_subtype") == "broadcom-dnx"):
+        click.echo("sonic-clear copp is not supported on this platform "
+                   "(only broadcom-xgs ASICs supported).")
+        return
     command = ["coppstat", "-c"]
     run_command(command)
 
