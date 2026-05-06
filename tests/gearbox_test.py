@@ -118,6 +118,18 @@ class TestInterfaceFecStats(TestCase):
         self.assertIn("Error", output)
         self.assertIn("EthernetInvalid", output)
 
+    def test_fec_stats_state_uses_system_and_line_oper_status(self):
+        # Mock has system_oper_status=up -> 'U' and line_oper_status=down -> 'D'
+        # Verifies get_port_state reads the correct per-side field, not generic oper_status
+        output = self._capture(port_name="Ethernet0", display_type='stats')
+        lines = [l for l in output.splitlines() if "Ethernet0" in l]
+        system_line = next((l for l in lines if "System" in l), None)
+        line_line = next((l for l in lines if "Line" in l), None)
+        self.assertIsNotNone(system_line, "Expected a System row in fec-stats output")
+        self.assertIsNotNone(line_line, "Expected a Line row in fec-stats output")
+        self.assertIn("U", system_line, "System side should show U (system_oper_status=up)")
+        self.assertIn("D", line_line, "Line side should show D (line_oper_status=down)")
+
     def test_fec_histogram_all_ports_bins(self):
         output = self._capture(display_type='histogram')
         self.assertIn("Ethernet0", output)

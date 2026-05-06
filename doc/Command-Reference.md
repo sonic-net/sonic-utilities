@@ -5544,6 +5544,75 @@ This command displays basic information about the gearbox phys configured on the
 
   ```
 
+**show gearbox interfaces fec-stats**
+
+This command displays FEC statistics for gearbox interfaces from the GB_COUNTERS_DB. Statistics are shown separately for each port's system side and line side. An optional port name argument filters output to a single port.
+
+- Usage:
+  ```
+  show gearbox interfaces fec-stats [<port_name>]
+  ```
+
+- Example (all ports):
+
+  ```
+  /home/admin# show gearbox interfaces fec-stats
+  GB IFACE           STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FEC_MAX_T
+  ---------------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  -----------
+  Ethernet0 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A            3
+  Ethernet0 System       U           0             0                 0      6.05e-10        0.00e+00                N/A            2
+  Ethernet4 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A            1
+  Ethernet4 System       U           0             0                 0      6.05e-10        0.00e+00                N/A            2
+
+  ```
+
+- Example (single port):
+
+  ```
+  /home/admin# show gearbox interfaces fec-stats Ethernet0
+  GB IFACE           STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FEC_MAX_T
+  ---------------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  -----------
+  Ethernet0 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A           -1
+  Ethernet0 System       U           0             0                 0      6.05e-10        0.00e+00                N/A           -1
+
+  ```
+
+  STATE legend: U = Up, D = Down, N/A = Unknown
+
+**show gearbox interfaces fec-histogram**
+
+This command displays the FEC codeword error histogram for gearbox interfaces. Histogram bins (BIN0–BIN15) count codewords with a given number of symbol errors. An optional port name argument filters output to a single port.
+
+- Usage:
+  ```
+  show gearbox interfaces fec-histogram [<port_name>]
+  ```
+
+- Example (single port):
+
+  ```
+  /home/admin# show gearbox interfaces fec-histogram Ethernet0
+
+  Ethernet0 Line
+  Symbol Errors Per Codeword    Codewords
+  --------------------------  -----------
+  BIN0                              12345
+  BIN1                                  1
+  BIN2                                  0
+  ...
+  BIN15                                 0
+
+  Ethernet0 System
+  Symbol Errors Per Codeword    Codewords
+  --------------------------  -----------
+  BIN0                              12355
+  BIN1                                  0
+  BIN2                                  0
+  ...
+  BIN15                                 0
+
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#gearbox)
 
 

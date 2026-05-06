@@ -38,6 +38,8 @@ PHY_LINE_LANES = "line_lanes"
 PHY_SYSTEM_LANES = "system_lanes"
 
 PORT_OPER_STATUS = "oper_status"
+PORT_SYSTEM_OPER_STATUS = "system_oper_status"
+PORT_LINE_OPER_STATUS = "line_oper_status"
 PORT_ADMIN_STATUS = "admin_status"
 PORT_SYSTEM_SPEED = "system_speed"
 PORT_LINE_SPEED = "line_speed"
@@ -288,12 +290,13 @@ class InterfaceFecStats(object):
         rates = self.gb_db.get_all('GB_COUNTERS_DB', full_table_id)
         return rates if rates else {}
 
-    def get_port_state(self, base_port_name):
+    def get_port_state(self, base_port_name, side):
         """
         Get port operational state from APPL_DB
         """
         port_key = PORT_TABLE_ETHERNET_PREFIX.format(base_port_name)
-        oper_status = self.appl_db.get(self.appl_db.APPL_DB, port_key, PORT_OPER_STATUS)
+        attr = PORT_SYSTEM_OPER_STATUS if side == 'System' else PORT_LINE_OPER_STATUS
+        oper_status = self.appl_db.get(self.appl_db.APPL_DB, port_key, attr)
         if oper_status and oper_status.lower() == 'up':
             return 'U'
         elif oper_status and oper_status.lower() == 'down':
@@ -402,9 +405,9 @@ class InterfaceFecStats(object):
                 rates = self.get_rates_for_oid(oid)
                 
                 base_name, side = self.extract_port_info(port_name)
-                
+
                 iface = f"{base_name} {side}"
-                state = self.get_port_state(base_name)
+                state = self.get_port_state(base_name, side)
 
                 # Get counter values and format with commas
                 fec_corr = format_number_with_commas(counters.get('SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES', '0'))
