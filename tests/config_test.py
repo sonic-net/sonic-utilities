@@ -730,7 +730,9 @@ class TestConfigReload(object):
     def test_config_reload(self, get_cmd_module, setup_single_broadcom_asic):
         (config, show) = get_cmd_module
 
-        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
                 mock.patch.object(config, "config_file_yang_validation") as mock_validate_config:
 
             jsonfile_config = os.path.join(mock_db_path, "config_db.json")
@@ -764,7 +766,8 @@ class TestConfigReload(object):
         config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
 
         with mock.patch("utilities_common.cli.run_command") as mock_run_command, \
-                mock.patch.object(config, "config_file_yang_validation", side_effect=click.Abort) as mock_validate_config:
+                mock.patch.object(
+                    config, "config_file_yang_validation", side_effect=click.Abort) as mock_validate_config:
             runner = CliRunner()
             result = runner.invoke(config.config.commands["reload"], ["-y", "-f"])
 
