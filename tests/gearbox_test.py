@@ -55,6 +55,24 @@ class TestGearbox(TestCase):
         )
         self.assertEqual(result.output.strip(), expected_output)
 
+    def test_gearbox_interfaces_fec_stats(self):
+        result = self.runner.invoke(
+            show.cli.commands["gearbox"].commands["interfaces"].commands["fec-stats"], ["Ethernet0"])
+        print(result.output, file=sys.stderr)
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("FEC_CORR", result.output)
+        self.assertIn("Ethernet0 Line", result.output)
+        self.assertIn("Ethernet0 System", result.output)
+
+    def test_gearbox_interfaces_fec_histogram(self):
+        result = self.runner.invoke(
+            show.cli.commands["gearbox"].commands["interfaces"].commands["fec-histogram"], ["Ethernet0"])
+        print(result.output, file=sys.stderr)
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Ethernet0", result.output)
+        self.assertIn("BIN0", result.output)
+        self.assertIn("BIN15", result.output)
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
