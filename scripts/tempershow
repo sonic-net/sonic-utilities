@@ -86,7 +86,7 @@ class TemperShow(object):
             platform_sfputil_helper.load_platform_sfputil()
             platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
             return True
-        except Exception:
+        except (Exception, SystemExit):
             return False
 
     def _sfp_display_name(self, port_name):
@@ -118,11 +118,16 @@ class TemperShow(object):
         connections = []
         if multi_asic is not None and multi_asic.is_multi_asic():
             try:
-                for ns in multi_asic.get_front_end_namespaces():
-                    db = multi_asic.connect_to_all_dbs_for_ns(ns)
-                    connections.append(db)
+                namespaces = multi_asic.get_front_end_namespaces()
             except Exception:
-                connections = []
+                namespaces = []
+            # Connect per-namespace so a single failing namespace does not
+            # silently drop SFP rows from the other namespaces.
+            for ns in namespaces:
+                try:
+                    connections.append(multi_asic.connect_to_all_dbs_for_ns(ns))
+                except Exception:
+                    continue
         if not connections:
             db = SonicV2Connector(host="127.0.0.1")
             db.connect(db.STATE_DB)
@@ -180,6 +185,8 @@ class TemperShow(object):
                 continue
             if not keys:
                 continue
+            thr_map = self._prefetch_table(db, SFP_THRESHOLD_TABLE_NAME)
+            flag_map = self._prefetch_table(db, SFP_FLAG_TABLE_NAME)
             for key in natsorted(keys):
                 key_list = key.split('|')
                 if len(key_list) != 2:
@@ -190,12 +197,8 @@ class TemperShow(object):
                     continue
                 seen_ports.add(port)
                 temp_dict = db.get_all(db.STATE_DB, key) or {}
-                thr_dict = db.get_all(
-                    db.STATE_DB,
-                    '{}|{}'.format(SFP_THRESHOLD_TABLE_NAME, port)) or {}
-                flag_dict = db.get_all(
-                    db.STATE_DB,
-                    '{}|{}'.format(SFP_FLAG_TABLE_NAME, port)) or {}
+                thr_dict = thr_map.get(port, {})
+                flag_dict = flag_map.get(port, {})
                 rows.append({
                     'name': self._sfp_display_name(port),
                     'temperature': temp_dict.get(SFP_TEMPER_FIELD_NAME, NA),
@@ -209,12 +212,40 @@ class TemperShow(object):
         return rows
 
     @staticmethod
-    def _derive_sfp_warning(flag_dict):
-        """Return True/False/N/A based on temp flags in TRANSCEIVER_DOM_FLAG.
+    def _prefetch_table(db, table_name):
+        """Build a {port: {field: value}} map for an entire STATE_DB table.
 
-        True  - any of temphigh/lowwarning/alarm is asserted
-        False - all four flags are present and de-asserted
-        N/A   - none of the four flags are present
+        Used to avoid per-port hgetall round trips when populating SFP rows.
+        Returns an empty dict on any DB error.
+        """
+        result = {}
+        try:
+            keys = db.keys(db.STATE_DB, table_name + '|*')
+        except Exception:
+            return result
+        if not keys:
+            return result
+        for key in keys:
+            parts = key.split('|')
+            if len(parts) != 2:
+                continue
+            try:
+                result[parts[1]] = db.get_all(db.STATE_DB, key) or {}
+            except Exception:
+                continue
+        return result
+
+    @staticmethod
+    def _derive_sfp_warning(flag_dict):
+        """Return 'True'/'False'/'N/A' based on temp flags in TRANSCEIVER_DOM_FLAG.
+
+        Returns string values to stay consistent with the platform sensor
+        warning column (which is read as a string from TEMPERATURE_INFO),
+        keeping the JSON output's 'Warning' field type stable across rows.
+
+        'True'  - any of temphigh/lowwarning/alarm is asserted
+        'False' - all four flags are present and de-asserted
+        'N/A'   - none of the four flags are present
         """
         if not flag_dict:
             return NA
@@ -225,8 +256,8 @@ class TemperShow(object):
                 continue
             seen = True
             if str(value).strip().lower() == 'true':
-                return True
-        return False if seen else NA
+                return 'True'
+        return 'False' if seen else NA
 
     def show(self, output_json):
         rows = self._collect_platform_sensors() + self._collect_sfp_sensors()
