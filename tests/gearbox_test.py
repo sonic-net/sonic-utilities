@@ -122,9 +122,9 @@ class TestInterfaceFecStats(TestCase):
         # Mock has system_oper_status=up -> 'U' and line_oper_status=down -> 'D'
         # Verifies get_port_state reads the correct per-side field, not generic oper_status
         output = self._capture(port_name="Ethernet0", display_type='stats')
-        lines = [l for l in output.splitlines() if "Ethernet0" in l]
-        system_line = next((l for l in lines if "System" in l), None)
-        line_line = next((l for l in lines if "Line" in l), None)
+        lines = [row for row in output.splitlines() if "Ethernet0" in row]
+        system_line = next((row for row in lines if "System" in row), None)
+        line_line = next((row for row in lines if "Line" in row), None)
         self.assertIsNotNone(system_line, "Expected a System row in fec-stats output")
         self.assertIsNotNone(line_line, "Expected a Line row in fec-stats output")
         self.assertIn("U", system_line, "System side should show U (system_oper_status=up)")

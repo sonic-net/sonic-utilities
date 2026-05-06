@@ -33,6 +33,7 @@ def status(ctx):
     """Show gearbox interfaces status"""
     clicommon.run_command(['gearboxutil', 'interfaces', 'status'])
 
+
 # 'fec-stats' subcommand ("show gearbox interfaces fec-stats")
 @interfaces.command('fec-stats')
 @click.argument('port_name', required=False)
@@ -43,6 +44,7 @@ def fec_stats(ctx, port_name):
     if port_name:
         cmd.append(port_name)
     clicommon.run_command(cmd)
+
 
 # 'fec-histogram' subcommand ("show gearbox interfaces fec-histogram")
 @interfaces.command('fec-histogram')
