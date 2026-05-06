@@ -728,8 +728,10 @@ class TestConfigReload(object):
         open(cls.dummy_cfg_file, 'w').close()
 
     def test_config_reload(self, get_cmd_module, setup_single_broadcom_asic):
-        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
-            (config, show) = get_cmd_module
+        (config, show) = get_cmd_module
+
+        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
+                mock.patch.object(config, "config_file_yang_validation") as mock_validate_config:
 
             jsonfile_config = os.path.join(mock_db_path, "config_db.json")
             jsonfile_init_cfg = os.path.join(mock_db_path, "init_cfg.json")
@@ -753,6 +755,22 @@ class TestConfigReload(object):
 
             assert "\n".join([line.rstrip() for line in result.output.split('\n')][:2]) == \
                 reload_config_with_sys_info_command_output.format(config.SYSTEM_RELOAD_LOCK)
+            mock_validate_config.assert_called_once_with(jsonfile_config)
+
+    def test_config_reload_default_config_validation_failure(self, get_cmd_module, setup_single_broadcom_asic):
+        (config, show) = get_cmd_module
+
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+
+        with mock.patch("utilities_common.cli.run_command") as mock_run_command, \
+                mock.patch.object(config, "config_file_yang_validation", side_effect=click.Abort) as mock_validate_config:
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["reload"], ["-y", "-f"])
+
+            assert result.exit_code != 0
+            mock_validate_config.assert_called_once_with(jsonfile_config)
+            mock_run_command.assert_not_called()
 
     def test_config_reload_stdin(self, get_cmd_module, setup_single_broadcom_asic):
         def mock_json_load(f):

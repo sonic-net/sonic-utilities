@@ -2161,7 +2161,10 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
             return
 
-    if filename is not None and filename != "/dev/stdin":
+    if filename is None and file_format == 'config_db':
+        # Validate the default config before stopping services and flushing CONFIG_DB.
+        config_file_yang_validation(DEFAULT_CONFIG_DB_FILE)
+    elif filename is not None and filename != "/dev/stdin":
         if multi_asic.is_multi_asic():
             for cfg_file in cfg_files:
                 if cfg_file is not None:
