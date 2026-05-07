@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import subprocess
 import click
@@ -147,6 +148,13 @@ def naming_mode(verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def status(interfacename, namespace, display, verbose):
     """Show Interface status information"""
+
+    if device_info.is_supervisor():
+        # the command will be executed directly by rexec
+        click.echo("Since the current device is a chassis supervisor, "
+                    "this command will be executed remotely on all linecards")
+        proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
+        sys.exit(proc.returncode)
 
     ctx = click.get_current_context()
 
