@@ -7,6 +7,7 @@ from config.stp import (
   is_valid_interface_cost
  )
 
+import clear.stp as clear_stp
 import config.main as config
 import show.main as show
 from utilities_common.db import Db
@@ -2372,3 +2373,75 @@ class TestStpInterfaceBpduGuardEnable:
 
         assert result.exit_code != 0
         assert "Invalid interface" in result.output
+
+
+class TestClearStp(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        print("SETUP Clear STP Tests")
+
+    @patch('clear.stp.clicommon.run_command')
+    def test_clear_stp_statistics_all(self, mock_run_cmd):
+        """Test clearing all STP statistics"""
+        runner = CliRunner()
+        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"], [])
+        
+        assert result.exit_code == 0
+        mock_run_cmd.assert_called_once()
+        args, kwargs = mock_run_cmd.call_args
+        command = args[0]
+        assert command == ["sudo", "docker", "exec", "stp", "stpctl", "clrstsall"]
+
+    @patch('clear.stp.clicommon.run_command')
+    def test_clear_stp_statistics_interface(self, mock_run_cmd):
+        """Test clearing STP statistics for a specific interface"""
+        runner = CliRunner()
+        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["interface"], ["Ethernet4"])
+        
+        assert result.exit_code == 0
+        mock_run_cmd.assert_called_once()
+        args, kwargs = mock_run_cmd.call_args
+        command = args[0]
+        assert command == ["sudo", "docker", "exec", "stp", "stpctl", "clrstsintf", "Ethernet4"]
+
+    @patch('clear.stp.clicommon.run_command')
+    def test_clear_stp_statistics_vlan(self, mock_run_cmd):
+        """Test clearing STP statistics for a specific VLAN"""
+        runner = CliRunner()
+        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan"], ["100"])
+        
+        assert result.exit_code == 0
+        mock_run_cmd.assert_called_once()
+        args, kwargs = mock_run_cmd.call_args
+        command = args[0]
+        assert command == ["sudo", "docker", "exec", "stp", "stpctl", "clrstsvlan", "100"]
+
+    @patch('clear.stp.clicommon.run_command')
+    def test_clear_stp_statistics_vlan_interface(self, mock_run_cmd):
+        """Test clearing STP statistics for a specific VLAN and Interface"""
+        runner = CliRunner()
+        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan-interface"], ["100", "Ethernet4"])
+        
+        assert result.exit_code == 0
+        mock_run_cmd.assert_called_once()
+        args, kwargs = mock_run_cmd.call_args
+        command = args[0]
+        assert command == ["sudo", "docker", "exec", "stp", "stpctl", "clrstsvlanintf", "100", "Ethernet4"]
+
+    def test_clear_stp_statistics_missing_args(self):
+        """Test that missing arguments result in usage error"""
+        runner = CliRunner()
+        
+        # Missing interface name
+        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["interface"], [])
+        assert result.exit_code != 0
+        assert "Missing argument" in result.output or "Usage" in result.output
+
+        # Missing vlan id
+        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan"], [])
+        assert result.exit_code != 0
+        
+        # Missing vlan and interface
+        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan-interface"], ["100"])
+        assert result.exit_code != 0
