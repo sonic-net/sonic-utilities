@@ -2386,7 +2386,7 @@ class TestClearStp(object):
         """Test clearing all STP statistics"""
         runner = CliRunner()
         result = runner.invoke(clear_stp.spanning_tree.commands["statistics"], [])
-        
+
         assert result.exit_code == 0
         mock_run_cmd.assert_called_once()
         args, kwargs = mock_run_cmd.call_args
@@ -2398,7 +2398,7 @@ class TestClearStp(object):
         """Test clearing STP statistics for a specific interface"""
         runner = CliRunner()
         result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["interface"], ["Ethernet4"])
-        
+
         assert result.exit_code == 0
         mock_run_cmd.assert_called_once()
         args, kwargs = mock_run_cmd.call_args
@@ -2410,7 +2410,7 @@ class TestClearStp(object):
         """Test clearing STP statistics for a specific VLAN"""
         runner = CliRunner()
         result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan"], ["100"])
-        
+
         assert result.exit_code == 0
         mock_run_cmd.assert_called_once()
         args, kwargs = mock_run_cmd.call_args
@@ -2421,8 +2421,12 @@ class TestClearStp(object):
     def test_clear_stp_statistics_vlan_interface(self, mock_run_cmd):
         """Test clearing STP statistics for a specific VLAN and Interface"""
         runner = CliRunner()
-        result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan-interface"], ["100", "Ethernet4"])
-        
+        result = runner.invoke(
+            clear_stp.spanning_tree
+            .commands["statistics"]
+            .commands["vlan-interface"],
+            ["100", "Ethernet4"])
+
         assert result.exit_code == 0
         mock_run_cmd.assert_called_once()
         args, kwargs = mock_run_cmd.call_args
@@ -2432,7 +2436,6 @@ class TestClearStp(object):
     def test_clear_stp_statistics_missing_args(self):
         """Test that missing arguments result in usage error"""
         runner = CliRunner()
-        
         # Missing interface name
         result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["interface"], [])
         assert result.exit_code != 0
@@ -2441,7 +2444,7 @@ class TestClearStp(object):
         # Missing vlan id
         result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan"], [])
         assert result.exit_code != 0
-        
+
         # Missing vlan and interface
         result = runner.invoke(clear_stp.spanning_tree.commands["statistics"].commands["vlan-interface"], ["100"])
         assert result.exit_code != 0
