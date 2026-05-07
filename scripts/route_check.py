@@ -37,7 +37,6 @@ To verify:
 import argparse
 from enum import Enum
 import ipaddress
-import ijson.backends.python as ijson
 import json
 import os
 import re
@@ -48,6 +47,7 @@ import signal
 import traceback
 import subprocess
 import concurrent.futures
+import ijson
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
@@ -875,7 +875,7 @@ def check_routes_for_namespace(namespace):
     If there are FRR routes that aren't marked offloaded but all APPL & ASIC DB
     routes are in sync report failure and perform a mitigation action.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 
@@ -920,6 +920,11 @@ def check_routes_for_namespace(namespace):
     if rt_appl_miss or rt_asic_miss:
         # Look for subscribe updates for a second
         adds, deletes = get_subscribe_updates(selector, subs)
+
+    # Release the subscriber. If we keep the subscriber open then route updates will accumulate in the subscriber queue
+    # causing high client memory usage in redis.
+    del subs
+    del selector
 
     # Drop all those for which SET received
     rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds)
@@ -1013,7 +1018,7 @@ def check_sids_for_namespace(namespace):
     this function does not wait for subscriber updates, as SIDs are not
     expected to change frequently.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 

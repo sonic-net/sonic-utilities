@@ -47,13 +47,10 @@ class TestQueueStat(object):
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
     @pytest.mark.parametrize(
@@ -111,15 +108,12 @@ class TestQueueTrimStat(object):
     def setup_class(cls):
         logger.info("SETUP")
         remove_tmp_cnstat_file()
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ['UTILITIES_UNIT_TESTING'] = "2"
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
         remove_tmp_cnstat_file()
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
     @pytest.mark.parametrize(
         "output", [

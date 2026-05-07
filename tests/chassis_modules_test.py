@@ -2,14 +2,32 @@ import sys
 import os
 from click.testing import CliRunner
 from datetime import datetime, timedelta, timezone
+from unittest import mock
+
+import pytest
 
 import show.main as show
 import config.main as config
 import tests.mock_tables.dbconnector
 from utilities_common.db import Db
 from .utils import get_result_and_return_code
-from unittest import mock
 sys.modules['clicommon'] = mock.Mock()
+
+
+@pytest.fixture(autouse=True)
+def _inject_sonic_platform():
+    # conftest._reset_between_files() clears sys.modules['sonic_platform']
+    # before the first test of each file. Re-inject before every test so that
+    # chassis command handlers that import sonic_platform at call time can find
+    # it. Module-level injection is not sufficient because it runs before the
+    # conftest hook that clears it.
+    sys.modules['sonic_platform'] = mock.MagicMock()
+    yield
+
+
+test_path = os.path.dirname(os.path.abspath(__file__))
+modules_path = os.path.dirname(test_path)
+scripts_path = os.path.join(modules_path, "scripts")
 
 show_linecard0_shutdown_output="""\
 LINE-CARD0 line-card 1 Empty down LC1000101
@@ -566,4 +584,3 @@ class TestChassisModules(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

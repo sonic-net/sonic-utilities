@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
 import re
+import subprocess
 import unittest
 from unittest.mock import Mock, call, patch, mock_open, MagicMock
 import pytest
 
 import sonic_package_manager
 from sonic_package_manager.errors import *
+from sonic_package_manager.manager import PackageManager
 from sonic_package_manager.version import Version
 import json
 
@@ -640,3 +642,145 @@ def test_installation_from_file_no_tags(package_manager, mock_docker_api, sonic_
     # Get the package from the database and verify the tag was set to the image ID
     package = package_manager.database.get_package('test-package')
     assert package.docker_image_reference == 'Azure/docker-test:1.6.0'
+
+
+# --- Tests for generated/transient unit handling ---
+
+def _make_package_for_systemctl(service_name='test-package', host_service=True, asic_service=False):
+    """Minimal package-like object for _systemctl_action tests (avoids DB/image resolution)."""
+    pkg = Mock()
+    pkg.manifest = {
+        'service': {
+            'name': service_name,
+            'host-service': host_service,
+            'asic-service': asic_service,
+        }
+    }
+    return pkg
+
+
+@pytest.mark.parametrize('stdout_value,expected', [
+    pytest.param('generated\n', True, id='generated'),
+    pytest.param('transient', True, id='transient'),
+    pytest.param('enabled\n', False, id='enabled'),
+    pytest.param('disabled', False, id='disabled'),
+    pytest.param(None, False, id='no-stdout'),
+])
+def test_systemctl_is_generated_or_transient_by_state(stdout_value, expected):
+    """Return value is True for generated/transient state, False for enabled/disabled/other."""
+    with patch('sonic_package_manager.manager.subprocess.run') as mock_run:
+        mock_run.return_value = Mock(stdout=stdout_value)
+        result = PackageManager._systemctl_is_generated_or_transient('myunit')
+        assert result is expected
+        mock_run.assert_called_once_with(
+            ['systemctl', 'is-enabled', 'myunit'],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+
+@pytest.mark.parametrize('exception,log_attr,message_contains', [
+    pytest.param(
+        subprocess.TimeoutExpired('systemctl', 15),
+        'warning',
+        'timed out for unit',
+        id='timeout',
+    ),
+    pytest.param(
+        OSError(2, 'No such file or directory'),
+        'error',
+        'failed for unit',
+        id='exception',
+    ),
+])
+def test_systemctl_is_generated_or_transient_on_failure(
+        exception, log_attr, message_contains):
+    """Subprocess failure is caught, logged, returns False."""
+    with patch('sonic_package_manager.manager.subprocess.run') as mock_run, \
+         patch('sonic_package_manager.manager.log') as mock_log:
+        mock_run.side_effect = exception
+        assert PackageManager._systemctl_is_generated_or_transient('myunit') is False
+        log_method = getattr(mock_log, log_attr)
+        log_method.assert_called_once()
+        msg = log_method.call_args[0][0]
+        assert message_contains in msg
+        assert 'myunit' in msg
+
+
+@pytest.mark.parametrize('action', [
+    pytest.param('enable', id='enable'),
+    pytest.param('disable', id='disable'),
+])
+def test_systemctl_action_skipped_for_generated_or_transient_unit(
+        package_manager, mock_run_command, action):
+    """enable/disable is skipped when unit is generated/transient; warning logged."""
+    package = _make_package_for_systemctl('test-package')
+    with patch.object(PackageManager, '_systemctl_is_generated_or_transient', return_value=True), \
+         patch('sonic_package_manager.manager.log') as mock_log:
+        package_manager._systemctl_action(package, action)
+        mock_run_command.assert_not_called()
+        mock_log.warning.assert_called_once()
+        assert f'Skipping systemctl {action}' in mock_log.warning.call_args[0][0]
+        assert 'test-package' in mock_log.warning.call_args[0][0]
+
+
+@pytest.mark.parametrize('action', [
+    pytest.param('enable', id='enable'),
+    pytest.param('disable', id='disable'),
+])
+def test_systemctl_action_called_when_not_generated(package_manager, mock_run_command, action):
+    """enable/disable runs systemctl when unit is not generated/transient."""
+    package = _make_package_for_systemctl('test-package')
+    with patch.object(PackageManager, '_systemctl_is_generated_or_transient', return_value=False):
+        package_manager._systemctl_action(package, action)
+        mock_run_command.assert_called_once_with(['systemctl', action, 'test-package'])
+
+
+@pytest.mark.parametrize('action', [
+    pytest.param('start', id='start'),
+    pytest.param('stop', id='stop'),
+])
+def test_systemctl_action_never_skipped(package_manager, mock_run_command, action):
+    """start/stop are never skipped (no generated/transient check)."""
+    package = _make_package_for_systemctl('test-package')
+    package_manager._systemctl_action(package, action)
+    mock_run_command.assert_called_once_with(['systemctl', action, 'test-package'])
+
+
+@pytest.mark.parametrize('action', [
+    pytest.param('enable', id='enable'),
+    pytest.param('disable', id='disable'),
+])
+def test_systemctl_action_multi_instance_skipped_for_generated_unit(
+        package_manager, mock_run_command, action):
+    """Multi-instance: enable/disable is skipped for each generated/transient instance; warning logged."""
+    package = _make_package_for_systemctl('test-package', host_service=False, asic_service=True)
+    package_manager.is_multi_npu = True
+    package_manager.num_npus = 2
+    with patch.object(PackageManager, '_systemctl_is_generated_or_transient', return_value=True), \
+         patch('sonic_package_manager.manager.log') as mock_log:
+        package_manager._systemctl_action(package, action)
+        mock_run_command.assert_not_called()
+        assert mock_log.warning.call_count == 2
+        warning_msgs = [mock_log.warning.call_args_list[i][0][0] for i in range(2)]
+        assert all(f'Skipping systemctl {action}' in msg for msg in warning_msgs)
+        assert 'test-package@0' in warning_msgs[0] and 'test-package@1' in warning_msgs[1]
+
+
+@pytest.mark.parametrize('action', [
+    pytest.param('enable', id='enable'),
+    pytest.param('disable', id='disable'),
+])
+def test_systemctl_action_multi_instance_called_when_not_generated(
+        package_manager, mock_run_command, action):
+    """Multi-instance: enable/disable runs systemctl for each instance when not generated/transient."""
+    package = _make_package_for_systemctl('test-package', host_service=False, asic_service=True)
+    package_manager.is_multi_npu = True
+    package_manager.num_npus = 2
+    with patch.object(PackageManager, '_systemctl_is_generated_or_transient', return_value=False):
+        package_manager._systemctl_action(package, action)
+    mock_run_command.assert_has_calls([
+        call(['systemctl', action, 'test-package@0']),
+        call(['systemctl', action, 'test-package@1']),
+    ])

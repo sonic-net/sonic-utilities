@@ -126,7 +126,7 @@ def swap_work(tc):
 
 
 class TestDiskCheck(object):
-    def setup(self):
+    def setup_method(self):
         pass
 
 
