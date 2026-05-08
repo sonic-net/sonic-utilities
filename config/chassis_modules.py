@@ -7,7 +7,7 @@ import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, is_bmc, get_all_dpus
 from utilities_common.module import ModuleHelper
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
@@ -144,7 +144,7 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
                 type=click.Choice(get_all_dpus(), case_sensitive=False) if is_smartswitch() else str
                 )
 def shutdown_chassis_module(db, chassis_module_name):
-    """Chassis-module shutdown of module"""
+    """Shutdown chassis module (sets admin_status to down; default for SWITCH-HOST on BMC)"""
     config_db = db.cfgdb
     ctx = click.get_current_context()
 
@@ -233,16 +233,13 @@ if is_bmc():
     @modules.command('power-on-delay')
     @clicommon.pass_db
     @click.argument('chassis_module_name', metavar='<module_name>', required=True)
-    @click.argument('seconds', metavar='<seconds>', required=True, type=int)
+    @click.argument('seconds', metavar='<seconds>', required=True, type=click.IntRange(min=0))
     def set_power_on_delay(db, chassis_module_name, seconds):
-        """Configure delay (in seconds) BMC waits before powering on Switch-Host (default: 0)"""
+        """Configure delay (secs) BMC waits before powering on Switch-Host (default: 0)"""
         ctx = click.get_current_context()
 
         if not chassis_module_name.startswith("SWITCH-HOST"):
             ctx.fail("'power-on-delay' is only applicable to SWITCH-HOST modules")
-
-        if seconds < 0:
-            ctx.fail("'seconds' must be a non-negative value")
 
         config_db = db.cfgdb
         fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name) or {}
@@ -256,16 +253,13 @@ if is_bmc():
     @modules.command('shutdown-timeout')
     @clicommon.pass_db
     @click.argument('chassis_module_name', metavar='<module_name>', required=True)
-    @click.argument('seconds', metavar='<seconds>', required=True, type=int)
+    @click.argument('seconds', metavar='<seconds>', required=True, type=click.IntRange(min=0))
     def set_graceful_shutdown_timeout(db, chassis_module_name, seconds):
-        """Configure graceful-shutdown timeout (in seconds) before BMC forces power-off (default: 120)"""
+        """Configure graceful-shutdown timeout (secs) before BMC forces power-off (0: immediate power-off, default: 120)"""
         ctx = click.get_current_context()
 
         if not chassis_module_name.startswith("SWITCH-HOST"):
             ctx.fail("'shutdown-timeout' is only applicable to SWITCH-HOST modules")
-
-        if seconds < 0:
-            ctx.fail("'seconds' must be a non-negative value")
 
         config_db = db.cfgdb
         fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name) or {}

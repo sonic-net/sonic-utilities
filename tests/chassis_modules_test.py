@@ -614,6 +614,7 @@ class TestChassisModuleTimingConfig(object):
         assert entry.get("power_on_delay") == "0"
 
     def test_power_on_delay_negative_rejected(self):
+        """Verify negative values are invalid; default is 0 per HLD (admin_status=down keeps Switch-Host off)."""
         runner = CliRunner()
         db = Db()
         result = runner.invoke(
