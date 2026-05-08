@@ -1133,8 +1133,8 @@ def error_status(port, fetch_from_hardware):
 # 'lpmode' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP low-power mode status for port <port_name> only")
-@click.option('--use-hardware-control', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
-def lpmode(port, use_hardware_control):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def lpmode(port, use_lpmode_pin):
     """Display low-power mode status of SFP transceiver(s)"""
     logical_port_list = []
     output_table = []
@@ -1175,14 +1175,8 @@ def lpmode(port, use_hardware_control):
                     if not sfp.get_presence():
                         output_table.append([port_name, "Not Present"])
                         continue
-                    if use_hardware_control:
-                        try:
-                            lpmode = sfp.get_lpmode(
-                                use_hardware_control=use_hardware_control
-                            )
-                        except TypeError:
-                            click.echo("Hardware control flag not implemented for this platform")
-                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                    if use_lpmode_pin:
+                        lpmode = sfp.get_lpmode_via_pin()
                     else:
                         lpmode = sfp.get_lpmode()
 
@@ -1241,7 +1235,7 @@ def lpmode():
 
 
 # Helper method for setting low-power mode
-def set_lpmode(logical_port, enable, use_hardware_control=False):
+def set_lpmode(logical_port, enable, use_lpmode_pin=False):
     ganged = False
     i = 1
 
@@ -1273,14 +1267,8 @@ def set_lpmode(logical_port, enable, use_hardware_control=False):
             click.echo("{} low-power mode for port {} ... ".format(
                 "Enabling" if enable else "Disabling",
                 port_name), nl=False)
-            if use_hardware_control:
-                try:
-                    result = sfp.set_lpmode(
-                        enable, use_hardware_control=use_hardware_control
-                    )
-                except TypeError:
-                    click.echo("Hardware control flag not implemented for this platform")
-                    sys.exit(ERROR_NOT_IMPLEMENTED)
+            if use_lpmode_pin:
+                result = sfp.set_lpmode_via_pin(enable)
             else:
                 result = sfp.set_lpmode(enable)
         except NotImplementedError:
@@ -1296,19 +1284,19 @@ def set_lpmode(logical_port, enable, use_hardware_control=False):
 # 'off' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-@click.option('--use-hardware-control', is_flag=True, default=False)
-def off(port_name, use_hardware_control):
+@click.option('--use-lpmode-pin', is_flag=True, default=False)
+def off(port_name, use_lpmode_pin):
     """Disable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, False, use_hardware_control=use_hardware_control)
+    set_lpmode(port_name, False, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'on' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-@click.option('--use-hardware-control', is_flag=True, default=False)
-def on(port_name, use_hardware_control):
+@click.option('--use-lpmode-pin', is_flag=True, default=False)
+def on(port_name, use_lpmode_pin):
     """Enable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, True, use_hardware_control=use_hardware_control)
+    set_lpmode(port_name, True, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'reset' subcommand

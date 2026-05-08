@@ -632,30 +632,31 @@ Ethernet0  N/A
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
-    def test_show_lpmode_use_hardware_control(self, mock_chassis):
+    def test_show_lpmode_use_lpmode_pin(self, mock_chassis):
         mock_sfp = MagicMock()
         mock_sfp.get_presence = MagicMock(return_value=True)
-        mock_sfp.get_lpmode = MagicMock(return_value=True)
+        mock_sfp.get_lpmode_via_pin = MagicMock(return_value=True)
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         runner = CliRunner()
 
         result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
-                               ["-p", "Ethernet0", "--use-hardware-control"])
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
         assert result.exit_code == 0
-        mock_sfp.get_lpmode.assert_called_once_with(use_hardware_control=True)
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        mock_sfp.get_lpmode.assert_not_called()
         expected_output = """Port       Low-power Mode
 ---------  ----------------
 Ethernet0  On
 """
         assert result.output == expected_output
 
-        mock_sfp.get_lpmode.reset_mock()
-        mock_sfp.get_lpmode.side_effect = TypeError
+        mock_sfp.get_lpmode_via_pin.reset_mock()
+        mock_sfp.get_lpmode_via_pin.side_effect = NotImplementedError
         result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
-                               ["-p", "Ethernet0", "--use-hardware-control"])
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
         assert result.exit_code == ERROR_NOT_IMPLEMENTED
-        mock_sfp.get_lpmode.assert_called_once_with(use_hardware_control=True)
-        assert "Hardware control flag not implemented for this platform" in result.output
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        assert "This functionality is currently not implemented for this platform" in result.output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
@@ -1265,34 +1266,35 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.is_port_type_rj45')
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
-    def test_lpmode_set_use_hardware_control(self, mock_is_rj45, mock_chassis):
+    def test_lpmode_set_use_lpmode_pin(self, mock_is_rj45, mock_chassis):
         runner = CliRunner()
         mock_is_rj45.return_value = False
         mock_sfp = MagicMock()
         mock_sfp.get_presence.return_value = True
-        mock_sfp.set_lpmode = MagicMock(return_value=True)
+        mock_sfp.set_lpmode_via_pin = MagicMock(return_value=True)
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
 
         result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
-                               ["Ethernet0", "--use-hardware-control"])
+                               ["Ethernet0", "--use-lpmode-pin"])
         assert result.exit_code == 0
-        mock_sfp.set_lpmode.assert_called_once_with(True, use_hardware_control=True)
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        mock_sfp.set_lpmode.assert_not_called()
         assert result.output == "Enabling low-power mode for port Ethernet0 ... OK\n"
 
-        mock_sfp.set_lpmode.reset_mock()
+        mock_sfp.set_lpmode_via_pin.reset_mock()
         result = runner.invoke(sfputil.cli.commands['lpmode'].commands['off'],
-                               ["Ethernet0", "--use-hardware-control"])
+                               ["Ethernet0", "--use-lpmode-pin"])
         assert result.exit_code == 0
-        mock_sfp.set_lpmode.assert_called_once_with(False, use_hardware_control=True)
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(False)
         assert result.output == "Disabling low-power mode for port Ethernet0 ... OK\n"
 
-        mock_sfp.set_lpmode.reset_mock()
-        mock_sfp.set_lpmode.side_effect = TypeError
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        mock_sfp.set_lpmode_via_pin.side_effect = NotImplementedError
         result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
-                               ["Ethernet0", "--use-hardware-control"])
+                               ["Ethernet0", "--use-lpmode-pin"])
         assert result.exit_code == ERROR_NOT_IMPLEMENTED
-        mock_sfp.set_lpmode.assert_called_once_with(True, use_hardware_control=True)
-        assert "Hardware control flag not implemented for this platform" in result.output
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        assert "This functionality is currently not implemented for this platform" in result.output
 
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_chassis')
