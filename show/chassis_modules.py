@@ -52,11 +52,16 @@ def status(db, chassis_module_name):
         print('Key {} not found in {} table'.format(key_pattern, CHASSIS_MODULE_INFO_TABLE))
         return
 
-    # On BMC, oper_status is read directly from the platform API
+    # On BMC, oper_status is read directly from the platform API.
+    # ModuleHelper.__init__ does not raise on chassis load failure; it logs and keeps
+    # platform_chassis=None. Treat that as unavailable so we don't emit per-module
+    # errors in the loop — just fall back to STATE_DB silently.
     module_helper = None
     if is_bmc():
         try:
-            module_helper = ModuleHelper()
+            helper = ModuleHelper()
+            if helper.platform_chassis:
+                module_helper = helper
         except Exception:
             pass
 
