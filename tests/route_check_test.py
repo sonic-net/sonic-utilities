@@ -244,11 +244,34 @@ class TestRouteCheck(object):
             patch('sonic_py_common.multi_asic.get_namespace_list', return_value= ct_data[NAMESPACE]), \
             patch('sonic_py_common.multi_asic.is_multi_asic', return_value= ct_data[MULTI_ASIC]), \
             patch('route_check.subprocess.check_output', side_effect=lambda *args, **kwargs: self.mock_check_output(ct_data, *args, **kwargs)), \
+            patch('route_check.check_frr_pending_routes',
+                  side_effect=lambda *args, **kwargs: self.mock_fetch_routes(ct_data, *args, **kwargs)), \
             patch('route_check.mitigate_installed_not_offloaded_frr_routes', side_effect=lambda *args, **kwargs: None), \
             patch('route_check.load_db_config', side_effect=lambda: init_db_conns(ct_data[NAMESPACE])):
 
             ret, res = route_check.main()
             self.assert_results(ct_data, ret, res)
+
+    def mock_fetch_routes(self, ct_data, *args, **kwargs):
+        ns = args[0]
+        routes = ct_data.get(FRR_ROUTES, {}).get(ns, {})
+        if not routes:
+            return [], []
+        missed_route_list = []
+        failed_route_list = []
+        for r, v in routes.items():
+            for e in v:
+                if e.get('protocol') in ('connected', 'kernel', 'static'):
+                    continue
+                if e.get('vrfName') != 'default':
+                    continue
+                if not e.get('selected', False):
+                    continue
+                if not e.get('offloaded', False):
+                    missed_route_list.append({'prefix': r, 'protocol': e.get('protocol', '')})
+                if e.get('failed', False):
+                    failed_route_list.append(r)
+        return missed_route_list, failed_route_list
 
     def mock_check_output(self, ct_data, *args, **kwargs):
         ns = self.extract_namespace_from_args(args[0])
