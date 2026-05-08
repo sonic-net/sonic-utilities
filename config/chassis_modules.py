@@ -255,7 +255,7 @@ if is_bmc():
     @click.argument('chassis_module_name', metavar='<module_name>', required=True)
     @click.argument('seconds', metavar='<seconds>', required=True, type=click.IntRange(min=0))
     def set_graceful_shutdown_timeout(db, chassis_module_name, seconds):
-        """Configure graceful-shutdown timeout (secs) before BMC forces power-off (0: immediate power-off, default: 120)"""
+        """Configure graceful-shutdown timeout (secs) before BMC forces power-off (0: immediate, default: 120)"""
         ctx = click.get_current_context()
 
         if not chassis_module_name.startswith("SWITCH-HOST"):
