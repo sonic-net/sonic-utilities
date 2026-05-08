@@ -1284,7 +1284,7 @@ def set_lpmode(logical_port, enable, use_lpmode_pin=False):
 # 'off' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-@click.option('--use-lpmode-pin', is_flag=True, default=False)
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
 def off(port_name, use_lpmode_pin):
     """Disable low-power mode for SFP transceiver"""
     set_lpmode(port_name, False, use_lpmode_pin=use_lpmode_pin)
@@ -1293,7 +1293,7 @@ def off(port_name, use_lpmode_pin):
 # 'on' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-@click.option('--use-lpmode-pin', is_flag=True, default=False)
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
 def on(port_name, use_lpmode_pin):
     """Enable low-power mode for SFP transceiver"""
     set_lpmode(port_name, True, use_lpmode_pin=use_lpmode_pin)
