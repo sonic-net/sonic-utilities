@@ -106,7 +106,7 @@ def test_get_next_image(run_command_patch, popen_patch):
     bootloader.get_installed_images = Mock(return_value=installed_images)
 
     bootloader.set_default_image(installed_images[1])
-    
+
     # Verify get_next_image was executed with image path
     next_image=bootloader.get_next_image()
 

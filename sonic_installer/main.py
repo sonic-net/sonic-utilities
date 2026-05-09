@@ -303,7 +303,12 @@ def update_sonic_environment(bootloader, binary_image_version):
 
     with bootloader.get_rootfs_path(new_image_dir) as new_image_squashfs_path:
         if not os.path.exists(new_image_squashfs_path):
-            echo_and_log("Skipping SONiC environment variables update: {} does not exist".format(new_image_squashfs_path), LOG_NOTICE)
+            echo_and_log(
+                "Skipping SONiC environment variables update: {} does not exist".format(
+                    new_image_squashfs_path
+                ),
+                LOG_NOTICE
+            )
             return
 
         try:
@@ -449,9 +454,9 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             run_command_or_raise(["touch", os.path.join(new_image_mount, "tmp",
                                                         DOCKERD_SOCK)])
             run_command_or_raise(["mount", "--bind",
-                                os.path.join(VAR_RUN_PATH, DOCKERD_SOCK),
-                                os.path.join(new_image_mount, "tmp",
-                                             DOCKERD_SOCK)])
+                                  os.path.join(VAR_RUN_PATH, DOCKERD_SOCK),
+                                  os.path.join(new_image_mount, "tmp",
+                                               DOCKERD_SOCK)])
 
             run_command_or_raise(["cp", os.path.join(new_image_mount,
                                   RESOLV_CONF_FILE), RESOLV_CONF_BACKUP_FILE])
@@ -464,10 +469,10 @@ def migrate_sonic_packages(bootloader, binary_image_version):
                                   cmd_check])
             run_command_or_raise(["chroot", new_image_mount,
                                   SONIC_PACKAGE_MANAGER, "migrate",
-                                os.path.join("/", TMP_DIR, packages_file),
-                                "--dockerd-socket",
-                                os.path.join("/", TMP_DIR, DOCKERD_SOCK),
-                                "-y"], capture=False)
+                                  os.path.join("/", TMP_DIR, packages_file),
+                                  "--dockerd-socket",
+                                  os.path.join("/", TMP_DIR, DOCKERD_SOCK),
+                                  "-y"], capture=False)
         finally:
             if docker_started:
                 run_command_or_raise(["chroot", new_image_mount,
@@ -700,7 +705,7 @@ def install(url, force, skip_platform_check=False, skip_migration=False,
                   "If you are sure you want to install this image, use " \
                   "-f|--force|--skip-secure-check.\n"
             echo_and_log(msg +
-                "Abort.", LOG_ERR, fg="red")
+                         "Abort.", LOG_ERR, fg="red")
             raise click.Abort()
 
         # Verify binary image is of same platform type as running platform
@@ -711,7 +716,7 @@ def install(url, force, skip_platform_check=False, skip_migration=False,
                   "If you are sure you want to install this image, use " \
                   "--skip-platform-check.\n"
             echo_and_log(msg +
-                "Abort.", LOG_ERR, fg="red")
+                         "Abort.", LOG_ERR, fg="red")
             raise click.Abort()
 
         if bootloader.is_secure_upgrade_image_verification_supported():
@@ -759,7 +764,7 @@ def install(url, force, skip_platform_check=False, skip_migration=False,
 def list_command():
     """ Print installed images """
     def maybe(s: str | None) -> str:
-      return "" if s is None else s
+        return "" if s is None else s
 
     bootloader = get_bootloader()
     images = bootloader.get_installed_images()
@@ -814,7 +819,7 @@ def set_fips(image, enable_fips):
     """ Set fips for the image """
     bootloader = get_bootloader()
     if not image:
-        image =  bootloader.get_next_image()
+        image = bootloader.get_next_image()
     if image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         sys.exit(1)
@@ -828,15 +833,15 @@ def get_fips(image):
     """ Get the fips enabled or disabled status for the image """
     bootloader = get_bootloader()
     if not image:
-        image =  bootloader.get_next_image()
+        image = bootloader.get_next_image()
     if image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         sys.exit(1)
     enable = bootloader.get_fips(image)
     if enable:
-       click.echo("FIPS is enabled")
+        click.echo("FIPS is enabled")
     else:
-       click.echo("FIPS is disabled")
+        click.echo("FIPS is disabled")
 
 # Uninstall image
 @sonic_installer.command('remove')

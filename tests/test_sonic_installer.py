@@ -13,6 +13,7 @@ def test_run_command():
         output = sonic_installer_common.run_command([sys.executable, "-c", "import sys; sys.exit(6)"])
     assert e.value.code == 6
 
+
 @patch("sonic_installer.main.os.path.ismount", return_value=True)
 @patch("sonic_installer.main.uuid.uuid4", return_value="b4a1d8e0-1e78-4046-8481-1e4967af919c")
 @patch("sonic_installer.main.SWAPAllocator")
@@ -44,12 +45,13 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, mock_u
     mock_bootloader.get_installed_images = Mock(return_value=[current_image_version])
     mock_bootloader.get_image_path = Mock(return_value=new_image_folder)
     mock_bootloader.verify_image_sign = Mock(return_value=True)
+
     @contextmanager
     def rootfs_path_mock(path):
         yield mounted_image_folder
 
     mock_bootloader.get_rootfs_path = rootfs_path_mock
-    get_bootloader.return_value=mock_bootloader
+    get_bootloader.return_value = mock_bootloader
 
     # Invoke CLI command
     runner = CliRunner()
@@ -72,7 +74,11 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, mock_u
     expected_call_list = [
         call(["mkdir", "-p", mounted_image_folder]),
         call(["mount", "-t", "squashfs", mounted_image_folder, mounted_image_folder]),
-        call(["sonic-cfggen", "-H", "-d", "-y", f"{mounted_image_folder}/etc/sonic/sonic_version.yml", "-t", f"{mounted_image_folder}/usr/share/sonic/templates/sonic-environment.j2"]),
+        call([
+            "sonic-cfggen", "-H", "-d", "-y",
+            f"{mounted_image_folder}/etc/sonic/sonic_version.yml",
+            "-t", f"{mounted_image_folder}/usr/share/sonic/templates/sonic-environment.j2"
+        ]),
         call(["cp", f"{mounted_image_folder}/etc/sonic/sonic_version.yml", f"{new_image_folder}/sonic-config"]),
         call(["umount", "-r", "-f", mounted_image_folder], raise_exception=True),
         call(["rm", "-rf", mounted_image_folder], raise_exception=True),
@@ -81,13 +87,21 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, mock_u
         call(["mkdir", "-p", f"/tmp/image-{new_image_version}-upper-b4a1d8e0-1e78-4046-8481-1e4967af919c"]),
         call(["mkdir", "-p", f"/tmp/image-{new_image_version}-work-b4a1d8e0-1e78-4046-8481-1e4967af919c"]),
         call(["mkdir", "-p", mounted_image_folder]),
-        call(["mount", "overlay", "-t", "overlay", "-o", f"rw,relatime,lowerdir={mounted_image_folder},upperdir=/tmp/image-{new_image_version}-upper-b4a1d8e0-1e78-4046-8481-1e4967af919c,workdir=/tmp/image-{new_image_version}-work-b4a1d8e0-1e78-4046-8481-1e4967af919c", mounted_image_folder]),
+        call([
+            "mount", "overlay", "-t", "overlay", "-o",
+            f"rw,relatime,lowerdir={mounted_image_folder},"
+            f"upperdir=/tmp/image-{new_image_version}-upper-b4a1d8e0-1e78-4046-8481-1e4967af919c,"
+            f"workdir=/tmp/image-{new_image_version}-work-b4a1d8e0-1e78-4046-8481-1e4967af919c",
+            mounted_image_folder
+        ]),
         call(["mkdir", "-p", f"{mounted_image_folder}/var/lib/docker"]),
         call(["mount", "--bind", f"{new_image_folder}/docker", f"{mounted_image_folder}/var/lib/docker"]),
         call(["chroot", mounted_image_folder, "mount", "proc", "/proc", "-t", "proc"]),
         call(["chroot", mounted_image_folder, "mount", "sysfs", "/sys", "-t", "sysfs"]),
         call(["cp", f"{mounted_image_folder}/etc/default/docker", f"{mounted_image_folder}/tmp/docker_config_backup"]),
-        call(["sh", "-c", f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(dockerd_opts)}\"' >> {mounted_image_folder}/etc/default/docker"]), # dockerd started with added options as host dockerd
+        call(["sh", "-c",
+              f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(dockerd_opts)}\"' >> "
+              f"{mounted_image_folder}/etc/default/docker"]),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "start"]),
         call(["cp", "/var/lib/sonic-package-manager/packages.json", f"{mounted_image_folder}/tmp/packages.json"]),
         call(["mkdir", "-p", "/var/lib/sonic-package-manager/manifests"]),
@@ -98,15 +112,19 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, mock_u
         call(["cp", f"{mounted_image_folder}/etc/resolv.conf", "/tmp/resolv.conf.backup"]),
         call(["cp", "/etc/resolv.conf", f"{mounted_image_folder}/etc/resolv.conf"]),
         call(["chroot", mounted_image_folder, "sh", "-c", "command -v sonic-package-manager"]),
-        call(["chroot", mounted_image_folder, "sonic-package-manager", "migrate", "/tmp/packages.json", "--dockerd-socket", "/tmp/docker.sock", "-y"], capture=False),
+        call(["chroot", mounted_image_folder, "sonic-package-manager", "migrate",
+              "/tmp/packages.json", "--dockerd-socket", "/tmp/docker.sock", "-y"],
+             capture=False),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "stop"], raise_exception=False),
-        call(["mv", f"{mounted_image_folder}/tmp/docker_config_backup", f"{mounted_image_folder}/etc/default/docker"], raise_exception=False),
+        call(["mv", f"{mounted_image_folder}/tmp/docker_config_backup",
+              f"{mounted_image_folder}/etc/default/docker"], raise_exception=False),
         call(["cp", "/tmp/resolv.conf.backup", f"{mounted_image_folder}/etc/resolv.conf"], raise_exception=False),
         call(["umount", "-f", "-R", mounted_image_folder], raise_exception=False),
         call(["umount", f"{mounted_image_folder}/tmp/docker.sock"], raise_exception=False),
         call(["rm", "-rf", ANY, ANY], raise_exception=False),
     ]
     assert run_command_or_raise.call_args_list == expected_call_list
+
 
 @patch("sonic_installer.main.SWAPAllocator")
 @patch("sonic_installer.main.get_bootloader")
@@ -136,12 +154,13 @@ def test_install_no_redis_db(run_command, run_command_or_raise, get_bootloader, 
     mock_bootloader.get_installed_images = Mock(return_value=[current_image_version])
     mock_bootloader.get_image_path = Mock(return_value=new_image_folder)
     mock_bootloader.verify_image_sign = Mock(return_value=True)
+
     @contextmanager
     def rootfs_path_mock(path):
         yield mounted_image_folder
 
     mock_bootloader.get_rootfs_path = rootfs_path_mock
-    get_bootloader.return_value=mock_bootloader
+    get_bootloader.return_value = mock_bootloader
 
     # Invoke CLI command
     runner = CliRunner()
@@ -149,7 +168,10 @@ def test_install_no_redis_db(run_command, run_command_or_raise, get_bootloader, 
 
     assert result.exit_code == 0
     # Check that cfggen doesn't contain -d
-    expected_cfggen_call = call(["sonic-cfggen", "-H", "-y", f"{mounted_image_folder}/etc/sonic/sonic_version.yml", "-t", f"{mounted_image_folder}/usr/share/sonic/templates/sonic-environment.j2"])
+    expected_cfggen_call = call([
+        "sonic-cfggen", "-H", "-y", f"{mounted_image_folder}/etc/sonic/sonic_version.yml",
+        "-t", f"{mounted_image_folder}/usr/share/sonic/templates/sonic-environment.j2"
+    ])
     assert expected_cfggen_call in run_command_or_raise.call_args_list
 
 @patch("sonic_installer.main.get_bootloader")

@@ -6,6 +6,7 @@ import sonic_installer.bootloader.bootloader as bl
 
 from unittest.mock import patch, mock_open
 
+
 def test_get_image_path():
     # Constants
     image = f'{bl.IMAGE_PREFIX}expeliarmus-{bl.IMAGE_PREFIX}abcde'
@@ -14,13 +15,15 @@ def test_get_image_path():
 
     bootloader = bl.Bootloader()
 
-    # Test replacement image id with image path (direct match without ROOTFS check should fail now if we follow the strict logic)
+    # Test replacement image id with image path (direct match without ROOTFS check
+    # should fail now if we follow the strict logic)
     # Actually, the base class now prefers A/B slots, then direct version with ROOTFS, then fallback.
     # So we need to mock these to test.
 
     with patch('sonic_installer.bootloader.bootloader.path.exists', return_value=False):
         # 1. No A/B slots, no direct match -> returns default path
         assert bootloader.get_image_path(image) == exp_image_path
+
 
 @patch('sonic_installer.bootloader.bootloader.path.exists')
 @patch('sonic_installer.bootloader.bootloader.path.isfile')
@@ -39,6 +42,7 @@ def test_get_image_path_ab_slots(mock_file, mock_isfile, mock_exists):
     bootloader = bl.Bootloader()
     assert bootloader.get_image_path(image) == os.path.join(bl.HOST_PATH, 'image-A')
 
+
 @patch('sonic_installer.bootloader.bootloader.path.exists')
 @patch('sonic_installer.bootloader.bootloader.path.isfile')
 def test_get_image_path_direct_with_rootfs(mock_isfile, mock_exists):
@@ -52,6 +56,7 @@ def test_get_image_path_direct_with_rootfs(mock_isfile, mock_exists):
     bootloader = bl.Bootloader()
     assert bootloader.get_image_path(image) == exp_path
 
+
 @patch('sonic_installer.bootloader.bootloader.path.exists', return_value=False)
 @patch('sonic_installer.bootloader.bootloader.path.isdir')
 @patch('builtins.open', new_callable=mock_open, read_data='image-A')
@@ -62,6 +67,7 @@ def test_get_image_path_fallback_to_b(mock_file, mock_isdir, mock_exists):
 
     bootloader = bl.Bootloader()
     assert bootloader.get_image_path(image) == os.path.join(bl.HOST_PATH, 'image-B')
+
 
 @patch('sonic_installer.bootloader.bootloader.path.exists', return_value=False)
 @patch('sonic_installer.bootloader.bootloader.path.isdir')
@@ -74,6 +80,7 @@ def test_get_image_path_fallback_to_a(mock_file, mock_isdir, mock_exists):
     bootloader = bl.Bootloader()
     assert bootloader.get_image_path(image) == os.path.join(bl.HOST_PATH, 'image-A')
 
+
 @patch('sonic_installer.bootloader.bootloader.path.exists', return_value=False)
 @patch('sonic_installer.bootloader.bootloader.path.isdir')
 @patch('builtins.open', new_callable=mock_open, read_data='some other cmdline')
@@ -85,6 +92,7 @@ def test_get_image_path_fallback_default_a(mock_file, mock_isdir, mock_exists):
     bootloader = bl.Bootloader()
     assert bootloader.get_image_path(image) == os.path.join(bl.HOST_PATH, 'image-A')
 
+
 @patch('sonic_installer.bootloader.bootloader.path.exists', return_value=False)
 @patch('sonic_installer.bootloader.bootloader.path.isdir', return_value=False)
 @patch('builtins.open', side_effect=OSError("File not found"))
@@ -94,6 +102,7 @@ def test_get_image_path_exception_handling(mock_file, mock_isdir, mock_exists):
     exp_path = os.path.join(bl.HOST_PATH, bl.IMAGE_DIR_PREFIX) + 'some_version'
     bootloader = bl.Bootloader()
     assert bootloader.get_image_path(image) == exp_path
+
 
 @patch('sonic_installer.bootloader.bootloader.yaml.safe_load')
 @patch('sonic_installer.bootloader.bootloader.path.exists')

@@ -821,10 +821,11 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with patch("sonic_kdump_config.open", mock_open_func):
             try:
                 sonic_kdump_config.cmd_kdump_config_next(False)
-            except Exception as e:
+            except BaseException as e:
                 print(f"Error {e}")
-            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
             handle = mock_open_func()
+            handle.reset_mock()
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
             handle.writelines.assert_called_once()
 
         mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_DISABLED)
@@ -832,7 +833,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
             return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
             try:
                 sonic_kdump_config.cmd_kdump_disable(False)
-            except Exception as e:
+            except BaseException as e:
                 print(f"Error {e}")
 
         mock_path_exist.return_value = False
