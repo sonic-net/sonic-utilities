@@ -1,18 +1,12 @@
 """Bootloader implementation for Sonie based platforms."""
 
-import logging
 import os
 
 import subprocess
 import syslog
 import sys
-from typing import List
 from typing import Optional
 from ..common import (
-    HOST_PATH,
-    IMAGE_DIR_PREFIX,
-    IMAGE_PREFIX,
-    ROOTFS_NAME,
     run_command,
 )
 from ..exception import SonicRuntimeException
@@ -202,7 +196,6 @@ class SonieGrubBootloader(GrubBootloader):
             self._set_grub_env_var('warmboot_env', '0')
         except SonicRuntimeException as e:
             syslog.syslog(syslog.LOG_ERR, f'Failed to set environment variables: {str(e)}')
-
 
     @classmethod
     def detect(cls):

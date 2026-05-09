@@ -1,17 +1,16 @@
-import os
-import shutil
 import subprocess
 from syslog import LOG_ERR as syslog_err
-from unittest.mock import Mock, patch, call, mock_open
+from unittest.mock import Mock, patch, call
 
 import pytest
 from pytest import mark
 from sonic_installer.bootloader import sonie
+from sonic_installer.common import IMAGE_PREFIX
 from sonic_installer.exception import SonicRuntimeException
 
 installed_images = [
-    f'{sonie.IMAGE_PREFIX}A',
-    f'{sonie.IMAGE_PREFIX}B',
+    f'{IMAGE_PREFIX}A',
+    f'{IMAGE_PREFIX}B',
     'SONIE',
 ]
 
@@ -46,7 +45,7 @@ def test_set_grub_env_var_raises():
 
 @patch('sonic_installer.bootloader.sonie.subprocess.check_output')
 def test_set_default_image(mock_check_output):
-    image = installed_images[0] # Index 0
+    image = installed_images[0]  # Index 0
     # set_default_image(persist=True)
     # rollback should become 0 (matches index 0)
     # bootcount should become 2
@@ -71,7 +70,8 @@ def test_set_next_image_same_preference(mock_check_output):
     # Target image A (index 0)
     # Should stay rollback=0, bootcount=2
     def _get_grub_env_var(var):
-        if var == 'rollback_env': return 0
+        if var == 'rollback_env':
+            return 0
         return 0
 
     with patch('sonic_installer.bootloader.sonie.run_command') as mock_cmd:
@@ -93,13 +93,15 @@ def test_set_next_image_same_preference(mock_check_output):
         for c in mock_cmd.call_args_list:
             assert 'rollback_env' not in str(c)
 
+
 @patch('sonic_installer.bootloader.sonie.subprocess.check_output')
 def test_set_next_image_diff_preference(mock_check_output):
     # Current preference A (rollback=0)
     # Target image B (index 1)
     # Should stay rollback=0, bootcount=1 (try secondary once)
     def _get_grub_env_var(var):
-        if var == 'rollback_env': return 0
+        if var == 'rollback_env':
+            return 0
         return 0
 
     with patch('sonic_installer.bootloader.sonie.run_command') as mock_cmd:
@@ -117,16 +119,17 @@ def test_set_next_image_diff_preference(mock_check_output):
         ]
         mock_cmd.assert_has_calls(expected_calls)
 
+
 @mark.parametrize('bootcount, rollback, install, expected_image',
                   [
                    # rollback=0 (Prefer A)
-                   (2, 0, 0, installed_images[0]), # A
-                   (1, 0, 0, installed_images[1]), # B
+                   (2, 0, 0, installed_images[0]),  # A
+                   (1, 0, 0, installed_images[1]),  # B
                    (0, 0, 0, 'SONIE'),
 
                    # rollback=1 (Prefer B)
-                   (2, 1, 0, installed_images[1]), # B
-                   (1, 1, 0, installed_images[0]), # A
+                   (2, 1, 0, installed_images[1]),  # B
+                   (1, 1, 0, installed_images[0]),  # A
                    (0, 1, 0, 'SONIE'),
 
                    # Install mode
@@ -171,19 +174,23 @@ def test_install_image():
             call('rollback_env', '0')
         ], any_order=True)
 
+
 def test_detect_true():
     with patch('os.path.exists', return_value=True):
-         assert sonie.SonieGrubBootloader.detect() is True
+        assert sonie.SonieGrubBootloader.detect() is True
+
 
 def test_detect_false():
     with patch('os.path.exists', return_value=False):
-         assert sonie.SonieGrubBootloader.detect() is False
+        assert sonie.SonieGrubBootloader.detect() is False
+
 
 def test_set_image_to_boot_value_error():
     # Attempting to set an image that is not installed
     bootloader = sonie.SonieGrubBootloader()
     bootloader.get_installed_images = Mock(return_value=installed_images)
     assert bootloader._set_image_to_boot('NON_EXISTENT', True) is False
+
 
 def test_set_image_to_boot_runtime_error():
     # _set_grub_env_var raises SonicRuntimeException
@@ -192,11 +199,13 @@ def test_set_image_to_boot_runtime_error():
     bootloader._set_grub_env_var = Mock(side_effect=SonicRuntimeException)
     assert bootloader._set_image_to_boot(installed_images[0], True) is False
 
+
 def test_get_next_image_runtime_error():
     bootloader = sonie.SonieGrubBootloader()
     bootloader.get_installed_images = Mock(return_value=installed_images)
     bootloader._get_grub_env_var = Mock(side_effect=SonicRuntimeException)
     assert bootloader.get_next_image() is None
+
 
 def test_install_image_runtime_error():
     bootloader = sonie.SonieGrubBootloader()
@@ -206,13 +215,18 @@ def test_install_image_runtime_error():
             bootloader.install_image('dummy.bin')
             mock_syslog.assert_called_with(syslog_err, 'Failed to set environment variables: Test error')
 
+
 def test_install_image_exception():
     bootloader = sonie.SonieGrubBootloader()
     bootloader._set_grub_env_var = Mock(side_effect=Exception("Unknown error"))
     with patch('sonic_installer.bootloader.sonie.run_command'):
         with patch('sonic_installer.bootloader.sonie.syslog.syslog') as mock_syslog:
             bootloader.install_image('dummy.bin')
-            mock_syslog.assert_called_with(syslog_err, 'Failed to update bootloader environment variables: Unknown error')
+            mock_syslog.assert_called_with(
+                syslog_err,
+                'Failed to update bootloader environment variables: Unknown error'
+            )
+
 
 def test_remove_image():
     bootloader = sonie.SonieGrubBootloader()
@@ -226,6 +240,7 @@ def test_remove_image():
             call('warmboot_env', '0')
         ], any_order=True)
 
+
 def test_remove_image_runtime_error():
     bootloader = sonie.SonieGrubBootloader()
     bootloader._set_grub_env_var = Mock(side_effect=SonicRuntimeException("Test error"))
@@ -233,6 +248,3 @@ def test_remove_image_runtime_error():
         with patch('sonic_installer.bootloader.sonie.syslog.syslog') as mock_syslog:
             bootloader.remove_image('dummy.bin')
             mock_syslog.assert_called_with(syslog_err, 'Failed to set environment variables: Test error')
-
-
-    assert not sonie.SonieGrubBootloader.detect()

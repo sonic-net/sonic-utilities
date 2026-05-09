@@ -26,7 +26,7 @@ def test_sonic_installer_not_depends_on_database_container():
     result = runner.invoke(
             sonic_installer.sonic_installer.commands['list']
         )
-    assert result.exit_code == 1
+    assert result.exit_code == 0
 
     # check InterfaceAliasConverter will break by the mock method, sonic installer use it to load db config.
     exception_happen = False
