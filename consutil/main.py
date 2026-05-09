@@ -65,7 +65,8 @@ def show(db, brief):
             remote_device,
             oper_state,
             state_duration,
-        ]
+        ])
+    click.echo(tabulate(body, header, stralign='right'))
 
 
 # 'show-escape' subcommand
