@@ -1,10 +1,10 @@
 import configparser
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
+import uuid
 import utilities_common.cli as clicommon
 from urllib.request import urlopen, urlretrieve
 
@@ -34,7 +34,8 @@ _config = None
 log = logger.Logger(SYSLOG_IDENTIFIER)
 
 # This is from the aliases example:
-# https://github.com/pallets/click/blob/57c6f09611fc47ca80db0bd010f05998b3c0aa95/examples/aliases/aliases.py
+# https://github.com/pallets/click/blob/
+# 57c6f09611fc47ca80db0bd010f05998b3c0aa95/examples/aliases/aliases.py
 class Config(object):
     """Object to hold CLI config"""
 
@@ -59,7 +60,8 @@ class AliasedGroup(click.Group):
     def get_command(self, ctx, cmd_name):
         global _config
 
-        # If we haven't instantiated our global config, do it now and load current config
+        # If we haven't instantiated our global config:
+        # do it now and load current config
         if _config is None:
             _config = Config()
 
@@ -123,7 +125,8 @@ def reporthook(count, block_size, total_size):
 # and extract tag name from docker image file.
 def get_docker_tag_name(image):
     # Try to get tag name from label metadata
-    cmd = ["docker", "inspect", "--format", '{{.ContainerConfig.Labels.Tag}}', image]
+    cmd = ["docker", "inspect", "--format",
+           '{{.ContainerConfig.Labels.Tag}}', image]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
     (out, _) = proc.communicate()
     if proc.returncode != 0:
@@ -155,12 +158,14 @@ def validate_url_or_abort(url):
         response_code = None
 
     if not response_code:
-        echo_and_log("Did not receive a response from remote machine. Aborting...", LOG_ERR)
+        echo_and_log("Did not receive a response from remote machine. "
+                     "Aborting...", LOG_ERR)
         raise click.Abort()
     else:
         # Check for a 4xx response code which indicates a nonexistent URL
         if response_code / 100 == 4:
-            echo_and_log("Image file not found on remote machine. Aborting...", LOG_ERR)
+            echo_and_log("Image file not found on remote machine. "
+                         "Aborting...", LOG_ERR)
             raise click.Abort()
 
 
@@ -180,13 +185,14 @@ def get_container_image_name(container_name):
     image_latest = out.rstrip()
 
     # example image_name: docker-lldp-sv2
-    _, stdout = getstatusoutput_noshell_pipe(["echo", image_latest], ["cut", "-d", ':', "-f", "1"])
+    _, stdout = getstatusoutput_noshell_pipe(["echo", image_latest],
+                                             ["cut", "-d", ':', "-f", "1"])
     image_name = stdout.rstrip()
     return image_name
 
 
 def get_container_image_id(image_tag):
-    # TODO: extract command docker info fetching functions
+    # TODO: extract commond docker info fetching functions
     # this is image_id for image with tag, like 'docker-teamd:latest'
     cmd = ["docker", "images", "--format", '{{.ID}}', image_tag]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
@@ -221,18 +227,25 @@ def hdel_warm_restart_table(db_name, table_name, warm_app_name, key):
 
 
 def print_deprecation_warning(deprecated_cmd_or_subcmd, new_cmd_or_subcmd):
-    click.secho("Warning: '{}' {}command is deprecated and will be removed in the future"
-                .format(deprecated_cmd_or_subcmd, "" if deprecated_cmd_or_subcmd == "sonic_installer" else "sub"),
+    dep = deprecated_cmd_or_subcmd
+    click.secho(
+        "Warning: '{}' {}command is deprecated "
+        "and will be removed in the future"
+        .format(dep, "" if dep == "sonic_installer" else "sub"),
+
                 fg="red", err=True)
-    click.secho("Please use '{}' instead".format(new_cmd_or_subcmd), fg="red", err=True)
+    msg = "Please use '{}' instead".format(new_cmd_or_subcmd)
+    click.secho(msg, fg="red", err=True)
 
 
 def mount_squash_fs(squashfs_path, mount_point):
     run_command_or_raise(["mkdir", "-p", mount_point])
-    run_command_or_raise(["mount", "-t", "squashfs", squashfs_path, mount_point])
+    run_command_or_raise(["mount", "-t", "squashfs",
+                          squashfs_path, mount_point])
 
 
-def umount(mount_point, read_only=True, recursive=False, force=True, remove_dir=True, raise_exception=True):
+def umount(mount_point, read_only=True, recursive=False, force=True,
+           remove_dir=True, raise_exception=True):
     flags = []
     if read_only:
         flags.append("-r")
@@ -240,15 +253,20 @@ def umount(mount_point, read_only=True, recursive=False, force=True, remove_dir=
         flags.append("-f")
     if recursive:
         flags.append("-R")
-    run_command_or_raise(["umount", *flags, mount_point], raise_exception=raise_exception)
+    run_command_or_raise(["umount", *flags, mount_point],
+                         raise_exception=raise_exception)
     if remove_dir:
-        run_command_or_raise(["rm", "-rf", mount_point], raise_exception=raise_exception)
+        run_command_or_raise(["rm", "-rf", mount_point],
+                             raise_exception=raise_exception)
 
 
 def mount_overlay_fs(lowerdir, upperdir, workdir, mount_point):
     run_command_or_raise(["mkdir", "-p", mount_point])
-    overlay_options = "rw,relatime,lowerdir={},upperdir={},workdir={}".format(lowerdir, upperdir, workdir)
-    run_command_or_raise(["mount", "overlay", "-t", "overlay", "-o", overlay_options, mount_point])
+    overlay_options = "rw,relatime,lowerdir={},upperdir={},workdir={}".format(
+        lowerdir, upperdir, workdir
+    )
+    run_command_or_raise(["mount", "overlay", "-t", "overlay", "-o",
+                          overlay_options, mount_point])
 
 
 def mount_bind(source, mount_point):
@@ -257,53 +275,73 @@ def mount_bind(source, mount_point):
 
 
 def mount_procfs_chroot(root):
-    run_command_or_raise(["chroot", root, "mount", "proc", "/proc", "-t", "proc"])
+    run_command_or_raise(["chroot", root, "mount", "proc", "/proc",
+                          "-t", "proc"])
 
 
 def mount_sysfs_chroot(root):
-    run_command_or_raise(["chroot", root, "mount", "sysfs", "/sys", "-t", "sysfs"])
+    run_command_or_raise(["chroot", root, "mount", "sysfs", "/sys",
+                          "-t", "sysfs"])
 
 
 def update_sonic_environment(bootloader, binary_image_version):
-    """Prepare sonic environment variable using incoming image template file. If incoming image template does not exist
+    """Prepare sonic environment variable using incoming image template file.
+    If incoming image template does not exist
        use current image template file.
     """
 
-    SONIC_ENV_TEMPLATE_FILE = os.path.join("usr", "share", "sonic", "templates", "sonic-environment.j2")
+    SONIC_ENV_TEMPLATE_FILE = os.path.join("usr", "share", "sonic",
+                                           "templates", "sonic-environment.j2")
     SONIC_VERSION_YML_FILE = os.path.join("etc", "sonic", "sonic_version.yml")
 
     sonic_version = re.sub(IMAGE_PREFIX, '', binary_image_version, 1)
     new_image_dir = bootloader.get_image_path(binary_image_version)
-    new_image_mount = os.path.join('/', "tmp", "image-{0}-fs".format(sonic_version))
+    new_image_mount = os.path.join('/', "tmp",
+                                   "image-{0}-fs".format(sonic_version))
     env_dir = os.path.join(new_image_dir, "sonic-config")
     env_file = os.path.join(env_dir, "sonic-environment")
 
     with bootloader.get_rootfs_path(new_image_dir) as new_image_squashfs_path:
+        if not os.path.exists(new_image_squashfs_path):
+            echo_and_log("Skipping SONiC environment variables update: {} does not exist".format(new_image_squashfs_path), LOG_NOTICE)
+            return
+
         try:
             mount_squash_fs(new_image_squashfs_path, new_image_mount)
 
-            next_sonic_env_template_file = os.path.join(new_image_mount, SONIC_ENV_TEMPLATE_FILE)
-            next_sonic_version_yml_file = os.path.join(new_image_mount, SONIC_VERSION_YML_FILE)
+            next_sonic_env_template_file = os.path.join(
+                new_image_mount, SONIC_ENV_TEMPLATE_FILE)
+            next_sonic_version_yml_file = os.path.join(
+                new_image_mount, SONIC_VERSION_YML_FILE)
 
-            sonic_env = run_command_or_raise([
-                    "sonic-cfggen",
-                    "-d",
-                    "-y",
-                    next_sonic_version_yml_file,
-                    "-t",
-                    next_sonic_env_template_file,
+            cfggen_cmd = [
+                "sonic-cfggen",
+                "-H",
+            ]
+            if os.path.exists("/var/run/redis/sonic-db/database_config.json"):
+                cfggen_cmd.append("-d")
+            cfggen_cmd.extend([
+                "-y",
+                next_sonic_version_yml_file,
+                "-t",
+                next_sonic_env_template_file,
             ])
+            sonic_env = run_command_or_raise(cfggen_cmd)
             os.mkdir(env_dir, 0o755)
             with open(env_file, "w+") as ef:
                 print(sonic_env, file=ef)
             os.chmod(env_file, 0o644)
+            run_command_or_raise(["cp", next_sonic_version_yml_file, env_dir])
         except SonicRuntimeException as ex:
-            echo_and_log("Warning: SONiC environment variables are not supported for this image: {0}".format(str(ex)), LOG_ERR, fg="red")
+            msg = "Warning: SONiC environment variables are not " \
+                  "supported for this image: {0}".format(str(ex))
+            echo_and_log(msg, LOG_ERR, fg="red")
             if os.path.exists(env_file):
                 os.remove(env_file)
                 os.rmdir(env_dir)
         finally:
-            umount(new_image_mount)
+            if os.path.ismount(new_image_mount):
+                umount(new_image_mount, raise_exception=True)
 
 
 def get_docker_opts():
@@ -312,10 +350,7 @@ def get_docker_opts():
         pid = int(pid_file.read())
 
     with open("/proc/{}/cmdline".format(pid)) as cmdline_file:
-        opts = cmdline_file.read().strip().split("\x00")[1:]
-        # Replace fd:// with unix:// to ensure dockerd can start properly
-        # inside a chroot environment without systemd socket activation
-        return [opt if opt != "fd://" else "unix://" for opt in opts]
+        return cmdline_file.read().strip().split("\x00")[1:]
 
 
 def migrate_sonic_packages(bootloader, binary_image_version):
@@ -328,27 +363,41 @@ def migrate_sonic_packages(bootloader, binary_image_version):
     DOCKERD_SOCK = "docker.sock"
     VAR_RUN_PATH = "/var/run/"
     RESOLV_CONF_FILE = os.path.join("etc", "resolv.conf")
+    RESOLV_CONF_BACKUP_FILE = os.path.join("/", TMP_DIR, "resolv.conf.backup")
 
     packages_file = "packages.json"
     packages_path = os.path.join(PACKAGE_MANAGER_DIR, packages_file)
     sonic_version = re.sub(IMAGE_PREFIX, '', binary_image_version, 1)
     new_image_dir = bootloader.get_image_path(binary_image_version)
-    new_image_upper_dir = os.path.join(new_image_dir, UPPERDIR_NAME)
-    new_image_work_dir = os.path.join(new_image_dir, WORKDIR_NAME)
+    session_id = str(uuid.uuid4())
+    new_image_upper_dir = os.path.join("/", TMP_DIR,
+                                       "image-{0}-upper-{1}".format(
+                                           sonic_version, session_id))
+    new_image_work_dir = os.path.join("/", TMP_DIR,
+                                      "image-{0}-work-{1}".format(
+                                          sonic_version, session_id))
     new_image_docker_dir = os.path.join(new_image_dir, DOCKERDIR_NAME)
-    new_image_mount = os.path.join("/", TMP_DIR, "image-{0}-fs".format(sonic_version))
-    new_image_docker_mount = os.path.join(new_image_mount, "var", "lib", "docker")
-    docker_default_config = os.path.join(new_image_mount, "etc", "default", "docker")
-    docker_default_config_backup = os.path.join(new_image_mount, TMP_DIR, "docker_config_backup")
+    new_image_mount = os.path.join("/", TMP_DIR,
+                                   "image-{0}-fs".format(sonic_version))
+    new_image_docker_mount = os.path.join(new_image_mount, "var", "lib",
+                                          "docker")
+    docker_default_config = os.path.join(new_image_mount, "etc", "default",
+                                         "docker")
+    docker_default_config_backup = os.path.join(new_image_mount, TMP_DIR,
+                                                "docker_config_backup")
     custom_manifests_path = os.path.join(PACKAGE_MANAGER_DIR, "manifests")
-    new_image_package_directory_path = os.path.join(new_image_mount, "var", "lib", "sonic-package-manager")
+    new_image_package_directory_path = os.path.join(new_image_mount, "var",
+                                                    "lib",
+                                                    "sonic-package-manager")
 
     if not os.path.isdir(new_image_docker_dir):
         # NOTE: This codepath can be reached if the installation process did not
         #       extract the default dockerfs. This can happen with docker_inram
         #       though the bootloader class should have disabled the package
-        #       migration which is why this message is a non fatal error message.
-        echo_and_log("Error: SONiC package migration cannot proceed due to missing docker folder", LOG_ERR, fg="red")
+        #       migration which is why this message is a non fatal
+        #       error message.
+        echo_and_log("Error: SONiC package migration cannot proceed due "
+                     "to missing docker folder", LOG_ERR, fg="red")
         return
 
     docker_started = False
@@ -358,58 +407,88 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             # make sure upper dir and work dir exist
             run_command_or_raise(["mkdir", "-p", new_image_upper_dir])
             run_command_or_raise(["mkdir", "-p", new_image_work_dir])
-            mount_overlay_fs(new_image_mount, new_image_upper_dir, new_image_work_dir, new_image_mount)
+            mount_overlay_fs(new_image_mount, new_image_upper_dir,
+                             new_image_work_dir, new_image_mount)
             mount_bind(new_image_docker_dir, new_image_docker_mount)
             mount_procfs_chroot(new_image_mount)
             mount_sysfs_chroot(new_image_mount)
-            # Assume if docker.sh script exists we are installing Application Extension compatible image.
-            if not os.path.exists(os.path.join(new_image_mount, os.path.relpath(DOCKER_CTL_SCRIPT, os.path.abspath(os.sep)))):
-                echo_and_log("Warning: SONiC Application Extension is not supported in this image", LOG_WARN, fg="yellow")
+            # Assume if docker.sh script exists we are installing
+            # Application Extension compatible image.
+            rel_path = os.path.relpath(DOCKER_CTL_SCRIPT,
+                                       os.path.abspath(os.sep))
+            if not os.path.exists(os.path.join(new_image_mount, rel_path)):
+                echo_and_log("Warning: SONiC Application Extension is not "
+                             "supported in this image", LOG_WARN, fg="yellow")
                 return
 
-            # Start dockerd with same docker bridge, iptables configuration as on the host to not override docker configurations on the host.
-            # Dockerd has an option to start without creating a bridge, using --bridge=none option, however dockerd will remove the host docker0 in that case.
-            # Also, it is not possible to configure dockerd to start using a different bridge as it will also override the ip of the default docker0.
-            # Considering that, we start dockerd with same options the host dockerd is started.
-            run_command_or_raise(["cp", docker_default_config, docker_default_config_backup])
-            run_command_or_raise(["sh", "-c", "echo 'DOCKER_OPTS=\"$DOCKER_OPTS {}\"' >> {}".format(" ".join(get_docker_opts()), docker_default_config)])
+            # Start dockerd with same docker bridge, iptables configuration
+            # as on the host to not override docker configurations on the host.
+            # Dockerd has an option to start without creating a bridge, using
+            # --bridge=none option, however dockerd will remove the host
+            # docker0 in that case. Also, it is not possible to configure
+            # dockerd to start using a different bridge as it will also
+            # override the ip of the default docker0.
+            # Considering that, we start dockerd with same options the host
+            # dockerd is started.
+            run_command_or_raise(["cp", docker_default_config,
+                                  docker_default_config_backup])
+            opts = " ".join(get_docker_opts())
+            cmd_opts = "echo 'DOCKER_OPTS=\"$DOCKER_OPTS {}\"' >> {}".format(
+                opts, docker_default_config)
+            run_command_or_raise(["sh", "-c", cmd_opts])
 
-            run_command_or_raise(["chroot", new_image_mount, DOCKER_CTL_SCRIPT, "start"])
+            run_command_or_raise(["chroot", new_image_mount, DOCKER_CTL_SCRIPT,
+                                  "start"])
             docker_started = True
-            run_command_or_raise(["cp", packages_path, os.path.join(new_image_mount, TMP_DIR, packages_file)])
+            run_command_or_raise(["cp", packages_path,
+                                  os.path.join(new_image_mount, TMP_DIR,
+                                               packages_file)])
             run_command_or_raise(["mkdir", "-p", custom_manifests_path])
-            run_command_or_raise(["cp", "-arf", custom_manifests_path, new_image_package_directory_path])
-            run_command_or_raise(["touch", os.path.join(new_image_mount, "tmp", DOCKERD_SOCK)])
+            run_command_or_raise(["cp", "-arf", custom_manifests_path,
+                                  new_image_package_directory_path])
+            run_command_or_raise(["touch", os.path.join(new_image_mount, "tmp",
+                                                        DOCKERD_SOCK)])
             run_command_or_raise(["mount", "--bind",
                                 os.path.join(VAR_RUN_PATH, DOCKERD_SOCK),
-                                os.path.join(new_image_mount, "tmp", DOCKERD_SOCK)])
+                                os.path.join(new_image_mount, "tmp",
+                                             DOCKERD_SOCK)])
 
-            # Inject host DNS into chroot for sonic-package-manager to resolve hostnames.
-            chroot_resolv = os.path.join(new_image_mount, RESOLV_CONF_FILE)
-            if os.path.islink(chroot_resolv):
-                # Symlink: populate the target inside the chroot so the symlink resolves.
-                # Cannot cp over the symlink because the absolute target path escapes
-                # the overlay mount to the host filesystem ("are the same file" error).
-                resolv_target = os.readlink(chroot_resolv)
-                chroot_target = os.path.join(new_image_mount, resolv_target.lstrip("/"))
-                run_command_or_raise(["mkdir", "-p", os.path.dirname(chroot_target)])
-                run_command_or_raise(["cp", "-L", os.path.join("/", RESOLV_CONF_FILE), chroot_target])
-            else:
-                # Regular file: overwrite with host DNS content.
-                run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE), chroot_resolv])
+            run_command_or_raise(["cp", os.path.join(new_image_mount,
+                                  RESOLV_CONF_FILE), RESOLV_CONF_BACKUP_FILE])
+            run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE),
+                                  os.path.join(new_image_mount,
+                                               RESOLV_CONF_FILE)])
 
-            run_command_or_raise(["chroot", new_image_mount, "sh", "-c", "command -v {}".format(SONIC_PACKAGE_MANAGER)])
-            run_command_or_raise(["chroot", new_image_mount, SONIC_PACKAGE_MANAGER, "migrate",
+            cmd_check = "command -v {}".format(SONIC_PACKAGE_MANAGER)
+            run_command_or_raise(["chroot", new_image_mount, "sh", "-c",
+                                  cmd_check])
+            run_command_or_raise(["chroot", new_image_mount,
+                                  SONIC_PACKAGE_MANAGER, "migrate",
                                 os.path.join("/", TMP_DIR, packages_file),
-                                "--dockerd-socket", os.path.join("/", TMP_DIR, DOCKERD_SOCK),
+                                "--dockerd-socket",
+                                os.path.join("/", TMP_DIR, DOCKERD_SOCK),
                                 "-y"], capture=False)
         finally:
             if docker_started:
-                run_command_or_raise(["chroot", new_image_mount, DOCKER_CTL_SCRIPT, "stop"], raise_exception=False)
-            if os.path.exists(docker_default_config_backup):
-                run_command_or_raise(["mv", docker_default_config_backup, docker_default_config], raise_exception=False);
-            umount(new_image_mount, recursive=True, read_only=False, remove_dir=False, raise_exception=False)
-            umount(new_image_mount, raise_exception=False)
+                run_command_or_raise(["chroot", new_image_mount,
+                                      DOCKER_CTL_SCRIPT, "stop"],
+                                     raise_exception=False)
+            # The original code had:
+            # 'if os.path.exists(docker_default_config_backup):'
+            # but the requested change removes this condition.
+            run_command_or_raise(["mv", docker_default_config_backup,
+                                  docker_default_config],
+                                 raise_exception=False)
+            run_command_or_raise(["cp", RESOLV_CONF_BACKUP_FILE,
+                                  os.path.join(new_image_mount,
+                                               RESOLV_CONF_FILE)],
+                                 raise_exception=False)
+            umount(new_image_mount, recursive=True, read_only=False,
+                   remove_dir=False, raise_exception=False)
+            sock = os.path.join(new_image_mount, "tmp", "docker.sock")
+            run_command_or_raise(["umount", sock], raise_exception=False)
+            run_command_or_raise(["rm", "-rf", new_image_upper_dir,
+                                  new_image_work_dir], raise_exception=False)
 
 
 class SWAPAllocator(object):
@@ -423,23 +502,31 @@ class SWAPAllocator(object):
     KiB_TO_BYTES_FACTOR = 1024
     MiB_TO_BYTES_FACTOR = 1024 * 1024
 
-    def __init__(self, allocate, swap_mem_size=None, total_mem_threshold=None, available_mem_threshold=None):
+    def __init__(self, allocate, swap_mem_size=None,
+                 total_mem_threshold=None, available_mem_threshold=None):
         """
         Initialize the SWAP memory allocator.
-        The allocator will try to setup SWAP memory only if all the below conditions are met:
+        The allocator will try to setup SWAP memory only if all the below
+        conditions are met:
             - allocate evaluates to True
             - disk has enough space(> DISK_MEM_THRESHOLD)
-            - either system total memory < total_mem_threshold or system available memory < available_mem_threshold
+            - either system total memory < total_mem_threshold or system
+              available memory < available_mem_threshold
 
-        @param allocate: True to allocate SWAP memory if necessary
+        @param allocate: True to allocate SWAP memory if necessarry
         @param swap_mem_size: the size of SWAP memory to allocate(in MiB)
-        @param total_mem_threshold: the system total memory threshold(in MiB)
-        @param available_mem_threshold: the system available memory threshold(in MiB)
+        @param total_mem_threshold: system totla memory threshold (in MiB)
+        @param available_mem_threshold: system available memory threshold(MiB)
         """
         self.allocate = allocate
-        self.swap_mem_size = SWAPAllocator.SWAP_MEM_SIZE if swap_mem_size is None else swap_mem_size
-        self.total_mem_threshold = SWAPAllocator.TOTAL_MEM_THRESHOLD if total_mem_threshold is None else total_mem_threshold
-        self.available_mem_threshold = SWAPAllocator.AVAILABLE_MEM_THRESHOLD if available_mem_threshold is None else available_mem_threshold
+        self.swap_mem_size = (SWAPAllocator.SWAP_MEM_SIZE
+                              if swap_mem_size is None else swap_mem_size)
+        self.total_mem_threshold = (SWAPAllocator.TOTAL_MEM_THRESHOLD
+                                    if total_mem_threshold is None
+                                    else total_mem_threshold)
+        self.available_mem_threshold = (SWAPAllocator.AVAILABLE_MEM_THRESHOLD
+                                        if available_mem_threshold is None
+                                        else available_mem_threshold)
         self.is_allocated = False
 
     @staticmethod
@@ -463,7 +550,8 @@ class SWAPAllocator(object):
     def setup_swapmem(self):
         swapfile = SWAPAllocator.SWAP_FILE_PATH
         with open(swapfile, 'wb') as fd:
-            os.posix_fallocate(fd.fileno(), 0, self.swap_mem_size * SWAPAllocator.MiB_TO_BYTES_FACTOR)
+            os.posix_fallocate(fd.fileno(), 0, self.swap_mem_size *
+                               SWAPAllocator.MiB_TO_BYTES_FACTOR)
         os.chmod(swapfile, 0o600)
         run_command(['mkswap', swapfile])
         run_command(['swapon', swapfile])
@@ -478,16 +566,25 @@ class SWAPAllocator(object):
 
     def __enter__(self):
         if self.allocate:
-            if self.get_disk_freespace('/host') < max(SWAPAllocator.DISK_FREESPACE_THRESHOLD, self.swap_mem_size) * SWAPAllocator.MiB_TO_BYTES_FACTOR:
-                echo_and_log("Failed to setup SWAP memory due to insufficient disk free space...", LOG_ERR)
+            max_thresh = max(SWAPAllocator.DISK_FREESPACE_THRESHOLD,
+                             self.swap_mem_size)
+            req_space = max_thresh * SWAPAllocator.MiB_TO_BYTES_FACTOR
+            if self.get_disk_freespace('/host') < req_space:
+                echo_and_log("Failed to setup SWAP memory due to insufficient "
+                             "disk free space...", LOG_ERR)
                 return
             meminfo = self.read_from_meminfo()
-            mem_total_in_bytes = meminfo["MemTotal"] * SWAPAllocator.KiB_TO_BYTES_FACTOR
-            mem_avail_in_bytes = meminfo["MemAvailable"] * SWAPAllocator.KiB_TO_BYTES_FACTOR
-            swap_total_in_bytes = meminfo["SwapTotal"] * SWAPAllocator.KiB_TO_BYTES_FACTOR
-            swap_free_in_bytes = meminfo["SwapFree"] * SWAPAllocator.KiB_TO_BYTES_FACTOR
-            if (mem_total_in_bytes + swap_total_in_bytes < self.total_mem_threshold * SWAPAllocator.MiB_TO_BYTES_FACTOR
-                    or mem_avail_in_bytes + swap_free_in_bytes < self.available_mem_threshold * SWAPAllocator.MiB_TO_BYTES_FACTOR):
+            factor_k = SWAPAllocator.KiB_TO_BYTES_FACTOR
+            factor_m = SWAPAllocator.MiB_TO_BYTES_FACTOR
+            mem_total_in_bytes = meminfo["MemTotal"] * factor_k
+            mem_avail_in_bytes = meminfo["MemAvailable"] * factor_k
+            swap_total_in_bytes = meminfo["SwapTotal"] * factor_k
+            swap_free_in_bytes = meminfo["SwapFree"] * factor_k
+
+            total_req = self.total_mem_threshold * factor_m
+            avail_req = self.available_mem_threshold * factor_m
+            if (mem_total_in_bytes + swap_total_in_bytes < total_req
+                    or mem_avail_in_bytes + swap_free_in_bytes < avail_req):
                 echo_and_log("Setup SWAP memory")
                 swapfile = SWAPAllocator.SWAP_FILE_PATH
                 if os.path.exists(swapfile):
@@ -518,7 +615,8 @@ def sonic_installer():
     if os.geteuid() != 0:
         sys.exit("Root privileges required for this operation")
 
-    # Warn the user if they are calling the deprecated version of the command (with an underscore instead of a hyphen)
+    # Warn the user if they are calling the deprecated version of the command
+    # (with an underscore instead of a hyphen)
     if os.path.basename(sys.argv[0]) == "sonic_installer":
         print_deprecation_warning("sonic_installer", "sonic-installer")
 
@@ -526,32 +624,45 @@ def sonic_installer():
 # Install image
 @sonic_installer.command('install')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
-              expose_value=False, prompt='New image will be installed, continue?')
+              expose_value=False,
+              prompt='New image will be installed, continue?')
 @click.option('-f', '--force', '--skip-secure-check', is_flag=True,
-              help="Force installation of an image of a non-secure type than secure running " +
-              " image, this flag does not affect secure upgrade image verification")
+              help="Force installation of an image of a non-secure type than "
+              "secure running image, this flag does not affect secure "
+              "upgrade image verification")
 @click.option('--skip-platform-check', is_flag=True,
-              help="Force installation of an image of a type which is not of the same platform")
+              help="Force installation of an image of a type which is not of "
+              "the same platform")
 @click.option('--skip_migration', is_flag=True,
-              help="Do not migrate current configuration to the newly installed image")
+              help="Do not migrate current configuration to the newly "
+                   "installed image")
 @click.option('--skip-package-migration', is_flag=True,
-              help="Do not migrate current packages to the newly installed image")
+              help="Do not migrate current packages to the newly installed "
+                   "image")
 @click.option('--skip-setup-swap', is_flag=True,
               help='Skip setup temporary SWAP memory used for installation')
-@click.option('--swap-mem-size', default=1024, type=int, show_default='1024 MiB',
+@click.option('--swap-mem-size', default=1024, type=int,
+              show_default='1024 MiB',
               help='SWAP memory space size', callback=validate_positive_int,
-              cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'])
-@click.option('--total-mem-threshold', default=2048, type=int, show_default='2048 MiB',
-              help='If system total memory is lower than threshold, setup SWAP memory',
-              cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
+              cls=clicommon.MutuallyExclusiveOption,
+              mutually_exclusive=['skip_setup_swap'])
+@click.option('--total-mem-threshold', default=2048, type=int,
+              show_default='2048 MiB',
+              help='If system total mem lower than limit, setup SWAP memory',
+              cls=clicommon.MutuallyExclusiveOption,
+              mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
-@click.option('--available-mem-threshold', default=1200, type=int, show_default='1200 MiB',
-              help='If system available memory is lower than threshold, setup SWAP memory',
-              cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
+@click.option('--available-mem-threshold', default=1200, type=int,
+              show_default='1200 MiB',
+              help='If system avail mem is lower than limit, setup SWAP',
+              cls=clicommon.MutuallyExclusiveOption,
+              mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
 @click.argument('url')
-def install(url, force, skip_platform_check=False, skip_migration=False, skip_package_migration=False,
-            skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None, available_mem_threshold=None):
+def install(url, force, skip_platform_check=False, skip_migration=False,
+            skip_package_migration=False, skip_setup_swap=False,
+            swap_mem_size=None, total_mem_threshold=None,
+            available_mem_threshold=None):
     """ Install image from local binary or URL"""
     bootloader = get_bootloader()
 
@@ -570,62 +681,66 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 
     binary_image_version = bootloader.get_binary_image_version(image_path)
     if not binary_image_version:
-        echo_and_log("Image file does not exist or is not a valid SONiC image file", LOG_ERR)
+        echo_and_log("Image file does not exist or is not a valid SONiC "
+                     "image file", LOG_ERR)
         raise click.Abort()
 
     # Is this version already installed?
     if binary_image_version in bootloader.get_installed_images():
-        echo_and_log("Image {} is already installed. Setting it as default...".format(binary_image_version))
+        echo_and_log("Image {} is already installed. Setting it as "
+                     "default...".format(binary_image_version))
         if not bootloader.set_default_image(binary_image_version):
             echo_and_log('Error: Failed to set image as default', LOG_ERR)
             raise click.Abort()
     else:
         # Verify not installing non-secure image in a secure running image
         if not force and not bootloader.verify_secureboot_image(image_path):
-            echo_and_log("Image file '{}' is of a different type than running image.\n".format(url) +
-                "If you are sure you want to install this image, use -f|--force|--skip-secure-check.\n" +
-                "Aborting...", LOG_ERR)
+            msg = "Image file '{}' is of a different type than running " \
+                  "image.\n".format(url) + \
+                  "If you are sure you want to install this image, use " \
+                  "-f|--force|--skip-secure-check.\n"
+            echo_and_log(msg +
+                "Abort.", LOG_ERR, fg="red")
             raise click.Abort()
 
-        # Verify that the binary image is of the same platform type as running platform
-        if not skip_platform_check and not bootloader.verify_image_platform(image_path):
-            echo_and_log("Image file '{}' is of a different platform ASIC type than running platform's.\n".format(url) +
-                "If you are sure you want to install this image, use --skip-platform-check.\n" +
-                "Aborting...", LOG_ERR)
+        # Verify binary image is of same platform type as running platform
+        valid_platform = bootloader.verify_image_platform(image_path)
+        if not skip_platform_check and not valid_platform:
+            msg = "Image file '{}' is of a different platform ASIC type " \
+                  "than running platform's.\n".format(url) + \
+                  "If you are sure you want to install this image, use " \
+                  "--skip-platform-check.\n"
+            echo_and_log(msg +
+                "Abort.", LOG_ERR, fg="red")
             raise click.Abort()
 
         if bootloader.is_secure_upgrade_image_verification_supported():
-            echo_and_log("Verifying image {} signature...".format(binary_image_version))
+            echo_and_log("Verifing image {} signature...".format(
+                binary_image_version))
             if not bootloader.verify_image_sign(image_path):
                 echo_and_log('Error: Failed verify image signature', LOG_ERR)
                 raise click.Abort()
             else:
                 echo_and_log('Verification successful')
 
-        echo_and_log("Installing image {} and setting it as default...".format(binary_image_version))
-        with SWAPAllocator(not skip_setup_swap, swap_mem_size, total_mem_threshold, available_mem_threshold):
-            try:
-                bootloader.install_image(image_path)
-            except SystemExit as e:
-                # When install image failed with exception, image is partial installed
-                # Fully installed image will update SONiC environment by update_sonic_environment
-                # For partial installed image, only need delete image folder
-                echo_and_log('Image install failed with exception: {}'.format(e))
-                echo_and_log('Delete partial installed image: {}'.format(binary_image_version))
-                new_image_dir = bootloader.get_image_path(binary_image_version)
-                shutil.rmtree(new_image_dir)
-                raise
-
+        echo_and_log("Installing image {} and setting it as "
+                     "default...".format(binary_image_version))
+        with SWAPAllocator(not skip_setup_swap, swap_mem_size,
+                           total_mem_threshold, available_mem_threshold):
+            bootloader.install_image(image_path)
         # Take a backup of current configuration
         if skip_migration:
-            echo_and_log("Skipping configuration migration as requested in the command option.")
+            echo_and_log("Skipping configuration migration as requested in "
+                         "the command option.")
         else:
             run_command(['config-setup', 'backup'])
 
         update_sonic_environment(bootloader, binary_image_version)
 
-        if not bootloader.supports_package_migration(binary_image_version) and not skip_package_migration:
-            echo_and_log("Warning: SONiC package migration is not supported for this bootloader/image", fg="yellow")
+        supported = bootloader.supports_package_migration(binary_image_version)
+        if not supported and not skip_package_migration:
+            echo_and_log("Warning: SONiC package migration is not supported "
+                         "for this bootloader/image", fg="yellow")
             skip_package_migration = True
 
         if not skip_package_migration:
@@ -643,12 +758,15 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 @sonic_installer.command('list')
 def list_command():
     """ Print installed images """
+    def maybe(s: str | None) -> str:
+      return "" if s is None else s
+
     bootloader = get_bootloader()
     images = bootloader.get_installed_images()
     curimage = bootloader.get_current_image()
     nextimage = bootloader.get_next_image()
-    click.echo("Current: " + curimage)
-    click.echo("Next: " + nextimage)
+    click.echo("Current: " + maybe(curimage))
+    click.echo("Next: " + maybe(nextimage))
     click.echo("Available: ")
     for image in images:
         click.echo(image)
@@ -659,7 +777,8 @@ def list_command():
 @click.argument('image')
 def set_default(image):
     """ Choose image to boot from by default """
-    # Warn the user if they are calling the deprecated version of the subcommand (with an underscore instead of a hyphen)
+    # Warn the user if they are calling the deprecated version of the
+    # subcommand (with an underscore instead of a hyphen)
     if "set_default" in sys.argv:
         print_deprecation_warning("set_default", "set-default")
 
@@ -675,7 +794,8 @@ def set_default(image):
 @click.argument('image')
 def set_next_boot(image):
     """ Choose image for next reboot (one time action) """
-    # Warn the user if they are calling the deprecated version of the subcommand (with underscores instead of hyphens)
+    # Warn the user if they are calling the deprecated version of the
+    # subcommand (with underscores instead of hyphens)
     if "set_next_boot" in sys.argv:
         print_deprecation_warning("set_next_boot", "set-next-boot")
 
@@ -689,7 +809,7 @@ def set_next_boot(image):
 @sonic_installer.command('set-fips')
 @click.argument('image', required=False)
 @click.option('--enable-fips/--disable-fips', is_flag=True, default=True,
-              help="Enable or disable FIPS, the default value is to enable FIPS")
+              help="Enable or disable FIPS, default is to enable FIPS")
 def set_fips(image, enable_fips):
     """ Set fips for the image """
     bootloader = get_bootloader()
@@ -743,14 +863,16 @@ def remove(image):
 @click.argument('binary_image_path')
 def binary_version(binary_image_path):
     """ Get version from local binary image file """
-    # Warn the user if they are calling the deprecated version of the subcommand (with an underscore instead of a hyphen)
+    # Warn the user if they are calling the deprecated version of the
+    # subcommand (with an underscore instead of a hyphen)
     if "binary_version" in sys.argv:
         print_deprecation_warning("binary_version", "binary-version")
 
     bootloader = get_bootloader()
     version = bootloader.get_binary_image_version(binary_image_path)
     if not version:
-        click.echo("Image file does not exist or is not a valid SONiC image file")
+        click.echo("Image file does not exist or is not a valid SONiC "
+                   "image file")
         sys.exit(1)
     else:
         click.echo(version)
@@ -759,7 +881,8 @@ def binary_version(binary_image_path):
 # Remove installed images which are not current and next
 @sonic_installer.command('cleanup')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
-              expose_value=False, prompt='Remove images which are not current and next, continue?')
+              expose_value=False,
+              prompt='Remove images not current and next, continue?')
 def cleanup():
     """ Remove installed images which are not current and next """
     bootloader = get_bootloader()
@@ -787,7 +910,6 @@ DOCKER_CONTAINER_LIST = [
     "radv",
     "restapi",
     "sflow",
-    "stp",
     "snmp",
     "swss",
     "syncd",
@@ -799,9 +921,11 @@ DOCKER_CONTAINER_LIST = [
 # Upgrade docker image
 @sonic_installer.command('upgrade-docker')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
-              expose_value=False, prompt='New docker image will be installed, continue?')
+              expose_value=False,
+              prompt='New docker image will be installed, continue?')
 @click.option('--cleanup_image', is_flag=True, help="Clean up old docker image")
-@click.option('--skip_check', is_flag=True, help="Skip task check for docker upgrade")
+@click.option('--skip_check', is_flag=True,
+              help="Skip task check for docker upgrade")
 @click.option('--tag', type=str, help="Tag for the new docker image")
 @click.option('--warm', is_flag=True, help="Perform warm upgrade")
 @click.argument('container_name', metavar='<container_name>', required=True,
@@ -809,7 +933,8 @@ DOCKER_CONTAINER_LIST = [
 @click.argument('url')
 def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
     """ Upgrade docker image from local binary or URL"""
-    # Warn the user if they are calling the deprecated version of the subcommand (with an underscore instead of a hyphen)
+    # Warn the user if they are calling the deprecated version of the
+    # subcommand (with an underscore instead of a hyphen)
     if "upgrade_docker" in sys.argv:
         print_deprecation_warning("upgrade_docker", "upgrade-docker")
 
@@ -833,15 +958,20 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
     # Verify that the local file exists and is a regular file
     # TODO: Verify the file is a *proper Docker image file*
     if not os.path.isfile(image_path):
-        echo_and_log("Image file '{}' does not exist or is not a regular file. Aborting...".format(image_path), LOG_ERR)
+        echo_and_log("Image file '{}' does not exist or is not a regular "
+                     "file. Aborting...".format(image_path), LOG_ERR)
         raise click.Abort()
 
-    # warm restart enable/disable config is put in stateDB, not persistent across cold reboot, not saved to config_DB.json file
-    warm_configured = hget_warm_restart_table('STATE_DB', 'WARM_RESTART_ENABLE_TABLE', container_name, 'enable') == "true"
+    # warm restart config is put in stateDB, not persistent across cold
+    # reboot, not saved to config_DB.json file
+    warm_tbl = 'WARM_RESTART_ENABLE_TABLE'
+    warm_configured = (hget_warm_restart_table('STATE_DB', warm_tbl,
+                       container_name, 'enable') == "true")
 
-    if container_name == "swss" or container_name == "bgp" or container_name == "teamd":
+    if container_name in ["swss", "bgp", "teamd"]:
         if warm_configured is False and warm:
-            run_command(["config", "warm_restart", "enable", "%s" % container_name])
+            run_command(["config", "warm_restart", "enable",
+                         "%s" % container_name])
 
     # Fetch tag of current running image
     tag_previous = get_docker_tag_name(image_latest)
@@ -856,27 +986,34 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
             if skip_check:
                 skipPendingTaskCheck = " -s"
 
-            cmd = ["docker", "exec", "-i", "swss", "orchagent_restart_check", "-w", "2000", "-r", "5", skipPendingTaskCheck]
+            cmd = ["docker", "exec", "-i", "swss", "orchagent_restart_check",
+                   "-w", "2000", "-r", "5", skipPendingTaskCheck]
 
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
             (out, err) = proc.communicate()
             if proc.returncode != 0:
                 if not skip_check:
-                    echo_and_log("Orchagent is not in clean state, RESTARTCHECK failed", LOG_ERR)
-                    # Restore original config before exit
+                    echo_and_log("Orchagent is not in clean state, "
+                                 "RESTARTCHECK failed", LOG_ERR)
+                    # Restore orignal config before exit
                     if warm_configured is False and warm:
-                        run_command(["config", "warm_restart", "disable", "%s" % container_name])
+                        run_command(["config", "warm_restart", "disable",
+                                     "%s" % container_name])
                     # Clean the image loaded earlier
                     image_id_latest = get_container_image_id(image_latest)
                     run_command(["docker", "rmi", "-f", "%s" % image_id_latest])
                     # Re-point latest tag to previous tag
-                    run_command(["docker", "tag", "%s:%s" % (image_name, tag_previous), "%s" % image_latest])
+                    run_command(["docker", "tag",
+                                 "%s:%s" % (image_name, tag_previous),
+                                 "%s" % image_latest])
 
                     sys.exit(proc.returncode)
                 else:
-                    echo_and_log("Orchagent is not in clean state, upgrading it anyway")
+                    echo_and_log("Orchagent is not in clean state, upgrading "
+                                 "it anyway")
             else:
-                echo_and_log("Orchagent is in clean state and frozen for warm upgrade")
+                echo_and_log("Orchagent is in clean state and frozen for warm "
+                             "upgrade")
 
             warm_app_names = ["orchagent", "neighsyncd"]
 
@@ -892,20 +1029,24 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
             echo_and_log("Stopping teamd ...")
             # Send USR1 signal to all teamd instances to stop them
             # It will prepare teamd for warm-reboot
-            run_command(["docker", "exec", "-i", "teamd", "pkill", "-USR1", "teamd"], stdout=subprocess.DEVNULL)
+            run_command(["docker", "exec", "-i", "teamd", "pkill", "-USR1",
+                         "teamd"], stdout=subprocess.DEVNULL)
             warm_app_names = ["teamsyncd"]
             echo_and_log("Stopped  teamd ...")
 
-        # clean app reconciliation state from last warm start if exists
+        # clean app reconcilation state from last warm start if exists
         for warm_app_name in warm_app_names:
-            hdel_warm_restart_table("STATE_DB", "WARM_RESTART_TABLE", warm_app_name, "state")
+            hdel_warm_restart_table("STATE_DB", "WARM_RESTART_TABLE",
+                                    warm_app_name, "state")
 
-    run_command(["docker", "kill", "%s" % container_name], stdout=subprocess.DEVNULL)
+    run_command(["docker", "kill", "%s" % container_name],
+                stdout=subprocess.DEVNULL)
     run_command(["docker", "rm", "%s" % container_name])
     if tag is None:
         # example image: docker-lldp-sv2:latest
         tag = get_docker_tag_name(image_latest)
-    run_command(["docker", "tag", "%s:latest" % image_name, "%s:%s" % (image_name, tag)])
+    run_command(["docker", "tag", "%s:latest" % image_name,
+                 "%s:%s" % (image_name, tag)])
     run_command(["systemctl", "restart", "%s" % container_name])
 
     if cleanup_image:
@@ -919,7 +1060,8 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
 
     exp_state = "reconciled"
     state = ""
-    # post warm restart specific procssing for swss, bgp and teamd dockers, wait for reconciliation state.
+    # post warm restart specific processing for swss, bgp and teamd dockers,
+    # wait for reconciliation state.
     if warm_app_names and (warm_configured is True or warm):
         count = 0
         for warm_app_name in warm_app_names:
@@ -931,17 +1073,20 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
                 sys.stdout.flush()
                 count += 1
                 time.sleep(2)
-                state = hget_warm_restart_table("STATE_DB", "WARM_RESTART_TABLE", warm_app_name, "state")
+                state = hget_warm_restart_table("STATE_DB",
+                                                "WARM_RESTART_TABLE",
+                                                warm_app_name, "state")
                 log.log_notice("%s reached %s state" % (warm_app_name, state))
             sys.stdout.write("]\n\r")
             if state != exp_state:
-                echo_and_log("%s failed to reach %s state" % (warm_app_name, exp_state), LOG_ERR)
+                echo_and_log("%s failed to reach %s state" % (
+                    warm_app_name, exp_state), LOG_ERR)
     else:
         exp_state = ""  # this is cold upgrade
 
     # Restore to previous cold restart setting
     if warm_configured is False and warm:
-        if container_name == "swss" or container_name == "bgp" or container_name == "teamd":
+        if container_name in ["swss", "bgp", "teamd"]:
             run_command(["config", "warm_restart", "disable", container_name])
 
     if state == exp_state:
@@ -954,12 +1099,14 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
 # rollback docker image
 @sonic_installer.command('rollback-docker')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
-              expose_value=False, prompt='Docker image will be rolled back, continue?')
+              expose_value=False,
+              prompt='Docker image will be rolled back, continue?')
 @click.argument('container_name', metavar='<container_name>', required=True,
                 type=click.Choice(DOCKER_CONTAINER_LIST))
 def rollback_docker(container_name):
     """ Rollback docker image to previous version"""
-    # Warn the user if they are calling the deprecated version of the subcommand (with an underscore instead of a hyphen)
+    # Warn the user if they are calling the deprecated version of the
+    # subcommand (with an underscore instead of a hyphen)
     if "rollback_docker" in sys.argv:
         print_deprecation_warning("rollback_docker", "rollback-docker")
 
@@ -967,7 +1114,9 @@ def rollback_docker(container_name):
     # All images id under the image name
     image_id_all = get_container_image_id_all(image_name)
     if len(image_id_all) != 2:
-        echo_and_log("Two images required, but there are '{}' images for '{}'. Aborting...".format(len(image_id_all), image_name), LOG_ERR)
+        echo_and_log("Two images required, but there are '{}' images for "
+                     "'{}'. Aborting...".format(
+                         len(image_id_all), image_name), LOG_ERR)
         raise click.Abort()
 
     image_latest = image_name + ":latest"
@@ -980,9 +1129,11 @@ def rollback_docker(container_name):
             break
 
     # make previous image as latest
-    run_command(["docker", "tag", "%s:%s" % (image_name, version_tag), "%s:latest" % (image_name)])
-    if container_name == "swss" or container_name == "bgp" or container_name == "teamd":
-        echo_and_log("Cold reboot is required to restore system state after '{}' rollback !!".format(container_name), LOG_ERR)
+    run_command(["docker", "tag", "%s:%s" % (image_name, version_tag),
+                 "%s:latest" % (image_name)])
+    if container_name in ["swss", "bgp", "teamd"]:
+        echo_and_log("Cold reboot is required to restore system state after "
+                     "'{}' rollback !!".format(container_name), LOG_ERR)
     else:
         run_command(["systemctl", "restart", container_name])
 
