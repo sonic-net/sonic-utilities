@@ -51,7 +51,7 @@ function get_reboot_status()
 {
     local dpu_ip=$1
     local port=$2
-    local reboot_output_file="reboot_status.txt"
+    local reboot_output_file="reboot_status_${dpu_ip}.txt"
 
     $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null)
     if [ $? -ne 0 ]; then

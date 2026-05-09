@@ -18,16 +18,18 @@ def get_chassis_info():
     call fails we simply return N/A.
     """
 
-    keys = ["serial", "model", "revision"]
+    keys = ["serial", "model", "revision", "switch_host_serial"]
 
     def try_get(platform, attr, fallback):
         try:
             if platform["chassis"] is None:
                 import sonic_platform
                 platform["chassis"] = sonic_platform.platform.Platform().get_chassis()
+            if attr == "switch_host_serial" and platform["chassis"].is_bmc() is False:
+                return fallback
             return getattr(platform["chassis"], "get_{}".format(attr))()
         except Exception:
-            return 'N/A'
+            return fallback
 
     chassis_info = device_info.get_chassis_info()
 

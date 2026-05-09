@@ -180,7 +180,6 @@ class TestAaa(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")
 
     def test_show_aaa_default(self):

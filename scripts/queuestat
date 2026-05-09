@@ -630,7 +630,10 @@ class Queuestat(object):
         if self.voq and self.namespace is not None:
             cache_ns = '-' + self.namespace + '-'
         for port in natsorted(self.counter_port_name_map):
-            cnstat_dict = self.get_cnstat(self.port_queues_map[port])
+            if device_info.is_supervisor():
+                cnstat_dict = self.get_aggregate_port_stats(port)
+            else:
+                cnstat_dict = self.get_cnstat(self.port_queues_map[port])
             try:
                 json.dump(cnstat_dict, open(cnstat_fqn_file + cache_ns + port, 'w'), default=json_serial)
             except IOError as e:
@@ -641,7 +644,7 @@ class Queuestat(object):
 
 
 @click.command()
-@click.option('-p', '--port', type=str, help='Show the queue conters for just one port', default=None)
+@click.option('-p', '--port', type=str, help='Show the queue counters for just one port', default=None)
 @click.option('-c', '--clear', is_flag=True, default=False, help='Clear previous stats and save new ones')
 @click.option('-d', '--delete', is_flag=True, default=False, help='Delete saved stats')
 @click.option('-j', '--json_opt',  is_flag=True, default=False, help='Print in JSON format')

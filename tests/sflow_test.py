@@ -300,64 +300,58 @@ class TestShowSflow(object):
         obj = {'db':db.cfgdb}
         config.ADHOC_VALIDATION = True
 
-        # mock interface_name_is_valid
-        config.interface_name_is_valid = mock.MagicMock(return_value = True)
+        sflow_intf = config.config.commands["sflow"].commands["interface"]
+        with mock.patch.object(config, 'interface_name_is_valid', mock.MagicMock(return_value=True)):
+            # intf enable
+            result = runner.invoke(
+                sflow_intf.commands["enable"], ["Ethernet1"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        # intf enable
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["enable"], ["Ethernet1"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
+            # we can not use 'show sflow interface', becasue 'show sflow interface'
+            # gets data from appDB, we need to fetch data from configDB for verification
+            sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+            assert sflowSession["Ethernet1"]["admin_state"] == "up"
 
-        # we can not use 'show sflow interface', becasue 'show sflow interface'
-        # gets data from appDB, we need to fetch data from configDB for verification
-        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
-        assert sflowSession["Ethernet1"]["admin_state"] == "up"
+            # intf disable
+            result = runner.invoke(
+                sflow_intf.commands["disable"], ["Ethernet1"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        # intf disable
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["disable"], ["Ethernet1"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
+            # verify in configDb
+            sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+            assert sflowSession["Ethernet1"]["admin_state"] == "down"
 
-        # verify in configDb
-        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
-        assert sflowSession["Ethernet1"]["admin_state"] == "down"
+        with mock.patch.object(config, 'interface_name_is_valid', mock.MagicMock(return_value=False)):
+            result = runner.invoke(
+                sflow_intf.commands["enable"], ["Ethernetx"], obj=obj)
+            print(result.exit_code, result.output)
+            assert "Invalid interface name" in result.output
 
-        config.interface_name_is_valid = mock.MagicMock(return_value = False)
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["enable"], ["Ethernetx"], obj=obj)
-        print(result.exit_code, result.output)
-        assert "Invalid interface name" in result.output
-
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["disable"], ["Ethernetx"], obj=obj)
-        print(result.exit_code, result.output)
-        assert "Invalid interface name" in result.output
-
-        return
+            result = runner.invoke(
+                sflow_intf.commands["disable"], ["Ethernetx"], obj=obj)
+            print(result.exit_code, result.output)
+            assert "Invalid interface name" in result.output
 
     def test_config_sflow_intf_sample_rate(self):
         db = Db()
         runner = CliRunner()
         obj = {'db':db.cfgdb}
 
-        # mock interface_name_is_valid
-        config.interface_name_is_valid = mock.MagicMock(return_value = True)
+        sflow_intf = config.config.commands["sflow"].commands["interface"]
+        with mock.patch.object(config, 'interface_name_is_valid', mock.MagicMock(return_value=True)):
+            # set sample-rate to 2500
+            result = runner.invoke(
+                sflow_intf.commands["sample-rate"],
+                ["Ethernet2", "2500"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        # set sample-rate to 2500
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["sample-rate"],
-            ["Ethernet2", "2500"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
-
-        # we can not use 'show sflow interface', becasue 'show sflow interface'
-        # gets data from appDB, we need to fetch data from configDB for verification
-        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
-        assert sflowSession["Ethernet2"]["sample_rate"] == "2500"
-
-        return
+            # we can not use 'show sflow interface', becasue 'show sflow interface'
+            # gets data from appDB, we need to fetch data from configDB for verification
+            sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+            assert sflowSession["Ethernet2"]["sample_rate"] == "2500"
 
     def test_config_disable_all_intf(self):
         db = Db()
@@ -393,38 +387,35 @@ class TestShowSflow(object):
         runner = CliRunner()
         obj = {'db':db.cfgdb}
 
-        # mock interface_name_is_valid
-        config.interface_name_is_valid = mock.MagicMock(return_value = True)
+        sflow_intf = config.config.commands["sflow"].commands["interface"]
+        with mock.patch.object(config, 'interface_name_is_valid', mock.MagicMock(return_value=True)):
+            result_out1 = runner.invoke(show.cli.commands["sflow"].commands["interface"], [], obj=Db())
+            print(result_out1.exit_code, result_out1.output)
+            assert result_out1.exit_code == 0
 
-        result_out1 = runner.invoke(show.cli.commands["sflow"].commands["interface"], [], obj=Db())
-        print(result_out1.exit_code, result_out1.output)
-        assert result_out1.exit_code == 0
-        
-        # set sample-rate to 2500
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["sample-rate"],
-            ["Ethernet2", "2500"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
+            # set sample-rate to 2500
+            result = runner.invoke(
+                sflow_intf.commands["sample-rate"],
+                ["Ethernet2", "2500"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        # we can not use 'show sflow interface', becasue 'show sflow interface'
-        # gets data from appDB, we need to fetch data from configDB for verification
-        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
-        assert sflowSession["Ethernet2"]["sample_rate"] == "2500"
+            # we can not use 'show sflow interface', becasue 'show sflow interface'
+            # gets data from appDB, we need to fetch data from configDB for verification
+            sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+            assert sflowSession["Ethernet2"]["sample_rate"] == "2500"
 
-        # set sample-rate to default
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["sample-rate"],
-            ["Ethernet2", "default"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
+            # set sample-rate to default
+            result = runner.invoke(
+                sflow_intf.commands["sample-rate"],
+                ["Ethernet2", "default"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        result_out2 = runner.invoke(show.cli.commands["sflow"].commands["interface"], [], obj=Db())
-        print(result_out2.exit_code, result_out2.output)
-        assert result_out2.exit_code == 0
-        assert result_out1.output == result_out2.output
-
-        return
+            result_out2 = runner.invoke(show.cli.commands["sflow"].commands["interface"], [], obj=Db())
+            print(result_out2.exit_code, result_out2.output)
+            assert result_out2.exit_code == 0
+            assert result_out1.output == result_out2.output
 
     def test_config_sflow_sample_direction(self):
         # config sflow sample-direction<rx|tx|both>
@@ -515,57 +506,53 @@ class TestShowSflow(object):
         runner = CliRunner()
         obj = {'db':db.cfgdb}
 
-        # mock interface_name_is_valid
-        config.interface_name_is_valid = mock.MagicMock(return_value = True)
+        sflow_intf = config.config.commands["sflow"].commands["interface"]
+        with mock.patch.object(config, 'interface_name_is_valid', mock.MagicMock(return_value=True)):
+            # set sample-direction to Invalid
+            result = runner.invoke(
+                sflow_intf.commands["sample-direction"],
+                ["Ethernet2", "NA"], obj=obj)
+            print(result.exit_code, result.output)
+            expected = "Error: Direction NA is invalid"
+            assert result.exit_code == 2
+            assert expected in result.output
 
-        # set sample-direction to Invalid
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["sample-direction"],
-            ["Ethernet2", "NA"], obj=obj)
-        print(result.exit_code, result.output)
-        expected = "Error: Direction NA is invalid"
-        assert result.exit_code == 2
-        assert expected in result.output
+            # set sample-direction to both
+            result = runner.invoke(
+                sflow_intf.commands["sample-direction"],
+                ["Ethernet2", "both"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        # set sample-direction to both
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["sample-direction"],
-            ["Ethernet2", "both"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
+            # we can not use 'show sflow interface', becasue 'show sflow interface'
+            # gets data from appDB, we need to fetch data from configDB for verification
+            sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+            assert sflowSession["Ethernet2"]["sample_direction"] == "both"
 
-        # we can not use 'show sflow interface', becasue 'show sflow interface'
-        # gets data from appDB, we need to fetch data from configDB for verification
-        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
-        assert sflowSession["Ethernet2"]["sample_direction"] == "both"
+            # set sample-direction to tx
+            result = runner.invoke(
+                sflow_intf.commands["sample-direction"],
+                ["Ethernet2", "tx"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        # set sample-direction to tx
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["sample-direction"],
-            ["Ethernet2", "tx"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
+            # we can not use 'show sflow interface', becasue 'show sflow interface'
+            # gets data from appDB, we need to fetch data from configDB for verification
+            sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+            assert sflowSession["Ethernet2"]["sample_direction"] == "tx"
 
-        # we can not use 'show sflow interface', becasue 'show sflow interface'
-        # gets data from appDB, we need to fetch data from configDB for verification
-        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
-        assert sflowSession["Ethernet2"]["sample_direction"] == "tx"
+            # set sample-direction to rx
+            result = runner.invoke(
+                sflow_intf.commands["sample-direction"],
+                ["Ethernet2", "rx"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
-        # set sample-direction to rx
-        result = runner.invoke(config.config.commands["sflow"].
-            commands["interface"].commands["sample-direction"],
-            ["Ethernet2", "rx"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
-
-        # we can not use 'show sflow interface', becasue 'show sflow interface'
-        # gets data from appDB, we need to fetch data from configDB for verification
-        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
-        assert sflowSession["Ethernet2"]["sample_direction"] == "rx"
-
-        return
+            # we can not use 'show sflow interface', becasue 'show sflow interface'
+            # gets data from appDB, we need to fetch data from configDB for verification
+            sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+            assert sflowSession["Ethernet2"]["sample_direction"] == "rx"
 
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

@@ -5,7 +5,7 @@ from mock import patch
 fast_reboot_filter_routes = importlib.import_module("scripts.fast-reboot-filter-routes")
 
 class TestFastRebootFilterRoutes(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('utilities_common.cli.run_command')
@@ -22,5 +22,5 @@ class TestFastRebootFilterRoutes(object):
             fast_reboot_filter_routes.get_connected_routes()
         mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', "show ip route connected json"], return_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEAR DOWN")

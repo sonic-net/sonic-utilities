@@ -336,6 +336,10 @@ def format_dict_value_to_string(sorted_key_table,
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
+    # Gracefully handle missing/invalid info dicts
+    if sfp_info_dict is None or not isinstance(sfp_info_dict, dict):
+        output += '{}EEPROM info: N/A\n'.format(indent)
+        return output
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     if is_sfp_cmis:
         # Use the utility function with the local QSFP_DD_DATA_MAP for CMIS transceivers
@@ -396,7 +400,7 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
     channel_threshold_align = 18
     module_threshold_align = 15
 
-    if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
+    if sfp_type.startswith('QSFP') or is_sfp_cmis:
         # Channel Monitor
         if is_sfp_cmis:
             output_dom += (indent + 'ChannelMonitorValues:\n')
@@ -727,7 +731,7 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEEPROM hexdump for <page_number_in_hex>")
+@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
@@ -869,20 +873,14 @@ def eeprom_hexdump_pages_general(logical_port_name, pages, target_page):
         if page == 0:
             lines.append(f'{EEPROM_DUMP_INDENT}Lower page 0h')
             return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
 
             lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page 0h')
             return_code, output = eeprom_dump_general(physical_port, page, PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
         else:
             lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page {page:x}h')
             return_code, output = eeprom_dump_general(physical_port, page, page * PAGE_SIZE + PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
 
     lines.append('') # add a new line
@@ -915,20 +913,14 @@ def eeprom_hexdump_pages_sff8472(logical_port_name, pages, target_page):
                 return_code, output = eeprom_dump_general(physical_port, page, 0, SFF8472_A0_SIZE, 0)
             else:
                 return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
-            if return_code != 0:
-                return return_code, 'Error: Failed to read EEPROM for A0h!'
             lines.append(output)
         elif page == 1:
             lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (lower 128 bytes)')
             return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE, PAGE_SIZE, 0)
-            if return_code != 0:
-                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h!'
             lines.append(output)
         else:
             lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (upper 128 bytes) page {page - 2:x}h')
             return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE + PAGE_OFFSET + page * PAGE_SIZE, PAGE_SIZE, PAGE_SIZE)
-            if return_code != 0:
-                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h upper page!'
             lines.append(output)
 
     lines.append('') # add a new line
@@ -1181,7 +1173,11 @@ def lpmode(port):
                 port_name = get_physical_port_name(logical_port_name, i, ganged)
 
                 try:
-                    lpmode = platform_chassis.get_sfp(physical_port).get_lpmode()
+                    sfp = platform_chassis.get_sfp(physical_port)
+                    if not sfp.get_presence():
+                        output_table.append([port_name, "Not Present"])
+                        continue
+                    lpmode = sfp.get_lpmode()
                 except NotImplementedError:
                     click.echo("This functionality is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1261,12 +1257,15 @@ def set_lpmode(logical_port, enable):
         ganged = True
 
     for physical_port in physical_port_list:
-        click.echo("{} low-power mode for port {} ... ".format(
-            "Enabling" if enable else "Disabling",
-            get_physical_port_name(logical_port, i, ganged)), nl=False)
-
         try:
-            result = platform_chassis.get_sfp(physical_port).set_lpmode(enable)
+            sfp = platform_chassis.get_sfp(physical_port)
+            if not sfp.get_presence():
+                click.echo(f"{logical_port}: module {physical_port} is not present, skipping")
+                continue
+            click.echo("{} low-power mode for port {} ... ".format(
+                "Enabling" if enable else "Disabling",
+                get_physical_port_name(logical_port, i, ganged)), nl=False)
+            result = sfp.set_lpmode(enable)
         except NotImplementedError:
             click.echo("This functionality is currently not implemented for this platform")
             sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1321,10 +1320,13 @@ def reset(port_name):
         ganged = True
 
     for physical_port in physical_port_list:
-        click.echo("Resetting port {} ... ".format(get_physical_port_name(port_name, i, ganged)), nl=False)
-
         try:
-            result = platform_chassis.get_sfp(physical_port).reset()
+            sfp = platform_chassis.get_sfp(physical_port)
+            if not sfp.get_presence():
+                click.echo(f"{port_name}: module {physical_port} is not present, skipping")
+                continue
+            click.echo("Resetting port {} ... ".format(get_physical_port_name(port_name, i, ganged)), nl=False)
+            result = sfp.reset()
         except NotImplementedError:
             click.echo("This functionality is currently not implemented for this platform")
             sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1469,36 +1471,32 @@ def is_fw_switch_done(port_name):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     try:
-        MAX_WAIT = 60 # 60s timeout.
-        is_busy = 1 # Initial to 1 for entering while loop at least one time.
+        MAX_WAIT = 60
         timeout_time = time.time() + MAX_WAIT
-        while is_busy and (time.time() < timeout_time):
+        while time.time() < timeout_time:
             fw_info = api.get_module_fw_info()
-            is_busy = 1 if (fw_info['status'] == False) and (fw_info['result'] is not None) else 0
+            if fw_info['status'] is True and fw_info['result'] is not None:
+                (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
+                 ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
+
+                if (ImageARunning == 1) and (ImageAInvalid == 1):
+                    click.echo("FW info error : ImageA shows running, but also shows invalid!")
+                    return -1
+                elif (ImageBRunning == 1) and (ImageBInvalid == 1):
+                    click.echo("FW info error : ImageB shows running, but also shows invalid!")
+                    return -1
+                elif (ImageARunning == 1) and (ImageACommitted == 0):
+                    click.echo("FW images switch successful : ImageA is running")
+                    return 1
+                elif (ImageBRunning == 1) and (ImageBCommitted == 0):
+                    click.echo("FW images switch successful : ImageB is running")
+                    return 1
+                # Switch not done yet — module may have returned stale pre-reset data, keep polling
+
             time.sleep(2)
 
-        if fw_info['status'] == True:
-            (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
-             ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
-
-            if (ImageARunning == 1) and (ImageAInvalid == 1):       # ImageA is running, but also invalid.
-                click.echo("FW info error : ImageA shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageBRunning == 1) and (ImageBInvalid == 1):     # ImageB is running, but also invalid.
-                click.echo("FW info error : ImageB shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageARunning == 1) and (ImageACommitted == 0):   # ImageA is running, but not committed.
-                click.echo("FW images switch successful : ImageA is running")
-                status = 1  # run_firmware is done. 
-            elif (ImageBRunning == 1) and (ImageBCommitted == 0):   # ImageB is running, but not committed.
-                click.echo("FW images switch successful : ImageB is running")
-                status = 1  # run_firmware is done. 
-            else:                                                   # No image is running, or running and committed image is same.
-                click.echo("FW info error : Failed to switch into uncommitted image!")
-                status = -1 # Failure for Switching images.
-        else:
-            click.echo("FW switch : Timeout!")
-            status = -1     # Timeout or check code error or CDB not supported.
+        click.echo("FW switch : Timeout!")
+        status = -1
 
     except NotImplementedError:
         click.echo("This functionality is not applicable for this transceiver")
@@ -1545,7 +1543,7 @@ def download_firmware(port_name, filepath):
     try:
         fwinfo = api.get_module_fw_mgmt_feature()
         if fwinfo['status'] == True:
-            startLPLsize, maxblocksize, lplonly_flag, autopaging_flag, writelength = fwinfo['feature']
+            startLPLsize, maxblocksize, lplonly_flag, _, _ = fwinfo['feature']
         else:
             click.echo("Failed to fetch CDB Firmware management features")
             sys.exit(EXIT_FAIL)
@@ -1554,11 +1552,11 @@ def download_firmware(port_name, filepath):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     click.echo('CDB: Starting firmware download')
-    startdata = fd.read(startLPLsize)
-    status = api.cdb_start_firmware_download(startLPLsize, startdata, file_size)
+    status = api.cdb_start_firmware_download(filepath)
     if status != 1:
         click.echo('CDB: Start firmware download failed - status {}'.format(status))
         sys.exit(EXIT_FAIL)
+    fd.seek(startLPLsize)
 
     # Increase the optoe driver's write max to speed up firmware download
     try:
@@ -1583,7 +1581,7 @@ def download_firmware(port_name, filepath):
             if lplonly_flag:
                 status = api.cdb_lpl_block_write(address, data)
             else:
-                status = api.cdb_epl_block_write(address, data, autopaging_flag, writelength)
+                status = api.cdb_epl_block_write(address, data)
             if (status != 1):
                 click.echo("CDB: firmware download failed! - status {}".format(status))
                 sys.exit(EXIT_FAIL)

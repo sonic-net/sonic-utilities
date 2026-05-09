@@ -148,7 +148,10 @@ Media Assign (0x1)
                 TxPowerLowAlarm   : -10.5012dBm
                 TxPowerLowWarning : -7.5007dBm
         ModuleMonitorValues:
+                Requested Laser Frequency: 193100GHz
+                Tx Frequency: 193100.0GHz
                 Temperature: 44.9883C
+                Requested Tx Power: -8.5dBm
                 Vcc: 3.2999Volts
         ModuleThresholdValues:
                 TempHighAlarm  : 80.0000C
@@ -899,8 +902,6 @@ class TestSFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     def test_sfp_presence(self):
         runner = CliRunner()
@@ -1060,7 +1061,6 @@ Ethernet36  Present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -1068,7 +1068,6 @@ class Test_multiAsic_SFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
@@ -1225,9 +1224,14 @@ Ethernet200  Not present
     def test_is_rj45_port(self):
         import utilities_common.platform_sfputil_helper as platform_sfputil_helper
         platform_sfputil_helper.platform_chassis = None
-        if 'sonic_platform' in sys.modules:
-            sys.modules.pop('sonic_platform')
-        assert platform_sfputil_helper.is_rj45_port("Ethernet0") == False
+        # Force `import sonic_platform` to raise ImportError regardless of whether
+        # the package is installed (it is, in per-platform sonic-buildimage CI) and
+        # regardless of whether other tests in this xdist worker pre-loaded it.
+        mods_to_hide = {k: None for k in list(sys.modules)
+                        if k == 'sonic_platform' or k.startswith('sonic_platform.')}
+        mods_to_hide.setdefault('sonic_platform', None)
+        with patch.dict(sys.modules, mods_to_hide):
+            assert platform_sfputil_helper.is_rj45_port("Ethernet0") is False
 
     def test_qsfp_dd_pm_all(self):
         runner = CliRunner()
@@ -1244,7 +1248,6 @@ Ethernet200  Not present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -1389,6 +1392,3 @@ class TestMultiAsicSFP(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

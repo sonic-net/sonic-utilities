@@ -130,7 +130,11 @@
         "tx5power": "1.175",
         "tx6power": "1.175",
         "tx7power": "1.175",
-        "tx8power": "1.175"
+        "tx8power": "1.175",
+        "laser_temperature": "47.7265625",
+        "laser_config_freq": "193100",
+        "laser_curr_freq": "193100.0",
+        "tx_config_power": "-8.5"
     },
     "TRANSCEIVER_DOM_THRESHOLD|Ethernet8": {
         "rxpowerhighalarm": "6.9999",
@@ -1631,6 +1635,18 @@
     },
     "VNET_ROUTE_TUNNEL_TABLE|Vnet_v6_in_v6-0|fddd:a156:a251::a6:1/128": {
         "active_endpoints":"fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",
+        "state":"active"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE|Vnet_mac_vni_scale|10.0.0.0/24": {
+        "active_endpoints":"10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6",
+        "state":"active"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE|Vnet_7127926|30.0.21.0/24": {
+        "active_endpoints":"100.106.230.44,10.134.85.10,100.106.229.38,100.106.229.170,100.106.228.160,10.134.84.24,100.106.230.168,10.90.92.16,10.224.116.42,100.106.228.134,100.106.229.171,100.106.228.161",
+        "state":"active"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE|Vnet_7127926|30.0.20.0/24": {
+        "active_endpoints":"100.106.230.44,10.134.85.10,100.106.229.38,100.106.229.170,100.106.228.160,10.134.84.24,100.106.230.168,10.90.92.16,10.224.116.42,100.106.228.134",
         "state":"active"
     },
     "BFD_SESSION_TABLE|default|default|100.251.7.1": {

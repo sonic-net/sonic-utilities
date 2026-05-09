@@ -1,5 +1,6 @@
 from click.testing import CliRunner
 import show.main as show
+import clear.main as clear
 import os
 import json
 
@@ -24,6 +25,16 @@ show_queue_counters_voq_sys_port = """\
 sonic-lc2|asic0|Ethernet4   VOQ1              18             2196           16          1952                     0
 
 """
+
+show_queue_voq_counters_with_clear = ["""\
+Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+-------------------------  -----  --------------  ---------------  -----------  ------------  --------------------
+sonic-lc1|asic0|Ethernet0   VOQ0               0                0            0             0                     0
+""", """\
+Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+-------------------------  -----  --------------  ---------------  -----------  ------------  --------------------
+sonic-lc2|asic0|Ethernet4   VOQ1               0                0            0             0                     0
+"""]
 
 show_queue_counters_voq_json = {
   "sonic-lc1|asic0|Ethernet0": {
@@ -52,9 +63,7 @@ show_queue_counters_voq_json = {
 class TestAggVoq(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         print("SETUP")
 
     def test_queue_voq_counters_aggregate(self):
@@ -90,9 +99,22 @@ class TestAggVoq(object):
         assert result.exit_code == 0
         assert result.output == show_queue_counters_voq_sys_port
 
+    def test_queue_voq_counters_aggregate_with_clear(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['queuecounters'], [])
+        assert result.exit_code == 0
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["counters"],
+            ["--voq"]
+        )
+        show.run_command(['queuestat', '-d', '--voq'])
+        assert result.exit_code == 0
+        assert "Ethernet0 Last cached time was" in result.output and \
+               "Ethernet4 Last cached time was" in result.output
+        assert show_queue_voq_counters_with_clear[0] in result.output and \
+               show_queue_voq_counters_with_clear[1] in result.output
+
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
         print("TEARDOWN")

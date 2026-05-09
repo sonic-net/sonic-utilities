@@ -1,6 +1,7 @@
 import pytest
 import logging
 import os
+import shutil
 
 import clear.main as clear
 import show.main as show
@@ -8,6 +9,7 @@ import show.main as show
 from click.testing import CliRunner
 from utilities_common.cli import UserCache
 
+from .mock_tables import dbconnector
 from .utils import get_result_and_return_code
 from .portstat_input import assert_show_output
 
@@ -414,17 +416,35 @@ def verify_after_clear(output, expected_out):
     assert new_output == expected_out
 
 
+def _backup_mock_file(fname, suffix=".bak"):
+    """Backup a file in the per-worker mock_tables dir."""
+    src = os.path.join(dbconnector.INPUT_DIR, fname)
+    dst = os.path.join(dbconnector.INPUT_DIR, fname + suffix)
+    shutil.copyfile(src, dst)
+
+
+def _restore_mock_file(fname, suffix=".bak"):
+    """Restore a backed-up file in the per-worker mock_tables dir."""
+    src = os.path.join(dbconnector.INPUT_DIR, fname + suffix)
+    dst = os.path.join(dbconnector.INPUT_DIR, fname)
+    shutil.copyfile(src, dst)
+
+
+def _replace_mock_file(subdir, fname):
+    """Replace a mock file with a test-specific version."""
+    src = os.path.join(test_path, subdir, fname)
+    dst = os.path.join(dbconnector.INPUT_DIR, fname)
+    shutil.copyfile(src, dst)
+
+
 class TestPortStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
-        os.system("cp {} /tmp/counters_db.json.orig".format(os.path.join(test_path, "mock_tables/counters_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/counters_db.json"),
-                                    os.path.join(test_path, "mock_tables/counters_db.json")))
+        _backup_mock_file("counters_db.json", ".orig")
+        _replace_mock_file("portstat_db", "counters_db.json")
         remove_tmp_cnstat_file()
 
     def test_show_intf_counters(self):
@@ -599,9 +619,8 @@ class TestPortStat(object):
 
     def test_show_intf_counters_on_sup_no_counters(self):
         remove_tmp_cnstat_file()
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_no_counters/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file("portstat_db/on_sup_no_counters", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
 
         runner = CliRunner()
@@ -619,14 +638,12 @@ class TestPortStat(object):
         assert result == intf_counters_on_sup_no_counters
 
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_on_sup_partial_lc(self):
         remove_tmp_cnstat_file()
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_partial_lc/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file("portstat_db/on_sup_partial_lc", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
 
         runner = CliRunner()
@@ -644,14 +661,12 @@ class TestPortStat(object):
         assert result == intf_counters_on_sup_partial_lc
 
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_on_sup_na(self):
         remove_tmp_cnstat_file()
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_na/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file("portstat_db/on_sup_na", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
 
         runner = CliRunner()
@@ -669,16 +684,15 @@ class TestPortStat(object):
         assert result == intf_counters_on_sup_na
 
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_on_sup_packet_chassis(self):
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/counters_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/counters_db.json"),
-                                    os.path.join(test_path, "mock_tables/counters_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file(
+            "portstat_db/on_sup_packet_chassis", "chassis_state_db.json")
+        _backup_mock_file("counters_db.json")
+        _replace_mock_file(
+            "portstat_db/on_sup_packet_chassis", "counters_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "1"
 
@@ -697,15 +711,13 @@ class TestPortStat(object):
         assert result.rstrip() == intf_counters_on_sup_packet_chassis.rstrip()
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp /tmp/counters_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/counters_db.json")))
+        _restore_mock_file("chassis_state_db.json")
+        _restore_mock_file("counters_db.json")
 
     def test_show_intf_counters_from_lc_on_sup_packet_chassis(self):
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file(
+            "portstat_db/on_sup_packet_chassis", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "1"
 
@@ -724,8 +736,7 @@ class TestPortStat(object):
         assert result.rstrip() == intf_counters_from_lc_on_sup_packet_chassis.rstrip()
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_nonzero(self):
         runner = CliRunner()
@@ -797,29 +808,23 @@ class TestPortStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
         remove_tmp_cnstat_file()
-        os.system("cp /tmp/counters_db.json.orig {}"
-                  .format(os.path.join(test_path, "mock_tables/counters_db.json")))
+        _restore_mock_file("counters_db.json", ".orig")
 
 
 class TestPortTrimStat(object):
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         remove_tmp_cnstat_file()
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         remove_tmp_cnstat_file()
 
@@ -992,7 +997,6 @@ class TestMultiAsicPortStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         remove_tmp_cnstat_file()
@@ -1120,8 +1124,77 @@ class TestMultiAsicPortStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         remove_tmp_cnstat_file()
+
+
+class TestPortstatGetDbClient(object):
+    """Test the get_db_client method for caching DB connections"""
+
+    def test_get_db_client_creates_new_connection(self):
+        """Test that get_db_client creates a new connection when none exists"""
+        from unittest import mock
+        from utilities_common.portstat import Portstat
+        from utilities_common.constants import DEFAULT_NAMESPACE
+
+        portstat = Portstat(namespace=DEFAULT_NAMESPACE, display_option='')
+
+        with mock.patch('sonic_py_common.multi_asic.connect_to_all_dbs_for_ns') as mock_connect:
+            mock_db_client = mock.MagicMock()
+            mock_connect.return_value = mock_db_client
+
+            result = portstat.get_db_client('asic0')
+
+            mock_connect.assert_called_once_with('asic0')
+
+            assert result == mock_db_client
+
+            assert portstat.db_clients['asic0'] == mock_db_client
+
+    def test_get_db_client_returns_cached_connection(self):
+        """Test that get_db_client returns cached connection on subsequent calls"""
+        from unittest import mock
+        from utilities_common.portstat import Portstat
+        from utilities_common.constants import DEFAULT_NAMESPACE
+
+        portstat = Portstat(namespace=DEFAULT_NAMESPACE, display_option='')
+
+        with mock.patch('sonic_py_common.multi_asic.connect_to_all_dbs_for_ns') as mock_connect:
+            mock_db_client = mock.MagicMock()
+            mock_connect.return_value = mock_db_client
+            result1 = portstat.get_db_client('asic0')
+            result2 = portstat.get_db_client('asic0')
+            mock_connect.assert_called_once_with('asic0')
+
+            assert result1 == result2
+            assert result1 == mock_db_client
+
+    def test_get_db_client_multiple_namespaces(self):
+        """Test that get_db_client handles multiple namespaces correctly"""
+        from unittest import mock
+        from utilities_common.portstat import Portstat
+        from utilities_common.constants import DEFAULT_NAMESPACE
+
+        portstat = Portstat(namespace=DEFAULT_NAMESPACE, display_option='')
+
+        with mock.patch('sonic_py_common.multi_asic.connect_to_all_dbs_for_ns') as mock_connect:
+            mock_db_client_asic0 = mock.MagicMock()
+            mock_db_client_asic1 = mock.MagicMock()
+
+            def side_effect(ns):
+                if ns == 'asic0':
+                    return mock_db_client_asic0
+                elif ns == 'asic1':
+                    return mock_db_client_asic1
+
+            mock_connect.side_effect = side_effect
+            result_asic0 = portstat.get_db_client('asic0')
+            result_asic1 = portstat.get_db_client('asic1')
+            assert mock_connect.call_count == 2
+            mock_connect.assert_any_call('asic0')
+            mock_connect.assert_any_call('asic1')
+            assert result_asic0 == mock_db_client_asic0
+            assert result_asic1 == mock_db_client_asic1
+            assert portstat.db_clients['asic0'] == mock_db_client_asic0
+            assert portstat.db_clients['asic1'] == mock_db_client_asic1

@@ -1,3 +1,6 @@
+import os
+import tarfile
+import importlib
 import sys
 import pytest
 from unittest.mock import call, patch, MagicMock
@@ -6,7 +9,7 @@ sys.modules['sonic_platform.platform'] = MagicMock()
 import fwutil.lib as fwutil_lib
 
 class TestSquashFs(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('fwutil.lib.check_output_pipe')
@@ -74,12 +77,12 @@ class TestSquashFs(object):
             call(sqfs.fs_mountpoint)
         ]
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')
 
 
 class TestComponentUpdateProvider(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch("glob.glob", MagicMock(side_effect=[[], ['abc'], [], ['abc']]))
@@ -241,5 +244,166 @@ class TestComponentUpdateProvider(object):
             )
         assert "Module names mismatch" in str(excinfo.value)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')
+
+
+class TestFwutilMain(object):
+    def test_main_import_does_not_init_platform_provider(self):
+        import fwutil.lib as fwutil_lib
+        sys.modules.pop('fwutil.main', None)
+        with patch.object(fwutil_lib, "PlatformDataProvider") as pdp_cls:
+            import fwutil.main as fw_main
+            importlib.reload(fw_main)
+            pdp_cls.assert_not_called()
+
+    def test_get_pdp_is_singleton(self):
+        import fwutil.main as fw_main
+        with patch.object(fw_main, "PlatformDataProvider") as pdp_cls:
+            pdp_instance = MagicMock()
+            pdp_cls.return_value = pdp_instance
+            fw_main._pdp = None
+
+            first = fw_main.get_pdp()
+            second = fw_main.get_pdp()
+
+            assert first is pdp_instance
+            assert second is pdp_instance
+            pdp_cls.assert_called_once()
+
+    def test_chassis_handler_populates_context(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.COMPONENT_PATH_CTX_KEY: []}
+        pdp = MagicMock()
+        pdp.chassis.get_name.return_value = "ChassisA"
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            fw_main.chassis_handler(ctx)
+
+        mock_get_pdp.assert_called_once()
+        assert ctx.obj[fw_main.CHASSIS_NAME_CTX_KEY] == "ChassisA"
+        assert ctx.obj[fw_main.COMPONENT_PATH_CTX_KEY] == ["ChassisA"]
+
+    def test_module_handler_populates_context(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.COMPONENT_PATH_CTX_KEY: []}
+        pdp = MagicMock()
+        pdp.chassis.get_name.return_value = "ChassisA"
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            fw_main.module_handler(ctx, "Module1")
+
+        mock_get_pdp.assert_called_once()
+        assert ctx.obj[fw_main.MODULE_NAME_CTX_KEY] == "Module1"
+        assert ctx.obj[fw_main.COMPONENT_PATH_CTX_KEY] == ["ChassisA", "Module1"]
+
+    def test_validate_module_success(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        param = MagicMock()
+        param.metavar = "<module_name>"
+        pdp = MagicMock()
+        pdp.is_modular_chassis.return_value = True
+        pdp.module_component_map = {"Module1": {}}
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            result = fw_main.validate_module(ctx, param, "Module1")
+
+        mock_get_pdp.assert_called_once()
+        assert result == "Module1"
+
+    def test_validate_component_with_chassis(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.CHASSIS_NAME_CTX_KEY: "ChassisA"}
+        param = MagicMock()
+        param.metavar = "<component_name>"
+        component = MagicMock()
+        pdp = MagicMock()
+        pdp.chassis_component_map = {"ChassisA": {"Comp1": component}}
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            result = fw_main.validate_component(ctx, param, "Comp1")
+
+        mock_get_pdp.assert_called_once()
+        assert result == "Comp1"
+        assert ctx.obj[fw_main.COMPONENT_CTX_KEY] is component
+
+
+class TestFWPackageUntar(object):
+    """Tests for FWPackage.untar_fwpackage() path traversal protection."""
+
+    def _make_tar(self, members, tmp_path):
+        """Helper to create a tar file with given regular file members."""
+        import io
+        tar_path = str(tmp_path / "test.tar")
+        with tarfile.open(tar_path, 'w') as t:
+            for name in members:
+                info = tarfile.TarInfo(name=name)
+                data = b"test content"
+                info.size = len(data)
+                t.addfile(info, io.BytesIO(data))
+        return tar_path
+
+    def _make_symlink_tar(self, tmp_path, link_name, link_target):
+        """Helper to create a tar file with a symlink member."""
+        tar_path = str(tmp_path / "symlink.tar")
+        with tarfile.open(tar_path, 'w') as t:
+            info = tarfile.TarInfo(name=link_name)
+            info.type = tarfile.SYMTYPE
+            info.linkname = link_target
+            t.addfile(info)
+        return tar_path
+
+    def test_valid_tar_extracts_successfully(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_tar(['platform_components.json', 'bios.bin'], tmp_path)
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            result = pkg.untar_fwpackage()
+        assert result is True
+
+    def test_path_traversal_is_blocked(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_tar(['../../etc/cron.d/evil'], tmp_path)
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            with pytest.raises(ValueError, match="unsafe path"):
+                pkg.untar_fwpackage()
+
+    def test_absolute_path_in_tar_is_blocked(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_tar(['/etc/passwd'], tmp_path)
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            with pytest.raises(ValueError, match="unsafe path"):
+                pkg.untar_fwpackage()
+
+    def test_symlink_escaping_is_blocked(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_symlink_tar(tmp_path, 'evil_link', '/etc/passwd')
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            with pytest.raises(ValueError, match="unsafe link"):
+                pkg.untar_fwpackage()
+
+    def test_symlink_within_tarball_is_allowed(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        # Symlink pointing to another file inside the tarball is safe
+        tar_path = self._make_symlink_tar(tmp_path, 'link_to_config', './platform_components.json')
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            result = pkg.untar_fwpackage()
+        assert result is True

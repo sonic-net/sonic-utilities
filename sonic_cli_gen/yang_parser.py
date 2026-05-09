@@ -425,7 +425,7 @@ def get_list_keys(y_list: OrderedDict) -> list:
     """ Parse YANG the 'key' entity.
         If YANG model has a 'list' entity, inside the 'list'
         there is 'key' entity. The 'key' - whitespace
-        separeted list of 'leafs'
+        separated list of 'leafs'
 
         Args:
             y_list: reference to the 'list'
@@ -447,7 +447,7 @@ def change_dyn_obj_struct(dynamic_objects: list):
     """ Rearrange self.yang_2_dict['dynamic_objects'] structure.
         If YANG model have a 'list' entity - inside the 'list'
         it has 'key' entity. The 'key' entity it is whitespace
-        separeted list of 'leafs', those 'leafs' was parsed by
+        separated list of 'leafs', those 'leafs' was parsed by
         'on_leaf()' function and placed under 'attrs' in
         self.yang_2_dict['dynamic_objects'] need to move 'leafs'
         from 'attrs' and put them into 'keys' section of

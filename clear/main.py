@@ -5,7 +5,7 @@ import sys
 import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from sonic_py_common.general import getstatusoutput_noshell_pipe
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
@@ -76,7 +76,7 @@ class AliasedGroup(click.Group):
 
 
 # To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continous execution of this
+# location (configdb?), so that we prevent the continuous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
@@ -182,9 +182,11 @@ def rifcounters(interface):
 @cli.command()
 def queuecounters():
     """Clear queue counters"""
-    command = ["queuestat", "-c"]
-    run_command(command)
-
+    if(device_info.is_supervisor()):
+        print("INFO: On Supervisor, only Aggregate VOQ counters will be cleared")
+    else:
+        command = ["queuestat", "-c"]
+        run_command(command)
     command = ["queuestat", "-c", "--voq"]
     run_command(command)
 
@@ -516,20 +518,34 @@ def persistent_watermark(namespace):
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def arp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def arp(ipaddress, namespace):
     """Clear IP ARP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-4', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-4', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 
@@ -539,20 +555,34 @@ def arp(ipaddress):
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def ndp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def ndp(ipaddress, namespace):
     """Clear IPv6 NDP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-6', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-6', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 

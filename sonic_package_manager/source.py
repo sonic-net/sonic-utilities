@@ -43,7 +43,7 @@ class PackageSource(object):
 
     def install(self, package: Package):
         """ Install image based on package source,
-        record installation infromation in PackageEntry..
+        record installation information in PackageEntry..
 
         Args:
             package: SONiC Package

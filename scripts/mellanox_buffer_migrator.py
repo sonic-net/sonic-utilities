@@ -340,7 +340,7 @@ class MellanoxBufferMigrator():
                                          "Mellanox-SN2700": "spc1_2700_t1_pool_shp"}
             },
             "pool_mapped_from_old_version": {
-                # MSFT SKUs and generic SKUs may have different pool seetings
+                # MSFT SKUs and generic SKUs may have different pool settings
                 "spc1_t0_pool": ("sku", "spc1_t0_pool_sku_map"),
                 "spc1_t1_pool": ("sku", "spc1_t1_pool_sku_map"),
                 "spc1_2700_t0_pool": "spc1_2700_t0_single_pool_shp",
@@ -790,7 +790,7 @@ class MellanoxBufferMigrator():
             for name, profile in profiles.items():
                 if name in configdb_buffer_profiles.keys() and profile == configdb_buffer_profiles[name]:
                     continue
-                # return if any default profile isn't in cofiguration
+                # return if any default profile isn't in configuration
                 profile_matched = False
                 break
 
