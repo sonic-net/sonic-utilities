@@ -1180,7 +1180,7 @@ def lpmode(port, use_lpmode_pin):
                     else:
                         lpmode = sfp.get_lpmode()
 
-                except NotImplementedError:
+                except (NotImplementedError, AttributeError):
                     click.echo("This functionality is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
 
@@ -1271,7 +1271,7 @@ def set_lpmode(logical_port, enable, use_lpmode_pin=False):
                 result = sfp.set_lpmode_via_pin(enable)
             else:
                 result = sfp.set_lpmode(enable)
-        except NotImplementedError:
+        except (NotImplementedError, AttributeError):
             click.echo("This functionality is currently not implemented for this platform")
             sys.exit(ERROR_NOT_IMPLEMENTED)
 

@@ -658,6 +658,14 @@ Ethernet0  On
         mock_sfp.get_lpmode_via_pin.assert_called_once_with()
         assert "This functionality is currently not implemented for this platform" in result.output
 
+        mock_sfp.get_lpmode_via_pin.reset_mock()
+        mock_sfp.get_lpmode_via_pin.side_effect = AttributeError
+        result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        assert "This functionality is currently not implemented for this platform" in result.output
+
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
@@ -1290,6 +1298,14 @@ EEPROM hexdump for port Ethernet4
 
         mock_sfp.set_lpmode_via_pin.reset_mock()
         mock_sfp.set_lpmode_via_pin.side_effect = NotImplementedError
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        mock_sfp.set_lpmode_via_pin.side_effect = AttributeError
         result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
                                ["Ethernet0", "--use-lpmode-pin"])
         assert result.exit_code == ERROR_NOT_IMPLEMENTED
