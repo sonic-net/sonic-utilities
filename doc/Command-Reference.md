@@ -151,6 +151,9 @@
 * [NVGRE](#nvgre)
   * [NVGRE show commands](#nvgre-show-commands)
   * [NVGRE config commands](#nvgre-config-commands)
+* [Orchagent](#orchagent)
+  * [Orchagent show commands](#orchagent-show-commands)
+  * [Orchagent clear commands](#orchagent-clear-commands)
 * [PBH](#pbh)
   * [PBH show commands](#pbh-show-commands)
   * [PBH config commands](#pbh-config-commands)
@@ -9927,6 +9930,64 @@ This command is used to delete a configured NTP server IP address.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#NTP)
+
+## Orchagent
+
+This section explains the orchagent runtime introspection commands.
+
+`orchagent` is the SONiC orchestration agent that processes APPL_DB updates and drives the hardware via SAI. Each Executor in orchagent represents a self-scheduled task (per-table consumers, periodic timers, etc.); the commands below surface how long each task is taking and how long it waits between invocations so operators can identify select-loop starvation without rebuilding orchagent.
+
+### Orchagent show commands
+
+**show orchagent tasks**
+
+This command displays the per-Executor execution-time statistics that orchagent maintains internally. Each row corresponds to one orchagent task (an `Orch` subclass or named periodic). Rows are sorted by total run time descending; ties break by task name.
+
+Columns:
+
+- `TASK` — Executor name.
+- `RUN TIME` — `median/q1/q3/max` of per-invocation wall-clock duration, in milliseconds. Median is the headline, Q1/Q3 give spread, max exposes the worst tail.
+- `RUNS` — total number of completed invocations.
+- `OUTLIERS` — Tukey 1.5×IQR sum (high + low) — invocations whose duration fell outside the bulk of the distribution.
+- `SCHED LATENCY` — `median/q1/q3/max` of the gap between when the task finished and when it was next scheduled, in milliseconds. Exposes select-loop starvation.
+- `TOTAL` — cumulative `<run>/<sched>` wall-clock spent inside the task vs waiting before it, in milliseconds.
+
+Slots that have never run print `-` in place of the quartet/total values; `RUNS` / `OUTLIERS` remain integers.
+
+The CLI talks to orchagent over two APPL_DB notification channels (`ORCH_TASK_STATS_QUERY` / `ORCH_TASK_STATS_REPLY`); the command exits non-zero with an error message if orchagent does not reply within 10 seconds.
+
+- Usage:
+  ```
+  show orchagent tasks
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show orchagent tasks
+  TASK         RUN TIME                          RUNS  OUTLIERS  SCHED LATENCY                    TOTAL
+               median/q1/q3/max                                  median/q1/q3/max                 run/sched
+               (in msec)                                         (in msec)                        (in msec)
+  ROUTE_TABLE  1745.53/1391.34/2242.07/3913.36     43         5  1.06/0.41/48.40/1436.01          77619.63/5.04
+  ```
+
+### Orchagent clear commands
+
+**sonic-clear orchagent tasks**
+
+This command resets orchagent's per-Executor execution-time counters in place. Subsequent `show orchagent tasks` output starts accumulating from zero.
+
+- Usage:
+  ```
+  sonic-clear orchagent tasks
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sonic-clear orchagent tasks
+  OK
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#orchagent)
 
 # PFC Watchdog Commands
 Detailed description of the PFC Watchdog can be found on [this wiki page](https://github.com/sonic-net/SONiC/wiki/PFC-Watchdog)
