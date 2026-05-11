@@ -320,6 +320,29 @@ Vnet_7127926  30.0.21.0/24  100.106.230.44,10.134.85.10      00:22:48:03:8c:f8,6
 """
         assert result.output == expected_output
 
+    def test_show_vnet_routes_all_tunnel_rows_match_header(self, monkeypatch):
+        captured_tables = []
+
+        def capture_tabulate(table, header):
+            captured_tables.append((table, header))
+            return ""
+
+        monkeypatch.setattr(vnet, "tabulate", capture_tabulate)
+
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['all'], [], obj=db)
+
+        assert result.exit_code == 0
+        tunnel_tables = [
+            (table, header)
+            for table, header in captured_tables
+            if header and header[-1] == 'status'
+        ]
+        assert tunnel_tables
+
+        for table, header in tunnel_tables:
+            assert all(len(row) == len(header) for row in table)
 
 class TestShowVnetAdvertisedRoutesIPX(object):
     @classmethod
