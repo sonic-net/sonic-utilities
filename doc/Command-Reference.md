@@ -3834,6 +3834,70 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
   admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
   ```
 
+**sfputil debug loopback-capability**
+
+This command reads the loopback modes advertised as supported by the transceiver module. If `PORT_NAME` is omitted, the command iterates over all logical ports and prints the loopback capability of every port whose module advertises one.
+
+- Usage:
+  ```
+  sfputil debug loopback-capability [PORT_NAME]
+  ```
+
+- Example (single port):
+  ```
+  admin@sonic:~$ sfputil debug loopback-capability Ethernet88
+  Ethernet88: loopback capability:
+    simultaneous_host_media_loopback_supported: True
+    per_lane_media_loopback_supported: True
+    per_lane_host_loopback_supported: True
+    host_side_input_loopback_supported: True
+    host_side_output_loopback_supported: True
+    media_side_input_loopback_supported: True
+    media_side_output_loopback_supported: True
+  ```
+
+- Example (all ports):
+  ```
+  admin@sonic:~$ sfputil debug loopback-capability
+  Ethernet0: loopback capability:
+    simultaneous_host_media_loopback_supported: True
+    ...
+  Ethernet8: The module does not advertise any loopback capability
+  ...
+  ```
+
+**sfputil debug loopback-status**
+
+This command reads which loopback modes are currently enabled on the transceiver module. If `PORT_NAME` is omitted, the command iterates over all logical ports and prints the loopback status of every port whose module supports loopback.
+
+- Usage:
+  ```
+  sfputil debug loopback-status [PORT_NAME]
+  ```
+
+- Example (single port):
+  ```
+  admin@sonic:~$ sfputil debug loopback-status Ethernet88
+  Ethernet88: loopback status:
+    host-side-input:   False
+    host-side-output:  False
+    media-side-input:  True
+    media-side-output: False
+  ```
+
+- Example (all ports):
+  ```
+  admin@sonic:~$ sfputil debug loopback-status
+  Ethernet0: loopback status:
+    host-side-input:   False
+    host-side-output:  False
+    media-side-input:  False
+    media-side-output: False
+  Ethernet8: loopback status:
+    host-side-input:   True
+    ...
+  ```
+
 ### CMIS debug rx-output
 
 The command disables RX input by muting the optical receiver on the module, preventing it from detecting incoming signals.
