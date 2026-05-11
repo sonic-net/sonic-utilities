@@ -1879,6 +1879,38 @@ def load(filename, yes):
             click.echo("The config_db file {} doesn't exist".format(file))
             return
 
+        # Validate the config file before loading
+        try:
+            with open(file, 'r') as f:
+                config_input = json.load(f)
+
+            # Get config DB connection for the namespace
+            config_db = ConfigDBConnector(use_unix_socket_path=False, namespace=namespace)
+            config_db.connect()
+
+            # Enable YANG validation if configured
+            yang_enabled = device_info.is_yang_config_validation_enabled(config_db)
+            if yang_enabled:
+                # Validate the input config using YANG
+                try:
+                    cm = ConfigMgmt(configdb=config_db)
+                    cm.validateConfigData()
+
+                    # Validate input config
+                    tmp_config = copy.deepcopy(config_input)
+                    cm.loadData(tmp_config)
+                    cm.validateConfigData()
+                except Exception as ex:
+                    click.secho("Failed to validate config file {}. Error: {}".format(file, ex), fg="red")
+                    sys.exit(1)
+
+        except json.JSONDecodeError as ex:
+            click.secho("Failed to parse JSON config file {}. Error: {}".format(file, ex), fg="red")
+            sys.exit(1)
+        except Exception as ex:
+            click.secho("Error validating config file {}. Error: {}".format(file, ex), fg="red")
+            sys.exit(1)
+
         if namespace is None:
             command = [str(SONIC_CFGGEN_PATH), '-j', file, '--write-to-db']
         else:
