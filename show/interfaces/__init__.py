@@ -152,7 +152,7 @@ def status(interfacename, namespace, display, verbose):
     if device_info.is_supervisor():
         # the command will be executed directly by rexec
         click.echo("Since the current device is a chassis supervisor, "
-                    "this command will be executed remotely on all linecards")
+                   "this command will be executed remotely on all linecards")
         proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
         sys.exit(proc.returncode)
 
