@@ -1,4 +1,4 @@
-"""Abstract Bootloader class"""
+"""Implementation of SystemdBoot class"""
 
 from contextlib import contextmanager
 import logging
@@ -62,13 +62,11 @@ class SystemdBootBootloader(Bootloader):
         return None
 
     def _conf_from_image(self, image_str: str) -> str | None:
-        """Given an 'image' string return which conf it's from.
+        """Given an 'image' string return which conf it's from."""
 
-        The inverse of _image_from_conf_id.
-        """
         confs = sdboot_config.find_configs(self.BOOT_LOADER_ENTRIES)
         for key, val in confs.items():
-            if f"{val.title}:{val.version}" == image_str:
+            if val.version == image_str:
                 return sdboot_config.SdbootEntry.from_filename(key).identifier
 
     def get_current_image(self):
@@ -240,13 +238,18 @@ class SystemdBootBootloader(Bootloader):
         """returns True if the bootloader is in use"""
         return path.isfile("/efi/EFI/systemd/systemd-bootx64.efi")
 
-    @classmethod
-    def get_image_path(cls, image):
-        """Returns the image path."""
-        conf = cls()._conf_from_image(image)
-        return HOST_PATH / conf.image_dir
-
     @contextmanager
     def get_rootfs_path(self, image_path):
         """returns the path to the squashfs"""
         yield path.join(image_path, ROOTFS_NAME)
+
+    def get_image_path(self, image_version):
+        """Returns the image path."""
+        key = image_version
+        if key.startswith(IMAGE_PREFIX):
+            key = key.replace(IMAGE_PREFIX, "", 1)
+
+        confs = sdboot_config.find_configs(self.BOOT_LOADER_ENTRIES)
+        for entry, conf in confs.items():
+            if conf.version == key:
+                return HOST_PATH / conf.image_dir
