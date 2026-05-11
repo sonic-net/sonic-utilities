@@ -15777,6 +15777,62 @@ EEPROM hexdump for port Ethernet8
         000000f0 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 |................|
 ```
 
+- Show SFP low-power mode status
+
+  By default the status is read from the module EEPROM. Passing `--use-lpmode-pin` reads it from the platform's hardware LPMode pin instead. The hardware pin path requires the platform to implement `get_lpmode_via_pin` from `SfpBase`".
+
+```
+admin@sonic:~$ sfputil show lpmode --help
+Usage: sfputil show lpmode [OPTIONS]
+
+  Display low-power mode status of SFP transceiver(s)
+
+Options:
+  -p, --port <port_name>  Display SFP low-power mode status for port
+                          <port_name> only
+  --use-lpmode-pin        Use Xcvr LPMode pin instead of EEPROM
+  --help                  Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  Off
+
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0 --use-lpmode-pin
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+```
+
+- Enable / disable SFP low-power mode
+
+  By default the request is written to the module EEPROM. Passing `--use-lpmode-pin` writes the platform's hardware LPMode pin instead. The hardware pin path requires the platform to implement `set_lpmode_via_pin` from `SfpBase`.
+
+```
+admin@sonic:~$ sfputil lpmode on --help
+Usage: sfputil lpmode on [OPTIONS] <port_name>
+
+  Enable low-power mode for SFP transceiver
+
+Options:
+  --use-lpmode-pin  Use Xcvr LPMode pin instead of EEPROM
+  --help            Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0
+Disabling low-power mode for port Ethernet0 ... OK
+
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0 --use-lpmode-pin
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0 --use-lpmode-pin
+Disabling low-power mode for port Ethernet0 ... OK
+```
+
 # SFP Utilities read command
 
 - Read SFP EEPROM data
