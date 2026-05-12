@@ -32,36 +32,36 @@ def get_monitor_link_groups(state_db):
         if state_data:
             interfaces = []
 
-            # Parse uplinks from uplinks field (comma-separated list)
-            uplinks_str = state_data.get('uplinks', '')
-            if uplinks_str:
-                for uplink in uplinks_str.split(','):
-                    uplink = uplink.strip()
-                    if uplink:
+            # Parse monitored-links from monitored-links field (comma-separated list)
+            monitored_str = state_data.get('monitored-links', '')
+            if monitored_str:
+                for monitored in monitored_str.split(','):
+                    monitored = monitored.strip()
+                    if monitored:
                         interfaces.append({
-                            'name': uplink,
-                            'link_type': 'uplink'
+                            'name': monitored,
+                            'link_type': 'monitored'
                         })
 
-            # Parse downlinks from downlinks field (comma-separated list)
-            downlinks_str = state_data.get('downlinks', '')
-            if downlinks_str:
-                for downlink in downlinks_str.split(','):
-                    downlink = downlink.strip()
-                    if downlink:
+            # Parse managed-links from managed-links field (comma-separated list)
+            managed_str = state_data.get('managed-links', '')
+            if managed_str:
+                for managed in managed_str.split(','):
+                    managed = managed.strip()
+                    if managed:
                         interfaces.append({
-                            'name': downlink,
-                            'link_type': 'downlink'
+                            'name': managed,
+                            'link_type': 'managed'
                         })
 
             # Handle empty values by providing defaults
             description = state_data.get('description', '').strip()
-            min_uplinks = state_data.get('link_up_threshold', '').strip() or '1'
+            min_monitored_links = state_data.get('link_up_threshold', '').strip() or '1'
             linkup_delay = state_data.get('link_up_delay', '').strip() or '0'
 
             groups[group_name] = {
                 'description': description or 'No description',
-                'min_uplinks': min_uplinks,
+                'min_monitored_links': min_monitored_links,
                 'linkup_delay': linkup_delay,
                 'interfaces': interfaces,
                 'state': state_data.get('state', 'unknown'),
@@ -104,31 +104,31 @@ def monitor_link(db, group_name):
     for name in natsorted(groups.keys()):
         group_data = groups[name]
 
-        # Count uplink interfaces
-        uplink_count = len([intf for intf in group_data['interfaces']
-                           if intf['link_type'] == 'uplink'])
-        downlink_count = len([intf for intf in group_data['interfaces']
-                             if intf['link_type'] == 'downlink'])
+        # Count monitored / managed interfaces
+        monitored_count = len([intf for intf in group_data['interfaces']
+                              if intf['link_type'] == 'monitored'])
+        managed_count = len([intf for intf in group_data['interfaces']
+                            if intf['link_type'] == 'managed'])
 
-        # Always calculate uplinks up for real-time accuracy
-        actual_uplinks_up = 0
+        # Always calculate monitored-links up for real-time accuracy
+        actual_monitored_up = 0
         for intf in group_data['interfaces']:
-            if intf['link_type'] == 'uplink':
+            if intf['link_type'] == 'monitored':
                 status = clicommon.get_interface_operational_status(db.db, intf['name'])
                 if status == 'UP':
-                    actual_uplinks_up += 1
-        uplink_up_count_display = str(actual_uplinks_up)
+                    actual_monitored_up += 1
+        monitored_up_count_display = str(actual_monitored_up)
 
         # Display group header
         click.echo(f"Monitor Link Group: {name}")
         click.echo("=" * (len(name) + 20))
-        click.echo(f"Description:      {group_data['description']}")
-        click.echo(f"State:            {format_group_state(group_data.get('state', 'unknown'))}")
-        click.echo(f"Uplinks Up:       {uplink_up_count_display}/{uplink_count}")
-        click.echo(f"Min-uplinks:      {group_data['min_uplinks']}")
-        click.echo(f"Link-up-delay:    {group_data['linkup_delay']} seconds")
-        click.echo(f"Total Interfaces: {len(group_data['interfaces'])} "
-                   f"({uplink_count} uplinks, {downlink_count} downlinks)")
+        click.echo(f"Description:           {group_data['description']}")
+        click.echo(f"State:                 {format_group_state(group_data.get('state', 'unknown'))}")
+        click.echo(f"Monitored Up:          {monitored_up_count_display}/{monitored_count}")
+        click.echo(f"Min-monitored-links:   {group_data['min_monitored_links']}")
+        click.echo(f"Link-up-delay:         {group_data['linkup_delay']} seconds")
+        click.echo(f"Total Interfaces:      {len(group_data['interfaces'])} "
+                   f"({monitored_count} monitored, {managed_count} managed)")
         click.echo()
 
         # Display interfaces table
@@ -136,9 +136,9 @@ def monitor_link(db, group_name):
             click.echo("Interfaces:")
             click.echo("-" * 50)
 
-            # Sort interfaces by link type (uplink first, then downlink) and then by name
+            # Sort interfaces by link type (monitored first, then managed) and then by name
             def sort_key(interface):
-                link_type_priority = 0 if interface['link_type'] == 'uplink' else 1
+                link_type_priority = 0 if interface['link_type'] == 'monitored' else 1
                 return (link_type_priority, interface['name'])
 
             sorted_interfaces = sorted(group_data['interfaces'], key=sort_key)
@@ -150,8 +150,8 @@ def monitor_link(db, group_name):
                 interface_status = clicommon.get_interface_operational_status(db.db, interface['name'])
                 reason = ""
 
-                # For downlink interfaces that are DOWN, get the reason
-                if interface['link_type'] == 'downlink' and interface_status == 'DOWN':
+                # For managed interfaces that are DOWN, get the reason
+                if interface['link_type'] == 'managed' and interface_status == 'DOWN':
                     member_info = get_monitor_link_member_info(db.db, interface['name'])
                     if member_info and member_info['down_due_to']:
                         reason = f"Down due to group {member_info['down_due_to']}"
