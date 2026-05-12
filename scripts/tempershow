@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 
 from tabulate import tabulate
-from swsscommon.swsscommon import SonicV2Connector
+from swsscommon.swsscommon import SonicDBConfig, SonicV2Connector
 from natsort import natsorted
 
 try:
@@ -67,6 +67,8 @@ NA = 'N/A'
 
 class TemperShow(object):
     def __init__(self):
+        if not SonicDBConfig.isGlobalInit():
+            SonicDBConfig.load_sonic_global_db_config()
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
         self._sfp_helper_ready = self._init_sfp_util_helper()
