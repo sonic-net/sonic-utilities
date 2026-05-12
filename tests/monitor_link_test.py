@@ -245,7 +245,7 @@ class TestMonitorLink:
             assert "Monitor Link Group: empty_group" in result.output
             assert "No description" in result.output
             assert "Min-monitored-links:   1" in result.output  # Default value
-            assert "Link-up-delay:    0 seconds" in result.output  # Default value
+            assert "Link-up-delay:         0 seconds" in result.output  # Default value
         finally:
             # Restore original file
             shutil.move(backup_file, state_db_file)
