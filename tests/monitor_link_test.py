@@ -28,7 +28,7 @@ MOCK_STATE_DB_DATA = {
         'managed-links': 'Ethernet80',
         'link_up_threshold': '2',
         'link_up_delay': '10',
-        'down_to_up_count': '1'
+        'total_transitions': '3'
     },
     'MONITOR_LINK_GROUP_STATE|test_group': {
         'state': 'down',
@@ -37,7 +37,7 @@ MOCK_STATE_DB_DATA = {
         'managed-links': 'PortChannel102',
         'link_up_threshold': '1',
         'link_up_delay': '5',
-        'up_to_down_count': '0'
+        'total_transitions': '5'
     },
     'PORT_TABLE|Ethernet64': {
         'netdev_oper_status': 'up',
@@ -520,18 +520,16 @@ class TestMonitorLinkTransitionTracking:
         # epoch 1700000000 == 2023-11-14 22:13:20 UTC
         assert "2023-11-14" in result.output
         assert "DOWN -> UP" in result.output
-        assert "monitored 2/2 >= min-monitored-links 2" in result.output
 
     def test_transitions_counter_line(self):
-        """The 'Transitions:' line is always present and shows counters."""
+        """The 'Transitions:' line is always present and shows a total count."""
         runner = CliRunner()
         db = Db()
 
         result = runner.invoke(show.cli.commands["monitor-link-group"], ["test_group"], obj=db)
         assert result.exit_code == 0
-        assert "Transitions:" in result.output
-        assert "UP->DOWN=3" in result.output
-        assert "DOWN->UP=2" in result.output
+        # test_group fixture has total_transitions=5
+        assert "Transitions:           5" in result.output
 
     def test_pending_linkup_delay_progress(self):
         """When state is PENDING, Link-up-delay shows elapsed/remaining."""
@@ -591,8 +589,8 @@ class TestMonitorLinkTransitionTracking:
             assert result.exit_code == 0
             assert "Monitor Link Group: legacy_group" in result.output
             assert "Last change:" not in result.output
-            # Counters fall back to 0 when fields missing
-            assert "Transitions:           UP->DOWN=0, DOWN->UP=0" in result.output
+            # Counter falls back to 0 when field missing
+            assert "Transitions:           0" in result.output
         finally:
             if 'STATE_DB' in dbconnector.dedicated_dbs:
                 del dbconnector.dedicated_dbs['STATE_DB']

@@ -72,17 +72,15 @@ def get_monitor_link_groups(state_db):
                 'last_state_change_time': state_data.get('last_state_change_time', '').strip(),
                 'last_state_change_from': state_data.get('last_state_change_from', '').strip(),
                 'last_state_change_to': state_data.get('last_state_change_to', '').strip(),
-                'last_state_change_reason': state_data.get('last_state_change_reason', '').strip(),
                 'pending_start_time': state_data.get('pending_start_time', '').strip(),
-                'up_to_down_count': state_data.get('up_to_down_count', '0'),
-                'down_to_up_count': state_data.get('down_to_up_count', '0'),
+                'total_transitions': state_data.get('total_transitions', '0'),
             }
 
     return groups
 
 
 def format_last_change(group_data):
-    """Return 'YYYY-MM-DD HH:MM:SS UTC (FROM -> TO, reason: ...)' or None if no transition recorded."""
+    """Return 'YYYY-MM-DD HH:MM:SS UTC (FROM -> TO)' or None if no transition recorded."""
     epoch_str = group_data.get('last_state_change_time', '')
     if not epoch_str:
         return None
@@ -93,9 +91,6 @@ def format_last_change(group_data):
     ts = datetime.fromtimestamp(epoch, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
     from_state = group_data.get('last_state_change_from', '').upper() or '?'
     to_state = group_data.get('last_state_change_to', '').upper() or '?'
-    reason = group_data.get('last_state_change_reason', '')
-    if reason:
-        return f"{ts} ({from_state} -> {to_state}, reason: {reason})"
     return f"{ts} ({from_state} -> {to_state})"
 
 
@@ -137,10 +132,10 @@ def format_linkup_delay(group_data):
 
 
 def format_transitions(group_data):
-    """Return 'UP->DOWN=N, DOWN->UP=M' counter line."""
-    u_to_d = group_data.get('up_to_down_count', '0') or '0'
-    d_to_u = group_data.get('down_to_up_count', '0') or '0'
-    return f"UP->DOWN={u_to_d}, DOWN->UP={d_to_u}"
+    """Return 'N' (total transitions count); blank string forces show CLI to omit
+    the line cleanly. Total is the count of all observed state transitions; a full
+    UP/DOWN cycle bumps it by 2."""
+    return group_data.get('total_transitions', '0') or '0'
 
 
 def format_group_state(state):

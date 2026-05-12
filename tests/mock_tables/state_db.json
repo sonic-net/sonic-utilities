@@ -1866,9 +1866,7 @@
         "last_state_change_time": "1700000000",
         "last_state_change_from": "down",
         "last_state_change_to": "up",
-        "last_state_change_reason": "monitored 2/2 >= min-monitored-links 2",
-        "up_to_down_count": "1",
-        "down_to_up_count": "2"
+        "total_transitions": "3"
     },
     "MONITOR_LINK_GROUP_STATE|test_group": {
         "state": "down",
@@ -1880,9 +1878,7 @@
         "last_state_change_time": "1700000100",
         "last_state_change_from": "up",
         "last_state_change_to": "down",
-        "last_state_change_reason": "monitored 0/2 < min-monitored-links 1",
-        "up_to_down_count": "3",
-        "down_to_up_count": "2"
+        "total_transitions": "5"
     },
     "MONITOR_LINK_GROUP_STATE|pending_group": {
         "state": "pending",
@@ -1894,10 +1890,8 @@
         "last_state_change_time": "1700000200",
         "last_state_change_from": "down",
         "last_state_change_to": "pending",
-        "last_state_change_reason": "monitored 2/2 >= min-monitored-links 2, starting link-up-delay",
         "pending_start_time": "1700000200",
-        "up_to_down_count": "0",
-        "down_to_up_count": "0"
+        "total_transitions": "1"
     },
     "PORT_TABLE|Ethernet64": {
         "netdev_oper_status": "up",
