@@ -80,6 +80,8 @@
 * [Feature](#feature)
   * [Feature show commands](#feature-show-commands)
   * [Feature config commands](#feature-config-commands)
+* [Fine Grained Next Hop Group (FGNHG)](#fine-grained-next-hop-group-fgnhg)
+  * [FGNHG show commands](#fgnhg-show-commands)
 * [Flow Counters](#flow-counters)
   * [Flow Counters show commands](#flow-counters-show-commands)
   * [Flow Counters clear commands](#flow-counters-clear-commands)
@@ -5335,6 +5337,92 @@ NOTE: If the existing state or auto-restart value for a feature is "always_enabl
 commands are don't care and will not update state/auto-restart value.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#feature)
+
+## Fine Grained Next Hop Group (FGNHG)
+
+This section explains the show commands for Fine Grained Next Hop Groups (FGNHG). FGNHG provides consistent hashing by maintaining a stable mapping between hash buckets and next hops, including for prefixes installed in user-defined VRFs/VNETs.
+
+### FGNHG show commands
+
+**show fgnhg active-hops**
+
+This command displays the currently active next hops for each FGNHG-managed prefix. Without arguments, all entries are shown. Optional positional arguments allow filtering by NHG name, or by VRF/VNET and prefix.
+
+- Usage:
+  ```
+  show fgnhg active-hops [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, all active next hops for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the next hops belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg active-hops
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ------------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+  default     fc:5::/128       200:200:200:200::4
+                               200:200:200:200::5
+
+  admin@sonic:~$ show fgnhg active-hops fgnhg_v4
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops default 100.50.25.12/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  ```
+
+**show fgnhg hash-view**
+
+This command displays the per-next-hop hash bucket assignment for each FGNHG-managed prefix. The same filtering options as `active-hops` are supported.
+
+- Usage:
+  ```
+  show fgnhg hash-view [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, hash bucket assignments for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the buckets belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg hash-view
+  VNET/VRF    FG NHG Prefix    Next Hop            Hash buckets
+  ----------  ---------------  ------------------  ------------------------------
+  default     100.50.25.12/32  200.200.200.4       0   1   2   3   4   5   6   7
+  default     100.50.25.12/32  200.200.200.5       8   9   10  11  12  13  14  15
+  Vnet1       10.0.0.1/32      200.200.200.4       0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5       4   5   6   7
+  default     fc:5::/128       200:200:200:200::4  0   1   2   3   4   5   6   7
+  default     fc:5::/128       200:200:200:200::5  8   9   10  11  12  13  14  15
+
+  admin@sonic:~$ show fgnhg hash-view Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Next Hop       Hash buckets
+  ----------  ---------------  -------------  --------------
+  Vnet1       10.0.0.1/32      200.200.200.4  0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5  4   5   6   7
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#fine-grained-next-hop-group-fgnhg)
 
 ## Flow Counters
 

@@ -25,14 +25,9 @@ def parse_fg_route_key(key):
 
 def format_bank_output(bank_ids):
     """Format hash bucket IDs for display."""
-    displayed_banks = []
-    for bankid in bank_ids:
-        if len(str(bankid)) == 1:
-            displayed_banks.append(str(bankid) + "  ")
-        elif len(str(bankid)) == 2:
-            displayed_banks.append(str(bankid) + " ")
-        elif len(str(bankid)) == 3:
-            displayed_banks.append(str(bankid))
+    str_ids = [str(bankid) for bankid in bank_ids]
+    width = max([3] + [len(s) for s in str_ids])
+    displayed_banks = [s.ljust(width) for s in str_ids]
     bank_output = ""
     for i in range(0, len(displayed_banks), 8):
         bank_output = bank_output + " ".join(displayed_banks[i:i+8]) + "\n"
@@ -41,13 +36,13 @@ def format_bank_output(bank_ids):
 
 
 @fgnhg.command()
-@click.argument('arg1', required=False)
-@click.argument('arg2', required=False)
-def active_hops(arg1, arg2):
+@click.argument('nhg_or_vrf', required=False, metavar='[NHG | VRF]')
+@click.argument('prefix', required=False, metavar='[PREFIX]')
+def active_hops(nhg_or_vrf, prefix):
     """Show active next hops. Usage:
-    show fgnhg active-hops                   - show all
-    show fgnhg active-hops <nhg>             - filter by NHG name
-    show fgnhg active-hops <vrf> <prefix>    - filter by VRF/VNET and prefix
+    show fgnhg active-hops                       - show all
+    show fgnhg active-hops <nhg>                 - filter by NHG name
+    show fgnhg active-hops <vrf> <prefix>        - filter by VRF/VNET and prefix
     """
     config_db = ConfigDBConnector()
     config_db.connect()
@@ -69,12 +64,16 @@ def active_hops(arg1, arg2):
     if table_keys is None:
         ctx.fail("FG_ROUTE_TABLE does not exist!")
 
-    if arg1 is not None and arg2 is not None:
+    if nhg_or_vrf is not None and prefix is not None:
         # 2-arg mode: filter by VRF/VNET + prefix
-        vrf_filter = arg1
-        prefix_filter = arg2
-        lookup_key = f"FG_ROUTE_TABLE|{vrf_filter}|{prefix_filter}"
-        if lookup_key not in table_keys:
+        vrf_filter = nhg_or_vrf
+        prefix_filter = prefix
+        lookup_keys = []
+        if vrf_filter == "default":
+            lookup_keys.append(f"FG_ROUTE_TABLE|{prefix_filter}")
+        lookup_keys.append(f"FG_ROUTE_TABLE|{vrf_filter}|{prefix_filter}")
+        lookup_key = next((key for key in lookup_keys if key in table_keys), None)
+        if lookup_key is None:
             ctx.fail(f"No FG_ROUTE_TABLE entry found for VRF '{vrf_filter}' prefix '{prefix_filter}'")
         t_dict = state_db.get_all(state_db.STATE_DB, lookup_key)
         vals = sorted(set([val for val in t_dict.values()]))
@@ -82,7 +81,7 @@ def active_hops(arg1, arg2):
         formatted_nhps = '\n'.join(nhops)
         table.append([vrf_filter, prefix_filter, formatted_nhps])
         click.echo(tabulate(table, header, tablefmt="simple"))
-    elif arg1 is None:
+    elif nhg_or_vrf is None:
         # 0-arg mode: show all
         for nhg_prefix in table_keys:
             t_dict = state_db.get_all(state_db.STATE_DB, nhg_prefix)
@@ -99,7 +98,7 @@ def active_hops(arg1, arg2):
         click.echo(tabulate(table, header, tablefmt="simple"))
     else:
         # 1-arg mode: filter by NHG name
-        nhg = arg1
+        nhg = nhg_or_vrf
         nhip_prefix_map = {}
         try:
             fg_nhg_member_table = config_db.get_table('FG_NHG_MEMBER')
@@ -136,13 +135,13 @@ def active_hops(arg1, arg2):
 
 
 @fgnhg.command()
-@click.argument('arg1', required=False)
-@click.argument('arg2', required=False)
-def hash_view(arg1, arg2):
+@click.argument('nhg_or_vrf', required=False, metavar='[NHG | VRF]')
+@click.argument('prefix', required=False, metavar='[PREFIX]')
+def hash_view(nhg_or_vrf, prefix):
     """Show hash bucket view. Usage:
-    show fgnhg hash-view                   - show all
-    show fgnhg hash-view <nhg>             - filter by NHG name
-    show fgnhg hash-view <vrf> <prefix>    - filter by VRF/VNET and prefix
+    show fgnhg hash-view                         - show all
+    show fgnhg hash-view <nhg>                   - filter by NHG name
+    show fgnhg hash-view <vrf> <prefix>          - filter by VRF/VNET and prefix
     """
     config_db = ConfigDBConnector()
     config_db.connect()
@@ -165,12 +164,16 @@ def hash_view(arg1, arg2):
     if table_keys is None:
         ctx.fail("FG_ROUTE_TABLE does not exist!")
 
-    if arg1 is not None and arg2 is not None:
+    if nhg_or_vrf is not None and prefix is not None:
         # 2-arg mode: filter by VRF/VNET + prefix
-        vrf_filter = arg1
-        prefix_filter = arg2
-        lookup_key = f"FG_ROUTE_TABLE|{vrf_filter}|{prefix_filter}"
-        if lookup_key not in table_keys:
+        vrf_filter = nhg_or_vrf
+        prefix_filter = prefix
+        lookup_keys = []
+        if vrf_filter == "default":
+            lookup_keys.append(f"FG_ROUTE_TABLE|{prefix_filter}")
+        lookup_keys.append(f"FG_ROUTE_TABLE|{vrf_filter}|{prefix_filter}")
+        lookup_key = next((key for key in lookup_keys if key in table_keys), None)
+        if lookup_key is None:
             ctx.fail(f"No FG_ROUTE_TABLE entry found for VRF '{vrf_filter}' prefix '{prefix_filter}'")
         t_dict = state_db.get_all(state_db.STATE_DB, lookup_key)
         vals = sorted(set([val for val in t_dict.values()]))
@@ -184,7 +187,7 @@ def hash_view(arg1, arg2):
             bank_output = format_bank_output(val)
             table.append([vrf_filter, prefix_filter, nhip, bank_output])
         click.echo(tabulate(table, header, tablefmt="simple"))
-    elif arg1 is None:
+    elif nhg_or_vrf is None:
         # 0-arg mode: show all
         for nhg_prefix in table_keys:
             bank_dict = {}
@@ -206,7 +209,7 @@ def hash_view(arg1, arg2):
         click.echo(tabulate(table, header, tablefmt="simple"))
     else:
         # 1-arg mode: filter by NHG name
-        nhg = arg1
+        nhg = nhg_or_vrf
         try:
             fg_nhg_member_table = config_db.get_table('FG_NHG_MEMBER')
         except Exception as e:
