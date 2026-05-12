@@ -2127,6 +2127,44 @@ collect_nvidia_bluefield() {
 }
 
 ###############################################################################
+# Collect NVIDIA BMC hw-management dump.
+# hw-management-bmc-generate-dump.sh writes artifacts under /tmp/hw-mgmt-bmc-dump*
+# (e.g. /tmp/hw-mgmt-bmc-dump.tar.gz).
+# Globals:
+#  CMD_PREFIX
+#  TIMEOUT_MIN
+#  TIMEOUT_EXIT_CODE
+#  ALLOW_PROCESS_STOP
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+collect_nvidia_bmc_dump() {
+    trap 'handle_error $? $LINENO' ERR
+    local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
+    local HW_BMC_DUMP_FILE=/usr/bin/hw-management-bmc-generate-dump.sh
+
+    if [ ! -f "$HW_BMC_DUMP_FILE" ]; then
+        echo "HW Mgmt BMC dump script $HW_BMC_DUMP_FILE does not exist"
+        return 0
+    fi
+
+    ${CMD_PREFIX}${timeout_cmd} "$HW_BMC_DUMP_FILE" $ALLOW_PROCESS_STOP
+    local ret=$?
+    if [ $ret -ne 0 ]; then
+        if [ $ret -eq $TIMEOUT_EXIT_CODE ]; then
+            echo "hw-management-bmc dump timedout after ${TIMEOUT_MIN} minutes."
+        else
+            echo "hw-management-bmc dump failed ..."
+        fi
+    else
+        save_file "/tmp/hw-mgmt-bmc-dump*" "hw-mgmt-bmc" false
+        rm -f /tmp/hw-mgmt-bmc-dump*
+    fi
+}
+
+###############################################################################
 # Collect Pensando specific information
 # Globals:
 #  MKDIR
@@ -2645,6 +2683,7 @@ main() {
 
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
     local device_type=`sonic-db-cli CONFIG_DB hget 'DEVICE_METADATA|localhost' type`
+    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     # 1st counter snapshot early. Need 2 snapshots to make sense of counters trend.
     save_counter_snapshot $asic 1
 
@@ -2787,6 +2826,10 @@ main() {
 
     if [ "$asic" = "pensando" ]; then
         collect_pensando
+    fi
+
+    if [[ "$asic" = "aspeed" && "$platform" == *"nvidia"* ]]; then
+        collect_nvidia_bmc_dump
     fi
 
     start_dpu_flow_dump &
