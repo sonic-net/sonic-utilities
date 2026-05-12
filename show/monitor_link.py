@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import time
+from datetime import datetime, timezone
+
 import click
 from tabulate import tabulate
 from natsort import natsorted
@@ -65,9 +68,79 @@ def get_monitor_link_groups(state_db):
                 'linkup_delay': linkup_delay,
                 'interfaces': interfaces,
                 'state': state_data.get('state', 'unknown'),
+                # PR-A fields (all optional; legacy groups render unchanged when absent)
+                'last_state_change_time': state_data.get('last_state_change_time', '').strip(),
+                'last_state_change_from': state_data.get('last_state_change_from', '').strip(),
+                'last_state_change_to': state_data.get('last_state_change_to', '').strip(),
+                'last_state_change_reason': state_data.get('last_state_change_reason', '').strip(),
+                'pending_start_time': state_data.get('pending_start_time', '').strip(),
+                'up_to_down_count': state_data.get('up_to_down_count', '0'),
+                'down_to_up_count': state_data.get('down_to_up_count', '0'),
             }
 
     return groups
+
+
+def format_last_change(group_data):
+    """Return 'YYYY-MM-DD HH:MM:SS UTC (FROM -> TO, reason: ...)' or None if no transition recorded."""
+    epoch_str = group_data.get('last_state_change_time', '')
+    if not epoch_str:
+        return None
+    try:
+        epoch = int(epoch_str)
+    except ValueError:
+        return None
+    ts = datetime.fromtimestamp(epoch, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    from_state = group_data.get('last_state_change_from', '').upper() or '?'
+    to_state = group_data.get('last_state_change_to', '').upper() or '?'
+    reason = group_data.get('last_state_change_reason', '')
+    if reason:
+        return f"{ts} ({from_state} -> {to_state}, reason: {reason})"
+    return f"{ts} ({from_state} -> {to_state})"
+
+
+def format_linkup_delay(group_data):
+    """Return 'N seconds' baseline. When state is PENDING and pending_start_time is set:
+      - '(elapsed: Xs, remaining: Ys)' while inside the delay window
+      - '(elapsed: Xs, OVERDUE by Ys)' once raw elapsed > delay (surfaces a stuck timer
+        instead of silently clamping the display to 100%)
+    """
+    delay_str = group_data.get('linkup_delay', '0')
+    base = f"{delay_str} seconds"
+
+    if group_data.get('state', '').lower() != 'pending':
+        return base
+
+    try:
+        delay = int(delay_str)
+    except ValueError:
+        return base
+    if delay <= 0:
+        return base
+
+    pending_start_str = group_data.get('pending_start_time', '')
+    if not pending_start_str:
+        return base
+    try:
+        pending_start = int(pending_start_str)
+    except ValueError:
+        return base
+
+    now = int(time.time())
+    raw_elapsed = max(0, now - pending_start)
+    if raw_elapsed > delay:
+        overdue = raw_elapsed - delay
+        return f"{base} (elapsed: {raw_elapsed}s, OVERDUE by {overdue}s)"
+
+    remaining = delay - raw_elapsed
+    return f"{base} (elapsed: {raw_elapsed}s, remaining: {remaining}s)"
+
+
+def format_transitions(group_data):
+    """Return 'UP->DOWN=N, DOWN->UP=M' counter line."""
+    u_to_d = group_data.get('up_to_down_count', '0') or '0'
+    d_to_u = group_data.get('down_to_up_count', '0') or '0'
+    return f"UP->DOWN={u_to_d}, DOWN->UP={d_to_u}"
 
 
 def format_group_state(state):
@@ -126,7 +199,11 @@ def monitor_link(db, group_name):
         click.echo(f"State:                 {format_group_state(group_data.get('state', 'unknown'))}")
         click.echo(f"Monitored Up:          {monitored_up_count_display}/{monitored_count}")
         click.echo(f"Min-monitored-links:   {group_data['min_monitored_links']}")
-        click.echo(f"Link-up-delay:         {group_data['linkup_delay']} seconds")
+        click.echo(f"Link-up-delay:         {format_linkup_delay(group_data)}")
+        last_change = format_last_change(group_data)
+        if last_change:
+            click.echo(f"Last change:           {last_change}")
+        click.echo(f"Transitions:           {format_transitions(group_data)}")
         click.echo(f"Total Interfaces:      {len(group_data['interfaces'])} "
                    f"({monitored_count} monitored, {managed_count} managed)")
         click.echo()

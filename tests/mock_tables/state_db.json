@@ -1858,30 +1858,46 @@
     },
     "MONITOR_LINK_GROUP_STATE|critical_links": {
         "state": "up",
-        "description": "Critical uplink and downlink monitoring group",
-        "uplinks": "Ethernet64,Ethernet72",
-        "downlinks": "Ethernet80",
+        "description": "Critical monitored and managed link monitoring group",
+        "monitored-links": "Ethernet64,Ethernet72",
+        "managed-links": "Ethernet80",
         "link_up_threshold": "2",
         "link_up_delay": "10",
-        "uplink_up_count": "2"
+        "last_state_change_time": "1700000000",
+        "last_state_change_from": "down",
+        "last_state_change_to": "up",
+        "last_state_change_reason": "monitored 2/2 >= min-monitored-links 2",
+        "up_to_down_count": "1",
+        "down_to_up_count": "2"
     },
     "MONITOR_LINK_GROUP_STATE|test_group": {
         "state": "down",
         "description": "Test monitoring group",
-        "uplinks": "PortChannel101,PortChannel103",
-        "downlinks": "PortChannel102",
+        "monitored-links": "PortChannel101,PortChannel103",
+        "managed-links": "PortChannel102",
         "link_up_threshold": "1",
         "link_up_delay": "5",
-        "uplink_up_count": "0"
+        "last_state_change_time": "1700000100",
+        "last_state_change_from": "up",
+        "last_state_change_to": "down",
+        "last_state_change_reason": "monitored 0/2 < min-monitored-links 1",
+        "up_to_down_count": "3",
+        "down_to_up_count": "2"
     },
     "MONITOR_LINK_GROUP_STATE|pending_group": {
         "state": "pending",
         "description": "Group in pending state",
-        "uplinks": "Ethernet96,Ethernet100",
-        "downlinks": "Ethernet104",
+        "monitored-links": "Ethernet96,Ethernet100",
+        "managed-links": "Ethernet104",
         "link_up_threshold": "2",
         "link_up_delay": "15",
-        "uplink_up_count": "2"
+        "last_state_change_time": "1700000200",
+        "last_state_change_from": "down",
+        "last_state_change_to": "pending",
+        "last_state_change_reason": "monitored 2/2 >= min-monitored-links 2, starting link-up-delay",
+        "pending_start_time": "1700000200",
+        "up_to_down_count": "0",
+        "down_to_up_count": "0"
     },
     "PORT_TABLE|Ethernet64": {
         "netdev_oper_status": "up",

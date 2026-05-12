@@ -23,21 +23,21 @@ mock_db_path = os.path.join(test_path, "mock_tables")
 MOCK_STATE_DB_DATA = {
     'MONITOR_LINK_GROUP_STATE|critical_links': {
         'state': 'up',
-        'description': 'Critical uplink and downlink monitoring group',
-        'uplinks': 'Ethernet64,Ethernet72',
-        'downlinks': 'Ethernet80',
+        'description': 'Critical monitored and managed link monitoring group',
+        'monitored-links': 'Ethernet64,Ethernet72',
+        'managed-links': 'Ethernet80',
         'link_up_threshold': '2',
         'link_up_delay': '10',
-        'uplink_up_count': '2'
+        'down_to_up_count': '1'
     },
     'MONITOR_LINK_GROUP_STATE|test_group': {
         'state': 'down',
         'description': 'Test monitoring group',
-        'uplinks': 'PortChannel101,PortChannel103',
-        'downlinks': 'PortChannel102',
+        'monitored-links': 'PortChannel101,PortChannel103',
+        'managed-links': 'PortChannel102',
         'link_up_threshold': '1',
         'link_up_delay': '5',
-        'uplink_up_count': '0'
+        'up_to_down_count': '0'
     },
     'PORT_TABLE|Ethernet64': {
         'netdev_oper_status': 'up',
@@ -100,8 +100,8 @@ class TestMonitorLink:
         assert "Monitor Link Group: critical_links" in result.output
         assert "Monitor Link Group: test_group" in result.output
         assert "State:" in result.output
-        assert "Uplinks Up:" in result.output
-        assert "Min-uplinks:" in result.output
+        assert "Monitored Up:" in result.output
+        assert "Min-monitored-links:" in result.output
         assert "Link-up-delay:" in result.output
 
     def test_show_monitor_link_specific_group(self):
@@ -113,7 +113,7 @@ class TestMonitorLink:
         assert result.exit_code == 0
         assert "Monitor Link Group: critical_links" in result.output
         assert "Monitor Link Group: test_group" not in result.output
-        assert "Critical uplink and downlink monitoring group" in result.output
+        assert "Critical monitored and managed link monitoring group" in result.output
 
     def test_show_monitor_link_nonexistent_group(self):
         """Test showing a non-existent monitor link group"""
@@ -162,11 +162,11 @@ class TestMonitorLink:
         assert "Ethernet64" in result.output
         assert "Ethernet72" in result.output
         assert "Ethernet80" in result.output
-        assert "uplink" in result.output
-        assert "downlink" in result.output
+        assert "monitored" in result.output
+        assert "managed" in result.output
 
-    def test_downlink_reason_display(self):
-        """Test that downlink down reasons are displayed"""
+    def test_managed_reason_display(self):
+        """Test that managed-link down reasons are displayed"""
         runner = CliRunner()
         db = Db()
 
@@ -175,16 +175,16 @@ class TestMonitorLink:
         assert result.exit_code == 0
         assert "Down due to group critical_links" in result.output
 
-    def test_uplink_count_calculation(self):
-        """Test that uplink counts are calculated correctly"""
+    def test_monitored_count_calculation(self):
+        """Test that monitored-link counts are calculated correctly"""
         runner = CliRunner()
         db = Db()
 
         result = runner.invoke(show.cli.commands["monitor-link-group"], ["critical_links"], obj=db)
 
         assert result.exit_code == 0
-        # Should show 2/2 uplinks up (both Ethernet64 and Ethernet72 are up)
-        assert "Uplinks Up:       2/2" in result.output
+        # Should show 2/2 monitored-links up (both Ethernet64 and Ethernet72 are up)
+        assert "Monitored Up:          2/2" in result.output
 
     def test_portchannel_interfaces(self):
         """Test that PortChannel interfaces are handled correctly"""
@@ -215,8 +215,8 @@ class TestMonitorLink:
         test_data = {
             'MONITOR_LINK_GROUP_STATE|empty_group': {
                 'state': 'unknown',
-                'uplinks': '',
-                'downlinks': '',
+                'monitored-links': '',
+                'managed-links': '',
                 'link_up_threshold': '',
                 'link_up_delay': ''
             }
@@ -244,7 +244,7 @@ class TestMonitorLink:
             assert result.exit_code == 0
             assert "Monitor Link Group: empty_group" in result.output
             assert "No description" in result.output
-            assert "Min-uplinks:      1" in result.output  # Default value
+            assert "Min-monitored-links:   1" in result.output  # Default value
             assert "Link-up-delay:    0 seconds" in result.output  # Default value
         finally:
             # Restore original file
@@ -281,8 +281,8 @@ class TestMonitorLinkFunctions:
         # Test critical_links group
         critical_group = groups['critical_links']
         assert critical_group['state'] == 'up'
-        assert critical_group['description'] == 'Critical uplink and downlink monitoring group'
-        assert critical_group['min_uplinks'] == '2'
+        assert critical_group['description'] == 'Critical monitored and managed link monitoring group'
+        assert critical_group['min_monitored_links'] == '2'
         assert critical_group['linkup_delay'] == '10'
         assert len(critical_group['interfaces']) == 3
 
@@ -325,8 +325,8 @@ class TestMonitorLinkFunctions:
         assert isinstance(unknown_state, str)
 
     @mock.patch('utilities_common.cli.get_interface_operational_status')
-    def test_uplink_count_calculation_with_mock(self, mock_get_status):
-        """Test uplink count calculation with mocked interface status"""
+    def test_monitored_count_calculation_with_mock(self, mock_get_status):
+        """Test monitored-link count calculation with mocked interface status"""
         from show.monitor_link import get_monitor_link_groups
 
         # Mock interface status calls
@@ -344,7 +344,7 @@ class TestMonitorLinkFunctions:
         db = Db()
         groups = get_monitor_link_groups(db.db)
 
-        # The function itself doesn't calculate uplink counts, but we can test the data structure
+        # The function itself doesn't calculate monitored-link counts, but we can test the data structure
         assert 'critical_links' in groups
         assert 'test_group' in groups
 
@@ -366,8 +366,8 @@ class TestMonitorLinkEdgeCases:
             'MONITOR_LINK_GROUP_STATE|malformed_group': {
                 'state': 'up',
                 'description': 'Test group with malformed data',
-                'uplinks': 'Ethernet1,,Ethernet2,   ,Ethernet3',  # Extra commas and spaces
-                'downlinks': ',Ethernet4,',  # Leading and trailing commas
+                'monitored-links': 'Ethernet1,,Ethernet2,   ,Ethernet3',  # Extra commas and spaces
+                'managed-links': ',Ethernet4,',  # Leading and trailing commas
                 'link_up_threshold': '2',
                 'link_up_delay': '5'
             }
@@ -439,7 +439,7 @@ class TestMonitorLinkEdgeCases:
             shutil.move(backup_file, state_db_file)
 
     def test_interface_sorting(self):
-        """Test that interfaces are sorted correctly (uplinks first, then by name)"""
+        """Test that interfaces are sorted correctly (monitored first, then by name)"""
         runner = CliRunner()
         db = Db()
         # Use default state_db.json which contains our monitor link data
@@ -463,13 +463,13 @@ class TestMonitorLinkEdgeCases:
                 if not line.strip() or line.startswith('Monitor Link Group:'):
                     break
 
-        # Should have uplinks first, then downlinks
-        downlink_found = False
+        # Should have monitored first, then managed
+        managed_found = False
         for line in interface_lines:
-            if 'uplink' in line:
-                assert not downlink_found, "Uplinks should come before downlinks"
-            elif 'downlink' in line:
-                downlink_found = True
+            if 'monitored' in line:
+                assert not managed_found, "Monitored should come before managed"
+            elif 'managed' in line:
+                managed_found = True
 
     def test_utilities_common_integration(self):
         """Test integration with utilities_common.cli functions"""
@@ -496,3 +496,104 @@ class TestMonitorLinkEdgeCases:
         # Test non-existent interface
         status = get_interface_operational_status(db.db, 'NonExistent')
         assert status == 'N/A'
+
+
+class TestMonitorLinkTransitionTracking:
+    """PR-B: rendering of last_state_change_*, PENDING elapsed/remaining, transition counters."""
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+
+    def test_last_change_line_shown(self):
+        """When transition fields are present, the 'Last change:' line is rendered."""
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands["monitor-link-group"], ["critical_links"], obj=db)
+        assert result.exit_code == 0
+        assert "Last change:" in result.output
+        # epoch 1700000000 == 2023-11-14 22:13:20 UTC
+        assert "2023-11-14" in result.output
+        assert "DOWN -> UP" in result.output
+        assert "monitored 2/2 >= min-monitored-links 2" in result.output
+
+    def test_transitions_counter_line(self):
+        """The 'Transitions:' line is always present and shows counters."""
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands["monitor-link-group"], ["test_group"], obj=db)
+        assert result.exit_code == 0
+        assert "Transitions:" in result.output
+        assert "UP->DOWN=3" in result.output
+        assert "DOWN->UP=2" in result.output
+
+    def test_pending_linkup_delay_progress(self):
+        """When state is PENDING, Link-up-delay shows elapsed/remaining."""
+        # pending_start_time in mock is 1700000200, link_up_delay is 15.
+        # Mock time.time() to 1700000204 -> elapsed=4s, remaining=11s.
+        with mock.patch('show.monitor_link.time.time', return_value=1700000204):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(show.cli.commands["monitor-link-group"], ["pending_group"], obj=db)
+
+        assert result.exit_code == 0
+        assert "Link-up-delay:         15 seconds (elapsed: 4s, remaining: 11s)" in result.output
+
+    def test_pending_progress_overdue(self):
+        """When the timer has overshot (raw elapsed > delay), display is OVERDUE."""
+        # pending_start_time=1700000200, delay=15. Mock now = pending_start + 999.
+        with mock.patch('show.monitor_link.time.time', return_value=1700001199):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(show.cli.commands["monitor-link-group"], ["pending_group"], obj=db)
+
+        assert result.exit_code == 0
+        # 999s elapsed - 15s delay = OVERDUE by 984s
+        assert "elapsed: 999s, OVERDUE by 984s" in result.output
+        # Make sure the misleading "remaining: 0s" form is not shown
+        assert "remaining:" not in result.output
+
+    def test_no_last_change_when_fields_missing(self):
+        """Backward compat: when transition fields are absent, 'Last change:' is omitted."""
+        minimal_data = {
+            'MONITOR_LINK_GROUP_STATE|legacy_group': {
+                'state': 'up',
+                'description': 'Legacy group without transition fields',
+                'monitored-links': 'Ethernet1',
+                'managed-links': '',
+                'link_up_threshold': '1',
+                'link_up_delay': '0',
+            }
+        }
+        import json
+        import shutil
+        import tempfile
+
+        # Use a per-test tempdir so parallel runs don't collide and a killed test
+        # doesn't leave the workspace dirty.
+        tmpdir = tempfile.mkdtemp()
+        test_db_file = os.path.join(tmpdir, 'state_db.json')
+        with open(test_db_file, 'w') as f:
+            json.dump(minimal_data, f)
+
+        try:
+            dbconnector.dedicated_dbs['STATE_DB'] = os.path.join(tmpdir, 'state_db')
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(show.cli.commands["monitor-link-group"], ["legacy_group"], obj=db)
+            assert result.exit_code == 0
+            assert "Monitor Link Group: legacy_group" in result.output
+            assert "Last change:" not in result.output
+            # Counters fall back to 0 when fields missing
+            assert "Transitions:           UP->DOWN=0, DOWN->UP=0" in result.output
+        finally:
+            if 'STATE_DB' in dbconnector.dedicated_dbs:
+                del dbconnector.dedicated_dbs['STATE_DB']
+            shutil.rmtree(tmpdir, ignore_errors=True)
