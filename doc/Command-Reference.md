@@ -270,6 +270,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
@@ -5423,12 +5424,21 @@ This command is used to clear the current statistics for the registered host int
 
 - Usage:
   ```
-  sonic-clear flowcnt-trap
+  sonic-clear flowcnt-trap [-n|--namespace <namespace>]
   ```
+
+- Details:
+  - -n, --namespace: (Multi-ASIC) Namespace name (e.g. asic0). When omitted, the default namespace is targeted.
 
 - Example:
   ```
   admin@sonic:~$ sonic-clear flowcnt-trap
+  Trap Flow Counters were successfully cleared
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sonic-clear flowcnt-trap -n asic0
   Trap Flow Counters were successfully cleared
   ```
 
@@ -8466,15 +8476,30 @@ If vrf-name is also provided as part of the command, if the vrf is created it wi
 
 ### VRF config commands
 
+The `config vrf` command group accepts an optional `-n|--namespace` option that targets a specific ASIC's config DB on multi-ASIC platforms. On multi-ASIC platforms the option is required; on single-ASIC platforms it can be omitted and the default namespace is used.
+
+- Usage:
+  ```
+  config vrf [-n|--namespace <namespace>] <subcommand> ...
+  ```
+
+- Details:
+  - -n, --namespace: (Multi-ASIC, required) Namespace name (e.g. asic0). On single-ASIC platforms this option is optional and defaults to the default namespace.
+
 **config vrf add**
 
 This command creates vrf in SONiC system with provided vrf-name.
 
 - Usage:
   ```
-  config vrf add <vrf-name>
+  config vrf [-n|--namespace <namespace>] add <vrf-name>
   ```
 Note: vrf-name should always start with keyword "Vrf"
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 add Vrf-red
+  ```
 
 **config vrf del <vrf-name>**
 
@@ -8482,7 +8507,12 @@ This command deletes vrf with name vrf-name.
 
 - Usage:
   ```
-  config vrf del <vrf-name>
+  config vrf [-n|--namespace <namespace>] del <vrf-name>
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 del Vrf-red
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vrf-configuration)
@@ -8602,12 +8632,17 @@ This command enables the management VRF in the system. This command restarts the
 
 - Usage:
   ```
-  config vrf add mgmt
+  config vrf [-n|--namespace <namespace>] add mgmt
   ```
 
 - Example:
   ```
   admin@sonic:~$ sudo config vrf add mgmt
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 add mgmt
   ```
 
 **config vrf del mgmt**
@@ -8616,7 +8651,7 @@ This command disables the management VRF in the system. This command restarts th
 
 - Usage:
   ```
-  config vrf del mgmt
+  config vrf [-n|--namespace <namespace>] del mgmt
   ```
 
 - Example:
