@@ -15662,8 +15662,9 @@ Usage: sfputil show eeprom-hexdump [OPTIONS]
   Display EEPROM hexdump of SFP transceiver(s)
 Options:
   -p, --port <port_name>    Display SFP EEPROM hexdump for port <port_name>
-  -n, --page <page_number>  Display SFP EEEPROM hexdump for
-                            <page_number_in_hex>
+  -n, --page <page_number>  Display SFP EEPROM hexdump for <page_number>
+                            (decimal, hex (with 0x prefix) or octal (with 0o
+                            prefix))
   --help                    Show this message and exit.
 ```
 
