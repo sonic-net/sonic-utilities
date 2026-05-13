@@ -5757,57 +5757,61 @@ This command displays switch hash capabilities.
 - Example:
   ```bash
   admin@sonic:~$ show switch-hash capabilities
-  +--------+-------------------------------------+
-  | Hash   | Capabilities                        |
-  +========+=====================================+
-  | ECMP   | +-------------------+-------------+ |
-  |        | | Hash Field        | Algorithm   | |
-  |        | |-------------------+-------------| |
-  |        | | IN_PORT           | CRC         | |
-  |        | | DST_MAC           | XOR         | |
-  |        | | SRC_MAC           | RANDOM      | |
-  |        | | ETHERTYPE         | CRC_32LO    | |
-  |        | | VLAN_ID           | CRC_32HI    | |
-  |        | | IP_PROTOCOL       | CRC_CCITT   | |
-  |        | | DST_IP            | CRC_XOR     | |
-  |        | | SRC_IP            |             | |
-  |        | | L4_DST_PORT       |             | |
-  |        | | L4_SRC_PORT       |             | |
-  |        | | INNER_DST_MAC     |             | |
-  |        | | INNER_SRC_MAC     |             | |
-  |        | | INNER_ETHERTYPE   |             | |
-  |        | | INNER_IP_PROTOCOL |             | |
-  |        | | INNER_DST_IP      |             | |
-  |        | | INNER_SRC_IP      |             | |
-  |        | | INNER_L4_DST_PORT |             | |
-  |        | | INNER_L4_SRC_PORT |             | |
-  |        | | IPV6_FLOW_LABEL   |             | |
-  |        | +-------------------+-------------+ |
-  +--------+-------------------------------------+
-  | LAG    | +-------------------+-------------+ |
-  |        | | Hash Field        | Algorithm   | |
-  |        | |-------------------+-------------| |
-  |        | | IN_PORT           | CRC         | |
-  |        | | DST_MAC           | XOR         | |
-  |        | | SRC_MAC           | RANDOM      | |
-  |        | | ETHERTYPE         | CRC_32LO    | |
-  |        | | VLAN_ID           | CRC_32HI    | |
-  |        | | IP_PROTOCOL       | CRC_CCITT   | |
-  |        | | DST_IP            | CRC_XOR     | |
-  |        | | SRC_IP            |             | |
-  |        | | L4_DST_PORT       |             | |
-  |        | | L4_SRC_PORT       |             | |
-  |        | | INNER_DST_MAC     |             | |
-  |        | | INNER_SRC_MAC     |             | |
-  |        | | INNER_ETHERTYPE   |             | |
-  |        | | INNER_IP_PROTOCOL |             | |
-  |        | | INNER_DST_IP      |             | |
-  |        | | INNER_SRC_IP      |             | |
-  |        | | INNER_L4_DST_PORT |             | |
-  |        | | INNER_L4_SRC_PORT |             | |
-  |        | | IPV6_FLOW_LABEL   |             | |
-  |        | +-------------------+-------------+ |
-  +--------+-------------------------------------+
+  +--------+---------------------------------------------------+
+  | Hash   | Capabilities                                      |
+  +========+===================================================+
+  | ECMP   | +-------------------+-------------+-------------+ |
+  |        | | Hash Field        | Algorithm   | Packet Type | |
+  |        | |-------------------+-------------+-------------| |
+  |        | | IN_PORT           | CRC         | ipv4        | |
+  |        | | DST_MAC           | XOR         | ipv4        | |
+  |        | | SRC_MAC           | RANDOM      | ipnip       | |
+  |        | | ETHERTYPE         | CRC_32LO    | ipv4_rdma   | |
+  |        | | VLAN_ID           | CRC_32HI    | ipv6_rdma   | |
+  |        | | IP_PROTOCOL       | CRC_CCITT   |             | |
+  |        | | DST_IP            | CRC_XOR     |             | |
+  |        | | SRC_IP            |             |             | |
+  |        | | L4_DST_PORT       |             |             | |
+  |        | | L4_SRC_PORT       |             |             | |
+  |        | | INNER_DST_MAC     |             |             | |
+  |        | | INNER_SRC_MAC     |             |             | |
+  |        | | INNER_ETHERTYPE   |             |             | |
+  |        | | INNER_IP_PROTOCOL |             |             | |
+  |        | | INNER_DST_IP      |             |             | |
+  |        | | INNER_SRC_IP      |             |             | |
+  |        | | INNER_L4_DST_PORT |             |             | |
+  |        | | INNER_L4_SRC_PORT |             |             | |
+  |        | | IPV6_FLOW_LABEL   |             |             | |
+  |        | | RDMA_BTH_OPCODE   |             |             | |
+  |        | | RDMA_BTH_DEST_QP  |             |             | |
+  |        | +-------------------+-------------+-------------+ |
+  +--------+---------------------------------------------------+
+  | LAG    | +-------------------+-------------+-------------+ |
+  |        | | Hash Field        | Algorithm   | Packet Type | |
+  |        | |-------------------+-------------+-------------| |
+  |        | | IN_PORT           | CRC         | ipv4        | |
+  |        | | DST_MAC           | XOR         | ipv4        | |
+  |        | | SRC_MAC           | RANDOM      | ipnip       | |
+  |        | | ETHERTYPE         | CRC_32LO    | ipv4_rdma   | |
+  |        | | VLAN_ID           | CRC_32HI    | ipv6_rdma   | |
+  |        | | IP_PROTOCOL       | CRC_CCITT   |             | |
+  |        | | DST_IP            | CRC_XOR     |             | |
+  |        | | SRC_IP            |             |             | |
+  |        | | L4_DST_PORT       |             |             | |
+  |        | | L4_SRC_PORT       |             |             | |
+  |        | | INNER_DST_MAC     |             |             | |
+  |        | | INNER_SRC_MAC     |             |             | |
+  |        | | INNER_ETHERTYPE   |             |             | |
+  |        | | INNER_IP_PROTOCOL |             |             | |
+  |        | | INNER_DST_IP      |             |             | |
+  |        | | INNER_SRC_IP      |             |             | |
+  |        | | INNER_L4_DST_PORT |             |             | |
+  |        | | INNER_L4_SRC_PORT |             |             | |
+  |        | | IPV6_FLOW_LABEL   |             |             | |
+  |        | | RDMA_BTH_OPCODE   |             |             | |
+  |        | | RDMA_BTH_DEST_QP  |             |             | |
+  |        | +-------------------+-------------+-------------+ |
+  +--------+---------------------------------------------------+
   ```
 
 - Multi-ASIC Examples:
@@ -5822,25 +5826,33 @@ This subsection explains how to configure switch hash.
 
 **config switch-hash global ecmp/lag hash**
 
-This command is used to manage switch hash global configuration.
+This command is used to manage switch hash global and switch hash packet-type configuration.
 
 - Usage:
   ```bash
-  config switch-hash global ecmp-hash <hash_field_list>
-  config switch-hash global lag-hash <hash_field_list>
-  config switch-hash global -n <namespace> ecmp-hash <hash_field_list>
-  config switch-hash global -n <namespace> lag-hash <hash_field_list>
+  config switch-hash global ecmp-hash [OPTIONS] ECMP_HASH
+  config switch-hash global lag-hash [OPTIONS] LAG_HASH
+  config switch-hash global -n <namespace> ecmp-hash [OPTIONS] ECMP_HASH
+  config switch-hash global -n <namespace> lag-hash [OPTIONS] LAG_HASH
+
+Options:
+  --packet-type [ipv4|ipv6|ipnip|ipv4_rdma|ipv6_rdma]
+                                  Configures the hash for given packet type.
+                                  Supported packet types: ipv4, ipv6, ipnip,
+                                  ipv4_rdma, ipv6_rdma
+  --action [add|del]              Action to perform: add hash fields or delete
+                                  hash fields
+  -?, -h, --help                  Show this message and exit.
   ```
 
 - Parameters:
-  - _hash_field_list_: hash fields for hashing packets going through ECMP/LAG
+  - _ECMP_HASH/LAG_HASH_: hash fields for hashing packets going through ECMP/LAG
   - _-n,--namespace_: namespace name. Required on multi-ASIC systems.
 
 - Note:
   - On multi-ASIC systems, place _-n,--namespace_ before _ecmp-hash_ or _lag-hash_.
   - Use _show switch-hash capabilities_ or _show switch-hash -n <namespace> capabilities_ to see supported values for the target namespace.
-
-- Examples:
+ Examples:
   ```bash
   admin@sonic:~$ config switch-hash global ecmp-hash \
   'DST_MAC' \
@@ -5859,7 +5871,9 @@ This command is used to manage switch hash global configuration.
   'INNER_SRC_IP' \
   'INNER_L4_DST_PORT' \
   'INNER_L4_SRC_PORT' \
-  'IPV6_FLOW_LABEL'
+  'IPV6_FLOW_LABEL' \
+  'RDMA_BTH_OPCODE' \
+  'RDMA_BTH_DEST_QP'
   admin@sonic:~$ config switch-hash global lag-hash \
   'DST_MAC' \
   'SRC_MAC' \
@@ -5877,7 +5891,9 @@ This command is used to manage switch hash global configuration.
   'INNER_SRC_IP' \
   'INNER_L4_DST_PORT' \
   'INNER_L4_SRC_PORT' \
-  'IPV6_FLOW_LABEL'
+  'IPV6_FLOW_LABEL' \
+  'RDMA_BTH_OPCODE' \
+  'RDMA_BTH_DEST_QP'
   ```
 
 - Multi-ASIC Examples:

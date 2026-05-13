@@ -7,7 +7,6 @@ import utilities_common.cli as clicommon
 from utilities_common import constants
 import utilities_common.multi_asic as multi_asic_util
 
-from sonic_py_common import logger
 from sonic_py_common import multi_asic
 from utilities_common.switch_hash import (
     CFG_SWITCH_HASH,
@@ -19,59 +18,26 @@ from utilities_common.switch_hash import (
     SW_CAP_LAG_HASH_CAPABLE_KEY,
     SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY,
     SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY,
+    SW_CAP_ECMP_PKT_TYPE_HASH_CAPABLE_KEY,
+    SW_CAP_LAG_PKT_TYPE_HASH_CAPABLE_KEY,
+    SW_CAP_ECMP_PKT_TYPE_LIST_KEY,
+    SW_CAP_LAG_PKT_TYPE_LIST_KEY,
     SW_HASH_KEY,
     SW_CAP_KEY,
     HASH_FIELD_LIST,
     HASH_ALGORITHM,
-    SYSLOG_IDENTIFIER,
     get_param,
     get_param_hint,
     get_dupes,
-    to_str,
 )
 
-
-log = logger.Logger(SYSLOG_IDENTIFIER)
-log.set_min_log_priority_info()
+SUPPORTED_PKT_TYPE_LIST = ["ipv4", "ipv6", "ipnip", "ipv4_rdma", "ipv6_rdma"]
 
 #
 # Hash validators -----------------------------------------------------------------------------------------------------
 #
 
-def hash_field_validator(ctx, param, value):
-    """
-    Check if hash field list argument is valid
-    Args:
-        ctx: click context
-        param: click parameter context
-        value: value of parameter
-    Returns:
-        str: validated parameter
-    """
-
-    for hash_field in value:
-        click.Choice(HASH_FIELD_LIST).convert(hash_field, param, ctx)
-
-    return list(value)
-
-
-def hash_algorithm_validator(ctx, param, value):
-    """
-    Check if hash algorithm argument is valid
-    Args:
-        ctx: click context
-        param: click parameter context
-        value: value of parameter
-    Returns:
-        str: validated parameter
-    """
-
-    click.Choice(HASH_ALGORITHM).convert(value, param, ctx)
-
-    return value
-
-
-def ecmp_hash_validator(ctx, db, ecmp_hash):
+def ecmp_hash_validator(ctx, db, ecmp_hash, is_pkt_type=False, pkt_type=None):
     """
     Check if ECMP hash argument is valid
 
@@ -79,39 +45,77 @@ def ecmp_hash_validator(ctx, db, ecmp_hash):
         ctx: click context
         db: State DB connector object
         ecmp_hash: ECMP hash field list
+        is_pkt_type: True when validating per-packet-type hash, False for global hash
+        pkt_type: packet-type name when is_pkt_type is True
     """
+    # Derive a safe hint even if ctx or get_param_hint misbehave
+    try:
+        hint = get_param_hint(ctx, "ecmp_hash")
+    except Exception:
+        hint = "ecmp-hash"
 
+    # 1) Duplicate check
     dup_list = get_dupes(ecmp_hash)
     if dup_list:
-        raise click.UsageError("Invalid value for {}: {} has a duplicate hash field(s) {}".format(
-            get_param_hint(ctx, "ecmp_hash"), to_str(ecmp_hash), to_str(dup_list)), ctx
+        dup_str = ", ".join(dup_list)           # "DST_MAC" or "DST_MAC, SRC_MAC"
+        fields_str = " ".join(ecmp_hash)        # full list as passed
+        raise click.UsageError(
+            f"Invalid value for {hint}: {fields_str} has a duplicate hash field(s) {dup_str}",
+            ctx,
         )
 
+    # 2) Capability checks
     entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
+    if entry is None:
+        entry = {}
+    entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, "N/A")
 
-    entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, 'N/A')
-    entry.setdefault(SW_CAP_ECMP_HASH_CAPABLE_KEY, 'false')
-
-    if entry[SW_CAP_ECMP_HASH_CAPABLE_KEY] == 'false':
-        raise click.UsageError("Failed to configure {}: operation is not supported".format(
-            get_param_hint(ctx, "ecmp_hash")), ctx
-        )
+    if not is_pkt_type:
+        entry.setdefault(SW_CAP_ECMP_HASH_CAPABLE_KEY, "false")
+        if entry[SW_CAP_ECMP_HASH_CAPABLE_KEY] != "true":
+            raise click.UsageError(
+                f'Failed to configure {hint}: operation is not supported',
+                ctx,
+            )
+    else:
+        entry.setdefault(SW_CAP_ECMP_PKT_TYPE_HASH_CAPABLE_KEY, "false")
+        entry.setdefault(SW_CAP_ECMP_PKT_TYPE_LIST_KEY, "")
+        if entry[SW_CAP_ECMP_PKT_TYPE_HASH_CAPABLE_KEY] != "true":
+            raise click.UsageError(
+                f'Failed to configure {hint}: packet-type operation is not supported',
+                ctx,
+            )
+        if not entry[SW_CAP_ECMP_PKT_TYPE_LIST_KEY]:
+            raise click.UsageError(
+                f'Failed to configure {hint}: no packet-type hash capabilities',
+                ctx,
+            )
+        if pkt_type:
+            supported = [p.strip().upper()
+                         for p in entry[SW_CAP_ECMP_PKT_TYPE_LIST_KEY].split(",") if p.strip()]
+            if pkt_type.upper() not in supported:
+                raise click.UsageError(
+                    f'Failed to configure {hint}: packet-type {pkt_type.upper()} is not supported',
+                    ctx,
+                )
 
     if not entry[SW_CAP_HASH_FIELD_LIST_KEY]:
-        raise click.UsageError("Failed to configure {}: no hash field capabilities".format(
-            get_param_hint(ctx, "ecmp_hash")), ctx
+        raise click.UsageError(
+            f'Failed to configure {hint}: no hash field capabilities',
+            ctx,
         )
 
-    if entry[SW_CAP_HASH_FIELD_LIST_KEY] == 'N/A':
+    if entry[SW_CAP_HASH_FIELD_LIST_KEY] == "N/A":
         return
 
-    cap_list = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(',')
-
+    cap_list = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(",")
     for hash_field in ecmp_hash:
-        click.Choice(cap_list).convert(hash_field, get_param(ctx, "ecmp_hash"), ctx)
+        click.Choice(cap_list).convert(
+            hash_field, get_param(ctx, "ecmp_hash"), ctx
+        )
 
 
-def lag_hash_validator(ctx, db, lag_hash):
+def lag_hash_validator(ctx, db, lag_hash, is_pkt_type=False, pkt_type=None):
     """
     Check if LAG hash argument is valid
 
@@ -119,37 +123,73 @@ def lag_hash_validator(ctx, db, lag_hash):
         ctx: click context
         db: State DB connector object
         lag_hash: LAG hash field list
+        is_pkt_type: True when validating per-packet-type hash, False for global hash
+        pkt_type: packet-type name when is_pkt_type is True
     """
+    try:
+        hint = get_param_hint(ctx, "lag_hash")
+    except Exception:
+        hint = "lag-hash"
 
+    # 1) Duplicate check
     dup_list = get_dupes(lag_hash)
     if dup_list:
-        raise click.UsageError("Invalid value for {}: {} has a duplicate hash field(s) {}".format(
-            get_param_hint(ctx, "lag_hash"), to_str(lag_hash), to_str(dup_list)), ctx
+        dup_str = ", ".join(dup_list)
+        fields_str = " ".join(lag_hash)
+        raise click.UsageError(
+            f"Invalid value for {hint}: {fields_str} has a duplicate hash field(s) {dup_str}",
+            ctx,
         )
 
-    entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
+    # 2) Capability checks
+    entry = db.get_all(db.STATE_DB, f"{STATE_SWITCH_CAPABILITY}|{SW_CAP_KEY}")
+    if entry is None:
+        entry = {}
+    entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, "N/A")
 
-    entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, 'N/A')
-    entry.setdefault(SW_CAP_LAG_HASH_CAPABLE_KEY, 'false')
-
-    if entry[SW_CAP_LAG_HASH_CAPABLE_KEY] == 'false':
-        raise click.UsageError("Failed to configure {}: operation is not supported".format(
-            get_param_hint(ctx, "lag_hash")), ctx
-        )
+    if not is_pkt_type:
+        entry.setdefault(SW_CAP_LAG_HASH_CAPABLE_KEY, "false")
+        if entry[SW_CAP_LAG_HASH_CAPABLE_KEY] != "true":
+            raise click.UsageError(
+                f'Failed to configure {hint}: operation is not supported',
+                ctx,
+            )
+    else:
+        entry.setdefault(SW_CAP_LAG_PKT_TYPE_HASH_CAPABLE_KEY, "false")
+        entry.setdefault(SW_CAP_LAG_PKT_TYPE_LIST_KEY, "")
+        if entry[SW_CAP_LAG_PKT_TYPE_HASH_CAPABLE_KEY] != "true":
+            raise click.UsageError(
+                f'Failed to configure {hint}: packet-type operation is not supported',
+                ctx,
+            )
+        if not entry[SW_CAP_LAG_PKT_TYPE_LIST_KEY]:
+            raise click.UsageError(
+                f'Failed to configure {hint}: no packet-type hash capabilities',
+                ctx,
+            )
+        if pkt_type:
+            supported = [p.strip().upper()
+                         for p in entry[SW_CAP_LAG_PKT_TYPE_LIST_KEY].split(",") if p.strip()]
+            if pkt_type.upper() not in supported:
+                raise click.UsageError(
+                    f'Failed to configure {hint}: packet-type {pkt_type.upper()} is not supported',
+                    ctx,
+                )
 
     if not entry[SW_CAP_HASH_FIELD_LIST_KEY]:
-        raise click.UsageError("Failed to configure {}: no hash field capabilities".format(
-            get_param_hint(ctx, "lag_hash")), ctx
+        raise click.UsageError(
+            f'Failed to configure {hint}: no hash field capabilities',
+            ctx,
         )
 
-    if entry[SW_CAP_HASH_FIELD_LIST_KEY] == 'N/A':
+    if entry[SW_CAP_HASH_FIELD_LIST_KEY] == "N/A":
         return
 
-    cap_list = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(',')
-
+    cap_list = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(",")
     for hash_field in lag_hash:
-        click.Choice(cap_list).convert(hash_field, get_param(ctx, "lag_hash"), ctx)
-
+        click.Choice(cap_list).convert(
+            hash_field, get_param(ctx, "lag_hash"), ctx
+        )
 
 def ecmp_hash_algorithm_validator(ctx, db, ecmp_hash_algorithm):
     """
@@ -265,6 +305,29 @@ def update_entry_validated(db, table, key, data, create_if_not_exists=False):
     db.set_entry(table, key, cfg[table][key])
 
 #
+# helper functions---------------------------------------------------------------------------------------------------
+#
+def _merge_hash_fields(existing_str, new_fields):
+    """Merge hash fields preserving order, without duplicates."""
+    existing = []
+    if existing_str:
+        existing = [f.strip() for f in existing_str.split(",") if f.strip()]
+
+    result = existing[:]
+    for f in new_fields:
+        if f not in result:
+            result.append(f)
+    return result
+
+def _delete_hash_fields(existing_str, delete_fields):
+    """Delete the given fields from existing_str; return new list."""
+    if not existing_str:
+        return []
+
+    existing = [f.strip() for f in existing_str.split(",") if f.strip()]
+    delete_set = set(delete_fields)
+    return [f for f in existing if f not in delete_set]
+#
 # Hash CLI ------------------------------------------------------------------------------------------------------------
 #
 
@@ -295,64 +358,212 @@ def SWITCH_HASH_GLOBAL(ctx, namespace):
 @SWITCH_HASH_GLOBAL.command(
     name="ecmp-hash"
 )
-@click.argument(
-    "ecmp-hash",
-    nargs=-1,
-    required=True,
-    callback=hash_field_validator,
+@click.argument("hash_fields", nargs=-1, type=click.Choice(HASH_FIELD_LIST), required=False, metavar="ECMP_HASH")
+@click.option(
+    "--packet-type",
+    type=click.Choice(SUPPORTED_PKT_TYPE_LIST, case_sensitive=False),
+    help="Configures the hash for given packet type",
+)
+@click.option(
+    "--action",
+    type=click.Choice(["add", "del"]),
+    help=(
+        "When used with --packet-type: 'del' removes hash fields (or deletes "
+        "the packet-type hash if no fields are given); 'add' merges new hash "
+        "fields into the existing list. If omitted, the given fields "
+        "overwrite any existing list for that packet-type."
+    ),
 )
 @clicommon.pass_db
 @click.pass_context
-def SWITCH_HASH_GLOBAL_ecmp_hash(ctx, db, ecmp_hash):
+def ecmp_hash(ctx, db, hash_fields, packet_type, action):
     """ Hash fields for hashing packets going through ECMP """
 
-    namespace = ctx.parent.obj['namespace']
-    ecmp_hash_validator(ctx, db.db_clients[namespace], ecmp_hash)
+    # Validate option combinations
+    # When --packet-type is specified:
+    #   - --action del : mandatory for delete semantics
+    #   - --action add : optional; when present, merge; when omitted, overwrite
+    if action and not packet_type:
+        ctx.fail("--packet-type is required when --action is specified")
+
+    # Resolve namespace (parent group sets this when invoked via the group);
+    # fall back to the default namespace when the subcommand is invoked
+    # directly (e.g. from tests).
+    parent_obj = getattr(ctx.parent, 'obj', None) or {}
+    namespace = parent_obj.get('namespace', constants.DEFAULT_NAMESPACE)
+    state_db = db.db_clients.get(namespace, db.db)
+    cfgdb = db.cfgdb_clients.get(namespace, db.cfgdb)
 
     table = CFG_SWITCH_HASH
     key = SW_HASH_KEY
-    data = {
-        "ecmp_hash": ecmp_hash,
-    }
 
-    try:
-        update_entry_validated(db.cfgdb_clients[namespace], table, key, data, create_if_not_exists=True)
-        log.log_notice("Configured switch global ECMP hash: {}".format(to_str(ecmp_hash)))
-    except Exception as e:
-        log.log_error("Failed to configure switch global ECMP hash: {}".format(str(e)))
-        ctx.fail(str(e))
+    # Packet-type specific configuration
+    if packet_type:
+        pkt_key = packet_type.lower()
+        attr_name = f"ecmp_hash_{pkt_key}"
+        global_entry = cfgdb.get_entry(table, key) or {}
+        existing_value = global_entry.get(attr_name, "")
 
+        if action == "del":
+            # Delete semantics (unchanged):
+            #   - with hash_fields: remove subset
+            #   - without hash_fields: delete entire pkt-type attribute
+            if not hash_fields:
+                if existing_value:
+                    update_entry_validated(cfgdb, table, key, {attr_name: None}, create_if_not_exists=True)
+                return
+
+            new_list = _delete_hash_fields(existing_value, list(hash_fields))
+            new_value = ",".join(new_list) if new_list else ""
+
+            if not new_list:
+                update_entry_validated(cfgdb, table, key, {attr_name: None}, create_if_not_exists=True)
+            elif new_value != existing_value:
+                update_entry_validated(cfgdb, table, key, {attr_name: new_value}, create_if_not_exists=True)
+        else:
+            # ADD / overwrite semantics:
+            #   - action == "add": merge with existing (ignore duplicates)
+            #   - action is None: overwrite any existing list
+            if not hash_fields:
+                available_fields = ", ".join(HASH_FIELD_LIST)
+                ctx.fail(
+                    "Hash fields are required when --packet-type is specified "
+                    "and --action is not 'del'\n\nAvailable hash fields:\n"
+                    f"{available_fields}"
+                )
+
+            hash_fields = list(hash_fields)
+            ecmp_hash_validator(ctx, state_db, hash_fields, is_pkt_type=True, pkt_type=packet_type)
+
+            if action == "add":
+                merged_value = _merge_hash_fields(existing_value, hash_fields)
+            else:
+                merged_value = hash_fields
+
+            new_value = ",".join(merged_value)
+
+            if new_value != existing_value:
+                update_entry_validated(cfgdb, table, key, {attr_name: new_value}, create_if_not_exists=True)
+    else:
+        # Global hash configuration
+        if not hash_fields:
+            click.echo(ctx.get_help())
+            ctx.exit(0)
+
+        hash_fields = list(hash_fields)
+        ecmp_hash_validator(ctx, state_db, hash_fields, is_pkt_type=False)
+
+        data = {"ecmp_hash": hash_fields}
+
+        try:
+            update_entry_validated(cfgdb, table, key, data, create_if_not_exists=True)
+        except Exception as e:
+            ctx.fail(str(e))
 
 @SWITCH_HASH_GLOBAL.command(
     name="lag-hash"
 )
-@click.argument(
-    "lag-hash",
-    nargs=-1,
-    required=True,
-    callback=hash_field_validator,
+@click.argument("hash_fields", nargs=-1, type=click.Choice(HASH_FIELD_LIST), required=False, metavar="LAG_HASH")
+@click.option(
+    "--packet-type",
+    type=click.Choice(SUPPORTED_PKT_TYPE_LIST, case_sensitive=False),
+    help="Configures the hash for given packet type",
+)
+@click.option(
+    "--action",
+    type=click.Choice(["add", "del"]),
+    help=(
+        "When used with --packet-type: 'del' removes hash fields (or deletes "
+        "the packet-type hash if no fields are given); 'add' merges new hash "
+        "fields into the existing list. If omitted, the given fields "
+        "overwrite any existing list for that packet-type."
+    ),
 )
 @clicommon.pass_db
 @click.pass_context
-def SWITCH_HASH_GLOBAL_lag_hash(ctx, db, lag_hash):
+def lag_hash(ctx, db, hash_fields, packet_type, action):
     """ Hash fields for hashing packets going through LAG """
 
-    namespace = ctx.parent.obj['namespace']
-    lag_hash_validator(ctx, db.db_clients[namespace], lag_hash)
+    # Validate option combinations
+    # When --packet-type is specified:
+    #   - --action del : mandatory for delete semantics
+    #   - --action add : optional; when present, merge; when omitted, overwrite
+    if action and not packet_type:
+        ctx.fail("--packet-type is required when --action is specified")
+
+    # Resolve namespace (parent group sets this when invoked via the group);
+    # fall back to the default namespace when the subcommand is invoked
+    # directly (e.g. from tests).
+    parent_obj = getattr(ctx.parent, 'obj', None) or {}
+    namespace = parent_obj.get('namespace', constants.DEFAULT_NAMESPACE)
+    state_db = db.db_clients.get(namespace, db.db)
+    cfgdb = db.cfgdb_clients.get(namespace, db.cfgdb)
 
     table = CFG_SWITCH_HASH
     key = SW_HASH_KEY
-    data = {
-        "lag_hash": lag_hash,
-    }
 
-    try:
-        update_entry_validated(db.cfgdb_clients[namespace], table, key, data, create_if_not_exists=True)
-        log.log_notice("Configured switch global LAG hash: {}".format(to_str(lag_hash)))
-    except Exception as err:
-        log.log_error("Failed to configure switch global LAG hash: {}".format(str(err)))
-        ctx.fail(str(err))
+    # Packet-type specific configuration
+    if packet_type:
+        pkt_key = packet_type.lower()
+        attr_name = f"lag_hash_{pkt_key}"
+        global_entry = cfgdb.get_entry(table, key) or {}
+        existing_value = global_entry.get(attr_name, "")
 
+        if action == "del":
+            # Delete semantics (unchanged):
+            #   - with hash_fields: remove subset
+            #   - without hash_fields: delete entire pkt-type attribute
+            if not hash_fields:
+                if existing_value:
+                    update_entry_validated(cfgdb, table, key, {attr_name: None}, create_if_not_exists=True)
+                return
+
+            new_list = _delete_hash_fields(existing_value, list(hash_fields))
+            new_value = ",".join(new_list) if new_list else ""
+
+            if not new_list:
+                update_entry_validated(cfgdb, table, key, {attr_name: None}, create_if_not_exists=True)
+            elif new_value != existing_value:
+                update_entry_validated(cfgdb, table, key, {attr_name: new_value}, create_if_not_exists=True)
+        else:
+            # ADD / overwrite semantics:
+            #   - action == "add": merge with existing (ignore duplicates)
+            #   - action is None: overwrite any existing list
+            if not hash_fields:
+                available_fields = ", ".join(HASH_FIELD_LIST)
+                ctx.fail(
+                    "Hash fields are required when --packet-type is specified "
+                    "and --action is not 'del'\n\nAvailable hash fields:\n"
+                    f"{available_fields}"
+                )
+
+            hash_fields = list(hash_fields)
+            lag_hash_validator(ctx, state_db, hash_fields, is_pkt_type=True, pkt_type=packet_type)
+
+            if action == "add":
+                merged_value = _merge_hash_fields(existing_value, hash_fields)
+            else:
+                merged_value = hash_fields
+
+            new_value = ",".join(merged_value)
+
+            if new_value != existing_value:
+                update_entry_validated(cfgdb, table, key, {attr_name: new_value}, create_if_not_exists=True)
+    else:
+        # Global hash configuration
+        if not hash_fields:
+            click.echo(ctx.get_help())
+            ctx.exit(0)
+
+        hash_fields = list(hash_fields)
+        lag_hash_validator(ctx, state_db, hash_fields, is_pkt_type=False)
+
+        data = {"lag_hash": hash_fields}
+
+        try:
+            update_entry_validated(cfgdb, table, key, data, create_if_not_exists=True)
+        except Exception as e:
+            ctx.fail(str(e))
 
 @SWITCH_HASH_GLOBAL.command(
     name="ecmp-hash-algorithm"
@@ -361,7 +572,7 @@ def SWITCH_HASH_GLOBAL_lag_hash(ctx, db, lag_hash):
     "ecmp-hash-algorithm",
     nargs=1,
     required=True,
-    callback=hash_algorithm_validator,
+    type=click.Choice(HASH_ALGORITHM),
 )
 @clicommon.pass_db
 @click.pass_context
@@ -379,9 +590,7 @@ def SWITCH_HASH_GLOBAL_ecmp_hash_algorithm(ctx, db, ecmp_hash_algorithm):
 
     try:
         update_entry_validated(db.cfgdb_clients[namespace], table, key, data, create_if_not_exists=True)
-        log.log_notice("Configured switch global ECMP hash algorithm: {}".format(ecmp_hash_algorithm))
     except Exception as e:
-        log.log_error("Failed to configure switch global ECMP hash algorithm: {}".format(str(e)))
         ctx.fail(str(e))
 
 
@@ -392,7 +601,7 @@ def SWITCH_HASH_GLOBAL_ecmp_hash_algorithm(ctx, db, ecmp_hash_algorithm):
     "lag-hash-algorithm",
     nargs=1,
     required=True,
-    callback=hash_algorithm_validator,
+    type=click.Choice(HASH_ALGORITHM),
 )
 @clicommon.pass_db
 @click.pass_context
@@ -410,9 +619,7 @@ def SWITCH_HASH_GLOBAL_lag_hash_algorithm(ctx, db, lag_hash_algorithm):
 
     try:
         update_entry_validated(db.cfgdb_clients[namespace], table, key, data, create_if_not_exists=True)
-        log.log_notice("Configured switch global LAG hash algorithm: {}".format(lag_hash_algorithm))
     except Exception as e:
-        log.log_error("Failed to configure switch global LAG hash algorithm: {}".format(str(e)))
         ctx.fail(str(e))
 
 
