@@ -152,6 +152,44 @@ class TestPfcwd(object):
         assert result.output == test_vectors.pfcwd_show_enable_history_config_output_pass
 
     @patch('pfcwd.main.os')
+    def test_pfcwd_interval_skips_partial_entry(self, mock_os):
+        """
+        Regression test for GitHub issue #4535.
+
+        pfc_stat_history_cmd writes only pfc_stat_history via mod_entry() on a
+        port that has no prior PFC_WD configuration, creating a PFC_WD entry
+        that is missing detection_time and restoration_time.  The original
+        interval() code called int(...get('detection_time')) unconditionally,
+        causing a TypeError: int() argument must be ... not 'NoneType'.
+
+        After the fix, interval() must skip such partial entries and succeed.
+        """
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+
+        # Simulate a partial PFC_WD entry with only pfc_stat_history set
+        # (no detection_time / restoration_time), as created by pfc_stat_history_cmd
+        # on a port with no prior PFC_WD config.
+        db.cfgdb.mod_entry("PFC_WD", "Ethernet12", {"pfc_stat_history": "disable"})
+
+        # config pfcwd interval must not crash with TypeError
+        result = runner.invoke(
+            pfcwd.cli.commands["interval"],
+            ["200"],
+            obj=db
+        )
+        assert result.exit_code == 0, (
+            "interval() crashed on partial PFC_WD entry: {}".format(result.output)
+        )
+
+        # Verify the poll interval was actually written
+        global_entry = db.cfgdb.get_entry("PFC_WD", "GLOBAL")
+        assert global_entry.get("POLL_INTERVAL") == 200
+
+    @patch('pfcwd.main.os')
     def test_pfcwd_start_actions(self, mock_os):
         # pfcwd start --action forward --restoration-time 200 Ethernet0 200
         import pfcwd.main as pfcwd
