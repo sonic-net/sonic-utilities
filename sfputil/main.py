@@ -728,7 +728,7 @@ def eeprom(port, dump_dom, namespace):
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
 @click.option('-n', '--page', metavar='<page_number>',
-              help="Display SFP EEEPROM hexdump for <page_number> "
+              help="Display SFP EEPROM hexdump for <page_number> "
                    "(decimal, hex (with 0x prefix) or octal (with 0o prefix))")
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
