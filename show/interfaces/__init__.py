@@ -1,9 +1,11 @@
 import json
 import os
+from datetime import datetime
 
 import subprocess
 import click
 from utilities_common import constants
+from utilities_common.general import format_relative_time
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from natsort import natsorted
@@ -16,7 +18,6 @@ import sonic_platform_base.sonic_sfp.sfputilhelper
 
 from . import portchannel
 from collections import OrderedDict
-from datetime import datetime
 
 HWSKU_JSON = 'hwsku.json'
 
@@ -869,7 +870,7 @@ def get_port_oid_mapping(db, namespace):
     return port_oid_map
 
 
-def fetch_fec_histogram(db, namespace, port_oid_map, target_port):
+def fetch_fec_histogram(db, namespace, port_oid_map, target_port, relative_timestamp=False):
     ''' Fetch and display FEC histogram for the given port. '''
 
     if target_port not in port_oid_map:
@@ -880,15 +881,34 @@ def fetch_fec_histogram(db, namespace, port_oid_map, target_port):
     asic_db_kvp = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS:{}'.format(port_oid))
 
     if asic_db_kvp is not None:
+        table_data = []
+        for i in range(16):
+            counter_key = f'SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{i}'
+            timestamp_key = f'{counter_key}_TIMESTAMP'
 
-        fec_errors = {f'BIN{i}': asic_db_kvp.get
-                      (f'SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{i}', '0') for i in range(16)}
+            error_value = asic_db_kvp.get(counter_key, '0')
+            timestamp_ms = asic_db_kvp.get(timestamp_key, None)
 
-        # Prepare the data for tabulation
-        table_data = [(bin_label, error_value) for bin_label, error_value in fec_errors.items()]
+            if timestamp_ms and int(timestamp_ms) > 0:
+                timestamp_sec = int(timestamp_ms) / 1000.0
+                timestamp_str = datetime.fromtimestamp(timestamp_sec).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                timestamp_str = 'N/A'
+
+            row = [f'BIN{i}', error_value, timestamp_str]
+
+            if relative_timestamp:
+                if timestamp_ms and int(timestamp_ms) > 0:
+                    row.append(format_relative_time(timestamp_ms))
+                else:
+                    row.append('N/A')
+
+            table_data.append(tuple(row))
 
         # Define headers
-        headers = ["Symbol Errors Per Codeword", "Codewords"]
+        headers = ["Symbol Errors Per Codeword", "Codewords", "Last Updated"]
+        if relative_timestamp:
+            headers.append("Relative Time")
 
         # Print FEC histogram using tabulate
         click.echo(tabulate(table_data, headers=headers))
@@ -901,9 +921,10 @@ def fetch_fec_histogram(db, namespace, port_oid_map, target_port):
 # 'fec-histogram' subcommand ("show interfaces counters fec-histogram")
 @counters.command('fec-histogram')
 @multi_asic_util.multi_asic_click_options
+@click.option('--relative-timestamp', is_flag=True, help="Show relative time since last bin update")
 @click.argument('interfacename', required=True)
 @clicommon.pass_db
-def fec_histogram(db, interfacename, namespace, display):
+def fec_histogram(db, interfacename, namespace, display, relative_timestamp):
     """Show interface counters fec-histogram"""
 
     if namespace is None:
@@ -915,7 +936,7 @@ def fec_histogram(db, interfacename, namespace, display):
     interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
 
     # Fetch and display the FEC histogram
-    fetch_fec_histogram(db, namespace, port_oid_map, interfacename)
+    fetch_fec_histogram(db, namespace, port_oid_map, interfacename, relative_timestamp)
 
 
 # 'rates' subcommand ("show interfaces counters rates")

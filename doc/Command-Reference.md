@@ -6120,7 +6120,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters errors
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
-  show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-histogram [--relative-timestamp] <interface_name>
   show interfaces counters fec-stats
   show interfaces counters detailed <interface_name>
   show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
@@ -6302,25 +6302,48 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
 
 - Example:
   ```
-  admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
-  Symbol Errors Per Codeword  Codewords
-  --------------------------  ---------
-  BIN0:                       1000000
-  BIN1:                       900000
-  BIN2:                       800000
-  BIN3:                       700000
-  BIN4:                       600000
-  BIN5:                       500000
-  BIN6:                       400000
-  BIN7:                       300000
-  BIN8:                       0
-  BIN9:                       0
-  BIN10:                      0
-  BIN11:                      0
-  BIN12:                      0
-  BIN13:                      0
-  BIN14:                      0
-  BIN15:                      0
+  admin@sonic:~$ show interfaces counters fec-histogram Ethernet0
+  Symbol Errors Per Codeword    Codewords  Last Updated
+  --------------------------  -----------  -------------------
+  BIN0                            1000000  2024-03-26 01:02:03
+  BIN1                             900000  2024-03-26 01:02:03
+  BIN2                             800000  2024-03-26 01:02:03
+  BIN3                             700000  2024-03-26 01:02:03
+  BIN4                             600000  2024-03-26 01:02:03
+  BIN5                             500000  2024-03-26 01:02:03
+  BIN6                             400000  2024-03-26 01:02:03
+  BIN7                             300000  2024-03-26 01:02:03
+  BIN8                                  0  N/A
+  BIN9                                  0  N/A
+  BIN10                                 0  N/A
+  BIN11                                 0  N/A
+  BIN12                                 0  N/A
+  BIN13                                 0  N/A
+  BIN14                                 0  N/A
+  BIN15                                 0  N/A
+  ```
+
+- Example with relative timestamps:
+  ```
+  admin@sonic:~$ show interfaces counters fec-histogram --relative-timestamp Ethernet0
+  Symbol Errors Per Codeword    Codewords  Last Updated         Relative Time
+  --------------------------  -----------  -------------------  ---------------
+  BIN0                            1000000  2024-03-26 01:02:03  5 days ago
+  BIN1                             900000  2024-03-26 01:02:03  5 days ago
+  BIN2                             800000  2024-03-26 01:02:03  5 days ago
+  BIN3                             700000  2024-03-26 01:02:03  5 days ago
+  BIN4                             600000  2024-03-26 01:02:03  5 days ago
+  BIN5                             500000  2024-03-26 01:02:03  5 days ago
+  BIN6                             400000  2024-03-26 01:02:03  5 days ago
+  BIN7                             300000  2024-03-26 01:02:03  5 days ago
+  BIN8                                  0  N/A                  N/A
+  BIN9                                  0  N/A                  N/A
+  BIN10                                 0  N/A                  N/A
+  BIN11                                 0  N/A                  N/A
+  BIN12                                 0  N/A                  N/A
+  BIN13                                 0  N/A                  N/A
+  BIN14                                 0  N/A                  N/A
+  BIN15                                 0  N/A                  N/A
   ```
 
 The "fec-stats" subcommand is used to disply the interface fec related statistic.

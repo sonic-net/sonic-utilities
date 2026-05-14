@@ -1,6 +1,7 @@
 import importlib.machinery
 import importlib.util
 import sys
+from datetime import datetime
 
 from sonic_py_common import multi_asic
 from swsscommon import swsscommon
@@ -67,3 +68,32 @@ def get_feature_state_data(config_db, feature):
         if info_dict['state'].lower() == "enabled":
             global_scope = "True"
     return global_scope, asic_scope
+
+
+def format_relative_time(timestamp_ms):
+    '''Convert a millisecond epoch timestamp to a human-readable relative time string.
+
+    Args:
+        timestamp_ms: Epoch timestamp in milliseconds (int or string)
+
+    Returns:
+        str: Relative time string (e.g. "5 minutes ago", "2 days ago"), or "N/A" if in the future
+    '''
+    now = datetime.now()
+    ts = datetime.fromtimestamp(int(timestamp_ms) / 1000.0)
+    delta = now - ts
+
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 0:
+        return 'N/A'
+    elif total_seconds < 60:
+        return f'{total_seconds} second{"s" if total_seconds != 1 else ""} ago'
+    elif total_seconds < 3600:
+        minutes = total_seconds // 60
+        return f'{minutes} minute{"s" if minutes != 1 else ""} ago'
+    elif total_seconds < 86400:
+        hours = total_seconds // 3600
+        return f'{hours} hour{"s" if hours != 1 else ""} ago'
+    else:
+        days = total_seconds // 86400
+        return f'{days} day{"s" if days != 1 else ""} ago'
