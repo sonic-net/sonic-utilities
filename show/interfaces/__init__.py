@@ -18,7 +18,6 @@ import sonic_platform_base.sonic_sfp.sfputilhelper
 
 from . import portchannel
 from collections import OrderedDict
-from datetime import datetime
 
 HWSKU_JSON = 'hwsku.json'
 
@@ -890,7 +889,7 @@ def fetch_fec_histogram(db, namespace, port_oid_map, target_port, relative_times
             error_value = asic_db_kvp.get(counter_key, '0')
             timestamp_ms = asic_db_kvp.get(timestamp_key, None)
 
-            if timestamp_ms:
+            if timestamp_ms and int(timestamp_ms) > 0:
                 timestamp_sec = int(timestamp_ms) / 1000.0
                 timestamp_str = datetime.fromtimestamp(timestamp_sec).strftime('%Y-%m-%d %H:%M:%S')
             else:
@@ -899,7 +898,7 @@ def fetch_fec_histogram(db, namespace, port_oid_map, target_port, relative_times
             row = [f'BIN{i}', error_value, timestamp_str]
 
             if relative_timestamp:
-                if timestamp_ms:
+                if timestamp_ms and int(timestamp_ms) > 0:
                     row.append(format_relative_time(timestamp_ms))
                 else:
                     row.append('N/A')

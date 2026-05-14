@@ -2,6 +2,7 @@ import pytest
 import logging
 import os
 import shutil
+from unittest import mock
 
 import clear.main as clear
 import show.main as show
@@ -517,7 +518,13 @@ class TestPortStat(object):
         assert result.exit_code == 0
         assert result.output == intf_fec_counters_fec_hist
 
-    def test_show_intf_counters_fec_histogram_relative_timestamp(self):
+    @mock.patch('utilities_common.general.datetime')
+    def test_show_intf_counters_fec_histogram_relative_timestamp(self, mock_datetime):
+        # Fix "now" to 5 days after the fixture timestamp (1711414796000 ms = 2024-03-26 00:59:56)
+        from datetime import datetime
+        mock_datetime.now.return_value = datetime(2024, 3, 31, 0, 59, 56)
+        mock_datetime.fromtimestamp.side_effect = lambda *args, **kwargs: datetime.fromtimestamp(*args, **kwargs)
+
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"],
@@ -527,8 +534,8 @@ class TestPortStat(object):
         assert result.exit_code == 0
         # Verify the extra column header is present
         assert 'Relative Time' in result.output
-        # BIN0 has a timestamp so it should show a relative time (e.g. "days ago")
-        assert 'ago' in result.output
+        # BIN0 has a timestamp so it should show "5 days ago"
+        assert '5 days ago' in result.output
         # BIN1 has no timestamp so it should show N/A in the relative column
         lines = result.output.strip().split('\n')
         # Header line, separator line, then 16 data lines
