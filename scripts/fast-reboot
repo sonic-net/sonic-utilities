@@ -982,6 +982,22 @@ setup_reboot_variables
 
 reboot_pre_check
 
+# Ensure BGP GR restart-time is sufficient for warm/express reboot.
+# This updates both the running FRR config (so peers learn the new value)
+# and constants.yml (so the value persists across reboots).
+if [[ "$REBOOT_TYPE" != "fast-reboot" ]]; then
+    if test -f /usr/local/bin/warm-reboot-gr-fix.py; then
+        debug "Applying BGP GR timer fix..."
+        /usr/local/bin/warm-reboot-gr-fix.py || {
+            error "BGP GR timer fix failed"
+            if [[ x"${FORCE}" != x"yes" ]]; then
+                exit "${EXIT_FAILURE}"
+            fi
+            debug "Ignoring BGP GR timer fix failure (FORCE mode)..."
+        }
+    fi
+fi
+
 if test -f /usr/local/bin/ctrmgr_tools.py
 then
     if [[ x"${TAG_LATEST}" == x"yes" ]]; then
