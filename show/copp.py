@@ -2,7 +2,7 @@ import click
 import json
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
-from sonic_py_common import device_info
+from utilities_common.general import is_copp_policer_stats_supported
 from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
 from tabulate import tabulate
@@ -277,12 +277,13 @@ def detailed(_db, trapid, group):
 def stats(namespace):
     """Show copp policer statistics with per-color breakdown"""
 
-    # broadcom-xgs only -- matches the gate in sonic-swss FlexCounterOrch.
-    version_info = device_info.get_sonic_version_info() or {}
-    if (version_info.get("asic_type") != "broadcom" or
-            version_info.get("asic_subtype") == "broadcom-dnx"):
-        click.echo("show copp stats is not supported on this platform "
-                   "(only broadcom-xgs ASICs supported).")
+    # Capability is published by swss/CoppOrch to
+    # STATE_DB:SWITCH_CAPABILITY|switch:COPP_POLICER_STATS_CAPABLE after
+    # probing SAI at boot. No platform-substring assumptions here.
+    if not is_copp_policer_stats_supported(namespace):
+        click.echo("COPP policer per-color statistics are not supported on "
+                   "this platform (SAI does not advertise SAI_OBJECT_TYPE_POLICER "
+                   "stats capability).")
         return
 
     cmd = ['coppstat']

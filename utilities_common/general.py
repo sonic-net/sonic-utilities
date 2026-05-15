@@ -35,6 +35,31 @@ def load_db_config():
         if not swsscommon.SonicDBConfig.isInit():
             swsscommon.SonicDBConfig.load_sonic_db_config()
 
+def is_copp_policer_stats_supported(namespace=None):
+    '''
+    Whether the underlying SAI advertises POLICER stats via
+    sai_query_stats_capability — i.e. whether `show copp stats` can produce
+    meaningful per-color RED/YELLOW/GREEN counters.
+
+    swss/CoppOrch publishes this to STATE_DB:SWITCH_CAPABILITY|switch:
+    COPP_POLICER_STATS_CAPABLE = "true" or "false" on orchagent boot. CLI
+    callers should treat a missing key as "not supported" (fail-closed).
+
+    In multi-ASIC topologies COPP runs per ASIC; pass `namespace` to query
+    the matching STATE_DB. None reads the global / default namespace, which
+    is correct for single-ASIC systems and a reasonable proxy in multi-ASIC.
+    '''
+    try:
+        db = swsscommon.SonicV2Connector(namespace=namespace) \
+            if namespace else swsscommon.SonicV2Connector()
+        db.connect(db.STATE_DB)
+        val = db.get(db.STATE_DB, "SWITCH_CAPABILITY|switch",
+                     "COPP_POLICER_STATS_CAPABLE")
+    except Exception:
+        return False
+    return (val or "").lower() == "true"
+
+
 def get_optional_value_for_key_in_config_tbl(config_db, port, key, table):
     info_dict = {}
     info_dict = config_db.get_entry(table, port)
