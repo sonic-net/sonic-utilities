@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import copy
 import io
 import jsonpatch
 import sys
@@ -2760,11 +2761,33 @@ class TestRequiredValueMoveExtender(unittest.TestCase):
         # Assert
         self._verify_moves(expected, actual)
 
-    def test_extend__port_up_and_critical_move__turn_admin_status_down(self):
+    def test_extend__port_up_and_critical_move_without_admin_status_in_patch__no_injection(self):
         # Arrange
+        # Patch only changes mtu, does not include admin_status.
+        # The extender should NOT inject admin_status=down — the patch is
+        # incomplete and the caller is responsible for including it.
         move = ps.JsonMove.from_operation({"op":"replace", "path":"/PORT/Ethernet4/mtu", "value":"9000"})
         current_config = Files.CONFIG_DB_WITH_PORT_CRITICAL
         target_config = move.apply(current_config)
+        diff = ps.Diff(current_config, target_config)
+        expected = []
+
+        # Act
+        actual = self.extender.extend(move, diff)
+
+        # Assert
+        self._verify_moves(expected, actual)
+
+    def test_extend__port_up_and_critical_move_with_admin_status_in_patch__turn_admin_status_down(self):
+        # Arrange
+        # Patch changes both mtu and admin_status (e.g. AddRack scenario).
+        # The extender SHOULD inject admin_status=down to ensure critical
+        # config changes happen before the port comes up.
+        move = ps.JsonMove.from_operation({"op":"replace", "path":"/PORT/Ethernet4/mtu", "value":"9000"})
+        current_config = Files.CONFIG_DB_WITH_PORT_CRITICAL
+        target_config = copy.deepcopy(current_config)
+        target_config["PORT"]["Ethernet4"]["mtu"] = "9000"
+        target_config["PORT"]["Ethernet4"]["admin_status"] = "down"
         diff = ps.Diff(current_config, target_config)
         expected = [{"op":"replace", "path":"/PORT/Ethernet4/admin_status", "value":"down"}]
 

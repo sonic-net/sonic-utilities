@@ -1980,9 +1980,17 @@ class RequiredValueMoveExtender:
         data = self.identifier.get_required_value_data([current_config, simulated_config, target_config])
 
         # If move is changing a requiring path while the required path does not have the required value,
-        # flip the required path to the required value
-        # E.g. if the move is changing port-critical config while the port is admin up, create a move to
-        #      turn the port admin down
+        # flip the required path to the required value — but ONLY if the original patch actually changes
+        # the required path (i.e., target differs from current for that path).
+        #
+        # Without this guard, the extender injects phantom operations the caller never requested.
+        # E.g. a patch that removes BUFFER_PG/QUEUE without including admin_status=down would get
+        # an injected admin_status=down move, followed by a restore to admin_status=up (to match
+        # target). The caller should provide a YANG-complete patch instead.
+        #
+        # When the patch DOES include admin_status changes (e.g. AddRack with admin_status=up),
+        # injection is still allowed — it ensures the port is brought down before critical config
+        # changes and brought back up only after they complete.
         processed_moves = set()
         for path in data:
             if self.path_addressing.is_config_different(path, current_config, simulated_config):
@@ -1991,6 +1999,12 @@ class RequiredValueMoveExtender:
                     if actual_value is None: # current config does not have this value at all
                         continue
                     if actual_value != required_value:
+                        # Only inject if the original patch touches the required path.
+                        # If current and target have the same value for the required path,
+                        # the patch didn't include it — don't invent operations.
+                        target_value = self.identifier.get_value_or_default(target_config, required_path)
+                        if target_value is not None and actual_value == target_value:
+                            continue
                         extended_move = JsonMove.from_operation({"op":"replace", "path":required_path, "value":required_value})
                         if extended_move not in processed_moves:
                             processed_moves.add(extended_move)
