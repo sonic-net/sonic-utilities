@@ -17,6 +17,7 @@ import sys
 import syslog
 import subprocess
 import tabulate
+import time
 
 from natsort import natsorted
 
@@ -210,6 +211,8 @@ NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MU
 NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
                                     "PREFIX_ROUTE", "NEXTHOP_TYPE", "HWSTATUS"]
 NOT_AVAILABLE = "N/A"
+BOUNCING = "bouncing"
+DEFAULT_RECHECK_DELAY_MS = 300
 
 
 class LogOutput(enum.Enum):
@@ -265,6 +268,14 @@ def parse_args():
         default=None,
         help="stdout log level"
     )
+    parser.add_argument(
+        "--recheck-delay-ms",
+        type=int,
+        default=DEFAULT_RECHECK_DELAY_MS,
+        help=("Milliseconds to wait before re-reading APPL_DB/ASIC_DB to filter out "
+              "transient FDB/NEIGH races on suspect inconsistent neighbors. "
+              "Set to 0 to disable. Default: %d." % DEFAULT_RECHECK_DELAY_MS),
+    )
     args = parser.parse_args()
 
     if args.log_output == LogOutput.STDOUT:
@@ -283,6 +294,9 @@ def parse_args():
 
         if args.log_level is not None:
             parser.error("Received stdout log level with log output to syslog.")
+
+    if args.recheck_delay_ms < 0:
+        parser.error("--recheck-delay-ms must be non-negative.")
 
     return args
 
@@ -590,11 +604,91 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
     return check_results
 
 
-def parse_check_results(check_results):
+def identify_suspect_neighbors(check_results):
+    """Return list of (neighbor_ip, mac, port) tuples for rows that would currently be
+    flagged as inconsistent and are eligible for a recheck.
+
+    Eligibility: non-zero MAC, port resolved (not N/A), mux not mid-toggle, HWSTATUS False.
+    Zero-MAC and in-toggle rows are intentionally excluded — they are handled (or
+    suppressed) by existing logic and rechecking them adds no signal.
+    """
+    suspects = []
+    for r in check_results:
+        if r.get("MAC") == ZERO_MAC:
+            continue
+        if r.get("PORT", NOT_AVAILABLE) == NOT_AVAILABLE:
+            continue
+        if r.get("IN_MUX_TOGGLE") is True:
+            continue
+        if r.get("HWSTATUS") is False:
+            suspects.append((r["NEIGHBOR"], r["MAC"], r["PORT"]))
+    return suspects
+
+
+def detect_bouncing(suspects, first_neighbors, first_mac_to_port,
+                    second_neighbors, second_mac_to_port):
+    """Return the set of neighbor IPs whose IP->MAC binding or MAC->port binding
+    changed between two reads of APPL_DB:NEIGH_TABLE / ASIC_DB FDB.
+
+    These are transient FDB / NEIGH races (a MAC moving between ports while
+    orchagent / dualtor_neighbor_check is reading) — the inconsistency is not a
+    real failure of mux/neighbor programming, just a snapshot caught mid-move.
+    """
+    bouncing = set()
+    for ip, mac, _port in suspects:
+        new_mac = second_neighbors.get(ip)
+        if new_mac is None or new_mac != mac:
+            # IP disappeared from NEIGH_TABLE or its MAC changed -> bouncing.
+            bouncing.add(ip)
+            continue
+
+        first_port = first_mac_to_port.get(mac)
+        new_port = second_mac_to_port.get(mac)
+        if new_port != first_port:
+            # MAC moved (or disappeared from) FDB between reads -> bouncing.
+            bouncing.add(ip)
+            continue
+    return bouncing
+
+
+def recheck_bouncing_neighbors(check_results, first_neighbors, first_mac_to_port,
+                               appl_db, if_oid_to_port_name_map, delay_ms):
+    """Re-read APPL_DB / ASIC_DB after `delay_ms` and identify suspect inconsistent
+    neighbors that are actually mid-bounce (transient FDB / NEIGH race).
+
+    Returns the set of bouncing neighbor IPs (subset of the suspect IPs). Empty
+    when delay_ms <= 0, when there are no suspects, or when none of the suspects
+    changed binding between reads.
+    """
+    if delay_ms <= 0:
+        return set()
+
+    suspects = identify_suspect_neighbors(check_results)
+    if not suspects:
+        return set()
+
+    WRITE_LOG_INFO("Found %d suspect inconsistent neighbor(s); re-reading after %d ms "
+                   "to filter transient FDB/NEIGH races.", len(suspects), delay_ms)
+    time.sleep(delay_ms / 1000.0)
+
+    second_neighbors, _, _, _, second_asic_fdb, _, _, _ = read_tables_from_db(appl_db)
+    second_mac_to_port = get_mac_to_port_name_map(second_asic_fdb, if_oid_to_port_name_map)
+
+    bouncing_ips = detect_bouncing(suspects, first_neighbors, first_mac_to_port,
+                                   second_neighbors, second_mac_to_port)
+    if bouncing_ips:
+        WRITE_LOG_WARN("Detected %d transient (bouncing) neighbor(s); these will be "
+                       "logged but not reported as inconsistent: %s",
+                       len(bouncing_ips), sorted(bouncing_ips))
+    return bouncing_ips
+
+
+def parse_check_results(check_results, bouncing_ips=None):
     """Parse the check results to see if there are neighbors that are inconsistent with mux state."""
     failed_neighbors = []
     bool_to_yes_no = ("no", "yes")
     bool_to_consistency = ("inconsistent", "consistent")
+    bouncing_ips = bouncing_ips or set()
 
     # Group check results by neighbor_mode
     prefix_route_results = []
@@ -604,6 +698,7 @@ def parse_check_results(check_results):
         port = check_result["PORT"]
         is_zero_mac = check_result["MAC"] == ZERO_MAC
         neighbor_mode = check_result.get("_NEIGHBOR_MODE", "host-route")
+        is_bouncing = (not is_zero_mac) and (check_result["NEIGHBOR"] in bouncing_ips)
 
         if port == NOT_AVAILABLE and not is_zero_mac:
             host_route_results.append(check_result)
@@ -622,11 +717,14 @@ def parse_check_results(check_results):
             check_result["TUNNEL_IN_ASIC"] = bool_to_yes_no[check_result["TUNNEL_IN_ASIC"]]
             host_route_results.append(check_result)
 
-        check_result["HWSTATUS"] = bool_to_consistency[hwstatus]
+        if is_bouncing and not hwstatus:
+            check_result["HWSTATUS"] = BOUNCING
+        else:
+            check_result["HWSTATUS"] = bool_to_consistency[hwstatus]
         if (not hwstatus):
             if is_zero_mac:
                 failed_neighbors.append(check_result)
-            elif not in_toggle:
+            elif not in_toggle and not is_bouncing:
                 failed_neighbors.append(check_result)
 
     # Display prefix-route neighbors if any
@@ -718,5 +816,15 @@ if __name__ == "__main__":
         mux_server_to_port_map,
         port_neighbor_modes
     )
-    res = parse_check_results(check_results)
+
+    bouncing_ips = recheck_bouncing_neighbors(
+        check_results,
+        neighbors,
+        mac_to_port_name_map,
+        appl_db,
+        if_oid_to_port_name_map,
+        args.recheck_delay_ms,
+    )
+
+    res = parse_check_results(check_results, bouncing_ips=bouncing_ips)
     sys.exit(0 if res else 1)
