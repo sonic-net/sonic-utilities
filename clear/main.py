@@ -693,12 +693,14 @@ def flowcnt_trap():
 @cli.command()
 def copp():
     """ Clear COPP statistics """
-    # broadcom-xgs only -- matches the gate in sonic-swss FlexCounterOrch.
-    version_info = device_info.get_sonic_version_info() or {}
-    if (version_info.get("asic_type") != "broadcom" or
-            version_info.get("asic_subtype") == "broadcom-dnx"):
-        click.echo("sonic-clear copp is not supported on this platform "
-                   "(only broadcom-xgs ASICs supported).")
+    # Capability is published by swss/CoppOrch to
+    # STATE_DB:SWITCH_CAPABILITY|switch:COPP_POLICER_STATS_CAPABLE after
+    # probing SAI at boot. No platform-substring assumptions here.
+    from utilities_common.general import is_copp_policer_stats_supported
+    if not is_copp_policer_stats_supported():
+        click.echo("COPP policer per-color statistics are not supported on "
+                   "this platform (SAI does not advertise SAI_OBJECT_TYPE_POLICER "
+                   "stats capability).")
         return
     command = ["coppstat", "-c"]
     run_command(command)
