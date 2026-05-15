@@ -80,8 +80,9 @@ class TestConfigMgmt(TestCase):
         Libyang converts from 'XX:XX:XX:E4:B3:DD' -> 'xx:xx:xx:e4:b3:dd'
         '''
         curConfig = deepcopy(configDbJson)
-        # Keep only PORT part to skip dependencies.
-        curConfig = {'PORT': curConfig['PORT']}
+        # Use the full sample CONFIG_DB so YANG loadData() satisfies cross-table
+        # must/when constraints (a PORT-only snapshot can fail model validation on
+        # some branches). DEVICE_METADATA is added below for the MAC case test.
         # add DEVICE_METADATA Config
         curConfig['DEVICE_METADATA'] = {
             "localhost": {
