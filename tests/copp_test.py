@@ -331,3 +331,65 @@ class TestCoppMultiAsic:
         print(result)
         assert return_code == 0
         assert result == show_copp_stats_expected_output_after_clear
+
+
+# ----------- show/clear copp stats capability gate --------------------------
+# `show copp stats` and `sonic-clear copp` now gate on the STATE_DB
+# SWITCH_CAPABILITY|switch:COPP_POLICER_STATS_CAPABLE flag published by
+# swss/CoppOrch after probing SAI. These tests exercise both branches with
+# the helper patched directly — keeps the test focused on the CLI gate
+# rather than rebuilding the STATE_DB mock for each scenario.
+
+from unittest.mock import patch as _patch  # noqa: E402 (after class for clarity)
+import clear.main as _clear_main           # noqa: E402
+
+
+class TestCoppStatsCapabilityGate:
+    @classmethod
+    def setup_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+    def test_show_copp_stats_unsupported_platform(self):
+        """When COPP_POLICER_STATS_CAPABLE is false, the CLI prints the
+        not-supported message and does NOT invoke coppstat."""
+        runner = CliRunner()
+        with _patch("show.copp.is_copp_policer_stats_supported", return_value=False), \
+             _patch("show.copp.clicommon.run_command") as mock_run:
+            result = runner.invoke(show.cli.commands["copp"].commands["stats"])
+        assert result.exit_code == 0
+        assert "not supported" in result.output
+        mock_run.assert_not_called()
+
+    def test_show_copp_stats_supported_platform_invokes_coppstat(self):
+        """When the capability is true, the CLI invokes coppstat."""
+        runner = CliRunner()
+        with _patch("show.copp.is_copp_policer_stats_supported", return_value=True), \
+             _patch("show.copp.clicommon.run_command") as mock_run:
+            result = runner.invoke(show.cli.commands["copp"].commands["stats"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        assert mock_run.call_args[0][0][0] == "coppstat"
+
+    def test_clear_copp_unsupported_platform(self):
+        """sonic-clear copp gates on the same capability flag."""
+        runner = CliRunner()
+        with _patch("utilities_common.general.is_copp_policer_stats_supported",
+                    return_value=False), \
+             _patch("clear.main.run_command") as mock_run:
+            result = runner.invoke(_clear_main.cli.commands["copp"])
+        assert result.exit_code == 0
+        assert "not supported" in result.output
+        mock_run.assert_not_called()
+
+    def test_clear_copp_supported_platform_invokes_coppstat(self):
+        runner = CliRunner()
+        with _patch("utilities_common.general.is_copp_policer_stats_supported",
+                    return_value=True), \
+             _patch("clear.main.run_command") as mock_run:
+            result = runner.invoke(_clear_main.cli.commands["copp"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once_with(["coppstat", "-c"])
