@@ -35,6 +35,9 @@ LOG_PATH="/var/log/${REBOOT_TYPE}.txt"
 UIMAGE_HDR_SIZE=64
 REQUIRE_TEAMD_RETRY_COUNT=no
 
+FAST_BOOT_DIR=/host/fast-reboot
+FAST_REBOOT_DUMP=/usr/local/bin/fast-reboot-dump.py
+
 EXIT_SUCCESS=0
 EXIT_FAILURE=1
 EXIT_NOT_SUPPORTED=2
@@ -500,6 +503,25 @@ function backup_database()
     STATE=$(timeout 5s docker exec database$DEV rm /var/lib/$target_db_inst/$REDIS_FILE; if [[ $? == 124 ]]; then echo "timed out"; fi)
     if [[ x"${STATE}" == x"timed out" ]]; then
         error "Timed out during attempting to remove Redis dump file from database container"
+    fi
+}
+
+function dump_state_for_fast_boot()
+{
+    if [[ ! -x "$FAST_REBOOT_DUMP" ]]; then
+        debug "$FAST_REBOOT_DUMP not found; skipping fast-boot state dump"
+        return
+    fi
+    if [[ $NUM_ASIC -gt 1 ]]; then
+        debug "Multi-ASIC: skipping fast-boot state dump (unsupported)"
+        return
+    fi
+    rm -rf "$FAST_BOOT_DIR"
+    mkdir -p "$FAST_BOOT_DIR"
+    debug "Dumping FDB/ARP/route/serdes state to $FAST_BOOT_DIR ..."
+    if ! "$FAST_REBOOT_DUMP" -t "$FAST_BOOT_DIR"; then
+        debug "fast-reboot-dump.py exited $? — cleaning up $FAST_BOOT_DIR and continuing"
+        rm -rf "$FAST_BOOT_DIR"
     fi
 }
 
@@ -1131,6 +1153,9 @@ if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" |
     execute_in_namespaces asic increase_teamd_retry_count
 fi
 
+if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
+    dump_state_for_fast_boot
+fi
 
 # We are fully committed to reboot from this point on because critical
 # service will go down and we cannot recover from it.
