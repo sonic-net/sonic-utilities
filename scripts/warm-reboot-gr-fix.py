@@ -2,11 +2,12 @@
 """
 Pre-warm-reboot GR timer fix.
 
-Ensures T1 peers learn the updated GR restart-time (360s) before warm reboot
-and patches constants.yml on current and next-boot images for persistence.
+1. Sets bgp_timer in WARM_RESTART|bgp (fpmsyncd reconciliation timer, default 120s → 360s)
+2. Patches constants.yml (GR restart-time 240s → 360s) on current + next-boot images
+3. Updates running FRR GR restart-time + staggered peer reset (first run only)
 
-First invocation: updates GR timer + staggered peer reset (one at a time, ECMP-safe).
-Subsequent invocations: no-op (peers already have target value).
+First invocation: updates timers + staggered peer reset (one at a time, ECMP-safe).
+Subsequent invocations: no-op (all values already at target).
 
 Usage:
     sudo python3 /usr/local/bin/warm-reboot-gr-fix.py
@@ -22,6 +23,7 @@ import time
 import yaml
 
 TARGET_GR_RESTART_TIME = 360
+TARGET_BGP_TIMER = 360
 PEER_ESTABLISH_TIMEOUT = 30
 CONSTANTS_PATH = "/etc/sonic/constants.yml"
 
@@ -171,12 +173,25 @@ def patch_all_images():
                      TARGET_GR_RESTART_TIME)
 
 
+def set_bgp_timer():
+    """Set fpmsyncd warm-restart timer in CONFIG_DB to prevent stale route deletion."""
+    current = run('sonic-db-cli CONFIG_DB HGET "WARM_RESTART|bgp" "bgp_timer"', check=False)
+    if current == str(TARGET_BGP_TIMER):
+        logger.info("bgp_timer already %ds in WARM_RESTART|bgp", TARGET_BGP_TIMER)
+        return
+    run(f'sonic-db-cli CONFIG_DB HSET "WARM_RESTART|bgp" "bgp_timer" "{TARGET_BGP_TIMER}"')
+    logger.info("Set WARM_RESTART|bgp bgp_timer=%ds", TARGET_BGP_TIMER)
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s: %(message)s",
         datefmt="%b %d %H:%M:%S",
     )
+
+    # 0. Set fpmsyncd warm-restart timer (prevents T0 stale route deletion)
+    set_bgp_timer()
 
     # 1. Patch constants.yml for persistence across reboots
     patch_all_images()
