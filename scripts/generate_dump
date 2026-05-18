@@ -1516,6 +1516,16 @@ collect_mellanox() {
 
     save_cmd "show interfaces autoneg status" "autoneg.status"
 
+    save_cmd "/usr/local/bin/generate_ssd_dump" "ssd.dump"
+    # generate_ssd_dump saved the output of vtFA_RTK_5766_v2 if exists in $ssd_dump_generated_files
+    ssd_dump_generated_files=/tmp/ssd_dump_generated_files
+    if [ -d $ssd_dump_generated_files ]; then
+        for file in $(find_files "$ssd_dump_generated_files"); do
+            save_file ${file} dump false
+        done
+        rm -rf ${ssd_dump_generated_files}
+    fi
+
     wait
 }
 
