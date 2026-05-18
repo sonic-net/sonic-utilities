@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 
 from tabulate import tabulate
-from sonic_py_common import multi_asic
 from swsscommon.swsscommon import SonicDBConfig, SonicV2Connector
 from natsort import natsorted
 
@@ -71,7 +70,7 @@ class TemperShow(object):
         if multi_asic.is_multi_asic():
             if not SonicDBConfig.isGlobalInit():
                 SonicDBConfig.load_sonic_global_db_config()
-         else:
+        else:
             if not SonicDBConfig.isInit():
                 SonicDBConfig.load_sonic_db_config()
         self.db = SonicV2Connector(host="127.0.0.1")
