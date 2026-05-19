@@ -747,7 +747,8 @@ def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
     )
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for dualtor neighbor consistency check."""
     args = parse_args()
     config_logging(args)
 
@@ -774,4 +775,8 @@ if __name__ == "__main__":
             check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
             res = parse_check_results(check_results)
 
-    sys.exit(0 if res else 1)
+    return 0 if res else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
