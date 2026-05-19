@@ -37,6 +37,7 @@ SUPPORTED_PKT_TYPE_LIST = ["ipv4", "ipv6", "ipnip", "ipv4_rdma", "ipv6_rdma"]
 # Hash validators -----------------------------------------------------------------------------------------------------
 #
 
+
 def ecmp_hash_validator(ctx, db, ecmp_hash, is_pkt_type=False, pkt_type=None):
     """
     Check if ECMP hash argument is valid
@@ -307,6 +308,8 @@ def update_entry_validated(db, table, key, data, create_if_not_exists=False):
 #
 # helper functions---------------------------------------------------------------------------------------------------
 #
+
+
 def _merge_hash_fields(existing_str, new_fields):
     """Merge hash fields preserving order, without duplicates."""
     existing = []
@@ -318,6 +321,7 @@ def _merge_hash_fields(existing_str, new_fields):
         if f not in result:
             result.append(f)
     return result
+
 
 def _delete_hash_fields(existing_str, delete_fields):
     """Delete the given fields from existing_str; return new list."""
@@ -459,6 +463,7 @@ def ecmp_hash(ctx, db, hash_fields, packet_type, action):
             update_entry_validated(cfgdb, table, key, data, create_if_not_exists=True)
         except Exception as e:
             ctx.fail(str(e))
+
 
 @SWITCH_HASH_GLOBAL.command(
     name="lag-hash"

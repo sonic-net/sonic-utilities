@@ -615,7 +615,7 @@ show_hash_capabilities_ecmp_and_lag_json="""\
     }
 }
 """
-show_hash_capabilities_pkttype_ecmp_and_lag="""\
+show_hash_capabilities_pkttype_ecmp_and_lag = """\
 +--------+---------------------------------------------------+
 | Hash   | Capabilities                                      |
 +========+===================================================+
@@ -672,7 +672,7 @@ show_hash_capabilities_pkttype_ecmp_and_lag="""\
 |        | +-------------------+-------------+-------------+ |
 +--------+---------------------------------------------------+
 """
-show_hash_capabilities_pkttype_ecmp_and_lag_json="""\
+show_hash_capabilities_pkttype_ecmp_and_lag_json = """\
 {
     "ecmp": {
         "hash_field": [

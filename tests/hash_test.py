@@ -370,7 +370,7 @@ class TestHash:
         assert result.output == output[format]
         assert result.exit_code == SUCCESS
 
-    ########## CONFIG PKT-TYPE SWITCH HASH ######
+    # ========== CONFIG PKT-TYPE SWITCH HASH ==========
     @pytest.mark.parametrize(
         "hash_cmd", [
             "ecmp-hash",
@@ -784,7 +784,7 @@ class TestHash:
         )
         print("ecmp-hash callback:", cmd.callback, "module:", cmd.callback.__module__)
 
-    ########## SHOW SWITCH-HASH GLOBAL --packet-type ##########
+    # ========== SHOW SWITCH-HASH GLOBAL --packet-type ==========
 
     def test_show_hash_packet_type_option_valid(self):
         """
