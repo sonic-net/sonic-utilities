@@ -760,7 +760,7 @@ def main():
 
     if not is_dualtor(config_db) or not mux_cables:
         WRITE_LOG_DEBUG("Not a valid dualtor setup, skip the check.")
-        sys.exit(0)
+        return 0
 
     mux_server_to_port_map = get_mux_server_to_port_map(mux_cables)
     if_oid_to_port_name_map = get_if_br_oid_to_port_name_map()
