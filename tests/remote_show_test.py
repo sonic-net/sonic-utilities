@@ -25,6 +25,40 @@ Error
 '''
 
 
+class TestRexecInterfacesStatus(object):
+    @classmethod
+    def setup_class(cls):
+        pass
+
+    @mock.patch("show.interfaces.device_info.is_supervisor", mock.MagicMock(return_value=True))
+    @mock.patch("sys.argv", ["show", "interfaces", "status"])
+    def test_show_interfaces_status_rexec(self):
+        import show.main as show
+        runner = CliRunner()
+
+        _old_subprocess_run = subprocess.run
+        subprocess.run = mock_rexec_command
+        result = runner.invoke(show.cli.commands["interfaces"].commands["status"])
+        print(result.output)
+        subprocess.run = _old_subprocess_run
+        assert result.exit_code == 0
+        assert MULTI_LC_REXEC_OUTPUT == result.output
+
+    @mock.patch("show.interfaces.device_info.is_supervisor", mock.MagicMock(return_value=True))
+    @mock.patch("sys.argv", ["show", "interfaces", "status"])
+    def test_show_interfaces_status_error_rexec(self):
+        import show.main as show
+        runner = CliRunner()
+
+        _old_subprocess_run = subprocess.run
+        subprocess.run = mock_rexec_error_cmd
+        result = runner.invoke(show.cli.commands["interfaces"].commands["status"])
+        print(result.output)
+        subprocess.run = _old_subprocess_run
+        assert result.exit_code == 1
+        assert MULTI_LC_ERR_OUTPUT == result.output
+
+
 class TestRexecBgp(object):
     @classmethod
     def setup_class(cls):
