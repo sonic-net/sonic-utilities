@@ -75,12 +75,15 @@ class TestDualtorNeighborCheck(object):
 
             mock_run_command.assert_called_once_with("sudo ip -6 neigh flush to fc02:1000::1")
 
-    def test_flush_inconsistent_neighbors_deduplicates(self, mock_log_functions):
+    def test_flush_inconsistent_neighbors_prefix_route_mux_ports_only(self, mock_log_functions):
         _, mock_log_warn, _, _ = mock_log_functions
         failed_neighbors = [
-            {"NEIGHBOR": "192.168.0.2"},
-            {"NEIGHBOR": "192.168.0.2"},
-            {"NEIGHBOR": "192.168.0.3"}
+            {"NEIGHBOR": "192.168.0.2", "PORT": "Ethernet4", "_NEIGHBOR_MODE": "prefix-route"},
+            {"NEIGHBOR": "192.168.0.2", "PORT": "Ethernet4", "_NEIGHBOR_MODE": "prefix-route"},
+            {"NEIGHBOR": "192.168.0.3", "PORT": "Ethernet8", "_NEIGHBOR_MODE": "prefix-route"},
+            {"NEIGHBOR": "192.168.0.4", "PORT": "Ethernet12", "_NEIGHBOR_MODE": "host-route"},
+            {"NEIGHBOR": "192.168.0.5", "PORT": dualtor_neighbor_check.NOT_AVAILABLE,
+             "_NEIGHBOR_MODE": "prefix-route"}
         ]
 
         with patch("dualtor_neighbor_check.flush_neighbor") as mock_flush_neighbor:

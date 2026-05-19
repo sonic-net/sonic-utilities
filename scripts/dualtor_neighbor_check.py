@@ -268,7 +268,7 @@ def parse_args():
     parser.add_argument(
         "--flush-inconsistent-neighbors",
         action="store_true",
-        help="flush inconsistent kernel neighbor entries and rerun the check"
+        help="flush inconsistent prefix-route mux-port kernel neighbor entries and rerun the check"
     )
     args = parser.parse_args()
 
@@ -366,10 +366,19 @@ def flush_neighbor(neighbor_ip):
 
 
 def flush_inconsistent_neighbors(failed_neighbors):
-    """Flush the kernel neighbor entries for failed neighbors."""
+    """Flush kernel neighbor entries for failed prefix-route mux-port neighbors."""
     flushed_neighbors = set()
 
     for neighbor in failed_neighbors:
+        if (neighbor.get("_NEIGHBOR_MODE") != "prefix-route" or
+                neighbor.get("PORT") == NOT_AVAILABLE):
+            WRITE_LOG_DEBUG(
+                "Skip flushing inconsistent neighbor %s because only "
+                "prefix-route mux-port neighbors are remediated",
+                neighbor["NEIGHBOR"]
+            )
+            continue
+
         neighbor_ip = neighbor["NEIGHBOR"]
         if neighbor_ip in flushed_neighbors:
             continue
@@ -760,8 +769,9 @@ if __name__ == "__main__":
 
     if not res and args.flush_inconsistent_neighbors:
         flush_count = flush_inconsistent_neighbors(failed_neighbors)
-        WRITE_LOG_WARN("Flushed %d inconsistent neighbor entries. Rerunning dualtor neighbor check.", flush_count)
-        check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
-        res = parse_check_results(check_results)
+        if flush_count:
+            WRITE_LOG_WARN("Flushed %d inconsistent neighbor entries. Rerunning dualtor neighbor check.", flush_count)
+            check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
+            res = parse_check_results(check_results)
 
     sys.exit(0 if res else 1)
