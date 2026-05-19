@@ -265,6 +265,11 @@ def parse_args():
         default=None,
         help="stdout log level"
     )
+    parser.add_argument(
+        "--flush-inconsistent-neighbors",
+        action="store_true",
+        help="flush inconsistent kernel neighbor entries and rerun the check"
+    )
     args = parser.parse_args()
 
     if args.log_output == LogOutput.STDOUT:
@@ -351,6 +356,29 @@ def redis_cli(redis_cmd):
     if "error" in result or "ERR" in result:
         raise RuntimeError("Redis command '%s' failed: %s" % (redis_cmd, result))
     return result
+
+
+def flush_neighbor(neighbor_ip):
+    """Flush a kernel neighbor entry by IP address."""
+    ip = ipaddress.ip_address(neighbor_ip)
+    ip_version = "4" if ip.version == 4 else "6"
+    run_command("sudo ip -%s neigh flush to %s" % (ip_version, ip.compressed))
+
+
+def flush_inconsistent_neighbors(failed_neighbors):
+    """Flush the kernel neighbor entries for failed neighbors."""
+    flushed_neighbors = set()
+
+    for neighbor in failed_neighbors:
+        neighbor_ip = neighbor["NEIGHBOR"]
+        if neighbor_ip in flushed_neighbors:
+            continue
+
+        WRITE_LOG_WARN("Flushing inconsistent neighbor entry: %s", neighbor_ip)
+        flush_neighbor(neighbor_ip)
+        flushed_neighbors.add(neighbor_ip)
+
+    return len(flushed_neighbors)
 
 
 def read_tables_from_db(appl_db):
@@ -590,7 +618,7 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
     return check_results
 
 
-def parse_check_results(check_results):
+def parse_check_results(check_results, return_failed_neighbors=False):
     """Parse the check results to see if there are neighbors that are inconsistent with mux state."""
     failed_neighbors = []
     bool_to_yes_no = ("no", "yes")
@@ -683,8 +711,31 @@ def parse_check_results(check_results):
             )
             for output_line in err_output_lines.split("\n"):
                 WRITE_LOG_ERROR(output_line)
+        if return_failed_neighbors:
+            return False, failed_neighbors
         return False
+    if return_failed_neighbors:
+        return True, failed_neighbors
     return True
+
+
+def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map):
+    """Run the dualtor neighbor consistency check once."""
+    neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, asic_neigh_table, \
+        asic_nexthop_table = read_tables_from_db(appl_db)
+    mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
+
+    return check_neighbor_consistency(
+        neighbors,
+        mux_states,
+        hw_mux_states,
+        mac_to_port_name_map,
+        asic_route_table,
+        asic_neigh_table,
+        asic_nexthop_table,
+        mux_server_to_port_map,
+        port_neighbor_modes
+    )
 
 
 if __name__ == "__main__":
@@ -703,20 +754,14 @@ if __name__ == "__main__":
 
     mux_server_to_port_map = get_mux_server_to_port_map(mux_cables)
     if_oid_to_port_name_map = get_if_br_oid_to_port_name_map()
-    neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, asic_neigh_table, \
-        asic_nexthop_table = read_tables_from_db(appl_db)
-    mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
 
-    check_results = check_neighbor_consistency(
-        neighbors,
-        mux_states,
-        hw_mux_states,
-        mac_to_port_name_map,
-        asic_route_table,
-        asic_neigh_table,
-        asic_nexthop_table,
-        mux_server_to_port_map,
-        port_neighbor_modes
-    )
-    res = parse_check_results(check_results)
+    check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
+    res, failed_neighbors = parse_check_results(check_results, return_failed_neighbors=True)
+
+    if not res and args.flush_inconsistent_neighbors:
+        flush_count = flush_inconsistent_neighbors(failed_neighbors)
+        WRITE_LOG_WARN("Flushed %d inconsistent neighbor entries. Rerunning dualtor neighbor check.", flush_count)
+        check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
+        res = parse_check_results(check_results)
+
     sys.exit(0 if res else 1)

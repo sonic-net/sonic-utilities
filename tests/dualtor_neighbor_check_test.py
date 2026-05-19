@@ -63,6 +63,39 @@ class TestDualtorNeighborCheck(object):
             mock_popen.assert_called_once_with(shlex.split("ls /tmp/not-existed"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             mock_proc.communicate.assert_called_once()
 
+    def test_flush_neighbor_ipv4(self, mock_log_functions):
+        with patch("dualtor_neighbor_check.run_command") as mock_run_command:
+            dualtor_neighbor_check.flush_neighbor("192.168.0.2")
+
+            mock_run_command.assert_called_once_with("sudo ip -4 neigh flush to 192.168.0.2")
+
+    def test_flush_neighbor_ipv6(self, mock_log_functions):
+        with patch("dualtor_neighbor_check.run_command") as mock_run_command:
+            dualtor_neighbor_check.flush_neighbor("fc02:1000::1")
+
+            mock_run_command.assert_called_once_with("sudo ip -6 neigh flush to fc02:1000::1")
+
+    def test_flush_inconsistent_neighbors_deduplicates(self, mock_log_functions):
+        _, mock_log_warn, _, _ = mock_log_functions
+        failed_neighbors = [
+            {"NEIGHBOR": "192.168.0.2"},
+            {"NEIGHBOR": "192.168.0.2"},
+            {"NEIGHBOR": "192.168.0.3"}
+        ]
+
+        with patch("dualtor_neighbor_check.flush_neighbor") as mock_flush_neighbor:
+            flush_count = dualtor_neighbor_check.flush_inconsistent_neighbors(failed_neighbors)
+
+            assert flush_count == 2
+            mock_flush_neighbor.assert_has_calls([
+                call("192.168.0.2"),
+                call("192.168.0.3")
+            ])
+            mock_log_warn.assert_has_calls([
+                call("Flushing inconsistent neighbor entry: %s", "192.168.0.2"),
+                call("Flushing inconsistent neighbor entry: %s", "192.168.0.3")
+            ])
+
     def test_redis_cli(self, mock_log_functions):
         with patch("dualtor_neighbor_check.subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
@@ -104,10 +137,18 @@ class TestDualtorNeighborCheck(object):
             assert args.log_output == dualtor_neighbor_check.LogOutput.STDOUT
             assert args.log_level == dualtor_neighbor_check.logging.WARNING
             assert args.syslog_level is None
+            assert args.flush_inconsistent_neighbors is False
             mock_log_err.assert_called_once_with("test_error")
             mock_log_warn.assert_called_once_with("test_warn")
             mock_log_info.assert_called_once_with("test_info")
             mock_log_debug.assert_called_once_with("test_debug")
+
+    def test_parse_args_flush_inconsistent_neighbors(self):
+        with patch("dualtor_neighbor_check.sys.argv",
+                   ["dualtor_neighbor_check.py", "--flush-inconsistent-neighbors"]):
+            args = dualtor_neighbor_check.parse_args()
+
+            assert args.flush_inconsistent_neighbors is True
 
     def test_log_config_syslog_default_level(self, mock_syslog_log_function):
         expected_syslog_calls = [
