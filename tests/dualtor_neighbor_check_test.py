@@ -124,6 +124,21 @@ class TestDualtorNeighborCheck(object):
         assert res is True
         assert failed_neighbors == []
 
+    def test_parse_check_results_empty_keeps_original_table_output(self, mock_log_functions):
+        _, mock_log_warn, _, _ = mock_log_functions
+
+        res, failed_neighbors = dualtor_neighbor_check.parse_check_results(
+            [], return_failed_neighbors=True)
+
+        expected_output_lines = tabulate.tabulate(
+            [],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE,
+            tablefmt="simple"
+        ).split("\n")
+        assert res is True
+        assert failed_neighbors == []
+        mock_log_warn.assert_has_calls([call(line) for line in expected_output_lines])
+
     def test_run_neighbor_check(self, mock_log_functions):
         appl_db = MagicMock()
         mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}

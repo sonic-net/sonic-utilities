@@ -666,6 +666,16 @@ def parse_check_results(check_results, return_failed_neighbors=False):
             elif not in_toggle:
                 failed_neighbors.append(check_result)
 
+    # Keep the original no-neighbor output behavior by printing an empty prefix-route table.
+    if not prefix_route_results and not host_route_results:
+        output_lines = tabulate.tabulate(
+            [],
+            headers=NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE,
+            tablefmt="simple"
+        )
+        for output_line in output_lines.split("\n"):
+            WRITE_LOG_WARN(output_line)
+
     # Display prefix-route neighbors if any
     if prefix_route_results:
         WRITE_LOG_WARN("=" * 80)
