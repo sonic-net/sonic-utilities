@@ -1257,7 +1257,6 @@ def set_lpmode(logical_port, enable, use_lpmode_pin=False):
         ganged = True
 
     for physical_port in physical_port_list:
-        port_name = get_physical_port_name(logical_port, i, ganged)
         try:
             sfp = platform_chassis.get_sfp(physical_port)
             if not sfp.get_presence():
@@ -1265,12 +1264,11 @@ def set_lpmode(logical_port, enable, use_lpmode_pin=False):
                 continue
             click.echo("{} low-power mode for port {} ... ".format(
                 "Enabling" if enable else "Disabling",
-                port_name), nl=False)
+                get_physical_port_name(logical_port, i, ganged)), nl=False)
             if use_lpmode_pin:
                 result = sfp.set_lpmode_via_pin(enable)
             else:
                 result = sfp.set_lpmode(enable)
-            i += 1
         except (NotImplementedError, AttributeError) as e:
             click.echo("This functionality is currently not implemented for this platform ({}: {})".format(type(e).__name__, e))
             sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1279,6 +1277,8 @@ def set_lpmode(logical_port, enable, use_lpmode_pin=False):
             click.echo("OK")
         else:
             click.echo("Failed")
+
+        i += 1
 
 
 # 'off' subcommand
