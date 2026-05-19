@@ -223,9 +223,9 @@ def loopback_capability(port_name):
             click.echo(f"{port}: The module does not advertise any loopback capability")
             continue
 
-        click.echo(f"{port}: loopback capability: ")
-        for key, value in cap.items():
-            click.echo(f"  {key}: {value}")
+        click.echo(f"{port}: loopback capability:")
+        for key in sorted(cap):
+            click.echo(f"  {key}: {cap[key]}")
 
     if not single_port and not found:
         click.echo("No ports found that support loopback capability")
@@ -277,7 +277,7 @@ def loopback_status(port_name):
             continue
 
         found = True
-        click.echo(f"{port}: loopback status: ")
+        click.echo(f"{port}: loopback status:")
         click.echo(f"  host-side-input:   {host_input}")
         click.echo(f"  host-side-output:  {host_output}")
         click.echo(f"  media-side-input:  {media_input}")
