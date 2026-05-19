@@ -1168,7 +1168,6 @@ def lpmode(port, use_lpmode_pin):
 
             for physical_port in physical_port_list:
                 port_name = get_physical_port_name(logical_port_name, i, ganged)
-                i += 1
 
                 try:
                     sfp = platform_chassis.get_sfp(physical_port)
@@ -1179,7 +1178,6 @@ def lpmode(port, use_lpmode_pin):
                         lpmode = sfp.get_lpmode_via_pin()
                     else:
                         lpmode = sfp.get_lpmode()
-
                 except (NotImplementedError, AttributeError) as e:
                     click.echo("This functionality is currently not implemented for this platform ({}: {})".format(type(e).__name__, e))
                     sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1188,6 +1186,8 @@ def lpmode(port, use_lpmode_pin):
                     output_table.append([port_name, "On"])
                 else:
                     output_table.append([port_name, "Off"])
+
+                i += 1
 
     click.echo(tabulate(output_table, table_header, tablefmt='simple'))
 
@@ -1325,14 +1325,12 @@ def reset(port_name):
         ganged = True
 
     for physical_port in physical_port_list:
-        physical_port_name = get_physical_port_name(port_name, i, ganged)
-        i += 1
         try:
             sfp = platform_chassis.get_sfp(physical_port)
             if not sfp.get_presence():
                 click.echo(f"{port_name}: module {physical_port} is not present, skipping")
                 continue
-            click.echo("Resetting port {} ... ".format(physical_port_name), nl=False)
+            click.echo("Resetting port {} ... ".format(get_physical_port_name(port_name, i, ganged)), nl=False)
             result = sfp.reset()
         except NotImplementedError:
             click.echo("This functionality is currently not implemented for this platform")
@@ -1342,6 +1340,8 @@ def reset(port_name):
             click.echo("OK")
         else:
             click.echo("Failed")
+
+        i += 1
 
 
 # 'power' subgroup
