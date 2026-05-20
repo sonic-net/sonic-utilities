@@ -1779,6 +1779,8 @@ def users(verbose):
 
 @cli.command()
 @click.option('--since', required=False, help="Collect logs and core files since given date")
+@click.option('-f', '--filename', required=False,
+              help="Custom dump filename under /var/dump. WARN: if file already exists, this command will abort.")
 @click.option('-g', '--global-timeout', required=False, type=int, help="Global timeout in minutes. WARN: Dump might be incomplete if enforced")
 @click.option('-c', '--cmd-timeout', default=5, type=int, help="Individual command timeout in minutes. Default 5 mins")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1786,7 +1788,8 @@ def users(verbose):
 @click.option('--silent', is_flag=True, help="Run techsupport in silent mode")
 @click.option('--debug-dump', is_flag=True, help="Collect Debug Dump Output")
 @click.option('--redirect-stderr', '-r', is_flag=True, help="Redirect an intermediate errors to STDERR")
-def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop, silent, debug_dump, redirect_stderr):
+def techsupport(since, filename, global_timeout, cmd_timeout,
+                verbose, allow_process_stop, silent, debug_dump, redirect_stderr):
     """Gather information for troubleshooting"""
     cmd = ["sudo"]
 
@@ -1798,6 +1801,11 @@ def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
         click.echo("Techsupport is running with silent option. This command might take a long time.")
     else:
         cmd += ['generate_dump', '-v']
+
+    if filename:
+        if '/' in filename:
+            raise click.UsageError("-f/--filename requires a file name with no path components")
+        cmd += ["-f", filename]
 
     if allow_process_stop:
         cmd += ["-a"]

@@ -14852,8 +14852,10 @@ Resulting archive file is saved as `/var/dump/<DEVICE_HOST_NAME>_YYYYMMDD_HHMMSS
 
 - Example:
   ```
-  admin@sonic:~$ show techsupport [--since=<time_specifier>]
+  admin@sonic:~$ show techsupport [--since=<time_specifier>] [--filename=<file_name>]
   ```
+
+With the `--filename` option, files will be saved under `/var/dump/<file_name>`. Passing in filenames with path components will be rejected. 
 
 If the SONiC system was running for quite some time `show techsupport` will produce a large dump file. To reduce the amount of syslog and core files gathered during system dump use `--since` option:
 
@@ -14863,6 +14865,9 @@ If the SONiC system was running for quite some time `show techsupport` will prod
   ```
   ```
   admin@sonic:~$ show techsupport --since='hour ago' # Will collect syslog and core files for the last one hour
+  ```
+  ```
+  admin@sonic:~$ show techsupport --filename=custom_name # saved under /var/dump/custom_name.tar.gz
   ```
 
 ### Debug Dumps

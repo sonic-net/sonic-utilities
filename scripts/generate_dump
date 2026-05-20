@@ -49,6 +49,7 @@ TIMEOUT_MIN="5"
 SKIP_BCMCMD=0
 SAVE_STDERR=true
 RETURN_CODE=$EXT_SUCCESS
+CUSTOM_FILENAME_SET=false
 DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 IS_SUPERVISOR=false
@@ -2945,11 +2946,15 @@ OPTIONS
         Redirect any intermediate errors to STDERR
     -d
         Collect the output of debug dump cli
+    -f FILENAME
+        Base name for the output dump file (default: sonic_dump_<hostname>_<timestamp>).
+        The file will be created as $DUMPDIR/<FILENAME>.tar[.gz].
+        WARN: if the file already exists, this command will fail and exit.
 EOF
 }
 
 
-while getopts ":xnvhzas:t:r:d" opt; do
+while getopts ":xnvhzas:t:r:d:f:" opt; do
     case $opt in
         x)
             # enable bash debugging
@@ -3000,12 +3005,42 @@ while getopts ":xnvhzas:t:r:d" opt; do
         d)
             DEBUG_DUMP=true
             ;;
-        /?)
+        f)
+            BASE="${OPTARG}"
+            if [[ "$BASE" == */* ]]; then
+                echo "ERROR: Invalid filename ${BASE}, filename must be a plain name with no path component." >&2
+                exit $EXT_GENERAL
+            fi
+            TARDIR=$DUMPDIR/$BASE
+            TARFILE=$DUMPDIR/$BASE.tar
+            LOGDIR=$DUMPDIR/$BASE/dump
+            CUSTOM_FILENAME_SET=true
+
+            # avoid dumps with redundant file extensions like "customname.tar.gz.tar.gz"
+            if [[ "$BASE" == *.tar.gz ]]; then
+                BASE="${BASE%.tar.gz}".
+                echo "INFO: Pruning redundant file extension '.tar.gz' from filename; dump will be saved under '${TARFILE}.gz'" >&2
+            elif [[ "$BASE" == *.tar ]]; then
+                BASE="${BASE%.tar}"
+                echo "INFO: Pruning redundant file extension '.tar' from filename; dump will be saved under '${TARFILE}'" >&2
+            fi
+            ;;
+        \?)
             echo "Invalid option: -$OPTARG" >&2
             exit $EXT_GENERAL
             ;;
     esac
 done
+
+if $CUSTOM_FILENAME_SET; then
+    if $DO_COMPRESS && [[ -f ${TARFILE}.gz ]]; then
+        echo "WARNING: ${TARFILE}.gz already exists, aborting without dumping." >&2
+        exit $EXT_GENERAL
+    elif ! $DO_COMPRESS && [[ -f $TARFILE ]]; then
+        echo "WARNING: $TARFILE already exists, aborting without dumping." >&2
+        exit $EXT_GENERAL
+    fi
+fi
 
 # Check permissions before proceeding further
 if [ `whoami` != root ] && ! $NOOP;
