@@ -63,6 +63,7 @@ class TestCounterpoll(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
+        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def test_show(self):
@@ -404,6 +405,74 @@ class TestCounterpoll(object):
         assert test_interval == table["SRV6"]["POLL_INTERVAL"]
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_icmp_status(self, status):
+        """`counterpoll icmp {enable,disable}` flips
+        FLEX_COUNTER_TABLE|ICMP_SESSION.FLEX_COUNTER_STATUS."""
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["icmp"].commands[status], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["ICMP_SESSION"]["FLEX_COUNTER_STATUS"]
+
+    def test_update_icmp_interval(self):
+        """`counterpoll icmp interval <ms>` persists on
+        FLEX_COUNTER_TABLE|ICMP_SESSION.POLL_INTERVAL (1000-30000 ms)."""
+        runner = CliRunner()
+        db = Db()
+        test_interval = "20000"
+
+        result = runner.invoke(counterpoll.cli.commands["icmp"].commands["interval"],
+                               [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["ICMP_SESSION"]["POLL_INTERVAL"]
+
+    def test_update_icmp_interval_out_of_range_rejected(self):
+        """Intervals outside 1000-30000 ms are rejected by click's
+        IntRange before reaching FLEX_COUNTER_TABLE."""
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["icmp"].commands["interval"],
+                               ["999"], obj=db.cfgdb)
+        assert result.exit_code != 0
+        result = runner.invoke(counterpoll.cli.commands["icmp"].commands["interval"],
+                               ["30001"], obj=db.cfgdb)
+        assert result.exit_code != 0
+
+    def test_icmp_session_stat_appears_in_show_when_configured(self):
+        """When ICMP_SESSION is provisioned in CONFIG_DB,
+        `counterpoll show` lists an ICMP_SESSION_STAT row with the
+        persisted interval/status.
+
+        `counterpoll show` builds its own ConfigDBConnector via
+        `connect_to_db()`, so patch it to return the seeded Db()."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", {
+            "POLL_INTERVAL": "10000",
+            "FLEX_COUNTER_STATUS": "enable",
+        })
+
+        with mock.patch("counterpoll.main.connect_to_db", return_value=db.cfgdb):
+            result = runner.invoke(counterpoll.cli.commands["show"], [], obj=db.cfgdb)
+        assert result.exit_code == 0
+        assert "ICMP_SESSION_STAT" in result.output
+        # Row must report the persisted interval and status.
+        icmp_lines = [line for line in result.output.splitlines()
+                      if line.startswith("ICMP_SESSION_STAT")]
+        assert len(icmp_lines) == 1
+        tokens = icmp_lines[0].split()
+        assert "10000" in tokens
+        assert "enable" in tokens
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_update_switch_status(self, status):
         runner = CliRunner()
         db = Db()
@@ -546,3 +615,5 @@ class TestCounterpoll(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
+        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
