@@ -1,0 +1,5 @@
+{
+    "WARM_RESTART_ENABLE_TABLE|system": {
+        "enable": "true"
+    }
+}

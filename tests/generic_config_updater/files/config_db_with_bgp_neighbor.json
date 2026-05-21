@@ -1,0 +1,32 @@
+{
+    "BGP_NEIGHBOR": {
+        "1.2.3.4": {
+            "admin_status": "up",
+            "asn": "65000",
+            "holdtime": "10",
+            "keepalive": "3",
+            "local_addr": "10.0.0.10",
+            "name": "ARISTA03T1",
+            "nhopself": "0",
+            "rrclient": "0"
+        },
+        "default|1.2.3.4": {
+            "local_asn": "65200",
+            "asn": "65100",
+            "name": "bgp peer 65100",
+            "ebgp_multihop_ttl": "3"
+        }
+    },
+    "BGP_MONITORS": {
+        "5.6.7.8": {
+            "admin_status": "up",
+            "asn": "65000",
+            "holdtime": "180",
+            "keepalive": "60",
+            "local_addr": "10.0.0.11",
+            "name": "BGPMonitor",
+            "nhopself": "0",
+            "rrclient": "0"
+        }
+    }
+}

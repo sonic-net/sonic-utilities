@@ -1,0 +1,20 @@
+{
+    "VRF|Vrf-Data": {
+        "NULL": "NULL"
+    },
+    "SYSLOG_SERVER|2.2.2.2": {
+        "source": "1.1.1.1",
+        "port": "514",
+        "vrf": "default"
+    },
+    "SYSLOG_SERVER|3.3.3.3": {
+        "source": "1.1.1.1",
+        "port": "514",
+        "vrf": "mgmt"
+    },
+    "SYSLOG_SERVER|2222::2222": {
+        "source": "1111::1111",
+        "port": "514",
+        "vrf": "Vrf-Data"
+    }
+}

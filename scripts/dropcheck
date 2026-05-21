@@ -1,0 +1,34 @@
+#!/bin/bash
+
+#
+# Usage: dropcheck [-p PERIOD] [-t THRESHOLD]
+#        -p: Set the period of time for portstat to get all counters
+#        -t: Set the threshold to exit 1
+#
+
+PERIOD=3
+THRESHOLD=100
+
+while getopts ":p:t:" opt; do
+        case $opt in
+                p)
+                        PERIOD=$OPTARG
+                        ;;
+                t)
+                        THRESHOLD=$OPTARG
+                        ;;
+                /?)
+                        echo "Invalid option: -$OPTARG" >&2
+                        exit 1
+                        ;;
+        esac
+done
+
+# Sum up column RX_DRP and TX_DRP for all ports
+TOTAL_DROP=`portstat -p $PERIOD | awk -F' ' '{if (NR>3) {s+=$9+$16}} END {print s}'`
+echo "Total number of drop packets during the last $PERIOD seconds is $TOTAL_DROP!"
+
+# Exit 1 for monit to check the output of the script
+if [ $TOTAL_DROP -gt $THRESHOLD ]; then
+        exit 1
+fi

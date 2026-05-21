@@ -1,0 +1,10 @@
+{
+    "FG_NHG|fg_grp_1": {
+        "bucket_size": "30",
+        "match_mode": "prefix-based",
+        "max_next_hops": "6"
+    },
+    "FG_NHG_PREFIX|192.168.11.1": {
+        "FG_NHG": "fg_grp_1"
+    }
+}

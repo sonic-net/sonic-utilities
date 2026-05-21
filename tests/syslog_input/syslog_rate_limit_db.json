@@ -1,0 +1,33 @@
+{
+    "FEATURE|bgp": {
+        "state": "enabled",
+        "support_syslog_rate_limit": "true"
+    },
+    "FEATURE|swss": {
+        "state": "enabled",
+        "support_syslog_rate_limit": "true"
+    },
+    "FEATURE|syncd": {
+        "state": "enabled",
+        "support_syslog_rate_limit": "true"
+    },
+    "FEATURE|snmp": {
+        "state": "disabled",
+        "support_syslog_rate_limit": "true"
+    },
+    "FEATURE|pmon": {
+        "state": "enabled",
+        "support_syslog_rate_limit": "false"
+    },
+    "SYSLOG_CONFIG|GLOBAL": {
+        "rate_limit_interval": "100",
+        "rate_limit_burst": "20000"
+    },
+    "SYSLOG_CONFIG_FEATURE|bgp": {
+        "rate_limit_interval": "150",
+        "rate_limit_burst": "30000"
+    },
+    "SYSLOG_CONFIG_FEATURE|swss": {
+        "rate_limit_burst": "30000"
+    }
+}

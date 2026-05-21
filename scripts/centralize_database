@@ -1,0 +1,68 @@
+#!/usr/bin/python
+from __future__ import print_function
+import sys
+from sonic_py_common import multi_asic
+from swsscommon.swsscommon import SonicDBConfig, SonicDBKey
+import redis
+import argparse
+import os
+
+def centralize_to_target_db(target_dbname, namespace):
+    if multi_asic.is_multi_asic():
+        SonicDBConfig.initializeGlobalConfig()
+    key = SonicDBKey(namespace)
+    target_dbport = SonicDBConfig.getDbPort(target_dbname, key)
+    target_dbhost = SonicDBConfig.getDbHostname(target_dbname, key)
+
+    dblists = SonicDBConfig.getDbList(key)
+    for dbname in dblists:
+        dbport = SonicDBConfig.getDbPort(dbname, key)
+        dbhost = SonicDBConfig.getDbHostname(dbname, key)
+        # if the db is on the same instance, no need to move
+        if dbport == target_dbport and dbhost == target_dbhost:
+            continue
+
+        dbsocket = SonicDBConfig.getDbSock(dbname, key)
+        dbid = SonicDBConfig.getDbId(dbname, key)
+
+        r = redis.Redis(host=dbhost, unix_socket_path=dbsocket, db=dbid)
+
+        script = """
+            local cursor = 0;
+            repeat
+                local  dat = redis.call('SCAN', cursor, 'COUNT', 7000);
+                     cursor = dat[1];
+                redis.call('MIGRATE', KEYS[1], KEYS[2], '', KEYS[3], 5000, 'COPY', 'REPLACE', 'KEYS', unpack(dat[2]));
+            until cursor == '0';
+        """
+        r.eval(script, 3, target_dbhost, target_dbport, dbid)
+
+    #SAVE rdb file
+    r = redis.Redis(host=target_dbhost, port=target_dbport)
+    r.save()
+
+def main():
+    parser = argparse.ArgumentParser(description='centralize all db data into one db instances',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog=
+"""
+Example : centralize_database APPL_DB
+""")
+    parser.add_argument('target_db', type=str, help='move all db data into the instance where target db locates')
+    parser.add_argument('-n', '--namespace', default=multi_asic.DEFAULT_NAMESPACE, type=str, help='namespace to use')
+    args = parser.parse_args()
+
+    if args.target_db:
+        try:
+            centralize_to_target_db(args.target_db, args.namespace)
+            print(SonicDBConfig.getDbInst(args.target_db, SonicDBKey(args.namespace)))
+        except Exception as ex:
+            template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+            message = template.format(type(ex).__name__, ex.args)
+            print(message, file=sys.stderr)
+            sys.exit(1)
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

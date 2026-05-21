@@ -1,0 +1,1042 @@
+import sys
+import os
+from click.testing import CliRunner
+from datetime import datetime, timedelta, timezone
+from unittest import mock
+
+import pytest
+
+import show.main as show
+import config.main as config
+import tests.mock_tables.dbconnector
+from utilities_common.db import Db
+from .utils import get_result_and_return_code
+sys.modules['clicommon'] = mock.Mock()
+
+
+@pytest.fixture(autouse=True)
+def _inject_sonic_platform():
+    # conftest._reset_between_files() clears sys.modules['sonic_platform']
+    # before the first test of each file. Re-inject before every test so that
+    # chassis command handlers that import sonic_platform at call time can find
+    # it. Module-level injection is not sufficient because it runs before the
+    # conftest hook that clears it.
+    sys.modules['sonic_platform'] = mock.MagicMock()
+    yield
+
+
+test_path = os.path.dirname(os.path.abspath(__file__))
+modules_path = os.path.dirname(test_path)
+scripts_path = os.path.join(modules_path, "scripts")
+
+show_linecard0_shutdown_output="""\
+LINE-CARD0 line-card 1 Empty down LC1000101
+"""
+
+show_linecard0_startup_output="""\
+LINE-CARD0 line-card 1 Empty up LC1000101
+"""
+
+show_fabriccard0_shutdown_output = """\
+FABRIC-CARD0 fabric-card 17 Online down FC1000101
+"""
+
+show_fabriccard0_startup_output = """\
+FABRIC-CARD0 fabric-card 17 Online up FC1000101
+"""
+
+header_lines = 2
+warning_lines = 0
+
+show_chassis_modules_output="""\
+        Name      Description    Physical-Slot    Oper-Status    Admin-Status     Serial
+------------  ---------------  ---------------  -------------  --------------  ---------
+FABRIC-CARD0      fabric-card               17         Online              up  FC1000101
+FABRIC-CARD1      fabric-card               18        Offline              up  FC1000102
+  LINE-CARD0        line-card                1          Empty              up  LC1000101
+  LINE-CARD1        line-card                2         Online            down  LC1000102
+ SUPERVISOR0  supervisor-card               16         Online              up  RP1000101
+"""
+
+show_chassis_midplane_output="""\
+      Name    IP-Address    Reachability
+----------  ------------  --------------
+LINE-CARD0   192.168.3.1            True
+LINE-CARD1   192.168.4.1           False
+LINE-CARD2   192.168.5.1            True
+LINE-CARD3   192.168.6.1            True
+"""
+
+show_chassis_system_ports_output_asic0="""\
+            System Port Name    Port Id    Switch Id    Core    Core Port    Speed
+----------------------------  ---------  -----------  ------  -----------  -------
+   Linecard1|Asic0|Ethernet0          1            0       0            1     100G
+Linecard1|Asic0|Ethernet-IB0         13            0       1            6      10G
+  Linecard1|Asic1|Ethernet12         65            2       0            1     100G
+  Linecard1|Asic2|Ethernet24        129            4       0            1     100G
+   Linecard2|Asic0|Ethernet0        193            6       0            1     100G
+"""
+
+show_chassis_system_ports_output_1_asic0="""\
+         System Port Name    Port Id    Switch Id    Core    Core Port    Speed
+-------------------------  ---------  -----------  ------  -----------  -------
+Linecard1|Asic0|Ethernet0          1            0       0            1     100G
+"""
+
+show_chassis_system_neighbors_output_all="""\
+          System Port Interface    Neighbor                MAC    Encap Index
+-------------------------------  ----------  -----------------  -------------
+      Linecard2|Asic0|Ethernet4    10.0.0.5  b6:8c:4f:18:67:ff     1074790406
+      Linecard2|Asic0|Ethernet4     fc00::a  b6:8c:4f:18:67:ff     1074790407
+   Linecard2|Asic0|Ethernet-IB0     3.3.3.4  24:21:24:05:81:f7     1074790404
+   Linecard2|Asic0|Ethernet-IB0   3333::3:4  24:21:24:05:81:f7     1074790405
+Linecard2|Asic1|PortChannel0002    10.0.0.1  26:8b:37:fa:8e:67     1074790406
+Linecard2|Asic1|PortChannel0002     fc00::2  26:8b:37:fa:8e:67     1074790407
+      Linecard4|Asic0|Ethernet5   10.0.0.11  46:c3:71:8c:dd:2d     1074790406
+      Linecard4|Asic0|Ethernet5    fc00::16  46:c3:71:8c:dd:2d     1074790407
+"""
+
+show_chassis_system_neighbors_output_ipv4="""\
+    System Port Interface    Neighbor                MAC    Encap Index
+-------------------------  ----------  -----------------  -------------
+Linecard2|Asic0|Ethernet4    10.0.0.5  b6:8c:4f:18:67:ff     1074790406
+"""
+
+show_chassis_system_neighbors_output_ipv6="""\
+    System Port Interface    Neighbor                MAC    Encap Index
+-------------------------  ----------  -----------------  -------------
+Linecard4|Asic0|Ethernet5    fc00::16  46:c3:71:8c:dd:2d     1074790407
+"""
+
+show_chassis_system_neighbors_output_asic0="""\
+       System Port Interface    Neighbor                MAC    Encap Index
+----------------------------  ----------  -----------------  -------------
+   Linecard2|Asic0|Ethernet4    10.0.0.5  b6:8c:4f:18:67:ff     1074790406
+   Linecard2|Asic0|Ethernet4     fc00::a  b6:8c:4f:18:67:ff     1074790407
+Linecard2|Asic0|Ethernet-IB0     3.3.3.4  24:21:24:05:81:f7     1074790404
+Linecard2|Asic0|Ethernet-IB0   3333::3:4  24:21:24:05:81:f7     1074790405
+   Linecard4|Asic0|Ethernet5   10.0.0.11  46:c3:71:8c:dd:2d     1074790406
+   Linecard4|Asic0|Ethernet5    fc00::16  46:c3:71:8c:dd:2d     1074790407
+"""
+
+show_chassis_system_lags_output="""\
+                System Lag Name    Lag Id    Switch Id                                     Member System Ports
+-------------------------------  --------  -----------  ------------------------------------------------------
+Linecard2|Asic1|PortChannel0002         1            8  Linecard2|Asic1|Ethernet16, Linecard2|Asic1|Ethernet17
+Linecard4|Asic2|PortChannel0001         2           22  Linecard4|Asic2|Ethernet29, Linecard4|Asic2|Ethernet30
+"""
+
+show_chassis_system_lags_output_1="""\
+                System Lag Name    Lag Id    Switch Id                                     Member System Ports
+-------------------------------  --------  -----------  ------------------------------------------------------
+Linecard4|Asic2|PortChannel0001         2           22  Linecard4|Asic2|Ethernet29, Linecard4|Asic2|Ethernet30
+"""
+
+show_chassis_system_lags_output_asic1="""\
+                System Lag Name    Lag Id    Switch Id                                     Member System Ports
+-------------------------------  --------  -----------  ------------------------------------------------------
+Linecard2|Asic1|PortChannel0002         1            8  Linecard2|Asic1|Ethernet16, Linecard2|Asic1|Ethernet17
+"""
+
+show_chassis_system_lags_output_lc4="""\
+                System Lag Name    Lag Id    Switch Id                                     Member System Ports
+-------------------------------  --------  -----------  ------------------------------------------------------
+Linecard4|Asic2|PortChannel0001         2           22  Linecard4|Asic2|Ethernet29, Linecard4|Asic2|Ethernet30
+"""
+
+
+def mock_run_command_side_effect(*args, **kwargs):
+    print("command: {}".format(*args))
+    if isinstance(*args, list):
+        return '', 0
+    else:
+        print("Expected type of command is list. Actual type is {}".format(*args))
+        assert 0
+        return '', 0
+
+
+class TestChassisModules(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    def test_show_and_verify_output(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"], [])
+        print(result.output)
+        assert(result.output == show_chassis_modules_output)
+
+    def test_show_all_count_lines(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"], [])
+        print(result.output)
+        result_lines = result.output.strip('\n').split('\n')
+        modules = ["FABRIC-CARD0", "FABRIC-CARD1", "LINE-CARD0", "LINE-CARD1", "SUPERVISOR0"]
+        for i, module in enumerate(modules):
+            assert module in result_lines[i + warning_lines + header_lines]
+        assert len(result_lines) == warning_lines + header_lines + len(modules)
+
+    def test_show_single_count_lines(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"], ["LINE-CARD0"])
+        print(result.output)
+        result_lines = result.output.strip('\n').split('\n')
+        modules = ["LINE-CARD0"]
+        for i, module in enumerate(modules):
+            assert module in result_lines[i+header_lines]
+        assert len(result_lines) == header_lines + len(modules)
+
+    def test_show_module_down(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"], ["LINE-CARD1"])
+        result_lines = result.output.strip('\n').split('\n')
+        assert result.exit_code == 0
+        result_out = (result_lines[header_lines]).split()
+        assert result_out[4] == 'down'
+
+    def test_show_incorrect_command(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"], [])
+        print(result.output)
+        print(result.exit_code)
+        assert result.exit_code == 0
+
+    def test_show_incorrect_module(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"], ["TEST-CARD1"])
+        print(result.output)
+        print(result.exit_code)
+        assert result.exit_code == 0
+
+    def test_config_shutdown_module(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"], ["LINE-CARD0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"], ["LINE-CARD0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        result_lines = result.output.strip('\n').split('\n')
+        assert result.exit_code == 0
+        header_lines = 2
+        result_out = " ".join((result_lines[header_lines]).split())
+        assert result_out.strip('\n') == show_linecard0_shutdown_output.strip('\n')
+        #db.cfgdb.set_entry("CHASSIS_MODULE", "LINE-CARD0", { "admin_status" : "down" })
+        #db.get_data("CHASSIS_MODULE", "LINE-CARD0")
+
+    def test_config_shutdown_module_fabric(self):
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
+            runner = CliRunner()
+            db = Db()
+
+            chassisdb = db.db
+            chassisdb.connect("CHASSIS_STATE_DB")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_id_in_module", "0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_pci_address", "nokia-bdb:4:0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "name", "FABRIC-CARD0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_id_in_module", "1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_pci_address", "nokia-bdb:4:1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "name", "FABRIC-CARD0")
+            chassisdb.close("CHASSIS_STATE_DB")
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            result_lines = result.output.strip('\n').split('\n')
+            assert result.exit_code == 0
+            header_lines = 2
+            result_out = " ".join((result_lines[header_lines]).split())
+            assert result_out.strip('\n') == show_fabriccard0_shutdown_output.strip('\n')
+
+            fvs = {'admin_status': 'down'}
+            db.cfgdb.set_entry('CHASSIS_MODULE', "FABRIC-CARD0", fvs)
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 6
+
+    def test_config_startup_module(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["startup"], ["LINE-CARD0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"], ["LINE-CARD0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        result_lines = result.output.strip('\n').split('\n')
+        assert result.exit_code == 0
+        result_out = " ".join((result_lines[header_lines]).split())
+        assert result_out.strip('\n') == show_linecard0_startup_output.strip('\n')
+
+    def test_config_startup_module_fabric(self):
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
+            runner = CliRunner()
+            db = Db()
+
+            chassisdb = db.db
+            chassisdb.connect("CHASSIS_STATE_DB")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_id_in_module", "0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_pci_address", "nokia-bdb:4:0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "name", "FABRIC-CARD0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_id_in_module", "1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_pci_address", "nokia-bdb:4:1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "name", "FABRIC-CARD0")
+            chassisdb.close("CHASSIS_STATE_DB")
+
+            # FC is down and doing startup
+            fvs = {'admin_status': 'down'}
+            db.cfgdb.set_entry('CHASSIS_MODULE', "FABRIC-CARD0", fvs)
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["startup"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            result_lines = result.output.strip('\n').split('\n')
+            assert result.exit_code == 0
+            result_out = " ".join((result_lines[header_lines]).split())
+            assert result_out.strip('\n') == show_fabriccard0_startup_output.strip('\n')
+            assert mock_run_command.call_count == 2
+
+            # FC is up and doing startup
+            fvs = {'admin_status': 'up'}
+            db.cfgdb.set_entry('CHASSIS_MODULE', "FABRIC-CARD0", fvs)
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["startup"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            result_lines = result.output.strip('\n').split('\n')
+            assert result.exit_code == 0
+            result_out = " ".join((result_lines[header_lines]).split())
+            assert result_out.strip('\n') == show_fabriccard0_startup_output.strip('\n')
+            assert mock_run_command.call_count == 2
+
+    def test_config_incorrect_module(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"], ["TEST-CARD0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+
+    def test_show_and_verify_midplane_output(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], [])
+        print(result.output)
+        assert(result.output == show_chassis_midplane_output)
+
+    def test_midplane_show_all_count_lines(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], [])
+        print(result.output)
+        result_lines = result.output.strip('\n').split('\n')
+        modules = ["LINE-CARD0", "LINE-CARD1", "LINE-CARD2", "LINE-CARD3"]
+        for i, module in enumerate(modules):
+            assert module in result_lines[i + warning_lines + header_lines]
+        assert len(result_lines) == warning_lines + header_lines + len(modules)
+
+    def test_midplane_show_single_count_lines(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], ["LINE-CARD0"])
+        print(result.output)
+        result_lines = result.output.strip('\n').split('\n')
+        modules = ["LINE-CARD0"]
+        for i, module in enumerate(modules):
+            assert module in result_lines[i+header_lines]
+        assert len(result_lines) == header_lines + len(modules)
+
+    def test_midplane_show_module_down(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], ["LINE-CARD1"])
+        print(result.output)
+        result_lines = result.output.strip('\n').split('\n')
+        assert result.exit_code == 0
+        result_out = (result_lines[header_lines]).split()
+        print(result_out)
+        assert result_out[2] == 'False'
+
+    def test_midplane_show_incorrect_module(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], ["TEST-CARD1"])
+        print(result.output)
+        print(result.exit_code)
+        assert result.exit_code == 0
+
+    def test_show_and_verify_system_ports_output_asic0(self):
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        return_code, result = get_result_and_return_code(['voqutil', '-c', 'system_ports', '-n', 'asic0'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == show_chassis_system_ports_output_asic0
+
+    def test_show_and_verify_system_ports_output_1_asic0(self):
+        return_code, result = get_result_and_return_code(['voqutil', '-c', 'system_ports', '-i', "Linecard1|Asic0|Ethernet0", '-n', 'asic0'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == show_chassis_system_ports_output_1_asic0
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
+    def test_show_and_verify_system_neighbors_output_all(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["system-neighbors"], [])
+        print(result.output)
+        assert(result.output == show_chassis_system_neighbors_output_all)
+
+    def test_show_and_verify_system_neighbors_output_ipv4(self):
+        return_code, result = get_result_and_return_code(['voqutil', '-c', 'system_neighbors', '-a', '10.0.0.5'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == show_chassis_system_neighbors_output_ipv4
+
+    def test_show_and_verify_system_neighbors_output_ipv6(self):
+        return_code, result = get_result_and_return_code(['voqutil', '-c', 'system_neighbors', '-a', 'fc00::16'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == show_chassis_system_neighbors_output_ipv6
+
+    def test_show_and_verify_system_neighbors_output_asic0(self):
+        return_code, result = get_result_and_return_code(['voqutil', '-c', 'system_neighbors', '-n', 'Asic0'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == show_chassis_system_neighbors_output_asic0
+
+    def test_show_and_verify_system_lags_output(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["system-lags"], [])
+        print(result.output)
+        assert(result.output == show_chassis_system_lags_output)
+
+    def test_show_and_verify_system_lags_output_1(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["chassis"].commands["system-lags"], ["""Linecard4|Asic2|PortChannel0001"""])
+        print(result.output)
+        assert(result.output == show_chassis_system_lags_output_1)
+
+    def test_show_and_verify_system_lags_output_asic1(self):
+        return_code, result = get_result_and_return_code(['voqutil', '-c', 'system_lags', '-n', 'Asic1'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == show_chassis_system_lags_output_asic1
+
+    def test_show_and_verify_system_lags_output_lc4(self):
+        return_code, result = get_result_and_return_code(['voqutil', '-c', 'system_lags', '-l', 'Linecard4'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == show_chassis_system_lags_output_lc4
+
+    def test_shutdown_smartswitch_module(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Shutting down chassis module DPU0" in result.output
+
+            # Check CONFIG_DB for admin_status
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            admin_status = cfg_fvs.get("admin_status")
+            print(f"admin_status: {admin_status}")
+            assert admin_status == "down"
+
+    def test_shutdown_smartswitch_transition_in_progress(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 state transition is already in progress" in result.output
+
+            # Verify no config change was made
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs == {}
+
+    def test_shutdown_module_already_down(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 is already in down state" in result.output
+
+    def test_startup_smartswitch_module(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Starting up chassis module DPU0" in result.output
+
+            # Check CONFIG_DB for admin_status
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            admin_status = cfg_fvs.get("admin_status")
+            print(f"admin_status: {admin_status}")
+            assert admin_status == "up"
+
+    def test_startup_smartswitch_transition_in_progress(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 state transition is already in progress" in result.output
+
+            # Verify no config change was made
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs == {}
+
+    def test_startup_module_already_up(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 is already set to up state" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestChassisModuleTimingConfig(object):
+    """Tests for 'config chassis modules power-on-delay' and 'shutdown-timeout'"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        import importlib
+        import config.chassis_modules as cm
+        with mock.patch('utilities_common.chassis.is_bmc', new=lambda: True):
+            importlib.reload(cm)
+        cls.modules = cm.modules
+
+    def test_power_on_delay_switch_host(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "300"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "300" in result.output
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "300"
+
+    def test_power_on_delay_zero(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "0"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "0"
+
+    def test_power_on_delay_negative_rejected(self):
+        """Verify negative values are invalid; default is 0 per HLD (admin_status=down keeps Switch-Host off)."""
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "-1"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+
+    def test_power_on_delay_non_switch_host_rejected(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["LINE-CARD0", "300"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+        assert "SWITCH-HOST" in result.output
+
+    def test_shutdown_timeout_switch_host(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "120"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "120" in result.output
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "120"
+
+    def test_shutdown_timeout_zero_immediate_poweroff(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "0"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "0"
+
+    def test_shutdown_timeout_negative_rejected(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "-5"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+
+    def test_shutdown_timeout_non_switch_host_rejected(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["FABRIC-CARD0", "120"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+        assert "SWITCH-HOST" in result.output
+
+    def test_both_fields_preserved_in_db(self):
+        """Setting one field does not overwrite the other."""
+        runner = CliRunner()
+        db = Db()
+        runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "60"],
+            obj=db
+        )
+        runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "30"],
+            obj=db
+        )
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "60"
+        assert entry.get("graceful_shutdown_timeout") == "30"
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestChassisModuleBMCStartupShutdown(object):
+    """Tests for startup/shutdown of SWITCH-HOST on BMC:
+    - default admin_status is 'down' when no entry exists
+    - startup/shutdown use mod_entry to preserve power_on_delay and graceful_shutdown_timeout
+    """
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    def test_default_state_is_down_on_bmc(self):
+        """SWITCH-HOST has no entry in CONFIG_DB; on BMC the default must be 'down'."""
+        from config.chassis_modules import get_config_module_state
+        db = Db()
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            state = get_config_module_state(db, "SWITCH-HOST")
+        assert state == 'down'
+
+    def test_startup_switch_host_preserves_timing_fields(self):
+        """startup SWITCH-HOST on BMC must not erase power_on_delay or graceful_shutdown_timeout."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {
+            'admin_status': 'down',
+            'power_on_delay': '300',
+            'graceful_shutdown_timeout': '120',
+        })
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("admin_status") == "up"
+        assert entry.get("power_on_delay") == "300", "power_on_delay must be preserved"
+        assert entry.get("graceful_shutdown_timeout") == "120", "graceful_shutdown_timeout must be preserved"
+
+    def test_shutdown_switch_host_preserves_timing_fields(self):
+        """shutdown SWITCH-HOST on BMC must not erase power_on_delay or graceful_shutdown_timeout."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {
+            'admin_status': 'up',
+            'power_on_delay': '60',
+            'graceful_shutdown_timeout': '30',
+        })
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("admin_status") == "down"
+        assert entry.get("power_on_delay") == "60", "power_on_delay must be preserved"
+        assert entry.get("graceful_shutdown_timeout") == "30", "graceful_shutdown_timeout must be preserved"
+
+    def test_startup_switch_host_already_up_is_noop(self):
+        """startup SWITCH-HOST when already up should print a message and return."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "already" in result.output
+
+    def test_shutdown_switch_host_already_down_is_noop(self):
+        """shutdown SWITCH-HOST when already down (no entry) should print a message and return."""
+        runner = CliRunner()
+        db = Db()
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "already" in result.output
+
+    def test_show_status_bmc_uses_platform_oper_status(self):
+        """On BMC, oper_status should come from platform API when available."""
+        runner = CliRunner()
+        mock_module_helper = mock.MagicMock()
+        mock_module_helper.get_module_oper_status.return_value = "Online"
+
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Online" in result.output
+
+    def test_show_status_bmc_falls_back_to_db_when_platform_unavailable(self):
+        """On BMC, if platform API returns N/A, fall back to STATE_DB oper_status."""
+        runner = CliRunner()
+        mock_module_helper = mock.MagicMock()
+        mock_module_helper.get_module_oper_status.return_value = "N/A"
+
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        # DB value for LINE-CARD0 is "Empty"; should be preserved when platform returns N/A
+        assert "Empty" in result.output
+
+    def test_show_status_non_bmc_uses_db_oper_status(self):
+        """On non-BMC, oper_status should always come from STATE_DB."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Empty" in result.output
+
+    def test_show_status_bmc_module_helper_init_failure_falls_back_to_db(self):
+        """On BMC, if ModuleHelper init raises, gracefully fall back to STATE_DB."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("init failed")):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Empty" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestChassisModulesRecovery(object):
+    """Tests for 'show chassis modules recovery' and Ready-Status in status command"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    def _setup_dpu_state_db(self):
+        """Create a mock SonicV2Connector with DPU_STATE data in CHASSIS_STATE_DB."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # DPU0 - healthy
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "true")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "recovery_status", "recoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "reset_count", "2")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "last_down_time", "2026-05-28 10:15:30 UTC")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "last_ready_time", "2026-05-28 10:18:45 UTC")
+        # DPU1 - healthy with no failures
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "ready_status", "true")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "recovery_status", "recoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "reset_count", "0")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "last_ready_time", "2026-05-28 09:00:12 UTC")
+        # DPU2 - unrecoverable
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "ready_status", "false")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "recovery_status", "unrecoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "reset_count", "2")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "last_down_time", "2026-05-28 11:02:00 UTC")
+        return conn
+
+    def test_show_recovery_all(self):
+        """Test show chassis modules recovery shows all DPUs."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "DPU1" in result.output
+        assert "DPU2" in result.output
+        assert "recoverable" in result.output
+        assert "unrecoverable" in result.output
+
+    def test_show_recovery_single_module(self):
+        """Test show chassis modules recovery for a specific DPU."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU0"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "true" in result.output
+        assert "recoverable" in result.output
+        assert "2026-05-28 10:15:30 UTC" in result.output
+        assert "2026-05-28 10:18:45 UTC" in result.output
+
+    def test_show_recovery_non_smartswitch(self):
+        """Test recovery command on non-SmartSwitch platform."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "only supported on SmartSwitch" in result.output
+
+    def test_show_recovery_no_data(self):
+        """Test recovery command when no DPU_STATE data is available."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "No DPU recovery data available" in result.output
+
+    def test_show_recovery_module_not_found(self):
+        """Test recovery command with specific module name that doesn't exist in DPU_STATE."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # Add some DPU data but not the one we'll query
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "true")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU5"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU recovery data not found for module DPU5" in result.output
+
+    def test_show_status_with_ready_status_smartswitch(self):
+        """Test show chassis modules status includes Ready-Status on SmartSwitch."""
+        conn = self._setup_dpu_state_db()
+        # status command also reads STATE_DB CHASSIS_MODULE_TABLE
+        conn.connect(conn.STATE_DB)
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "desc", "DPU Module")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "slot", "N/A")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "oper_status", "Online")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "serial", "SN001")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.is_bmc', return_value=False), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Ready-Status" in result.output
+        assert "true" in result.output
+
+    def test_show_recovery_unrecoverable_dpu(self):
+        """Test that unrecoverable DPU shows correct status."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU2"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU2" in result.output
+        assert "false" in result.output
+        assert "unrecoverable" in result.output
+        assert "2026-05-28 11:02:00 UTC" in result.output
+
+    def test_show_recovery_missing_fields(self):
+        """Test recovery command gracefully handles missing fields."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # DPU with only ready_status set
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "false")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "false" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"

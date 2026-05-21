@@ -1,0 +1,408 @@
+[
+  {
+    "OP": "SET",
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-90": {
+      "type": "dynamic",
+      "port": "Ethernet39"
+    }
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-25": {
+      "type": "dynamic",
+      "port": "Ethernet23"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-73": {
+      "type": "dynamic",
+      "port": "Ethernet54"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-39": {
+      "type": "dynamic",
+      "port": "Ethernet29"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-09": {
+      "type": "dynamic",
+      "port": "Ethernet9"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-36": {
+      "type": "dynamic",
+      "port": "Ethernet26"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-41": {
+      "type": "dynamic",
+      "port": "Ethernet58"
+    },
+    "OP": "SET"
+  },
+  {
+    "OP": "SET",
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-19": {
+      "type": "dynamic",
+      "port": "Ethernet56"
+    }
+  },
+  {
+    "OP": "SET",
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-37": {
+      "type": "dynamic",
+      "port": "Ethernet27"
+    }
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-49": {
+      "type": "dynamic",
+      "port": "Ethernet13"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-77": {
+      "type": "dynamic",
+      "port": "Ethernet23"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-80": {
+      "type": "dynamic",
+      "port": "Ethernet53"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-82": {
+      "type": "dynamic",
+      "port": "Ethernet10"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-09": {
+      "type": "dynamic",
+      "port": "Ethernet38"
+    },
+    "OP": "SET"
+  },
+  {
+    "OP": "SET",
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-06": {
+      "type": "dynamic",
+      "port": "Ethernet32"
+    }
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-20": {
+      "type": "dynamic",
+      "port": "Ethernet37"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-96": {
+      "type": "dynamic",
+      "port": "Ethernet41"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-34": {
+      "type": "dynamic",
+      "port": "Ethernet10"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-15": {
+      "type": "dynamic",
+      "port": "Ethernet29"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-31": {
+      "type": "dynamic",
+      "port": "Ethernet15"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-93": {
+      "type": "dynamic",
+      "port": "Ethernet38"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-48": {
+      "type": "dynamic",
+      "port": "Ethernet12"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-02": {
+      "type": "dynamic",
+      "port": "Ethernet39"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-65": {
+      "type": "dynamic",
+      "port": "Ethernet13"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-19": {
+      "type": "dynamic",
+      "port": "Ethernet25"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-09": {
+      "type": "dynamic",
+      "port": "Ethernet54"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:24-8A-07-4C-F5-18": {
+      "type": "dynamic",
+      "port": "Ethernet24"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-72": {
+      "type": "dynamic",
+      "port": "Ethernet37"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-51": {
+      "type": "dynamic",
+      "port": "Ethernet15"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-74": {
+      "type": "dynamic",
+      "port": "Ethernet14"
+    },
+    "OP": "SET"
+  },
+  {
+    "OP": "SET",
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-98": {
+      "type": "dynamic",
+      "port": "Ethernet55"
+    }
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-80": {
+      "type": "dynamic",
+      "port": "Ethernet26"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-42": {
+      "type": "dynamic",
+      "port": "Ethernet24"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-99": {
+      "type": "dynamic",
+      "port": "Ethernet52"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-18": {
+      "type": "dynamic",
+      "port": "Ethernet24"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-43": {
+      "type": "dynamic",
+      "port": "Ethernet36"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-46": {
+      "type": "dynamic",
+      "port": "Ethernet24"
+    },
+    "OP": "SET"
+  },
+  {
+    "OP": "SET",
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-76": {
+      "type": "dynamic",
+      "port": "Ethernet22"
+    }
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-81": {
+      "type": "dynamic",
+      "port": "Ethernet38"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-70": {
+      "type": "dynamic",
+      "port": "Ethernet10"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-68": {
+      "type": "dynamic",
+      "port": "Ethernet30"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-78": {
+      "type": "dynamic",
+      "port": "Ethernet6"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-50": {
+      "type": "dynamic",
+      "port": "Ethernet6"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-77": {
+      "type": "dynamic",
+      "port": "Ethernet31"
+    },
+    "OP": "SET"
+  },
+  {
+    "OP": "SET",
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-55": {
+      "type": "dynamic",
+      "port": "Ethernet56"
+    }
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-49": {
+      "type": "dynamic",
+      "port": "Ethernet27"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-22": {
+      "type": "dynamic",
+      "port": "Ethernet14"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-03": {
+      "type": "dynamic",
+      "port": "Ethernet56"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-77": {
+      "type": "dynamic",
+      "port": "Ethernet58"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-42": {
+      "type": "dynamic",
+      "port": "Ethernet6"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-56": {
+      "type": "dynamic",
+      "port": "Ethernet37"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-24": {
+      "type": "dynamic",
+      "port": "Ethernet22"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-03-13": {
+      "type": "dynamic",
+      "port": "Ethernet42"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-02-45": {
+      "type": "dynamic",
+      "port": "Ethernet54"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-29": {
+      "type": "dynamic",
+      "port": "Ethernet38"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-00-04": {
+      "type": "dynamic",
+      "port": "Ethernet12"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-01-06": {
+      "type": "dynamic",
+      "port": "Ethernet6"
+    },
+    "OP": "SET"
+  },
+  {
+    "FDB_TABLE:Vlan1000:72-06-00-01-04-14": {
+      "type": "dynamic",
+      "port": "Ethernet32"
+    },
+    "OP": "SET"
+  }
+]

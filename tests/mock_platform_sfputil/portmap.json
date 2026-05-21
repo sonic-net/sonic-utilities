@@ -1,0 +1,8 @@
+{
+    "portMap": {
+        "Ethernet29": 1
+    },
+    "RJ45Ports": [
+        1
+    ]
+}

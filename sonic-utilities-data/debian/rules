@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+build:
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	rm -rf build
+	dh_auto_clean
+
+override_dh_auto_build:
+	mkdir build
+	./generate_completions.py -o build

@@ -1,0 +1,17 @@
+{
+	"CONTAINER_FEATURE|swss": {
+		"auto_restart": "disabled",
+		"high_mem_alert": "disabled"
+	},
+	"CONTAINER_FEATURE|telemetry": {
+		"auto_restart": "enabled",
+		"high_mem_alert": "disabled"
+	},
+	"FEATURE|telemetry": {
+		"status": "enabled",
+		"has_timer": "True"
+	},
+	"FEATURE|syncd": {
+		"state": "enabled"
+	}
+}

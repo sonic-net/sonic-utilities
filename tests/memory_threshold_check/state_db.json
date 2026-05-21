@@ -1,0 +1,10 @@
+{
+    "DOCKER_STATS|b77647f643a2": {
+        "MEM%": "10",
+        "NAME": "swss1"
+    },
+    "DOCKER_STATS|b77647f643a3": {
+        "MEM%": "10",
+        "NAME": "telemetry"
+    }
+}

@@ -1,0 +1,127 @@
+module sonic-device_metadata {
+
+    yang-version 1.1;
+
+    namespace "http://github.com/Azure/sonic-device_metadata";
+    prefix device_metadata;
+
+    import ietf-yang-types {
+        prefix yang;
+    }
+
+    import ietf-inet-types {
+        prefix inet;
+    }
+
+    import sonic-types {
+        prefix stypes;
+        revision-date 2019-07-01;
+    }
+
+    description "DEVICE_METADATA YANG Module for SONiC OS";
+    
+    revision 2021-02-27 {
+        description "Added frr_mgmt_framework_config field to handle BGP 
+            config DB schema events to configure FRR protocols.";
+    }
+
+    revision 2020-04-10 {
+        description "First Revision";
+    }
+
+    container sonic-device_metadata {
+
+        container DEVICE_METADATA {
+
+            description "DEVICE_METADATA part of config_db.json";
+
+            container localhost{
+
+                leaf hwsku {
+                    type stypes:hwsku;
+                }
+
+                leaf default_bgp_status {
+                    type enumeration {
+                        enum up;
+                        enum down;
+                    }
+                    default up;
+                }
+
+                leaf docker_routing_config_mode {
+                    type string {
+                        pattern "unified|split|separated";
+                    }
+                    default "unified";
+                }
+
+                leaf hostname {
+                    type string {
+                        length 1..255;
+                    }
+                }
+
+                leaf platform {
+                    type string {
+                        length 1..255;
+                    }
+                }
+
+                leaf mac {
+                    type yang:mac-address;
+                }
+
+                leaf default_pfcwd_status {
+                    type enumeration {
+                        enum disable;
+                        enum enable;
+                    }
+                    default disable;
+                }
+
+                leaf bgp_asn {
+                    type inet:as-number;
+                }
+
+                leaf deployment_id {
+                    type uint32;
+                }
+
+                leaf non_existing_field {
+                    type uint32;
+                }
+
+                leaf type {
+                    type string {
+                        length 1..255;
+                        pattern "ToRRouter|LeafRouter|SpineChassisFrontendRouter|ChassisBackendRouter|ASIC";
+                    }
+                }
+
+                leaf buffer_model {
+                    description "This leaf is added for dynamic buffer calculation.
+                                The dynamic model represents the model in which the buffer configurations,
+                                like the headroom sizes and buffer pool sizes, are dynamically calculated based
+                                on the ports' speed, cable length, and MTU. This model is used by Mellanox so far.
+                                The traditional model represents the model in which all the buffer configurations
+                                are statically configured in CONFIG_DB tables. This is the default model used by all other vendors";
+                    type string {
+                        pattern "dynamic|traditional";
+                    }
+                }
+
+                leaf frr_mgmt_framework_config {
+                    type boolean;
+                    description "FRR configurations are handled by sonic-frr-mgmt-framework module when set to true, 
+                        otherwise, sonic-bgpcfgd handles the FRR configurations based on the predefined templates.";
+                    default "false";
+                }
+            }
+            /* end of container localhost */
+        }
+        /* end of container DEVICE_METADATA */
+    }
+    /* end of top level container */
+}
+/* end of module sonic-device_metadata */

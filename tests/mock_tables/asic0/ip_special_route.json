@@ -1,0 +1,197 @@
+{
+    "10.3.0.4/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "vrf": 2,
+                    "recursive": true,
+                    "blackhole": true,
+                    "unreachable": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 726,
+                    "interfaceName": "PortChannel1014"
+                }
+            ],
+            "prefix": "10.3.0.4/31",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ],
+    "10.5.0.4/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "reject": true,
+                    "unreachable": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel1016"
+                }
+            ],
+            "prefix": "10.5.0.4/31",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ],
+    "10.5.0.8/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "admin-prohibited": true,
+                    "unreachable": true,
+                    "onLink": true,
+                    "source": "10.2.3.4",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel1015"
+                }
+            ],
+            "prefix": "10.5.0.8/31",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ],
+    "10.6.0.8/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "admin-prohibited": true,
+                    "fib": true,
+                    "flags": 7,
+                    "interfaceIndex": 737,
+                    "interfaceName": "PortChannel1025"
+                }
+            ],
+            "prefix": "10.6.0.8/31",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ],
+    "10.6.5.0/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "admin-prohibited": true,
+                    "fib": true,
+                    "flags": 7,
+                    "interfaceIndex": 737,
+                    "interfaceName": "PortChannel1025"
+                }
+            ],
+            "prefix": "10.6.5.0/31",
+            "protocol": "connected",
+            "selected": true,
+            "queued": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ],
+    "10.6.5.3/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "admin-prohibited": true,
+                    "fib": true,
+                    "flags": 7,
+                    "interfaceIndex": 737,
+                    "interfaceName": "PortChannel1025"
+                }
+            ],
+            "prefix": "10.6.5.3/31",
+            "protocol": "connected",
+            "selected": true,
+            "failed": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ],
+    "10.7.0.8/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "admin-prohibited": true,
+                    "unreachable": true,
+                    "onLink": true,
+                    "source": "10.2.3.4",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 729,
+                    "interfaceName": "PortChannel1017",
+                    "labels": [0,14,15,1212]
+                }
+            ],
+            "prefix": "10.7.0.8/31",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ]
+}

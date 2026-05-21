@@ -1,0 +1,23 @@
+{
+    "COPP_TRAP_TABLE|snmp_grp": {
+        "state": "ok"
+    },
+    "COPP_GROUP_TABLE|queue4_group2": {
+        "state": "ok"
+    },
+    "COPP_TRAP_TABLE|arp": {
+        "state": "ok"
+    },
+    "COPP_TRAP_TABLE|sflow": {
+        "state": "ok"
+    },
+    "COPP_GROUP_TABLE|queue2_group1": {
+        "state": "ok"
+    },
+    "COPP_GROUP_TABLE|queue4_group1": {
+        "state": "ok"
+    },
+    "COPP_TRAP_TABLE|bgp": {
+        "state": "ok"
+    }
+}

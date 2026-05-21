@@ -1,0 +1,16 @@
+{
+    "LOOPBACK_INTERFACE": {
+        "Loopback0": {},
+        "Loopback0|10.1.0.32/32": {},
+        "Loopback0|1100:1::32/128": {},
+        "Loopback1": {
+            "vrf_name": "Vrf_02"
+        },
+        "Loopback1|20.2.0.32/32": {},
+        "Loopback1|2200:2::32/128": {}
+    },
+    "VRF": {
+        "Vrf_01": {},
+        "Vrf_02": {}
+    }
+}

@@ -1,0 +1,36 @@
+{
+	"acl": {
+		"acl-sets": {
+			"acl-set": {
+                "DATAACL": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"l2": {
+									"config": {
+										"vlan-id": "nan"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "20.0.0.2/32",
+										"destination-ip-address": "30.0.0.3/32"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

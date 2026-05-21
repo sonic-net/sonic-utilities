@@ -1,0 +1,35 @@
+{
+    "PORT": {
+        "Ethernet0": {
+            "alias": "Eth1",
+            "lanes": "65, 66, 67, 68",
+            "description": "Ethernet0 100G link",
+            "speed": "100000"
+        }
+    },
+    "ACL_TABLE": {
+        "NO-NSW-PACL-V4": {
+            "type": "L3",
+            "policy_desc": "NO-NSW-PACL-V4",
+            "ports": [
+                "Ethernet0"
+            ]
+        }
+    },
+    "VLAN_MEMBER": {
+        "Vlan100|Ethernet0": {
+            "tagging_mode": "untagged"
+        }
+    },
+    "VLAN": {
+        "Vlan100": {
+            "vlanid": "100",
+            "dhcp_servers": [
+                "192.0.0.1",
+                "192.0.0.2",
+                "192.0.0.3",
+                "192.0.0.4"
+            ]
+        }
+    }
+}

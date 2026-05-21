@@ -1,0 +1,149 @@
+{
+	"acl": {
+		"acl-sets": {
+			"acl-set": {
+				"sonic-ssh-only": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "192.168.0.0/18"
+									}
+								},
+								"transport": {
+									"config": {
+										"destination-port": "22"
+									}
+								}
+							},
+							"2": {
+								"config": {
+									"sequence-id": 2
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "192.168.192.0/18"
+									}
+								},
+								"transport": {
+									"config": {
+										"destination-port": "22"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "sonic-ssh-only"
+					}
+				},
+				"Sonic-SNMP_ACL": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_UDP",
+										"source-ip-address": "192.168.0.0/18"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "Sonic-SNMP_ACL"
+					}
+				},
+				"sonic-everflow": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "127.0.0.1/32",
+										"destination-ip-address": "127.0.0.1/32"
+									}
+								},
+								"transport": {
+									"config": {
+										"source-port": "0",
+										"destination-port": "0"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "sonic-everflow"
+					}
+				},
+				"everflowV6": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "::1/128",
+										"destination-ip-address": "::1/128"
+									}
+								},
+								"transport": {
+									"config": {
+										"source-port": "0",
+										"destination-port": "0"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "everflowV6"
+					}
+				},
+				"TimeStampHeader": "Configuration last updated on: [9/13/2018 11:00:16 AM]"
+			}
+		}
+	}
+}

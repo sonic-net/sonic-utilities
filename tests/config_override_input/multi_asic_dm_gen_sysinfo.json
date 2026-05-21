@@ -1,0 +1,53 @@
+{
+    "localhost": {
+        "DEVICE_METADATA": {
+            "localhost": {
+                "default_bgp_status": "down",
+                "default_pfcwd_status": "enable",
+                "deployment_id": "1",
+                "docker_routing_config_mode": "separated",
+                "hostname": "sonic-switch",
+                "hwsku": "Mellanox-SN3800-D112C8",
+                "peer_switch": "sonic-switch",
+                "type": "ToRRouter",
+                "suppress-fib-pending": "enabled"
+            }
+        }
+    },
+    "asic0": {
+        "DEVICE_METADATA": {
+            "localhost": {
+                "asic_name": "asic0",
+                "bgp_asn": "65100",
+                "cloudtype": "None",
+                "default_bgp_status": "down",
+                "default_pfcwd_status": "enable",
+                "deployment_id": "None",
+                "docker_routing_config_mode": "separated",
+                "hostname": "sonic",
+                "hwsku": "multi_asic",
+                "region": "None",
+                "sub_role": "FrontEnd",
+                "type": "LeafRouter"
+            }
+        }
+    },
+    "asic1": {
+        "DEVICE_METADATA": {
+            "localhost": {
+                "asic_name": "asic1",
+                "bgp_asn": "65100",
+                "cloudtype": "None",
+                "default_bgp_status": "down",
+                "default_pfcwd_status": "enable",
+                "deployment_id": "None",
+                "docker_routing_config_mode": "separated",
+                "hostname": "sonic",
+                "hwsku": "multi_asic",
+                "region": "None",
+                "sub_role": "BackEnd",
+                "type": "LeafRouter"
+            }
+        }
+    }
+}

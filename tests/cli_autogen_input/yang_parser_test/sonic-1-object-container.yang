@@ -1,0 +1,23 @@
+module sonic-1-object-container {
+
+    yang-version 1.1;
+
+    namespace "http://github.com/Azure/s-1-object";
+    prefix s-1-object;
+
+    container sonic-1-object-container {
+        /* sonic-1-object-container - top level container */
+
+        container TABLE_1 {
+            /* TABLE_1 - table container */
+
+            description "TABLE_1 description";
+
+            container OBJECT_1 {
+                /* OBJECT_1 - object container */
+
+                description "OBJECT_1 description";
+            }
+        }
+    }
+}

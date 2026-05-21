@@ -1,0 +1,23 @@
+module sonic-2-table-containers {
+
+    yang-version 1.1;
+
+    namespace "http://github.com/Azure/s-2-table";
+    prefix s-2-table;
+
+    container sonic-2-table-containers {
+        /* sonic-2-table-containers - top level container */ 
+
+        container TABLE_1 {
+            /* TABLE_1 - table container */
+
+            description "TABLE_1 description";
+        }
+
+        container TABLE_2 {
+            /* TABLE_2 - table container */
+
+            description "TABLE_2 description";
+        }
+    }
+}

@@ -1,0 +1,109 @@
+{
+    "EMPTYING_A_CONFIGDB_TABLE__FAILURE": {
+        "desc": "Emptying a configdb table fails because empty tables are not allowed in configdb. User should remove whole table instead e.g. remove /ACL_TABLE in this case.",
+        "current_config": {
+            "ACL_TABLE": {
+                "EVERFLOW": {
+                    "policy_desc": "EVERFLOW",
+                    "ports": [
+                        "Ethernet0"
+                    ],
+                    "stage": "ingress",
+                    "type": "MIRROR"
+                }
+            },
+            "PORT": {
+                "Ethernet0": {
+                    "alias": "Eth1",
+                    "lanes": "65, 66, 67, 68",
+                    "description": "Ethernet0 100G link",
+                    "speed": "100000"
+                }
+            }
+        },
+        "patch": [
+            {"op": "remove", "path": "/ACL_TABLE/EVERFLOW"}
+        ],
+        "expected_error_substrings": [
+            "There is no possible sorting"
+        ]
+    },
+    "ADDING_AN_EMPTY_CONFIGDB_TABLE__FAILURE": {
+        "desc": "Adding an empty configdb table fail because empty tables are not allowed in configdb.",
+        "current_config": {},
+        "patch": [
+            {"op": "add", "path": "/VLAN", "value": {}}
+        ],
+        "expected_error_substrings": [
+            "There is no possible sorting"
+        ]
+    },
+    "EMPTYING_MULTIPLE_CONFIGDB_TABLE__FAILURE": {
+        "desc": "Emptying multiple configdb table fails because empty tables are not allowed in configdb. User should remove whole tables instead  e.g. remove /PORT and /ACL_TABLE in this case.",
+        "current_config": {
+            "ACL_TABLE": {
+                "EVERFLOW": {
+                    "policy_desc": "EVERFLOW",
+                    "ports": [
+                        "Ethernet0"
+                    ],
+                    "stage": "ingress",
+                    "type": "MIRROR"
+                }
+            },
+            "PORT": {
+                "Ethernet0": {
+                    "alias": "Eth1",
+                    "lanes": "65, 66, 67, 68",
+                    "description": "Ethernet0 100G link",
+                    "speed": "100000"
+                }
+            }
+        },
+        "patch": [
+            {"op": "remove", "path": "/ACL_TABLE/EVERFLOW"},
+            {"op": "remove", "path": "/PORT/Ethernet0"}
+        ],
+        "expected_error_substrings": [
+            "There is no possible sorting"
+        ]
+    },
+    "EMPTYING_A_CONFIGDB_TABLE_AND_CONFIG_HAS_NON_YANG_TABLE__FAILURE": {
+        "desc": [
+            "Emptying a configdb table fails because empty tables are not allowed in configdb.",
+            "User should remove whole table instead e.g. remove /ACL_TABLE in this case.",
+            "Also there is a table without YANG in the config, which the sorting logic will loop over.",
+            "The sorting logic should fail with GenericConfigUpdaterError: 'There is no possible sorting' and not KeyError: 'TABLE_WITHOUT_YANG'"
+        ],
+        "current_config": {
+            "TABLE_WITHOUT_YANG": {
+                "key1": "value1",
+                "key2": "value2"
+            },
+            "ACL_TABLE": {
+                "EVERFLOW": {
+                    "policy_desc": "EVERFLOW",
+                    "ports": [
+                        "Ethernet0"
+                    ],
+                    "stage": "ingress",
+                    "type": "MIRROR"
+                }
+            },
+            "PORT": {
+                "Ethernet0": {
+                    "alias": "Eth1",
+                    "lanes": "65, 66, 67, 68",
+                    "description": "Ethernet0 100G link",
+                    "speed": "100000"
+                }
+            }
+        },
+        "patch": [
+            {"op": "remove", "path": "/ACL_TABLE/EVERFLOW"}
+        ],
+        "expected_error_substrings": [
+            "There is no possible sorting"
+        ]
+    }
+}

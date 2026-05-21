@@ -1,0 +1,29 @@
+#!/bin/bash
+
+#
+# =============== Managed by SONiC Package Manager. DO NOT EDIT! ===============
+#             auto-generated from {{ source }} by sonic-package-manager
+#
+
+service="{{ manifest.service.name }}"
+dump_command="{{ manifest.package['debug-dump'] }}"
+container_re="^${service}[0-9]*$"
+{% raw %}
+container_ids="$(docker ps -f name=${container_re} -f status=running --format {{.Names}})"
+{% endraw %}
+tmp_dir=$(mktemp -d)
+tmp_dump_dir="$tmp_dir/$service"
+tmp_archive=$(mktemp)
+
+mkdir -p "$tmp_dump_dir"
+
+for container_id in $container_ids; do
+    docker exec -t "${container_id}" ${dump_command} &> "${tmp_dump_dir}/${container_id}"
+done
+
+
+tar -C $(dirname $tmp_dump_dir) -cf $tmp_archive $service
+
+cat $tmp_archive
+rm $tmp_archive
+rm -rf $tmp_dir

@@ -1,0 +1,29 @@
+{
+    "PORTCHANNEL|PortChannel001": {
+        "admin_status": "up",
+        "lacp_key": "auto",
+        "min_links": "1",
+        "mtu": "9100"
+    },
+    "PORTCHANNEL|PortChannel002": {
+        "admin_status": "up",
+        "lacp_key": "auto",
+        "min_links": "1",
+        "mtu": "9100"
+    },
+    "PORTCHANNEL|PortChannel003": {
+        "admin_status": "up",
+        "lacp_key": "auto",
+        "min_links": "1",
+        "mtu": "9100"
+    },
+    "PORTCHANNEL_MEMBER|PortChannel001|Ethernet0": {
+        "NULL" : "NULL"
+    },
+    "PORTCHANNEL_MEMBER|PortChannel001|Ethernet4": {
+        "NULL" : "NULL"
+    },
+    "PORTCHANNEL_MEMBER|PortChannel001|Ethernet8": {
+        "NULL" : "NULL"
+    }
+}

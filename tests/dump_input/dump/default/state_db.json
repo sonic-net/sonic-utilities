@@ -1,0 +1,66 @@
+{
+        "PORT_TABLE|Ethernet176":{
+                "state" : "ok",
+                "netdev_oper_status" : "up"
+        },
+        "PORT_TABLE|Ethernet160":{
+                "state" : "ok",
+                "netdev_oper_status" : "up"
+        },
+        "PORT_TABLE|Ethernet164":{
+                "state" : "ok",
+                "netdev_oper_status" : "up"
+        },
+        "PORT_TABLE|Ethernet0": {
+                "speed" : "100000",
+                "supported_speeds": "10000,25000,40000,100000"
+        },
+        "REBOOT_CAUSE|2020_10_09_04_53_58": {
+                "cause": "warm-reboot",
+                "time": "Fri Oct  9 04:51:47 UTC 2020",
+                "user": "admin",
+                "comment": "N/A"
+        },
+        "REBOOT_CAUSE|2020_10_09_02_33_06": {
+                "cause": "reboot",
+                "time": "Fri Oct  9 02:29:44 UTC 2020",
+                "user": "admin",
+                "comment": "N/A"
+        },
+        "CHASSIS_MODULE_TABLE|FABRIC-CARD1": {
+                "desc": "fabric-card",
+                "oper_status": "Offline",
+                "slot": "18"
+        },
+        "VXLAN_TUNNEL_TABLE|EVPN_25.25.25.25": {
+                "src_ip": "1.1.1.1",
+                "dst_ip": "25.25.25.25",
+                "tnl_src": "EVPN",
+                "operstatus": "down"
+        },
+        "VXLAN_TUNNEL_TABLE|EVPN_25.25.25.26": {
+                "src_ip": "1.1.1.1",
+                "dst_ip": "25.25.25.26",
+                "tnl_src": "EVPN",
+                "operstatus": "down"
+        },
+        "VXLAN_TUNNEL_TABLE|EVPN_25.25.25.27": {
+                "src_ip": "1.1.1.1",
+                "dst_ip": "25.25.25.27",
+                "tnl_src": "EVPN",
+                "operstatus": "down"
+        },
+        "FAN_INFO|fan1": {
+                "drawer_name": "drawer1",
+                "presence": "True",
+                "model": "N/A",
+                "serial": "N/A",
+                "status": "True",
+                "direction": "intake",
+                "speed": "30",
+                "speed_tolerance": "50",
+                "speed_target": "20",
+                "led_status": "red",
+                "timestamp": "20200813 01:32:30"
+        }
+}

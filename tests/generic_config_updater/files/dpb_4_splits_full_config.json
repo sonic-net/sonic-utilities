@@ -1,0 +1,65 @@
+{
+    "PORT": {
+        "Ethernet0": {
+            "alias": "Eth1/1",
+            "lanes": "65",
+            "description": "",
+            "speed": "10000"
+        },
+        "Ethernet1": {
+            "alias": "Eth1/2",
+            "lanes": "66",
+            "description": "",
+            "speed": "10000"
+        },
+        "Ethernet2": {
+            "alias": "Eth1/3",
+            "lanes": "67",
+            "description": "",
+            "speed": "10000"
+        },
+        "Ethernet3": {
+            "alias": "Eth1/4",
+            "lanes": "68",
+            "description": "",
+            "speed": "10000"
+        }
+    },
+    "ACL_TABLE": {
+        "NO-NSW-PACL-V4": {
+            "type": "L3",
+            "policy_desc": "NO-NSW-PACL-V4",
+            "ports": [
+                "Ethernet0",
+                "Ethernet1",
+                "Ethernet2",
+                "Ethernet3"
+            ]
+        }
+    },
+    "VLAN_MEMBER": {
+        "Vlan100|Ethernet0": {
+            "tagging_mode": "untagged"
+        },
+        "Vlan100|Ethernet1": {
+            "tagging_mode": "untagged"
+        },
+        "Vlan100|Ethernet2": {
+            "tagging_mode": "untagged"
+        },
+        "Vlan100|Ethernet3": {
+            "tagging_mode": "untagged"
+        }
+    },
+    "VLAN": {
+        "Vlan100": {
+            "vlanid": "100",
+            "dhcp_servers": [
+                "192.0.0.1",
+                "192.0.0.2",
+                "192.0.0.3",
+                "192.0.0.4"
+            ]
+        }
+    }
+}

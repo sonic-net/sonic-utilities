@@ -1,0 +1,10 @@
+{
+    "COUNTERS_PORT_NAME_MAP": {
+            "Ethernet0": "oid:0x1000000000528",
+            "Ethernet4": "oid:0x1000000000549",
+            "Ethernet8": "oid:0x1000000000550"
+    },
+    "COUNTERS_LAG_NAME_MAP": {
+            "": ""
+    }
+}

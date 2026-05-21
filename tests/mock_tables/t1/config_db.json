@@ -1,0 +1,3513 @@
+{
+  "AAA|authentication": {
+    "expireat": 1602451533.230674, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "ACL_TABLE|DATAACL": {
+    "expireat": 1602451533.237415, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "policy_desc": "DATAACL", 
+      "ports@": "PortChannel0002,PortChannel0005,PortChannel0008,PortChannel0011,PortChannel0014,PortChannel0017,PortChannel0020,PortChannel0023,Ethernet64,Ethernet68,Ethernet72,Ethernet76,Ethernet80,Ethernet84,Ethernet88,Ethernet92,Ethernet96,Ethernet100,Ethernet104,Ethernet108,Ethernet112,Ethernet116,Ethernet120,Ethernet124", 
+      "stage": "ingress", 
+      "type": "L3"
+    }
+  }, 
+  "ACL_TABLE|EVERFLOW": {
+    "expireat": 1602451533.232414, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "policy_desc": "EVERFLOW", 
+      "ports@": "PortChannel0002,PortChannel0005,PortChannel0008,PortChannel0011,PortChannel0014,PortChannel0017,PortChannel0020,PortChannel0023,Ethernet88,Ethernet84,Ethernet80,Ethernet96,Ethernet76,Ethernet92,Ethernet104,Ethernet100,Ethernet64,Ethernet112,Ethernet68,Ethernet120,Ethernet72,Ethernet124,Ethernet108,Ethernet116", 
+      "stage": "ingress", 
+      "type": "MIRROR"
+    }
+  }, 
+  "ACL_TABLE|EVERFLOWV6": {
+    "expireat": 1602451533.2328, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "policy_desc": "EVERFLOWV6", 
+      "ports@": "PortChannel0002,PortChannel0005,PortChannel0008,PortChannel0011,PortChannel0014,PortChannel0017,PortChannel0020,PortChannel0023,Ethernet88,Ethernet84,Ethernet80,Ethernet96,Ethernet76,Ethernet92,Ethernet104,Ethernet100,Ethernet64,Ethernet112,Ethernet68,Ethernet120,Ethernet72,Ethernet124,Ethernet108,Ethernet116", 
+      "stage": "ingress", 
+      "type": "MIRRORV6"
+    }
+  }, 
+  "ACL_TABLE|SNMP_ACL": {
+    "expireat": 1602451533.235009, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "policy_desc": "SNMP_ACL", 
+      "services@": "SNMP", 
+      "stage": "ingress", 
+      "type": "CTRLPLANE"
+    }
+  }, 
+  "ACL_TABLE|SSH_ONLY": {
+    "expireat": 1602451533.232844, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "policy_desc": "SSH_ONLY", 
+      "services@": "SSH", 
+      "stage": "ingress", 
+      "type": "CTRLPLANE"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.1": {
+    "expireat": 1602451533.236033, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.0", 
+      "name": "ARISTA01T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.13": {
+    "expireat": 1602451533.234409, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.12", 
+      "name": "ARISTA07T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.17": {
+    "expireat": 1602451533.233372, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.16", 
+      "name": "ARISTA09T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.21": {
+    "expireat": 1602451533.231964, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.20", 
+      "name": "ARISTA11T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.25": {
+    "expireat": 1602451533.236885, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.24", 
+      "name": "ARISTA13T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.29": {
+    "expireat": 1602451533.231502, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.28", 
+      "name": "ARISTA15T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.33": {
+    "expireat": 1602451533.233927, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64001", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.32", 
+      "name": "ARISTA01T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.35": {
+    "expireat": 1602451533.231667, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64002", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.34", 
+      "name": "ARISTA02T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.37": {
+    "expireat": 1602451533.239239, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64003", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.36", 
+      "name": "ARISTA03T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.39": {
+    "expireat": 1602451533.2317991, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64004", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.38", 
+      "name": "ARISTA04T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.41": {
+    "expireat": 1602451533.239324, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64005", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.40", 
+      "name": "ARISTA05T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.43": {
+    "expireat": 1602451533.23155, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64006", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.42", 
+      "name": "ARISTA06T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.45": {
+    "expireat": 1602451533.2359831, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64007", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.44", 
+      "name": "ARISTA07T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.47": {
+    "expireat": 1602451533.236357, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64008", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.46", 
+      "name": "ARISTA08T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.49": {
+    "expireat": 1602451533.2382681, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64009", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.48", 
+      "name": "ARISTA09T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.5": {
+    "expireat": 1602451533.2311392, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.4", 
+      "name": "ARISTA03T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.51": {
+    "expireat": 1602451533.235443, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64010", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.50", 
+      "name": "ARISTA10T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.53": {
+    "expireat": 1602451533.233278, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64011", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.52", 
+      "name": "ARISTA11T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.55": {
+    "expireat": 1602451533.233756, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64012", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.54", 
+      "name": "ARISTA12T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.57": {
+    "expireat": 1602451533.234494, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64013", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.56", 
+      "name": "ARISTA13T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.59": {
+    "expireat": 1602451533.2308462, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64014", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.58", 
+      "name": "ARISTA14T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.61": {
+    "expireat": 1602451533.236661, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64015", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.60", 
+      "name": "ARISTA15T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.63": {
+    "expireat": 1602451533.230003, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64016", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.62", 
+      "name": "ARISTA16T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|10.0.0.9": {
+    "expireat": 1602451533.237143, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "10.0.0.8", 
+      "name": "ARISTA05T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::12": {
+    "expireat": 1602451533.237245, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::11", 
+      "name": "ARISTA05T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::1a": {
+    "expireat": 1602451533.232311, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::19", 
+      "name": "ARISTA07T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::2": {
+    "expireat": 1602451533.2307231, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::1", 
+      "name": "ARISTA01T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::22": {
+    "expireat": 1602451533.238418, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::21", 
+      "name": "ARISTA09T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::2a": {
+    "expireat": 1602451533.235492, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::29", 
+      "name": "ARISTA11T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::32": {
+    "expireat": 1602451533.238214, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::31", 
+      "name": "ARISTA13T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::3a": {
+    "expireat": 1602451533.2370641, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::39", 
+      "name": "ARISTA15T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::42": {
+    "expireat": 1602451533.237585, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64001", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::41", 
+      "name": "ARISTA01T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::46": {
+    "expireat": 1602451533.23423, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64002", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::45", 
+      "name": "ARISTA02T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::4a": {
+    "expireat": 1602451533.234146, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64003", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::49", 
+      "name": "ARISTA03T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::4e": {
+    "expireat": 1602451533.234039, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64004", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::4d", 
+      "name": "ARISTA04T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::52": {
+    "expireat": 1602451533.234741, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64005", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::51", 
+      "name": "ARISTA05T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::56": {
+    "expireat": 1602451533.232028, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64006", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::55", 
+      "name": "ARISTA06T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::5a": {
+    "expireat": 1602451533.2339752, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64007", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::59", 
+      "name": "ARISTA07T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::5e": {
+    "expireat": 1602451533.230302, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64008", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::5d", 
+      "name": "ARISTA08T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::62": {
+    "expireat": 1602451533.23007, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64009", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::61", 
+      "name": "ARISTA09T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::66": {
+    "expireat": 1602451533.232722, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64010", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::65", 
+      "name": "ARISTA10T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::6a": {
+    "expireat": 1602451533.229893, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64011", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::69", 
+      "name": "ARISTA11T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::6e": {
+    "expireat": 1602451533.235649, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64012", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::6d", 
+      "name": "ARISTA12T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::72": {
+    "expireat": 1602451533.23557, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64013", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::71", 
+      "name": "ARISTA13T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::76": {
+    "expireat": 1602451533.236406, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64014", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::75", 
+      "name": "ARISTA14T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::7a": {
+    "expireat": 1602451533.231329, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64015", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::79", 
+      "name": "ARISTA15T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::7e": {
+    "expireat": 1602451533.232964, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "64016", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::7d", 
+      "name": "ARISTA16T0", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "BGP_NEIGHBOR|fc00::a": {
+    "expireat": 1602451533.232613, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "asn": "65200", 
+      "holdtime": "10", 
+      "keepalive": "3", 
+      "local_addr": "fc00::9", 
+      "name": "ARISTA03T2", 
+      "nhopself": "0", 
+      "rrclient": "0"
+    }
+  }, 
+  "CONFIG_DB_INITIALIZED": {
+    "expireat": 1602451533.232753, 
+    "ttl": -0.001, 
+    "type": "string", 
+    "value": "1"
+  }, 
+  "CRM|Config": {
+    "expireat": 1602451533.236268, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "acl_counter_high_threshold": "85", 
+      "acl_counter_low_threshold": "70", 
+      "acl_counter_threshold_type": "percentage", 
+      "acl_entry_high_threshold": "85", 
+      "acl_entry_low_threshold": "70", 
+      "acl_entry_threshold_type": "percentage", 
+      "acl_group_high_threshold": "85", 
+      "acl_group_low_threshold": "70", 
+      "acl_group_threshold_type": "percentage", 
+      "acl_table_high_threshold": "85", 
+      "acl_table_low_threshold": "70", 
+      "acl_table_threshold_type": "percentage", 
+      "fdb_entry_high_threshold": "85", 
+      "fdb_entry_low_threshold": "70", 
+      "fdb_entry_threshold_type": "percentage", 
+      "ipv4_neighbor_high_threshold": "85", 
+      "ipv4_neighbor_low_threshold": "70", 
+      "ipv4_neighbor_threshold_type": "percentage", 
+      "ipv4_nexthop_high_threshold": "85", 
+      "ipv4_nexthop_low_threshold": "70", 
+      "ipv4_nexthop_threshold_type": "percentage", 
+      "ipv4_route_high_threshold": "85", 
+      "ipv4_route_low_threshold": "70", 
+      "ipv4_route_threshold_type": "percentage", 
+      "ipv6_neighbor_high_threshold": "85", 
+      "ipv6_neighbor_low_threshold": "70", 
+      "ipv6_neighbor_threshold_type": "percentage", 
+      "ipv6_nexthop_high_threshold": "85", 
+      "ipv6_nexthop_low_threshold": "70", 
+      "ipv6_nexthop_threshold_type": "percentage", 
+      "ipv6_route_high_threshold": "85", 
+      "ipv6_route_low_threshold": "70", 
+      "ipv6_route_threshold_type": "percentage", 
+      "nexthop_group_high_threshold": "85", 
+      "nexthop_group_low_threshold": "70", 
+      "nexthop_group_member_high_threshold": "85", 
+      "nexthop_group_member_low_threshold": "70", 
+      "nexthop_group_member_threshold_type": "percentage", 
+      "nexthop_group_threshold_type": "percentage", 
+      "polling_interval": "300"
+    }
+  }, 
+  "DEVICE_METADATA|localhost": {
+    "expireat": 1602451533.2385812, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "bgp_asn": "65100", 
+      "cloudtype": "None", 
+      "default_bgp_status": "up", 
+      "default_pfcwd_status": "disable", 
+      "deployment_id": "1", 
+      "docker_routing_config_mode": "separated", 
+      "hostname": "str2-7050cx3-acs-03", 
+      "hwsku": "Arista-7050CX3-32S-C32", 
+      "mac": "c0:d6:82:b8:ca:51", 
+      "platform": "x86_64-arista_7050cx3_32s", 
+      "region": "None", 
+      "type": "LeafRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA01T0": {
+    "expireat": 1602451533.2335072, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.64", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA01T2": {
+    "expireat": 1602451533.236954, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.56", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA02T0": {
+    "expireat": 1602451533.230531, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.65", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA03T0": {
+    "expireat": 1602451533.234275, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.66", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA03T2": {
+    "expireat": 1602451533.239072, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.57", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA04T0": {
+    "expireat": 1602451533.237859, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.67", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA05T0": {
+    "expireat": 1602451533.235678, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.68", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA05T2": {
+    "expireat": 1602451533.236522, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.58", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA06T0": {
+    "expireat": 1602451533.2309952, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.69", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA07T0": {
+    "expireat": 1602451533.237941, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.70", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA07T2": {
+    "expireat": 1602451533.2378302, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.59", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA08T0": {
+    "expireat": 1602451533.234098, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.71", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA09T0": {
+    "expireat": 1602451533.235521, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.72", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA09T2": {
+    "expireat": 1602451533.232564, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.60", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA10T0": {
+    "expireat": 1602451533.238831, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.73", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA11T0": {
+    "expireat": 1602451533.2375312, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.74", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA11T2": {
+    "expireat": 1602451533.235327, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.61", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA12T0": {
+    "expireat": 1602451533.233537, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.75", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA13T0": {
+    "expireat": 1602451533.231091, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.76", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA13T2": {
+    "expireat": 1602451533.2338781, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.62", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA14T0": {
+    "expireat": 1602451533.23215, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.77", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA15T0": {
+    "expireat": 1602451533.2364511, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.78", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA15T2": {
+    "expireat": 1602451533.2357612, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.63", 
+      "type": "SpineRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR_METADATA|ARISTA16T0": {
+    "expireat": 1602451533.234785, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "hwsku": "Arista-VM", 
+      "lo_addr": "None", 
+      "mgmt_addr": "172.16.137.79", 
+      "type": "ToRRouter"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet0": {
+    "expireat": 1602451533.2348762, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA01T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet100": {
+    "expireat": 1602451533.238084, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA10T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet104": {
+    "expireat": 1602451533.233776, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA11T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet108": {
+    "expireat": 1602451533.23498, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA12T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet112": {
+    "expireat": 1602451533.236741, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA13T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet116": {
+    "expireat": 1602451533.2350302, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA14T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet12": {
+    "expireat": 1602451533.2320921, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA03T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet120": {
+    "expireat": 1602451533.2329152, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA15T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet124": {
+    "expireat": 1602451533.2307432, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA16T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet16": {
+    "expireat": 1602451533.232985, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA05T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet20": {
+    "expireat": 1602451533.23866, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA05T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet24": {
+    "expireat": 1602451533.2314532, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA07T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet28": {
+    "expireat": 1602451533.232347, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA07T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet32": {
+    "expireat": 1602451533.238318, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA09T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet36": {
+    "expireat": 1602451533.235781, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA09T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet4": {
+    "expireat": 1602451533.2337952, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA01T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet40": {
+    "expireat": 1602451533.233652, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA11T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet44": {
+    "expireat": 1602451533.2393432, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA11T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet48": {
+    "expireat": 1602451533.239093, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA13T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet52": {
+    "expireat": 1602451533.236905, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA13T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet56": {
+    "expireat": 1602451533.231174, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA15T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet60": {
+    "expireat": 1602451533.231266, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA15T2", 
+      "port": "Ethernet2"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet64": {
+    "expireat": 1602451533.236836, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA01T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet68": {
+    "expireat": 1602451533.231403, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA02T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet72": {
+    "expireat": 1602451533.2375002, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA03T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet76": {
+    "expireat": 1602451533.23443, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA04T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet8": {
+    "expireat": 1602451533.236581, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA03T2", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet80": {
+    "expireat": 1602451533.234944, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA05T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet84": {
+    "expireat": 1602451533.23709, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA06T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet88": {
+    "expireat": 1602451533.2341821, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA07T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet92": {
+    "expireat": 1602451533.2367811, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA08T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DEVICE_NEIGHBOR|Ethernet96": {
+    "expireat": 1602451533.2318192, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "name": "ARISTA09T0", 
+      "port": "Ethernet1"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.1": {
+    "expireat": 1602451533.2337072, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.10": {
+    "expireat": 1602451533.236063, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.11": {
+    "expireat": 1602451533.237461, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.12": {
+    "expireat": 1602451533.236553, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.13": {
+    "expireat": 1602451533.238847, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.14": {
+    "expireat": 1602451533.23243, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.15": {
+    "expireat": 1602451533.2320712, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.16": {
+    "expireat": 1602451533.233099, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.17": {
+    "expireat": 1602451533.230386, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.18": {
+    "expireat": 1602451533.2343051, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.19": {
+    "expireat": 1602451533.236596, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.2": {
+    "expireat": 1602451533.23878, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.20": {
+    "expireat": 1602451533.233293, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.21": {
+    "expireat": 1602451533.234162, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.22": {
+    "expireat": 1602451533.232377, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.23": {
+    "expireat": 1602451533.234568, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.24": {
+    "expireat": 1602451533.238862, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.25": {
+    "expireat": 1602451533.230317, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.26": {
+    "expireat": 1602451533.237641, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.27": {
+    "expireat": 1602451533.236048, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.28": {
+    "expireat": 1602451533.2305, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.29": {
+    "expireat": 1602451533.233433, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.3": {
+    "expireat": 1602451533.2332141, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.30": {
+    "expireat": 1602451533.234638, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.31": {
+    "expireat": 1602451533.2381492, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.32": {
+    "expireat": 1602451533.238115, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.33": {
+    "expireat": 1602451533.238675, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.34": {
+    "expireat": 1602451533.233387, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.35": {
+    "expireat": 1602451533.233478, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.36": {
+    "expireat": 1602451533.233418, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.37": {
+    "expireat": 1602451533.230659, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.38": {
+    "expireat": 1602451533.235373, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.39": {
+    "expireat": 1602451533.2369862, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.4": {
+    "expireat": 1602451533.2356, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.40": {
+    "expireat": 1602451533.231565, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.41": {
+    "expireat": 1602451533.238369, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.42": {
+    "expireat": 1602451533.2339911, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.43": {
+    "expireat": 1602451533.233169, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.44": {
+    "expireat": 1602451533.237718, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.45": {
+    "expireat": 1602451533.2391372, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.46": {
+    "expireat": 1602451533.231281, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.47": {
+    "expireat": 1602451533.238024, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.48": {
+    "expireat": 1602451533.234069, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.5": {
+    "expireat": 1602451533.233184, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.6": {
+    "expireat": 1602451533.232362, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.7": {
+    "expireat": 1602451533.2306151, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.8": {
+    "expireat": 1602451533.2328951, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "DHCP_SERVER|192.0.0.9": {
+    "expireat": 1602451533.2352362, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "FEATURE|bgp": {
+    "expireat": 1602451533.237695, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "False", 
+      "has_per_asic_scope": "True", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|database": {
+    "expireat": 1602451533.2336922, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "disabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "True", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|dhcp_relay": {
+    "expireat": 1602451533.2387612, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|lldp": {
+    "expireat": 1602451533.236308, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "True", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|mgmt-framework": {
+    "expireat": 1602451533.231215, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "True", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|nat": {
+    "expireat": 1602451533.2377582, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "disabled"
+    }
+  }, 
+  "FEATURE|pmon": {
+    "expireat": 1602451533.234623, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|radv": {
+    "expireat": 1602451533.234345, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|sflow": {
+    "expireat": 1602451533.2336311, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "disabled"
+    }
+  }, 
+  "FEATURE|snmp": {
+    "expireat": 1602451533.230165, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "True", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|swss": {
+    "expireat": 1602451533.2325342, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "False", 
+      "has_per_asic_scope": "True", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|syncd": {
+    "expireat": 1602451533.2352211, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "False", 
+      "has_per_asic_scope": "True", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|teamd": {
+    "expireat": 1602451533.238064, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "False", 
+      "has_per_asic_scope": "True", 
+      "delayed": "False", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled"
+    }
+  }, 
+  "FEATURE|telemetry": {
+    "expireat": 1602451533.237368, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auto_restart": "enabled", 
+      "has_global_scope": "True", 
+      "has_per_asic_scope": "False", 
+      "delayed": "True", 
+      "high_mem_alert": "disabled", 
+      "state": "enabled", 
+      "status": "enabled"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|BUFFER_POOL_WATERMARK": {
+    "expireat": 1602451533.2371922, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|PFCWD": {
+    "expireat": 1602451533.235166, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|PG_WATERMARK": {
+    "expireat": 1602451533.235358, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|PORT": {
+    "expireat": 1602451533.2387211, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|PORT_BUFFER_DROP": {
+    "expireat": 1602451533.2310622, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|QUEUE": {
+    "expireat": 1602451533.229835, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|QUEUE_WATERMARK": {
+    "expireat": 1602451533.237431, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "FLEX_COUNTER_TABLE|RIF": {
+    "expireat": 1602451533.2387972, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "FLEX_COUNTER_STATUS": "enable"
+    }
+  }, 
+  "INTERFACE|Ethernet100": {
+    "expireat": 1602451533.238507, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet100|10.0.0.50/31": {
+    "expireat": 1602451533.237384, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet100|FC00::65/126": {
+    "expireat": 1602451533.233, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet104": {
+    "expireat": 1602451533.238492, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet104|10.0.0.52/31": {
+    "expireat": 1602451533.238333, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet104|FC00::69/126": {
+    "expireat": 1602451533.2390442, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet108": {
+    "expireat": 1602451533.2357972, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet108|10.0.0.54/31": {
+    "expireat": 1602451533.2306302, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet108|FC00::6D/126": {
+    "expireat": 1602451533.232121, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet112": {
+    "expireat": 1602451533.23716, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet112|10.0.0.56/31": {
+    "expireat": 1602451533.233308, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet112|FC00::71/126": {
+    "expireat": 1602451533.2352982, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet116": {
+    "expireat": 1602451533.237626, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet116|10.0.0.58/31": {
+    "expireat": 1602451533.235827, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet116|FC00::75/126": {
+    "expireat": 1602451533.2358122, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet120": {
+    "expireat": 1602451533.2332292, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet120|10.0.0.60/31": {
+    "expireat": 1602451533.236612, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet120|FC00::79/126": {
+    "expireat": 1602451533.2364922, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet124": {
+    "expireat": 1602451533.2381651, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet124|10.0.0.62/31": {
+    "expireat": 1602451533.239113, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet124|FC00::7D/126": {
+    "expireat": 1602451533.2369711, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet64": {
+    "expireat": 1602451533.2350981, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet64|10.0.0.32/31": {
+    "expireat": 1602451533.232209, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet64|FC00::41/126": {
+    "expireat": 1602451533.234509, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet68": {
+    "expireat": 1602451533.237476, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet68|10.0.0.34/31": {
+    "expireat": 1602451533.236421, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet68|FC00::45/126": {
+    "expireat": 1602451533.236757, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet72": {
+    "expireat": 1602451533.233084, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet72|10.0.0.36/31": {
+    "expireat": 1602451533.235181, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet72|FC00::49/126": {
+    "expireat": 1602451533.2321072, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet76": {
+    "expireat": 1602451533.232815, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet76|10.0.0.38/31": {
+    "expireat": 1602451533.234756, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet76|FC00::4D/126": {
+    "expireat": 1602451533.234445, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet80": {
+    "expireat": 1602451533.237016, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet80|10.0.0.40/31": {
+    "expireat": 1602451533.2348, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet80|FC00::51/126": {
+    "expireat": 1602451533.238691, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet84": {
+    "expireat": 1602451533.234291, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet84|10.0.0.42/31": {
+    "expireat": 1602451533.232461, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet84|FC00::55/126": {
+    "expireat": 1602451533.2381, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet88": {
+    "expireat": 1602451533.2328591, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet88|10.0.0.44/31": {
+    "expireat": 1602451533.232446, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet88|FC00::59/126": {
+    "expireat": 1602451533.233463, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet92": {
+    "expireat": 1602451533.232629, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet92|10.0.0.46/31": {
+    "expireat": 1602451533.2319162, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet92|FC00::5D/126": {
+    "expireat": 1602451533.234524, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet96": {
+    "expireat": 1602451533.2352512, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet96|10.0.0.48/31": {
+    "expireat": 1602451533.2314181, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "INTERFACE|Ethernet96|FC00::61/126": {
+    "expireat": 1602451533.235585, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "LOOPBACK_INTERFACE|Loopback0": {
+    "expireat": 1602451533.230401, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "LOOPBACK_INTERFACE|Loopback0|10.1.0.32/32": {
+    "expireat": 1602451533.23496, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "LOOPBACK_INTERFACE|Loopback0|FC00:1::32/128": {
+    "expireat": 1602451533.238706, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "MGMT_INTERFACE|eth0|10.3.146.185/23": {
+    "expireat": 1602451533.233402, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "gwaddr": "10.3.146.1"
+    }
+  }, 
+  "MGMT_INTERFACE|eth0|FC00:2::32/64": {
+    "expireat": 1602451533.235394, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "forced_mgmt_routes@": "10.3.145.98/31,10.3.145.8,100.127.20.16/28,10.3.149.170/31,40.122.216.24,13.91.48.226,10.3.145.14,10.64.246.0/24,10.3.146.0/23", 
+      "gwaddr": "fc00:2::1"
+    }
+  }, 
+  "MGMT_PORT|eth0": {
+    "expireat": 1602451533.2328792, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "eth0"
+    }
+  }, 
+  "NTP_SERVER|10.20.8.129": {
+    "expireat": 1602451533.2370012, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "NTP_SERVER|10.20.8.130": {
+    "expireat": 1602451533.2365382, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0002": {
+    "expireat": 1602451533.233323, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0002|10.0.0.0/31": {
+    "expireat": 1602451533.2319791, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0002|FC00::1/126": {
+    "expireat": 1602451533.2304702, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0005": {
+    "expireat": 1602451533.2352831, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0005|10.0.0.4/31": {
+    "expireat": 1602451533.2368, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0005|FC00::9/126": {
+    "expireat": 1602451533.237175, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0008": {
+    "expireat": 1602451533.2345831, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0008|10.0.0.8/31": {
+    "expireat": 1602451533.2390292, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0008|FC00::11/126": {
+    "expireat": 1602451533.2331991, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0011": {
+    "expireat": 1602451533.2326741, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0011|10.0.0.12/31": {
+    "expireat": 1602451533.2348561, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0011|FC00::19/126": {
+    "expireat": 1602451533.2317362, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0014": {
+    "expireat": 1602451533.231246, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0014|10.0.0.16/31": {
+    "expireat": 1602451533.2330692, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0014|FC00::21/126": {
+    "expireat": 1602451533.233448, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0017": {
+    "expireat": 1602451533.23436, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0017|10.0.0.20/31": {
+    "expireat": 1602451533.231154, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0017|FC00::29/126": {
+    "expireat": 1602451533.2314332, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0020": {
+    "expireat": 1602451533.23002, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0020|10.0.0.24/31": {
+    "expireat": 1602451533.236921, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0020|FC00::31/126": {
+    "expireat": 1602451533.231231, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0023": {
+    "expireat": 1602451533.23813, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0023|10.0.0.28/31": {
+    "expireat": 1602451533.2306452, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_INTERFACE|PortChannel0023|FC00::39/126": {
+    "expireat": 1602451533.237314, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0002|Ethernet0": {
+    "expireat": 1602451533.232165, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0002|Ethernet4": {
+    "expireat": 1602451533.232768, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0005|Ethernet12": {
+    "expireat": 1602451533.2389312, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0005|Ethernet8": {
+    "expireat": 1602451533.234246, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0008|Ethernet16": {
+    "expireat": 1602451533.2352672, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0008|Ethernet20": {
+    "expireat": 1602451533.234841, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0011|Ethernet24": {
+    "expireat": 1602451533.237446, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0011|Ethernet28": {
+    "expireat": 1602451533.238353, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0014|Ethernet32": {
+    "expireat": 1602451533.2309132, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0014|Ethernet36": {
+    "expireat": 1602451533.230181, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0017|Ethernet40": {
+    "expireat": 1602451533.239013, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0017|Ethernet44": {
+    "expireat": 1602451533.235342, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0020|Ethernet48": {
+    "expireat": 1602451533.232326, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0020|Ethernet52": {
+    "expireat": 1602451533.230485, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0023|Ethernet56": {
+    "expireat": 1602451533.231751, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL_MEMBER|PortChannel0023|Ethernet60": {
+    "expireat": 1602451533.230546, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0002": {
+    "expireat": 1602451533.2377942, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet0,Ethernet4", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0005": {
+    "expireat": 1602451533.2320561, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet8,Ethernet12", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0008": {
+    "expireat": 1602451533.2319012, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet16,Ethernet20", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0011": {
+    "expireat": 1602451533.232659, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet24,Ethernet28", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0014": {
+    "expireat": 1602451533.2382982, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet32,Ethernet36", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0017": {
+    "expireat": 1602451533.229952, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet40,Ethernet44", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0020": {
+    "expireat": 1602451533.2321942, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet48,Ethernet52", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORTCHANNEL|PortChannel0023": {
+    "expireat": 1602451533.234553, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "members@": "Ethernet56,Ethernet60", 
+      "min_links": "2", 
+      "mtu": "9100"
+    }
+  }, 
+  "PORT|Ethernet0": {
+    "expireat": 1602451533.2310472, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet1/1", 
+      "description": "ARISTA01T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "1", 
+      "lanes": "1,2,3,4", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet100": {
+    "expireat": 1602451533.230237, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet26/1", 
+      "description": "ARISTA10T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "26", 
+      "lanes": "97,98,99,100", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet104": {
+    "expireat": 1602451533.233849, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet27/1", 
+      "description": "ARISTA11T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "27", 
+      "lanes": "105,106,107,108", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet108": {
+    "expireat": 1602451533.2309651, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet28/1", 
+      "description": "ARISTA12T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "28", 
+      "lanes": "109,110,111,112", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet112": {
+    "expireat": 1602451533.234692, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet29/1", 
+      "description": "ARISTA13T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "29", 
+      "lanes": "117,118,119,120", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet116": {
+    "expireat": 1602451533.2335901, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet30/1", 
+      "description": "ARISTA14T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "30", 
+      "lanes": "113,114,115,116", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet12": {
+    "expireat": 1602451533.238915, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet4/1", 
+      "description": "ARISTA03T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "4", 
+      "lanes": "13,14,15,16", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet120": {
+    "expireat": 1602451533.230797, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet31/1", 
+      "description": "ARISTA15T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "31", 
+      "lanes": "121,122,123,124", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet124": {
+    "expireat": 1602451533.2313821, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet32/1", 
+      "description": "ARISTA16T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "32", 
+      "lanes": "125,126,127,128", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet128": {
+    "expireat": 1602451533.2358792, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "alias": "Ethernet33", 
+      "description": "Ethernet33", 
+      "fec": "rs", 
+      "index": "33", 
+      "lanes": "129", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet132": {
+    "expireat": 1602451533.234924, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "alias": "Ethernet34", 
+      "description": "Ethernet34", 
+      "fec": "rs", 
+      "index": "34", 
+      "lanes": "128", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet16": {
+    "expireat": 1602451533.23172, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet5/1", 
+      "description": "ARISTA05T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "5", 
+      "lanes": "21,22,23,24", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet20": {
+    "expireat": 1602451533.235151, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet6/1", 
+      "description": "ARISTA05T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "6", 
+      "lanes": "17,18,19,20", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet24": {
+    "expireat": 1602451533.235934, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet7/1", 
+      "description": "ARISTA07T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "7", 
+      "lanes": "25,26,27,28", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet28": {
+    "expireat": 1602451533.2308981, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet8/1", 
+      "description": "ARISTA07T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "8", 
+      "lanes": "29,30,31,32", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet32": {
+    "expireat": 1602451533.2318711, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet9/1", 
+      "description": "ARISTA09T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "9", 
+      "lanes": "37,38,39,40", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet36": {
+    "expireat": 1602451533.238476, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet10/1", 
+      "description": "ARISTA09T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "10", 
+      "lanes": "33,34,35,36", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet4": {
+    "expireat": 1602451533.2316182, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet2/1", 
+      "description": "ARISTA01T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "2", 
+      "lanes": "5,6,7,8", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet40": {
+    "expireat": 1602451533.2322621, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet11/1", 
+      "description": "ARISTA11T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "11", 
+      "lanes": "41,42,43,44", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet44": {
+    "expireat": 1602451533.2306, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet12/1", 
+      "description": "ARISTA11T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "12", 
+      "lanes": "45,46,47,48", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet48": {
+    "expireat": 1602451533.237299, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet13/1", 
+      "description": "ARISTA13T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "13", 
+      "lanes": "53,54,55,56", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet52": {
+    "expireat": 1602451533.238639, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet14/1", 
+      "description": "ARISTA13T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "14", 
+      "lanes": "49,50,51,52", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet56": {
+    "expireat": 1602451533.230454, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet15/1", 
+      "description": "ARISTA15T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "15", 
+      "lanes": "57,58,59,60", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet60": {
+    "expireat": 1602451533.233053, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet16/1", 
+      "description": "ARISTA15T2:Ethernet2", 
+      "fec": "rs", 
+      "index": "16", 
+      "lanes": "61,62,63,64", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet64": {
+    "expireat": 1602451533.238996, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet17/1", 
+      "description": "ARISTA01T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "17", 
+      "lanes": "69,70,71,72", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet68": {
+    "expireat": 1602451533.2357311, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet18/1", 
+      "description": "ARISTA02T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "18", 
+      "lanes": "65,66,67,68", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet72": {
+    "expireat": 1602451533.230371, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet19/1", 
+      "description": "ARISTA03T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "19", 
+      "lanes": "73,74,75,76", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet76": {
+    "expireat": 1602451533.2379122, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet20/1", 
+      "description": "ARISTA04T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "20", 
+      "lanes": "77,78,79,80", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet8": {
+    "expireat": 1602451533.239191, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet3/1", 
+      "description": "ARISTA03T2:Ethernet1", 
+      "fec": "rs", 
+      "index": "3", 
+      "lanes": "9,10,11,12", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet80": {
+    "expireat": 1602451533.238008, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet21/1", 
+      "description": "ARISTA05T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "21", 
+      "lanes": "85,86,87,88", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet84": {
+    "expireat": 1602451533.2301252, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet22/1", 
+      "description": "ARISTA06T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "22", 
+      "lanes": "81,82,83,84", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet88": {
+    "expireat": 1602451533.233153, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet23/1", 
+      "description": "ARISTA07T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "23", 
+      "lanes": "89,90,91,92", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet92": {
+    "expireat": 1602451533.235083, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet24/1", 
+      "description": "ARISTA08T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "24", 
+      "lanes": "93,94,95,96", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "PORT|Ethernet96": {
+    "expireat": 1602451533.23672, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "admin_status": "up", 
+      "alias": "Ethernet25/1", 
+      "description": "ARISTA09T0:Ethernet1", 
+      "fec": "rs", 
+      "index": "25", 
+      "lanes": "101,102,103,104", 
+      "mtu": "9100", 
+      "pfc_asym": "off", 
+      "speed": "100000"
+    }
+  }, 
+  "RESTAPI|certs": {
+    "expireat": 1602451533.239275, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "ca_crt": "/etc/sonic/credentials/restapica.crt", 
+      "client_crt_cname": "client.restapi.sonic", 
+      "server_crt": "/etc/sonic/credentials/restapiserver.crt", 
+      "server_key": "/etc/sonic/credentials/restapiserver.key"
+    }
+  }, 
+  "RESTAPI|config": {
+    "expireat": 1602451533.2348251, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "allow_insecure": "false", 
+      "client_auth": "true", 
+      "log_level": "trace"
+    }
+  }, 
+  "SYSLOG_SERVER|10.3.145.8": {
+    "expireat": 1602451533.236815, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "SYSLOG_SERVER|100.127.20.21": {
+    "expireat": 1602451533.232738, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "TACPLUS|global": {
+    "expireat": 1602451533.234054, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "auth_type": "login"
+    }
+  }, 
+  "TELEMETRY|certs": {
+    "expireat": 1602451533.229921, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "ca_crt": "/etc/sonic/telemetry/dsmsroot.cer", 
+      "server_crt": "/etc/sonic/telemetry/streamingtelemetryserver.cer", 
+      "server_key": "/etc/sonic/telemetry/streamingtelemetryserver.key"
+    }
+  }, 
+  "TELEMETRY|gnmi": {
+    "expireat": 1602451533.237611, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "client_auth": "false", 
+      "log_level": "2", 
+      "port": "50051"
+    }
+  }, 
+  "VERSIONS|DATABASE": {
+    "expireat": 1602451533.230253, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "VERSION": "version_1_0_4"
+    }
+  }
+}

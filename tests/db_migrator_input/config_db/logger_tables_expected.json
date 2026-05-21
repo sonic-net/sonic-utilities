@@ -1,0 +1,13 @@
+{
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_3_0_6"
+    },
+    "LOGGER|orchagent": {
+        "LOGLEVEL": "INFO",
+        "LOGOUTPUT": "SYSLOG"
+    },
+    "LOGGER|SAI_API_BUFFER": {
+        "LOGLEVEL": "SAI_LOG_LEVEL_NOTICE",
+        "LOGOUTPUT": "SYSLOG"
+    }
+}

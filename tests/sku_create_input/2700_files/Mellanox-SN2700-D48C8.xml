@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<DeviceInfo Vendor="Mellanox" BaseSku="Mellanox-SN2700" HwSku="Mellanox-SN2700-D48C8_NEW" ClusterSku="Mellanox-SN2700" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="..\appdata\schemas\DeviceTemplate.xsd">
+  <Ethernet>
+    <Interface Index="1" PortName="0" InterfaceName="etp1a" Speed="50000" />
+    <Interface Index="2" PortName="2" InterfaceName="etp1b" Speed="50000" />
+    <Interface Index="3" PortName="4" InterfaceName="etp2a" Speed="50000" />
+    <Interface Index="4" PortName="6" InterfaceName="etp2b" Speed="50000" />
+    <Interface Index="5" PortName="8" InterfaceName="etp3a" Speed="50000" />
+    <Interface Index="6" PortName="10" InterfaceName="etp3b" Speed="50000" />
+    <Interface Index="7" PortName="12" InterfaceName="etp4a" Speed="50000" />
+    <Interface Index="8" PortName="14" InterfaceName="etp4b" Speed="50000" />
+    <Interface Index="9" PortName="16" InterfaceName="etp5a" Speed="50000" />
+    <Interface Index="10" PortName="18" InterfaceName="etp5b" Speed="50000" />
+    <Interface Index="11" PortName="20" InterfaceName="etp6a" Speed="50000" />
+    <Interface Index="12" PortName="22" InterfaceName="etp6b" Speed="50000" />
+    <Interface Index="13" PortName="24" InterfaceName="etp7" Speed="100000" />
+    <Interface Index="14" PortName="28" InterfaceName="etp8" Speed="100000" />
+    <Interface Index="15" PortName="32" InterfaceName="etp9" Speed="100000" />
+    <Interface Index="16" PortName="36" InterfaceName="etp10" Speed="100000" />
+    <Interface Index="17" PortName="40" InterfaceName="etp11a" Speed="50000" />
+    <Interface Index="18" PortName="42" InterfaceName="etp11b" Speed="50000" />
+    <Interface Index="19" PortName="44" InterfaceName="etp12a" Speed="50000" />
+    <Interface Index="20" PortName="46" InterfaceName="etp12b" Speed="50000" />
+    <Interface Index="21" PortName="48" InterfaceName="etp13a" Speed="50000" />
+    <Interface Index="22" PortName="50" InterfaceName="etp13b" Speed="50000" />
+    <Interface Index="23" PortName="52" InterfaceName="etp14a" Speed="50000" />
+    <Interface Index="24" PortName="54" InterfaceName="etp14b" Speed="50000" />
+    <Interface Index="25" PortName="56" InterfaceName="etp15a" Speed="50000" />
+    <Interface Index="26" PortName="58" InterfaceName="etp15b" Speed="50000" />
+    <Interface Index="27" PortName="60" InterfaceName="etp16a" Speed="50000" />
+    <Interface Index="28" PortName="62" InterfaceName="etp16b" Speed="50000" />
+    <Interface Index="29" PortName="64" InterfaceName="etp17a" Speed="50000" />
+    <Interface Index="30" PortName="66" InterfaceName="etp17b" Speed="50000" />
+    <Interface Index="31" PortName="68" InterfaceName="etp18a" Speed="50000" />
+    <Interface Index="32" PortName="70" InterfaceName="etp18b" Speed="50000" />
+    <Interface Index="33" PortName="72" InterfaceName="etp19a" Speed="50000" />
+    <Interface Index="34" PortName="74" InterfaceName="etp19b" Speed="50000" />
+    <Interface Index="35" PortName="76" InterfaceName="etp20a" Speed="50000" />
+    <Interface Index="36" PortName="78" InterfaceName="etp20b" Speed="50000" />
+    <Interface Index="37" PortName="80" InterfaceName="etp21a" Speed="50000" />
+    <Interface Index="38" PortName="82" InterfaceName="etp21b" Speed="50000" />
+    <Interface Index="39" PortName="84" InterfaceName="etp22a" Speed="50000" />
+    <Interface Index="40" PortName="86" InterfaceName="etp22b" Speed="50000" />
+    <Interface Index="41" PortName="88" InterfaceName="etp23" Speed="100000" />
+    <Interface Index="42" PortName="92" InterfaceName="etp24" Speed="100000" />
+    <Interface Index="43" PortName="96" InterfaceName="etp25" Speed="100000" />
+    <Interface Index="44" PortName="100" InterfaceName="etp26" Speed="100000" />
+    <Interface Index="45" PortName="104" InterfaceName="etp27a" Speed="50000" />
+    <Interface Index="46" PortName="106" InterfaceName="etp27b" Speed="50000" />
+    <Interface Index="47" PortName="108" InterfaceName="etp28a" Speed="50000" />
+    <Interface Index="48" PortName="110" InterfaceName="etp28b" Speed="50000" />
+    <Interface Index="49" PortName="112" InterfaceName="etp29a" Speed="50000" />
+    <Interface Index="50" PortName="114" InterfaceName="etp29b" Speed="50000" />
+    <Interface Index="51" PortName="116" InterfaceName="etp30a" Speed="50000" />
+    <Interface Index="52" PortName="118" InterfaceName="etp30b" Speed="50000" />
+    <Interface Index="53" PortName="120" InterfaceName="etp31a" Speed="50000" />
+    <Interface Index="54" PortName="122" InterfaceName="etp31b" Speed="50000" />
+    <Interface Index="55" PortName="124" InterfaceName="etp32a" Speed="50000" />
+    <Interface Index="56" PortName="126" InterfaceName="etp32b" Speed="50000" />
+  </Ethernet>
+  <Management>
+    <Interface Index="1" PortName="mgmt0" InterfaceName="mgmt0" Speed="1000" />
+    <Interface Index="2" PortName="mgmt1" InterfaceName="mgmt1" Speed="1000" />
+  </Management>
+  <Serial>
+    <Interface Index="1" PortName="console" InterfaceName="ttyS0" Speed="9600" />
+  </Serial>
+   <Power>
+    <Interface Index="1" PortName="power0" InterfaceName="ps1_12_aux" PortType="C13" Redundant="false" />
+    <Interface Index="2" PortName="power1" InterfaceName="ps2_12_aux" PortType="C13" Redundant="true" />
+  </Power>
+</DeviceInfo>

@@ -1,0 +1,95 @@
+#!/bin/bash -e
+
+# Exit codes
+ASIC_CONFIG_UNCHANGED=0
+ASIC_CONFIG_CHANGED=1
+CURR_ASIC_CONFIG_NOT_FOUND=2
+DST_ASIC_CONFIG_NOT_FOUND=3
+
+# Logging utilities
+function error()
+{
+    logger -p user.err "$@"
+}
+
+function debug()
+{
+    logger -p user.info "$@"
+}
+
+# Retrieve the current ASIC config checksum from the current image
+# Returns CURR_ASIC_CONFIG_NOT_FOUND if the checksum is not found, ASIC_CONFIG_UNCHANGED otherwise
+function GetCurrentASICConfigChecksum()
+{
+    if [[ ! -f "/etc/sonic/asic_config_checksum" ]]; then
+            debug "ASIC config not found in curr image, pre-check not supported"
+            return "${CURR_ASIC_CONFIG_NOT_FOUND}"
+    fi
+
+    return "${ASIC_CONFIG_UNCHANGED}"
+}
+
+# Retrieve the destination ASIC config checksum from the destination image
+# Exits with error DST_ASIC_CONFIG_NOT_FOUND if the checksum is not found
+function GetDestinationASICConfigChecksum()
+{
+    DST_IMAGE_PATH="/host/image-${DST_SONIC_IMAGE#SONiC-OS-}"
+    FS_PATH="${DST_IMAGE_PATH}/fs.squashfs"
+    FS_MOUNTPOINT="/tmp/image-${DST_SONIC_IMAGE#SONiC-OS-}-fs"
+
+    # Verify that the destination image exists
+    if [[ ! -d ${DST_IMAGE_PATH} ]]; then
+        error "ASIC config not found in dst image, can't verify changes"
+        exit "${DST_ASIC_CONFIG_NOT_FOUND}"
+    fi
+
+    mkdir "${FS_MOUNTPOINT}"
+    mount -t squashfs "${FS_PATH}" "${FS_MOUNTPOINT}"
+
+    if [[ ! -f "${FS_MOUNTPOINT}/etc/sonic/asic_config_checksum" ]]; then
+        error "ASIC config not found in dst image, can't verify changes"
+        umount "${FS_MOUNTPOINT}"
+        rm -rf "${FS_MOUNTPOINT}"
+        exit "${DST_ASIC_CONFIG_NOT_FOUND}"
+    fi
+
+    cp "${FS_MOUNTPOINT}/etc/sonic/asic_config_checksum" /tmp/dst_asic_config_checksum
+    umount "${FS_MOUNTPOINT}"
+    rm -rf "${FS_MOUNTPOINT}"
+}
+
+# Confirm that the curr and dst ASIC config checksums match
+# Exits with ASIC_CONFIG_CHANGED if the checksums differ
+function ConfirmASICConfigChecksumsMatch()
+{
+    CURR_CONFIG_CHECKSUM=$(cat /etc/sonic/asic_config_checksum)
+    DST_CONFIG_CHECKSUM=$(cat /tmp/dst_asic_config_checksum)
+    if [[ "${CURR_CONFIG_CHECKSUM}" != "${DST_CONFIG_CHECKSUM}" ]]; then
+        error "ASIC config may have changed, checksum failed"
+        exit "${ASIC_CONFIG_CHANGED}"
+    fi
+}
+
+# Main starts here
+debug "Checking that ASIC configuration has not changed"
+
+CURR_SONIC_IMAGE="$(sonic-installer list | grep "Current: " | cut -f2 -d' ')"
+DST_SONIC_IMAGE="$(sonic-installer list | grep "Next: " | cut -f2 -d' ')"
+if [[ "${CURR_SONIC_IMAGE}" == "${DST_SONIC_IMAGE}" ]]; then
+    debug "ASIC config unchanged, current and destination SONiC version are the same"
+    exit "${ASIC_CONFIG_UNCHANGED}"
+fi
+
+GET_CURR_CHECKSUM_RESULT=0
+GetCurrentASICConfigChecksum || GET_CURR_CHECKSUM_RESULT=$?
+
+# If the current device does not have a checksum then this check is not yet supported on this device
+if [[ "${GET_CURR_CHECKSUM_RESULT}" == "${CURR_ASIC_CONFIG_NOT_FOUND}" ]]; then
+    exit "${ASIC_CONFIG_UNCHANGED}"
+fi
+
+GetDestinationASICConfigChecksum
+ConfirmASICConfigChecksumsMatch
+
+debug "ASIC config unchanged, checksum passed"
+exit "${ASIC_CONFIG_UNCHANGED}"

@@ -1,0 +1,66 @@
+{
+    "0.0.0.0/0": [
+        {
+            "prefix": "0.0.0.0/0",
+            "prefixLen": 0,
+            "protocol": "bgp",
+            "vrfId": 0,
+            "vrfName": "default",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "table": 254,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 4,
+            "internalNextHopActiveNum": 4,
+            "nexthopGroupId": 566,
+            "installedNexthopGroupId": 566,
+            "uptime": "04w0d11h",
+            "nexthops": [
+                {
+                    "flags": 3,
+                    "fib": true,
+                    "ip": "20.1.0.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 2,
+                    "interfaceName": "PortChannel1",
+                    "active": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 3,
+                    "fib": true,
+                    "ip": "20.1.8.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 4,
+                    "interfaceName": "PortChannel5",
+                    "active": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 3,
+                    "fib": true,
+                    "ip": "20.1.16.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 5,
+                    "interfaceName": "PortChannel9",
+                    "active": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 3,
+                    "fib": true,
+                    "ip": "20.1.24.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 3,
+                    "interfaceName": "PortChannel13",
+                    "active": true,
+                    "weight": 1
+                }
+            ]
+        }
+    ]
+}

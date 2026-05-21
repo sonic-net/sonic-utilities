@@ -1,0 +1,150 @@
+#!/bin/bash
+
+#
+# =============== Managed by SONiC Package Manager. DO NOT EDIT! ===============
+#             auto-generated from {{ source }} by sonic-package-manager
+#
+
+SERVICE="{{ manifest.service.name }}"
+NAMESPACE_PREFIX="asic"
+SONIC_DB_CLI="sonic-db-cli"
+TMPDIR="/tmp/"
+DEBUGLOG="${TMPDIR}/${SERVICE}.log"
+[[ ! -z $DEV ]] && DEBUGLOG="${TMPDIR}/${SERVICE}-${DEV}.log"
+[[ ! -z $DEV ]] && NET_NS="${NAMESPACE_PREFIX}${DEV}"  # name of the network namespace
+[[ ! -z $DEV ]] && SONIC_DB_CLI="${SONIC_DB_CLI} -n ${NET_NS}"
+
+{%- for service in manifest.service.dependent %}
+{%- if service in multi_instance_services %}
+MULTI_INST_DEPENDENT="${MULTI_INST_DEPENDENT} {{ service }}"
+{%- else %}
+DEPENDENT="${DEPENDENT} {{ service }}"
+{%- endif %}
+{%- endfor %}
+
+# Update dependent list based on other packages requirements
+if [[ -f /etc/sonic/${SERVICE}_dependent ]]; then
+    DEPENDENT="${DEPENDENT} $(cat /etc/sonic/${SERVICE}_dependent)"
+fi
+
+if [[ -f /etc/sonic/${SERVICE}_multi_inst_dependent ]]; then
+    MULTI_INST_DEPENDENT="${MULTI_INST_DEPENDENT} $(cat /etc/sonic/${SERVICE}_multi_inst_dependent)"
+fi
+
+function debug()
+{
+    /usr/bin/logger $1
+    /bin/echo `date` "- $1" >> ${DEBUGLOG}
+}
+
+function check_warm_boot()
+{
+    SYSTEM_WARM_START=`$SONIC_DB_CLI STATE_DB hget "WARM_RESTART_ENABLE_TABLE|system" enable`
+    SERVICE_WARM_START=`$SONIC_DB_CLI STATE_DB hget "WARM_RESTART_ENABLE_TABLE|${SERVICE}" enable`
+    if [[ x"$SYSTEM_WARM_START" == x"true" ]] || [[ x"$SERVICE_WARM_START" == x"true" ]]; then
+        WARM_BOOT="true"
+{#- TODO: restore count validation for SONiC packages #}
+    else
+        WARM_BOOT="false"
+    fi
+}
+
+function check_fast_boot()
+{
+    SYSTEM_FAST_REBOOT=`$SONIC_DB_CLI STATE_DB hget "FAST_RESTART_ENABLE_TABLE|system" enable`
+    if [[ x"${SYSTEM_FAST_REBOOT}" == x"true" ]]; then
+        FAST_BOOT="true"
+    else
+        FAST_BOOT="false"
+    fi
+}
+
+function start_dependent_services() {
+    if [[ x"$WARM_BOOT" != x"true" ]]; then
+        for dep in ${DEPENDENT}; do
+            /bin/systemctl start ${dep}
+        done
+        for dep in ${MULTI_INST_DEPENDENT}; do
+            if [[ ! -z $DEV ]]; then
+                /bin/systemctl start ${dep}@$DEV
+            else
+                /bin/systemctl start ${dep}
+            fi
+        done
+    fi
+}
+
+function stop_dependent_services() {
+    if [[ x"$WARM_BOOT" != x"true" ]] && [[ x"$FAST_BOOT" != x"true" ]]; then
+        for dep in ${DEPENDENT}; do
+            /bin/systemctl stop ${dep}
+        done
+        for dep in ${MULTI_INST_DEPENDENT}; do
+            if [[ ! -z $DEV ]]; then
+                /bin/systemctl stop ${dep}@$DEV
+            else
+                /bin/systemctl stop ${dep}
+            fi
+        done
+    fi
+}
+
+function start() {
+    debug "Starting ${SERVICE}$DEV service..."
+
+    # start service docker
+    /usr/bin/${SERVICE}.sh start $DEV
+    debug "Started ${SERVICE}$DEV service..."
+
+{%- if manifest.service["post-start-action"] %}
+    docker exec -t ${SERVICE}${DEV} {{ manifest.service["post-start-action"] }}
+{%- endif %}
+}
+
+function wait() {
+    start_dependent_services
+
+    if [[ ! -z $DEV ]]; then
+        /usr/bin/${SERVICE}.sh wait $DEV
+    else
+        /usr/bin/${SERVICE}.sh wait
+    fi
+}
+
+function stop() {
+    debug "Stopping ${SERVICE}$DEV service..."
+
+{%- if manifest.service["pre-shutdown-action"] %}
+    docker exec -t ${SERVICE}${DEV} {{ manifest.service["pre-shutdown-action"] }}
+{%- endif %}
+
+    # For WARM/FAST boot do not perform service stop
+    if [[ x"$WARM_BOOT" != x"true" ]] && [[ x"$FAST_BOOT" != x"true" ]]; then
+        /usr/bin/${SERVICE}.sh stop $DEV
+    else
+        docker kill ${SERVICE}$DEV &> /dev/null || debug "Docker ${SERVICE}$DEV is not running ($?) ..."
+    fi
+
+    debug "Stopped ${SERVICE}$DEV service..."
+
+    stop_dependent_services
+}
+
+OP=$1
+DEV=$2
+
+check_warm_boot
+check_fast_boot
+
+debug "Fast boot flag: ${SERVICE}$DEV ${FAST_BOOT}."
+debug "Warm boot flag: ${SERVICE}$DEV ${WARM_BOOT}."
+
+case "$OP" in
+    start|wait|stop)
+        $1
+        ;;
+    *)
+        echo "Usage: $0 {start|wait|stop}"
+        exit 1
+        ;;
+esac

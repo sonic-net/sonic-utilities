@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import re
+import sys
+import ipaddress
+
+from natsort import natsorted
+from tabulate import tabulate
+from utilities_common import multi_asic as multi_asic_util
+from swsscommon import swsscommon
+
+# mock the redis for unit test purposes #
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        tests_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, tests_path)
+        import mock_tables.dbconnector
+        if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+            import mock_tables.mock_multi_asic
+            mock_tables.dbconnector.load_namespace_config()
+        else:
+            mock_tables.dbconnector.load_database_config()
+
+except KeyError:
+    pass
+
+
+# ========================== Common VOQ util logic ==========================
+
+SYSTEM_PORT_TABLE_PREFIX = swsscommon.APP_SYSTEM_PORT_TABLE_NAME + ":"
+SYSTEM_STATE_PORT_TABLE_PREFIX = swsscommon.STATE_PORT_TABLE_NAME + "|"
+SYSTEM_PORT_ID = "system_port_id"
+SYSTEM_PORT_CORE = "core_index"
+SYSTEM_PORT_CORE_PORT = "core_port_index"
+SYSTEM_PORT_SPEED = "speed"
+SYSTEM_PORT_SWITCH_ID = "switch_id"
+SYSTEM_PORT_OPER_STATUS = "oper_status"
+
+SYSTEM_NEIGH_TABLE_PREFIX = swsscommon.CHASSIS_APP_SYSTEM_NEIGH_TABLE_NAME + "|"
+SYSTEM_NEIGH_MAC = "neigh"
+SYSTEM_NEIGH_ENCAP_INDEX = "encap_index"
+
+SYSTEM_LAG_TABLE_PREFIX = swsscommon.CHASSIS_APP_LAG_TABLE_NAME + "|"
+SYSTEM_LAG_MEMBER_TABLE_PREFIX = swsscommon.CHASSIS_APP_LAG_MEMBER_TABLE_NAME + "|"
+SYSTEM_LAG_ID = "lag_id"
+SYSTEM_LAG_SWITCH_ID = "switch_id"
+
+def parse_systemintf_in_filter(intf_filter):
+    intf_fs = []
+
+    if intf_filter is None:
+        return intf_fs
+
+    fs = intf_filter.split(',')
+    for x in fs:
+        intf_fs.append(x.strip())
+
+    return intf_fs
+
+def is_ipv4_address(ip_address):
+    """
+    Checks if given ip is ipv4
+    :param ip_address: str ipv4
+    :return: bool
+    """
+    try:
+        ipaddress.IPv4Address(ip_address)
+        return True
+    except ipaddress.AddressValueError as err:
+        return False
+
+
+def is_ipv6_address(ip_address):
+    """
+    Checks if given ip is ipv6
+    :param ip_address: str ipv6
+    :return: bool
+    """
+    try:
+        ipaddress.IPv6Address(ip_address)
+        return True
+    except ipaddress.AddressValueError as err:
+        return False
+
+def appl_db_keys_get_system_port(appl_db, system_port_name):
+    """
+    Get APPL_DB SYSTEM_PORT_TABLE Keys
+    """
+    if system_port_name is None or system_port_name == "":
+        appl_db_keys = appl_db.keys(appl_db.APPL_DB, SYSTEM_PORT_TABLE_PREFIX+"*")
+    else:
+        appl_db_keys = appl_db.keys(appl_db.APPL_DB, SYSTEM_PORT_TABLE_PREFIX+"%s" % system_port_name)
+
+    return appl_db_keys
+
+
+def appl_db_system_port_status_get(appl_db, system_port_name, status_type):
+    """
+    Get the system port status
+    """
+    full_table_id = SYSTEM_PORT_TABLE_PREFIX + system_port_name
+    status = appl_db.get(appl_db.APPL_DB, full_table_id, status_type)
+    if status is None:
+        return "N/A"
+    if status_type == SYSTEM_PORT_SPEED and status != "N/A":
+       status = '{}G'.format(status[:-3])
+    return status
+
+
+def port_oper_speed_get(db, system_port_name):
+    """
+    Get port oper speed
+    """
+    full_table_id = SYSTEM_STATE_PORT_TABLE_PREFIX + system_port_name
+    oper_speed = db.get(db.STATE_DB, full_table_id, SYSTEM_PORT_SPEED)
+    oper_status = db.get(db.APPL_DB, SYSTEM_PORT_TABLE_PREFIX + system_port_name,
+                         SYSTEM_PORT_OPER_STATUS)
+    if oper_speed is None or oper_speed == "N/A" or oper_status != "up":
+        return appl_db_system_port_status_get(db, system_port_name, SYSTEM_PORT_SPEED)
+
+    return '{}G'.format(oper_speed[:-3])
+
+
+def chassis_app_db_keys_get_system_neigh(chassis_app_db):
+    """
+    Get CHASSIS_APP_DB SYSTEM_NEIGH table Keys
+    """
+    system_neigh_keys = chassis_app_db.keys(chassis_app_db.CHASSIS_APP_DB, SYSTEM_NEIGH_TABLE_PREFIX+"*")
+
+    return system_neigh_keys
+
+def chassis_app_db_system_neigh_status_get(chassis_app_db, system_neigh_name, status_type):
+    """
+    Get the system neigh status
+    """
+    full_table_id = SYSTEM_NEIGH_TABLE_PREFIX + system_neigh_name
+    status = chassis_app_db.get(chassis_app_db.CHASSIS_APP_DB, full_table_id, status_type)
+    if status is None:
+        return "N/A"
+    return status
+
+def chassis_app_db_keys_get_system_lag(chassis_app_db, system_lag_name):
+    """
+    Get CHASSIS_APP_DB SYSTEM_LAG_TABLE Keys
+    """
+    if system_lag_name is None or system_lag_name == "":
+        chassis_app_db_keys = chassis_app_db.keys(chassis_app_db.CHASSIS_APP_DB, SYSTEM_LAG_TABLE_PREFIX+"*")
+    else:
+        chassis_app_db_keys = chassis_app_db.keys(chassis_app_db.CHASSIS_APP_DB, SYSTEM_LAG_TABLE_PREFIX+"%s" % system_lag_name)
+
+    return chassis_app_db_keys
+
+def chassis_app_db_system_lag_status_get(chassis_app_db, system_lag_name, status_type):
+    """
+    Get the system lag status
+    """
+    full_table_id = SYSTEM_LAG_TABLE_PREFIX + system_lag_name
+    status = chassis_app_db.get(chassis_app_db.CHASSIS_APP_DB, full_table_id, status_type)
+    if status is None:
+        return "N/A"
+    return status
+
+def chassis_app_db_keys_get_system_lag_member(chassis_app_db, system_lag_name, system_lag_member_name):
+    """
+    Get CHASSIS_APP_DB SYSTEM_LAG_MEMBER_TABLE Keys for a given system lag
+    """
+    if system_lag_name is None or system_lag_name == "":
+        chassis_app_db_keys = chassis_app_db.keys(chassis_app_db.CHASSIS_APP_DB, SYSTEM_LAG_MEMBER_TABLE_PREFIX+"*")
+    elif system_lag_member_name is None or system_lag_member_name == "":
+        chassis_app_db_keys = chassis_app_db.keys(chassis_app_db.CHASSIS_APP_DB, SYSTEM_LAG_MEMBER_TABLE_PREFIX+"%s*" % system_lag_name)
+    else:
+        chassis_app_db_keys = chassis_app_db.keys(chassis_app_db.CHASSIS_APP_DB, SYSTEM_LAG_MEMBER_TABLE_PREFIX+"%s:%s" % system_lag_name, system_lag_member_name)
+
+    return chassis_app_db_keys
+
+# ========================== VOQ system port status logic ==========================
+
+header_system_port = ['System Port Name', 'Port Id', 'Switch Id', 'Core', 'Core Port', 'Speed']
+
+class SystemPortStatus(object):
+
+    def __init__(self, system_port_name, namespace_option):
+        """
+        Class constructor method
+        :param self:
+        :param intf_name: string of system port name
+        :return:
+        """
+        self.db = None
+        self.config_db = None
+        self.system_port_name = system_port_name
+        self.table = []
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace_option)
+
+    def display_systemport_status(self):
+        self.get_systemport_status()
+        sorted_table = natsorted(self.table)
+        print(tabulate(sorted_table,
+                       header_system_port,
+                       tablefmt="simple",
+                       stralign='right'))
+
+    def generate_systemport_status(self):
+        """
+            Generate system port status output
+        """
+
+        i = {}
+        table = []
+        key = []
+
+        intf_fs = parse_systemintf_in_filter(self.system_port_name)
+        #
+        # Iterate through all the keys and append system port's associated info to
+        # the result table.
+        #
+        for i in self.appl_db_keys_system_port:
+            key = re.split(':', i, maxsplit=1)[-1].strip()
+            if self.system_port_name is None or key in intf_fs:
+                table.append((key,
+                        appl_db_system_port_status_get(self.db, key, SYSTEM_PORT_ID),
+                        appl_db_system_port_status_get(self.db, key, SYSTEM_PORT_SWITCH_ID),
+                        appl_db_system_port_status_get(self.db, key, SYSTEM_PORT_CORE),
+                        appl_db_system_port_status_get(self.db, key, SYSTEM_PORT_CORE_PORT),
+                        port_oper_speed_get(self.db, key)))
+
+        return table
+
+    @multi_asic_util.run_on_multi_asic
+    def get_systemport_status(self):
+        self.appl_db_keys_system_port = appl_db_keys_get_system_port(self.db, None)
+        if self.appl_db_keys_system_port:
+            self.table += self.generate_systemport_status()
+
+# ========================== voq system neigh status logic ==========================
+
+header_system_neigh = ['System Port Interface', 'Neighbor', 'MAC', 'Encap Index']
+
+class SystemNeighStatus(object):
+
+    def __init__(self, ipaddress, asicname):
+        self.db = None
+        self.config_db = None
+        self.ipaddress = ipaddress
+        self.asicname = asicname
+        self.table = []
+
+    def display_systemneigh_status(self):
+
+        self.get_systemneigh_status()
+
+        # Sorting and tabulating the result table.
+        sorted_table = natsorted(self.table)
+        print(tabulate(sorted_table, header_system_neigh, tablefmt="simple", stralign='right'))
+
+    def generate_systemneigh_status(self):
+        """
+            Generate system neigh status output
+        """
+
+        i = {}
+        table = []
+        key = []
+
+        if self.ipaddress is not None:
+            if not is_ipv4_address(self.ipaddress) and not is_ipv6_address(self.ipaddress):
+                print("{} is not valid ip address\n".format(self.ipaddress))
+                return table
+
+        #
+        # Iterate through all the keys and append system neigh's associated info to
+        # the result table.
+        #
+        for i in self.chassis_app_db_keys_system_neigh:
+            key_tokens = re.split(r'\|', i)
+            nbr = key_tokens[-1].strip()
+            intf = '|'.join(key_tokens[1:-1])
+            key = '|'.join(key_tokens[1:])
+            if ((self.ipaddress is None or nbr in self.ipaddress) and
+                (self.asicname is None or self.asicname in intf)):
+                table.append((intf, nbr,
+                                chassis_app_db_system_neigh_status_get(self.db, key, SYSTEM_NEIGH_MAC),
+                                chassis_app_db_system_neigh_status_get(self.db, key, SYSTEM_NEIGH_ENCAP_INDEX)))
+        return table
+
+    def get_systemneigh_status(self):
+        self.db = swsscommon.SonicV2Connector(use_unix_socket_path=False)
+        self.db.connect(self.db.CHASSIS_APP_DB, False)
+        self.chassis_app_db_keys_system_neigh = chassis_app_db_keys_get_system_neigh(self.db)
+        if self.chassis_app_db_keys_system_neigh:
+            self.table += self.generate_systemneigh_status()
+
+# ========================== VOQ system lag status logic ==========================
+
+header_system_lag = ['System Lag Name', 'Lag Id', 'Switch Id', 'Member System Ports']
+
+class SystemLagStatus(object):
+
+    def __init__(self, system_lag_name, asicname, hostname):
+        """
+        Class constructor method
+        :param self:
+        :param intf_name: string of system lag name
+        :return:
+        """
+        self.db = None
+        self.config_db = None
+        self.system_lag_name = system_lag_name
+        self.asicname = asicname
+        self.hostname = hostname
+        self.table = []
+
+    def display_systemlag_status(self):
+        self.get_systemlag_status()
+        sorted_table = natsorted(self.table)
+        print(tabulate(sorted_table,
+                       header_system_lag,
+                       tablefmt="simple",
+                       stralign='right'))
+
+    def generate_systemlag_status(self):
+        """
+            Generate system lag status output
+        """
+
+        i = {}
+        table = []
+        key = []
+        members = []
+
+        intf_fs = parse_systemintf_in_filter(self.system_lag_name)
+        #
+        # Iterate through all the keys and append system lag's associated info to
+        # the result table.
+        #
+        for i in self.chassis_app_db_keys_system_lag:
+            key_tokens = re.split(r'\|', i)
+            key = '|'.join(key_tokens[1:])
+            if ((self.system_lag_name is None or key in intf_fs) and
+                (self.asicname is None or self.asicname in key) and
+                (self.hostname is None or self.hostname in key)):
+                mkeys = chassis_app_db_keys_get_system_lag_member(self.db, key, '')
+                members.clear()
+                for mk in mkeys:
+                    members.append(mk.split(':')[-1].strip())
+                memstr = ', '.join(members)
+                table.append((key,
+                        chassis_app_db_system_lag_status_get(self.db, key, SYSTEM_LAG_ID),
+                        chassis_app_db_system_lag_status_get(self.db, key, SYSTEM_LAG_SWITCH_ID),
+                        memstr))
+
+        return table
+
+    def get_systemlag_status(self):
+        self.db = swsscommon.SonicV2Connector(use_unix_socket_path=False)
+        self.db.connect(self.db.CHASSIS_APP_DB, False)
+        self.chassis_app_db_keys_system_lag = chassis_app_db_keys_get_system_lag(self.db, None)
+        if self.chassis_app_db_keys_system_lag:
+            self.table += self.generate_systemlag_status()
+
+# ========================== VOQ util logic main ==========================
+
+def main():
+    parser = argparse.ArgumentParser(description='Display VOQ information',
+                                     formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-c', '--command', type=str, help='get system ports or system neighbors or system lags', default=None)
+    parser.add_argument('-a', '--ipaddress', type=str, help='information for specific neighbor', default=None)
+    parser.add_argument('-i', '--interface', type=str, help='information for specific system port', default=None)
+    parser.add_argument('-s', '--systemlag', type=str, help='information for specific system lag', default=None)
+    parser.add_argument('-n', '--namespace', type=str, help='information from specific namespace or asicname', default=None)
+    parser.add_argument('-l', '--linecardname', type=str, help='information for specific linecard or host', default=None)
+    args = parser.parse_args()
+
+    if args.command == "system_ports":
+        system_port_status = SystemPortStatus(args.interface, args.namespace)
+        system_port_status.display_systemport_status()
+    elif args.command == "system_neighbors":
+        system_neigh_status = SystemNeighStatus(args.ipaddress, args.namespace)
+        system_neigh_status.display_systemneigh_status()
+    elif args.command == "system_lags":
+        system_lag_status = SystemLagStatus(args.systemlag, args.namespace, args.linecardname)
+        system_lag_status.display_systemlag_status()
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+     main()

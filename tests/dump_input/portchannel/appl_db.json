@@ -1,0 +1,18 @@
+{	
+    "LAG_TABLE:PortChannel002": {
+        "oper_status": "up",
+        "mtu": "9100",
+        "admin_status": "up"
+    },
+    "LAG_TABLE:PortChannel001": {
+        "oper_status": "up",
+        "mtu": "9100",
+        "admin_status": "up"
+    },
+    "LAG_MEMBER_TABLE:PortChannel001:Ethernet4": {
+        "status": "enabled"
+    },
+    "LAG_MEMBER_TABLE:PortChannel001:Ethernet0": {
+        "status": "enabled"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "PORT|Ethernet0": {
+        "NULL": "NULL"
+    },
+    "PORT|Ethernet4": {
+        "NULL": "NULL"
+    },
+    "PORT|Ethernet8": { 
+        "NULL": "NULL"
+    },
+    "PORTCHANNEL|PortChannel0001": {
+        "NULL": "NULL"
+    },
+    "PORTCHANNEL|PortChannel0002": {
+        "NULL": "NULL"
+    }
+}

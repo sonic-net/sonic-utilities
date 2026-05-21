@@ -1,0 +1,8 @@
+Route Source         Routes               FIB  (vrf default)
+kernel               1                    1
+connected            6                    6
+static               1                    0
+ebgp                 6371                 6371
+ibgp                 88                   88
+------
+Totals               6467                 6466

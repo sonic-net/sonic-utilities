@@ -1,0 +1,40 @@
+{
+    "VLAN_SUB_INTERFACE|Ethernet0.10": {
+        "vrf_name": "Vrf101",
+        "admin_status": "up"
+    },
+    "VLAN_SUB_INTERFACE|Eth36.10": {
+        "vrf_name": "Vrf102",
+        "admin_status": "up",
+        "vlan": "100"
+    },
+    "VLAN_SUB_INTERFACE|Po0002.101": {
+        "vrf_name": "Vrf103",
+        "admin_status": "up",
+        "vlan": "1001"
+    },
+    "VLAN_INTERFACE|Vlan40": {
+        "vrf_name": "Vrf102"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel0002": {
+        "vrf_name": "Vrf102"
+    },
+    "INTERFACE|Ethernet4": {
+        "vrf_name": "Vrf103"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+        "vrf_name": "Vrf103"
+    },
+    "VRF|Vrf1": {
+         "fallback": "false"
+    },
+    "VRF|Vrf101": {
+         "NULL": "NULL"
+    },
+    "VRF|Vrf102": {
+         "NULL": "NULL"
+    },
+    "VRF|Vrf103": {
+         "NULL": "NULL"
+    }
+}

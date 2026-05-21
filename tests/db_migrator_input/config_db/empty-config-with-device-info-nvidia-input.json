@@ -1,0 +1,6 @@
+{
+    "DEVICE_METADATA|localhost": {
+        "platform": "x86_64-nvidia_sn5600-r0",
+        "hwsku": "Mellanox-SN5600-O128"
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "INTF_TABLE:Loopback0" : {"NULL": "NULL"},
+    "INTF_TABLE:Loopback0:10.1.0.32/32" :  {"NULL": "NULL"},
+    "INTF_TABLE:Loopback0:FC00:1::32/128" : {"NULL": "NULL"},
+    "INTF_TABLE:Loopback1" : {"NULL": "NULL"},
+    "INTF_TABLE:Loopback1:10.20.8.199/32" :  {"NULL": "NULL"},
+    "INTF_TABLE:Loopback1:2001:506:28:500::1/128" :  {"NULL": "NULL"}
+}

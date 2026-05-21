@@ -1,0 +1,2833 @@
+{
+    "2064:100::1/128": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                }
+            ],
+            "prefix": "2064:100::1/128",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "2064:100::3/128": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "2064:100::3/128",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:10::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:10::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:11::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:11::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:20::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:20::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:21::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:21::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:30::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:30::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:31::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:31::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:40::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:40::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:41::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:41::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:50::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:50::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:51::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:51::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:60::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:60::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:61::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:61::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:70::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:70::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:71::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:71::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:80::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:80::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:81::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:81::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:90::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:90::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:91::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:91::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:a0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:a0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:a1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:a1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:b0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:b0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:b1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:b1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:c0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:c0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:c1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:c1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:d0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:d0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:d1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:d1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:e0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:e0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:e1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:e1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:f0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:f0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800:0:f1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800:0:f1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a800::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a800::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:10::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:10::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:11::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:11::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:20::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:20::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:21::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:21::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:30::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:30::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:31::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:31::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:40::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:40::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:41::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:41::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:50::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:50::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:51::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:51::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:60::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:60::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:61::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:61::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:70::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:70::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:71::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:71::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:80::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:80::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:81::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:81::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:90::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:90::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:91::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:91::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:a0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:a0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:a1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:a1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:b0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:b0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:b1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:b1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:c0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:c0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:c1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:c1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:d0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:d0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:d1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:d1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:e0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:e0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:e1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:e1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:f0::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:f0::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801:0:f1::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801:0:f1::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "20c0:a801::/64": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "20c0:a801::/64",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "2603:10e2:400::/128": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 726,
+                    "interfaceName": "Loopback4096"
+                }
+            ],
+            "prefix": "2603:10e2:400::/128",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "::/0": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "fc00::2"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "fc00::6"
+                }
+            ],
+            "prefix": "::/0",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 210,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv6",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 15,
+                    "interfaceName": "eth0",
+                    "ip": "fd00::1"
+                }
+            ],
+            "prefix": "::/0",
+            "protocol": "kernel",
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "fc00:1::32/128": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 725,
+                    "interfaceName": "Loopback0"
+                }
+            ],
+            "prefix": "fc00:1::32/128",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "fc00::/126": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002"
+                }
+            ],
+            "prefix": "fc00::/126",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "fc00::4/126": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005"
+                }
+            ],
+            "prefix": "fc00::4/126",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "fd00::/80": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 15,
+                    "interfaceName": "eth0"
+                }
+            ],
+            "prefix": "fd00::/80",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ],
+    "fe80::/64": [
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 742,
+                    "interfaceName": "Ethernet20"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 743,
+                    "interfaceName": "Ethernet16"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 738,
+                    "interfaceName": "Ethernet4"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 739,
+                    "interfaceName": "Ethernet0"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 726,
+                    "interfaceName": "Loopback4096"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 0,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 725,
+                    "interfaceName": "Loopback0"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "table": 254,
+            "uptime": "1d11h34m"
+        },
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 15,
+                    "interfaceName": "eth0"
+                }
+            ],
+            "prefix": "fe80::/64",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "1d11h34m"
+        }
+    ]
+}

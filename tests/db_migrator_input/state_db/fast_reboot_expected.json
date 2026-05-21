@@ -1,0 +1,5 @@
+{
+    "FAST_RESTART_ENABLE_TABLE|system": {
+        "enable": "false"
+    }
+}

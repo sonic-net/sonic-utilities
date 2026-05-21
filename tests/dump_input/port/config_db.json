@@ -1,0 +1,30 @@
+{
+        "PORT|Ethernet176": {
+                "admin_status" : "up",
+                "alias": "etp45",
+                "index": "45",
+                "lanes": "176",
+                "speed": "25000"
+        },
+        "PORT|Ethernet164": {
+                "admin_status" : "up",
+                "alias": "etp42",
+                "index": "42",
+                "lanes": "164",
+                "speed": "25000"
+        },
+        "PORT|Ethernet160": {
+                "admin_status" : "up",
+                "alias": "etp41",
+                "index": "41",
+                "lanes": "160",
+                "speed": "25000"
+        },
+        "PORT|Ethernet156": {
+                "admin_status" : "up",
+                "alias": "etp40",
+                "index": "40",
+                "lanes": "156",
+                "speed": "25000"
+        }
+}

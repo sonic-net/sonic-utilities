@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Collect all parameters in order and build a file name prefix
+PREFIX=""
+while [[ $# > 1 ]]; do
+    PREFIX=${PREFIX}$1.
+    shift
+done
+
+CONTAINER_ID=""
+if [ $# > 0 ]; then
+    CONTAINER_ID=$(xargs -0 -L1 -a /proc/${1}/cgroup | grep -oP "(?:system.slice/docker-\K\w+)|(?:pids:/docker/\K\w+)")
+    ns=`xargs -0 -L1 -a /proc/${1}/environ | grep -e "^NAMESPACE_ID" | cut -f2 -d'='`
+    if [ ! -z ${ns} ]; then
+        PREFIX=${PREFIX}${ns}.
+    fi
+fi
+
+/bin/gzip -1 - > /var/core/${PREFIX}core.gz
+
+if [[ ! -z $CONTAINER_ID ]]; then
+   CONTAINER_NAME=$(docker inspect --format='{{.Name}}' ${CONTAINER_ID} | cut -c2-)
+   if [[ ! -z ${CONTAINER_NAME} ]]; then
+      # coredump_gen_handler invokes techsupport if all the other required conditions are met
+      # explicitly passing in the env vars because coredump-compress's namespace doesn't have these set by default
+      for path in $(find /usr/local/lib/python3*/dist-packages -maxdepth 0); do
+          PYTHONPATH=$PYTHONPATH:$path
+      done
+      setsid $(echo > /tmp/coredump_gen_handler.log;
+             export PYTHONPATH=$PYTHONPATH;
+             python3 /usr/local/bin/coredump_gen_handler.py ${PREFIX}core.gz ${CONTAINER_NAME} &>> /tmp/coredump_gen_handler.log) &
+   fi
+fi
+

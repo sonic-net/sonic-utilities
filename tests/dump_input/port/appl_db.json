@@ -1,0 +1,35 @@
+{
+        "PORT_TABLE:Ethernet176": {
+                "index": "0",
+                "lanes": "0",
+                "alias": "etp45",
+                "speed": "25000",
+                "oper_status": "up",
+                "pfc_asym": "off",
+                "mtu": "9100",
+                "fec": "rs",
+                "admin_status": "up"
+        },
+        "PORT_TABLE:Ethernet160": {
+                "index": "0",
+                "lanes": "0",
+                "alias": "etp41",
+                "speed": "25000",
+                "oper_status": "up",
+                "pfc_asym": "off",
+                "mtu": "9100",
+                "fec": "rs",
+                "admin_status": "up"
+        },
+        "PORT_TABLE:Ethernet164": {
+                "index": "0",
+                "lanes": "0",
+                "alias": "etp42",
+                "speed": "25000",
+                "oper_status": "up",
+                "pfc_asym": "off",
+                "mtu": "9100",
+                "fec": "rs",
+                "admin_status": "up"
+        }
+}

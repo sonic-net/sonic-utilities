@@ -1,0 +1,88 @@
+[
+    {
+        "op": "add",
+        "path": "/PORT/Ethernet3",
+        "value": {
+            "alias": "Eth1/4",
+            "lanes": "68",
+            "description": "",
+            "speed": "10000"
+        }
+    },
+    {
+        "op": "add",
+        "path": "/PORT/Ethernet1",
+        "value": {
+            "alias": "Eth1/2",
+            "lanes": "66",
+            "description": "",
+            "speed": "10000"
+        }
+    },
+    {
+        "op": "add",
+        "path": "/PORT/Ethernet2",
+        "value": {
+            "alias": "Eth1/3",
+            "lanes": "67",
+            "description": "",
+            "speed": "10000"
+        }
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/lanes",
+        "value": "65"
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/alias",
+        "value": "Eth1/1"
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/description",
+        "value": ""
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/speed",
+        "value": "10000"
+    },
+    {
+        "op": "add",
+        "path": "/VLAN_MEMBER/Vlan100|Ethernet2",
+        "value": {
+            "tagging_mode": "untagged"
+        }
+    },
+    {
+        "op": "add",
+        "path": "/VLAN_MEMBER/Vlan100|Ethernet3",
+        "value": {
+            "tagging_mode": "untagged"
+        }
+    },
+    {
+        "op": "add",
+        "path": "/VLAN_MEMBER/Vlan100|Ethernet1",
+        "value": {
+            "tagging_mode": "untagged"
+        }
+    },
+    {
+        "op": "add",
+        "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/1",
+        "value": "Ethernet1"
+    },
+    {
+        "op": "add",
+        "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/2",
+        "value": "Ethernet2"
+    },
+    {
+        "op": "add",
+        "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/3",
+        "value": "Ethernet3"
+    }
+]

@@ -1,0 +1,42 @@
+{
+    "BUFFER_POOL": {
+        "egress_lossless_pool": {
+           "mode": "static",
+           "size": "33004032",
+           "xoff": "196608",
+           "type": "egress"
+        },
+        "egress_lossy_pool": {
+            "size": "12766208",
+            "type": "egress",
+            "mode": "dynamic"
+        }
+    },
+    "BUFFER_PROFILE": {
+        "egress_lossless_profile": {
+            "pool":"egress_lossless_pool",
+            "size":"1518",
+            "dynamic_th":"3"
+        },
+        "egress_lossy_profile": {
+            "pool":"egress_lossy_pool",
+            "size":"1518",
+            "dynamic_th":"3"
+        }
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST": {
+        "Ethernet9": {
+            "profile_list": "egress_lossless_profile,egress_lossy_profile"
+        }
+    },
+    "PORT": {
+        "Ethernet9": {
+            "alias": "Eth3/2",
+            "lanes": "74",
+            "description": "",
+            "speed": "11100",
+            "tpid": "0x8100",
+            "admin_status": "up"
+        }
+    }
+}

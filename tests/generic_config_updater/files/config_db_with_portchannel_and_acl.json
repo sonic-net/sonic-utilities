@@ -1,0 +1,25 @@
+{
+    "PORT": {
+        "Ethernet0": {
+            "alias": "Eth1/1",
+            "lanes": "65",
+            "description": "",
+            "speed": "10000"
+        }
+    },
+    "PORTCHANNEL": {
+        "PortChannel0001": {
+            "admin_status": "up"
+        }
+    },
+    "ACL_TABLE": {
+        "NO-NSW-PACL-V4": {
+            "type": "L3",
+            "policy_desc": "NO-NSW-PACL-V4",
+            "ports": [
+                "Ethernet0",
+                "PortChannel0001"
+            ]
+        }
+    }
+}

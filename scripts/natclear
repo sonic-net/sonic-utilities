@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+
+"""
+    Script to clear nat dynamic entries from Hardware and also to clear the nat statistics
+
+    usage: natclear [-t | -s]
+    arguments:
+      -t,  --translations
+      -s,  --statistics 
+
+"""
+
+import argparse
+import json
+import sys
+
+from swsscommon.swsscommon import SonicV2Connector
+
+class NatClear(object):
+
+    def __init__(self):
+        super(NatClear,self).__init__()
+        self.db = SonicV2Connector()
+        self.db.connect(self.db.APPL_DB)
+        return
+
+    def send_entries_notification(self, op, data):
+        opdata = [op,data]
+        msg = json.dumps(opdata,separators=(',',':'))
+        self.db.publish('APPL_DB','FLUSHNATENTRIES', msg)
+        return
+
+    def send_statistics_notification(self, op, data):
+        opdata = [op,data]
+        msg = json.dumps(opdata,separators=(',',':'))
+        self.db.publish('APPL_DB','FLUSHNATSTATISTICS', msg)
+        return
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Clear the nat information',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+    Examples:
+    natclear -t
+    natclear -s
+    """)
+
+    parser.add_argument('-t', '--translations', action='store_true', help='Clear the nat translations')
+    parser.add_argument('-s', '--statistics', action='store_true', help='Clear the nat statistics')
+
+    args = parser.parse_args()
+    
+    clear_translations = args.translations
+    clear_statistics = args.statistics
+
+    try:
+        nat = NatClear()
+        if clear_translations:
+            nat.send_entries_notification("ENTRIES", "ALL")
+            print("\nDynamic NAT entries are cleared.")
+        elif clear_statistics:
+            nat.send_statistics_notification("STATISTICS", "ALL")
+            print("\nNAT statistics are cleared.")
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+

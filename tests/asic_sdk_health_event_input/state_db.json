@@ -1,0 +1,19 @@
+{
+    "SWITCH_CAPABILITY|switch": {
+        "MIRROR": "true",
+        "MIRRORV6": "true",
+        "PORT_TPID_CAPABLE": "true",
+        "LAG_TPID_CAPABLE": "true",
+        "ACL_ACTION|PACKET_ACTION": "FORWARD",
+        "ASIC_SDK_HEALTH_EVENT": "true",
+        "REG_FATAL_ASIC_SDK_HEALTH_CATEGORY": "true",
+        "REG_WARNING_ASIC_SDK_HEALTH_CATEGORY": "true",
+        "REG_NOTICE_ASIC_SDK_HEALTH_CATEGORY": "true"
+    },
+    "ASIC_SDK_HEALTH_EVENT_TABLE|2023-11-22 09:18:12": {
+        "asic_id": "0",
+        "severity": "fatal",
+        "description": "ASIC SDK health event",
+        "category": "firmware"
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "orchagent:orchagent": {
+        "LOGLEVEL": "INFO",
+        "LOGOUTPUT": "SYSLOG"
+    },
+    "SAI_API_BUFFER:SAI_API_BUFFER": {
+        "LOGLEVEL": "SAI_LOG_LEVEL_NOTICE",
+        "LOGOUTPUT": "SYSLOG"
+    },
+    "JINJA2_CACHE": {},
+    "INVALID:INVALID": {
+        "invalid": "invalid"
+    }
+}

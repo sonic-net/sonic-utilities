@@ -1,0 +1,914 @@
+{
+    "BUFFER_PG_TABLE:Ethernet0:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_10000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet8:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet8:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_25000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet16:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet16:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_50000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet24:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet24:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_40000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet32:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet32:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_100000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet40:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet40:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_200000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet48:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet48:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet56:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet56:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet64:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet64:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet72:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet72:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet80:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet80:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet88:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet88:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet96:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet96:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet104:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet104:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet112:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet112:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet120:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet120:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet128:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet128:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet136:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet136:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet144:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet144:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet152:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet152:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet160:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet160:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet168:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet168:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet176:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet176:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet184:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet184:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet192:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet192:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet200:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet208:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet216:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet224:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet224:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_40m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet232:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet232:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_400000_40m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet240:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet240:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_100000_40m_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet248:0": {
+        "profile": "[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PG_TABLE:Ethernet248:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:pg_lossless_100000_40m_profile]"
+    },
+    "BUFFER_POOL_TABLE:egress_lossless_pool": {
+        "type": "egress",
+        "mode": "dynamic",
+        "size": "60817392"
+    },
+    "BUFFER_POOL_TABLE:egress_lossy_pool": {
+        "type": "egress",
+        "mode": "dynamic",
+        "size": "26451968"
+    },
+    "BUFFER_POOL_TABLE:ingress_lossless_pool": {
+        "type": "ingress",
+        "mode": "dynamic",
+        "size": "26451968"
+    },
+    "BUFFER_POOL_TABLE:ingress_lossy_pool": {
+        "type": "ingress",
+        "mode": "dynamic",
+        "size": "26451968"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet0": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet2": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet4": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet6": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet8": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet10": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet12": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet16": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet18": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet20": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet22": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet24": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet26": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet28": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet32": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet34": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet36": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet38": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet40": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet42": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet44": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet48": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet50": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet52": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet54": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet56": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet58": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet60": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet64": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet65": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet66": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet67": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet68": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet70": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet72": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet76": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet80": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet82": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet84": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet88": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet92": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet96": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet100": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet104": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet108": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet112": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet116": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet120": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet124": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet128": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet136": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet144": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet152": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet160": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet168": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet176": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet184": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet192": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet224": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet232": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet240": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_EGRESS_PROFILE_LIST_TABLE:Ethernet248": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:egress_lossless_profile],[BUFFER_PROFILE_TABLE:egress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet0": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet2": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet4": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet6": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet8": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet10": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet12": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet16": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet18": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet20": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet22": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet24": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet26": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet28": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet32": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet34": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet36": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet38": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet40": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet42": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet44": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet48": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet50": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet52": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet54": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet56": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet58": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet60": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet64": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet65": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet66": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet67": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet68": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet70": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet72": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet76": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet80": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet82": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet84": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet88": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet92": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet96": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet100": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet104": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet108": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet112": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet116": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet120": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet124": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet128": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet136": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet144": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet152": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet160": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet168": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet176": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet184": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet192": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet224": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet232": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet240": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PORT_INGRESS_PROFILE_LIST_TABLE:Ethernet248": {
+        "profile_list": "[BUFFER_PROFILE_TABLE:ingress_lossless_profile],[BUFFER_PROFILE_TABLE:ingress_lossy_profile]"
+    },
+    "BUFFER_PROFILE_TABLE:egress_lossless_profile": {
+        "dynamic_th": "7",
+        "pool": "[BUFFER_POOL_TABLE:egress_lossless_pool]",
+        "size": "0"
+    },
+    "BUFFER_PROFILE_TABLE:egress_lossy_profile": {
+        "dynamic_th": "7",
+        "pool": "[BUFFER_POOL_TABLE:egress_lossy_pool]",
+        "size": "9216"
+    },
+    "BUFFER_PROFILE_TABLE:ingress_lossless_profile": {
+        "dynamic_th": "7",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "0"
+    },
+    "BUFFER_PROFILE_TABLE:ingress_lossy_profile": {
+        "dynamic_th": "3",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossy_pool]",
+        "size": "0"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_10000_5m_profile": {
+        "xon": "19456",
+        "dynamic_th": "0",
+        "xoff": "32768",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "52224"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_25000_5m_profile": {
+        "xon": "19456",
+        "dynamic_th": "0",
+        "xoff": "32768",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "52224"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_40000_5m_profile": {
+        "xon": "19456",
+        "dynamic_th": "0",
+        "xoff": "33792",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "53248"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_50000_5m_profile": {
+        "xon": "19456",
+        "dynamic_th": "0",
+        "xoff": "33792",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "53248"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_100000_5m_profile": {
+        "xon": "19456",
+        "dynamic_th": "0",
+        "xoff": "33792",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "53248"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_100000_40m_profile": {
+        "xon": "19456",
+        "dynamic_th": "0",
+        "xoff": "44032",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "63488"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_200000_5m_profile": {
+        "xon": "19456",
+        "dynamic_th": "0",
+        "xoff": "35840",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "55296"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_400000_5m_profile": {
+        "xon": "37888",
+        "dynamic_th": "0",
+        "xoff": "38912",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "86016"
+    },
+    "BUFFER_PROFILE_TABLE:pg_lossless_400000_40m_profile": {
+        "xon": "37888",
+        "dynamic_th": "0",
+        "xoff": "77824",
+        "pool": "[BUFFER_POOL_TABLE:ingress_lossless_pool]",
+        "size": "124928"
+    },
+    "BUFFER_PROFILE_TABLE:q_lossy_profile": {
+        "dynamic_th": "3",
+        "pool": "[BUFFER_POOL_TABLE:egress_lossy_pool]",
+        "size": "0"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet8:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet8:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet8:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet16:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet16:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet16:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet24:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet24:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet24:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet32:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet32:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet32:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet40:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet40:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet40:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet48:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet48:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet48:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet56:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet56:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet56:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet64:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet64:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet64:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet72:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet72:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet72:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet80:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet80:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet80:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet88:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet88:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet88:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet96:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet96:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet96:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet104:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet104:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet104:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet112:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet112:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet112:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet120:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet120:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet120:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet128:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet128:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet128:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet136:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet136:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet136:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet144:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet144:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet144:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet152:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet152:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet152:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet160:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet160:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet160:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet168:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet168:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet168:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet176:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet176:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet176:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet184:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet184:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet184:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet192:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet192:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet192:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet224:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet224:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet224:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet232:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet232:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet232:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet240:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet240:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet240:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet248:0-2": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet248:3-4": {
+        "profile": "[BUFFER_PROFILE_TABLE:egress_lossless_profile]"
+    },
+    "BUFFER_QUEUE_TABLE:Ethernet248:5-6": {
+        "profile": "[BUFFER_PROFILE_TABLE:q_lossy_profile]"
+    }
+}

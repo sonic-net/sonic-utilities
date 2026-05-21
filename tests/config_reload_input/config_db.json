@@ -1,0 +1,62 @@
+{
+    "DEVICE_METADATA": {
+        "localhost": {
+            "docker_routing_config_mode": "split",
+            "hostname": "sonic",
+            "hwsku": "Seastone-DX010-25-50",
+            "mac": "00:e0:ec:89:6e:48",
+            "platform": "x86_64-cel_seastone-r0",
+            "type": "ToRRouter"
+        }
+    },
+    "VLAN_MEMBER": {
+        "Vlan1000|Ethernet0": {
+            "tagging_mode": "untagged"
+        },
+        "Vlan1000|Ethernet4": {
+            "tagging_mode": "untagged"
+        },
+        "Vlan1000|Ethernet8": {
+            "tagging_mode": "untagged"
+        }
+    },
+    "VLAN": {
+        "Vlan1000": {
+            "vlanid": "1000",
+            "dhcp_servers": [
+                "192.0.0.1",
+                "192.0.0.2",
+                "192.0.0.3",
+                "192.0.0.4"
+            ]
+        }
+    },
+    "PORT": {
+        "Ethernet0": {
+            "alias": "Eth1",
+            "lanes": "65, 66, 67, 68",
+            "description": "Ethernet0 100G link",
+            "speed": "100000"
+        },
+        "Ethernet4": {
+            "admin_status": "up",
+            "alias": "fortyGigE0/4",
+            "description": "Servers0:eth0",
+            "index": "1",
+            "lanes": "29,30,31,32",
+            "mtu": "9100",
+            "pfc_asym": "off",
+            "speed": "40000"
+        },
+        "Ethernet8": {
+            "admin_status": "up",
+            "alias": "fortyGigE0/8",
+            "description": "Servers1:eth0",
+            "index": "2",
+            "lanes": "33,34,35,36",
+            "mtu": "9100",
+            "pfc_asym": "off",
+            "speed": "40000"
+        }
+    }
+}

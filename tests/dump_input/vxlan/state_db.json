@@ -1,0 +1,20 @@
+{
+    "VXLAN_TUNNEL_TABLE|EVPN_11.1.0.32": {
+        "src_ip": "10.1.0.32",
+        "dst_ip": "11.1.0.32",
+        "tnl_src": "EVPN",
+        "operstatus": "up"
+    },
+    "VXLAN_TUNNEL_TABLE|EVPN_11.1.0.33": {
+        "src_ip": "10.1.0.32",
+        "dst_ip": "11.1.0.33",
+        "tnl_src": "EVPN",
+        "operstatus": "down"
+    },
+    "VXLAN_TUNNEL_TABLE|EVPN_11.1.0.34": {
+        "src_ip": "10.1.0.32",
+        "dst_ip": "11.1.0.34",
+        "tnl_src": "EVPN",
+        "operstatus": "up"
+    }
+}

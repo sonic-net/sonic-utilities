@@ -1,0 +1,7 @@
+{
+    "FLEX_COUNTER_TABLE": {
+        "BUFFER_POOL_WATERMARK": {
+            "FLEX_COUNTER_STATUS": "enable"
+        }
+    }
+}

@@ -1,0 +1,27 @@
+{
+    "ACL_TABLE|SNMP_ACL": {
+        "policy_desc": "SNMP_ACL",
+        "services": [
+            "SNMP"
+        ],
+        "stage": "ingress",
+        "type": "CTRLPLANE"
+    },
+    "ACL_TABLE|DATAACL": {
+        "policy_desc": "Some ACL table",
+        "ports": "Ethernet0,Ethernet4",
+        "stage": "ingress",
+        "type": "L3"
+    },
+    "ACL_TABLE|DATAACL1": {
+        "policy_desc": "Some ACL table",
+        "ports": "Ethernet0,Ethernet4",
+        "stage": "ingress",
+        "type": "L3"
+    },
+    "ACL_RULE|DATAACL|R0": {
+        "ETHER_TYPE": "2048",
+        "PACKET_ACTION": "FORWARD",
+        "PRIORITY": "999"
+    }
+}

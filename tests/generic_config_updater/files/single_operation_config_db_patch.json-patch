@@ -1,0 +1,6 @@
+[
+    {
+        "op": "remove",
+        "path": "/VLAN_MEMBER/Vlan1000|Ethernet8"
+    }
+]

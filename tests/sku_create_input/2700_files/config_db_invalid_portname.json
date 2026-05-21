@@ -1,0 +1,302 @@
+{
+    "DEVICE_METADATA": {
+        "localhost": {
+            "hwsku": "Mellanox-SN2700-C28D8", 
+            "hostname": "sonic", 
+            "platform": "x86_64-mlnx_msn2700-r0", 
+            "mac": "7c:fe:90:f8:06:80", 
+            "bgp_asn": "65100", 
+            "type": "LeafRouter"
+        }
+    }, 
+    "PORT": {
+        "Ether8": {
+            "index": "3", 
+            "lanes": "8,9,10,11", 
+            "mtu": "9100", 
+            "alias": "etp3", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether0": {
+            "index": "1", 
+            "lanes": "0,1,2,3", 
+            "mtu": "9100", 
+            "alias": "etp1", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether4": {
+            "index": "2", 
+            "lanes": "4,5,6,7", 
+            "mtu": "9100", 
+            "alias": "etp2", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether108": {
+            "index": "28", 
+            "lanes": "108,109,110,111", 
+            "mtu": "9100", 
+            "alias": "etp28", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether100": {
+            "index": "26", 
+            "lanes": "100,101,102,103", 
+            "mtu": "9100", 
+            "alias": "etp26", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether104": {
+            "index": "27", 
+            "lanes": "104,105,106,107", 
+            "mtu": "9100", 
+            "alias": "etp27", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether68": {
+            "index": "18", 
+            "lanes": "68,69,70,71", 
+            "mtu": "9100", 
+            "alias": "etp18", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether126": {
+            "index": "32", 
+            "lanes": "126,127", 
+            "mtu": "9100", 
+            "alias": "etp32b", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether96": {
+            "index": "25", 
+            "lanes": "96,97,98,99", 
+            "mtu": "9100", 
+            "alias": "etp25", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether124": {
+            "index": "32", 
+            "lanes": "124,125", 
+            "mtu": "9100", 
+            "alias": "etp32a", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether122": {
+            "index": "31", 
+            "lanes": "122,123", 
+            "mtu": "9100", 
+            "alias": "etp31b", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether92": {
+            "index": "24", 
+            "lanes": "92,93,94,95", 
+            "mtu": "9100", 
+            "alias": "etp24", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether120": {
+            "index": "31", 
+            "lanes": "120,121", 
+            "mtu": "9100", 
+            "alias": "etp31a", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether52": {
+            "index": "14", 
+            "lanes": "52,53,54,55", 
+            "mtu": "9100", 
+            "alias": "etp14", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether56": {
+            "index": "15", 
+            "lanes": "56,57,58,59", 
+            "mtu": "9100", 
+            "alias": "etp15", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether76": {
+            "index": "20", 
+            "lanes": "76,77,78,79", 
+            "mtu": "9100", 
+            "alias": "etp20", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether72": {
+            "index": "19", 
+            "lanes": "72,73,74,75", 
+            "mtu": "9100", 
+            "alias": "etp19", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether64": {
+            "index": "17", 
+            "lanes": "64,65,66,67", 
+            "mtu": "9100", 
+            "alias": "etp17", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether32": {
+            "index": "9", 
+            "lanes": "32,33,34,35", 
+            "mtu": "9100", 
+            "alias": "etp9", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether16": {
+            "index": "5", 
+            "lanes": "16,17,18,19", 
+            "mtu": "9100", 
+            "alias": "etp5", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether36": {
+            "index": "10", 
+            "lanes": "36,37,38,39", 
+            "mtu": "9100", 
+            "alias": "etp10", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether12": {
+            "index": "4", 
+            "lanes": "12,13,14,15", 
+            "mtu": "9100", 
+            "alias": "etp4", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether88": {
+            "index": "23", 
+            "lanes": "88,89,90,91", 
+            "mtu": "9100", 
+            "alias": "etp23", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether118": {
+            "index": "30", 
+            "lanes": "118,119", 
+            "mtu": "9100", 
+            "alias": "etp30b", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether116": {
+            "index": "30", 
+            "lanes": "116,117", 
+            "mtu": "9100", 
+            "alias": "etp30a", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether114": {
+            "index": "29", 
+            "lanes": "114,115", 
+            "mtu": "9100", 
+            "alias": "etp29b", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether80": {
+            "index": "21", 
+            "lanes": "80,81,82,83", 
+            "mtu": "9100", 
+            "alias": "etp21", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether112": {
+            "index": "29", 
+            "lanes": "112,113", 
+            "mtu": "9100", 
+            "alias": "etp29a", 
+            "admin_status": "up", 
+            "speed": "50000"
+        }, 
+        "Ether84": {
+            "index": "22", 
+            "lanes": "84,85,86,87", 
+            "mtu": "9100", 
+            "alias": "etp22", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether48": {
+            "index": "13", 
+            "lanes": "48,49,50,51", 
+            "mtu": "9100", 
+            "alias": "etp13", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether44": {
+            "index": "12", 
+            "lanes": "44,45,46,47", 
+            "mtu": "9100", 
+            "alias": "etp12", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether40": {
+            "index": "11", 
+            "lanes": "40,41,42,43", 
+            "mtu": "9100", 
+            "alias": "etp11", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether28": {
+            "index": "8", 
+            "lanes": "28,29,30,31", 
+            "mtu": "9100", 
+            "alias": "etp8", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether60": {
+            "index": "16", 
+            "lanes": "60,61,62,63", 
+            "mtu": "9100", 
+            "alias": "etp16", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether20": {
+            "index": "6", 
+            "lanes": "20,21,22,23", 
+            "mtu": "9100", 
+            "alias": "etp6", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }, 
+        "Ether24": {
+            "index": "7", 
+            "lanes": "24,25,26,27", 
+            "mtu": "9100", 
+            "alias": "etp7", 
+            "admin_status": "up", 
+            "speed": "100000"
+        }
+    }
+}

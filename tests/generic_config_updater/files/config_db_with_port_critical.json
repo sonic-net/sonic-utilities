@@ -1,0 +1,69 @@
+{
+    "PORT": {
+        "Ethernet4": {
+            "admin_status": "up",
+            "alias": "fortyGigE0/4",
+            "description": "Servers0:eth0",
+            "index": "1",
+            "lanes": "29,30,31,32",
+            "mtu": "9100",
+            "pfc_asym": "off",
+            "speed": "40000"
+        },
+        "Ethernet8": {
+            "admin_status": "up",
+            "alias": "fortyGigE0/8",
+            "description": "Servers1:eth0",
+            "index": "2",
+            "lanes": "33,34,35,36",
+            "pfc_asym": "off",
+            "speed": "40000"
+        },
+        "Ethernet12": {
+            "admin_status": "down",
+            "alias": "fortyGigE0/12",
+            "description": "Servers2:eth0",
+            "index": "3",
+            "lanes": "37,38,39,40",
+            "mtu": "9100",
+            "pfc_asym": "off",
+            "speed": "40000"
+        },
+        "Ethernet16": {
+            "alias": "fortyGigE0/16",
+            "description": "Servers3:eth0",
+            "index": "4",
+            "lanes": "41,42,43,44",
+            "pfc_asym": "off",
+            "speed": "40000"
+        },
+        "Ethernet28": {
+            "alias": "fortyGigE0/28",
+            "description": "Servers5:eth0",
+            "index": "6",
+            "lanes": "53,54,55,56",
+            "pfc_asym": "off",
+            "speed": "40000"
+        },
+        "Ethernet32": {
+            "alias": "fortyGigE0/32",
+            "description": "Servers6:eth0",
+            "index": "7",
+            "lanes": "57,58,59,60",
+            "mtu": "9100",
+            "pfc_asym": "off",
+            "speed": "40000"
+        }
+    },
+    "BUFFER_PG": {
+        "Ethernet4|0": {
+            "profile": "ingress_lossy_profile"
+        },
+        "Ethernet12|0": {
+            "profile": "ingress_lossy_profile"
+        },
+        "Ethernet28|0": {
+            "profile": "ingress_lossy_profile"
+        }
+    }
+}

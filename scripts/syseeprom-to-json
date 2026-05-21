@@ -1,0 +1,31 @@
+#!/usr/bin/awk -f
+
+BEGIN { print "{"; n = 0 }
+
+function sep()
+{
+	if (n > 0)  print ", ";
+	++n;
+}
+
+/Product Name/       { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Part Number/        { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Serial Number/      { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Base MAC Address/   { sep(); print "\"" $1 " " $2 " " $3 "\": \"" $6 "\""; }
+/Manufacture Date/   { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Device Version/     { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Label Revision/     { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Platform Name/      { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/ONIE Version/       { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/MAC Addresses/      { sep(); print "\"" $1 " " $2 "\": " $5; }
+/Manfacturer/        { sep(); print "\"" $1 "\": \"" $4 "\""; } 
+/Manfacture Country/ { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Vendor Name/        { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Diag Version/       { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Service Tag/        { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Hardware Version/   { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Software Version/   { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Manfacture Date/    { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+/Model Name/         { sep(); print "\"" $1 " " $2 "\": \"" $5 "\""; } 
+
+END { print "}" }

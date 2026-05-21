@@ -1,0 +1,41 @@
+{   
+    "VLAN_TABLE|Vlan2": {
+        "state": "ok"
+    },
+    "VLAN_TABLE|Vlan3": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan3|Ethernet8": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan3|Ethernet0": {
+        "state": "ok"
+    },
+    "VLAN_TABLE|Vlan4": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan4|Ethernet16": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan4|Ethernet24": {
+        "state": "ok"
+    },
+    "VLAN_TABLE|Vlan6": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan6|Ethernet32": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan6|Ethernet40": {
+        "state": "ok"
+    },
+    "VLAN_TABLE|Vlan8": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan8|Ethernet64": {
+        "state": "ok"
+    },
+    "VLAN_MEMBER_TABLE|Vlan8|Ethernet72": {
+        "state": "ok"
+    }
+}

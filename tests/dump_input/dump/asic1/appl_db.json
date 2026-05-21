@@ -1,0 +1,13 @@
+{
+    "PORT_TABLE:Ethernet-BP256": {
+        "oper_status": "up",
+        "lanes": "61,62,63,64",
+        "description": "ASIC0:Eth16-ASIC0",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet-BP256",
+        "admin_status": "up",
+        "speed": "40000",
+        "asic_port_name": "Eth0-ASIC1"
+    }
+}

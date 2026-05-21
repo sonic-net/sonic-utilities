@@ -1,0 +1,11 @@
+{
+    "NVGRE_TUNNEL|tunnel_1": {
+        "src_ip": "10.0.0.1"
+    },
+    "VLAN|Vlan1000": {
+        "vlanid": "1000"
+    },
+    "VLAN|Vlan2000": {
+        "vlanid": "2000"
+    }
+}

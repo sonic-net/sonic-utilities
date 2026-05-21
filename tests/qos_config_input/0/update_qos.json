@@ -1,0 +1,57 @@
+{
+    "BUFFER_PG": {
+        "Ethernet0|0": {
+            "profile": "ingress_lossy_profile"
+        }
+    },
+    "BUFFER_QUEUE": {
+        "Ethernet0|0-2": {
+            "profile": "egress_lossy_profile"
+        },
+        "Ethernet0|3-4": {
+            "profile": "egress_lossless_profile"
+        },
+        "Ethernet0|5-6": {
+            "profile": "egress_lossy_profile"
+        }
+    },
+    "CABLE_LENGTH": {
+        "AZURE": {
+            "Ethernet0": "300m"
+        }
+    },
+    "PORT_QOS_MAP": {
+        "Ethernet0": {
+            "dscp_to_tc_map": "AZURE",
+            "pfc_enable": "3,4",
+            "pfc_to_queue_map": "AZURE",
+            "tc_to_pg_map": "AZURE",
+            "tc_to_queue_map": "AZURE"
+        }
+    },
+    "QUEUE": {
+        "Ethernet0|0": {
+            "scheduler": "scheduler.0"
+        },
+        "Ethernet0|1": {
+            "scheduler": "scheduler.0"
+        },
+        "Ethernet0|2": {
+            "scheduler": "scheduler.0"
+        },
+        "Ethernet0|3": {
+            "scheduler": "scheduler.1",
+            "wred_profile": "AZURE_LOSSLESS"
+        },
+        "Ethernet0|4": {
+            "scheduler": "scheduler.1",
+            "wred_profile": "AZURE_LOSSLESS"
+        },
+        "Ethernet0|5": {
+            "scheduler": "scheduler.0"
+        },
+        "Ethernet0|6": {
+            "scheduler": "scheduler.0"
+        }
+    }
+}

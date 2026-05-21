@@ -1,0 +1,18 @@
+{
+    "COUNTERS_EVENTS:latency_in_ms": {
+        "value": 2
+    },
+    "COUNTERS_EVENTS:missed_to_cache": {
+        "value": 0
+    },
+    "COUNTERS_EVENTS:missed_internal": {
+        "value": 0
+    },
+    "COUNTERS_EVENTS:missed_by_slow_receiver": {
+        "value": 0
+    },
+    "COUNTERS_EVENTS:published": {
+        "value": 40147
+    }
+}
+
