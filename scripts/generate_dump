@@ -1669,6 +1669,7 @@ collect_broadcom() {
         print(json.load(sys.stdin)["platform"])')
     local hwsku=$(show platform summary --json | python -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
+    local hsdk=$(bcmcmd bsh -c SOC | grep 'Failed to execute')
 
     # save SAI configuration files (config.bcm, port_config.ini, sai.profile)
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
@@ -1711,9 +1712,14 @@ collect_broadcom() {
     save_cmd "cat /proc/bcm/knet/link" "broadcom.knet.link"
     save_cmd "cat /proc/bcm/knet/rate" "broadcom.knet.rate"
 
-    save_bcmcmd_all_ns "-t5 version" "broadcom.version"
-    save_bcmcmd_all_ns "-t5 soc" "broadcom.soc"
-    save_bcmcmd_all_ns "-t5 ps" "broadcom.ps"
+    save_bcmcmd_all_ns "-t 5 version" "broadcom.version"
+    if [ -z "$hsdk" ]; then
+        save_bcmcmd_all_ns "-t 5 soc" "broadcom.soc"
+    else
+        save_bcmcmd_all_ns "-t 5 attach" "broadcom.attach"
+        save_bcmcmd_all_ns "-t 5 stkmode" "broadcom.stkmode"
+    fi
+    save_bcmcmd_all_ns "-t 5 ps" "broadcom.ps"
     if [ -e /usr/share/sonic/device/${platform}/platform_asic ]; then
        bcm_family=`cat /usr/share/sonic/device/${platform}/platform_asic`
     else
@@ -1767,28 +1773,42 @@ collect_broadcom() {
        save_bcmcmd_all_ns "\"fabric connectivity\"" "fabric.connect.summary"
        save_bcmcmd_all_ns "\"port status\"" "port.status.summary"
     else
-       save_bcmcmd_all_ns "\"l3 nat_ingress show\"" "broadcom.nat.ingress"
-       save_bcmcmd_all_ns "\"l3 nat_egress show\"" "broadcom.nat.egress"
+       if [ -n "$(bcmcmd 'show feature' | grep -i nat)" ]; then
+           save_bcmcmd_all_ns "\"l3 nat_ingress show\"" "broadcom.nat.ingress"
+           save_bcmcmd_all_ns "\"l3 nat_egress show\"" "broadcom.nat.egress"
+       fi
        save_bcmcmd_all_ns "\"ipmc table show\"" "broadcom.ipmc"
        save_bcmcmd_all_ns "\"multicast show\"" "broadcom.multicast"
-       save_bcmcmd_all_ns "\"conf show\"" "conf.summary"
        save_bcmcmd_all_ns "\"fp show\"" "fp.summary"
        save_bcmcmd_all_ns "\"pvlan show\"" "pvlan.summary"
        save_bcmcmd_all_ns "\"l2 show\"" "l2.summary"
        save_bcmcmd_all_ns "\"l3 intf show\"" "l3.intf.summary"
-       save_bcmcmd_all_ns "\"l3 defip show\"" "l3.defip.summary"
-       save_bcmcmd_all_ns "\"l3 l3table show\"" "l3.l3table.summary"
        save_bcmcmd_all_ns "\"l3 egress show\"" "l3.egress.summary"
-       save_bcmcmd_all_ns "\"l3 ecmp egress show\"" "l3.ecmp.egress.summary"
-       save_bcmcmd_all_ns "\"l3 multipath show\"" "l3.multipath.summary"
-       save_bcmcmd_all_ns "\"l3 ip6host show\"" "l3.ip6host.summary"
-       save_bcmcmd_all_ns "\"l3 ip6route show\"" "l3.ip6route.summary"
        save_bcmcmd_all_ns "\"mc show\"" "multicast.summary"
        save_bcmcmd_all_ns "\"cstat *\"" "cstat.summary"
        save_bcmcmd_all_ns "\"mirror show\"" "mirror.summary"
        save_bcmcmd_all_ns "\"mirror dest show\"" "mirror.dest.summary"
        save_bcmcmd_all_ns "\"port *\"" "port.summary"
-       save_bcmcmd_all_ns "\"d chg my_station_tcam\"" "mystation.tcam.summary"
+       if [ -z "$hsdk" ]; then
+           save_bcmcmd_all_ns "\"conf show\"" "conf.summary"
+           save_bcmcmd_all_ns "\"l3 defip show\"" "l3.defip.summary"
+           save_bcmcmd_all_ns "\"l3 l3table show\"" "l3.l3table.summary"
+           save_bcmcmd_all_ns "\"l3 ecmp egress show\"" "l3.ecmp.egress.summary"
+           save_bcmcmd_all_ns "\"l3 multipath show\"" "l3.multipath.summary"
+           save_bcmcmd_all_ns "\"l3 ip6host show\"" "l3.ip6host.summary"
+           save_bcmcmd_all_ns "\"l3 ip6route show\"" "l3.ip6route.summary"
+           save_bcmcmd_all_ns "\"d chg my_station_tcam\"" "mystation.tcam.summary"
+       else
+           # TH5 cmds
+           save_bcmcmd_all_ns "\"show config lt raw\"" "show.config.lt.raw"
+           save_bcmcmd_all_ns "\"l3 route show v6=0\"" "l3.ip4route.show"
+           save_bcmcmd_all_ns "\"l3 host show v6=0\"" "l3.ip4host.show"
+           save_bcmcmd_all_ns "\"l3 ecmp show\"" "l3.ecmp.show"
+           save_bcmcmd_all_ns "\"l3 host show v6=1\"" "l3.ip6host.show"
+           save_bcmcmd_all_ns "\"l3 route show v6=1\"" "l3.ip6route.show"
+           save_bcmcmd_all_ns "\"l2 station show\"" "l2.station.show"
+           save_bcmcmd_all_ns "\"bcmltshell -c 'pt dump -d my_station_tcam'\"" "mystation.tcam.summary"
+       fi
     fi
 
     copy_from_masic_docker "syncd" "/var/log/diagrun.log" "/var/log/diagrun.log"
