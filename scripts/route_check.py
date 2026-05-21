@@ -579,6 +579,13 @@ def filter_out_local_interfaces(namespace, keys):
     chassis_local_intfs = chassis.get_chassis_local_interfaces()
     local_if_lst.update(set(chassis_local_intfs))
 
+    # Exclude BMC interface (e.g. usb0) — connected route for BMC subnet is a management
+    # route that will never be programmed into the ASIC.
+    cfg_db = multi_asic.connect_config_db_for_ns(namespace)
+    bmc_if_name = cfg_db.get_entry('DEVICE_METADATA', 'bmc').get('bmc_if_name', '')
+    if bmc_if_name:
+        local_if_lst.add(bmc_if_name)
+
     db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
 

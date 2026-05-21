@@ -1752,4 +1752,37 @@ TEST_DATA = {
             }
         }
     },
+    "35": {
+        DESCR: "BMC interface route in ROUTE_TABLE should be ignored (not in ASIC_DB)",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "169.254.100.1/30": {"ifname": "bmc0"},
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                },
+                CONFIG_DB: {
+                    DEVICE_METADATA: {
+                        LOCALHOST: {},
+                        "bmc": {"bmc_if_name": "bmc0", "bmc_addr": "169.254.100.1", "bmc_net_mask": "255.255.255.252"}
+                    }
+                }
+            }
+        }
+    },
 }
