@@ -35,6 +35,7 @@ def load_db_config():
         if not swsscommon.SonicDBConfig.isInit():
             swsscommon.SonicDBConfig.load_sonic_db_config()
 
+
 def is_copp_policer_stats_supported(namespace=None):
     '''
     Whether the underlying SAI advertises POLICER stats via
