@@ -17,6 +17,7 @@ import sys
 import syslog
 import subprocess
 import tabulate
+import time
 
 from natsort import natsorted
 
@@ -203,6 +204,8 @@ result['asic_nexthop_table'] = asic_nexthop_table
 return redis.status_reply(cjson.encode(result))
 """
 
+POST_FLUSH_CHECK_DELAY_SEC = 10
+
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
 ZERO_MAC = "00:00:00:00:00:00"
 NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
@@ -268,7 +271,7 @@ def parse_args():
     parser.add_argument(
         "--flush-inconsistent-neighbors",
         action="store_true",
-        help="flush inconsistent prefix-route mux-port kernel neighbor entries and rerun the check"
+        help="flush inconsistent kernel neighbor entries and rerun the check"
     )
     args = parser.parse_args()
 
@@ -366,19 +369,11 @@ def flush_neighbor(neighbor_ip):
 
 
 def flush_inconsistent_neighbors(failed_neighbors):
-    """Flush kernel neighbor entries for failed prefix-route mux-port neighbors."""
+    """Flush kernel neighbor entries for failed neighbors."""
     flushed_neighbors = set()
 
     for neighbor in failed_neighbors:
-        if (neighbor.get("_NEIGHBOR_MODE") != "prefix-route" or
-                neighbor.get("PORT") == NOT_AVAILABLE):
-            WRITE_LOG_DEBUG(
-                "Skip flushing inconsistent neighbor %s because only "
-                "prefix-route mux-port neighbors are remediated",
-                neighbor["NEIGHBOR"]
-            )
-            continue
-
+        # Inconsistency can affect both host-route and prefix-route neighbors.
         neighbor_ip = neighbor["NEIGHBOR"]
         if neighbor_ip in flushed_neighbors:
             continue
@@ -627,7 +622,7 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
     return check_results
 
 
-def parse_check_results(check_results, return_failed_neighbors=False):
+def parse_check_results(check_results):
     """Parse the check results to see if there are neighbors that are inconsistent with mux state."""
     failed_neighbors = []
     bool_to_yes_no = ("no", "yes")
@@ -665,16 +660,6 @@ def parse_check_results(check_results, return_failed_neighbors=False):
                 failed_neighbors.append(check_result)
             elif not in_toggle:
                 failed_neighbors.append(check_result)
-
-    # Keep the original no-neighbor output behavior by printing an empty prefix-route table.
-    if not prefix_route_results and not host_route_results:
-        output_lines = tabulate.tabulate(
-            [],
-            headers=NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE,
-            tablefmt="simple"
-        )
-        for output_line in output_lines.split("\n"):
-            WRITE_LOG_WARN(output_line)
 
     # Display prefix-route neighbors if any
     if prefix_route_results:
@@ -730,12 +715,8 @@ def parse_check_results(check_results, return_failed_neighbors=False):
             )
             for output_line in err_output_lines.split("\n"):
                 WRITE_LOG_ERROR(output_line)
-        if return_failed_neighbors:
-            return False, failed_neighbors
-        return False
-    if return_failed_neighbors:
-        return True, failed_neighbors
-    return True
+        return False, failed_neighbors
+    return True, failed_neighbors
 
 
 def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map):
@@ -776,14 +757,21 @@ def main():
     if_oid_to_port_name_map = get_if_br_oid_to_port_name_map()
 
     check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
-    res, failed_neighbors = parse_check_results(check_results, return_failed_neighbors=True)
+    res, failed_neighbors = parse_check_results(check_results)
 
     if not res and args.flush_inconsistent_neighbors:
         flush_count = flush_inconsistent_neighbors(failed_neighbors)
         if flush_count:
-            WRITE_LOG_WARN("Flushed %d inconsistent neighbor entries. Rerunning dualtor neighbor check.", flush_count)
+            WRITE_LOG_WARN("Flushed %d inconsistent neighbor entries.", flush_count)
+            WRITE_LOG_WARN(
+                "Waiting %d seconds before rerunning dualtor neighbor check.",
+                POST_FLUSH_CHECK_DELAY_SEC
+            )
+            time.sleep(POST_FLUSH_CHECK_DELAY_SEC)
             check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
-            res = parse_check_results(check_results)
+            res, _ = parse_check_results(check_results)
+            if not res:
+                WRITE_LOG_WARN("Post-flush dualtor neighbor check still found inconsistent neighbors.")
 
     return 0 if res else 1
 
