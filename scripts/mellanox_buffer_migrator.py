@@ -821,9 +821,11 @@ class MellanoxBufferMigrator():
         if not self.ready:
             return True
 
-        if not self.is_buffer_config_default and not self.is_buffer_config_empty or self.is_default_traditional_model:
+        metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
+        already_dynamic = metadata.get('buffer_model') == 'dynamic' and not self.is_default_traditional_model
+
+        if (not self.is_buffer_config_default and not self.is_buffer_config_empty or self.is_default_traditional_model) and not already_dynamic:
             log.log_notice("No item pending to be updated")
-            metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
             metadata['buffer_model'] = 'traditional'
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
             log.log_notice("Set buffer_model as traditional")
