@@ -775,53 +775,95 @@ class TestConfigReload(object):
             mock_validate_config.assert_called_once_with(jsonfile_config)
             mock_run_command.assert_not_called()
 
-    def test_config_reload_default_config_missing_file(self, get_cmd_module, setup_single_broadcom_asic):
+    def test_config_reload_default_config_missing_file(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
         (config, show) = get_cmd_module
 
-        config.DEFAULT_CONFIG_DB_FILE = os.path.join(mock_db_path, 'missing_config_db.json')
+        config.DEFAULT_CONFIG_DB_FILE = os.path.join(
+            mock_db_path, 'missing_config_db.json'
+        )
 
-        with mock.patch("utilities_common.cli.run_command") as mock_run_command:
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
             runner = CliRunner()
-            result = runner.invoke(config.config.commands["reload"], ["-y", "-f"])
+            result = runner.invoke(
+                config.config.commands["reload"], ["-y", "-f"]
+            )
 
             assert result.exit_code != 0
-            assert "The config file {} doesn't exist".format(config.DEFAULT_CONFIG_DB_FILE) in result.output
+            assert (
+                "The config file {} doesn't exist".format(
+                    config.DEFAULT_CONFIG_DB_FILE
+                ) in result.output
+            )
             assert "Traceback" not in result.output
             mock_run_command.assert_not_called()
 
-    def test_config_reload_default_config_invalid_json(self, get_cmd_module, setup_single_broadcom_asic):
+    def test_config_reload_default_config_invalid_json(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
         (config, show) = get_cmd_module
 
         jsonfile_config = os.path.join(mock_db_path, "config_db.json")
         config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
 
-        with mock.patch("utilities_common.cli.run_command") as mock_run_command, \
-                mock.patch('config.main.os.access', return_value=True), \
-                mock.patch.object(config, "config_file_yang_validation", side_effect=Exception("bad json")):
-            runner = CliRunner()
-            result = runner.invoke(config.config.commands["reload"], ["-y", "-f"])
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            with mock.patch('config.main.os.access', return_value=True):
+                with mock.patch.object(
+                    config,
+                    "config_file_yang_validation",
+                    side_effect=Exception("bad json"),
+                ):
+                    runner = CliRunner()
+                    result = runner.invoke(
+                        config.config.commands["reload"], ["-y", "-f"]
+                    )
 
-            assert result.exit_code != 0
-            assert "Failed to read config file {}: bad json".format(jsonfile_config) in result.output
-            assert "Traceback" not in result.output
-            mock_run_command.assert_not_called()
+                    assert result.exit_code != 0
+                    assert (
+                        "Failed to read config file {}: bad json".format(
+                            jsonfile_config
+                        ) in result.output
+                    )
+                    assert "Traceback" not in result.output
+                    mock_run_command.assert_not_called()
 
-    def test_config_reload_default_config_invalid_root(self, get_cmd_module, setup_single_broadcom_asic):
+    def test_config_reload_default_config_invalid_root(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
         (config, show) = get_cmd_module
 
         jsonfile_config = os.path.join(mock_db_path, "config_db.json")
         config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
 
-        with mock.patch("utilities_common.cli.run_command") as mock_run_command, \
-                mock.patch('config.main.os.access', return_value=True), \
-                mock.patch.object(config, "config_file_yang_validation", return_value=False) as mock_validate_config:
-            runner = CliRunner()
-            result = runner.invoke(config.config.commands["reload"], ["-y", "-f"])
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            with mock.patch('config.main.os.access', return_value=True):
+                with mock.patch.object(
+                    config,
+                    "config_file_yang_validation",
+                    return_value=False,
+                ) as mock_validate_config:
+                    runner = CliRunner()
+                    result = runner.invoke(
+                        config.config.commands["reload"], ["-y", "-f"]
+                    )
 
-            assert result.exit_code != 0
-            assert "Invalid config file:'{}'!".format(jsonfile_config) in result.output
-            mock_validate_config.assert_called_once_with(jsonfile_config)
-            mock_run_command.assert_not_called()
+                    assert result.exit_code != 0
+                    assert (
+                        "Invalid config file:'{}'!".format(
+                            jsonfile_config
+                        ) in result.output
+                    )
+                    mock_validate_config.assert_called_once_with(
+                        jsonfile_config
+                    )
+                    mock_run_command.assert_not_called()
 
     def test_config_reload_stdin(self, get_cmd_module, setup_single_broadcom_asic):
         def mock_json_load(f):
@@ -1005,9 +1047,9 @@ class TestConfigReloadMasic(object):
             }
 
         with mock.patch("utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                   mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
 
             runner = CliRunner()
 
@@ -1080,9 +1122,9 @@ class TestConfigReloadMasic(object):
             }
 
         with mock.patch("utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                   mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
 
             runner = CliRunner()
 
@@ -1105,9 +1147,9 @@ class TestConfigReloadMasic(object):
             }
 
         with mock.patch("utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                   mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
 
             runner = CliRunner()
 
@@ -1191,17 +1233,31 @@ class TestConfigReloadMasic(object):
         }
 
         with mock.patch("utilities_common.cli.run_command",
-                        mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                        mock.MagicMock(
+                            side_effect=mock_run_command_side_effect
+                        )), \
                 mock.patch('config.main.os.path.exists', return_value=True), \
                 mock.patch('config.main.os.access', return_value=True), \
-                mock.patch.object(config, 'read_json_file', return_value=device_metadata), \
-                mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model, \
-                mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_load_data, \
-                mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') as mock_validate_data_tree:
+                mock.patch.object(
+                    config, 'read_json_file', return_value=device_metadata
+                ), \
+                mock.patch(
+                    'config.main.sonic_yang.SonicYang.loadYangModel'
+                ) as mock_load_yang_model, \
+                mock.patch(
+                    'config.main.sonic_yang.SonicYang.loadData'
+                ) as mock_load_data, \
+                mock.patch(
+                    'config.main.sonic_yang.SonicYang.validate_data_tree'
+                ) as mock_validate_data_tree:
             runner = CliRunner()
-            config.DEFAULT_CONFIG_DB_FILE = os.path.join(mock_db_path, 'config_db.json')
+            config.DEFAULT_CONFIG_DB_FILE = os.path.join(
+                mock_db_path, 'config_db.json'
+            )
 
-            result = runner.invoke(config.config.commands["reload"], ['-y', '-f', '-n'])
+            result = runner.invoke(
+                config.config.commands["reload"], ['-y', '-f', '-n']
+            )
 
             assert result.exit_code == 0
             assert mock_load_yang_model.call_count == 3

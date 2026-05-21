@@ -2167,27 +2167,44 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     if filename is None and file_format == 'config_db':
         cfg_files_to_validate = [DEFAULT_CONFIG_DB_FILE]
         if multi_asic.is_multi_asic():
-            default_cfg_file_root, default_cfg_file_ext = os.path.splitext(DEFAULT_CONFIG_DB_FILE)
+            default_cfg_file_root, default_cfg_file_ext = os.path.splitext(
+                DEFAULT_CONFIG_DB_FILE
+            )
             cfg_files_to_validate.extend([
-                "{}{}{}".format(default_cfg_file_root, inst, default_cfg_file_ext)
+                "{}{}{}".format(
+                    default_cfg_file_root,
+                    inst,
+                    default_cfg_file_ext,
+                )
                 for inst in range(num_asic)
             ])
 
         for cfg_file in cfg_files_to_validate:
             if not os.path.exists(cfg_file):
-                click.echo("The config file {} doesn't exist".format(cfg_file))
+                click.echo(
+                    "The config file {} doesn't exist".format(cfg_file)
+                )
                 raise click.Abort()
             if not os.access(cfg_file, os.R_OK):
-                click.echo("The config file {} is not readable".format(cfg_file))
+                click.echo(
+                    "The config file {} is not readable".format(cfg_file)
+                )
                 raise click.Abort()
             try:
                 if not config_file_yang_validation(cfg_file):
-                    click.secho("Invalid config file:'{}'!".format(cfg_file), fg='magenta')
+                    click.secho(
+                        "Invalid config file:'{}'!".format(cfg_file),
+                        fg='magenta'
+                    )
                     raise click.Abort()
             except click.Abort:
                 raise
             except Exception as e:
-                click.echo("Failed to read config file {}: {}".format(cfg_file, str(e)))
+                click.echo(
+                    "Failed to read config file {}: {}".format(
+                        cfg_file, str(e)
+                    )
+                )
                 raise click.Abort()
     elif filename is not None and filename != "/dev/stdin":
         if multi_asic.is_multi_asic():
