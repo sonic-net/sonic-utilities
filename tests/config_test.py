@@ -1223,6 +1223,15 @@ class TestConfigReloadMasic(object):
                 RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_config_reload_default_files_validate_all_namespaces(self):
+        dummy_cfg_file = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db.json"
+        )
+        dummy_cfg_file_asic0 = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db0.json"
+        )
+        dummy_cfg_file_asic1 = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db1.json"
+        )
         device_metadata = {
             "DEVICE_METADATA": {
                 "localhost": {
@@ -1231,38 +1240,34 @@ class TestConfigReloadMasic(object):
                 }
             }
         }
+        self._create_dummy_config(dummy_cfg_file, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
 
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(
                             side_effect=mock_run_command_side_effect
                         )), \
-                mock.patch('config.main.os.path.exists', return_value=True), \
-                mock.patch('config.main.os.access', return_value=True), \
                 mock.patch.object(
-                    config, 'read_json_file', return_value=device_metadata
+                    config, 'DEFAULT_CONFIG_DB_FILE', dummy_cfg_file
                 ), \
                 mock.patch(
-                    'config.main.sonic_yang.SonicYang.loadYangModel'
-                ) as mock_load_yang_model, \
-                mock.patch(
-                    'config.main.sonic_yang.SonicYang.loadData'
-                ) as mock_load_data, \
-                mock.patch(
-                    'config.main.sonic_yang.SonicYang.validate_data_tree'
-                ) as mock_validate_data_tree:
+                    'config.main.config_file_yang_validation',
+                    return_value=True
+                ) as mock_validate_config:
             runner = CliRunner()
-            config.DEFAULT_CONFIG_DB_FILE = os.path.join(
-                mock_db_path, 'config_db.json'
-            )
 
             result = runner.invoke(
                 config.config.commands["reload"], ['-y', '-f', '-n']
             )
 
             assert result.exit_code == 0
-            assert mock_load_yang_model.call_count == 3
-            assert mock_load_data.call_count == 3
-            assert mock_validate_data_tree.call_count == 3
+            assert mock_validate_config.call_count == 3
+            assert mock_validate_config.call_args_list == [
+                mock.call(dummy_cfg_file),
+                mock.call(dummy_cfg_file_asic0),
+                mock.call(dummy_cfg_file_asic1),
+            ]
 
     @classmethod
     def teardown_class(cls):
