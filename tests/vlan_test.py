@@ -316,15 +316,11 @@ class TestVlan(object):
 
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         # ensure that we are working with single asic config
         cls._old_run_bgp_command = bgp_util.run_bgp_command
         bgp_util.run_bgp_command = mock.MagicMock(
             return_value=cls.mock_run_bgp_command())
         from .mock_tables import dbconnector
-        from .mock_tables import mock_single_asic
-        reload(mock_single_asic)
         dbconnector.load_namespace_config()
 
         cls._test_db = None
@@ -1729,12 +1725,6 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code != 0
         assert "DHCPv6 relay config for Vlan1001 already exists" in result.output
-
-    @classmethod
-    def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        bgp_util.run_bgp_command = cls._old_run_bgp_command
-        print("TEARDOWN")
 
     def test_config_vlan_del_dhcp_relay_restart(self):
         runner = CliRunner()

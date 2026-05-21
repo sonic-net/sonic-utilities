@@ -1,6 +1,7 @@
 import click
 import utilities_common.cli as clicommon
 import utilities_common.dhcp_relay_util as dhcp_relay_util
+import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic
 
 from jsonpatch import JsonPatchConflict
@@ -19,8 +20,7 @@ DHCPV6_SERVERS = "dhcpv6_servers"
 
 
 @click.group(cls=clicommon.AbbreviationGroup, name='vlan')
-@click.option('-n', '--namespace', help='Namespace name', required=True if multi_asic.is_multi_asic() else False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+@multi_asic_util.multi_asic_click_option_namespace(required=True)
 @click.pass_context
 def vlan(ctx, namespace):
     """VLAN-related configuration tasks"""

@@ -181,7 +181,7 @@ def main(show_config, profile, alpha, staticth, trim, namespace, verbose):
     # A test file created for unit test purposes
     filename=None
     if os.environ.get("UTILITIES_UNIT_TESTING", "0") == "2":
-        filename = '/tmp/mmuconfig'
+        filename = os.environ.get("MMUCONFIG_FILE", "/tmp/mmuconfig")
 
     # Buffershow and mmuconfig cmds share this script
     # Buffershow cmd cannot modify configs hence config is set to False

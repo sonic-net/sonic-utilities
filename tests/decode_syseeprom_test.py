@@ -17,6 +17,16 @@ sys.path.insert(0, modules_path)
 sys.modules['sonic_platform'] = mock.MagicMock()
 
 
+@pytest.fixture(autouse=True)
+def _inject_sonic_platform():
+    # conftest._reset_between_files() clears sys.modules['sonic_platform']
+    # before the first test of each file; re-inject before every test so that
+    # lazy imports inside scripts (e.g. instantiate_eeprom_object) still find
+    # the mock. Module-level injection runs before the conftest hook clears it.
+    sys.modules['sonic_platform'] = mock.MagicMock()
+    yield
+
+
 decode_syseeprom_path = os.path.join(scripts_path, 'decode-syseeprom')
 decode_syseeprom = load_module_from_source('decode_syseeprom', decode_syseeprom_path)
 

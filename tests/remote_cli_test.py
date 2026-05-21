@@ -104,7 +104,6 @@ class TestRemoteExec(object):
     def setup_class(cls):
         print("SETUP")
         from .mock_tables import dbconnector
-        dbconnector.load_database_config()
         getpass.getpass = mock_getpass
 
     @classmethod
@@ -256,7 +255,6 @@ class TestRemoteCLI(object):
     def setup_class(cls):
         print("SETUP")
         from .mock_tables import dbconnector
-        dbconnector.load_database_config()
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))

@@ -5544,6 +5544,75 @@ This command displays basic information about the gearbox phys configured on the
 
   ```
 
+**show gearbox interfaces fec-stats**
+
+This command displays FEC statistics for gearbox interfaces from the GB_COUNTERS_DB. Statistics are shown separately for each port's system side and line side. An optional port name argument filters output to a single port.
+
+- Usage:
+  ```
+  show gearbox interfaces fec-stats [<port_name>]
+  ```
+
+- Example (all ports):
+
+  ```
+  /home/admin# show gearbox interfaces fec-stats
+  GB IFACE           STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FEC_MAX_T
+  ---------------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  -----------
+  Ethernet0 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A            3
+  Ethernet0 System       U           0             0                 0      6.05e-10        0.00e+00                N/A            2
+  Ethernet4 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A            1
+  Ethernet4 System       U           0             0                 0      6.05e-10        0.00e+00                N/A            2
+
+  ```
+
+- Example (single port):
+
+  ```
+  /home/admin# show gearbox interfaces fec-stats Ethernet0
+  GB IFACE           STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FEC_MAX_T
+  ---------------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  -----------
+  Ethernet0 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A           -1
+  Ethernet0 System       U           0             0                 0      6.05e-10        0.00e+00                N/A           -1
+
+  ```
+
+  STATE legend: U = Up, D = Down, N/A = Unknown
+
+**show gearbox interfaces fec-histogram**
+
+This command displays the FEC codeword error histogram for gearbox interfaces. Histogram bins (BIN0–BIN15) count codewords with a given number of symbol errors. An optional port name argument filters output to a single port.
+
+- Usage:
+  ```
+  show gearbox interfaces fec-histogram [<port_name>]
+  ```
+
+- Example (single port):
+
+  ```
+  /home/admin# show gearbox interfaces fec-histogram Ethernet0
+
+  Ethernet0 Line
+  Symbol Errors Per Codeword    Codewords
+  --------------------------  -----------
+  BIN0                              12345
+  BIN1                                  1
+  BIN2                                  0
+  ...
+  BIN15                                 0
+
+  Ethernet0 System
+  Symbol Errors Per Codeword    Codewords
+  --------------------------  -----------
+  BIN0                              12355
+  BIN1                                  0
+  BIN2                                  0
+  ...
+  BIN15                                 0
+
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#gearbox)
 
 
@@ -13790,14 +13859,16 @@ This command displays vnet neighbor information about all the vnets configured i
                30.30.30.30  11:22:33:44:55:66  Ethernet0.1002
   ```
 
-**show vnet routes all**
+**show vnet routes all [<vnet_name>]**
 
-This command displays all routes information about all the vnets configured in the device. It also show the vnet routes which are configured but may or may not be active based on endpoint BFD status.
+This command displays either all routes information about all the vnets or a specified vnet configured in the device. It also shows the vnet routes which are configured but may or may not be active based on endpoint BFD status.
+
+For ECMP tunnel routes with per-endpoint `mac_address` or `vni` lists, the endpoints, MAC addresses, and VNIs are wrapped together in aligned chunks (2 per row when any item exceeds 15 characters, 3 per row otherwise).
 
 - Usage:
 
   ```
-  show vnet [ -n <namespace> ] routes all
+  show vnet [ -n <namespace> ] routes all [<vnet_name>]
   ```
 
 - Example:
@@ -13809,31 +13880,61 @@ This command displays all routes information about all the vnets configured in t
   Vnet_2000    100.100.3.0/24             Ethernet52
   Vnet_3000    100.100.4.0/24             Vlan2000
 
-  vnet name    prefix          endpoint    mac address        vni    status
-  -----------  --------------  ----------  -----------------  -----  -------
-  Vnet_2000    100.100.1.1/32  10.10.10.1                            active
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04         inactive
-  Vnet_3000    100.100.2.3/32  10.10.10.6  00:00:00:00:03:04
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+  Vnet_3000         100.100.2.1/32   10.10.10.5                           00:00:00:00:03:04                             0         inactive
+  Vnet_3000         100.100.2.3/32   10.10.10.6                           00:00:00:00:03:04
   ```
 
-**show vnet routes tunnel**
+**show vnet routes local [<vnet_name>]**
 
-This command displays tunnel routes information about all the vnets configured in the device.
+This command displays either local routes information about all the vnets or a specified vnet configured in the device.
 
 - Usage:
 
   ```
-  show vnet [ -n <namespace> ] routes tunnel
+  show vnet [ -n <namespace> ] routes local [<vnet_name>]
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vnet routes local
+  vnet name    prefix          nexthop    interface
+  -----------  --------------  ---------  -----------
+  Vnet_2000    100.100.3.0/24             Ethernet52
+  Vnet_3000    100.100.4.0/24             Vlan2000
+  ```
+
+**show vnet routes tunnel [<vnet_name>]**
+
+This command displays tunnel routes information about all the vnets or a specified vnet configured in the device.
+
+For ECMP routes with per-endpoint `mac_address` or `vni` lists, the endpoints, MAC addresses, and VNIs are wrapped together in aligned chunks. An optional vnet name argument filters the output to a single vnet.
+
+- Usage:
+
+  ```
+  show vnet [ -n <namespace> ] routes tunnel [<vnet_name>]
   ```
 
 - Example:
 
   ```
   admin@sonic:~$ show vnet routes tunnel
-  vnet name    prefix          endpoint    mac address        vni
-  -----------  --------------  ----------  -----------------  -----
-  Vnet_2000    100.100.1.1/32  10.10.10.1
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+  Vnet_3000         100.100.2.1/32   10.10.10.5                           00:00:00:00:03:04                             0         inactive
+
+  admin@sonic:~$ show vnet routes tunnel Vnet_2000
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
   ```
 
 **Additional show vnet commands**
@@ -15664,8 +15765,9 @@ Usage: sfputil show eeprom-hexdump [OPTIONS]
   Display EEPROM hexdump of SFP transceiver(s)
 Options:
   -p, --port <port_name>    Display SFP EEPROM hexdump for port <port_name>
-  -n, --page <page_number>  Display SFP EEEPROM hexdump for
-                            <page_number_in_hex>
+  -n, --page <page_number>  Display SFP EEPROM hexdump for <page_number>
+                            (decimal, hex (with 0x prefix) or octal (with 0o
+                            prefix))
   --help                    Show this message and exit.
 ```
 

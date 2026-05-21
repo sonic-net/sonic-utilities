@@ -243,7 +243,6 @@ class TestFabricStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def test_single_show_fabric_counters(self):
@@ -275,8 +274,6 @@ class TestFabricStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -285,7 +282,6 @@ class TestMultiAsicFabricStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
@@ -404,8 +400,6 @@ class TestMultiAsicFabricStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -414,7 +408,6 @@ class TestMultiAsicFabricStatCmd(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
@@ -432,7 +425,3 @@ class TestMultiAsicFabricStatCmd(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

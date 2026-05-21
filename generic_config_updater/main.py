@@ -38,6 +38,7 @@ from generic_config_updater.gu_common import (
     GenericConfigUpdaterError,
 )
 from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 
 logger = logging.getLogger(__name__)
 
@@ -782,6 +783,8 @@ Examples:
 
 def main():
     """Main entry point for the gcu-standalone console script."""
+    load_db_config()
+
     parser = build_parser()
     args = parser.parse_args()
 

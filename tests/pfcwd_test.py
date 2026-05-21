@@ -20,7 +20,6 @@ class TestPfcwd(object):
     @classmethod
     def setup_class(cls):
         os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         print("SETUP")
 
     def test_pfcwd_show_config(self):
@@ -590,6 +589,10 @@ class TestMultiAsicPfcwdShow(object):
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
         import pfcwd.main
         importlib.reload(pfcwd.main)
 
@@ -1020,11 +1023,6 @@ class TestMultiAsicPfcwdShow(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         import mock_tables.mock_single_asic
         importlib.reload(mock_tables.mock_single_asic)
         import pfcwd.main

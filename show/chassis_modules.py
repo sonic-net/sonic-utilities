@@ -2,7 +2,8 @@ import click
 from natsort import natsorted
 from tabulate import tabulate
 from swsscommon.swsscommon import SonicV2Connector
-from utilities_common.chassis import is_smartswitch
+from utilities_common.chassis import is_smartswitch, is_bmc
+from utilities_common.module import ModuleHelper, NOT_AVAILABLE
 from sonic_platform_base.module_base import ModuleBase
 
 import utilities_common.cli as clicommon
@@ -51,6 +52,19 @@ def status(db, chassis_module_name):
         print('Key {} not found in {} table'.format(key_pattern, CHASSIS_MODULE_INFO_TABLE))
         return
 
+    # On BMC, oper_status is read directly from the platform API.
+    # ModuleHelper.__init__ does not raise on chassis load failure; it logs and keeps
+    # platform_chassis=None. Treat that as unavailable so we don't emit per-module
+    # errors in the loop — just fall back to STATE_DB silently.
+    module_helper = None
+    if is_bmc():
+        try:
+            helper = ModuleHelper()
+            if helper.platform_chassis:
+                module_helper = helper
+        except Exception:
+            pass
+
     table = []
     for key in natsorted(keys):
         key_list = key.split('|')
@@ -65,6 +79,12 @@ def status(db, chassis_module_name):
         slot = data_dict.get(CHASSIS_MODULE_INFO_SLOT_FIELD, 'N/A')
         oper_status = data_dict.get(CHASSIS_MODULE_INFO_OPERSTATUS_FIELD, ModuleBase.MODULE_STATUS_EMPTY)
         serial = data_dict.get(CHASSIS_MODULE_INFO_SERIAL_FIELD, 'N/A')
+
+        # On BMC, prefer oper_status from platform API; fall back to STATE_DB if unavailable
+        if module_helper is not None:
+            platform_oper_status = module_helper.get_module_oper_status(key_list[1])
+            if platform_oper_status != NOT_AVAILABLE:
+                oper_status = platform_oper_status
 
         # Determine admin_status
         if is_smartswitch():
