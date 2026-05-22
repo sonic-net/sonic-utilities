@@ -738,16 +738,25 @@ class PfcwdCli(object):
 
         port_num = len(list(self.config_db.get_table('PORT').keys()))
 
-        # Parameter values positively correlate to the number of ports.
-        multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
-
-        pfc_wd_poll_interval_time = DEFAULT_POLL_INTERVAL * multiply
-        if pfc_wd_poll_interval_time > MAX_POLL_INTERVAL_TIME:
-            pfc_wd_poll_interval_time = MAX_POLL_INTERVAL_TIME
+        # In hardware mode the per-port timers are programmed on dedicated HW
+        # resources, so the port-count scaling used in software mode does not
+        # apply. Use the baseline DEFAULT_*_TIME on every port.
+        if self.get_hw_recovery_limits() is not None:
+            detection_time = DEFAULT_DETECTION_TIME
+            restoration_time = DEFAULT_RESTORATION_TIME
+            poll_interval = DEFAULT_POLL_INTERVAL
+        else:
+            # Parameter values positively correlate to the number of ports.
+            multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
+            detection_time = DEFAULT_DETECTION_TIME * multiply
+            restoration_time = DEFAULT_RESTORATION_TIME * multiply
+            poll_interval = DEFAULT_POLL_INTERVAL * multiply
+            if poll_interval > MAX_POLL_INTERVAL_TIME:
+                poll_interval = MAX_POLL_INTERVAL_TIME
 
         pfcwd_info = {
-            'detection_time': DEFAULT_DETECTION_TIME * multiply,
-            'restoration_time': DEFAULT_RESTORATION_TIME * multiply,
+            'detection_time': detection_time,
+            'restoration_time': restoration_time,
             'action': DEFAULT_ACTION,
             'pfc_stat_history': DEFAULT_PFC_HISTORY_STATUS
         }
@@ -756,7 +765,7 @@ class PfcwdCli(object):
             self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite=True)
 
         pfcwd_info = {}
-        pfcwd_info['POLL_INTERVAL'] = pfc_wd_poll_interval_time
+        pfcwd_info['POLL_INTERVAL'] = poll_interval
         self.config_db.mod_entry(
             CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
         )
