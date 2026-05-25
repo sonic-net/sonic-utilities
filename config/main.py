@@ -2909,7 +2909,8 @@ def remove_portchannel(ctx, portchannel_name):
                 ctx.fail("{} has vlan {} configured, remove vlan membership to proceed".format(portchannel_name, str(k)))
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
-            ctx.fail("Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
+            ctx.fail("Portchannel {} contains members. Remove members before deleting Portchannel!"
+                     .format(portchannel_name))
 
         # Dont proceed if the port channel is used in dhcpv4_relay
         try:
