@@ -24,11 +24,17 @@ try:
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         import mock_tables.dbconnector
+
+    if os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "") == "multi_asic":
+        import mock_tables.mock_multi_asic
+        mock_tables.dbconnector.load_namespace_config()
 except KeyError:
     pass
 
+from sonic_py_common import multi_asic
 from swsscommon.swsscommon import SonicV2Connector
 from utilities_common.cli import UserCache
+import utilities_common.multi_asic as multi_asic_util
 
 STATUS_NA = "N/A"
 
@@ -92,24 +98,40 @@ LLR_CAPABILITIES_KEY = "PORT_COUNTER_CAPABILITIES|LLR"
 LLR_CACHE_APP = "llrstat"
 
 
+def _connect_db(namespace):
+    """Create a SonicV2Connector for the given namespace."""
+    if namespace is None:
+        namespace = multi_asic.DEFAULT_NAMESPACE
+    return SonicV2Connector(use_unix_socket_path=True, namespace=str(namespace))
+
+
 class Llrstat(object):
-    def __init__(self):
-        self.appl_db = SonicV2Connector(host="127.0.0.1")
+    def __init__(self, namespace=None):
+        self.namespace = namespace if namespace else multi_asic.DEFAULT_NAMESPACE
+        self.namespace_str = " for {}".format(namespace) if namespace else ""
+
+        self.appl_db = _connect_db(namespace)
         self.appl_db.connect(self.appl_db.APPL_DB)
 
-        self.state_db = SonicV2Connector(host="127.0.0.1")
+        self.state_db = _connect_db(namespace)
         self.state_db.connect(self.state_db.STATE_DB)
 
-        self.counters_db = SonicV2Connector(host="127.0.0.1")
+        self.counters_db = _connect_db(namespace)
         self.counters_db.connect(self.counters_db.COUNTERS_DB)
 
         self.capabilities = self._get_capabilities()
         self.port_name_map = self._get_port_name_map()
         self.baseline = self._load_baseline()
 
-    def _load_baseline(self):
+    def _baseline_file(self):
         cache = UserCache(LLR_CACHE_APP)
-        cnstat_file = os.path.join(cache.get_directory(), "llrstat")
+        # Per-namespace baseline so clear in one namespace does not
+        # affect counters displayed for another.
+        suffix = "" if self.namespace == multi_asic.DEFAULT_NAMESPACE else ".{}".format(self.namespace)
+        return os.path.join(cache.get_directory(), "llrstat{}".format(suffix))
+
+    def _load_baseline(self):
+        cnstat_file = self._baseline_file()
         if os.path.isfile(cnstat_file):
             try:
                 with open(cnstat_file, "r") as f:
@@ -299,8 +321,7 @@ class Llrstat(object):
                 )
                 snapshot[port][sai_name] = val if val is not None else "0"
 
-        cache = UserCache(LLR_CACHE_APP)
-        cnstat_file = os.path.join(cache.get_directory(), "llrstat")
+        cnstat_file = self._baseline_file()
         with open(cnstat_file, "w") as f:
             json.dump(snapshot, f)
 
@@ -331,21 +352,59 @@ Examples:
                         help='Display detailed per-port counter view')
     parser.add_argument('-i', '--interface', default=None,
                         help='Filter to a specific interface')
+    parser.add_argument('-n', '--namespace', default=None,
+                        help='Display counters for a specific namespace')
     parser.add_argument('-v', '--version', action='version',
                         version='%(prog)s 1.0')
 
     args = parser.parse_args()
 
-    llrstat = Llrstat()
-
-    if args.clear:
-        llrstat.clear_counters(args.interface)
-        sys.exit(0)
-
-    if args.detail:
-        llrstat.show_counters_detailed(args.interface)
+    # Build namespace iteration list.
+    # - explicit -n: that namespace only.
+    # - multi-asic with no -n: every per-asic namespace.
+    # - single-asic: DEFAULT_NAMESPACE ('').
+    if args.namespace is not None:
+        ns_list = [args.namespace]
+    elif multi_asic.is_multi_asic():
+        ns_list = multi_asic_util.multi_asic_ns_choices()
     else:
-        llrstat.show_counters(args.interface)
+        ns_list = [multi_asic.DEFAULT_NAMESPACE]
+
+    # When iterating across more than one namespace (multi-asic, no -n),
+    # avoid the noisy "Interface not found"/"No LLR ports configured"
+    # per-namespace messages by pre-filtering namespaces that don't own
+    # any LLR port.  Preserve the single-namespace
+    # behavior untouched.
+    multi_ns_iter = (args.namespace is None and len(ns_list) > 1)
+
+    interface_found_anywhere = False
+    for ns in ns_list:
+        llrstat = Llrstat(ns)
+
+        if multi_ns_iter:
+            llr_ports = llrstat._get_llr_ports()
+            if not llr_ports:
+                continue
+            if args.interface:
+                if args.interface not in llr_ports:
+                    continue
+                interface_found_anywhere = True
+
+        if multi_ns_iter:
+            print("Namespace: {}".format(ns if ns else multi_asic.DEFAULT_NAMESPACE))
+
+        if args.clear:
+            llrstat.clear_counters(args.interface)
+            continue
+
+        if args.detail:
+            llrstat.show_counters_detailed(args.interface)
+        else:
+            llrstat.show_counters(args.interface)
+
+    if (multi_ns_iter and args.interface and not interface_found_anywhere):
+        print("Interface {} not found in LLR configuration.".format(args.interface))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

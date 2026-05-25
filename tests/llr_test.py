@@ -530,3 +530,103 @@ class TestClearLlrCounters(object):
         )
         print(result.output)
         assert "not found" in result.output
+
+
+###############################################################################
+# Multi-ASIC tests
+###############################################################################
+
+class TestLlrMultiAsic(object):
+    """Tests for `-n/--namespace` plumbing on a multi-asic platform.
+
+    asic0 has LLR configuration (Ethernet0 in static mode); asic1 has none.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        # Switch the process into multi-asic state (patches
+        # multi_asic.is_multi_asic, get_namespace_list, etc.)
+        import importlib
+        from tests.mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        # Reload mock tables with namespace config
+        from tests.mock_tables import dbconnector
+        dbconnector.load_namespace_config()
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+        from tests.mock_tables import dbconnector
+        dbconnector.load_database_config()
+
+    def test_show_llr_interface_specific_namespace(self):
+        """show llr interface -n asic0 — asic0 carries LLR config."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["llr"].commands["interface"],
+            ["-n", "asic0"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Ethernet0" in result.output
+        assert "static" in result.output
+
+    def test_show_llr_interface_all_namespaces(self):
+        """show llr interface (no -n) on multi-asic — iterates per-asic."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["llr"].commands["interface"], []
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        # Output should be tagged with the namespace name on multi-asic
+        assert "asic0" in result.output
+        assert "Ethernet0" in result.output
+
+    def test_show_llr_profile_namespace(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["llr"].commands["profile"],
+            ["-n", "asic0"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "llr_800000_40m_profile" in result.output
+
+    def test_config_llr_mode_namespace(self):
+        """config llr interface mode Ethernet0 static -n asic0."""
+        runner = CliRunner()
+        obj = _make_config_obj()
+        result = runner.invoke(
+            config.config.commands["llr"].commands["interface"].commands["mode"],
+            ["Ethernet0", "static", "-n", "asic0"],
+            obj=obj
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        cfgdb = obj.cfgdb_clients["asic0"]
+        assert cfgdb.get_entry("LLR_PORT", "Ethernet0").get("llr_mode") == "static"
+
+    def test_counterpoll_llr_namespace(self):
+        """counterpoll llr enable -n asic0 — namespace option on the group."""
+        runner = CliRunner()
+        result = runner.invoke(
+            counterpoll.cli.commands["llr"],
+            ["-n", "asic0", "enable"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+    def test_clear_llr_counters_namespace(self):
+        """sonic-clear llr counters -n asic0 — forwards -n to llrstat."""
+        _del_llr_cached_stats()
+        runner = CliRunner()
+        result = runner.invoke(
+            clear.cli.commands["llr"].commands["counters"],
+            ["-n", "asic0"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
