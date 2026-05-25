@@ -1,6 +1,5 @@
 import click
 import utilities_common.cli as clicommon
-from swsscommon.swsscommon import SonicV2Connector
 from tabulate import tabulate
 
 
@@ -16,7 +15,8 @@ def orchagent():
 @orchagent.command()
 @click.option('--all', 'show_all', is_flag=True, default=False,
               help='Show all consumers including those with zero pending tasks.')
-def queue(show_all):
+@clicommon.pass_db
+def queue(db, show_all):
     """Show per-consumer pending task counts in orchagent's m_toSync queues.
 
     Each row is one Redis-table consumer registered with an orchagent Orch.
@@ -25,14 +25,13 @@ def queue(show_all):
 
     By default, consumers with zero pending tasks are hidden. Use --all to
     show every consumer."""
-    state_db = SonicV2Connector()
-    state_db.connect(state_db.STATE_DB)
-
+    state_db = db.db
     keys = state_db.keys(state_db.STATE_DB, f"{ORCHAGENT_QUEUE_TABLE}|*") or []
 
     rows = []
     for key in keys:
-        # key format: ORCHAGENT_QUEUE|<consumer_name>
+        # key format: ORCHAGENT_QUEUE|<consumer_name>. split with maxsplit=1
+        # so consumer names containing '|' (none today, but future-safe) round-trip.
         try:
             _, consumer_name = key.split("|", 1)
         except ValueError:
@@ -55,12 +54,13 @@ def queue(show_all):
                        "Is orchagent running and does this build include the "
                        "queue-depth telemetry change?")
         else:
-            click.echo("No consumers with pending tasks. Use --all to see all consumers.")
+            click.echo("No consumers with pending tasks. "
+                       "Use --all to see all consumers.")
         return
 
-    # Sort by pending_count descending so the most-loaded consumers are at the top,
-    # then by name (natural sort) for deterministic output among equal counts.
-    rows = sorted(rows, key=lambda r: (-r[1], r[0]))
+    # Sort by pending_count descending so the most-loaded consumers are at the
+    # top, then by name ascending for a deterministic tiebreak.
+    rows.sort(key=lambda r: (-r[1], r[0]))
 
     header = ["Consumer", "Pending Count"]
     click.echo(tabulate(rows, header, tablefmt="simple"))

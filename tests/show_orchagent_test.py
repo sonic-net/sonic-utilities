@@ -16,6 +16,18 @@ class TestShowOrchagentQueue:
         for f, v in kvs.items():
             db.set(db.STATE_DB, key, f, v)
 
+    @staticmethod
+    def _clear_orchagent_queue(db):
+        """Remove any ORCHAGENT_QUEUE|* keys so each test starts clean. The
+        mock dbconnector backing is shared across tests in the same process."""
+        for key in db.keys(db.STATE_DB, "ORCHAGENT_QUEUE|*") or []:
+            db.delete(db.STATE_DB, key)
+
+    def setup_method(self, method):
+        # Per-test fresh DB. Pytest invokes this before each test method.
+        db = Db().db
+        self._clear_orchagent_queue(db)
+
     def test_queue_only_nonzero_by_default(self):
         runner = CliRunner()
         db = Db()
@@ -57,9 +69,28 @@ class TestShowOrchagentQueue:
         runner = CliRunner()
         db = Db()
 
+        # setup_method has cleared ORCHAGENT_QUEUE|* keys; nothing else
+        # populates them.
         result = runner.invoke(
             show.cli.commands['orchagent'].commands['queue'], [], obj=db
         )
         assert result.exit_code == 0
         # No keys → friendly message, not a crash
-        assert "pending tasks" in result.output or "No orchagent queue" in result.output
+        assert ("pending tasks" in result.output
+                or "No orchagent queue" in result.output)
+
+    def test_queue_garbage_pending_count_treated_as_zero(self):
+        """If the producer ever writes a non-integer pending_count (shouldn't
+        happen, but be defensive), the row is treated as zero and hidden by
+        default."""
+        runner = CliRunner()
+        db = Db()
+        d = db.db
+
+        self._set(d, "ORCHAGENT_QUEUE|BUSTED_TABLE", {"pending_count": "n/a"})
+
+        result = runner.invoke(
+            show.cli.commands['orchagent'].commands['queue'], [], obj=db
+        )
+        assert result.exit_code == 0
+        assert "BUSTED_TABLE" not in result.output
