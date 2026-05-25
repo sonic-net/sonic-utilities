@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -707,8 +708,8 @@ class TestConfigDPB(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.system("rm -f {}".format(worker_tmp_path('startConfigDb.json')))
-        os.system("rm -f {}".format(worker_tmp_path('portBreakOutConfigDb.json')))
+        Path(worker_tmp_path('startConfigDb.json')).unlink(missing_ok=True)
+        Path(worker_tmp_path('portBreakOutConfigDb.json')).unlink(missing_ok=True)
 
 ###########GLOBAL Configs#####################################
 '''
