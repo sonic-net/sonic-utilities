@@ -55,6 +55,7 @@ from . import kube
 from . import muxcable
 from . import nat
 from . import platform
+from . import orchagent
 from . import p4_table
 from . import processes
 from . import reboot_cause
@@ -318,6 +319,7 @@ cli.add_command(kdump.kdump)
 cli.add_command(kube.kubernetes)
 cli.add_command(muxcable.muxcable)
 cli.add_command(nat.nat)
+cli.add_command(orchagent.orchagent)
 cli.add_command(platform.platform)
 cli.add_command(p4_table.p4_table)
 cli.add_command(processes.processes)
