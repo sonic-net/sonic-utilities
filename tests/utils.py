@@ -3,8 +3,19 @@
 
 import importlib.util
 import importlib.machinery
+import os
 import subprocess
 import sys
+
+
+def worker_tmp_path(filename):
+    """
+    Per-xdist-worker scratch file path (see tests/conftest.py setup_db_config).
+
+    Avoids races when multiple pytest workers read/write the same basename in
+    the source tree (e.g. startConfigDb.json under --dist loadfile).
+    """
+    return os.path.join(os.environ.get('WORKER_TMP', '/tmp'), filename)
 
 
 def load_source(modname, filename, cache_module=False):

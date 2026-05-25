@@ -7,6 +7,8 @@ from unittest import mock, TestCase
 import pytest
 from utilities_common.general import load_module_from_source
 
+from .utils import worker_tmp_path
+
 # Import file under test i.e., config_mgmt.py
 config_mgmt_py_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'config_mgmt.py')
 config_mgmt = load_module_from_source('config_mgmt', config_mgmt_py_path)
@@ -19,8 +21,11 @@ class TestConfigMgmt(TestCase):
     '''
 
     def setUp(self):
-        config_mgmt.CONFIG_DB_JSON_FILE = "startConfigDb.json"
-        config_mgmt.DEFAULT_CONFIG_DB_JSON_FILE = "portBreakOutConfigDb.json"
+        # Per-worker paths: shared basenames in the repo root race under pytest-xdist
+        # (see sonic-utilities #4516 / config_override_test startConfigDb.json).
+        config_mgmt.CONFIG_DB_JSON_FILE = worker_tmp_path('startConfigDb.json')
+        config_mgmt.DEFAULT_CONFIG_DB_JSON_FILE = worker_tmp_path(
+            'portBreakOutConfigDb.json')
         return
 
     def test_config_get_module_check(self):

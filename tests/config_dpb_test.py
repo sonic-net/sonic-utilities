@@ -10,6 +10,8 @@ from utilities_common.general import load_module_from_source
 
 import config.main as config
 
+from .utils import worker_tmp_path
+
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
 
@@ -162,8 +164,9 @@ def config_mgmt_dpb(cfgdb):
     '''
     curConfig = read_config_db(cfgdb)
     # create object
-    config_mgmt.CONFIG_DB_JSON_FILE = "/tmp/startConfigDb.json"
-    config_mgmt.DEFAULT_CONFIG_DB_JSON_FILE = "/tmp/portBreakOutConfigDb.json"
+    config_mgmt.CONFIG_DB_JSON_FILE = worker_tmp_path('startConfigDb.json')
+    config_mgmt.DEFAULT_CONFIG_DB_JSON_FILE = worker_tmp_path(
+        'portBreakOutConfigDb.json')
     # write in temp file
     writeJson(curConfig, config_mgmt.CONFIG_DB_JSON_FILE)
     writeJson(portBreakOutConfigDbJson, config_mgmt.DEFAULT_CONFIG_DB_JSON_FILE)
@@ -704,8 +707,8 @@ class TestConfigDPB(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.system("rm -f /tmp/startConfigDb.json")
-        os.system("rm -f /tmp/portBreakOutConfigDb.json")
+        os.system("rm -f {}".format(worker_tmp_path('startConfigDb.json')))
+        os.system("rm -f {}".format(worker_tmp_path('portBreakOutConfigDb.json')))
 
 ###########GLOBAL Configs#####################################
 '''
