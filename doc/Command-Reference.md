@@ -3896,34 +3896,6 @@ This command displays the current loopback enablement state for each loopback mo
     ...
   ```
 
-- Usage:
-  ```
-  sfputil debug loopback-status [PORT_NAME]
-  ```
-
-- Example (single port):
-  ```
-  admin@sonic:~$ sfputil debug loopback-status Ethernet88
-  Ethernet88: loopback status:
-    host-side-input:   False
-    host-side-output:  False
-    media-side-input:  True
-    media-side-output: False
-  ```
-
-- Example (all ports):
-  ```
-  admin@sonic:~$ sfputil debug loopback-status
-  Ethernet0: loopback status:
-    host-side-input:   False
-    host-side-output:  False
-    media-side-input:  False
-    media-side-output: False
-  Ethernet8: loopback status:
-    host-side-input:   True
-    ...
-  ```
-
 ### CMIS debug rx-output
 
 The command disables RX input by muting the optical receiver on the module, preventing it from detecting incoming signals.
