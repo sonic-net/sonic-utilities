@@ -1954,7 +1954,7 @@ EEPROM hexdump for port Ethernet4
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
 
-        # NotImplementedError from get_xcvr_api
+        # NotImplementedError from get_xcvr_api: platform-wide failure, exit with error code
         mock_sfp.get_xcvr_api.side_effect = NotImplementedError
         result = runner.invoke(cmd, ["Ethernet0"])
         assert result.output == 'Ethernet0: This functionality is not implemented\n'
@@ -1963,18 +1963,18 @@ EEPROM hexdump for port Ethernet4
         mock_sfp.get_xcvr_api.side_effect = None
         mock_sfp.get_xcvr_api.return_value = mock_api
 
-        # Diagnostic pages not supported
+        # Diagnostic pages not supported: per-module, no exit so other ports keep iterating
         mock_api.get_diag_page_support.return_value = False
         result = runner.invoke(cmd, ["Ethernet0"])
         assert 'does not support diagnostic pages required for loopback' in result.output
-        assert result.exit_code == EXIT_FAIL
+        assert result.exit_code == 0
 
         # SFF-8636 / non-CMIS module: AttributeError on get_loopback_capability
         mock_api.get_diag_page_support.return_value = True
         mock_api.get_loopback_capability.side_effect = AttributeError
         result = runner.invoke(cmd, ["Ethernet0"])
         assert result.output == 'Ethernet0: Loopback capability is not applicable for this module\n'
-        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        assert result.exit_code == 0
 
         # CCmisApi: get_diag_page_support absent but get_loopback_capability present
         mock_api.get_diag_page_support.side_effect = AttributeError
@@ -2084,7 +2084,7 @@ EEPROM hexdump for port Ethernet4
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-status']
 
-        # NotImplementedError from get_xcvr_api
+        # NotImplementedError from get_xcvr_api: platform-wide failure, exit with error code
         mock_sfp.get_xcvr_api.side_effect = NotImplementedError
         result = runner.invoke(cmd, ["Ethernet0"])
         assert result.output == 'Ethernet0: This functionality is not implemented\n'
@@ -2093,18 +2093,25 @@ EEPROM hexdump for port Ethernet4
         mock_sfp.get_xcvr_api.side_effect = None
         mock_sfp.get_xcvr_api.return_value = mock_api
 
-        # Diagnostic pages not supported
+        # Diagnostic pages not supported: per-module, no exit
         mock_api.get_diag_page_support.return_value = False
         result = runner.invoke(cmd, ["Ethernet0"])
         assert 'does not support diagnostic pages required for loopback' in result.output
-        assert result.exit_code == EXIT_FAIL
+        assert result.exit_code == 0
+
+        # Loopback capability not advertised: skip without reading status
+        mock_api.get_diag_page_support.return_value = True
+        mock_api.get_loopback_capability.return_value = None
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not advertise any loopback capability' in result.output
+        assert result.exit_code == 0
 
         # SFF-8636 / non-CMIS module: AttributeError on a getter
-        mock_api.get_diag_page_support.return_value = True
+        mock_api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
         mock_api.get_host_input_loopback.side_effect = AttributeError
         result = runner.invoke(cmd, ["Ethernet0"])
-        assert result.output == 'Ethernet0: Loopback status is not applicable for this module\n'
-        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        assert 'Ethernet0: Loopback status is not applicable for this module' in result.output
+        assert result.exit_code == 0
 
         # CCmisApi: get_diag_page_support absent but loopback getters present
         mock_api.get_diag_page_support.side_effect = AttributeError

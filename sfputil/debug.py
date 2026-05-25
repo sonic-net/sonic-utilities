@@ -176,6 +176,39 @@ def set_output(port_name, enable, direction):
         sys.exit(EXIT_FAIL)
 
 
+def _get_loopback_api_and_capability(port_name, single_port):
+    """Get xcvr API and loopback capability dict for a port.
+
+    Returns (api, cap) when the module exposes the loopback API; cap may be an empty/None
+    dict if the module does not advertise any capability. Returns (None, None) when the
+    module lacks diagnostic page support or the get_loopback_capability method.
+    """
+    sfp = get_sfp_object(port_name)
+
+    try:
+        api = sfp.get_xcvr_api()
+    except NotImplementedError:
+        click.echo(f"{port_name}: This functionality is not implemented")
+        sys.exit(ERROR_NOT_IMPLEMENTED)
+
+    try:
+        if not api.get_diag_page_support():
+            if single_port:
+                click.echo(f"{port_name}: The module does not support diagnostic pages required for loopback")
+            return None, None
+    except AttributeError:
+        pass  # Older sonic-platform-common does not have get_diag_page_support
+
+    try:
+        cap = api.get_loopback_capability()
+    except AttributeError:
+        if single_port:
+            click.echo(f"{port_name}: Loopback capability is not applicable for this module")
+        return None, None
+
+    return api, cap
+
+
 @debug.command(name='loopback-capability')
 @click.argument('port_name', required=False, default=None)
 def loopback_capability(port_name):
@@ -191,31 +224,8 @@ def loopback_capability(port_name):
         if not single_port and (is_rj45_port(port) or not is_sfp_present(port)):
             continue
 
-        sfp = get_sfp_object(port)
-
-        try:
-            api = sfp.get_xcvr_api()
-        except NotImplementedError:
-            if single_port:
-                click.echo(f"{port}: This functionality is not implemented")
-                sys.exit(ERROR_NOT_IMPLEMENTED)
-            continue
-
-        try:
-            if not api.get_diag_page_support():
-                if single_port:
-                    click.echo(f"{port}: The module does not support diagnostic pages required for loopback")
-                    sys.exit(EXIT_FAIL)
-                continue
-        except AttributeError:
-            pass  # Older sonic-platform-common does not have diag page method
-
-        try:
-            cap = api.get_loopback_capability()
-        except AttributeError:
-            if single_port:
-                click.echo(f"{port}: Loopback capability is not applicable for this module")
-                sys.exit(ERROR_NOT_IMPLEMENTED)
+        api, cap = _get_loopback_api_and_capability(port, single_port)
+        if api is None:
             continue
 
         found = True
@@ -246,24 +256,14 @@ def loopback_status(port_name):
         if not single_port and (is_rj45_port(port) or not is_sfp_present(port)):
             continue
 
-        sfp = get_sfp_object(port)
-
-        try:
-            api = sfp.get_xcvr_api()
-        except NotImplementedError:
-            if single_port:
-                click.echo(f"{port}: This functionality is not implemented")
-                sys.exit(ERROR_NOT_IMPLEMENTED)
+        api, cap = _get_loopback_api_and_capability(port, single_port)
+        if api is None:
             continue
 
-        try:
-            if not api.get_diag_page_support():
-                if single_port:
-                    click.echo(f"{port}: The module does not support diagnostic pages required for loopback")
-                    sys.exit(EXIT_FAIL)
-                continue
-        except AttributeError:
-            pass  # Older sonic-platform-common does not have diag_page_support function
+        if not cap:
+            if single_port:
+                click.echo(f"{port}: The module does not advertise any loopback capability")
+            continue
 
         try:
             host_input = api.get_host_input_loopback()
@@ -273,7 +273,6 @@ def loopback_status(port_name):
         except AttributeError:
             if single_port:
                 click.echo(f"{port}: Loopback status is not applicable for this module")
-                sys.exit(ERROR_NOT_IMPLEMENTED)
             continue
 
         found = True
