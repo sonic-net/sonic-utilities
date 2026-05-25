@@ -126,6 +126,25 @@ GUID_MAX_LEN = 255
 
 asic_type = None
 
+
+SAMPLE_RATE_MIN = 256
+SAMPLE_RATE_MAX = 8388608
+TRUNCATE_SIZE_MIN = 64
+TRUNCATE_SIZE_MAX = 9216
+
+
+def validate_sample_rate(ctx, param, value):
+    if value != 0 and (value < SAMPLE_RATE_MIN or value > SAMPLE_RATE_MAX):
+        raise click.BadParameter(f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX}")
+    return value
+
+
+def validate_truncate_size(ctx, param, value):
+    if value != 0 and (value < TRUNCATE_SIZE_MIN or value > TRUNCATE_SIZE_MAX):
+        raise click.BadParameter(f"must be 0 or in range {TRUNCATE_SIZE_MIN}..{TRUNCATE_SIZE_MAX}")
+    return value
+
+
 DSCP_RANGE = click.IntRange(min=0, max=63)
 TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
@@ -3192,12 +3211,20 @@ def erspan(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction):
+@click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
+              help="Sampling rate (1-in-N), 256..8388608. 0 disables sampling")
+@click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
+              help="Truncation size in bytes, 64..9216. 0 disables truncation")
+def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
+               sample_rate, truncate_size):
     """ Add ERSPAN mirror session """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
+               queue, policer, src_port, direction,
+               sample_rate, truncate_size)
 
 
-def gather_session_info(session_info, policer, queue, src_port, direction):
+def gather_session_info(session_info, policer, queue, src_port, direction,
+                        sample_rate=0, truncate_size=0):
     if policer:
         session_info['policer'] = policer
 
@@ -3210,9 +3237,18 @@ def gather_session_info(session_info, policer, queue, src_port, direction):
             direction = "both"
         session_info['direction'] = direction.upper()
 
+    if sample_rate:
+        session_info['sample_rate'] = str(sample_rate)
+
+    if truncate_size:
+        session_info['truncate_size'] = str(truncate_size)
+
     return session_info
 
-def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port=None, direction=None):
+
+def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
+               policer, src_port=None, direction=None,
+               sample_rate=0, truncate_size=0):
     session_info = {
             "type" : "ERSPAN",
             "src_ip": src_ip,
@@ -3224,7 +3260,8 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
     if gre_type is not None:
         session_info['gre_type'] = gre_type
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    session_info = gather_session_info(session_info, policer, queue, src_port, direction,
+                                       sample_rate, truncate_size)
     raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
@@ -3335,6 +3372,7 @@ def span_add(session_name, dst_port, src_port, direction, queue, policer):
     """ Add SPAN mirror session """
     add_span(session_name, dst_port, src_port, direction, queue, policer)
 
+
 def add_span(session_name, dst_port, src_port, direction, queue, policer):
     # Save original dst_port for namespace detection (before alias conversion)
     original_dst_port = dst_port
@@ -3437,7 +3475,7 @@ def remove(session_name):
     else:
         per_npu_configdb = {}
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))  # noqa: E501
             per_npu_configdb[front_asic_namespaces].connect()
             if per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name):
                 try:

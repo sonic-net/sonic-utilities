@@ -3254,6 +3254,18 @@
         "src_port": "Ethernet40,Ethernet48",
         "direction": "RX"
     },
+    "MIRROR_SESSION|test_session_sampled": {
+        "type": "ERSPAN",
+        "src_ip": "10.0.0.1",
+        "dst_ip": "10.0.0.2",
+        "dscp": "8",
+        "ttl": "64",
+        "gre_type": "0x8949",
+        "src_port": "Ethernet0",
+        "direction": "RX",
+        "sample_rate": "50000",
+        "truncate_size": "128"
+    },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
         "monCapacityThreshWarn": "100",
         "monErrThreshCrcCells": "1",
