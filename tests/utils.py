@@ -6,6 +6,7 @@ import importlib.machinery
 import os
 import subprocess
 import sys
+import tempfile
 
 
 def worker_tmp_path(filename):
@@ -15,7 +16,14 @@ def worker_tmp_path(filename):
     Avoids races when multiple pytest workers read/write the same basename in
     the source tree (e.g. startConfigDb.json under --dist loadfile).
     """
-    return os.path.join(os.environ.get('WORKER_TMP', '/tmp'), filename)
+    base_dir = os.environ.get('WORKER_TMP')
+    if not base_dir:
+        worker_id = os.environ.get('PYTEST_XDIST_WORKER', 'gw0')
+        base_dir = os.path.join(
+            tempfile.gettempdir(), f'sonic-utilities-{worker_id}')
+
+    os.makedirs(base_dir, exist_ok=True)
+    return os.path.join(base_dir, filename)
 
 
 def load_source(modname, filename, cache_module=False):
