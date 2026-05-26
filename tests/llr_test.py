@@ -630,3 +630,20 @@ class TestLlrMultiAsic(object):
         )
         print(result.output)
         assert result.exit_code == 0
+
+    def test_clear_llr_counters_all_namespaces(self):
+        """sonic-clear llr counters (no -n) iterates all namespaces.
+
+        On our mock multi-asic topology, only asic0 has LLR_PORT_TABLE entries,
+        so clear output must include the asic0 namespace header and clear success.
+        """
+        _del_llr_cached_stats()
+        runner = CliRunner()
+        result = runner.invoke(
+            clear.cli.commands["llr"].commands["counters"],
+            []
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Namespace: asic0" in result.output
+        assert "LLR counters cleared." in result.output
