@@ -43,6 +43,7 @@ from . import acl
 from . import bgp_common
 from . import chassis_modules
 from . import dropcounters
+from . import evpn
 from . import fabric
 from . import feature
 from . import fgnhg
@@ -305,6 +306,7 @@ def cli(ctx):
 cli.add_command(acl.acl)
 cli.add_command(chassis_modules.chassis)
 cli.add_command(dropcounters.dropcounters)
+cli.add_command(evpn.evpn)
 cli.add_command(fabric.fabric)
 cli.add_command(feature.feature)
 cli.add_command(fgnhg.fgnhg)
@@ -1204,6 +1206,7 @@ def pwm_headroom_pool(namespace):
 @click.option('-a', '--address')
 @click.option('-t', '--type')
 @click.option('-c', '--count', is_flag=True)
+@click.option('-l', '--local', is_flag=True)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.option('-n',
               '--namespace',
@@ -1213,7 +1216,7 @@ def pwm_headroom_pool(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def mac(ctx, vlan, port, address, type, count, verbose, namespace):
+def mac(ctx, vlan, port, address, type, count, local, verbose, namespace):
     """Show MAC (FDB) entries"""
 
     if ctx.invoked_subcommand is not None:
@@ -1238,6 +1241,9 @@ def mac(ctx, vlan, port, address, type, count, verbose, namespace):
 
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+
+    if local:
+        cmd += ["-l"]
 
     run_command(cmd, display_cmd=verbose)
 
@@ -2537,6 +2543,32 @@ def ztp(status, verbose):
        cmd += ["--verbose"]
     run_command(cmd, display_cmd=verbose)
 
+#
+# 'static anycast gateway' command ("show static-anycast-gateway")
+#
+
+
+@cli.command('static-anycast-gateway')
+@clicommon.pass_db
+def sag(db):
+    """Show static anycast gateway information"""
+    header = ['MacAddress', 'Interfaces']
+    body = []
+
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
+    if sag_entry:
+        sag_mac = sag_entry.get('gateway_mac')
+
+        intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
+        for key, value in intf_dict.items():
+            if value.get('static_anycast_gateway') == 'true':
+                if not body:
+                    body.append([sag_mac, key])
+                else:
+                    body.append(['', key])
+
+    click.echo("Static Anycast Gateway Information")
+    click.echo(tabulate(body, header, tablefmt='simple'))
 
 #
 # 'bmp' group ("show bmp ...")

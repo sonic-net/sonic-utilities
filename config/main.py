@@ -72,6 +72,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import evpn_mh
 
 # mock masic APIs for unit test
 try:
@@ -1790,6 +1791,7 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
+config.add_command(evpn_mh.evpn_mh)
 
 # add stp commands
 config.add_command(stp.spanning_tree)
@@ -2926,6 +2928,7 @@ def remove_portchannel(ctx, portchannel_name):
         db.set_entry('PORTCHANNEL', portchannel_name, None)
     except JsonPatchConflict:
         ctx.fail("{} is not present.".format(portchannel_name))
+
 
 @portchannel.group(cls=clicommon.AbbreviationGroup, name='member')
 @click.pass_context
@@ -5316,6 +5319,87 @@ def shutdown(ctx, interface_name):
             config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
 
 #
+# 'sys-mac' group ('config interface sys-mac ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def sys_mac(ctx):
+    pass
+
+
+@sys_mac.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def add_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Add System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if not is_portchannel_name_valid(interface_name):
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                 .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        try:
+            gateway_mac = netaddr.EUI(sys_mac)
+        except Exception:
+            ctx.fail(f'System MAC address {sys_mac} format is not valid.')
+        if (gateway_mac.words[0] & 0b01):
+            ctx.fail(f'System MAC address {sys_mac} is multicast, only unicast allowed.')
+
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+        if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+            if port_id is None:
+                ctx.fail(f"Cannot extract port ID from interface name '{interface_name}'")
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            cmd.append('-c')
+            cmd.append('evpn mh es-sys-mac {}'.format(sys_mac))
+        run_vtysh_command(cmd, ctx)
+
+        # Only write to CONFIG_DB after FRR update succeeds
+        config_db.mod_entry("PORTCHANNEL", interface_name, {'system_mac': sys_mac})
+
+
+@sys_mac.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def del_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Del System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    if not is_portchannel_name_valid(interface_name):
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                 .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        entry = config_db.get_entry("PORTCHANNEL", interface_name)
+        conf_sys_mac = None
+        if 'system_mac' in entry:
+            conf_sys_mac = entry['system_mac']
+            del entry['system_mac']
+        if conf_sys_mac and conf_sys_mac == sys_mac:
+            # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+            cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+            evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+            if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+                cmd.append('-c')
+                cmd.append('no evpn mh es-sys-mac')
+            run_vtysh_command(cmd, ctx)
+
+            # Only write to CONFIG_DB after FRR update succeeds
+            config_db.set_entry("PORTCHANNEL", interface_name, entry)
+        else:
+            ctx.fail("For {} sys-mac is not present or different value is configured.".format(interface_name))
+
+#
 # 'speed' subcommand
 #
 
@@ -5698,6 +5782,247 @@ def fec(ctx, interface_name, interface_fec, verbose):
     if verbose:
         command += ["-vv"]
     clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# EVPN interface commands
+#
+EVPN_ES_TABLE = 'EVPN_ETHERNET_SEGMENT'
+EVPN_ES_DF_PREF_MIN = 1
+EVPN_ES_DF_PREF_DEFAULT = 32767
+EVPN_ES_DF_PREF_MAX = 65535
+EVPN_ESI_NUM_BYTES = 10
+
+
+def is_reserved_esi(esi_str):
+    reserved = False
+
+    if esi_str == "00:00:00:00:00:00:00:00:00:00":
+        reserved = True
+    elif esi_str.lower() == "ff:ff:ff:ff:ff:ff:ff:ff:ff:ff":
+        reserved = True
+
+    return reserved
+
+
+def parse_esi_input(ctx, esi_input_strs):
+    esi_args = {'df_pref': str(EVPN_ES_DF_PREF_DEFAULT)}
+
+    if esi_input_strs[0] == 'auto-system-mac':
+        esi_args['type'] = 'TYPE_3_MAC_BASED'
+        esi_args['esi'] = 'AUTO'
+    elif ':' in esi_input_strs[0]:
+        if is_reserved_esi(esi_input_strs[0]):
+            ctx.fail("Not allowed to configure a reserved ESI")
+
+        esi_bytes = esi_input_strs[0].split(':')
+        if len(esi_bytes) != EVPN_ESI_NUM_BYTES:
+            ctx.fail(f"Failed to parse manual ESI {esi_input_strs[0]}")
+        try:
+            type_byte = int(esi_bytes[0], 16)
+        except Exception as e:
+            ctx.fail(f"Failed to parse ESI byte '{esi_bytes[0]}' - {e}")
+        if type_byte != 0:
+            ctx.fail(f"Manual ESI must start with type 0, got {esi_bytes[0]}")
+        for byte in esi_bytes:
+            try:
+                parsed_byte = int(byte, 16)
+            except Exception as e:
+                ctx.fail(f"Failed to parse ESI byte '{byte}' - {e}")
+            if parsed_byte > 0xFF:
+                ctx.fail(f"'Byte' {byte} is > 255")
+
+        esi_args['type'] = 'TYPE_0_OPERATOR_CONFIGURED'
+        esi_args['esi'] = esi_input_strs[0].lower()
+    else:
+        ctx.fail(f"Unknown ESI type {esi_input_strs[0]}")
+
+    return esi_args
+
+
+def port_id_from_if_name(if_name):
+    """Extract the numeric port identifier from an interface name.
+    Returns a string of digits (with any underscores removed) if the
+    interface name matches the expected pattern, otherwise returns None.
+    """
+    port_id_re = re.compile(r'[a-zA-Z]+(?P<port_id>[0-9_]+)')
+    match = port_id_re.search(if_name)
+    if not match:
+        return None
+    port_id_group = match.group('port_id')
+    if port_id_group:
+        return port_id_group.replace('_', '')
+    return None
+
+
+def run_vtysh_command(cmd, ctx=None):
+    """
+    Run a vtysh command.
+    If a Click context is provided, capture the return code/output and
+    surface failures via ctx.fail() instead of exiting abruptly.
+    When no context is provided, preserve the original behavior of
+    clicommon.run_command(), which may call sys.exit() on error.
+    """
+    if ctx is None:
+        # Preserve existing behavior for callers that don't use Click ctx
+        return clicommon.run_command(cmd)
+    output, rc = clicommon.run_command(cmd, return_cmd=True, ignore_error=True)
+    if rc != 0:
+        message = output if output else f"Command '{cmd}' failed with return code {rc}"
+        ctx.fail(message)
+    return output
+
+
+def check_if_same_manual_esi_exists(ctx, esi_args, es_data):
+    if esi_args['type'] == 'TYPE_0_OPERATOR_CONFIGURED':
+        for es_intf_name, es_intf_data in es_data.items():
+            if esi_args['esi'].lower() == es_intf_data.get('esi', '').lower():
+                ctx.fail(f"The ESI '{esi_args['esi']}' is already in use by '{es_intf_name}'")
+
+
+def is_valid_df_pref(df_pref):
+    """
+    Validate that the DF preference is an integer within the allowed range.
+    Returns True if df_pref can be parsed as an integer and is between
+    EVPN_ES_DF_PREF_MIN and EVPN_ES_DF_PREF_MAX (inclusive), otherwise False.
+    """
+    try:
+        df_pref_int = int(df_pref)
+    except (ValueError, TypeError):
+        return False
+    return df_pref_int in range(EVPN_ES_DF_PREF_MIN, EVPN_ES_DF_PREF_MAX + 1)
+
+#
+# 'evpn-esi' group ('config interface evpn-esi ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def evpn_esi(ctx):
+    """Set EVPN ES interface attributes"""
+    pass
+
+
+@evpn_esi.command('add')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('esi_type', metavar='<esi_type>', required=True,
+                type=str, nargs=-1)
+def add_evpn_es(ctx, interface_name, esi_type):
+    """Add EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_data = config_db.get_table(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name in es_data:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} already configured.")
+
+    esi_args = parse_esi_input(ctx, esi_type)
+
+    check_if_same_manual_esi_exists(ctx, esi_args, es_data)
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        esi_type = esi_args['type']
+        if esi_type == 'TYPE_0_OPERATOR_CONFIGURED' and esi_args['esi']:
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(esi_args['esi']))
+        elif esi_type == 'TYPE_3_MAC_BASED':
+            if port_id is None:
+                ctx.fail(f"Cannot extract port ID from interface name '{interface_name}'")
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            po_table = config_db.get_entry('PORTCHANNEL', interface_name)
+            if po_table and 'system_mac' in po_table:
+                cmd.append('-c')
+                cmd.append('evpn mh es-sys-mac {}'.format(po_table['system_mac']))
+        run_vtysh_command(cmd, ctx)
+
+        # Only write to CONFIG_DB after FRR update succeeds
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, esi_args)
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@evpn_esi.command('del')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+def del_evpn_es(ctx, interface_name):
+    """Del EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    evpn_es_keys = config_db.get_keys(EVPN_ES_TABLE)
+    if interface_name not in evpn_es_keys:
+        ctx.fail(f"EVPN Ethernet Segment '{interface_name}' does not exist")
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('no evpn mh es-sys-mac')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-df-pref')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-id')
+        run_vtysh_command(cmd, ctx)
+
+        # Only delete from CONFIG_DB after FRR update succeeds
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, None)
+    except JsonPatchConflict as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@interface.command()
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('df_pref', metavar='<df_pref>', required=True)
+@click.pass_context
+def evpn_df_pref(ctx, interface_name, df_pref):
+    """Set EVPN ES DF Preference"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_keys = config_db.get_keys(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name not in es_keys:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} does not exist")
+
+    if not is_valid_df_pref(df_pref):
+        ctx.fail(
+            f"EVPN Ethernet Segment {interface_name} - DF Preference {df_pref} is not valid. "
+            f"Valid values are {EVPN_ES_DF_PREF_MIN}-{EVPN_ES_DF_PREF_MAX}."
+        )
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('evpn mh es-df-pref {}'.format(int(df_pref)))
+        run_vtysh_command(cmd, ctx)
+
+        # Only write to CONFIG_DB after FRR update succeeds
+        config_db.mod_entry(EVPN_ES_TABLE, interface_name, {'df_pref': str(df_pref)})
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 #
 # 'ip' subgroup ('config interface ip ...')
@@ -9616,6 +9941,62 @@ def disable_link_local(ctx):
                     continue
                 set_ipv6_link_local_only_on_interface(config_db, table_dict, table_type, key, mode)
 
+# 'static-anycast-gateway' group ('config static-anycast-gateway ...')
+#
+
+
+@config.group(cls=clicommon.AbbreviationGroup, name='static-anycast-gateway')
+def static_anycast_gateway():
+    """sag-related configuration tasks"""
+    pass
+
+#
+# 'static-anycast-gateway mac_address' group
+#
+
+
+@static_anycast_gateway.group(cls=clicommon.AbbreviationGroup, name='mac_address')
+def mac_address():
+    """Add/Delete static-anycast-gateway mac address"""
+    pass
+
+
+@mac_address.command('add')
+@click.argument('mac_address', metavar='<mac_address>', required=True, type=str)
+@clicommon.pass_db
+def add_mac(db, mac_address):
+    """Add static-anycast-gateway mac address command"""
+    log.log_info(f"'static-anycast-gateway mac_address add {mac_address}' executing...")
+
+    try:
+        gateway_mac = netaddr.EUI(mac_address)
+    except Exception:
+        click.get_current_context().fail(f'static-anycast-gateway MAC address {mac_address} format is not valid.')
+
+    if (gateway_mac.words[0] & 0b01):
+        click.get_current_context().fail(
+            f'static-anycast-gateway MAC address {mac_address} is multicast, only allow unicast.')
+
+    if not db.cfgdb.get_entry('SAG', 'GLOBAL'):
+        db.cfgdb.set_entry('SAG', 'GLOBAL', {'gateway_mac': mac_address})
+    else:
+        click.get_current_context().fail(
+            f'static-anycast-gateway MAC address {mac_address} is alreaday existed. Remove it first'
+        )
+
+
+@mac_address.command('del')
+@clicommon.pass_db
+def del_mac(db):
+    """Del static-anycast-gateway mac address command"""
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
+    if sag_entry:
+        mac_address = sag_entry.get('gateway_mac', 'unknown')
+        log.log_info(f"'static-anycast-gateway mac_address del {mac_address}' executing...")
+        db.cfgdb.mod_entry('SAG', 'GLOBAL', None)
+    else:
+        log.log_info("'static-anycast-gateway mac_address del' executing...")
+        click.get_current_context().fail('static-anycast-gateway MAC address not found.')
 
 #
 # 'rate' group ('config rate ...')
