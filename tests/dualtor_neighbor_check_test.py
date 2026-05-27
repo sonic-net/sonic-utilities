@@ -971,3 +971,162 @@ class TestDualtorNeighborCheck(object):
         assert res is False
         mock_log_warn.assert_has_calls(expected_log_warn_calls)
         mock_log_error.assert_has_calls(expected_log_error_calls)
+
+    def test_identify_suspect_neighbors_filters_correctly(self, mock_log_functions):
+        """Only non-zero-MAC, non-in-toggle, failing rows with a resolved port should be suspects."""
+        zero = dualtor_neighbor_check.ZERO_MAC
+        na = dualtor_neighbor_check.NOT_AVAILABLE
+        check_results = [
+            {"NEIGHBOR": "10.0.0.1", "MAC": "aa:bb:cc:dd:ee:01", "PORT": "Ethernet4",
+             "IN_MUX_TOGGLE": False, "HWSTATUS": False},
+            {"NEIGHBOR": "10.0.0.2", "MAC": "aa:bb:cc:dd:ee:02", "PORT": "Ethernet8",
+             "IN_MUX_TOGGLE": False, "HWSTATUS": True},
+            {"NEIGHBOR": "10.0.0.3", "MAC": "aa:bb:cc:dd:ee:03", "PORT": "Ethernet12",
+             "IN_MUX_TOGGLE": True,  "HWSTATUS": False},
+            {"NEIGHBOR": "10.0.0.4", "MAC": zero,                "PORT": "Ethernet16",
+             "IN_MUX_TOGGLE": False, "HWSTATUS": False},
+            {"NEIGHBOR": "10.0.0.5", "MAC": "aa:bb:cc:dd:ee:05", "PORT": na,
+             "IN_MUX_TOGGLE": False, "HWSTATUS": False},
+        ]
+        suspects = dualtor_neighbor_check.identify_suspect_neighbors(check_results)
+        assert suspects == [("10.0.0.1", "aa:bb:cc:dd:ee:01", "Ethernet4")]
+
+    def test_detect_bouncing_detects_mac_move_and_neigh_change(self, mock_log_functions):
+        """detect_bouncing should flag IPs whose IP->MAC or MAC->port mapping changed."""
+        suspects = [
+            ("10.0.0.1", "aa:bb:cc:dd:ee:01", "Ethernet4"),
+            ("10.0.0.2", "aa:bb:cc:dd:ee:02", "Ethernet8"),
+            ("10.0.0.3", "aa:bb:cc:dd:ee:03", "Ethernet12"),
+            ("10.0.0.4", "aa:bb:cc:dd:ee:04", "Ethernet16"),
+            ("10.0.0.5", "aa:bb:cc:dd:ee:05", "Ethernet20"),
+        ]
+        first_neighbors = {
+            "10.0.0.1": "aa:bb:cc:dd:ee:01", "10.0.0.2": "aa:bb:cc:dd:ee:02",
+            "10.0.0.3": "aa:bb:cc:dd:ee:03", "10.0.0.4": "aa:bb:cc:dd:ee:04",
+            "10.0.0.5": "aa:bb:cc:dd:ee:05",
+        }
+        first_mac_to_port = {
+            "aa:bb:cc:dd:ee:01": "Ethernet4",  "aa:bb:cc:dd:ee:02": "Ethernet8",
+            "aa:bb:cc:dd:ee:03": "Ethernet12", "aa:bb:cc:dd:ee:04": "Ethernet16",
+            "aa:bb:cc:dd:ee:05": "Ethernet20",
+        }
+        second_neighbors = {
+            "10.0.0.1": "aa:bb:cc:dd:ee:01",
+            "10.0.0.2": "aa:bb:cc:dd:ee:02",
+            "10.0.0.3": "aa:bb:cc:dd:ee:99",
+            "10.0.0.5": "aa:bb:cc:dd:ee:05",
+        }
+        second_mac_to_port = {
+            "aa:bb:cc:dd:ee:01": "Ethernet4",
+            "aa:bb:cc:dd:ee:02": "Ethernet36",
+            "aa:bb:cc:dd:ee:03": "Ethernet12",
+            "aa:bb:cc:dd:ee:99": "Ethernet12",
+        }
+        bouncing = dualtor_neighbor_check.detect_bouncing(
+            suspects, first_neighbors, first_mac_to_port, second_neighbors, second_mac_to_port)
+        assert bouncing == {"10.0.0.2", "10.0.0.3", "10.0.0.4", "10.0.0.5"}
+
+    def test_detect_bouncing_no_change_returns_empty(self, mock_log_functions):
+        suspects = [("10.0.0.1", "aa:bb:cc:dd:ee:01", "Ethernet4")]
+        first_neighbors = {"10.0.0.1": "aa:bb:cc:dd:ee:01"}
+        first_mac_to_port = {"aa:bb:cc:dd:ee:01": "Ethernet4"}
+        bouncing = dualtor_neighbor_check.detect_bouncing(
+            suspects, first_neighbors, first_mac_to_port,
+            dict(first_neighbors), dict(first_mac_to_port))
+        assert bouncing == set()
+
+    def test_parse_check_results_bouncing_demoted_to_non_failure(self, mock_log_functions):
+        """A row whose IP is in bouncing_ips must not be reported as a failure;
+        its HWSTATUS column is rendered as 'bouncing' for operator visibility."""
+        mock_log_error, _, _, _ = mock_log_functions
+        check_results = [{
+            "NEIGHBOR": "10.0.0.2", "MAC": "aa:bb:cc:dd:ee:02", "PORT": "Ethernet8",
+            "MUX_STATE": "standby", "IN_MUX_TOGGLE": False,
+            "NEIGHBOR_IN_ASIC": True, "TUNNEL_IN_ASIC": False, "HWSTATUS": False,
+            "_NEIGHBOR_MODE": "host-route",
+        }]
+        res = dualtor_neighbor_check.parse_check_results(check_results, bouncing_ips={"10.0.0.2"})
+        assert res is True
+        assert check_results[0]["HWSTATUS"] == dualtor_neighbor_check.BOUNCING
+        mock_log_error.assert_not_called()
+
+    def test_parse_check_results_without_bouncing_still_fails(self, mock_log_functions):
+        """Sanity: same inconsistent row, no bouncing_ips -> still a failure."""
+        check_results = [{
+            "NEIGHBOR": "10.0.0.2", "MAC": "aa:bb:cc:dd:ee:02", "PORT": "Ethernet8",
+            "MUX_STATE": "standby", "IN_MUX_TOGGLE": False,
+            "NEIGHBOR_IN_ASIC": True, "TUNNEL_IN_ASIC": False, "HWSTATUS": False,
+            "_NEIGHBOR_MODE": "host-route",
+        }]
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+        assert res is False
+        assert check_results[0]["HWSTATUS"] == "inconsistent"
+
+    def test_recheck_bouncing_neighbors_disabled_when_delay_zero(self, mock_log_functions):
+        """delay_ms=0 must short-circuit: no sleep, no re-read, empty set."""
+        check_results = [{
+            "NEIGHBOR": "10.0.0.1", "MAC": "aa:bb:cc:dd:ee:01", "PORT": "Ethernet4",
+            "IN_MUX_TOGGLE": False, "HWSTATUS": False,
+        }]
+        with patch("dualtor_neighbor_check.time.sleep") as mock_sleep, \
+                patch("dualtor_neighbor_check.read_tables_from_db") as mock_read:
+            bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
+                check_results, {}, {}, MagicMock(), {}, delay_ms=0)
+        assert bouncing == set()
+        mock_sleep.assert_not_called()
+        mock_read.assert_not_called()
+
+    def test_recheck_bouncing_neighbors_no_suspects_skips_reread(self, mock_log_functions):
+        """No failing rows -> no sleep, no re-read."""
+        check_results = [{
+            "NEIGHBOR": "10.0.0.1", "MAC": "aa:bb:cc:dd:ee:01", "PORT": "Ethernet4",
+            "IN_MUX_TOGGLE": False, "HWSTATUS": True,
+        }]
+        with patch("dualtor_neighbor_check.time.sleep") as mock_sleep, \
+                patch("dualtor_neighbor_check.read_tables_from_db") as mock_read:
+            bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
+                check_results, {}, {}, MagicMock(), {}, delay_ms=300)
+        assert bouncing == set()
+        mock_sleep.assert_not_called()
+        mock_read.assert_not_called()
+
+    def test_recheck_bouncing_neighbors_detects_mac_move(self, mock_log_functions):
+        """A failing row whose MAC moves ports between the two reads is bouncing."""
+        check_results = [{
+            "NEIGHBOR": "10.0.0.2", "MAC": "aa:bb:cc:dd:ee:02", "PORT": "Ethernet8",
+            "IN_MUX_TOGGLE": False, "HWSTATUS": False,
+        }]
+        first_neighbors = {"10.0.0.2": "aa:bb:cc:dd:ee:02"}
+        first_mac_to_port = {"aa:bb:cc:dd:ee:02": "Ethernet8"}
+
+        second_neighbors = {"10.0.0.2": "aa:bb:cc:dd:ee:02"}
+        second_asic_fdb = {"aa:bb:cc:dd:ee:02": "oid:0xbridgeport_eth36"}
+        if_oid_to_port_name_map = {"oid:0xbridgeport_eth36": "Ethernet36"}
+
+        with patch("dualtor_neighbor_check.time.sleep"), \
+                patch("dualtor_neighbor_check.read_tables_from_db",
+                      return_value=(second_neighbors, {}, {}, {}, second_asic_fdb, [], [], {})):
+            bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
+                check_results, first_neighbors, first_mac_to_port,
+                MagicMock(), if_oid_to_port_name_map, delay_ms=300)
+        assert bouncing == {"10.0.0.2"}
+
+    def test_recheck_bouncing_neighbors_stable_returns_empty(self, mock_log_functions):
+        """A failing row whose bindings are stable across reads is NOT bouncing
+        (this is the RC2-persistent path we still want to fail loudly)."""
+        check_results = [{
+            "NEIGHBOR": "10.0.0.2", "MAC": "aa:bb:cc:dd:ee:02", "PORT": "Ethernet8",
+            "IN_MUX_TOGGLE": False, "HWSTATUS": False,
+        }]
+        first_neighbors = {"10.0.0.2": "aa:bb:cc:dd:ee:02"}
+        first_mac_to_port = {"aa:bb:cc:dd:ee:02": "Ethernet8"}
+        second_asic_fdb = {"aa:bb:cc:dd:ee:02": "oid:0xbridgeport_eth8"}
+        if_oid_to_port_name_map = {"oid:0xbridgeport_eth8": "Ethernet8"}
+
+        with patch("dualtor_neighbor_check.time.sleep"), \
+                patch("dualtor_neighbor_check.read_tables_from_db",
+                      return_value=(dict(first_neighbors), {}, {}, {}, second_asic_fdb, [], [], {})):
+            bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
+                check_results, first_neighbors, first_mac_to_port,
+                MagicMock(), if_oid_to_port_name_map, delay_ms=300)
+        assert bouncing == set()
