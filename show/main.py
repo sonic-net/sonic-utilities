@@ -779,6 +779,7 @@ def stats(namespace, display, verbose):
 
     run_command(cmd, display_cmd=verbose)
 
+
 @pfcwd.command('status')
 @multi_asic_util.multi_asic_click_options
 @click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
