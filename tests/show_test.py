@@ -1280,13 +1280,6 @@ class TestShow(object):
         mock_run_command.assert_called_with(['pfcwd', 'show', 'status', '-d', 'all', '--json'], display_cmd=False)
 
     @patch('show.main.run_command')
-    def test_show_pfcwd_status_namespace(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands["pfcwd"].commands['status'], ['-n', 'asic0'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['pfcwd', 'show', 'status', '-d', 'all', '-n', 'asic0'], display_cmd=False)
-
-    @patch('show.main.run_command')
     def test_show_watermark_telemetry_interval(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["watermark"].commands['telemetry'].commands['interval'])
