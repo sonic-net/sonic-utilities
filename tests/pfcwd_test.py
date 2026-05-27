@@ -1161,6 +1161,90 @@ class TestMultiAsicPfcwdShow(object):
         assert "Current global action: drop" in result.output
         assert "Requested action: forward" in result.output
 
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os.geteuid', MagicMock(return_value=0))
+    def test_pfcwd_stop_hardware_mode_stormed_blocked(self):
+        """pfcwd stop in hardware mode is blocked while any queue is stormed.
+
+        Mock COUNTERS_DB has Ethernet0:3 and Ethernet8:4 in stormed state, so
+        stop without arguments (i.e. stop all ports) must fail with exit 1 and
+        list both stormed queues in the error message.
+        """
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["stop"],
+            [],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert "Cannot stop PFC watchdog while queues are in stormed state" in result.output
+        assert "Ethernet0:3" in result.output
+        assert "Ethernet8:4" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os.geteuid', MagicMock(return_value=0))
+    def test_pfcwd_stop_hardware_mode_no_storm(self):
+        """pfcwd stop in hardware mode succeeds for ports with no stormed queues.
+
+        Ethernet4:3 is operational in the mock COUNTERS_DB; stopping Ethernet4
+        in HW mode should pass the storm check and complete with exit 0.
+        """
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["stop"],
+            ["Ethernet4"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_hardware_mode(self, mock_os):
+        """In hardware mode, start_default installs unscaled DEFAULT_*_TIME regardless
+        of port count.
+
+        With 512 ports, software mode would scale detection/restoration to 3200ms and
+        cap poll_interval at 1000ms (multiply=16). Hardware mode skips the scaling
+        because the per-port timers run on dedicated HW resources, so all three end
+        up at the unscaled 200ms baseline.
+        """
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        original_get_table = db.cfgdb.get_table
+
+        def mock_get_table_512_ports(table):
+            if table == 'PORT':
+                return {'Ethernet%d' % i: {} for i in range(512)}
+            return original_get_table(table)
+
+        mock_os.geteuid.return_value = 0
+        with patch.object(db.cfgdb, 'get_table', side_effect=mock_get_table_512_ports):
+            result = runner.invoke(
+                pfcwd.cli.commands["start_default"],
+                [],
+                obj=db
+            )
+        assert result.exit_code == 0
+
+        # 512 ports in HW mode still produces unscaled 200/200/200 output -
+        # identical to a 32-port system in SW mode (multiply=1).
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_start_default_32_ports
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
