@@ -59,6 +59,7 @@ from . import p4_table
 from . import processes
 from . import reboot_cause
 from . import sflow
+from . import user
 from . import vlan
 from . import vnet
 from . import vxlan
@@ -323,6 +324,7 @@ cli.add_command(p4_table.p4_table)
 cli.add_command(processes.processes)
 cli.add_command(reboot_cause.reboot_cause)
 cli.add_command(sflow.sflow)
+cli.add_command(user.user)
 cli.add_command(vlan.vlan)
 cli.add_command(vnet.vnet)
 cli.add_command(vxlan.vxlan)
