@@ -244,7 +244,6 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_flushes_and_reruns_inconsistent_neighbors(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -285,7 +284,6 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_waits_once_before_post_flush_check(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -317,7 +315,6 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_returns_failure_when_post_flush_check_remains_inconsistent(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -349,7 +346,6 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_skips_rerun_when_no_neighbors_are_flushed(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -382,7 +378,6 @@ class TestDualtorNeighborCheck(object):
     def test_main_logs_alert_when_post_flush_check_remains_inconsistent(self, mock_log_functions):
         mock_log_err, _, _, _ = mock_log_functions
         args = MagicMock()
-        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -453,18 +448,10 @@ class TestDualtorNeighborCheck(object):
             assert args.log_output == dualtor_neighbor_check.LogOutput.STDOUT
             assert args.log_level == dualtor_neighbor_check.logging.WARNING
             assert args.syslog_level is None
-            assert args.flush_inconsistent_neighbors is False
             mock_log_err.assert_called_once_with("test_error")
             mock_log_warn.assert_called_once_with("test_warn")
             mock_log_info.assert_called_once_with("test_info")
             mock_log_debug.assert_called_once_with("test_debug")
-
-    def test_parse_args_flush_inconsistent_neighbors(self):
-        with patch("dualtor_neighbor_check.sys.argv",
-                   ["dualtor_neighbor_check.py", "--flush-inconsistent-neighbors"]):
-            args = dualtor_neighbor_check.parse_args()
-
-            assert args.flush_inconsistent_neighbors is True
 
     def test_log_config_syslog_default_level(self, mock_syslog_log_function):
         expected_syslog_calls = [

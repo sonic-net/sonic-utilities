@@ -270,11 +270,6 @@ def parse_args():
         default=None,
         help="stdout log level"
     )
-    parser.add_argument(
-        "--flush-inconsistent-neighbors",
-        action="store_true",
-        help="deprecated: inconsistent kernel neighbor entries are flushed once by default"
-    )
     args = parser.parse_args()
 
     if args.log_output == LogOutput.STDOUT:
