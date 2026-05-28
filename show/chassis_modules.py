@@ -21,6 +21,16 @@ CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
 CHASSIS_MIDPLANE_INFO_IP_FIELD = 'ip_address'
 CHASSIS_MIDPLANE_INFO_ACCESS_FIELD = 'access'
 
+DPU_STATE_TABLE = 'DPU_STATE'
+DPU_STATE_READY_STATUS_FIELD = 'ready_status'
+DPU_STATE_RECOVERY_STATUS_FIELD = 'recovery_status'
+DPU_STATE_RESET_COUNT_FIELD = 'reset_count'
+DPU_STATE_LAST_DOWN_TIME_FIELD = 'last_down_time'
+DPU_STATE_LAST_READY_TIME_FIELD = 'last_ready_time'
+
+CHASSIS_SERVER = 'redis_chassis.server'
+CHASSIS_SERVER_PORT = 6380
+
 @click.group(cls=clicommon.AliasedGroup)
 def chassis():
     """Chassis commands group"""
@@ -37,7 +47,11 @@ def modules():
 def status(db, chassis_module_name):
     """Show chassis-modules status"""
 
+    smartswitch = is_smartswitch()
     header = ['Name', 'Description', 'Physical-Slot', 'Oper-Status', 'Admin-Status', 'Serial']
+    if smartswitch:
+        header.append('Ready-Status')
+
     chassis_cfg_table = db.cfgdb.get_table('CHASSIS_MODULE')
 
     state_db = SonicV2Connector(host="127.0.0.1")
@@ -65,6 +79,19 @@ def status(db, chassis_module_name):
         except Exception:
             pass
 
+    # For SmartSwitch, connect to CHASSIS_STATE_DB to read DPU_STATE
+    dpu_state_data = {}
+    if smartswitch:
+        chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
+        chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+        dpu_key_pattern = DPU_STATE_TABLE + '|*'
+        dpu_keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, dpu_key_pattern)
+        if dpu_keys:
+            for dpu_key in dpu_keys:
+                dpu_name = dpu_key.split('|')[1]
+                dpu_state_data[dpu_name] = chassis_state_db.get_all(
+                    chassis_state_db.CHASSIS_STATE_DB, dpu_key)
+
     table = []
     for key in natsorted(keys):
         key_list = key.split('|')
@@ -87,7 +114,7 @@ def status(db, chassis_module_name):
                 oper_status = platform_oper_status
 
         # Determine admin_status
-        if is_smartswitch():
+        if smartswitch:
             admin_status = 'down'
         else:
             admin_status = 'up'
@@ -95,12 +122,66 @@ def status(db, chassis_module_name):
         if config_data is not None:
             admin_status = config_data.get(CHASSIS_MODULE_INFO_ADMINSTATUS_FIELD, admin_status)
 
-        table.append((key_list[1], desc, slot, oper_status, admin_status, serial))
+        row = [key_list[1], desc, slot, oper_status, admin_status, serial]
+
+        if smartswitch:
+            dpu_info = dpu_state_data.get(key_list[1], {})
+            ready_status = dpu_info.get(DPU_STATE_READY_STATUS_FIELD, 'N/A')
+            row.append(ready_status)
+
+        table.append(tuple(row))
 
     if table:
         click.echo(tabulate(table, header, tablefmt='simple', stralign='right'))
     else:
         click.echo('No data available in CHASSIS_MODULE_TABLE\n')
+
+
+@modules.command()
+@click.argument('chassis_module_name', metavar='<module_name>', required=False)
+def recovery(chassis_module_name):
+    """Show chassis-modules recovery information"""
+
+    if not is_smartswitch():
+        click.echo('This command is only supported on SmartSwitch platforms')
+        return
+
+    header = ['Name', 'Ready-Status', 'Recovery-Status', 'Reset-Count',
+              'Last-Down-Time', 'Last-Ready-Time']
+
+    chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
+    chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+
+    key_pattern = DPU_STATE_TABLE + '|*'
+    if chassis_module_name:
+        key_pattern = DPU_STATE_TABLE + '|' + chassis_module_name
+
+    keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, key_pattern)
+    if not keys:
+        click.echo('No DPU recovery data available')
+        return
+
+    table = []
+    for key in natsorted(keys):
+        key_list = key.split('|')
+        if len(key_list) != 2:
+            continue
+
+        data_dict = chassis_state_db.get_all(chassis_state_db.CHASSIS_STATE_DB, key)
+
+        ready_status = data_dict.get(DPU_STATE_READY_STATUS_FIELD, 'N/A')
+        recovery_status = data_dict.get(DPU_STATE_RECOVERY_STATUS_FIELD, 'N/A')
+        reset_count = data_dict.get(DPU_STATE_RESET_COUNT_FIELD, '0')
+        last_down_time = data_dict.get(DPU_STATE_LAST_DOWN_TIME_FIELD, '-')
+        last_ready_time = data_dict.get(DPU_STATE_LAST_READY_TIME_FIELD, '-')
+
+        table.append((key_list[1], ready_status, recovery_status, reset_count,
+                      last_down_time, last_ready_time))
+
+    if table:
+        click.echo(tabulate(table, header, tablefmt='simple', stralign='right'))
+    else:
+        click.echo('No DPU recovery data available')
 
 @modules.command()
 @click.argument('chassis_module_name', metavar='<module_name>', required=False)
@@ -143,7 +224,7 @@ def midplane_status(chassis_module_name):
 
 @chassis.command()
 @click.argument('systemportname', required=False)
-@click.option('--namespace', '-n', 'namespace', required=True if multi_asic.is_multi_asic() else False, 
+@click.option('--namespace', '-n', 'namespace', required=True if multi_asic.is_multi_asic() else False,
                 default=None, type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def system_ports(systemportname, namespace, verbose):
@@ -153,7 +234,7 @@ def system_ports(systemportname, namespace, verbose):
 
     if systemportname is not None:
         cmd += ['-i', str(systemportname)]
-    
+
     if namespace is not None:
         cmd += ['-n', str(namespace)]
 
