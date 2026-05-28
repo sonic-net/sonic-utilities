@@ -60,28 +60,28 @@ default     fc:5::/128       200:200:200:200::4
                              200:200:200:200::5
 """
 
-show_fgnhg_hash_view_vrf_output="""\
+show_fgnhg_hash_view_vrf_output = """\
 VNET/VRF    FG NHG Prefix    Next Hop       Hash buckets
 ----------  ---------------  -------------  --------------
 Vnet1       10.0.0.1/32      200.200.200.4  0   1   2   3
 Vnet1       10.0.0.1/32      200.200.200.5  4   5   6   7
 """
 
-show_fgnhg_active_hops_vrf_output="""\
+show_fgnhg_active_hops_vrf_output = """\
 VNET/VRF    FG NHG Prefix    Active Next Hops
 ----------  ---------------  ----------------
 Vnet1       10.0.0.1/32      200.200.200.4
                              200.200.200.5
 """
 
-show_fgnhg_hash_view_default_vrf_output="""\
+show_fgnhg_hash_view_default_vrf_output = """\
 VNET/VRF    FG NHG Prefix    Next Hop       Hash buckets
 ----------  ---------------  -------------  ------------------------------
 default     100.50.25.12/32  200.200.200.4  0   1   2   3   4   5   6   7
 default     100.50.25.12/32  200.200.200.5  8   9   10  11  12  13  14  15
 """
 
-show_fgnhg_active_hops_default_vrf_output="""\
+show_fgnhg_active_hops_default_vrf_output = """\
 VNET/VRF    FG NHG Prefix    Active Next Hops
 ----------  ---------------  ----------------
 default     100.50.25.12/32  200.200.200.4

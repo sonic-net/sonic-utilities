@@ -59,7 +59,7 @@ def active_hops(nhg_or_vrf, prefix):
     ctx = click.get_current_context()
     try:
         table_keys = sorted(state_db.keys(state_db.STATE_DB, _hash))
-    except Exception as e:
+    except Exception:
         ctx.fail("FG_ROUTE_TABLE does not exist!")
     if table_keys is None:
         ctx.fail("FG_ROUTE_TABLE does not exist!")
@@ -102,7 +102,7 @@ def active_hops(nhg_or_vrf, prefix):
         nhip_prefix_map = {}
         try:
             fg_nhg_member_table = config_db.get_table('FG_NHG_MEMBER')
-        except Exception as e:
+        except Exception:
             ctx.fail("FG_NHG_MEMBER entries not present in config_db")
         alias_list = []
         nexthop_alias = {}
@@ -159,7 +159,7 @@ def hash_view(nhg_or_vrf, prefix):
     ctx = click.get_current_context()
     try:
         table_keys = sorted(state_db.keys(state_db.STATE_DB, _hash))
-    except Exception as e:
+    except Exception:
         ctx.fail("FG_ROUTE_TABLE does not exist!")
     if table_keys is None:
         ctx.fail("FG_ROUTE_TABLE does not exist!")
@@ -212,7 +212,7 @@ def hash_view(nhg_or_vrf, prefix):
         nhg = nhg_or_vrf
         try:
             fg_nhg_member_table = config_db.get_table('FG_NHG_MEMBER')
-        except Exception as e:
+        except Exception:
             ctx.fail("FG_NHG_MEMBER entries not present in config_db")
         alias_list = []
         nexthop_alias = {}
