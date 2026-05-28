@@ -408,7 +408,9 @@ class TestDualtorNeighborCheck(object):
             result = dualtor_neighbor_check.main()
 
             assert result == 1
-            mock_log_err.assert_called_with("ALERT: post-flush dualtor neighbor check still found inconsistent neighbors.")
+            mock_log_err.assert_called_with(
+                "ALERT: post-flush dualtor neighbor check still found inconsistent neighbors."
+            )
 
     def test_redis_cli(self, mock_log_functions):
         with patch("dualtor_neighbor_check.subprocess.Popen") as mock_popen:
