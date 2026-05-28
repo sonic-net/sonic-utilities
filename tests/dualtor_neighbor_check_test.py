@@ -7,6 +7,7 @@ import subprocess
 import tabulate
 
 from unittest.mock import call
+from unittest.mock import ANY
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -103,6 +104,57 @@ class TestDualtorNeighborCheck(object):
                 call("Flushing inconsistent neighbor entry: %s", "192.168.0.5")
             ])
 
+    def test_flush_inconsistent_neighbors_continues_after_flush_failure(self, mock_log_functions):
+        mock_log_err, mock_log_warn, _, _ = mock_log_functions
+        failed_neighbors = [
+            {"NEIGHBOR": "192.168.0.2", "PORT": "Ethernet4", "_NEIGHBOR_MODE": "prefix-route"},
+            {"NEIGHBOR": "192.168.0.3", "PORT": "Ethernet8", "_NEIGHBOR_MODE": "prefix-route"},
+            {"NEIGHBOR": "192.168.0.4", "PORT": "Ethernet12", "_NEIGHBOR_MODE": "host-route"},
+        ]
+
+        with patch("dualtor_neighbor_check.flush_neighbor",
+                   side_effect=[None, RuntimeError("flush failed"), None]) as mock_flush_neighbor:
+            flush_count = dualtor_neighbor_check.flush_inconsistent_neighbors(failed_neighbors)
+
+            assert flush_count == 2
+            mock_flush_neighbor.assert_has_calls([
+                call("192.168.0.2"),
+                call("192.168.0.3"),
+                call("192.168.0.4")
+            ])
+            mock_log_warn.assert_has_calls([
+                call("Flushing inconsistent neighbor entry: %s", "192.168.0.2"),
+                call("Flushing inconsistent neighbor entry: %s", "192.168.0.3"),
+                call("Flushing inconsistent neighbor entry: %s", "192.168.0.4")
+            ])
+            mock_log_err.assert_called_once_with(
+                "Failed to flush inconsistent neighbor entry %s: %s",
+                "192.168.0.3",
+                ANY
+            )
+
+    def test_flush_inconsistent_neighbors_continues_after_invalid_ip(self, mock_log_functions):
+        mock_log_err, _, _, _ = mock_log_functions
+        failed_neighbors = [
+            {"NEIGHBOR": "not-an-ip", "PORT": "Ethernet4", "_NEIGHBOR_MODE": "prefix-route"},
+            {"NEIGHBOR": "192.168.0.3", "PORT": "Ethernet8", "_NEIGHBOR_MODE": "prefix-route"},
+        ]
+
+        with patch("dualtor_neighbor_check.flush_neighbor",
+                   side_effect=[ValueError("invalid IP"), None]) as mock_flush_neighbor:
+            flush_count = dualtor_neighbor_check.flush_inconsistent_neighbors(failed_neighbors)
+
+            assert flush_count == 1
+            mock_flush_neighbor.assert_has_calls([
+                call("not-an-ip"),
+                call("192.168.0.3")
+            ])
+            mock_log_err.assert_called_once_with(
+                "Failed to flush inconsistent neighbor entry %s: %s",
+                "not-an-ip",
+                ANY
+            )
+
     def test_parse_check_results_returns_failed_neighbors_consistent(self, mock_log_functions):
         check_results = [{
             "NEIGHBOR": "192.168.0.2",
@@ -192,7 +244,7 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_flushes_and_reruns_inconsistent_neighbors(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = True
+        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -233,7 +285,7 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_waits_once_before_post_flush_check(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = True
+        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -265,7 +317,7 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_returns_failure_when_post_flush_check_remains_inconsistent(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = True
+        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -297,7 +349,7 @@ class TestDualtorNeighborCheck(object):
 
     def test_main_skips_rerun_when_no_neighbors_are_flushed(self, mock_log_functions):
         args = MagicMock()
-        args.flush_inconsistent_neighbors = True
+        args.flush_inconsistent_neighbors = False
         config_db = MagicMock()
         appl_db = MagicMock()
         failed_neighbors = [
@@ -326,6 +378,37 @@ class TestDualtorNeighborCheck(object):
             mock_run_neighbor_check.assert_called_once()
             mock_parse_results.assert_called_once_with([{"first": "result"}])
             mock_sleep.assert_not_called()
+
+    def test_main_logs_alert_when_post_flush_check_remains_inconsistent(self, mock_log_functions):
+        mock_log_err, _, _, _ = mock_log_functions
+        args = MagicMock()
+        args.flush_inconsistent_neighbors = False
+        config_db = MagicMock()
+        appl_db = MagicMock()
+        failed_neighbors = [
+            {"NEIGHBOR": "192.168.0.2", "PORT": "Ethernet4", "_NEIGHBOR_MODE": "prefix-route"}
+        ]
+
+        with patch("dualtor_neighbor_check.parse_args", return_value=args), \
+                patch("dualtor_neighbor_check.config_logging"), \
+                patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector", return_value=config_db), \
+                patch("dualtor_neighbor_check.daemon_base.db_connect", return_value=appl_db), \
+                patch("dualtor_neighbor_check.get_mux_cable_config", return_value={"Ethernet4": {}}), \
+                patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
+                patch("dualtor_neighbor_check.get_mux_server_to_port_map",
+                      return_value={"192.168.0.2": "Ethernet4"}), \
+                patch("dualtor_neighbor_check.get_if_br_oid_to_port_name_map",
+                      return_value={"1001": "Ethernet4"}), \
+                patch("dualtor_neighbor_check.run_neighbor_check",
+                      side_effect=[[{"first": "result"}], [{"second": "result"}]]), \
+                patch("dualtor_neighbor_check.parse_check_results",
+                      side_effect=[(False, failed_neighbors), (False, failed_neighbors)]), \
+                patch("dualtor_neighbor_check.flush_inconsistent_neighbors", return_value=1), \
+                patch("dualtor_neighbor_check.time.sleep"):
+            result = dualtor_neighbor_check.main()
+
+            assert result == 1
+            mock_log_err.assert_called_with("ALERT: post-flush dualtor neighbor check still found inconsistent neighbors.")
 
     def test_redis_cli(self, mock_log_functions):
         with patch("dualtor_neighbor_check.subprocess.Popen") as mock_popen:

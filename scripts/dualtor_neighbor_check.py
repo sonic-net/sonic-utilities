@@ -204,6 +204,8 @@ result['asic_nexthop_table'] = asic_nexthop_table
 return redis.status_reply(cjson.encode(result))
 """
 
+# Allow kernel ARP/ND and orchagent to converge before validating the
+# one-time automatic neighbor flush mitigation.
 POST_FLUSH_CHECK_DELAY_SEC = 10
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
@@ -271,7 +273,7 @@ def parse_args():
     parser.add_argument(
         "--flush-inconsistent-neighbors",
         action="store_true",
-        help="flush inconsistent kernel neighbor entries and rerun the check"
+        help="deprecated: inconsistent kernel neighbor entries are flushed once by default"
     )
     args = parser.parse_args()
 
@@ -370,16 +372,22 @@ def flush_neighbor(neighbor_ip):
 
 def flush_inconsistent_neighbors(failed_neighbors):
     """Flush kernel neighbor entries for failed neighbors."""
+    attempted_neighbors = set()
     flushed_neighbors = set()
 
     for neighbor in failed_neighbors:
         # Inconsistency can affect both host-route and prefix-route neighbors.
         neighbor_ip = neighbor["NEIGHBOR"]
-        if neighbor_ip in flushed_neighbors:
+        if neighbor_ip in attempted_neighbors:
             continue
 
+        attempted_neighbors.add(neighbor_ip)
         WRITE_LOG_WARN("Flushing inconsistent neighbor entry: %s", neighbor_ip)
-        flush_neighbor(neighbor_ip)
+        try:
+            flush_neighbor(neighbor_ip)
+        except (RuntimeError, ValueError) as err:
+            WRITE_LOG_ERROR("Failed to flush inconsistent neighbor entry %s: %s", neighbor_ip, err)
+            continue
         flushed_neighbors.add(neighbor_ip)
 
     return len(flushed_neighbors)
@@ -759,7 +767,7 @@ def main():
     check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
     res, failed_neighbors = parse_check_results(check_results)
 
-    if not res and args.flush_inconsistent_neighbors:
+    if not res:
         flush_count = flush_inconsistent_neighbors(failed_neighbors)
         if flush_count:
             WRITE_LOG_WARN("Flushed %d inconsistent neighbor entries.", flush_count)
@@ -771,7 +779,9 @@ def main():
             check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
             res, _ = parse_check_results(check_results)
             if not res:
-                WRITE_LOG_WARN("Post-flush dualtor neighbor check still found inconsistent neighbors.")
+                WRITE_LOG_ERROR("ALERT: post-flush dualtor neighbor check still found inconsistent neighbors.")
+        else:
+            WRITE_LOG_ERROR("ALERT: no inconsistent neighbor entries were flushed.")
 
     return 0 if res else 1
 
