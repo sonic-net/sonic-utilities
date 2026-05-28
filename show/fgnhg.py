@@ -122,8 +122,6 @@ def active_hops(nhg_or_vrf, prefix):
                     if nh_ip.split("@")[0] in nexthop_alias:
                         if nexthop_alias[nh_ip.split("@")[0]] == nhg:
                             output_list.append(nh_ip.split("@")[0])
-                    else:
-                        ctx.fail("state_db and config_db have FGNHG prefix config mismatch. Check device config!")
                 output_list = sorted(output_list)
             if not output_list:
                 ctx.fail("FG_ROUTE table likely does not contain the required entries")
@@ -242,8 +240,6 @@ def hash_view(nhg_or_vrf, prefix):
                     if nexthop in nexthop_alias:
                         if nexthop_alias[nexthop] == nhg:
                             output_bank_dict[nexthop] = banks
-                    else:
-                        ctx.fail("state_db and config_db have FGNHG prefix config mismatch. Check device config!")
                 matched_key = nhip_prefix_map[list(bank_dict.keys())[0]]
                 vrf, prefix_report = parse_fg_route_key(matched_key)
                 output_bank_dict = OrderedDict(sorted(output_bank_dict.items()))
