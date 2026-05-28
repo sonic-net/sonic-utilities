@@ -909,164 +909,65 @@ show_hash_global_multi_asic_single_ns = """\
 +--------+-------------------------------------+
 """
 
-show_hash_capabilities_multi_asic = """\
-Namespace asic0:
-+--------+-------------------------------------+
-| Hash   | Capabilities                        |
-+========+=====================================+
-| ECMP   | +-------------------+-------------+ |
-|        | | Hash Field        | Algorithm   | |
-|        | |-------------------+-------------| |
-|        | | IN_PORT           | CRC         | |
-|        | | DST_MAC           | XOR         | |
-|        | | SRC_MAC           | RANDOM      | |
-|        | | ETHERTYPE         | CRC_32LO    | |
-|        | | VLAN_ID           | CRC_32HI    | |
-|        | | IP_PROTOCOL       | CRC_CCITT   | |
-|        | | DST_IP            | CRC_XOR     | |
-|        | | SRC_IP            |             | |
-|        | | L4_DST_PORT       |             | |
-|        | | L4_SRC_PORT       |             | |
-|        | | INNER_DST_MAC     |             | |
-|        | | INNER_SRC_MAC     |             | |
-|        | | INNER_ETHERTYPE   |             | |
-|        | | INNER_IP_PROTOCOL |             | |
-|        | | INNER_DST_IP      |             | |
-|        | | INNER_SRC_IP      |             | |
-|        | | INNER_L4_DST_PORT |             | |
-|        | | INNER_L4_SRC_PORT |             | |
-|        | | IPV6_FLOW_LABEL   |             | |
-|        | +-------------------+-------------+ |
-+--------+-------------------------------------+
-| LAG    | +-------------------+-------------+ |
-|        | | Hash Field        | Algorithm   | |
-|        | |-------------------+-------------| |
-|        | | IN_PORT           | CRC         | |
-|        | | DST_MAC           | XOR         | |
-|        | | SRC_MAC           | RANDOM      | |
-|        | | ETHERTYPE         | CRC_32LO    | |
-|        | | VLAN_ID           | CRC_32HI    | |
-|        | | IP_PROTOCOL       | CRC_CCITT   | |
-|        | | DST_IP            | CRC_XOR     | |
-|        | | SRC_IP            |             | |
-|        | | L4_DST_PORT       |             | |
-|        | | L4_SRC_PORT       |             | |
-|        | | INNER_DST_MAC     |             | |
-|        | | INNER_SRC_MAC     |             | |
-|        | | INNER_ETHERTYPE   |             | |
-|        | | INNER_IP_PROTOCOL |             | |
-|        | | INNER_DST_IP      |             | |
-|        | | INNER_SRC_IP      |             | |
-|        | | INNER_L4_DST_PORT |             | |
-|        | | INNER_L4_SRC_PORT |             | |
-|        | | IPV6_FLOW_LABEL   |             | |
-|        | +-------------------+-------------+ |
-+--------+-------------------------------------+
-
-Namespace asic1:
-+--------+-------------------------------------+
-| Hash   | Capabilities                        |
-+========+=====================================+
-| ECMP   | +-------------------+-------------+ |
-|        | | Hash Field        | Algorithm   | |
-|        | |-------------------+-------------| |
-|        | | IN_PORT           | CRC         | |
-|        | | DST_MAC           | XOR         | |
-|        | | SRC_MAC           | RANDOM      | |
-|        | | ETHERTYPE         | CRC_32LO    | |
-|        | | VLAN_ID           | CRC_32HI    | |
-|        | | IP_PROTOCOL       | CRC_CCITT   | |
-|        | | DST_IP            | CRC_XOR     | |
-|        | | SRC_IP            |             | |
-|        | | L4_DST_PORT       |             | |
-|        | | L4_SRC_PORT       |             | |
-|        | | INNER_DST_MAC     |             | |
-|        | | INNER_SRC_MAC     |             | |
-|        | | INNER_ETHERTYPE   |             | |
-|        | | INNER_IP_PROTOCOL |             | |
-|        | | INNER_DST_IP      |             | |
-|        | | INNER_SRC_IP      |             | |
-|        | | INNER_L4_DST_PORT |             | |
-|        | | INNER_L4_SRC_PORT |             | |
-|        | | IPV6_FLOW_LABEL   |             | |
-|        | +-------------------+-------------+ |
-+--------+-------------------------------------+
-| LAG    | +-------------------+-------------+ |
-|        | | Hash Field        | Algorithm   | |
-|        | |-------------------+-------------| |
-|        | | IN_PORT           | CRC         | |
-|        | | DST_MAC           | XOR         | |
-|        | | SRC_MAC           | RANDOM      | |
-|        | | ETHERTYPE         | CRC_32LO    | |
-|        | | VLAN_ID           | CRC_32HI    | |
-|        | | IP_PROTOCOL       | CRC_CCITT   | |
-|        | | DST_IP            | CRC_XOR     | |
-|        | | SRC_IP            |             | |
-|        | | L4_DST_PORT       |             | |
-|        | | L4_SRC_PORT       |             | |
-|        | | INNER_DST_MAC     |             | |
-|        | | INNER_SRC_MAC     |             | |
-|        | | INNER_ETHERTYPE   |             | |
-|        | | INNER_IP_PROTOCOL |             | |
-|        | | INNER_DST_IP      |             | |
-|        | | INNER_SRC_IP      |             | |
-|        | | INNER_L4_DST_PORT |             | |
-|        | | INNER_L4_SRC_PORT |             | |
-|        | | IPV6_FLOW_LABEL   |             | |
-|        | +-------------------+-------------+ |
-+--------+-------------------------------------+
+_HASH_CAPABILITIES_MULTI_ASIC_TABLE = """\
++--------+-------------------------------------------------------+
+| Hash   | Capabilities                                          |
++========+=======================================================+
+| ECMP   | +-------------------+-------------+-----------------+ |
+|        | | Hash Field        | Algorithm   | Packet Type     | |
+|        | |-------------------+-------------+-----------------| |
+|        | | IN_PORT           | CRC         | no capabilities | |
+|        | | DST_MAC           | XOR         |                 | |
+|        | | SRC_MAC           | RANDOM      |                 | |
+|        | | ETHERTYPE         | CRC_32LO    |                 | |
+|        | | VLAN_ID           | CRC_32HI    |                 | |
+|        | | IP_PROTOCOL       | CRC_CCITT   |                 | |
+|        | | DST_IP            | CRC_XOR     |                 | |
+|        | | SRC_IP            |             |                 | |
+|        | | L4_DST_PORT       |             |                 | |
+|        | | L4_SRC_PORT       |             |                 | |
+|        | | INNER_DST_MAC     |             |                 | |
+|        | | INNER_SRC_MAC     |             |                 | |
+|        | | INNER_ETHERTYPE   |             |                 | |
+|        | | INNER_IP_PROTOCOL |             |                 | |
+|        | | INNER_DST_IP      |             |                 | |
+|        | | INNER_SRC_IP      |             |                 | |
+|        | | INNER_L4_DST_PORT |             |                 | |
+|        | | INNER_L4_SRC_PORT |             |                 | |
+|        | | IPV6_FLOW_LABEL   |             |                 | |
+|        | +-------------------+-------------+-----------------+ |
++--------+-------------------------------------------------------+
+| LAG    | +-------------------+-------------+-----------------+ |
+|        | | Hash Field        | Algorithm   | Packet Type     | |
+|        | |-------------------+-------------+-----------------| |
+|        | | IN_PORT           | CRC         | no capabilities | |
+|        | | DST_MAC           | XOR         |                 | |
+|        | | SRC_MAC           | RANDOM      |                 | |
+|        | | ETHERTYPE         | CRC_32LO    |                 | |
+|        | | VLAN_ID           | CRC_32HI    |                 | |
+|        | | IP_PROTOCOL       | CRC_CCITT   |                 | |
+|        | | DST_IP            | CRC_XOR     |                 | |
+|        | | SRC_IP            |             |                 | |
+|        | | L4_DST_PORT       |             |                 | |
+|        | | L4_SRC_PORT       |             |                 | |
+|        | | INNER_DST_MAC     |             |                 | |
+|        | | INNER_SRC_MAC     |             |                 | |
+|        | | INNER_ETHERTYPE   |             |                 | |
+|        | | INNER_IP_PROTOCOL |             |                 | |
+|        | | INNER_DST_IP      |             |                 | |
+|        | | INNER_SRC_IP      |             |                 | |
+|        | | INNER_L4_DST_PORT |             |                 | |
+|        | | INNER_L4_SRC_PORT |             |                 | |
+|        | | IPV6_FLOW_LABEL   |             |                 | |
+|        | +-------------------+-------------+-----------------+ |
++--------+-------------------------------------------------------+
 """
 
-show_hash_capabilities_multi_asic_single_ns = """\
-+--------+-------------------------------------+
-| Hash   | Capabilities                        |
-+========+=====================================+
-| ECMP   | +-------------------+-------------+ |
-|        | | Hash Field        | Algorithm   | |
-|        | |-------------------+-------------| |
-|        | | IN_PORT           | CRC         | |
-|        | | DST_MAC           | XOR         | |
-|        | | SRC_MAC           | RANDOM      | |
-|        | | ETHERTYPE         | CRC_32LO    | |
-|        | | VLAN_ID           | CRC_32HI    | |
-|        | | IP_PROTOCOL       | CRC_CCITT   | |
-|        | | DST_IP            | CRC_XOR     | |
-|        | | SRC_IP            |             | |
-|        | | L4_DST_PORT       |             | |
-|        | | L4_SRC_PORT       |             | |
-|        | | INNER_DST_MAC     |             | |
-|        | | INNER_SRC_MAC     |             | |
-|        | | INNER_ETHERTYPE   |             | |
-|        | | INNER_IP_PROTOCOL |             | |
-|        | | INNER_DST_IP      |             | |
-|        | | INNER_SRC_IP      |             | |
-|        | | INNER_L4_DST_PORT |             | |
-|        | | INNER_L4_SRC_PORT |             | |
-|        | | IPV6_FLOW_LABEL   |             | |
-|        | +-------------------+-------------+ |
-+--------+-------------------------------------+
-| LAG    | +-------------------+-------------+ |
-|        | | Hash Field        | Algorithm   | |
-|        | |-------------------+-------------| |
-|        | | IN_PORT           | CRC         | |
-|        | | DST_MAC           | XOR         | |
-|        | | SRC_MAC           | RANDOM      | |
-|        | | ETHERTYPE         | CRC_32LO    | |
-|        | | VLAN_ID           | CRC_32HI    | |
-|        | | IP_PROTOCOL       | CRC_CCITT   | |
-|        | | DST_IP            | CRC_XOR     | |
-|        | | SRC_IP            |             | |
-|        | | L4_DST_PORT       |             | |
-|        | | L4_SRC_PORT       |             | |
-|        | | INNER_DST_MAC     |             | |
-|        | | INNER_SRC_MAC     |             | |
-|        | | INNER_ETHERTYPE   |             | |
-|        | | INNER_IP_PROTOCOL |             | |
-|        | | INNER_DST_IP      |             | |
-|        | | INNER_SRC_IP      |             | |
-|        | | INNER_L4_DST_PORT |             | |
-|        | | INNER_L4_SRC_PORT |             | |
-|        | | IPV6_FLOW_LABEL   |             | |
-|        | +-------------------+-------------+ |
-+--------+-------------------------------------+
-"""
+show_hash_capabilities_multi_asic = (
+    "Namespace asic0:\n"
+    + _HASH_CAPABILITIES_MULTI_ASIC_TABLE
+    + "\nNamespace asic1:\n"
+    + _HASH_CAPABILITIES_MULTI_ASIC_TABLE
+)
+
+show_hash_capabilities_multi_asic_single_ns = _HASH_CAPABILITIES_MULTI_ASIC_TABLE

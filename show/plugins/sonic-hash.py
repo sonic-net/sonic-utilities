@@ -34,6 +34,15 @@ SHOW_PKT_TYPE_LIST = ["all", "ipv4", "ipv6", "ipnip", "ipv4_rdma", "ipv6_rdma"]
 # Hash helpers --------------------------------------------------------------------------------------------------------
 #
 
+
+def _get_namespace(ctx):
+    """Return namespace from parent click context, or None for all namespaces."""
+    parent = ctx.parent
+    if parent is not None and parent.params is not None:
+        return parent.params.get('namespace')
+    return None
+
+
 def format_attr_value(entry, attr):
     """ Helper that formats attribute to be presented in the table output.
 
@@ -380,7 +389,7 @@ def SWITCH_HASH_GLOBAL(ctx, db, json_format, packet_type):
         else:
             show_pkt_type = packet_type.upper()
 
-    namespace = ctx.parent.params['namespace']
+    namespace = _get_namespace(ctx)
     ns_list = multi_asic.get_namespace_list(namespace)
 
     for idx, ns in enumerate(ns_list):
@@ -440,7 +449,7 @@ def SWITCH_HASH_GLOBAL(ctx, db, json_format, packet_type):
 def SWITCH_HASH_CAPABILITIES(ctx, db, json_format):
     """ Show switch hash capabilities """
 
-    namespace = ctx.parent.params['namespace']
+    namespace = _get_namespace(ctx)
     ns_list = multi_asic.get_namespace_list(namespace)
 
     for idx, ns in enumerate(ns_list):
