@@ -5422,6 +5422,7 @@ def interface_type(ctx, interface_name, interface_type_value, verbose):
         command += ["-vv"]
     clicommon.run_command(command, display_cmd=verbose)
 
+
 #
 # 'damping' subgroup ('config interface damping ...')
 #
@@ -5431,6 +5432,7 @@ def interface_type(ctx, interface_name, interface_type_value, verbose):
 def damping(ctx):
     """Set interface damping configurations"""
     pass
+
 
 #
 # 'algo' subcommand ('config interface damping algo ...')
@@ -5458,6 +5460,7 @@ def algo(ctx, interface_name, algo_type):
 
     config_db.mod_entry("PORT", interface_name, {"link_event_damping_algorithm": algo_type})
 
+
 #
 # 'aied-param' subcommand ('config interface damping aied-param ...')
 #
@@ -5465,12 +5468,45 @@ def algo(ctx, interface_name, algo_type):
 @damping.command()
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.option('--max-suppress-time', required=False, type=int, help="Set max suppress time in ms")
-@click.option('--decay-half-life', required=False, type=int, help="Set decay half life in ms")
-@click.option('--suppress-threshold', required=False, type=int, help="Set suppress threshold")
-@click.option('--reuse-threshold', required=False, type=int, help="Set reuse threshold")
-@click.option('--flap-penalty', required=False, type=int, help="Set flap penalty")
-def aied_param(ctx, interface_name, max_suppress_time, decay_half_life, suppress_threshold, reuse_threshold, flap_penalty):
+@click.option(
+    '--max-suppress-time',
+    required=False,
+    type=int,
+    help="Set max suppress time in ms"
+    )
+@click.option(
+    '--decay-half-life',
+    required=False,
+    type=int,
+    help="Set decay half life in ms"
+    )
+@click.option(
+    '--suppress-threshold',
+    required=False,
+    type=int,
+    help="Set suppress threshold"
+    )
+@click.option(
+    '--reuse-threshold',
+    required=False,
+    type=int,
+    help="Set reuse threshold"
+    )
+@click.option(
+    '--flap-penalty',
+    required=False,
+    type=int,
+    help="Set flap penalty"
+    )
+def aied_param(
+    ctx,
+    interface_name,
+    max_suppress_time,
+    decay_half_life,
+    suppress_threshold,
+    reuse_threshold,
+    flap_penalty
+    ):
     """Set AIED link event damping configuration"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
@@ -5512,6 +5548,7 @@ def aied_param(ctx, interface_name, max_suppress_time, decay_half_life, suppress
 
     log.log_info("Executing: interface aied_config {}".format(interface_name))
     config_db.mod_entry("PORT", interface_name, config_set)
+
 
 #
 # 'advertised-interface-types' subcommand

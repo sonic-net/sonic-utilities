@@ -1,4 +1,3 @@
-import click
 import config.main as config
 import operator
 import os
@@ -17,7 +16,7 @@ sys.path.insert(0, modules_path)
 @pytest.fixture(scope='module')
 def ctx(scope='module'):
     db = Db()
-    obj = {'config_db':db.cfgdb, 'namespace': ''}
+    obj = {'config_db': db.cfgdb, 'namespace': ''}
     yield obj
 
 
@@ -41,7 +40,16 @@ class TestDampingConfig(object):
         assert "Error: Invalid port" in result.output
         result = self.basic_check("aied-param", ["Ethernet0"], ctx, op=operator.ne)
         assert "Error: Expected at least one valid AIED config parameter" in result.output
-        result = self.basic_check("aied-param", ["Ethernet0", "--suppress-threshold", "10", "--max-suppress-time", "10", "--decay-half-life", "-1"], ctx, op=operator.ne)
+        result = self.basic_check(
+            "aied-param", 
+            [
+                "Ethernet0",
+                "--suppress-threshold", "10",
+                "--max-suppress-time", "10",
+                "--decay-half-life", "-1"
+            ],
+            ctx,
+            op=operator.ne)
         assert "Error: Invalid decay_half_life value -1. It should be >= 0" in result.output
 
     def test_max_suppress_time_config(self, ctx):
@@ -70,7 +78,17 @@ class TestDampingConfig(object):
         self.basic_check("aied-param", ["Ethernet0", "--flap-penalty", "50"], ctx)
 
     def test_all_config(self, ctx):
-        self.basic_check("aied-param", ["Ethernet0", "--decay-half-life", "1001", "--suppress-threshold", "190", "--max-suppress-time", "500",  "--flap-penalty", "1000", "--reuse-threshold", "170"], ctx)
+        self.basic_check(
+            "aied-param",
+            [
+                "Ethernet0",
+                "--decay-half-life", "1001",
+                "--suppress-threshold", "190",
+                "--max-suppress-time", "500",
+                "--flap-penalty", "1000",
+                "--reuse-threshold", "170"
+            ],
+            ctx)
 
     def basic_check(self, command_name, para_list, ctx, op=operator.eq, expect_result=0):
         runner = CliRunner()
@@ -78,4 +96,3 @@ class TestDampingConfig(object):
         print(result.exit_code, result.output)
         assert op(result.exit_code, expect_result)
         return result
-

@@ -1453,6 +1453,7 @@ def display_phy_taps_attribute(attr_display_name, attr_json):
         click.echo(tabulate(body, header, tablefmt='simple', numalign="left"))
     click.echo("")
 
+
 #
 # 'dampening' subcommand ("show interfaces dampening")
 #

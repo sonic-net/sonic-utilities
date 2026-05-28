@@ -763,6 +763,7 @@ def asic_sdk_health_event(db, namespace):
         for key in keys:
             state_db.delete(state_db.STATE_DB, key);
 
+
 #
 # 'interfaces' group ("sonic-clear interfaces ...")
 #
