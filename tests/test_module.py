@@ -18,6 +18,13 @@ def _mock_sonic_platform_module():
 
 
 class TestModuleHelper:
+    @pytest.fixture(autouse=True)
+    def _restore_platform_chassis(self):
+        """Save and restore module_helper.platform_chassis between tests."""
+        original = module_helper.platform_chassis
+        yield
+        module_helper.platform_chassis = original
+
     @pytest.fixture(scope="function")
     def mock_load_platform_chassis(self):
         with mock.patch('utilities_common.module.util.load_platform_chassis') as mock_load_platform_chassis:
@@ -127,7 +134,8 @@ class TestModuleHelper:
         """When the module has neither reboot nor reboot_gracefully, should return False."""
         mock_try_get_args.return_value = 1
         mock_module = object()
-        module_helper.platform_chassis.get_module.return_value = mock_module
+        module_helper.platform_chassis = mock_load_platform_chassis.return_value
+        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
 
         result = module_helper.reboot_module("DPU1", "cold")
         assert result is False
