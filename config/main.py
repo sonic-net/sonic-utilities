@@ -5241,7 +5241,11 @@ def startup(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    intf_fs = parse_interface_in_filter(interface_name)
+    try:
+        intf_fs = parse_interface_in_filter(interface_name)
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if len(intf_fs) > 1 and multi_asic.is_multi_asic():
         ctx.fail("Interface range not supported in multi-asic platforms !!")
 
@@ -5287,7 +5291,11 @@ def shutdown(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    intf_fs = parse_interface_in_filter(interface_name)
+    try:
+        intf_fs = parse_interface_in_filter(interface_name)
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if len(intf_fs) > 1 and multi_asic.is_multi_asic():
         ctx.fail("Interface range not supported in multi-asic platforms !!")
 

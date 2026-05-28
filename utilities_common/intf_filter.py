@@ -19,24 +19,30 @@ def parse_interface_in_filter(intf_filter):
                 start = x.split('-')[0]
                 end = x.split('-')[1]
                 if not start.isdigit() or not end.isdigit():
-                    continue
+                    raise ValueError(
+                        "Invalid interface range '{}{}'. Expected a range like "
+                        "'{}0-3'.".format(intf, x, intf))
                 for i in range(int(start), int(end)+1):
                     intf_fs.append(intf+str(i))
             else:
                 intf_fs.append(intf+x)
         elif '-' in x:
             # handle range
-            if not x.startswith(SONIC_PORT_NAME_PREFIX) and not x.startswith(SONIC_LAG_NAME_PREFIX):
-                continue
             if x.startswith(SONIC_PORT_NAME_PREFIX):
                 intf = SONIC_PORT_NAME_PREFIX
-            if x.startswith(SONIC_LAG_NAME_PREFIX):
+            elif x.startswith(SONIC_LAG_NAME_PREFIX):
                 intf = SONIC_LAG_NAME_PREFIX
+            else:
+                raise ValueError(
+                    "Invalid interface range '{}'. A range must start with "
+                    "'{}' or '{}'.".format(x, SONIC_PORT_NAME_PREFIX, SONIC_LAG_NAME_PREFIX))
             start = x.split('-')[0].split(intf,1)[1]
             end = x.split('-')[1]
 
             if not start.isdigit() or not end.isdigit():
-                continue
+                raise ValueError(
+                    "Invalid interface range '{}'. Expected a range like "
+                    "'{}0-3'.".format(x, intf))
             for i in range(int(start), int(end)+1):
                 intf_fs.append(intf+str(i))
         else:
