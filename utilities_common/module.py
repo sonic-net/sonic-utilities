@@ -61,12 +61,16 @@ class ModuleHelper:
             log.log_error("Unable to get module-index for {}". format(module_name))
             return False
 
-        if not hasattr(self.platform_chassis.get_module(module_index), 'reboot'):
+        module = self.platform_chassis.get_module(module_index)
+        if not hasattr(module, 'reboot'):
             log.log_error("Reboot method not found in platform chassis")
             return False
 
         log.log_info("Rebooting module {} with reboot_type {}...".format(module_name, reboot_type))
-        status = self.try_get_args(self.platform_chassis.get_module(module_index).reboot, reboot_type, default=False)
+        if hasattr(module, 'reboot_gracefully'):
+            status = self.try_get_args(module.reboot_gracefully, reboot_type, default=False)
+        else:
+            status = self.try_get_args(module.reboot, reboot_type, default=False)
         if not status:
             log.log_error("Reboot status for module {}: {}".format(module_name, status))
             return False

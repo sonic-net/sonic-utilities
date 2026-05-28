@@ -78,12 +78,60 @@ class TestModuleHelper:
         result = module_helper.reboot_module("DPU1", "cold")
         assert result is True
 
+    def test_reboot_module_uses_reboot_gracefully_when_available(self, mock_load_platform_chassis):
+        """When the module has reboot_gracefully(), it should be called instead of reboot()."""
+        mock_module = mock.MagicMock()
+        mock_module.reboot_gracefully.return_value = True
+        module_helper.platform_chassis = mock_load_platform_chassis.return_value
+        mock_load_platform_chassis.return_value.get_module_index.return_value = 1
+        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
+
+        result = module_helper.reboot_module("DPU1", "cold")
+        assert result is True
+        mock_module.reboot_gracefully.assert_called_once_with("cold")
+        mock_module.reboot.assert_not_called()
+
+    def test_reboot_module_falls_back_to_reboot_without_gracefully(self, mock_load_platform_chassis):
+        """When the module lacks reboot_gracefully(), reboot() should be called."""
+        mock_module = mock.MagicMock(spec=['reboot'])
+        mock_module.reboot.return_value = True
+        module_helper.platform_chassis = mock_load_platform_chassis.return_value
+        mock_load_platform_chassis.return_value.get_module_index.return_value = 1
+        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
+
+        result = module_helper.reboot_module("DPU1", "cold")
+        assert result is True
+        mock_module.reboot.assert_called_once_with("cold")
+
+    def test_reboot_module_gracefully_failure(self, mock_load_platform_chassis, mock_log_error):
+        """When reboot_gracefully() returns False, reboot_module should return False."""
+        mock_module = mock.MagicMock()
+        mock_module.reboot_gracefully.return_value = False
+        module_helper.platform_chassis = mock_load_platform_chassis.return_value
+        mock_load_platform_chassis.return_value.get_module_index.return_value = 1
+        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
+
+        result = module_helper.reboot_module("DPU1", "cold")
+        assert result is False
+        mock_log_error.assert_called_with("Reboot status for module DPU1: False")
+
     def test_reboot_module_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
         mock_try_get_args.return_value = INVALID_MODULE_INDEX
         mock_load_platform_chassis.return_value.get_module_index.return_value = INVALID_MODULE_INDEX
 
         result = module_helper.reboot_module("DPU1", "cold")
         assert result is False
+
+    def test_reboot_module_no_reboot_method(self, mock_load_platform_chassis,
+                                            mock_try_get_args, mock_log_error):
+        """When the module has neither reboot nor reboot_gracefully, should return False."""
+        mock_try_get_args.return_value = 1
+        mock_module = object()
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.reboot_module("DPU1", "cold")
+        assert result is False
+        mock_log_error.assert_called_once_with("Reboot method not found in platform chassis")
 
     def test_module_pre_shutdown_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
         mock_try_get_args.return_value = True
