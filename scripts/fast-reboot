@@ -746,37 +746,8 @@ function check_pfc_storm_active()
     fi
 }
 
-function check_db_integrity()
+function check_ssd_health()
 {
-    if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
-        CHECK_DB_INTEGRITY=0
-        /usr/local/bin/check_db_integrity.py || CHECK_DB_INTEGRITY=$?
-        if [[ CHECK_DB_INTEGRITY -ne 0 ]]; then
-            if [[ x"${IGNORE_DB_CHECK}" == x"yes" ]]; then
-                debug "Ignoring Database integrity checks..."
-            else
-                error "Failed to validate DB's integrity. Exit code: ${CHECK_DB_INTEGRITY}. \
-                    Use '-d' option to force ignore this check."
-                exit ${EXIT_DB_INTEGRITY_FAILURE}
-            fi
-        fi
-    fi
-}
-
-function reboot_pre_check()
-{
-    execute_in_namespaces asic check_pfc_storm_active
-    check_docker_exec
-    # Make sure that the file system is normal: read-write able
-    filename="/host/test-$(date +%Y%m%d-%H%M%S)"
-    if [[ ! -f ${filename} ]]; then
-        touch ${filename}
-    fi
-    rm ${filename}
-
-    execute_in_namespaces asic check_db_integrity
-
-    # Check SSD health
     if [ -x "${SSD_UTIL}" ]; then
         debug "Checking ssd health before ${REBOOT_TYPE}..."
         health_line=$(${SSD_UTIL} | grep -E "Health\s*:\s*[0-9]+\.?[0-9]*%" || true)
@@ -798,6 +769,38 @@ function reboot_pre_check()
             fi
         fi
     fi
+}
+
+function check_db_integrity()
+{
+    if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        CHECK_DB_INTEGRITY=0
+        /usr/local/bin/check_db_integrity.py || CHECK_DB_INTEGRITY=$?
+        if [[ CHECK_DB_INTEGRITY -ne 0 ]]; then
+            if [[ x"${IGNORE_DB_CHECK}" == x"yes" ]]; then
+                debug "Ignoring Database integrity checks..."
+            else
+                error "Failed to validate DB's integrity. Exit code: ${CHECK_DB_INTEGRITY}. \
+                    Use '-d' option to force ignore this check."
+                exit ${EXIT_DB_INTEGRITY_FAILURE}
+            fi
+        fi
+    fi
+}
+
+function reboot_pre_check()
+{
+    execute_in_namespaces asic check_pfc_storm_active
+    check_ssd_health
+    check_docker_exec
+    # Make sure that the file system is normal: read-write able
+    filename="/host/test-$(date +%Y%m%d-%H%M%S)"
+    if [[ ! -f ${filename} ]]; then
+        touch ${filename}
+    fi
+    rm ${filename}
+
+    execute_in_namespaces asic check_db_integrity
 
     # Make sure /host has enough space for warm reboot temp files
     avail=$(df -k /host | tail -1 | awk '{ print $4 }')
