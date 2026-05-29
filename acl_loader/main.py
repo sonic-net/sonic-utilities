@@ -969,7 +969,7 @@ class AclLoader(object):
         :param table_name: Optional. ACL table name. Filter tables by specified name.
         :return:
         """
-        header = ("Name", "Type", "Binding", "Description", "Stage", "Status")
+        header = ("Name", "Type", "Binding", "Description", "Redirect Mode", "Stage", "Status")
 
         data = []
         for key, val in self.get_tables_db_info().items():
@@ -977,6 +977,7 @@ class AclLoader(object):
                 continue
 
             stage = val.get("stage", Stage.INGRESS).lower()
+            redirect_mode = val.get("redirect_mode", "")
             # Get ACL table status from STATE_DB
             if key in self.acl_table_status:
                 status = self.acl_table_status[key]['status']
@@ -984,21 +985,21 @@ class AclLoader(object):
                 status = 'N/A'
             if val.get("type", "N/A") == AclLoader.ACL_TABLE_TYPE_CTRLPLANE:
                 services = natsorted(val["services"])
-                data.append([key, val.get("type", "N/A"), services[0], val.get("policy_desc", ""), stage, status])
+                data.append([key, val.get("type", "N/A"), services[0], val.get("policy_desc", ""), redirect_mode, stage, status])
 
                 if len(services) > 1:
                     for service in services[1:]:
-                        data.append(["", "", service, "", "", ""])
+                        data.append(["", "", service, "", "", "", ""])
             else:
                 if not val.get("ports", []):
-                    data.append([key, val["type"], "", val.get("policy_desc", ""), stage, status])
+                    data.append([key, val["type"], "", val.get("policy_desc", ""), redirect_mode, stage, status])
                 else:
                     ports = natsorted(val["ports"])
-                    data.append([key, val["type"], ports[0], val.get("policy_desc", ""), stage, status])
+                    data.append([key, val["type"], ports[0], val.get("policy_desc", ""), redirect_mode, stage, status])
 
                     if len(ports) > 1:
                         for port in ports[1:]:
-                            data.append(["", "", port, "", "", ""])
+                            data.append(["", "", port, "", "", "", ""])
 
         print(tabulate.tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
