@@ -342,7 +342,7 @@ class TestRouteCheck(object):
 
     def test_mitigate_routes(self, mock_dbs):
         namespace = DEFAULTNS
-        missed_frr_rt = [{'prefix': '192.168.0.1', 'protocol': 'bgp'}]
+        missed_frr_rt = ['192.168.0.1']
         rt_appl = ['192.168.0.1']
         init_db_conns([namespace])
         with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
