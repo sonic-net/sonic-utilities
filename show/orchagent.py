@@ -30,14 +30,24 @@ def queue(db, show_all):
 
     rows = []
     for key in keys:
-        # key format: ORCHAGENT_QUEUE|<consumer_name>. split with maxsplit=1
-        # so consumer names containing '|' (none today, but future-safe) round-trip.
-        try:
-            _, consumer_name = key.split("|", 1)
-        except ValueError:
-            continue
-
         entry = state_db.get_all(state_db.STATE_DB, key) or {}
+
+        # Prefer the orch/consumer fields written by orchagent. Fall back to
+        # parsing the key as ORCHAGENT_QUEUE|<Orch>|<consumer> if the row was
+        # written by a build that did not include those fields.
+        orch_name = entry.get("orch")
+        consumer_name = entry.get("consumer")
+        if not orch_name or not consumer_name:
+            parts = key.split("|", 2)
+            if len(parts) == 3:
+                _, orch_name, consumer_name = parts
+            elif len(parts) == 2:
+                # Legacy single-segment key written by older orchagent.
+                _, consumer_name = parts
+                orch_name = "-"
+            else:
+                continue
+
         try:
             pending = int(entry.get("pending_count", "0"))
         except (TypeError, ValueError):
@@ -46,7 +56,7 @@ def queue(db, show_all):
         if pending == 0 and not show_all:
             continue
 
-        rows.append([consumer_name, pending])
+        rows.append([orch_name, consumer_name, pending])
 
     if not rows:
         if show_all:
@@ -59,8 +69,8 @@ def queue(db, show_all):
         return
 
     # Sort by pending_count descending so the most-loaded consumers are at the
-    # top, then by name ascending for a deterministic tiebreak.
-    rows.sort(key=lambda r: (-r[1], r[0]))
+    # top, then by (orch, consumer) ascending for a deterministic tiebreak.
+    rows.sort(key=lambda r: (-r[2], r[0], r[1]))
 
-    header = ["Consumer", "Pending Count"]
+    header = ["Orch", "Consumer", "Pending Count"]
     click.echo(tabulate(rows, header, tablefmt="simple"))
