@@ -730,20 +730,46 @@ def is_feature_bgp_enabled(namespace):
 
 def check_frr_pending_routes(namespace):
     """
-    Check FRR routes for offload flag presence by executing "show ip route json"
-    Returns a list of routes that have no offload flag.
+    Check FRR routes for offload flag presence by streaming vtysh text output.
+    Returns lists of route dicts {'prefix', 'protocol'} that are persistently
+    non-offloaded across all retry iterations (intersection logic).
+
+    Intersection approach: only routes that appear as stuck in *every* poll
+    are returned for mitigation.  A route that clears between iterations is
+    converging normally and should not be mitigated.
+
+    Example with FRR_CHECK_RETRIES=3:
+      iter 0: {A, B, C, D}
+      iter 1: {A, B, C}        (D converged)
+      iter 2: {A, B}           (C converged)
+      result: {A, B}           <- only truly stuck routes
     """
+    acc_miss = []
+    acc_fail = []
 
-    missed_rt = []
-    failed_rt = []
-    retries = FRR_CHECK_RETRIES
-    for i in range(retries):
-        missed_rt, failed_rt = get_frr_routes_parallel(namespace)
+    for i in range(FRR_CHECK_RETRIES):
+        curr_miss, curr_fail = get_frr_routes_parallel(namespace)
 
-        if not missed_rt and not failed_rt:
+        if i == 0:
+            # Seed: first iteration defines the candidate set
+            acc_miss = curr_miss
+            acc_fail = curr_fail
+        else:
+            # Intersect: keep only prefixes still stuck in this iteration
+            curr_miss_set = set(curr_miss)
+            curr_fail_set = set(curr_fail)
+            acc_miss = [e for e in acc_miss if e in curr_miss_set]
+            acc_fail = [e for e in acc_fail if e in curr_fail_set]
+
+        if not curr_miss and not curr_fail:
+            # Nothing queued right now; intersection already empty -- stop early
             break
 
-        time.sleep(FRR_WAIT_TIME)
+        if i < FRR_CHECK_RETRIES - 1:
+            time.sleep(FRR_WAIT_TIME)
+
+    missed_rt = acc_miss
+    failed_rt = acc_fail
     print_message(syslog.LOG_DEBUG, f"FRR missed routes: {missed_rt}")
     print_message(syslog.LOG_DEBUG, f"FRR failed routes: {failed_rt}")
     return missed_rt, failed_rt
