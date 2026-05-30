@@ -47,7 +47,6 @@ import signal
 import traceback
 import subprocess
 import concurrent.futures
-import ijson
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
@@ -391,10 +390,30 @@ def is_suppress_fib_pending_enabled(namespace):
 
 def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
-    Fetch routes using the given command.
-    Uses ijson for streaming JSON parsing to handle large route tables efficiently.
-    Parses each prefix entry as soon as it becomes available instead of waiting for the entire JSON.
+    Fetch non-offloaded FRR routes by streaming vtysh TEXT output line-by-line.
+
+    FRR zebra_vty.c assembles each route line as three fixed-position characters:
+      [0] protocol char  : 'B' for BGP (zebra_route_char)
+      [1] selected char  : '>' if ZEBRA_FLAG_SELECTED, else ' '
+      [2] status char    : single char from re_status_output_char():
+                             'q'  ROUTE_ENTRY_QUEUED (suppress-fib-pending)
+                             'o'  ZEBRA_FLAG_OFFLOAD_FAILED
+                             't'  ZEBRA_FLAG_TRAPPED
+                             '*'  nexthop active / installed
+                             ' '  none of the above
+    Examples:
+      B>* 10.0.0.0/24   selected, offloaded (healthy)
+      B>q 10.0.0.0/24   selected, queued (suppress-fib-pending)
+      B>o 10.0.0.0/24   selected, offload failed
+    The status char is always at position [2], never before '>'.
+    Only lines with 'q' or 'o' at position [2] are collected; on a healthy
+    device the output is scanned and discarded without any allocations.
+
+    Returns lists of plain prefix strings.  The protocol is always 'bgp' for
+    these routes; callers that need it (e.g. mitigate_installed_not_offloaded_frr_routes)
+    hardcode that value rather than carrying it in the list entries.
     """
+    import re
     missing_routes = []
     failing_routes = []
 
@@ -402,59 +421,37 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     if namespace is not multi_asic.DEFAULT_NAMESPACE:
         asic_id = ['-n', str(multi_asic.get_asic_id_from_name(namespace))]
 
-    if ipv6:
-        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ipv6 route json"]
-    else:
-        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ip route json"]
+    af = 'ipv6' if ipv6 else 'ip'
+    cmd = ["sudo", "vtysh"] + asic_id + ["-c", f"show {af} route"]
 
-    def process_route_entry(prefix, route_entry):
-        """Process a single route entry and add to missing_routes if needed."""
-        if route_entry.get('protocol') in ('connected', 'kernel', 'static'):
-            return
-        if route_entry.get('vrfName') != 'default':
-            return
-        # skip if this bgp source prefix is not selected as best
-        if not route_entry.get('selected', False):
-            return
-        if not route_entry.get('offloaded', False):
-            missing_routes.append(prefix)
-        if route_entry.get('failed', False):
-            failing_routes.append(prefix)
+    # Match selected BGP routes with a non-offloaded status flag:
+    #   B>q prefix  -- queued (suppress-fib-pending)
+    #   B>o prefix  -- offload failed
+    # Format is always: proto_char + selected_char(>) + status_char + space + prefix
+    pat = re.compile(r'^B>([qo])\s+(\S+)\s')
 
     try:
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
-            try:
-                # Use ijson to parse the JSON stream incrementally
-                # kvitems('') iterates over key-value pairs at the root level
-                # This gives us each prefix and its route entries as they become available
-                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
-                    # Process each route entry for this prefix
-                    if isinstance(route_entries, list):
-                        for route_entry in route_entries:
-                            process_route_entry(prefix, route_entry)
-                    else:
-                        # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
-                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
-
-            except ijson.JSONError as e:
-                # Handle JSON parsing errors
-                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
-            except UnicodeDecodeError as e:
-                # Handle UTF-8 decoding errors
-                print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
-            except Exception as e:
-                # Handle any other unexpected errors during parsing
-                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
-
-            # Wait for the process to terminate and get the return code
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL,
+                              bufsize=1, text=True) as proc:
+            for line in proc.stdout:
+                m = pat.match(line)
+                if not m:
+                    continue
+                flag = m.group(1)
+                prefix = m.group(2)
+                if flag == 'q':
+                    missing_routes.append(prefix)
+                if flag == 'o':
+                    failing_routes.append(prefix)
             return_code = proc.wait()
             if return_code != 0:
-                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
-
+                print_message(syslog.LOG_WARNING,
+                              f"vtysh exited with non-zero return code: {return_code}")
     except FileNotFoundError:
         print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
     except Exception as e:
-        print_message(syslog.LOG_ERR, f"An error occurred: {e}")
+        print_message(syslog.LOG_ERR, f"fetch_routes error: {e}")
 
     return missing_routes, failing_routes
 
