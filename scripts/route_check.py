@@ -911,6 +911,8 @@ def check_routes_for_namespace(namespace):
     rt_frr_miss = []
     rt_frr_failed = []
 
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
+
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
     rt_appl = get_appdb_routes(namespace)
@@ -967,8 +969,6 @@ def check_routes_for_namespace(namespace):
 
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
-
-    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
 
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
