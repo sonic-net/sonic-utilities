@@ -857,12 +857,12 @@ def storm_control_delete_entry(port_name, storm_type):
 def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
     if timeout == 0:
         return True
-    start = time.time()
+    start = time.monotonic()
     empty = False
     app_db = SonicV2Connector(host='127.0.0.1')
     app_db.connect(app_db.APPL_DB)
 
-    while not empty and time.time() - start < timeout:
+    while not empty and time.monotonic() - start < timeout:
         non_empty_table_count = 0
         for table in tables:
             keys = app_db.keys(app_db.APPL_DB, table)
@@ -1006,7 +1006,7 @@ def get_service_finish_timestamp(service):
 
 
 def wait_service_restart_finish(service, last_timestamp, timeout=30):
-    start_time = time.time()
+    start_time = time.monotonic()
     elapsed_time = 0
     while elapsed_time < timeout:
         current_timestamp = get_service_finish_timestamp(service)
@@ -1014,9 +1014,69 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
             return
 
         time.sleep(1)
-        elapsed_time = time.time() - start_time
+        elapsed_time = time.monotonic() - start_time
 
     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
+
+
+def get_device_name():
+    """
+    Return the device/model id from /host/machine.conf onie_platform line.
+    Hardware SKU string, e.g. armhf-nokia_ixs7215_52x-r0.
+    """
+    machine_conf = "/host/machine.conf"
+    try:
+        with open(machine_conf) as f:
+            for line in f:
+                if line.startswith("onie_platform="):
+                    return line.strip().split("=", 1)[1]
+    except Exception:
+        return None
+
+
+def get_mgmt_interface():
+    """
+    Parse /etc/sonic/config_db.json to find the management interface name (e.g., eth0).
+    """
+    try:
+        with open('/etc/sonic/config_db.json') as f:
+            config = json.load(f)
+        mgmt_entries = config.get("MGMT_INTERFACE", {})
+        if not mgmt_entries:
+            return None
+        # Example key: "eth0|10.3.141.10/24"
+        return list(mgmt_entries.keys())[0].split('|')[0]
+    except Exception:
+        # Valid - no mgmt interface in config_db.json
+        return None
+
+
+def reset_mgmt_interface_if_usb_not_running():
+    """
+    If the management interface is a USB device and not RUNNING,
+    bring it down and up with delay to trigger re-negotiation.
+    Failures are logged and ignored so reload is not aborted.
+    """
+    iface = get_mgmt_interface()
+    if not iface:
+        return
+    if 'usb' not in os.path.realpath(f"/sys/class/net/{iface}/device"):
+        return
+    try:
+        with open(f"/sys/class/net/{iface}/operstate") as f:
+            operstate = f.read().strip()
+        if operstate == "up":
+            return  # Already RUNNING
+    except Exception:
+        pass  # Continue to attempt reset
+
+    click.echo("Reset USB-based mgmt interface for re-negotiation")
+    try:
+        subprocess.run(["ip", "link", "set", iface, "down"], check=True)
+        time.sleep(1.0)
+        subprocess.run(["ip", "link", "set", iface, "up"], check=True)
+    except (subprocess.CalledProcessError, OSError) as err:
+        log.log_warning("USB mgmt interface reset failed for {}: {}".format(iface, err))
 
 
 def _restart_services():
@@ -1042,6 +1102,19 @@ def _restart_services():
     # Reload Monit configuration to pick up new hostname in case it changed
     click.echo("Reloading Monit configuration ...")
     clicommon.run_command(['sudo', 'monit', 'reload'])
+
+    device_model = get_device_name()
+    if device_model == "armhf-nokia_ixs7215_52x-r0":
+        click.echo("ARMHF/Nokia-7215: force restart swss and syncd")
+        time.sleep(15)
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss'])
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'syncd'])
+        time.sleep(1)
+        clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'swss'])
+        clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'syncd'])
+        clicommon.run_command(['sudo', 'systemctl', 'restart', 'swss'])
+
+    reset_mgmt_interface_if_usb_not_running()
 
 def _per_namespace_swss_ready(service_name):
     out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
