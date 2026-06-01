@@ -184,6 +184,8 @@
 * [sFlow](#sflow)
   * [sFlow Show commands](#sflow-show-commands)
   * [sFlow Config commands](#sflow-config-commands)
+* [SED](#sed)
+  * [SED Config commands](#sed-config-commands)
 * [SNMP](#snmp)
   * [SNMP Show commands](#snmp-show-commands)
   * [SNMP Config commands](#snmp-config-commands)
@@ -11903,6 +11905,47 @@ This command is used to set the counter polling interval. Default is 20 seconds.
 
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#sflow)
+
+## SED
+
+SED (Self-Encrypting Drive) commands are used to manage password changes for self-encrypting drives in the system.
+
+### SED Config commands
+
+**config sed change-password**
+
+This command changes the SED password. The new password is entered at interactive prompts (hidden input).
+
+- Usage:
+  ```
+  config sed change-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config sed change-password
+  New SED password:
+  Handling SED password change started...
+  SED password change process completed successfully
+  ```
+
+**config sed reset-password**
+
+This command resets the SED password to the default value.
+
+- Usage:
+  ```
+  config sed reset-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config sed reset-password
+  Handling SED password reset started...
+  SED password reset process completed successfully
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#sed)
 
 ## SNMP
 
