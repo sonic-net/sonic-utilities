@@ -4,10 +4,10 @@ Pre-warm-reboot GR timer fix.
 
 1. Sets bgp_timer in WARM_RESTART|bgp (fpmsyncd reconciliation timer, default 120s → 360s)
 2. Patches constants.yml (GR restart-time 240s → 360s) on current + next-boot images
-3. Updates running FRR GR restart-time + staggered peer reset (first run only)
+3. Updates running FRR GR restart-time + staggered peer reset (every run)
 
-First invocation: updates timers + staggered peer reset (one at a time, ECMP-safe).
-Subsequent invocations: no-op (all values already at target).
+Every invocation: updates timers + staggered peer reset (one at a time, ECMP-safe).
+Already-updated peers get a harmless redundant OPEN exchange.
 
 Usage:
     sudo python3 /usr/local/bin/warm-reboot-gr-fix.py
@@ -79,8 +79,13 @@ def get_peers():
 
 def get_peer_state(peer):
     """Get BGP state for a single peer."""
-    output = vtysh(f"show bgp neighbor {peer} json")
-    data = json.loads(output)
+    output = run(f'docker exec bgp vtysh -c "show bgp neighbor {peer} json"', check=False)
+    if not output:
+        return ""
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError:
+        return ""
     for info in data.values():
         return info.get("bgpState", "")
     return ""
@@ -103,14 +108,33 @@ def update_gr_timer(asn):
     peers = get_peers()
     logger.info("Resetting %d peers (staggered, one at a time)...", len(peers))
 
+    failed_peers = []
     for i, peer in enumerate(peers, 1):
         logger.info("  [%d/%d] Resetting %s...", i, len(peers), peer)
-        vtysh(f"clear bgp {peer}")
-        if wait_for_established(peer):
-            logger.info("  [%d/%d] %s: Established", i, len(peers), peer)
-        else:
-            logger.warning("  [%d/%d] %s: not Established after %ds, continuing",
-                           i, len(peers), peer, PEER_ESTABLISH_TIMEOUT)
+        try:
+            run(f'docker exec bgp vtysh -c "clear bgp {peer}"', check=False)
+            if wait_for_established(peer):
+                logger.info("  [%d/%d] %s: Established", i, len(peers), peer)
+            else:
+                logger.warning("  [%d/%d] %s: not Established after %ds",
+                               i, len(peers), peer, PEER_ESTABLISH_TIMEOUT)
+                failed_peers.append(peer)
+        except Exception as e:
+            logger.warning("  [%d/%d] %s: error during reset: %s, continuing",
+                           i, len(peers), peer, e)
+            failed_peers.append(peer)
+
+    # Admin-shutdown peers that failed to re-establish — forces clean withdrawal
+    # so remotes reconverge via alternate paths instead of hitting old GR expiry
+    if failed_peers:
+        logger.warning("%d peer(s) failed to re-establish, admin-shutting down: %s",
+                       len(failed_peers), ", ".join(failed_peers))
+        for peer in failed_peers:
+            try:
+                vtysh_config(f"router bgp {asn}", f"neighbor {peer} shutdown")
+                logger.info("  Admin-shutdown %s", peer)
+            except Exception as e:
+                logger.warning("  Failed to shutdown %s: %s", peer, e)
 
 
 # --- constants.yml persistence ---
@@ -197,14 +221,12 @@ def main():
     patch_all_images()
 
     # 2. Update running FRR config for immediate effect
+    #    Always reset peers — ensures all have current GR timer even if a
+    #    prior run was partial (crashed/failed mid-loop)
+    asn = get_asn()
     current_gr = get_current_gr_time()
     logger.info("Current running GR restart-time: %s", current_gr)
-
-    if current_gr != TARGET_GR_RESTART_TIME:
-        asn = get_asn()
-        update_gr_timer(asn)
-    else:
-        logger.info("GR restart-time already %ds, skipping peer reset", TARGET_GR_RESTART_TIME)
+    update_gr_timer(asn)
 
     logger.info("Done.")
 
