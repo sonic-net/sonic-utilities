@@ -857,12 +857,12 @@ def storm_control_delete_entry(port_name, storm_type):
 def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
     if timeout == 0:
         return True
-    start = time.time()
+    start = time.monotonic()
     empty = False
     app_db = SonicV2Connector(host='127.0.0.1')
     app_db.connect(app_db.APPL_DB)
 
-    while not empty and time.time() - start < timeout:
+    while not empty and time.monotonic() - start < timeout:
         non_empty_table_count = 0
         for table in tables:
             keys = app_db.keys(app_db.APPL_DB, table)
@@ -1006,7 +1006,7 @@ def get_service_finish_timestamp(service):
 
 
 def wait_service_restart_finish(service, last_timestamp, timeout=30):
-    start_time = time.time()
+    start_time = time.monotonic()
     elapsed_time = 0
     while elapsed_time < timeout:
         current_timestamp = get_service_finish_timestamp(service)
@@ -1014,7 +1014,7 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
             return
 
         time.sleep(1)
-        elapsed_time = time.time() - start_time
+        elapsed_time = time.monotonic() - start_time
 
     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
 
