@@ -81,19 +81,24 @@ def status(db, chassis_module_name):
 
     # For SmartSwitch, connect to CHASSIS_STATE_DB to read DPU_STATE
     dpu_state_data = {}
+    chassis_state_db = None
     if smartswitch:
-        chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
-        chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
-        if chassis_module_name:
-            dpu_key_pattern = DPU_STATE_TABLE + '|' + chassis_module_name
-        else:
-            dpu_key_pattern = DPU_STATE_TABLE + '|*'
-        dpu_keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, dpu_key_pattern)
-        if dpu_keys:
-            for dpu_key in dpu_keys:
-                dpu_name = dpu_key.split('|')[1]
-                dpu_state_data[dpu_name] = chassis_state_db.get_all(
-                    chassis_state_db.CHASSIS_STATE_DB, dpu_key)
+        try:
+            chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
+            chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+            if chassis_module_name:
+                dpu_key_pattern = DPU_STATE_TABLE + '|' + chassis_module_name
+            else:
+                dpu_key_pattern = DPU_STATE_TABLE + '|*'
+            dpu_keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, dpu_key_pattern)
+            if dpu_keys:
+                for dpu_key in dpu_keys:
+                    dpu_name = dpu_key.split('|')[1]
+                    dpu_state_data[dpu_name] = chassis_state_db.get_all(
+                        chassis_state_db.CHASSIS_STATE_DB, dpu_key)
+        except Exception:
+            chassis_state_db = None
+            dpu_state_data = {}
 
     table = []
     for key in natsorted(keys):
@@ -134,6 +139,9 @@ def status(db, chassis_module_name):
 
         table.append(tuple(row))
 
+    if chassis_state_db:
+        chassis_state_db.close(chassis_state_db.CHASSIS_STATE_DB)
+
     if table:
         click.echo(tabulate(table, header, tablefmt='simple', stralign='right'))
     else:
@@ -152,8 +160,12 @@ def recovery(chassis_module_name):
     header = ['Name', 'Ready-Status', 'Recovery-Status', 'Reset-Count',
               'Last-Down-Time', 'Last-Ready-Time']
 
-    chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
-    chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+    try:
+        chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
+        chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+    except Exception:
+        click.echo('Unable to connect to CHASSIS_STATE_DB')
+        return
 
     key_pattern = DPU_STATE_TABLE + '|*'
     if chassis_module_name:
@@ -161,6 +173,7 @@ def recovery(chassis_module_name):
 
     keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, key_pattern)
     if not keys:
+        chassis_state_db.close(chassis_state_db.CHASSIS_STATE_DB)
         if chassis_module_name:
             click.echo('DPU recovery data not found for module {}'.format(chassis_module_name))
         else:
@@ -177,12 +190,14 @@ def recovery(chassis_module_name):
 
         ready_status = data_dict.get(DPU_STATE_READY_STATUS_FIELD, 'N/A')
         recovery_status = data_dict.get(DPU_STATE_RECOVERY_STATUS_FIELD, 'N/A')
-        reset_count = data_dict.get(DPU_STATE_RESET_COUNT_FIELD, '-')
-        last_down_time = data_dict.get(DPU_STATE_LAST_DOWN_TIME_FIELD, '-')
-        last_ready_time = data_dict.get(DPU_STATE_LAST_READY_TIME_FIELD, '-')
+        reset_count = data_dict.get(DPU_STATE_RESET_COUNT_FIELD, 'N/A')
+        last_down_time = data_dict.get(DPU_STATE_LAST_DOWN_TIME_FIELD, 'N/A')
+        last_ready_time = data_dict.get(DPU_STATE_LAST_READY_TIME_FIELD, 'N/A')
 
         table.append((key_list[1], ready_status, recovery_status, reset_count,
                       last_down_time, last_ready_time))
+
+    chassis_state_db.close(chassis_state_db.CHASSIS_STATE_DB)
 
     if table:
         click.echo(tabulate(table, header, tablefmt='simple', stralign='right'))

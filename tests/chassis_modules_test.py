@@ -987,6 +987,12 @@ class TestChassisModulesRecovery(object):
     def test_show_status_with_ready_status_smartswitch(self):
         """Test show chassis modules status includes Ready-Status on SmartSwitch."""
         conn = self._setup_dpu_state_db()
+        # status command also reads STATE_DB CHASSIS_MODULE_TABLE
+        conn.connect(conn.STATE_DB)
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "desc", "DPU Module")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "slot", "N/A")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "oper_status", "Online")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "serial", "SN001")
         runner = CliRunner()
         with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
              mock.patch('show.chassis_modules.is_bmc', return_value=False), \
@@ -996,6 +1002,7 @@ class TestChassisModulesRecovery(object):
         print(result.output)
         assert result.exit_code == 0
         assert "Ready-Status" in result.output
+        assert "true" in result.output
 
     def test_show_recovery_unrecoverable_dpu(self):
         """Test that unrecoverable DPU shows correct status."""
