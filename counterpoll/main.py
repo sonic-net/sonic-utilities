@@ -491,7 +491,7 @@ def flowcnt_trap_disable(ctx):
 def flowcnt_route(ctx, namespace):
     """ Route flow counter commands """
     ctx.obj = connect_to_db(namespace)
-    exit_if_route_flow_counter_not_support()
+    exit_if_route_flow_counter_not_support(namespace)
 
 
 @flowcnt_route.command(name='interval')
