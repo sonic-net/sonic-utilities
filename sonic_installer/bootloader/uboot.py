@@ -36,6 +36,11 @@ class UbootBootloader(OnieInstallerBootloader):
     # uses this name pair per-slot. Otherwise the var is treated as
     # globally shared and left alone (some platforms use a single
     # `linuxargs` referenced by both sonic_image_1 and sonic_image_2).
+    #
+    # `linuxargs` is deliberately NOT listed here: set_fips()/get_fips()
+    # read and write it as a slot-agnostic kernel cmdline (they persist
+    # `sonic_fips=` into it regardless of slot), so clearing it on a
+    # remove could wipe the surviving image's boot args / FIPS setting.
     SLOT_AUX_VAR_PAIRS = (
         # `_old` convention
         ("image_dir", "image_dir_old"),
@@ -43,7 +48,6 @@ class UbootBootloader(OnieInstallerBootloader):
         ("initrd_name", "initrd_name_old"),
         ("fdt_name", "fdt_name_old"),
         ("fit_name", "fit_name_old"),
-        ("linuxargs", "linuxargs_old"),
         ("sonic_bootargs", "sonic_bootargs_old"),
         ("sonic_boot_load", "sonic_boot_load_old"),
         ("ubi_sonic_boot_bootargs", "ubi_sonic_boot_bootargs_old"),
@@ -119,8 +123,10 @@ class UbootBootloader(OnieInstallerBootloader):
             # instead would lie. Return the raw value.
             return cmd
 
-        # No explicit selector -- fall back to current image
-        # (mirrors grub.py when next_entry/saved_entry are absent).
+        # No explicit selector. grub.py falls back to the first installed
+        # image (images[0]); here we report the currently-running image as
+        # the next image instead, and only fall back to the lowest populated
+        # slot if the running image can't be determined.
         try:
             return self.get_current_image()
         except Exception:

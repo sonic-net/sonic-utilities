@@ -106,7 +106,7 @@ def test_set_next_image_unknown_returns_false(mock_run_cmd):
 
 @patch("sonic_installer.bootloader.uboot.run_command")
 def test_install_image(mock_run_cmd):
-    image_path = ['sonic_image']
+    image_path = 'sonic_image'
     expected_call = [
         call(['bash', image_path]),
         call(['/usr/bin/fw_setenv', 'boot_once', '']),
@@ -230,6 +230,29 @@ def test_remove_image_clears_slot_aux_vars(run_command_patch, popen_patch):
         assert call(['/usr/bin/fw_setenv', target, '']) \
             in run_command_patch.call_args_list, \
             f"slot-1 aux var {target!r} should have been cleared"
+
+
+@patch("sonic_installer.bootloader.uboot.subprocess.Popen")
+@patch("sonic_installer.bootloader.uboot.subprocess.call", Mock())
+@patch("sonic_installer.bootloader.uboot.run_command")
+def test_remove_image_preserves_linuxargs(run_command_patch, popen_patch):
+    """Regression: set_fips()/get_fips() own `linuxargs` as a slot-agnostic
+    kernel cmdline (they persist sonic_fips= into it regardless of slot).
+    remove_image must NOT clear it even when both `linuxargs` and
+    `linuxargs_old` are present -- doing so would wipe the surviving image's
+    boot args / FIPS setting. Guarded by keeping linuxargs out of the table."""
+    # Every fw_printenv var reads as present (rc 0), so the only thing
+    # keeping linuxargs from being cleared is its absence from the table.
+    popen_patch.side_effect = _mock_boot_once_popen("present")
+
+    bootloader = uboot.UbootBootloader()
+    bootloader._get_image_slot = Mock(return_value=1)
+
+    bootloader.remove_image(installed_images[0])
+
+    assert call(['/usr/bin/fw_setenv', 'linuxargs', '']) \
+        not in run_command_patch.call_args_list, \
+        "linuxargs must not be cleared on remove (owned by set_fips/get_fips)"
 
 
 @patch("sonic_installer.bootloader.uboot.subprocess.Popen")
@@ -486,3 +509,19 @@ def test_verify_image_platform_mismatch(popen_patch, device_info_patch,
 
     bootloader = uboot.UbootBootloader()
     assert bootloader.verify_image_platform(str(image)) is False
+
+
+@patch("sonic_installer.bootloader.uboot.device_info")
+@patch("sonic_installer.bootloader.uboot.subprocess.Popen")
+def test_verify_image_platform_no_manifest(popen_patch, device_info_patch,
+                                           tmp_path):
+    """tar rc!=0 (image ships no installer/platforms_asic) -> True, even
+    when the running platform wouldn't match. Backward compatible with
+    older images (matches grub.py); guards against tightening this."""
+    image = tmp_path / "sonic.bin"
+    image.write_text("dummy")
+    device_info_patch.get_platform = Mock(return_value="x86_64-foo-r0")
+    popen_patch.side_effect = _mock_verify_pipeline(p2_rc=2, p3_rc=1)
+
+    bootloader = uboot.UbootBootloader()
+    assert bootloader.verify_image_platform(str(image)) is True
