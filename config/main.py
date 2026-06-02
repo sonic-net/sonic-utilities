@@ -7671,19 +7671,21 @@ def remove_vrrp_v6(ctx, interface_name, vrrp_id):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup, name='vrf')
-@click.option('-n', '--namespace', help='Namespace name',
-              required=True if multi_asic.is_multi_asic() else False,
+@click.option('-n', '--namespace', help='Namespace name', default=None,
               type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
 def vrf(ctx, namespace):
     """ VRF-related configuration tasks """
-    if namespace is None:
-        namespace = DEFAULT_NAMESPACE
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
+    # Data VRFs live in the per-ASIC CONFIG_DB; the management VRF lives
+    # in the host/global CONFIG_DB. Connect to the (optionally namespaced)
+    # DB here for data-VRF subcommands; the mgmt-VRF path re-targets the
+    # global DB and rejects -n at runtime.
+    ns = namespace if namespace else DEFAULT_NAMESPACE
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(ns))
     config_db.connect()
     ctx.obj = {}
     ctx.obj['config_db'] = config_db
-    ctx.obj['namespace'] = str(namespace)
+    ctx.obj['namespace'] = namespace
 
 @vrf.command('add')
 @click.argument('vrf_name', metavar='<vrf_name>', required=True)
@@ -7695,9 +7697,18 @@ def add_vrf(ctx, vrf_name):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
     if not isInterfaceNameValid(vrf_name):
         ctx.fail("'vrf_name' length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
+
+    is_mgmt = vrf_name in ('mgmt', 'management')
+    if is_mgmt:
+        if ctx.obj['namespace'] is not None:
+            ctx.fail("-n/--namespace is not applicable to the management VRF; it is configured in the host CONFIG_DB.")
+    else:
+        if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+            ctx.fail("-n/--namespace is required for data VRFs on multi-ASIC platforms.")
+
     if is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} already exists!".format(vrf_name))
-    elif (vrf_name == 'mgmt' or vrf_name == 'management'):
+    elif is_mgmt:
         vrf_add_management_vrf(config_db)
     else:
         try:
@@ -7715,6 +7726,15 @@ def del_vrf(ctx, vrf_name):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
     if not isInterfaceNameValid(vrf_name):
         ctx.fail("'vrf_name' length should not exceed {} characters".format((IFACE_NAME_MAX_LEN)))
+
+    is_mgmt = vrf_name in ('mgmt', 'management')
+    if is_mgmt:
+        if ctx.obj['namespace'] is not None:
+            ctx.fail("-n/--namespace is not applicable to the management VRF; it is configured in the host CONFIG_DB.")
+    else:
+        if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+            ctx.fail("-n/--namespace is required for data VRFs on multi-ASIC platforms.")
+
     syslog_table = config_db.get_table("SYSLOG_SERVER")
     syslog_vrf_dev = "mgmt" if vrf_name == "management" else vrf_name
     for syslog_entry, syslog_data in syslog_table.items():
@@ -7729,7 +7749,7 @@ def del_vrf(ctx, vrf_name):
 
     if not is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} does not exist!".format(vrf_name))
-    elif (vrf_name == 'mgmt' or vrf_name == 'management'):
+    elif is_mgmt:
         vrf_delete_management_vrf(config_db)
     else:
         del_interface_bind_to_vrf(config_db, vrf_name)
@@ -7744,6 +7764,8 @@ def del_vrf(ctx, vrf_name):
 @click.argument('vni', metavar='<vni>', required=True)
 @click.pass_context
 def add_vrf_vni_map(ctx, vrfname, vni):
+    if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+        ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
     found = 0
     if vrfname not in config_db.get_table('VRF').keys():
@@ -7783,6 +7805,8 @@ def add_vrf_vni_map(ctx, vrfname, vni):
 @click.argument('vrfname', metavar='<vrf-name>', required=True, type=str)
 @click.pass_context
 def del_vrf_vni_map(ctx, vrfname):
+    if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+        ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
     if vrfname not in config_db.get_table('VRF').keys():
         ctx.fail("vrf {} doesn't exist".format(vrfname))

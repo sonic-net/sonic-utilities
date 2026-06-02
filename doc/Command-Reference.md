@@ -5420,7 +5420,7 @@ The "route" subcommand is used to display the route flow counter statistics by r
 
 **sonic-clear flowcnt-trap**
 
-This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis.
+This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis. On multi-ASIC platforms, an optional namespace can be supplied to clear counters for a specific ASIC; when omitted, counters are cleared across all ASIC namespaces.
 
 - Usage:
   ```
@@ -5428,7 +5428,7 @@ This command is used to clear the current statistics for the registered host int
   ```
 
 - Details:
-  - -n, --namespace: (Multi-ASIC) Namespace name (e.g. asic0). When omitted, the default namespace is targeted.
+  - -n, --namespace: Namespace name (e.g. asic0). On multi-ASIC platforms, omit this option to target all ASIC namespaces; on single-ASIC platforms, the default namespace is used.
 
 - Example:
   ```
@@ -8476,7 +8476,7 @@ If vrf-name is also provided as part of the command, if the vrf is created it wi
 
 ### VRF config commands
 
-The `config vrf` command group accepts an optional `-n|--namespace` option that targets a specific ASIC's config DB on multi-ASIC platforms. On multi-ASIC platforms the option is required; on single-ASIC platforms it can be omitted and the default namespace is used.
+The `config vrf` command group accepts an optional `-n|--namespace` option that targets a specific ASIC's CONFIG_DB on multi-ASIC platforms. For data-VRF subcommands (`add <Vrf-*>`, `del <Vrf-*>`, `add_vrf_vni_map`, `del_vrf_vni_map`) the option is required on multi-ASIC platforms. The management-VRF subcommands (`add mgmt`/`del mgmt`) operate on the host/global CONFIG_DB and reject `-n` with an error.
 
 - Usage:
   ```
@@ -8484,7 +8484,7 @@ The `config vrf` command group accepts an optional `-n|--namespace` option that 
   ```
 
 - Details:
-  - -n, --namespace: (Multi-ASIC, required) Namespace name (e.g. asic0). On single-ASIC platforms this option is optional and defaults to the default namespace.
+  - -n, --namespace: (Multi-ASIC) Namespace name (e.g. asic0). Required for data-VRF subcommands on multi-ASIC platforms; not applicable to `add mgmt`/`del mgmt`.
 
 **config vrf add**
 
@@ -8630,9 +8630,11 @@ This command displays the configured SNMP Trap server IP addresses.
 
 This command enables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This creates a new interface and l3mdev CGROUP with the name as "mgmt" and enslaves the management interface "eth0" into this master interface "mgmt". Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
 
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
+
 - Usage:
   ```
-  config vrf [-n|--namespace <namespace>] add mgmt
+  config vrf add mgmt
   ```
 
 - Example:
@@ -8640,18 +8642,15 @@ This command enables the management VRF in the system. This command restarts the
   admin@sonic:~$ sudo config vrf add mgmt
   ```
 
-- Example (multi-ASIC):
-  ```
-  admin@sonic:~$ sudo config vrf -n asic0 add mgmt
-  ```
-
 **config vrf del mgmt**
 
 This command disables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This deletes the interface "mgmt" and deletes the l3mdev CGROUP named "mgmt" and puts back the management interface "eth0" into the default VRF. Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
 
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
+
 - Usage:
   ```
-  config vrf [-n|--namespace <namespace>] del mgmt
+  config vrf del mgmt
   ```
 
 - Example:

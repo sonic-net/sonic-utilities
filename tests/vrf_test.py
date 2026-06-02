@@ -353,27 +353,36 @@ class TestVrfMultiAsic(object):
         assert result.exit_code == 0
         assert 'Vrf100' not in db.cfgdb.get_table('VRF')
 
-    @patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
-    @patch('config.main.multi_asic.get_namespace_list', MagicMock(return_value=['asic0', 'asic1']))
     def test_vrf_multi_asic_without_namespace_fails(self):
         """Multi-ASIC: config vrf add without -n must fail (namespace required)."""
         import config.main as config_main
-        importlib.reload(config_main)
-        runner = CliRunner()
-        result = runner.invoke(config_main.config.commands["vrf"], ['add', 'Vrf100'])
-        importlib.reload(config_main)
+        try:
+            with patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True)), \
+                 patch('config.main.multi_asic.get_namespace_list',
+                       MagicMock(return_value=['asic0', 'asic1'])):
+                importlib.reload(config_main)
+                runner = CliRunner()
+                result = runner.invoke(config_main.config.commands["vrf"], ['add', 'Vrf100'])
+        finally:
+            # Restore the module to its non-mocked state for subsequent tests.
+            importlib.reload(config_main)
         assert result.exit_code != 0
         assert 'Missing option' in result.output or '-n' in result.output or 'namespace' in result.output.lower()
 
-    @patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
-    @patch('config.main.multi_asic.get_namespace_list', MagicMock(return_value=['asic0', 'asic1']))
     def test_vrf_invalid_namespace_fails(self):
         """Multi-ASIC: config vrf with wrong/invalid ASIC namespace must fail."""
         import config.main as config_main
-        importlib.reload(config_main)
-        runner = CliRunner()
-        result = runner.invoke(config_main.config.commands["vrf"], ['-n', 'invalid_asic', 'add', 'Vrf100'])
-        importlib.reload(config_main)
+        try:
+            with patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True)), \
+                 patch('config.main.multi_asic.get_namespace_list',
+                       MagicMock(return_value=['asic0', 'asic1'])):
+                importlib.reload(config_main)
+                runner = CliRunner()
+                result = runner.invoke(config_main.config.commands["vrf"],
+                                       ['-n', 'invalid_asic', 'add', 'Vrf100'])
+        finally:
+            # Restore the module to its non-mocked state for subsequent tests.
+            importlib.reload(config_main)
         assert result.exit_code != 0
         assert 'Invalid value' in result.output or 'invalid_asic' in result.output
 
