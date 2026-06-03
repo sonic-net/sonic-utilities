@@ -122,7 +122,7 @@ class TestConfigInterfaceDamping(object):
         assert "Invalid flap_penalty" in result.output
 
 
-def test_aied_reuse_ge_suppress(self):
+    def test_aied_reuse_ge_suppress(self):
         """Test that reuse_threshold >= suppress_threshold is rejected"""
         runner = CliRunner()
         db = Db()
