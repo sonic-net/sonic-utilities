@@ -1019,7 +1019,8 @@ def check_routes(namespace):
                 return -1, results
 
     if results:
-        print_message(syslog.LOG_WARNING, "Route mismatch counts: ", json.dumps(summarize_results(results), separators=(",", ":")))
+        print_message(syslog.LOG_WARNING, "Route mismatch counts: ",
+                     json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
         print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
         print_message(syslog.LOG_WARNING, "add: ", json.dumps(all_adds, indent=4))
@@ -1090,7 +1091,8 @@ def check_sids(namespace):
                 return -1, results
 
     if results:
-        print_message(syslog.LOG_WARNING, "SID mismatch counts: ", json.dumps(summarize_results(results), separators=(",", ":")))
+        print_message(syslog.LOG_WARNING, "SID mismatch counts: ",
+                     json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
         return -1, results
     else:
