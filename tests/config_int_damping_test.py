@@ -82,11 +82,11 @@ class TestDampingConfig(object):
             "aied-param",
             [
                 "Ethernet0",
-                "--decay-half-life", "1001",
-                "--suppress-threshold", "190",
-                "--max-suppress-time", "500",
+                "--decay-half-life", "15000",
+                "--suppress-threshold", "1600",
+                "--max-suppress-time", "30000",
                 "--flap-penalty", "1000",
-                "--reuse-threshold", "170"
+                "--reuse-threshold", "1200"
             ],
             ctx)
 

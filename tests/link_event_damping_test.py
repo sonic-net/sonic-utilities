@@ -121,7 +121,6 @@ class TestConfigInterfaceDamping(object):
         assert result.exit_code != 0
         assert "Invalid flap_penalty" in result.output
 
-
     def test_aied_reuse_ge_suppress(self):
         """Test that reuse_threshold >= suppress_threshold is rejected"""
         runner = CliRunner()
@@ -141,7 +140,6 @@ class TestConfigInterfaceDamping(object):
         assert result.exit_code != 0
         assert "reuse_threshold" in result.output.lower() or "Reuse threshold" in result.output
 
-
     def test_aied_halflife_gt_maxsuppress(self):
         """Test that decay_half_life > max_suppress_time is rejected"""
         runner = CliRunner()
@@ -160,7 +158,6 @@ class TestConfigInterfaceDamping(object):
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert "decay_half_life" in result.output.lower() or "Half-life" in result.output
-
 
     def test_aied_invalid_halflife(self):
         """Test invalid (negative) decay_half_life"""
