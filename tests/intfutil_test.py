@@ -6,6 +6,8 @@ import subprocess
 
 import show.main as show
 
+from .utils import get_result_and_return_code
+
 root_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(root_path)
 scripts_path = os.path.join(modules_path, "scripts")
@@ -174,6 +176,32 @@ class TestIntfutil(TestCase):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == show_interface_status_Ethernet32_output
+
+    # malformed interface ranges must fail loudly instead of silently dropping the bad input
+    malformed_ranges = [
+        "Ethernet320-Ethernet376",  # range bounds not numeric
+        "Ethernet0-",               # missing end of range
+        "Ethernet0-foo",            # non-numeric end of range
+        "Eth0-3",                   # range with unsupported prefix
+    ]
+
+    def test_intf_status_malformed_range(self):
+        for intf_fs in self.malformed_ranges:
+            return_code, output = get_result_and_return_code(
+                ['intfutil', '-c', 'status', '-i', intf_fs])
+            print("return_code: {}".format(return_code))
+            print("output = {}".format(output))
+            assert return_code == 1
+            assert "Error: Invalid interface range" in output
+
+    def test_intf_tpid_malformed_range(self):
+        for intf_fs in self.malformed_ranges:
+            return_code, output = get_result_and_return_code(
+                ['intfutil', '-c', 'tpid', '-i', intf_fs])
+            print("return_code: {}".format(return_code))
+            print("output = {}".format(output))
+            assert return_code == 1
+            assert "Error: Invalid interface range" in output
 
     def test_show_interfaces_description(self):
         result = self.runner.invoke(show.cli.commands["interfaces"].commands["description"], [])
