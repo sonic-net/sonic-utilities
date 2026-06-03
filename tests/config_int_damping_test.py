@@ -41,7 +41,7 @@ class TestDampingConfig(object):
         result = self.basic_check("aied-param", ["Ethernet0"], ctx, op=operator.ne)
         assert "Error: Expected at least one valid AIED config parameter" in result.output
         result = self.basic_check(
-            "aied-param", 
+            "aied-param",
             [
                 "Ethernet0",
                 "--suppress-threshold", "10",
@@ -92,7 +92,13 @@ class TestDampingConfig(object):
 
     def basic_check(self, command_name, para_list, ctx, op=operator.eq, expect_result=0):
         runner = CliRunner()
-        result = runner.invoke(config.config.commands["interface"].commands["damping"].commands[command_name], para_list, obj = ctx)
+        result = runner.invoke(
+            config.config.commands["interface"]
+            .commands["damping"]
+            .commands[command_name],
+            para_list,
+            obj=ctx
+        )
         print(result.exit_code, result.output)
         assert op(result.exit_code, expect_result)
         return result
