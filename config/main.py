@@ -5473,31 +5473,31 @@ def algo(ctx, interface_name, algo_type):
     required=False,
     type=int,
     help="Set max suppress time in ms"
-    )
+)
 @click.option(
     '--decay-half-life',
     required=False,
     type=int,
     help="Set decay half life in ms"
-    )
+)
 @click.option(
     '--suppress-threshold',
     required=False,
     type=int,
     help="Set suppress threshold"
-    )
+)
 @click.option(
     '--reuse-threshold',
     required=False,
     type=int,
     help="Set reuse threshold"
-    )
+)
 @click.option(
     '--flap-penalty',
     required=False,
     type=int,
     help="Set flap penalty"
-    )
+)
 def aied_param(
     ctx,
     interface_name,
@@ -5506,7 +5506,7 @@ def aied_param(
     suppress_threshold,
     reuse_threshold,
     flap_penalty
-    ):
+):
     """Set AIED link event damping configuration"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
