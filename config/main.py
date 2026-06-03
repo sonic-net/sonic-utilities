@@ -5543,6 +5543,20 @@ def aied_param(
             ctx.fail("Invalid flap_penalty value {}. It should be >= 0".format(flap_penalty))
         config_set['flap_penalty'] = flap_penalty
 
+    if reuse_threshold is not None and suppress_threshold is not None:
+        if reuse_threshold >= suppress_threshold:
+            ctx.fail(
+                "Invalid configuration: reuse_threshold ({}) must be less than suppress_threshold ({})"
+                .format(reuse_threshold, suppress_threshold)
+            )
+
+    if decay_half_life is not None and max_suppress_time is not None:
+        if decay_half_life > max_suppress_time:
+            ctx.fail(
+                "Invalid configuration: decay_half_life ({}) must be <= max_suppress_time ({})"
+                .format(decay_half_life, max_suppress_time)
+            )
+
     if len(config_set) == 0:
         ctx.fail("Expected at least one valid AIED config parameter")
 
