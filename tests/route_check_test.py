@@ -340,6 +340,24 @@ class TestRouteCheck(object):
         msg = route_check.print_message(syslog.LOG_ERR, "a", "b", "c", "d", "e", "f")
         assert len(msg) == 5
 
+    def test_logging_truncation_indicator(self):
+        # Test truncation indicator with realistic PRINT_MSG_LEN_MAX
+        route_check.PRINT_MSG_LEN_MAX = 50
+        msg = route_check.print_message(syslog.LOG_ERR, "x" * 100)
+        assert len(msg) == 50
+        assert msg.endswith(" ... (truncated)")
+
+        # Short message should not have truncation indicator
+        msg = route_check.print_message(syslog.LOG_ERR, "short")
+        assert msg == "short"
+        assert " ... (truncated)" not in msg
+
+        # When PRINT_MSG_LEN_MAX is smaller than suffix, no suffix appended
+        route_check.PRINT_MSG_LEN_MAX = 5
+        msg = route_check.print_message(syslog.LOG_ERR, "abcdefghi")
+        assert len(msg) == 5
+        assert " ... (truncated)" not in msg
+
     def test_mitigate_routes(self, mock_dbs):
         namespace = DEFAULTNS
         missed_frr_rt = [{'prefix': '192.168.0.1', 'protocol': 'bgp'}]
