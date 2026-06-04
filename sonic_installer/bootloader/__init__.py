@@ -1,11 +1,13 @@
 
 from .aboot import AbootBootloader
 from .grub import GrubBootloader
+from .bmc_uboot import BmcUbootBootloader
 from .uboot import UbootBootloader
 
 BOOTLOADERS = [
     AbootBootloader,
     GrubBootloader,
+    BmcUbootBootloader,
     UbootBootloader,
 ]
 
