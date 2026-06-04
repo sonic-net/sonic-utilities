@@ -22,12 +22,10 @@ class TestConfigHftCli:
         _, payload = mock_process.call_args[0]
         expected_payload = [{
             'op': 'add',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE/profileA',
             'value': {
-                'profileA': {
-                    'stream_state': 'disabled',
-                    'poll_interval': '10000'
-                }
+                'stream_state': 'disabled',
+                'poll_interval': '10000'
             }
         }]
         assert payload == expected_payload
@@ -48,12 +46,10 @@ class TestConfigHftCli:
         _, payload = mock_process.call_args[0]
         expected_payload = [{
             'op': 'add',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_GROUP',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_GROUP/profileA|PORT',
             'value': {
-                'profileA|PORT': {
-                    'object_names': ['Ethernet0', 'Ethernet4'],
-                    'object_counters': ['COUNTER_A', 'COUNTER_B']
-                }
+                'object_names': ['Ethernet0', 'Ethernet4'],
+                'object_counters': ['COUNTER_A', 'COUNTER_B']
             }
         }]
         assert payload == expected_payload

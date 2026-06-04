@@ -171,20 +171,34 @@ def _split_csv_items(value):
 
 
 def _build_profile_patch(op, profile_name, attributes):
-    """Construct a JSON Patch entry targeting the profile table."""
+    """Construct a JSON Patch entry targeting a single profile row.
+
+    The patch must target the per-key path (e.g. /HIGH_FREQUENCY_TELEMETRY_PROFILE/foo)
+    rather than the table-level path (/HIGH_FREQUENCY_TELEMETRY_PROFILE), because per
+    RFC 6902 an "add" at an existing object member replaces that member's value -
+    which at the table level would wipe every other row.
+    """
     return [
-        _build_patch_entry(op, PROFILE_TABLE_PATH, {
-            profile_name: attributes
-        })
+        _build_patch_entry(
+            op,
+            _join_pointer(PROFILE_TABLE_PATH, profile_name),
+            attributes,
+        )
     ]
 
 
 def _build_group_patch(op, profile_name, group_type, attributes):
-    """Construct a JSON Patch entry targeting the group table."""
+    """Construct a JSON Patch entry targeting a single group row.
+
+    See _build_profile_patch for why this targets the per-key path rather than
+    the table path.
+    """
     return [
-        _build_patch_entry(op, GROUP_TABLE_PATH, {
-            _compose_group_key(profile_name, group_type): attributes
-        })
+        _build_patch_entry(
+            op,
+            _join_pointer(GROUP_TABLE_PATH, _compose_group_key(profile_name, group_type)),
+            attributes,
+        )
     ]
 
 
