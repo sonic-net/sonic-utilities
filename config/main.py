@@ -44,6 +44,7 @@ from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
+from utilities_common.chassis import is_bmc
 from utilities_common import hft as hft_common
 
 from .utils import log
@@ -2150,7 +2151,9 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             click.echo("System is not up. Retry later or use -f to avoid system checks")
             sys.exit(CONFIG_RELOAD_NOT_READY)
 
-        if not _swss_ready():
+        # On BMC platforms swss is disabled, so there is no swss
+        # container to wait on; skip the swss readiness check.
+        if not is_bmc() and not _swss_ready():
             click.echo("SwSS container is not ready. Retry later or use -f to avoid system checks")
             sys.exit(CONFIG_RELOAD_NOT_READY)
 
