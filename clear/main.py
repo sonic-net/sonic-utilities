@@ -11,7 +11,6 @@ from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from . import plugins
 from . import stp
 # This is from the aliases example:
