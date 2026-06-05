@@ -187,7 +187,7 @@ class BmcUbootBootloader(OnieInstallerBootloader):
         tokens = [token for token in value.split() if not token.startswith('sonic_fips=')]
         tokens.append('sonic_fips={}'.format('1' if enable else '0'))
         self._fw_setenv(self.SLOT_LINUXARGS_VAR[slot], ' '.join(tokens))
-        click.echo('Done')
+        # CLI prints the success message; don't duplicate it here.
         return True
 
     def get_fips(self, image):

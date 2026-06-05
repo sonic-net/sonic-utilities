@@ -151,3 +151,13 @@ def test_detect_uses_bmc_and_generic_uboot_excludes_bmc():
     with patch('sonic_installer.bootloader.uboot.is_bmc', return_value=False), \
          patch('sonic_installer.bootloader.uboot.platform.machine', return_value='aarch64'):
         assert generic_uboot.UbootBootloader.detect()
+
+
+def test_get_bootloader_prefers_bmc_over_grub_when_both_detect():
+    # On a BMC with a stale/accidental /host/grub/grub.cfg present, both the BMC
+    # and GRUB detectors would return True. BmcUbootBootloader must win because
+    # it is probed first in BOOTLOADERS.
+    import sonic_installer.bootloader as loader
+    with patch('sonic_installer.bootloader.bmc_uboot.is_bmc', return_value=True), \
+         patch('sonic_installer.bootloader.grub.os.path.isfile', return_value=True):
+        assert isinstance(loader.get_bootloader(), bmc.BmcUbootBootloader)
