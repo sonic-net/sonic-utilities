@@ -576,6 +576,7 @@ class TestPortStat(object):
         "Ethernet0-",               # missing end of range
         "Ethernet0-foo",            # non-numeric end of range
         "Eth0-3",                   # range with unsupported prefix
+        "Ethernet8-4",              # start of range greater than the end
     ])
     def test_show_intf_counters_malformed_range(self, intf_fs):
         return_code, result = get_result_and_return_code(['portstat', '-i', intf_fs])

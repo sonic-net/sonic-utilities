@@ -183,6 +183,7 @@ class TestIntfutil(TestCase):
         "Ethernet0-",               # missing end of range
         "Ethernet0-foo",            # non-numeric end of range
         "Eth0-3",                   # range with unsupported prefix
+        "Ethernet8-4",              # start of range greater than the end
     ]
 
     def test_intf_status_malformed_range(self):

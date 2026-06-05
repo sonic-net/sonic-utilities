@@ -22,6 +22,10 @@ def parse_interface_in_filter(intf_filter):
                     raise ValueError(
                         "Invalid interface range '{}{}'. Expected a range like "
                         "'{}0-3'.".format(intf, x, intf))
+                if int(start) > int(end):
+                    raise ValueError(
+                        "Invalid interface range '{}{}'. The start of the range "
+                        "must not be greater than the end.".format(intf, x))
                 for i in range(int(start), int(end)+1):
                     intf_fs.append(intf+str(i))
             else:
@@ -43,6 +47,10 @@ def parse_interface_in_filter(intf_filter):
                 raise ValueError(
                     "Invalid interface range '{}'. Expected a range like "
                     "'{}0-3'.".format(x, intf))
+            if int(start) > int(end):
+                raise ValueError(
+                    "Invalid interface range '{}'. The start of the range "
+                    "must not be greater than the end.".format(x))
             for i in range(int(start), int(end)+1):
                 intf_fs.append(intf+str(i))
         else:
