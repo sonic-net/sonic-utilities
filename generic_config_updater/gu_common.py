@@ -9,6 +9,7 @@ import yang as ly
 import copy
 import re
 import os
+import hashlib
 from sonic_py_common import logger, multi_asic
 from enum import Enum
 
@@ -80,6 +81,9 @@ class ConfigWrapper:
         self.scope = scope
         self.yang_dir = YANG_DIR
         self.sonic_yang_with_loaded_models = None
+        self._validate_config_cache = {}
+        self._currently_loaded_hash = None
+        self._loaded_sy = None
 
     def get_config_db_as_json(self):
         return get_config_db_as_json(self.scope)
@@ -138,6 +142,12 @@ class ConfigWrapper:
             return False, ex
 
     def validate_config_db_config(self, config_db_as_json):
+        _cache_key = hashlib.md5(
+            json.dumps(config_db_as_json, sort_keys=True).encode()
+        ).hexdigest()
+        if _cache_key in self._validate_config_cache:
+            return self._validate_config_cache[_cache_key]
+
         sy = self.create_sonic_yang_with_loaded_models()
 
         # TODO: Move these validators to YANG models
@@ -145,20 +155,28 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
-            tmp_config_db_as_json = copy.deepcopy(config_db_as_json)
-
-            sy.loadData(tmp_config_db_as_json)
+            sy.loadData(config_db_as_json)
+            self._currently_loaded_hash = _cache_key
+            self._loaded_sy = sy
 
             sy.validate_data_tree()
 
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
-                    return success, error
+                    result = (success, error)
+                    self._validate_config_cache[_cache_key] = result
+                    return result
         except sonic_yang.SonicYangException as ex:
-            return False, ex
+            self._currently_loaded_hash = None
+            self._loaded_sy = None
+            result = (False, ex)
+            self._validate_config_cache[_cache_key] = result
+            return result
 
-        return True, None
+        result = (True, None)
+        self._validate_config_cache[_cache_key] = result
+        return result
 
     def validate_field_operation(self, old_config, target_config):
         """
@@ -522,7 +540,7 @@ class PathAddressing:
     def _create_sonic_yang_with_loaded_models(self):
         return self.config_wrapper.create_sonic_yang_with_loaded_models()
 
-    def find_ref_paths(self, path, config):
+    def find_ref_paths(self, path, config, reload_config=True):
         """
         Finds the paths referencing any line under the given 'path' within the given 'config'.
         Example:
@@ -560,22 +578,39 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/1
         """
         # TODO: Also fetch references by must statement (check similar statements)
-        return self._find_leafref_paths(path, config)
+        return self._find_leafref_paths(path, config, reload_config=reload_config)
 
-    def _find_leafref_paths(self, path, config):
-        sy = self._create_sonic_yang_with_loaded_models()
+    def _find_leafref_paths(self, path, config, reload_config=True):
+        if reload_config:
+            _config_hash = hashlib.md5(
+                json.dumps(config, sort_keys=True).encode()
+            ).hexdigest()
+            already_loaded = (
+                self.config_wrapper is not None and
+                self.config_wrapper._currently_loaded_hash == _config_hash and
+                self.config_wrapper._loaded_sy is not None
+            )
+            if not already_loaded:
+                sy = self._create_sonic_yang_with_loaded_models()
+                sy.loadData(config)
+                if self.config_wrapper is not None:
+                    self.config_wrapper._currently_loaded_hash = _config_hash
+                    self.config_wrapper._loaded_sy = sy
+            else:
+                sy = self.config_wrapper._loaded_sy
+        else:
+            sy = self._create_sonic_yang_with_loaded_models()
+            sy.loadData(config)
 
-        tmp_config = copy.deepcopy(config)
-
-        sy.loadData(tmp_config)
-
-        xpath = self.convert_path_to_xpath(path, config, sy)
-
-        leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
+        if not isinstance(path, list):
+            path = [path]
 
         ref_xpaths = []
-        for xpath in leaf_xpaths:
-            ref_xpaths.extend(sy.find_data_dependencies(xpath))
+        for inner_path in path:
+            xpath = self.convert_path_to_xpath(inner_path, config, sy)
+            leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
+            for leaf_xpath in leaf_xpaths:
+                ref_xpaths.extend(sy.find_data_dependencies(leaf_xpath))
 
         ref_paths = []
         ref_paths_set = set()
