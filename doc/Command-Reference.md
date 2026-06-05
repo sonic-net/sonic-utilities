@@ -15779,7 +15779,9 @@ EEPROM hexdump for port Ethernet8
 
 - Show SFP low-power mode status
 
-  By default the status is read from the module EEPROM. Passing `--use-lpmode-pin` reads it from the platform's hardware LPMode pin instead. The hardware pin path requires the platform to implement `get_lpmode_via_pin` from `SfpBase`".
+  By default the status is read from the module EEPROM. Passing `--use-lpmode-pin` reads it from the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `get_lpmode_via_pin`
+  from `SfpBase`".
 
 ```
 admin@sonic:~$ sfputil show lpmode --help
@@ -15808,7 +15810,9 @@ Ethernet0  On
 
 - Enable / disable SFP low-power mode
 
-  By default the request is written to the module EEPROM. Passing `--use-lpmode-pin` writes the platform's hardware LPMode pin instead. The hardware pin path requires the platform to implement `set_lpmode_via_pin` from `SfpBase`.
+  By default the request is written to the module EEPROM. Passing `--use-lpmode-pin` writes the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `set_lpmode_via_pin`
+  from `SfpBase`.
 
 ```
 admin@sonic:~$ sfputil lpmode on --help
