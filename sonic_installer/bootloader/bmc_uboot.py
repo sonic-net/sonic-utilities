@@ -172,10 +172,9 @@ class BmcUbootBootloader(OnieInstallerBootloader):
                 preexec_fn=default_sigpipe)
 
             p2.wait()
-            if p2.returncode != 0:
-                return True
-
             p3.wait()
+            # Fail closed: compatible only when grep matched the platform. Keying on
+            # grep (not tar) accepts an early-match SIGPIPE while rejecting bad manifests.
             return p3.returncode == 0
 
     def set_fips(self, image, enable):

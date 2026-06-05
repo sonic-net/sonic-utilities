@@ -1,8 +1,27 @@
 import os
 from unittest.mock import Mock, call, patch
 
+import pytest
+
 import sonic_installer.bootloader.bmc_uboot as bmc
 import sonic_installer.bootloader.uboot as generic_uboot
+
+
+def fake_verify_popen(tar_rc, grep_rc):
+    """Stub sed|tar|grep for verify_image_platform; set tar (p2)/grep (p3) rc."""
+    def _popen(cmd, *args, **kwargs):
+        proc = Mock()
+        proc.stdout = Mock()
+        proc.wait = Mock(return_value=None)
+        if cmd[0] == 'tar':
+            proc.returncode = tar_rc
+        elif cmd[0] == 'grep':
+            proc.returncode = grep_rc
+        else:  # sed
+            proc.returncode = 0
+        return proc
+
+    return _popen
 
 
 IMAGE1 = bmc.IMAGE_PREFIX + '202401.0'
@@ -151,6 +170,68 @@ def test_detect_uses_bmc_and_generic_uboot_excludes_bmc():
     with patch('sonic_installer.bootloader.uboot.is_bmc', return_value=False), \
          patch('sonic_installer.bootloader.uboot.platform.machine', return_value='aarch64'):
         assert generic_uboot.UbootBootloader.detect()
+
+
+def test_verify_image_platform_match_mismatch_and_fail_closed():
+    b = bmc.BmcUbootBootloader()
+    with patch('sonic_installer.bootloader.bmc_uboot.os.path.isfile', return_value=True), \
+         patch('sonic_installer.bootloader.bmc_uboot.device_info.get_platform',
+               return_value='arm64-plat-r0'):
+        # platform listed -> grep matches
+        with patch('sonic_installer.bootloader.bmc_uboot.subprocess.Popen',
+                   side_effect=fake_verify_popen(tar_rc=0, grep_rc=0)):
+            assert b.verify_image_platform('/img.bin') is True
+        # platforms_asic present but platform not listed -> grep no match
+        with patch('sonic_installer.bootloader.bmc_uboot.subprocess.Popen',
+                   side_effect=fake_verify_popen(tar_rc=0, grep_rc=1)):
+            assert b.verify_image_platform('/img.bin') is False
+        # malformed / missing platforms_asic -> tar fails: must FAIL CLOSED
+        with patch('sonic_installer.bootloader.bmc_uboot.subprocess.Popen',
+                   side_effect=fake_verify_popen(tar_rc=2, grep_rc=1)):
+            assert b.verify_image_platform('/img.bin') is False
+        # early grep match where tar is then SIGPIPE'd (tar rc != 0) -> compatible
+        with patch('sonic_installer.bootloader.bmc_uboot.subprocess.Popen',
+                   side_effect=fake_verify_popen(tar_rc=-13, grep_rc=0)):
+            assert b.verify_image_platform('/img.bin') is True
+    # non-existent file -> False
+    with patch('sonic_installer.bootloader.bmc_uboot.os.path.isfile', return_value=False):
+        assert b.verify_image_platform('/missing.bin') is False
+
+
+def test_fw_printenv_failure_handled_gracefully():
+    def failing_popen(cmd, *args, **kwargs):
+        assert cmd[:2] == ['/usr/bin/fw_printenv', '-n']
+        proc = Mock()
+        proc.returncode = 1
+        proc.communicate.return_value = ('', '')
+        return proc
+
+    b = bmc.BmcUbootBootloader()
+    with patch('sonic_installer.bootloader.bmc_uboot.subprocess.Popen', side_effect=failing_popen):
+        assert b._fw_printenv('sonic_version_1') is None
+        assert b.get_installed_images() == []
+        assert b.get_next_image() == ''
+
+
+def test_get_installed_images_skips_empty_slots():
+    env = base_env()
+    env['sonic_version_2'] = 'None'  # empty marker
+    with patch('sonic_installer.bootloader.bmc_uboot.subprocess.Popen', side_effect=fake_popen(env)):
+        assert bmc.BmcUbootBootloader().get_installed_images() == [IMAGE1]
+
+
+def test_remove_image_only_populated_slot_aborts():
+    env = base_env()
+    env['sonic_version_2'] = 'None'  # only slot 1 populated
+    with patch('sonic_installer.bootloader.bmc_uboot.subprocess.Popen', side_effect=fake_popen(env)), \
+         patch('sonic_installer.bootloader.bmc_uboot.run_command', side_effect=fake_run_command(env)), \
+         patch('sonic_installer.bootloader.bmc_uboot.subprocess.call') as subprocess_call:
+        with pytest.raises(SystemExit):
+            bmc.BmcUbootBootloader().remove_image(IMAGE1)
+    # guard fires before any env mutation or rootfs removal
+    assert env['sonic_version_1'] == IMAGE1
+    assert env['boot_next'] == 'run sonic_image_1'
+    subprocess_call.assert_not_called()
 
 
 def test_get_bootloader_prefers_bmc_over_grub_when_both_detect():
