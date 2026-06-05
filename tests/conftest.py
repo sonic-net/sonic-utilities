@@ -84,8 +84,22 @@ def setup_db_config():
     # Per-worker copy of mock_tables so tests that overwrite shared
     # JSON files (e.g. portstat_test replaces counters_db.json) only
     # affect their own worker's sandbox.
+    #
+    # Skip __pycache__ entries during the copy. CPython writes new
+    # bytecode caches atomically by creating .pyc.<nonce> temp files
+    # then os.rename()-ing them onto .pyc. When pytest-xdist starts
+    # workers in parallel and each runs this fixture, one worker's
+    # os.listdir() can return a .pyc.<nonce> path that has already been
+    # renamed to .pyc by another process by the time copytree tries to
+    # stat/copy it, surfacing as FileNotFoundError from shutil.Error.
+    # The bytecode cache is reproducible from the .py source on first
+    # import in each worker, so we simply don't copy it.
     worker_mock_tables = os.path.join(worker_root, 'mock_tables')
-    shutil.copytree(dbconnector.INPUT_DIR, worker_mock_tables)
+    shutil.copytree(
+        dbconnector.INPUT_DIR,
+        worker_mock_tables,
+        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.pyc.*'),
+    )
     dbconnector.INPUT_DIR = worker_mock_tables
     os.environ['MOCK_TABLES_DIR'] = worker_mock_tables
 
@@ -235,6 +249,14 @@ def _reset_between_files():
     _CppDBConfig.load_sonic_db_config(db_config_path)
     _CppDBConfig.load_sonic_global_db_config(global_db_config_path)
 
+    # Clear sonic_platform mocks injected by test files at module import time.
+    # With --dist loadfile, xdist workers are reused; mocks from one file
+    # (e.g. sfputil_test.py) can pollute subsequent files (e.g. watchdogutil_test.py).
+    # Tests that need the mock will re-inject it when their module is imported.
+    for k in list(sys.modules):
+        if k == 'sonic_platform' or k.startswith('sonic_platform.') or k.startswith('sonic_platform_base.'):
+            sys.modules.pop(k, None)
+
 
 generated_services_list = [
     'warmboot-finalizer.service',
@@ -268,6 +290,7 @@ generated_services_list = [
     'syncd.service',
     'snmp.timer',
     'telemetry.timer']
+
 
 @pytest.fixture(autouse=True)
 def setup_env():

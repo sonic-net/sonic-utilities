@@ -795,6 +795,12 @@ class AclLoader(object):
         deep_update(rule_props, self.convert_transport(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_input_interface(table_name, rule_idx, rule))
 
+        if "IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props:
+            # If we don't include IP_TYPE as a qualifier in the IP_PROTOCOL rule
+            # we could match on non-IP packets if the bits at the same offset match
+            # https://github.com/sonic-net/sonic-mgmt/issues/23960
+            rule_props["IP_TYPE"] = "IP"
+
         self.validate_rule_fields(rule_props)
 
         return rule_data
@@ -1002,8 +1008,10 @@ class AclLoader(object):
         :param session_name: Optional. Mirror session name. Filter sessions by specified name.
         :return:
         """
-        erspan_header = ("Name", "Status", "SRC IP", "DST IP", "GRE", "DSCP", "TTL", "Queue",
-                            "Policer", "Monitor Port", "SRC Port", "Direction")
+        erspan_header = ("Name", "Status", "SRC IP", "DST IP", "GRE", "DSCP",
+                         "TTL", "Queue", "Policer", "Monitor Port",
+                         "SRC Port", "Direction",
+                         "Sample Rate", "Truncate Size")
         span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction", "Queue", "Policer")
 
         erspan_data = []
@@ -1020,7 +1028,8 @@ class AclLoader(object):
                 erspan_data.append([key, val.get("status", ""), val.get("src_ip", ""),
                                          val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
                                          val.get("ttl", ""), val.get("queue", ""), val.get("policer", ""),
-                                         val.get("monitor_port", ""), val.get("src_port", ""), val.get("direction", "").lower()])
+                                         val.get("monitor_port", ""), val.get("src_port", ""), val.get("direction", "").lower(),  # noqa: E127, E501
+                                         val.get("sample_rate", ""), val.get("truncate_size", "")])  # noqa: E127
 
         print("ERSPAN Sessions")
         erspan_data = natsorted(erspan_data)

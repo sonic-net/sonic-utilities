@@ -949,10 +949,12 @@ Ethernet0  On
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_sfp.read_eeprom = MagicMock(side_effect=side_effect)
         runner = CliRunner()
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "10"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x10"])
         assert result.exit_code == 0
         assert result.output == page10_expected_output
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "11"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x11"])
         assert result.exit_code == 0
         assert result.output == page11_expected_output
 
@@ -1105,7 +1107,7 @@ Ethernet0  On
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'])
         assert result.exit_code == 0
-        expected_output = """EEPROM hexdump for port Ethernet0
+        expected_output = r"""EEPROM hexdump for port Ethernet0
         Lower page 0h
         00000000 00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f |................|
         00000010 10 11 12 13 14 15 16 17  18 19 1a 1b 1c 1d 1e 1f |................|
@@ -1150,6 +1152,59 @@ EEPROM hexdump for port Ethernet4
 
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', 'invalid_number'])
         assert result.exit_code != 0
+
+    def test_validate_eeprom_page_decimal(self):
+        assert sfputil.validate_eeprom_page('0') == 0
+        assert sfputil.validate_eeprom_page('16') == 16
+        assert sfputil.validate_eeprom_page('255') == 255
+
+    def test_validate_eeprom_page_hex(self):
+        assert sfputil.validate_eeprom_page('0x0') == 0
+        assert sfputil.validate_eeprom_page('0x10') == 16
+        assert sfputil.validate_eeprom_page('0xff') == 255
+        assert sfputil.validate_eeprom_page('0xFF') == 255
+
+    def test_validate_eeprom_page_octal(self):
+        assert sfputil.validate_eeprom_page('0o0') == 0
+        assert sfputil.validate_eeprom_page('0o20') == 16
+        assert sfputil.validate_eeprom_page('0o377') == 255
+
+    def test_validate_eeprom_page_invalid_string(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('not_a_number')
+        assert exc_info.value.code == sfputil.ERROR_NOT_IMPLEMENTED
+
+    def test_validate_eeprom_page_out_of_range(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('256')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('-1')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+    def test_validate_eeprom_page_cli_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x10'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0xff'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_octal(self):
+        runner = CliRunner()
+        # octal input that maps to a valid page should be accepted
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0o20'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_out_of_range_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x100'])
+        assert result.exit_code == sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' in result.output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
@@ -1382,9 +1437,34 @@ EEPROM hexdump for port Ethernet4
         mock_sfp.set_optoe_write_max = MagicMock(side_effect=NotImplementedError)
         status = sfputil.download_firmware("Ethernet0", "test.bin")
         assert status == 1
+        mock_api.cdb_start_firmware_download.assert_called_once_with("test.bin")
+
+        mock_api.cdb_start_firmware_download.reset_mock()
         mock_api.get_module_fw_mgmt_feature.return_value = {'status': True, 'feature': (0, 64, True, False, 0)}
         status = sfputil.download_firmware("Ethernet0", "test.bin")
         assert status == 1
+        mock_api.cdb_start_firmware_download.assert_called_once_with("test.bin")
+        mock_api.reset_mock()
+        block_a = b'\xaa' * 64
+        block_b = b'\xbb' * 64
+        mock_file.return_value.tell.return_value = 128
+        mock_file.return_value.read.side_effect = [block_a, block_b]
+        mock_api.get_module_fw_mgmt_feature.return_value = {
+            'status': True, 'feature': (0, 64, False, False, 0)
+        }
+        mock_api.cdb_start_firmware_download.return_value = 1
+        mock_api.cdb_epl_block_write.return_value = 1
+        mock_api.cdb_firmware_download_complete.return_value = 1
+        status = sfputil.download_firmware("Ethernet0", "test_fw.bin")
+        assert status == 1
+        mock_api.cdb_start_firmware_download.assert_called_once_with("test_fw.bin")
+        assert mock_api.cdb_epl_block_write.call_count == 2
+        for call in mock_api.cdb_epl_block_write.call_args_list:
+            args, kwargs = call
+            assert len(args) == 2
+            assert kwargs == {}
+        mock_api.cdb_epl_block_write.assert_any_call(0, block_a)
+        mock_api.cdb_epl_block_write.assert_any_call(64, block_b)
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
@@ -1398,6 +1478,8 @@ EEPROM hexdump for port Ethernet4
         status = sfputil.run_firmware("Ethernet0", 1)
         assert status == 1
 
+    @patch('sfputil.main.time.time')
+    @patch('sfputil.main.time.sleep', MagicMock())
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @pytest.mark.parametrize("mock_response, expected", [
@@ -1408,17 +1490,16 @@ EEPROM hexdump for port Ethernet4
         ({'status': True,  'result': ("1.0.1", 0, 1, 0, "1.0.2", 1, 0, 0, "1.0.2", "1.0.1")} ,  1),
         ({'status': True,  'result': ("1.0.1", 1, 0, 1, "1.0.2", 0, 1, 0, "1.0.1", "1.0.2")} , -1),
         ({'status': True,  'result': ("1.0.1", 0, 1, 0, "1.0.2", 1, 0, 1, "1.0.2", "1.0.1")} , -1),
-
-        # "is_fw_switch_done" function will waiting until timeout under below condition, so that this test will spend around 1min.
         ({'status': False, 'result': 0}                                    , -1),
     ])
-    def test_is_fw_switch_done(self, mock_chassis, mock_response, expected):
+    def test_is_fw_switch_done(self, mock_chassis, mock_time, mock_response, expected):
         mock_sfp = MagicMock()
         mock_api = MagicMock()
         mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
         mock_sfp.get_presence.return_value = True
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_api.get_module_fw_info.return_value = mock_response
+        mock_time.side_effect = [0, 0, 61]
         status = sfputil.is_fw_switch_done("Ethernet0")
         assert status == expected
 
@@ -2096,3 +2177,8 @@ EEPROM hexdump for port Ethernet4
     ])
     def test_get_subport_lane_mask(self, subport, lane_count, expected_mask):
         assert sfputil_debug.get_subport_lane_mask(subport, lane_count) == expected_mask
+
+    def test_convert_sfp_info_to_output_string_none(self):
+        import sfputil.main as sfputil
+        output = sfputil.convert_sfp_info_to_output_string(None)
+        assert output == "        EEPROM info: N/A\n"

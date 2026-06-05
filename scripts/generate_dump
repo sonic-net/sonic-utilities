@@ -53,6 +53,8 @@ DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 IS_SUPERVISOR=false
 
+ENABLE_FLOW_DUMP=false
+
 # lock dirs/files
 LOCKDIR="/tmp/techsupport-lock"
 PIDFILE="${LOCKDIR}/PID"
@@ -1583,6 +1585,16 @@ collect_mellanox() {
 
     save_cmd "show interfaces autoneg status" "autoneg.status"
 
+    save_cmd "/usr/local/bin/generate_ssd_dump" "ssd.dump"
+    # generate_ssd_dump saved the output of vtFA_RTK_5766_v2 if exists in $ssd_dump_generated_files
+    ssd_dump_generated_files=/tmp/ssd_dump_generated_files
+    if [ -d $ssd_dump_generated_files ]; then
+        for file in $(find_files "$ssd_dump_generated_files"); do
+            save_file ${file} dump false
+        done
+        rm -rf ${ssd_dump_generated_files}
+    fi
+
     wait
 }
 
@@ -1765,6 +1777,7 @@ collect_broadcom() {
         print(json.load(sys.stdin)["platform"])')
     local hwsku=$(show platform summary --json | python -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
+    local hsdk=$(bcmcmd bsh -c SOC | grep 'Failed to execute')
 
     # save SAI configuration files (config.bcm, port_config.ini, sai.profile)
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
@@ -1807,9 +1820,14 @@ collect_broadcom() {
     save_cmd "cat /proc/bcm/knet/link" "broadcom.knet.link"
     save_cmd "cat /proc/bcm/knet/rate" "broadcom.knet.rate"
 
-    save_bcmcmd_all_ns "-t5 version" "broadcom.version"
-    save_bcmcmd_all_ns "-t5 soc" "broadcom.soc"
-    save_bcmcmd_all_ns "-t5 ps" "broadcom.ps"
+    save_bcmcmd_all_ns "-t 5 version" "broadcom.version"
+    if [ -z "$hsdk" ]; then
+        save_bcmcmd_all_ns "-t 5 soc" "broadcom.soc"
+    else
+        save_bcmcmd_all_ns "-t 5 attach" "broadcom.attach"
+        save_bcmcmd_all_ns "-t 5 stkmode" "broadcom.stkmode"
+    fi
+    save_bcmcmd_all_ns "-t 5 ps" "broadcom.ps"
     if [ -e /usr/share/sonic/device/${platform}/platform_asic ]; then
        bcm_family=`cat /usr/share/sonic/device/${platform}/platform_asic`
     else
@@ -1877,28 +1895,42 @@ collect_broadcom() {
        save_bcmcmd_all_ns "\"fabric connectivity\"" "fabric.connect.summary"
        save_bcmcmd_all_ns "\"port status\"" "port.status.summary"
     else
-       save_bcmcmd_all_ns "\"l3 nat_ingress show\"" "broadcom.nat.ingress"
-       save_bcmcmd_all_ns "\"l3 nat_egress show\"" "broadcom.nat.egress"
+       if [ -n "$(bcmcmd 'show feature' | grep -i nat)" ]; then
+           save_bcmcmd_all_ns "\"l3 nat_ingress show\"" "broadcom.nat.ingress"
+           save_bcmcmd_all_ns "\"l3 nat_egress show\"" "broadcom.nat.egress"
+       fi
        save_bcmcmd_all_ns "\"ipmc table show\"" "broadcom.ipmc"
        save_bcmcmd_all_ns "\"multicast show\"" "broadcom.multicast"
-       save_bcmcmd_all_ns "\"conf show\"" "conf.summary"
        save_bcmcmd_all_ns "\"fp show\"" "fp.summary"
        save_bcmcmd_all_ns "\"pvlan show\"" "pvlan.summary"
        save_bcmcmd_all_ns "\"l2 show\"" "l2.summary"
        save_bcmcmd_all_ns "\"l3 intf show\"" "l3.intf.summary"
-       save_bcmcmd_all_ns "\"l3 defip show\"" "l3.defip.summary"
-       save_bcmcmd_all_ns "\"l3 l3table show\"" "l3.l3table.summary"
        save_bcmcmd_all_ns "\"l3 egress show\"" "l3.egress.summary"
-       save_bcmcmd_all_ns "\"l3 ecmp egress show\"" "l3.ecmp.egress.summary"
-       save_bcmcmd_all_ns "\"l3 multipath show\"" "l3.multipath.summary"
-       save_bcmcmd_all_ns "\"l3 ip6host show\"" "l3.ip6host.summary"
-       save_bcmcmd_all_ns "\"l3 ip6route show\"" "l3.ip6route.summary"
        save_bcmcmd_all_ns "\"mc show\"" "multicast.summary"
        save_bcmcmd_all_ns "\"cstat *\"" "cstat.summary"
        save_bcmcmd_all_ns "\"mirror show\"" "mirror.summary"
        save_bcmcmd_all_ns "\"mirror dest show\"" "mirror.dest.summary"
        save_bcmcmd_all_ns "\"port *\"" "port.summary"
-       save_bcmcmd_all_ns "\"d chg my_station_tcam\"" "mystation.tcam.summary"
+       if [ -z "$hsdk" ]; then
+           save_bcmcmd_all_ns "\"conf show\"" "conf.summary"
+           save_bcmcmd_all_ns "\"l3 defip show\"" "l3.defip.summary"
+           save_bcmcmd_all_ns "\"l3 l3table show\"" "l3.l3table.summary"
+           save_bcmcmd_all_ns "\"l3 ecmp egress show\"" "l3.ecmp.egress.summary"
+           save_bcmcmd_all_ns "\"l3 multipath show\"" "l3.multipath.summary"
+           save_bcmcmd_all_ns "\"l3 ip6host show\"" "l3.ip6host.summary"
+           save_bcmcmd_all_ns "\"l3 ip6route show\"" "l3.ip6route.summary"
+           save_bcmcmd_all_ns "\"d chg my_station_tcam\"" "mystation.tcam.summary"
+       else
+           # TH5 cmds
+           save_bcmcmd_all_ns "\"show config lt raw\"" "show.config.lt.raw"
+           save_bcmcmd_all_ns "\"l3 route show v6=0\"" "l3.ip4route.show"
+           save_bcmcmd_all_ns "\"l3 host show v6=0\"" "l3.ip4host.show"
+           save_bcmcmd_all_ns "\"l3 ecmp show\"" "l3.ecmp.show"
+           save_bcmcmd_all_ns "\"l3 host show v6=1\"" "l3.ip6host.show"
+           save_bcmcmd_all_ns "\"l3 route show v6=1\"" "l3.ip6route.show"
+           save_bcmcmd_all_ns "\"l2 station show\"" "l2.station.show"
+           save_bcmcmd_all_ns "\"bcmltshell -c 'pt dump -d my_station_tcam'\"" "mystation.tcam.summary"
+       fi
     fi
 
     copy_from_masic_docker "syncd" "/var/log/diagrun.log" "/var/log/diagrun.log"
@@ -2468,6 +2500,73 @@ save_container_files() {
 }
 
 ###############################################################################
+# Save gearbox data
+###############################################################################
+save_gearbox_data() {
+    save_cmd "gearboxutil phys status" "gearbox.phys_status" &
+    save_cmd "gearboxutil interfaces status" "gearbox.interfaces_status" &
+    save_cmd "gearboxutil interfaces fec-stats" "gearbox.interfaces_fec_stats" &
+    save_cmd "gearboxutil interfaces fec-histogram" "gearbox.interfaces_fec_histogram" &
+}
+
+###############################################################################
+# Save DPU Flow Dump for better debugging
+###############################################################################
+start_dpu_flow_dump() {
+    if [[ "${ENABLE_FLOW_DUMP}" != true ]]; then
+        return
+    fi
+
+    if $NOOP; then
+        return
+    fi
+
+    if [[ ! -f /usr/local/bin/sonic-dpu-flow-dump.py ]]; then
+        echo "INFO: sonic-dpu-flow-dump.py not found, skipping DPU flow dump collection." >&2
+        return
+    fi
+
+    local is_dpu
+    is_dpu=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_dpu())" 2>/dev/null) || is_dpu="False"
+    if [[ "$is_dpu" != "True" ]]; then
+        return
+    fi
+
+    if [ ! -d $LOGDIR ]; then
+        $MKDIR $V -p $LOGDIR
+    fi
+
+    echo "Started DPU flow dump collection (pid ${BASHPID})."
+
+    local start_t=$(date +%s%3N)
+    local path_file stderr_file
+    path_file=$(mktemp /tmp/ts_dpu_flow_dump_path.XXXXXX)
+    stderr_file=$(mktemp /tmp/ts_dpu_flow_dump_err.XXXXXX)
+    sonic-dpu-flow-dump.py --no-flow-state --file-only > "$path_file" 2>"$stderr_file"
+    local rc=$?
+    if [[ "$rc" -eq 0 ]] && [[ -f "$path_file" ]]; then
+        echo "DPU flow dump collection successful (rc=${rc})."
+        local src
+        src=$(tr -d '\n\r' < "$path_file")
+        if [[ -n "$src" && -f "$src" ]]; then
+            $MV "$src" $LOGDIR
+            echo "DPU flow dump saved: $LOGDIR/$(basename "$src")"
+        fi
+    else
+        if [[ -s "$stderr_file" ]]; then
+            local err_log="${LOGDIR}/dpu_flow_dump.stderr"
+            $CP "$stderr_file" "$err_log"
+            echo "DPU flow dump collection failed (rc=${rc}). Stderr saved: $err_log"
+        else
+            echo "DPU flow dump collection failed or skipped (rc=${rc})."
+        fi
+    fi
+    $RM -f "$path_file" "$stderr_file"
+    local end_t=$(date +%s%3N)
+    echo "[ dpu_flow_dump ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
+}
+
+###############################################################################
 # Main generate_dump routine
 # Globals:
 #  All of them.
@@ -2591,6 +2690,7 @@ main() {
     save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
     save_cmd "show ip interface -d all" "ip.interface" &
     save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+    save_gearbox_data &
     wait
 
     save_cmd "lldpctl" "lldpctl" &
@@ -2689,6 +2789,7 @@ main() {
         collect_pensando
     fi
 
+    start_dpu_flow_dump &
 
     # 2nd counter snapshot late. Need 2 snapshots to make sense of counters trend.
     save_counter_snapshot $asic 2
@@ -2710,7 +2811,8 @@ main() {
     $TARDIR/etc/ssh* $TARDIR/etc/mlnx $TARDIR/etc/mft \
     $TARDIR/etc/ssl/certs/* $TARDIR/etc/ssl/private/*
     rm_list=$(find -L $TARDIR -type f \( -iname \*.cer -o -iname \*.crt -o \
-        -iname \*.pem -o -iname \*.key -o -iname \*snmpd.conf\* -o -iname \*get_creds\* \))
+        -iname \*.pem -o -iname \*.key -o -iname \*.pfx -o -iname \*snmpd.conf\* -o -iname \*get_creds\* \
+        -o -path \*/credentials/\* \))
     if [ ! -z "$rm_list" ]
     then
         rm $rm_list
@@ -2874,7 +2976,7 @@ abort() {
 ###############################################################################
 usage() {
     cat <<EOF
-$0 [-xnvh]
+$0 [-xnvhf]
 
 Create a SONiC system dump for support/debugging. Requires root privileges.
 
@@ -2903,11 +3005,12 @@ OPTIONS
         Redirect any intermediate errors to STDERR
     -d
         Collect the output of debug dump cli
+    -f
+        On DPU platforms, also collect a DPU flow dump
 EOF
 }
 
-
-while getopts ":xnvhzas:t:r:d" opt; do
+while getopts ":xnvhzas:t:r:df" opt; do
     case $opt in
         x)
             # enable bash debugging
@@ -2957,6 +3060,9 @@ while getopts ":xnvhzas:t:r:d" opt; do
             ;;
         d)
             DEBUG_DUMP=true
+            ;;
+        f)
+            ENABLE_FLOW_DUMP=true
             ;;
         /?)
             echo "Invalid option: -$OPTARG" >&2

@@ -1224,8 +1224,12 @@ Ethernet200  Not present
     def test_is_rj45_port(self):
         import utilities_common.platform_sfputil_helper as platform_sfputil_helper
         platform_sfputil_helper.platform_chassis = None
+        # Force `import sonic_platform` to raise ImportError regardless of whether
+        # the package is installed (it is, in per-platform sonic-buildimage CI) and
+        # regardless of whether other tests in this xdist worker pre-loaded it.
         mods_to_hide = {k: None for k in list(sys.modules)
                         if k == 'sonic_platform' or k.startswith('sonic_platform.')}
+        mods_to_hide.setdefault('sonic_platform', None)
         with patch.dict(sys.modules, mods_to_hide):
             assert platform_sfputil_helper.is_rj45_port("Ethernet0") is False
 

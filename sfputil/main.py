@@ -336,6 +336,10 @@ def format_dict_value_to_string(sorted_key_table,
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
+    # Gracefully handle missing/invalid info dicts
+    if sfp_info_dict is None or not isinstance(sfp_info_dict, dict):
+        output += '{}EEPROM info: N/A\n'.format(indent)
+        return output
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     if is_sfp_cmis:
         # Use the utility function with the local QSFP_DD_DATA_MAP for CMIS transceivers
@@ -727,7 +731,9 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
+@click.option('-n', '--page', metavar='<page_number>',
+              help="Display SFP EEPROM hexdump for <page_number> "
+                   "(decimal, hex (with 0x prefix) or octal (with 0o prefix))")
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
@@ -752,23 +758,25 @@ def eeprom_hexdump(port, page):
             lines.append(output)
         click.echo('\n'.join(lines))
 
-def validate_eeprom_page(page):
+
+def validate_eeprom_page(page: str) -> int:
     """
     Validate input page module EEPROM
     Args:
-        page: str page input by user
+        page: str page input by user (supports decimal, hex with 0x prefix, and octal with 0o prefix)
     Returns:
         int page
     """
     try:
-        page = int(str(page), base=16)
+        validated_page = int(page, base=0)
     except ValueError:
-        click.echo('Please enter a numeric page number')
+        click.echo(f'Please enter a numeric page number (decimal, hex with 0x prefix and octal with '
+                   f'0o prefix). Got: "{page}"')
         sys.exit(ERROR_NOT_IMPLEMENTED)
-    if page < 0 or page > MAX_EEPROM_PAGE:
-        click.echo(f'Error: Invalid page number {page}')
+    if validated_page < 0 or validated_page > MAX_EEPROM_PAGE:
+        click.echo(f'Error: Invalid page number {page}. Must be between 0 and {MAX_EEPROM_PAGE}')
         sys.exit(ERROR_INVALID_PAGE)
-    return page
+    return validated_page
 
 def eeprom_hexdump_single_port(logical_port_name, page):
     """
@@ -1478,36 +1486,32 @@ def is_fw_switch_done(port_name):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     try:
-        MAX_WAIT = 60 # 60s timeout.
-        is_busy = 1 # Initial to 1 for entering while loop at least one time.
+        MAX_WAIT = 60
         timeout_time = time.time() + MAX_WAIT
-        while is_busy and (time.time() < timeout_time):
+        while time.time() < timeout_time:
             fw_info = api.get_module_fw_info()
-            is_busy = 1 if (fw_info['status'] == False) and (fw_info['result'] is not None) else 0
+            if fw_info['status'] is True and fw_info['result'] is not None:
+                (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
+                 ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
+
+                if (ImageARunning == 1) and (ImageAInvalid == 1):
+                    click.echo("FW info error : ImageA shows running, but also shows invalid!")
+                    return -1
+                elif (ImageBRunning == 1) and (ImageBInvalid == 1):
+                    click.echo("FW info error : ImageB shows running, but also shows invalid!")
+                    return -1
+                elif (ImageARunning == 1) and (ImageACommitted == 0):
+                    click.echo("FW images switch successful : ImageA is running")
+                    return 1
+                elif (ImageBRunning == 1) and (ImageBCommitted == 0):
+                    click.echo("FW images switch successful : ImageB is running")
+                    return 1
+                # Switch not done yet — module may have returned stale pre-reset data, keep polling
+
             time.sleep(2)
 
-        if fw_info['status'] == True:
-            (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
-             ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
-
-            if (ImageARunning == 1) and (ImageAInvalid == 1):       # ImageA is running, but also invalid.
-                click.echo("FW info error : ImageA shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageBRunning == 1) and (ImageBInvalid == 1):     # ImageB is running, but also invalid.
-                click.echo("FW info error : ImageB shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageARunning == 1) and (ImageACommitted == 0):   # ImageA is running, but not committed.
-                click.echo("FW images switch successful : ImageA is running")
-                status = 1  # run_firmware is done. 
-            elif (ImageBRunning == 1) and (ImageBCommitted == 0):   # ImageB is running, but not committed.
-                click.echo("FW images switch successful : ImageB is running")
-                status = 1  # run_firmware is done. 
-            else:                                                   # No image is running, or running and committed image is same.
-                click.echo("FW info error : Failed to switch into uncommitted image!")
-                status = -1 # Failure for Switching images.
-        else:
-            click.echo("FW switch : Timeout!")
-            status = -1     # Timeout or check code error or CDB not supported.
+        click.echo("FW switch : Timeout!")
+        status = -1
 
     except NotImplementedError:
         click.echo("This functionality is not applicable for this transceiver")
@@ -1554,7 +1558,7 @@ def download_firmware(port_name, filepath):
     try:
         fwinfo = api.get_module_fw_mgmt_feature()
         if fwinfo['status'] == True:
-            startLPLsize, maxblocksize, lplonly_flag, autopaging_flag, writelength = fwinfo['feature']
+            startLPLsize, maxblocksize, lplonly_flag, _, _ = fwinfo['feature']
         else:
             click.echo("Failed to fetch CDB Firmware management features")
             sys.exit(EXIT_FAIL)
@@ -1563,11 +1567,11 @@ def download_firmware(port_name, filepath):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     click.echo('CDB: Starting firmware download')
-    startdata = fd.read(startLPLsize)
-    status = api.cdb_start_firmware_download(startLPLsize, startdata, file_size)
+    status = api.cdb_start_firmware_download(filepath)
     if status != 1:
         click.echo('CDB: Start firmware download failed - status {}'.format(status))
         sys.exit(EXIT_FAIL)
+    fd.seek(startLPLsize)
 
     # Increase the optoe driver's write max to speed up firmware download
     try:
@@ -1592,7 +1596,7 @@ def download_firmware(port_name, filepath):
             if lplonly_flag:
                 status = api.cdb_lpl_block_write(address, data)
             else:
-                status = api.cdb_epl_block_write(address, data, autopaging_flag, writelength)
+                status = api.cdb_epl_block_write(address, data)
             if (status != 1):
                 click.echo("CDB: firmware download failed! - status {}".format(status))
                 sys.exit(EXIT_FAIL)
@@ -1823,7 +1827,9 @@ def target(port_name, target):
 # 'read-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-s', '--size', metavar='<size>', type=click.IntRange(1, MAX_EEPROM_OFFSET + 1), help="Size of byte to be read", required=True)
 @click.option('--no-format', is_flag=True, help="Display non formatted data")
@@ -1873,7 +1879,9 @@ def read_eeprom(port, page, offset, size, no_format, wire_addr):
 # 'write-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-d', '--data', metavar='<data>', help="Hex string EEPROM data", required=True)
 @click.option('--wire-addr', help="Wire address of sff8472")

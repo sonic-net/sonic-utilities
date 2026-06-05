@@ -209,7 +209,11 @@ class TestPcieUtil(object):
         sys.stdout = result = StringIO()
         try:
             pcieutil.load_platform_pcieutil()
-        except ImportError:
+        except (ImportError, SystemExit):
+            # On platforms that ship sonic_platform.pcie (e.g. Mellanox), the
+            # import succeeds but Pcie("dummy_path") sys.exit()s when the yaml
+            # config isn't found. The warning we're checking for is only emitted
+            # on the ImportError branch, so SystemExit is fine to swallow here.
             pass
         sys.stdout = stdout
         assert pcieutil_load_module_warning_msg not in result.getvalue()

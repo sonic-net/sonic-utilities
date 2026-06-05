@@ -57,6 +57,14 @@ class TestPsushow(object):
         psu_status_list = psushow.get_psu_status_list()
         assert psu_status_list == expected_psu_status_list
 
+    def test_get_psu_status_list_no_psu_keys(self):
+        """STATE_DB has no PSU_INFO keys: early return with empty list."""
+        mock_db = mock.MagicMock()
+        mock_db.STATE_DB = 6
+        mock_db.keys.return_value = []
+        with mock.patch.object(psushow, 'SonicV2Connector', return_value=mock_db):
+            assert psushow.get_psu_status_list() == []
+
     def test_status_table(self, capsys):
         expected_output = '''\
 PSU    Model    Serial                        HW Rev      Voltage (V)    Current (A)    Power (W)  Status    LED
@@ -95,10 +103,9 @@ PSU 2  0J6J4K   CN-0J6J4K-17972-5AF-008M-A00  A                 12.18          1
             captured = capsys.readouterr()
             assert captured.out == expected_output
 
-        # Test trying to display a non-existent PSU
+        # Test trying to display a non-existent PSU (no "PSU not detected" per HLD)
         expected_output = '''\
 Error: PSU 3 is not available. Number of supported PSUs: 2
-PSU not detected
 '''
         for arg in ['-s', '--status']:
             with mock.patch('sys.argv', ['psushow', arg, '-i', '3']):
@@ -193,10 +200,9 @@ PSU not detected
             captured = capsys.readouterr()
             assert captured.out == expected_output
 
-        # Test trying to display a non-existent PSU
+        # Test trying to display a non-existent PSU (no "PSU not detected" per HLD)
         expected_output = '''\
 Error: PSU 3 is not available. Number of supported PSUs: 2
-PSU not detected
 '''
         for arg in ['-j', '--json']:
             with mock.patch('sys.argv', ['psushow', '-s', '-i', '3', arg]):
@@ -204,6 +210,49 @@ PSU not detected
             assert ret == 1
             captured = capsys.readouterr()
             assert captured.out == expected_output
+
+    def test_status_table_empty_no_error(self, capsys):
+        """HLD: when no PSU/PDB, output is simply header and no rows (no 'PSU not detected' error)."""
+        with mock.patch.object(psushow, 'get_psu_status_list', return_value=[]):
+            with mock.patch('sys.argv', ['psushow', '-s']):
+                ret = psushow.main()
+        assert ret == 0
+        captured = capsys.readouterr()
+        # Header only, no data rows, no error message
+        assert 'PSU ' in captured.out and 'Model' in captured.out
+        assert 'PSU not detected' not in captured.out
+
+    def test_status_table_empty_with_index_errors(self, capsys):
+        """Explicit index with no PSUs: error path in psu_status_show_table."""
+        expected = (
+            'Error: PSU 1 is not available. Number of supported PSUs: 0\n'
+        )
+        with mock.patch.object(psushow, 'get_psu_status_list', return_value=[]):
+            with mock.patch('sys.argv', ['psushow', '-s', '-i', '1']):
+                ret = psushow.main()
+        assert ret == 1
+        assert capsys.readouterr().out == expected
+
+    def test_status_json_empty_no_error(self, capsys):
+        """When no PSU/PDB, JSON output is [] and no error."""
+        with mock.patch.object(psushow, 'get_psu_status_list', return_value=[]):
+            with mock.patch('sys.argv', ['psushow', '-s', '-j']):
+                ret = psushow.main()
+        assert ret == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip() == '[]'
+        assert 'PSU not detected' not in captured.out
+
+    def test_status_json_empty_with_index_errors(self, capsys):
+        """Explicit index with no PSUs: error path in psu_status_show_json."""
+        expected = (
+            'Error: PSU 1 is not available. Number of supported PSUs: 0\n'
+        )
+        with mock.patch.object(psushow, 'get_psu_status_list', return_value=[]):
+            with mock.patch('sys.argv', ['psushow', '-s', '-j', '-i', '1']):
+                ret = psushow.main()
+        assert ret == 1
+        assert capsys.readouterr().out == expected
 
     def test_version(self, capsys):
         for arg in ['-v', '--version']:

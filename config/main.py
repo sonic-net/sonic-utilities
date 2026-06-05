@@ -51,6 +51,7 @@ from .utils import log
 from . import aaa
 from . import bmc
 from . import chassis_modules
+from . import liquid_cool
 from . import console
 from . import feature
 from . import fabric
@@ -60,6 +61,7 @@ from . import kdump
 from . import kube
 from . import muxcable
 from . import nat
+from . import sed
 from . import vlan
 from . import vxlan
 from . import plugins
@@ -124,6 +126,25 @@ VNET_NAME_MAX_LEN = 15
 GUID_MAX_LEN = 255
 
 asic_type = None
+
+
+SAMPLE_RATE_MIN = 256
+SAMPLE_RATE_MAX = 8388608
+TRUNCATE_SIZE_MIN = 64
+TRUNCATE_SIZE_MAX = 9216
+
+
+def validate_sample_rate(ctx, param, value):
+    if value != 0 and (value < SAMPLE_RATE_MIN or value > SAMPLE_RATE_MAX):
+        raise click.BadParameter(f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX}")
+    return value
+
+
+def validate_truncate_size(ctx, param, value):
+    if value != 0 and (value < TRUNCATE_SIZE_MIN or value > TRUNCATE_SIZE_MAX):
+        raise click.BadParameter(f"must be 0 or in range {TRUNCATE_SIZE_MIN}..{TRUNCATE_SIZE_MAX}")
+    return value
+
 
 DSCP_RANGE = click.IntRange(min=0, max=63)
 TTL_RANGE = click.IntRange(min=0, max=255)
@@ -1756,6 +1777,7 @@ config.add_command(aaa.tacacs)
 config.add_command(aaa.radius)
 config.add_command(bmc.bmc)
 config.add_command(chassis_modules.chassis)
+config.add_command(liquid_cool.liquid_cool)
 config.add_command(console.console)
 config.add_command(fabric.fabric)
 config.add_command(feature.feature)
@@ -1779,6 +1801,9 @@ config.add_command(mclag.mclag_unique_ip)
 
 # syslog module
 config.add_command(syslog.syslog)
+
+# SED module
+config.add_command(sed.sed)
 
 # DNS module
 config.add_command(dns.dns)
@@ -3190,12 +3215,20 @@ def erspan(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction):
+@click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
+              help="Sampling rate (1-in-N), 256..8388608. 0 disables sampling")
+@click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
+              help="Truncation size in bytes, 64..9216. 0 disables truncation")
+def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
+               sample_rate, truncate_size):
     """ Add ERSPAN mirror session """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
+               queue, policer, src_port, direction,
+               sample_rate, truncate_size)
 
 
-def gather_session_info(session_info, policer, queue, src_port, direction):
+def gather_session_info(session_info, policer, queue, src_port, direction,
+                        sample_rate=0, truncate_size=0):
     if policer:
         session_info['policer'] = policer
 
@@ -3208,9 +3241,18 @@ def gather_session_info(session_info, policer, queue, src_port, direction):
             direction = "both"
         session_info['direction'] = direction.upper()
 
+    if sample_rate:
+        session_info['sample_rate'] = str(sample_rate)
+
+    if truncate_size:
+        session_info['truncate_size'] = str(truncate_size)
+
     return session_info
 
-def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port=None, direction=None):
+
+def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
+               policer, src_port=None, direction=None,
+               sample_rate=0, truncate_size=0):
     session_info = {
             "type" : "ERSPAN",
             "src_ip": src_ip,
@@ -3222,7 +3264,8 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
     if gre_type is not None:
         session_info['gre_type'] = gre_type
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    session_info = gather_session_info(session_info, policer, queue, src_port, direction,
+                                       sample_rate, truncate_size)
     raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
@@ -3333,6 +3376,7 @@ def span_add(session_name, dst_port, src_port, direction, queue, policer):
     """ Add SPAN mirror session """
     add_span(session_name, dst_port, src_port, direction, queue, policer)
 
+
 def add_span(session_name, dst_port, src_port, direction, queue, policer):
     # Save original dst_port for namespace detection (before alias conversion)
     original_dst_port = dst_port
@@ -3435,7 +3479,7 @@ def remove(session_name):
     else:
         per_npu_configdb = {}
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))  # noqa: E501
             per_npu_configdb[front_asic_namespaces].connect()
             if per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name):
                 try:
@@ -6390,17 +6434,19 @@ def frequency(ctx, interface_name, frequency):
     clicommon.run_command(command)
 
 
-#
-# 'tx_power' subcommand ('config interface transceiver tx_power ...')
-# For negative float use:-
-# config interface transceiver tx_power Ethernet0 -- -27.4"
-#
 @transceiver.command('tx_power')
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('tx-power', metavar='<tx-power>', required=True, type=float)
 def tx_power(ctx, interface_name, tx_power):
-    """Set transceiver (only for 400G-ZR) Tx laser power"""
+    """Set transciever (only for 400G-ZR) Tx laser power.
+
+    For negative values, you must insert ``--`` before the value so that
+    Click treats it as a positional argument instead of an option. For example:
+
+      config interface transceiver tx_power Ethernet0 -- -11
+    """
+
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
