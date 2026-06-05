@@ -850,12 +850,12 @@ class NoDependencyMoveValidator:
         simulated_config = move.apply(diff.current_config)
         deleted_paths, added_paths = self._get_paths(diff.current_config, simulated_config, [])
 
-        # For deleted paths, we check the current config has no dependencies between nodes under the removed path
-        if not self._validate_paths_config(deleted_paths, diff.current_config):
-            return False
-
         # For added paths, we check the simulated config has no dependencies between nodes under the added path
         if not self._validate_paths_config(added_paths, simulated_config):
+            return False
+
+        # For deleted paths, we check the current config has no dependencies between nodes under the removed path
+        if not self._validate_paths_config(deleted_paths, diff.current_config):
             return False
 
         return True
@@ -935,10 +935,7 @@ class NoDependencyMoveValidator:
         return True
 
     def _find_ref_paths(self, paths, config):
-        refs = []
-        for path in paths:
-            refs.extend(self.path_addressing.find_ref_paths(path, config))
-        return refs
+        return self.path_addressing.find_ref_paths(paths, config)
 
 class NoEmptyTableMoveValidator:
     """
@@ -1054,6 +1051,43 @@ class TableLevelMoveGenerator:
         for table in config1:
             if not(table in config2):
                 yield [table]
+
+
+class BulkLeafListMoveGenerator:
+    """
+    A class that generates bulk REPLACE moves for leaf-lists (lists of primitive
+    values) that differ between current and target configs.
+    """
+    def generate(self, diff):
+        for move in self._traverse(diff, diff.current_config, diff.target_config, []):
+            yield move
+
+    def _traverse(self, diff, current_ptr, target_ptr, tokens):
+        if not isinstance(current_ptr, dict) or not isinstance(target_ptr, dict):
+            return
+
+        for key in current_ptr:
+            if key not in target_ptr:
+                continue
+
+            current_val = current_ptr[key]
+            target_val = target_ptr[key]
+            tokens.append(key)
+
+            if isinstance(current_val, list) and isinstance(target_val, list):
+                if (current_val != target_val and
+                        self._is_leaf_list(current_val) and
+                        self._is_leaf_list(target_val)):
+                    yield JsonMove(diff, OperationType.REPLACE, list(tokens), list(tokens))
+            elif isinstance(current_val, dict) and isinstance(target_val, dict):
+                for move in self._traverse(diff, current_val, target_val, tokens):
+                    yield move
+
+            tokens.pop()
+
+    @staticmethod
+    def _is_leaf_list(lst):
+        return all(isinstance(item, (str, int, float, bool)) for item in lst)
 
 class KeyLevelMoveGenerator:
     """
@@ -1639,7 +1673,8 @@ class SortAlgorithmFactory:
         move_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
                            LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
-        move_non_extendable_generators = [KeyLevelMoveGenerator()]
+        move_non_extendable_generators = [BulkLeafListMoveGenerator(),
+                                          KeyLevelMoveGenerator()]
         move_extenders = [RequiredValueMoveExtender(self.path_addressing, self.operation_wrapper),
                           UpperLevelMoveExtender(),
                           DeleteInsteadOfReplaceMoveExtender(),
