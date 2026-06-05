@@ -1,6 +1,8 @@
 import click
 import utilities_common.cli as clicommon
 
+from jsonpatch import JsonPatchConflict
+
 from .validated_config_db_connector import ValidatedConfigDBConnector
 
 #
@@ -53,7 +55,7 @@ def set_startup_delay(ctx, db, startup_delay=EVPN_MH_STARTUP_DELAY_DEFAULT):
         entry = config_db.get_entry(EVPN_MH_TABLE, 'default') or {}
         entry['startup_delay'] = startup_delay
         config_db.set_entry(EVPN_MH_TABLE, 'default', entry)
-    except ValueError as e:
+    except (ValueError, JsonPatchConflict) as e:
         ctx.fail("Failed to save to ConfigDB. Error: {}".format(e))
 
 
@@ -90,7 +92,7 @@ def set_mac_holdtime(ctx, db, mac_holdtime=EVPN_MH_MAC_HOLDTIME_DEFAULT):
         entry = config_db.get_entry(EVPN_MH_TABLE, 'default') or {}
         entry['mac_holdtime'] = mac_holdtime
         config_db.set_entry(EVPN_MH_TABLE, 'default', entry)
-    except ValueError as e:
+    except (ValueError, JsonPatchConflict) as e:
         ctx.fail("Failed to save to ConfigDB. Error: {}".format(e))
 
 
@@ -127,5 +129,5 @@ def set_neigh_holdtime(ctx, db, neigh_holdtime=EVPN_MH_NEIGH_HOLDTIME_DEFAULT):
         entry = config_db.get_entry(EVPN_MH_TABLE, 'default') or {}
         entry['neigh_holdtime'] = neigh_holdtime
         config_db.set_entry(EVPN_MH_TABLE, 'default', entry)
-    except ValueError as e:
+    except (ValueError, JsonPatchConflict) as e:
         ctx.fail("Failed to save to ConfigDB. Error: {}".format(e))

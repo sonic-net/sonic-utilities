@@ -54,7 +54,7 @@ class TestShowEvpn:
         with mock.patch('utilities_common.bgp_util.run_bgp_show_command') as mock_bgp:
             result = self.runner.invoke(show.cli.commands['evpn'].commands['es'],
                                         ["not-an-esi"])
-            assert result.exit_code == 0, result.output
+            assert result.exit_code != 0, result.output
             assert "Invalid ESI format" in result.output
             mock_bgp.assert_not_called()
 
@@ -62,7 +62,7 @@ class TestShowEvpn:
         with mock.patch('utilities_common.bgp_util.run_bgp_show_command') as mock_bgp:
             result = self.runner.invoke(show.cli.commands['evpn'].commands['es'],
                                         ["01:02:03"])
-            assert result.exit_code == 0, result.output
+            assert result.exit_code != 0, result.output
             assert "Invalid ESI format" in result.output
             mock_bgp.assert_not_called()
 
@@ -86,7 +86,7 @@ class TestShowEvpn:
     def test_show_evpn_es_evi_vni_zero(self):
         with mock.patch('utilities_common.bgp_util.run_bgp_show_command') as mock_bgp:
             result = self.runner.invoke(show.cli.commands['evpn'].commands['es-evi'], ["0"])
-            assert result.exit_code == 0, result.output
+            assert result.exit_code != 0, result.output
             assert "Invalid VNI" in result.output
             mock_bgp.assert_not_called()
 
@@ -94,7 +94,7 @@ class TestShowEvpn:
         with mock.patch('utilities_common.bgp_util.run_bgp_show_command') as mock_bgp:
             result = self.runner.invoke(show.cli.commands['evpn'].commands['es-evi'],
                                         ["16777216"])
-            assert result.exit_code == 0, result.output
+            assert result.exit_code != 0, result.output
             assert "Invalid VNI" in result.output
             mock_bgp.assert_not_called()
 
@@ -102,15 +102,14 @@ class TestShowEvpn:
         with mock.patch('utilities_common.bgp_util.run_bgp_show_command') as mock_bgp:
             result = self.runner.invoke(show.cli.commands['evpn'].commands['es-evi'],
                                         ["abc"])
-            assert result.exit_code == 0, result.output
+            assert result.exit_code != 0, result.output
             assert "Invalid VNI" in result.output
             mock_bgp.assert_not_called()
 
     def test_show_evpn_es_evi_detail(self):
         with mock.patch('utilities_common.bgp_util.run_bgp_show_command',
                         return_value=MOCK_ES_EVI_DETAIL_OUTPUT) as mock_bgp:
-            result = self.runner.invoke(
-                show.cli.commands['evpn'].commands['es-evi'].commands['detail'], [])
+            result = self.runner.invoke(show.cli.commands['evpn'].commands['es-evi'], ["detail"])
             assert result.exit_code == 0, result.output
             mock_bgp.assert_called_once_with("show evpn es-evi detail")
             assert MOCK_ES_EVI_DETAIL_OUTPUT in result.output

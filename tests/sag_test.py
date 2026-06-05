@@ -12,6 +12,13 @@ MacAddress         Interfaces
 00:11:22:33:44:55  Vlan1000
 """
 
+show_sag_inconsistent_output = """\
+Static Anycast Gateway Information
+Warning: static-anycast-gateway is enabled on VLAN interfaces but SAG gateway_mac is not configured
+MacAddress    Interfaces
+------------  ------------
+"""
+
 
 class TestSag(object):
     @classmethod
@@ -71,6 +78,19 @@ class TestSag(object):
         )
         assert {"gateway_mac": "00:22:33:44:55:66"} == db.cfgdb.get_entry("SAG", "GLOBAL")
 
+    def test_config_del_sag_mac_preserves_other_global_fields(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("SAG", "GLOBAL", {"gateway_mac": "00:11:22:33:44:55", "other_field": "keep"})
+
+        result = runner.invoke(config.config.commands["static-anycast-gateway"].commands["mac_address"].commands["del"],
+                               obj=db)
+        assert result.exit_code == 0, (
+            f"sag delete mac with code {type(result.exit_code)}:{result.exit_code} "
+            f"Output:{result.output}"
+        )
+        assert {"other_field": "keep"} == db.cfgdb.get_entry("SAG", "GLOBAL")
+
     def test_config_enable_sag_on_vlan_interface(self):
         runner = CliRunner()
         db = Db()
@@ -103,6 +123,18 @@ class TestSag(object):
             f"Output:{result.output}"
         )
         assert result.output == show_sag_output
+
+    def test_show_sag_missing_global_mac_with_enabled_vlan(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("SAG", "GLOBAL", None)
+
+        result = runner.invoke(show.cli.commands["static-anycast-gateway"], [], obj=db)
+        assert result.exit_code == 0, (
+            f"invalid show sag with code {type(result.exit_code)}:{result.exit_code} "
+            f"Output:{result.output}"
+        )
+        assert result.output == show_sag_inconsistent_output
 
     def test_config_enable_sag_already_enabled(self):
         runner = CliRunner()

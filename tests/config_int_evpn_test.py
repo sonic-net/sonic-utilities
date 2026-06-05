@@ -194,6 +194,18 @@ class TestEVPNEthernetSegmentConfig():
         runner, db = cli_db_connection
         configure_esi_w_failure(runner, db, ["PortChannel01", "unknown-esi-type"])
 
+    def test_add_extra_arg(self, cli_db_connection):
+        runner, db = cli_db_connection
+        result = runner.invoke(
+            config.config.commands["interface"].commands['evpn-esi'].commands["add"],
+            ["PortChannel01", "auto-system-mac", "extra-arg"],
+            obj=db,
+        )
+        assert result.exit_code != 0, f"Got zero exit code {result.exit_code} - {result.output}, expected non-zero"
+        assert "Got unexpected extra argument" in result.output, (
+            f'Did not find the extra argument help string in {result.output}'
+        )
+
     def test_add_multiple_es(self, cli_db_connection):
         runner, db = cli_db_connection
 

@@ -3,6 +3,7 @@ import pytest
 from unittest import mock
 
 from click.testing import CliRunner
+from jsonpatch import JsonPatchConflict
 from utilities_common.db import Db
 from config.main import config
 from config.evpn_mh import EVPN_MH_TABLE
@@ -168,3 +169,48 @@ class TestEVPNMultiHomingConfigDBError:
                 config.commands["evpn-mh"].commands["neigh-holdtime"], ["1080"], obj=self.db)
             assert result.exit_code != 0, f"Expected failure, got: {result.output}"
             assert "Failed to save to ConfigDB" in result.output
+
+    @pytest.mark.parametrize("command_name,value", [
+        ("startup-delay", "300"),
+        ("mac-holdtime", "1080"),
+        ("neigh-holdtime", "1080"),
+    ])
+    def test_patch_conflict_db_error(self, command_name, value):
+        with mock.patch.object(self.db.cfgdb, 'set_entry', side_effect=JsonPatchConflict("DB write failed")):
+            result = self.runner.invoke(config.commands["evpn-mh"].commands[command_name], [value], obj=self.db)
+            assert result.exit_code != 0, f"Expected failure, got: {result.output}"
+            assert "Failed to save to ConfigDB" in result.output
+
+
+class TestEVPNMultiHomingFieldPreservation:
+    def test_updates_preserve_existing_default_fields(self, cli_db_connection):
+        runner, db = cli_db_connection
+        db.cfgdb.set_entry(EVPN_MH_TABLE, 'default', {
+            'startup_delay': '300',
+            'mac_holdtime': '1080',
+            'neigh_holdtime': '1080',
+        })
+
+        result = runner.invoke(config.commands["evpn-mh"].commands["startup-delay"], ["600"], obj=db)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry(EVPN_MH_TABLE, 'default') == {
+            'startup_delay': '600',
+            'mac_holdtime': '1080',
+            'neigh_holdtime': '1080',
+        }
+
+        result = runner.invoke(config.commands["evpn-mh"].commands["mac-holdtime"], ["1200"], obj=db)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry(EVPN_MH_TABLE, 'default') == {
+            'startup_delay': '600',
+            'mac_holdtime': '1200',
+            'neigh_holdtime': '1080',
+        }
+
+        result = runner.invoke(config.commands["evpn-mh"].commands["neigh-holdtime"], ["1500"], obj=db)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry(EVPN_MH_TABLE, 'default') == {
+            'startup_delay': '600',
+            'mac_holdtime': '1200',
+            'neigh_holdtime': '1500',
+        }

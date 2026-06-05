@@ -12,6 +12,10 @@ import re
 import utilities_common.cli as clicommon
 import utilities_common.bgp_util as bgp_util
 
+ESI_PATTERN = r'^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){9}$'
+VNI_MIN = 1
+VNI_MAX = 16777215
+
 #
 # 'evpn' command ("show evpn")
 #
@@ -30,47 +34,39 @@ def evpn(ctx, db):
 
 @evpn.command()
 @click.argument('es', required=False)
-def es(es):
+@click.pass_context
+def es(ctx, es):
     """Show evpn es """
     cmd = "show evpn es"
 
     if es:
-        # Validate ESI format (XX:XX:XX:XX:XX:XX:XX:XX:XX:XX - 10 hex bytes separated by colons)
-        esi_pattern = r'^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){9}$'
-        if not re.match(esi_pattern, es):
-            click.echo(f"Error: Invalid ESI format '{es}'. Expected format: XX:XX:XX:XX:XX:XX:XX:XX:XX:XX")
-            return
+        if not re.match(ESI_PATTERN, es):
+            ctx.fail(f"Invalid ESI format '{es}'. Expected format: XX:XX:XX:XX:XX:XX:XX:XX:XX:XX")
         cmd += " {}".format(es)
 
     output = bgp_util.run_bgp_show_command(cmd)
     click.echo(output)
 
 
-@evpn.group(invoke_without_command=True)
-@click.argument('vni', required=False, metavar='<vni>')
-def es_evi(vni):
-    """Show Ethernet Segment per EVI information (show evpn es-evi <vni>)"""
+@evpn.command(name='es-evi')
+@click.argument('vni', required=False, metavar='<vni|detail>')
+@click.pass_context
+def es_evi(ctx, vni):
+    """Show Ethernet Segment per EVI information"""
     cmd = "show evpn es-evi"
     if vni:
-        # Validate VNI is a positive integer (VXLAN Network Identifier: 1-16777215)
-        try:
-            vni_int = int(vni)
-            if vni_int < 1 or vni_int > 16777215:
-                click.echo(f"Error: Invalid VNI '{vni}'. VNI must be between 1 and 16777215")
-                return
-        except ValueError:
-            click.echo(f"Error: Invalid VNI '{vni}'. VNI must be a numeric value")
-            return
-        cmd += " vni {}".format(vni)
+        if vni == 'detail':
+            cmd += " detail"
+        else:
+            # Validate VNI is a positive integer (VXLAN Network Identifier: 1-16777215)
+            try:
+                vni_int = int(vni)
+            except ValueError:
+                ctx.fail(f"Invalid VNI '{vni}'. VNI must be a numeric value")
+            if vni_int < VNI_MIN or vni_int > VNI_MAX:
+                ctx.fail(f"Invalid VNI '{vni}'. VNI must be between {VNI_MIN} and {VNI_MAX}")
+            cmd += " vni {}".format(vni)
 
-    output = bgp_util.run_bgp_show_command(cmd)
-    click.echo(output)
-
-
-@es_evi.command()
-def detail():
-    """Show Ethernet Segment per EVI detail"""
-    cmd = "show evpn es-evi detail"
     output = bgp_util.run_bgp_show_command(cmd)
     click.echo(output)
 

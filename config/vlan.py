@@ -498,8 +498,8 @@ def disable_vlan_sag(db, vid):
     if not clicommon.is_valid_vlan_interface(db.cfgdb, vlan):
         ctx.fail(f"Interface {vlan} does not exist")
 
-    vlan_entry = db.cfgdb.get_entry('VLAN_INTERFACE', vlan)
-    if vlan_entry and vlan_entry.get('static_anycast_gateway') != 'true':
+    vlan_entry = db.cfgdb.get_entry('VLAN_INTERFACE', vlan) or {}
+    if vlan_entry.get('static_anycast_gateway') != 'true':
         ctx.fail("static-anycast-gateway is already disabled")
 
     db.cfgdb.mod_entry('VLAN_INTERFACE', vlan, {"static_anycast_gateway": "false"})

@@ -2555,19 +2555,22 @@ def sag(db):
     header = ['MacAddress', 'Interfaces']
     body = []
 
-    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
-    if sag_entry:
-        sag_mac = sag_entry.get('gateway_mac')
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL') or {}
+    sag_mac = sag_entry.get('gateway_mac')
+    intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
+    enabled_vlans = [key for key, value in intf_dict.items()
+                     if value.get('static_anycast_gateway') == 'true']
 
-        intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
-        for key, value in intf_dict.items():
-            if value.get('static_anycast_gateway') == 'true':
-                if not body:
-                    body.append([sag_mac, key])
-                else:
-                    body.append(['', key])
+    if sag_mac:
+        for vlan in enabled_vlans:
+            if not body:
+                body.append([sag_mac, vlan])
+            else:
+                body.append(['', vlan])
 
     click.echo("Static Anycast Gateway Information")
+    if enabled_vlans and not sag_mac:
+        click.echo("Warning: static-anycast-gateway is enabled on VLAN interfaces but SAG gateway_mac is not configured")
     click.echo(tabulate(body, header, tablefmt='simple'))
 
 #

@@ -584,6 +584,90 @@ class TestInterfaces(object):
         assert result.exit_code != 0
         assert "System MAC address 00:01:01:01:01: format is not valid." in result.output
 
+    def test_sys_mac_no_evpn_es_does_not_call_vtysh(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        with mock.patch.object(config, 'run_vtysh_command') as mock_vtysh:
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code == 0, result.output
+        mock_vtysh.assert_not_called()
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+    def test_sys_mac_type3_programs_frr_before_config_db(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+        db.cfgdb.set_entry("EVPN_ETHERNET_SEGMENT", "PortChannel0001", {
+            "type": "TYPE_3_MAC_BASED",
+            "esi": "AUTO",
+            "df_pref": "32767",
+        })
+
+        with mock.patch.object(config, 'run_vtysh_command') as mock_vtysh:
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code == 0, result.output
+        mock_vtysh.assert_called_once()
+        vtysh_cmd = mock_vtysh.call_args[0][0]
+        assert "evpn mh es-id 0001" in vtysh_cmd
+        assert "evpn mh es-sys-mac 00:01:01:01:01:03" in vtysh_cmd
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+    def test_sys_mac_frr_failure_does_not_update_config_db(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+        db.cfgdb.set_entry("EVPN_ETHERNET_SEGMENT", "PortChannel0001", {
+            "type": "TYPE_3_MAC_BASED",
+            "esi": "AUTO",
+            "df_pref": "32767",
+        })
+
+        def fail_vtysh(cmd, ctx):
+            ctx.fail("vtysh failed")
+
+        with mock.patch.object(config, 'run_vtysh_command', side_effect=fail_vtysh):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code != 0, result.output
+        assert "vtysh failed" in result.output
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:02"
+
+    def test_sys_mac_config_db_failure_is_reported(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        with mock.patch.object(config, 'run_vtysh_command') as mock_vtysh, \
+                mock.patch.object(db.cfgdb, 'mod_entry', side_effect=ValueError("DB write failed")):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code != 0, result.output
+        mock_vtysh.assert_not_called()
+        assert "Invalid ConfigDB" in result.output
+
     def test_show_interfaces_naming_mode_default(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["naming_mode"], [])

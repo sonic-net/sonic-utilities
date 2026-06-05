@@ -5361,10 +5361,13 @@ def add_pc_sys_id_mac(ctx, interface_name, sys_mac):
             cmd.append('evpn mh es-id {}'.format(port_id))
             cmd.append('-c')
             cmd.append('evpn mh es-sys-mac {}'.format(sys_mac))
-        run_vtysh_command(cmd, ctx)
+            run_vtysh_command(cmd, ctx)
 
-        # Only write to CONFIG_DB after FRR update succeeds
-        config_db.mod_entry("PORTCHANNEL", interface_name, {'system_mac': sys_mac})
+        try:
+            # Only write to CONFIG_DB after FRR update succeeds
+            config_db.mod_entry("PORTCHANNEL", interface_name, {'system_mac': sys_mac})
+        except (ValueError, JsonPatchConflict) as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
 @sys_mac.command('remove')
@@ -5380,7 +5383,7 @@ def del_pc_sys_id_mac(ctx, interface_name, sys_mac):
     if is_portchannel_present_in_db(config_db, interface_name) is False:
         ctx.fail("{} is not present.".format(interface_name))
     else:
-        entry = config_db.get_entry("PORTCHANNEL", interface_name)
+        entry = dict(config_db.get_entry("PORTCHANNEL", interface_name))
         conf_sys_mac = None
         if 'system_mac' in entry:
             conf_sys_mac = entry['system_mac']
@@ -5392,10 +5395,13 @@ def del_pc_sys_id_mac(ctx, interface_name, sys_mac):
             if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
                 cmd.append('-c')
                 cmd.append('no evpn mh es-sys-mac')
-            run_vtysh_command(cmd, ctx)
+                run_vtysh_command(cmd, ctx)
 
-            # Only write to CONFIG_DB after FRR update succeeds
-            config_db.set_entry("PORTCHANNEL", interface_name, entry)
+            try:
+                # Only write to CONFIG_DB after FRR update succeeds
+                config_db.set_entry("PORTCHANNEL", interface_name, entry)
+            except (ValueError, JsonPatchConflict) as e:
+                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         else:
             ctx.fail("For {} sys-mac is not present or different value is configured.".format(interface_name))
 
@@ -5907,8 +5913,7 @@ def evpn_esi(ctx):
 @evpn_esi.command('add')
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.argument('esi_type', metavar='<esi_type>', required=True,
-                type=str, nargs=-1)
+@click.argument('esi_type', metavar='<esi_type>', required=True)
 def add_evpn_es(ctx, interface_name, esi_type):
     """Add EVPN ES"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
@@ -5924,7 +5929,7 @@ def add_evpn_es(ctx, interface_name, esi_type):
     if interface_name in es_data:
         ctx.fail(f"EVPN Ethernet segment {interface_name} already configured.")
 
-    esi_args = parse_esi_input(ctx, esi_type)
+    esi_args = parse_esi_input(ctx, [esi_type])
 
     check_if_same_manual_esi_exists(ctx, esi_args, es_data)
 
@@ -5949,7 +5954,7 @@ def add_evpn_es(ctx, interface_name, esi_type):
 
         # Only write to CONFIG_DB after FRR update succeeds
         config_db.set_entry(EVPN_ES_TABLE, interface_name, esi_args)
-    except ValueError as e:
+    except (ValueError, JsonPatchConflict) as e:
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
@@ -6021,7 +6026,7 @@ def evpn_df_pref(ctx, interface_name, df_pref):
 
         # Only write to CONFIG_DB after FRR update succeeds
         config_db.mod_entry(EVPN_ES_TABLE, interface_name, {'df_pref': str(df_pref)})
-    except ValueError as e:
+    except (ValueError, JsonPatchConflict) as e:
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 #
@@ -9981,7 +9986,7 @@ def add_mac(db, mac_address):
         db.cfgdb.set_entry('SAG', 'GLOBAL', {'gateway_mac': mac_address})
     else:
         click.get_current_context().fail(
-            f'static-anycast-gateway MAC address {mac_address} is alreaday existed. Remove it first'
+            f'static-anycast-gateway MAC address {mac_address} already exists. Remove it first'
         )
 
 
@@ -9992,8 +9997,12 @@ def del_mac(db):
     sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
     if sag_entry:
         mac_address = sag_entry.get('gateway_mac', 'unknown')
+        if mac_address == 'unknown':
+            click.get_current_context().fail('static-anycast-gateway MAC address not found.')
         log.log_info(f"'static-anycast-gateway mac_address del {mac_address}' executing...")
-        db.cfgdb.mod_entry('SAG', 'GLOBAL', None)
+        remaining_entry = dict(sag_entry)
+        remaining_entry.pop('gateway_mac', None)
+        db.cfgdb.set_entry('SAG', 'GLOBAL', remaining_entry if remaining_entry else None)
     else:
         log.log_info("'static-anycast-gateway mac_address del' executing...")
         click.get_current_context().fail('static-anycast-gateway MAC address not found.')

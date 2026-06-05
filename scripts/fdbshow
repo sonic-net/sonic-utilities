@@ -130,7 +130,7 @@ class FdbShow(object):
             #If we have VXLAN tunnel port FDBs try getting them
             try:
                 endpoint_ip = ent["SAI_FDB_ENTRY_ATTR_ENDPOINT_IP"]
-            except Exception:
+            except KeyError:
                 endpoint_ip = None
 
             #If endpoint_ip exists then use that as if_name
@@ -163,7 +163,7 @@ class FdbShow(object):
                                     if_name = if_name + "\n" + dst_ip
                         if if_name == "":
                             continue
-                    except Exception:
+                    except KeyError:
                         continue
 
                 else:
