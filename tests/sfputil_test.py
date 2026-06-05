@@ -2010,15 +2010,10 @@ EEPROM hexdump for port Ethernet4
         assert 'media_side_output_loopback_supported: False' in result.output
         assert result.exit_code == 0
 
-    @patch('sfputil.debug.is_sfp_present')
-    @patch('sfputil.debug.is_rj45_port')
     @patch('sfputil.debug.get_logical_list')
     @patch('sfputil.debug.get_sfp_object')
-    def test_debug_loopback_capability_all_ports(self, mock_get_sfp_object, mock_get_logical_list,
-                                                 mock_is_rj45_port, mock_is_sfp_present):
+    def test_debug_loopback_capability_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
         mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
-        mock_is_rj45_port.return_value = False
-        mock_is_sfp_present.return_value = True
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
 
@@ -2033,26 +2028,23 @@ EEPROM hexdump for port Ethernet4
                 api.get_loopback_capability.return_value = cap
             return sfp
 
-        # RJ45 and absent ports are skipped before get_sfp_object is called
-        mock_is_rj45_port.side_effect = lambda p: p == 'Ethernet0'
-        mock_is_sfp_present.side_effect = lambda p: p != 'Ethernet4'
+        # RJ45 and absent ports: get_sfp_object raises SystemExit (and prints diagnostic).
+        # The helper catches SystemExit so iteration continues past them.
         mock_get_sfp_object.side_effect = [
+            SystemExit(EXIT_FAIL),  # Ethernet0: simulated RJ45
+            SystemExit(EXIT_FAIL),  # Ethernet4: simulated no transceiver
             make_sfp(cap={'host_side_input_loopback_supported': True}),
             make_sfp(cap={'host_side_input_loopback_supported': False}),
         ]
         result = runner.invoke(cmd, [])
         assert result.exit_code == 0
-        assert 'Ethernet0' not in result.output
-        assert 'Ethernet4' not in result.output
         assert 'Ethernet8: loopback capability:' in result.output
         assert 'Ethernet12: loopback capability:' in result.output
-        assert mock_get_sfp_object.call_count == 2
+        # All four ports are visited; iteration is not aborted by the SystemExits.
+        assert mock_get_sfp_object.call_count == 4
 
-        # Mixed: CMIS with cap, no diag support, non-CMIS, no cap advertised
-        mock_is_rj45_port.side_effect = None
-        mock_is_rj45_port.return_value = False
-        mock_is_sfp_present.side_effect = None
-        mock_is_sfp_present.return_value = True
+        # Mixed: CMIS with cap, no diag support, non-CMIS, no cap advertised.
+        # Every skipped port emits a diagnostic message so the operator sees why.
         mock_get_sfp_object.reset_mock()
         mock_get_sfp_object.side_effect = [
             make_sfp(cap={'host_side_input_loopback_supported': True}),
@@ -2063,16 +2055,17 @@ EEPROM hexdump for port Ethernet4
         result = runner.invoke(cmd, [])
         assert result.exit_code == 0
         assert 'Ethernet0: loopback capability:' in result.output
-        assert 'Ethernet4' not in result.output
-        assert 'Ethernet8' not in result.output
-        assert 'does not advertise any loopback capability' in result.output
-        assert 'Ethernet12' in result.output
+        assert 'Ethernet4: The module does not support diagnostic pages required for loopback' in result.output
+        assert 'Ethernet8: Loopback capability is not applicable for this module' in result.output
+        assert 'Ethernet12: The module does not advertise any loopback capability' in result.output
 
-        # No ports support loopback (all non-CMIS)
+        # No ports support loopback (all non-CMIS): per-port diagnostics + the summary line.
         mock_get_sfp_object.reset_mock()
         mock_get_sfp_object.side_effect = [make_sfp(attr_error=True)] * 4
         result = runner.invoke(cmd, [])
         assert result.exit_code == 0
+        assert 'Ethernet0: Loopback capability is not applicable for this module' in result.output
+        assert 'Ethernet12: Loopback capability is not applicable for this module' in result.output
         assert 'No ports found that support loopback capability' in result.output
 
     @patch('sfputil.debug.get_sfp_object')
@@ -2141,15 +2134,10 @@ EEPROM hexdump for port Ethernet4
         assert 'media-side-output: True' in result.output
         assert result.exit_code == 0
 
-    @patch('sfputil.debug.is_sfp_present')
-    @patch('sfputil.debug.is_rj45_port')
     @patch('sfputil.debug.get_logical_list')
     @patch('sfputil.debug.get_sfp_object')
-    def test_debug_loopback_status_all_ports(self, mock_get_sfp_object, mock_get_logical_list,
-                                             mock_is_rj45_port, mock_is_sfp_present):
+    def test_debug_loopback_status_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
         mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
-        mock_is_rj45_port.return_value = False
-        mock_is_sfp_present.return_value = True
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-status']
 
@@ -2159,33 +2147,35 @@ EEPROM hexdump for port Ethernet4
             sfp.get_xcvr_api.return_value = api
             if attr_error:
                 api.get_diag_page_support.return_value = True
+                api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
                 api.get_host_input_loopback.side_effect = AttributeError
             else:
                 api.get_diag_page_support.return_value = diag_support
+                api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
                 api.get_host_input_loopback.return_value = [False] * 8
                 api.get_host_output_loopback.return_value = [False] * 8
                 api.get_media_input_loopback.return_value = False
                 api.get_media_output_loopback.return_value = False
             return sfp
 
-        # RJ45 and absent ports are skipped before get_sfp_object is called
+        # RJ45 and absent ports: get_sfp_object raises SystemExit (and prints diagnostic).
+        # The helper catches SystemExit so iteration continues past them.
         # Ethernet0: RJ45, Ethernet4: no transceiver, Ethernet8: CMIS, Ethernet12: CMIS
-        mock_is_rj45_port.side_effect = lambda p: p == 'Ethernet0'
-        mock_is_sfp_present.side_effect = lambda p: p != 'Ethernet4'
-        mock_get_sfp_object.side_effect = [make_cmis_sfp(), make_cmis_sfp()]
+        mock_get_sfp_object.side_effect = [
+            SystemExit(EXIT_FAIL),
+            SystemExit(EXIT_FAIL),
+            make_cmis_sfp(),
+            make_cmis_sfp(),
+        ]
         result = runner.invoke(cmd, [])
         assert result.exit_code == 0
-        assert 'Ethernet0' not in result.output
-        assert 'Ethernet4' not in result.output
         assert 'Ethernet8: loopback status:' in result.output
         assert 'Ethernet12: loopback status:' in result.output
-        assert mock_get_sfp_object.call_count == 2  # only called for Ethernet8 and Ethernet12
+        # All four ports are visited; iteration is not aborted by the SystemExits.
+        assert mock_get_sfp_object.call_count == 4
 
-        # Mixed CMIS: diag support, no diag support, non-CMIS (AttributeError)
-        mock_is_rj45_port.side_effect = None
-        mock_is_rj45_port.return_value = False
-        mock_is_sfp_present.side_effect = None
-        mock_is_sfp_present.return_value = True
+        # Mixed CMIS: diag support, no diag support, non-CMIS (AttributeError).
+        # Skipped ports each emit a diagnostic.
         mock_get_sfp_object.reset_mock()
         mock_get_sfp_object.side_effect = [
             make_cmis_sfp(diag_support=True),
@@ -2196,15 +2186,17 @@ EEPROM hexdump for port Ethernet4
         result = runner.invoke(cmd, [])
         assert result.exit_code == 0
         assert 'Ethernet0: loopback status:' in result.output
-        assert 'Ethernet4' not in result.output
-        assert 'Ethernet8' not in result.output
+        assert 'Ethernet4: The module does not support diagnostic pages required for loopback' in result.output
+        assert 'Ethernet8: Loopback status is not applicable for this module' in result.output
         assert 'Ethernet12: loopback status:' in result.output
 
-        # No ports support loopback (all non-CMIS)
+        # No ports support loopback (all non-CMIS): per-port diagnostics + the summary line.
         mock_get_sfp_object.reset_mock()
         mock_get_sfp_object.side_effect = [make_cmis_sfp(attr_error=True)] * 4
         result = runner.invoke(cmd, [])
         assert result.exit_code == 0
+        assert 'Ethernet0: Loopback status is not applicable for this module' in result.output
+        assert 'Ethernet12: Loopback status is not applicable for this module' in result.output
         assert 'No ports found that support loopback status' in result.output
 
     @pytest.mark.parametrize(

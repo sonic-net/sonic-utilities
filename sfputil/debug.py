@@ -8,8 +8,6 @@ from utilities_common.platform_sfputil_helper import (
     get_subport,
     get_sfp_object,
     get_logical_list,
-    is_rj45_port,
-    is_sfp_present,
     get_subport_lane_mask,
     get_media_lane_count,
     get_host_lane_count,
@@ -176,27 +174,29 @@ def set_output(port_name, enable, direction):
         sys.exit(EXIT_FAIL)
 
 
-def _get_loopback_api_and_capability(port_name, single_port):
+def _get_loopback_api_and_capability(port_name):
     """Get xcvr API and loopback capability dict for a port.
 
     Returns (api, cap) when the module exposes the loopback API; cap may be an empty/None
     dict if the module does not advertise any capability. Returns (None, None) when the
-    module lacks the xcvr API, diagnostic page support, or the get_loopback_capability
-    method.
+    port can't be read (RJ45 / EEPROM not detected / xcvr API not implemented / no diag
+    pages / no get_loopback_capability method).
     """
-    sfp = get_sfp_object(port_name)
+    try:
+        sfp = get_sfp_object(port_name)
+    except SystemExit:
+        # get_sfp_object already echoed the reason (RJ45 / EEPROM not detected).
+        return None, None
 
     try:
         api = sfp.get_xcvr_api()
     except NotImplementedError:
-        if single_port:
-            click.echo(f"{port_name}: This functionality is not implemented")
+        click.echo(f"{port_name}: This functionality is not implemented")
         return None, None
 
     try:
         if not api.get_diag_page_support():
-            if single_port:
-                click.echo(f"{port_name}: The module does not support diagnostic pages required for loopback")
+            click.echo(f"{port_name}: The module does not support diagnostic pages required for loopback")
             return None, None
     except AttributeError:
         pass  # Older sonic-platform-common does not have get_diag_page_support
@@ -204,8 +204,7 @@ def _get_loopback_api_and_capability(port_name, single_port):
     try:
         cap = api.get_loopback_capability()
     except AttributeError:
-        if single_port:
-            click.echo(f"{port_name}: Loopback capability is not applicable for this module")
+        click.echo(f"{port_name}: Loopback capability is not applicable for this module")
         return None, None
 
     return api, cap
@@ -223,10 +222,7 @@ def loopback_capability(port_name):
     found = False
 
     for port in port_list:
-        if not single_port and (is_rj45_port(port) or not is_sfp_present(port)):
-            continue
-
-        api, cap = _get_loopback_api_and_capability(port, single_port)
+        api, cap = _get_loopback_api_and_capability(port)
         if api is None:
             continue
 
@@ -255,16 +251,12 @@ def loopback_status(port_name):
     found = False
 
     for port in port_list:
-        if not single_port and (is_rj45_port(port) or not is_sfp_present(port)):
-            continue
-
-        api, cap = _get_loopback_api_and_capability(port, single_port)
+        api, cap = _get_loopback_api_and_capability(port)
         if api is None:
             continue
 
         if not cap:
-            if single_port:
-                click.echo(f"{port}: The module does not advertise any loopback capability")
+            click.echo(f"{port}: The module does not advertise any loopback capability")
             continue
 
         try:
@@ -273,8 +265,7 @@ def loopback_status(port_name):
             media_input = api.get_media_input_loopback()
             media_output = api.get_media_output_loopback()
         except AttributeError:
-            if single_port:
-                click.echo(f"{port}: Loopback status is not applicable for this module")
+            click.echo(f"{port}: Loopback status is not applicable for this module")
             continue
 
         found = True
