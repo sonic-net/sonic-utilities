@@ -1954,11 +1954,11 @@ EEPROM hexdump for port Ethernet4
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
 
-        # NotImplementedError from get_xcvr_api: platform-wide failure, exit with error code
+        # NotImplementedError from get_xcvr_api: print and continue so multi-port runs aren't aborted
         mock_sfp.get_xcvr_api.side_effect = NotImplementedError
         result = runner.invoke(cmd, ["Ethernet0"])
         assert result.output == 'Ethernet0: This functionality is not implemented\n'
-        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        assert result.exit_code == 0
 
         mock_sfp.get_xcvr_api.side_effect = None
         mock_sfp.get_xcvr_api.return_value = mock_api
@@ -2084,11 +2084,11 @@ EEPROM hexdump for port Ethernet4
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-status']
 
-        # NotImplementedError from get_xcvr_api: platform-wide failure, exit with error code
+        # NotImplementedError from get_xcvr_api: print and continue so multi-port runs aren't aborted
         mock_sfp.get_xcvr_api.side_effect = NotImplementedError
         result = runner.invoke(cmd, ["Ethernet0"])
         assert result.output == 'Ethernet0: This functionality is not implemented\n'
-        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        assert result.exit_code == 0
 
         mock_sfp.get_xcvr_api.side_effect = None
         mock_sfp.get_xcvr_api.return_value = mock_api

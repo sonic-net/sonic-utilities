@@ -181,15 +181,17 @@ def _get_loopback_api_and_capability(port_name, single_port):
 
     Returns (api, cap) when the module exposes the loopback API; cap may be an empty/None
     dict if the module does not advertise any capability. Returns (None, None) when the
-    module lacks diagnostic page support or the get_loopback_capability method.
+    module lacks the xcvr API, diagnostic page support, or the get_loopback_capability
+    method.
     """
     sfp = get_sfp_object(port_name)
 
     try:
         api = sfp.get_xcvr_api()
     except NotImplementedError:
-        click.echo(f"{port_name}: This functionality is not implemented")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
+        if single_port:
+            click.echo(f"{port_name}: This functionality is not implemented")
+        return None, None
 
     try:
         if not api.get_diag_page_support():
