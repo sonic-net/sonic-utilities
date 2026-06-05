@@ -187,7 +187,7 @@ class TestPfcwd(object):
 
         # Verify the poll interval was actually written
         global_entry = db.cfgdb.get_entry("PFC_WD", "GLOBAL")
-        assert global_entry.get("POLL_INTERVAL") == 200
+        assert str(global_entry.get("POLL_INTERVAL")) == "200"
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_actions(self, mock_os):
