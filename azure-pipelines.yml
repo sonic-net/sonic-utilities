@@ -151,3 +151,13 @@ stages:
     - publish: '$(System.DefaultWorkingDirectory)/dist/'
       artifact: wheels
       displayName: "Publish Python wheels"
+
+    - script: |
+        set -e
+        pushd generic_config_updater
+        python3 setup.py bdist_wheel
+      displayName: 'Build Python 3 wheel for GCU'
+
+    - publish: '$(System.DefaultWorkingDirectory)/generic_config_updater/dist/'
+      artifact: gcu_wheels
+      displayName: "Publish Python wheels for GCU"
