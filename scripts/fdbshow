@@ -76,6 +76,13 @@ class FdbShow(object):
 
     HEADER = ['No.', 'Vlan', 'MacAddress', 'Port', 'Type']
 
+    BRIDGE_PORT_NHG_TYPE = "SAI_BRIDGE_PORT_TYPE_BRIDGE_PORT_NEXT_HOP_GROUP"
+    BRIDGE_PORT_KEY = "ASIC_STATE:SAI_OBJECT_TYPE_BRIDGE_PORT:oid:0x"
+    NHG_MEMBER_KEY_PATTERN = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP_MEMBER:oid:*"
+    NEXT_HOP_KEY = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP:"
+    OID_PREFIX = "oid:0x"
+    TUNNEL_KEY = "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:"
+
     def __init__(self, namespace=None):
         super(FdbShow,self).__init__()
         if namespace is not None:
@@ -95,6 +102,45 @@ class FdbShow(object):
         self.if_br_oid_map = port_util.get_bridge_port_map(self.db)
         self.fetch_fdb_data()
         return
+
+    def get_oid_value(self, oid):
+        if not oid or not oid.startswith(self.OID_PREFIX):
+            return None
+        return oid[len(self.OID_PREFIX):]
+
+    def get_evpn_mh_remote_endpoints(self, br_port_id):
+        br_port = self.db.get_all(self.db.ASIC_DB, self.BRIDGE_PORT_KEY + br_port_id)
+        if not br_port or br_port.get("SAI_BRIDGE_PORT_ATTR_TYPE") != self.BRIDGE_PORT_NHG_TYPE:
+            return []
+
+        next_hop_grp_oid = br_port.get("SAI_BRIDGE_PORT_ATTR_BRIDGE_PORT_NEXT_HOP_GROUP_ID")
+        next_hop_grp_id = self.get_oid_value(next_hop_grp_oid)
+        if not next_hop_grp_id:
+            return []
+
+        endpoints = []
+        next_hop_grp_mem_keys = self.db.keys(self.db.ASIC_DB, self.NHG_MEMBER_KEY_PATTERN) or []
+        for member_key in next_hop_grp_mem_keys:
+            grp_mem = self.db.get_all(self.db.ASIC_DB, member_key)
+            member_grp_oid = grp_mem.get("SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_GROUP_ID") \
+                if grp_mem else None
+            member_grp_id = self.get_oid_value(member_grp_oid)
+            if member_grp_id != next_hop_grp_id:
+                continue
+
+            next_hop_oid = grp_mem.get("SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID")
+            if not next_hop_oid:
+                continue
+            next_hop = self.db.get_all(self.db.ASIC_DB, self.NEXT_HOP_KEY + next_hop_oid)
+            tunnel_oid = next_hop.get("SAI_NEXT_HOP_ATTR_TUNNEL_ID") if next_hop else None
+            if not tunnel_oid:
+                continue
+            tunnel = self.db.get_all(self.db.ASIC_DB, self.TUNNEL_KEY + tunnel_oid)
+            dst_ip = tunnel.get("SAI_TUNNEL_ATTR_ENCAP_DST_IP") if tunnel else None
+            if dst_ip:
+                endpoints.append(dst_ip)
+
+        return endpoints
 
     def fetch_fdb_data(self):
         """
@@ -139,32 +185,10 @@ class FdbShow(object):
                 if br_port_id not in self.if_br_oid_map:
                     if display_only_local:
                         continue
-                    try:
-                        br_port = self.db.get_all(self.db.ASIC_DB, "ASIC_STATE:SAI_OBJECT_TYPE_BRIDGE_PORT:oid:0x" + br_port_id)
-                        if br_port["SAI_BRIDGE_PORT_ATTR_TYPE"] != "SAI_BRIDGE_PORT_TYPE_BRIDGE_PORT_NEXT_HOP_GROUP":
-                            continue
-                        next_hop_grp_id = br_port["SAI_BRIDGE_PORT_ATTR_BRIDGE_PORT_NEXT_HOP_GROUP_ID"][oid_pfx:]
-
-                        next_hop_grp_mem_keys = self.db.keys(self.db.ASIC_DB, "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP_MEMBER:oid:*")
-
-                        if_name = ""
-                        for m in next_hop_grp_mem_keys:
-                            grp_mem = self.db.get_all(self.db.ASIC_DB, m)
-                            if grp_mem["SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_GROUP_ID"][oid_pfx:] == next_hop_grp_id:
-                                next_hop = self.db.get_all(self.db.ASIC_DB, "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP:" +
-                                                           grp_mem["SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID"])
-                                tunnel = self.db.get_all(self.db.ASIC_DB, "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:" +
-                                                         next_hop["SAI_NEXT_HOP_ATTR_TUNNEL_ID"])
-                                dst_ip = tunnel["SAI_TUNNEL_ATTR_ENCAP_DST_IP"]
-
-                                if if_name == "":
-                                    if_name = dst_ip
-                                else:
-                                    if_name = if_name + "\n" + dst_ip
-                        if if_name == "":
-                            continue
-                    except KeyError:
+                    endpoints = self.get_evpn_mh_remote_endpoints(br_port_id)
+                    if not endpoints:
                         continue
+                    if_name = "\n".join(endpoints)
 
                 else:
                     port_id = self.if_br_oid_map[br_port_id]

@@ -2562,15 +2562,16 @@ def sag(db):
                      if value.get('static_anycast_gateway') == 'true']
 
     if sag_mac:
-        for vlan in enabled_vlans:
+        for vlan_name in enabled_vlans:
             if not body:
-                body.append([sag_mac, vlan])
+                body.append([sag_mac, vlan_name])
             else:
-                body.append(['', vlan])
+                body.append(['', vlan_name])
 
     click.echo("Static Anycast Gateway Information")
     if enabled_vlans and not sag_mac:
-        click.echo("Warning: static-anycast-gateway is enabled on VLAN interfaces but SAG gateway_mac is not configured")
+        click.echo("Warning: static-anycast-gateway is enabled on VLAN interfaces but "
+                   "SAG gateway_mac is not configured")
     click.echo(tabulate(body, header, tablefmt='simple'))
 
 #
