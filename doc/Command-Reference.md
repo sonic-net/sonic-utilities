@@ -5964,6 +5964,7 @@ Subsequent pages explain each of these commands in detail.
   switchport   Show Interface switchport information
   tpid         Show Interface tpid information
   transceiver  Show SFP Transceiver information
+  label-port   Show label-port mapping information
   ```
 
 **show interfaces autoneg**
@@ -6844,6 +6845,91 @@ is command.
 **show interfaces transceiver**
 
 This command is already explained [here](#Transceivers)
+
+**show interfaces label-port status**
+
+This command displays a standardized mapping of front-panel label ports to SONiC interface names, their lanes, and operational status under the current breakout configuration. Each table cell shows the mapped interface name and status for the corresponding lane (for example, `Ethernet0(UP)`). On multi-ASIC systems, the interface name also includes the ASIC namespace (for example, `Ethernet0|asic0(UP)`).
+
+- Usage:
+  ```
+  show interfaces label-port status
+  ```
+
+- Example (single-ASIC, 2 x 4x breakout):
+  ```
+  admin@sonic:~$ show interfaces label-port status
+  +--------------+-----------------+-----------------+-----------------+-----------------+
+  |   Label Port | Lane 1          | Lane 2          | Lane 3          | Lane 4          |
+  +==============+=================+=================+=================+=================+
+  |            1 | Ethernet0(UP)   | Ethernet0(UP)   | Ethernet0(UP)   | Ethernet0(UP)   |
+  |            2 | Ethernet4(UP)   | Ethernet4(UP)   | Ethernet4(UP)   | Ethernet4(UP)   |
+  |            3 | Ethernet8(UP)   | Ethernet8(UP)   | Ethernet8(UP)   | Ethernet8(UP)   |
+  |          ... | ...             | ...             | ...             | ...             |
+  |          128 | Ethernet508(UP) | Ethernet508(UP) | Ethernet508(DOWN) | Ethernet508(UP) |
+  +--------------+-----------------+-----------------+-----------------+-----------------+
+  ```
+
+- Example (single-ASIC, 4 x 2x breakout):
+  ```
+  admin@sonic:~$ show interfaces label-port status
+  +--------------+-----------------+-----------------+------------------+------------------+
+  |   Label Port | Lane 1          | Lane 2          | Lane 3           | Lane 4           |
+  +==============+=================+=================+==================+==================+
+  |            1 | Ethernet0(UP)   | Ethernet0(UP)   | Ethernet2(UP)    | Ethernet2(UP)    |
+  |            2 | Ethernet4(UP)   | Ethernet4(UP)   | Ethernet6(UP)    | Ethernet6(UP)    |
+  |            3 | Ethernet8(UP)   | Ethernet8(UP)   | Ethernet10(UP)   | Ethernet10(UP)   |
+  |          ... | ...             | ...             | ...              | ...              |
+  |          128 | Ethernet508(UP) | Ethernet508(UP) | Ethernet510(DOWN) | Ethernet510(UP)   |
+  +--------------+-----------------+-----------------+------------------+------------------+
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ show interfaces label-port status
+  +--------------+---------------------+-----------------------+------------------------+------------------------+
+  |   Label Port | Lane 1              | Lane 2                | Lane 3                 | Lane 4                 |
+  +==============+=====================+=======================+========================+========================+
+  |            1 | Ethernet0|asic0(UP) | Ethernet512|asic1(UP) | Ethernet1024|asic2(UP) | Ethernet1536|asic3(UP) |
+  |            2 | Ethernet1|asic0(UP) | Ethernet513|asic1(UP) | Ethernet1025|asic2(UP) | Ethernet1537|asic3(UP) |
+  |            3 | Ethernet2|asic0(UP) | Ethernet514|asic1(UP) | Ethernet1026|asic2(UP) | Ethernet1538|asic3(UP) |
+  |          ... | ...                 | ...                   | ...                    | ...                    |
+  |          512 | Ethernet511|asic0(UP) | Ethernet1023|asic1(UP) | Ethernet1535|asic2(DOWN) | Ethernet2047|asic3(UP) |
+  +--------------+---------------------+-----------------------+------------------------+------------------------+
+  ```
+
+- Platform requirements (`platform.json`):
+
+  All supported platforms must define `label_port_lanes_mapping`:
+
+  - **Key**: label-port identifier (string), for example `"1"`, `"2"`.
+  - **Value**: list of global lane numbers (strings), for example `["0", "1", "2", "3"]`.
+
+  Multi-ASIC platforms must also define `number_of_lanes_per_asic`. This value is used to compute global lane offsets:
+
+  `global_lane = local_lane + (asic_index x number_of_lanes_per_asic)`
+
+  Single-ASIC example:
+  ```json
+  "label_port_lanes_mapping": {
+     "1": ["0", "1", "2", "3"],
+     "2": ["4", "5", "6", "7"],
+     ...
+     "127": ["504", "505", "506", "507"],
+     "128": ["508", "509", "510", "511"]
+  }
+  ```
+
+  Multi-ASIC example:
+  ```json
+  "number_of_lanes_per_asic": "512",
+  "label_port_lanes_mapping": {
+     "1": ["0", "512", "1024", "1536"],
+     "2": ["1", "513", "1025", "1537"],
+     ...
+     "511": ["510", "1022", "1534", "2046"],
+     "512": ["511", "1023", "1535", "2047"]
+  }
+  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#interfaces)
 

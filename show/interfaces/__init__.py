@@ -1531,11 +1531,9 @@ def get_ports_data():
         db = multi_asic.connect_to_all_dbs_for_ns(namespace=namespace)
         port_table = multi_asic.get_port_table(namespace=namespace)
         for port_name, port_info in port_table.items():
-            lanes = port_info.get(LANES, []).split(',')
+            lanes = [lane for lane in port_info.get(LANES, "").split(',') if lane]
             oper = db.get(db.APPL_DB, f"{APPL_PORT_TABLE}:{port_name}", OPER_STATUS)
             status = (oper or DOWN).upper()
-            if namespace not in ports_dict:
-                ports_dict[namespace] = {}
             ports_dict[port_name] = {
                 LANES: [int(lane) for lane in lanes],
                 STATUS: status,
@@ -1565,7 +1563,7 @@ def get_labelport_to_ports_map(ports_dict, labelport_map, lanes_per_asic):
             except (KeyError, ValueError):
                 log.log_debug("Lane {} not found in labelport {}".format(lane, labelport_num))
                 continue
-            port_name = f"{port}/{info.get(ASIC)}" if info.get(ASIC) != "" else port
+            port_name = f"{port}|{info.get(ASIC)}" if info.get(ASIC) != "" else port
             if labelport_num not in labelport_to_ports_map:
                 labelport_to_ports_map[int(labelport_num)] = ['-'] * labelport_lanes_number
             labelport_to_ports_map[int(labelport_num)][position] = f"{port_name}({info.get(STATUS, DOWN)})"
@@ -1573,8 +1571,7 @@ def get_labelport_to_ports_map(ports_dict, labelport_map, lanes_per_asic):
 
 
 @labelport.command(name='status')
-@clicommon.pass_db
-def labelport_status(db):
+def labelport_status():
     """
     Show a mapping and status of label-ports -> ports
     """
@@ -1603,5 +1600,10 @@ def labelport_status(db):
 
     # Build the table
     header = ['Label Port'] + [f'Lane {i+1}' for i in range(labelport_lanes_number)]
-    body = [[int(labelport)] + labelport_to_ports_map[labelport] for labelport in sorted(labelport_to_ports_map.keys())]
+    body = [
+        [int(labelport)] + labelport_to_ports_map.get(
+            int(labelport), ['-'] * labelport_lanes_number
+        )
+        for labelport in sorted(labelport_map.keys(), key=int)
+    ]
     click.echo(tabulate(body, header, tablefmt="outline"))

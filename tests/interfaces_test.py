@@ -974,8 +974,7 @@ def invoke_labelport_status():
     runner = CliRunner()
     return runner.invoke(
         show.cli.commands["interfaces"].commands["label-port"].commands["status"],
-        [],
-        obj=object.__new__(Db)
+        []
     )
 
 
@@ -1039,10 +1038,10 @@ class TestInterfacesLabelPortStatus(object):
 
         assert result.exit_code == 0
         assert result.output == expected_labelport_output([
-            [1, 'Ethernet0/asic0(UP)', 'Ethernet512/asic1(UP)', 'Ethernet1024/asic2(UP)',
-             'Ethernet1536/asic3(UP)'],
-            [2, 'Ethernet1/asic0(UP)', 'Ethernet513/asic1(UP)', 'Ethernet1025/asic2(UP)',
-             'Ethernet1537/asic3(UP)'],
+            [1, 'Ethernet0|asic0(UP)', 'Ethernet512|asic1(UP)', 'Ethernet1024|asic2(UP)',
+             'Ethernet1536|asic3(UP)'],
+            [2, 'Ethernet1|asic0(UP)', 'Ethernet513|asic1(UP)', 'Ethernet1025|asic2(UP)',
+             'Ethernet1537|asic3(UP)'],
         ])
 
     def test_mixed_splits_lane_positions_and_fanout(self, monkeypatch):
@@ -1140,8 +1139,8 @@ class TestInterfacesLabelPortStatus(object):
 
         assert result.exit_code == 0
         assert result.output == expected_labelport_output([
-            [1, 'Ethernet0/asic0(UP)', '-', 'Ethernet1024/asic2(UP)', 'Ethernet1536/asic3(UP)'],
-            [2, 'Ethernet1/asic0(UP)', '-', 'Ethernet1025/asic2(UP)', 'Ethernet1537/asic3(UP)'],
+            [1, 'Ethernet0|asic0(UP)', '-', 'Ethernet1024|asic2(UP)', 'Ethernet1536|asic3(UP)'],
+            [2, 'Ethernet1|asic0(UP)', '-', 'Ethernet1025|asic2(UP)', 'Ethernet1537|asic3(UP)'],
         ])
 
     def test_missing_oper_status_displays_down(self, monkeypatch):
