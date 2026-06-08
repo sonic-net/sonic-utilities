@@ -81,6 +81,7 @@ setup(
         'show.plugins.auto',
         'sonic_installer',
         'sonic_installer.bootloader',
+        'sonic_sdboot_utils',
         'sonic_package_manager',
         'sonic_package_manager.service_creator',
         'tests',
