@@ -84,8 +84,22 @@ def setup_db_config():
     # Per-worker copy of mock_tables so tests that overwrite shared
     # JSON files (e.g. portstat_test replaces counters_db.json) only
     # affect their own worker's sandbox.
+    #
+    # Skip __pycache__ entries during the copy. CPython writes new
+    # bytecode caches atomically by creating .pyc.<nonce> temp files
+    # then os.rename()-ing them onto .pyc. When pytest-xdist starts
+    # workers in parallel and each runs this fixture, one worker's
+    # os.listdir() can return a .pyc.<nonce> path that has already been
+    # renamed to .pyc by another process by the time copytree tries to
+    # stat/copy it, surfacing as FileNotFoundError from shutil.Error.
+    # The bytecode cache is reproducible from the .py source on first
+    # import in each worker, so we simply don't copy it.
     worker_mock_tables = os.path.join(worker_root, 'mock_tables')
-    shutil.copytree(dbconnector.INPUT_DIR, worker_mock_tables)
+    shutil.copytree(
+        dbconnector.INPUT_DIR,
+        worker_mock_tables,
+        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.pyc.*'),
+    )
     dbconnector.INPUT_DIR = worker_mock_tables
     os.environ['MOCK_TABLES_DIR'] = worker_mock_tables
 
