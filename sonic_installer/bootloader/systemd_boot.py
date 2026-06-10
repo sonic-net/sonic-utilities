@@ -40,6 +40,8 @@ class SystemdBootBootloader(Bootloader):
 
         If it can't be found, return None, None instead.
         """
+        if not self._entries_exist():
+            return None, None
         confs = sdboot_config.find_configs(self.BOOT_LOADER_ENTRIES)
         for key, val in confs.items():
             parsed = sdboot_config.SdbootEntry.from_filename(key)
@@ -54,6 +56,8 @@ class SystemdBootBootloader(Bootloader):
         Image str consistes of the title, a colon, and the version from the
         associated config.
         """
+        if not self._entries_exist():
+            return None
         confs = sdboot_config.find_configs(self.BOOT_LOADER_ENTRIES)
         for key, val in confs.items():
             parsed = sdboot_config.SdbootEntry.from_filename(key)
@@ -63,6 +67,8 @@ class SystemdBootBootloader(Bootloader):
 
     def _conf_from_image(self, image_str: str) -> str | None:
         """Given an 'image' string return which conf it's from."""
+        if not self._entries_exist():
+            return None
 
         confs = sdboot_config.find_configs(self.BOOT_LOADER_ENTRIES)
         for key, val in confs.items():
