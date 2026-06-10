@@ -100,4 +100,6 @@ class UbootBootloader(OnieInstallerBootloader):
     @classmethod
     def detect(cls):
         arch = platform.machine()
-        return ("arm" in arch) or ("aarch64" in arch)
+        if not (("arm" in arch) or ("aarch64" in arch)):
+            return False
+        return os.path.exists('/usr/bin/fw_printenv') and os.path.exists('/etc/fw_env.config')
