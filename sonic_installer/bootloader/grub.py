@@ -30,28 +30,38 @@ class GrubBootloader(OnieInstallerBootloader):
 
     def get_installed_images(self):
         images = []
-        config = open(HOST_PATH + '/grub/grub.cfg', 'r')
-        for line in config:
-            if line.startswith('menuentry'):
-                image = line.split()[1].strip("'")
-                if IMAGE_PREFIX in image:
-                    images.append(image)
-        config.close()
+        try:
+            config = open(HOST_PATH + '/grub/grub.cfg', 'r')
+            for line in config:
+                if line.startswith('menuentry'):
+                    image = line.split()[1].strip("'")
+                    if IMAGE_PREFIX in image:
+                        images.append(image)
+            config.close()
+        except FileNotFoundError:
+            pass
         return images
 
     def get_next_image(self):
         images = self.get_installed_images()
-        grubenv = subprocess.check_output(["/usr/bin/grub-editenv", HOST_PATH + "/grub/grubenv", "list"], text=True)
-        m = re.search(r"next_entry=(\d+)", grubenv)
-        if m:
-            next_image_index = int(m.group(1))
-        else:
-            m = re.search(r"saved_entry=(\d+)", grubenv)
+        if not images:
+            return None
+        try:
+            grubenv = subprocess.check_output(["/usr/bin/grub-editenv", HOST_PATH + "/grub/grubenv", "list"], text=True)
+            m = re.search(r"next_entry=(\d+)", grubenv)
             if m:
                 next_image_index = int(m.group(1))
             else:
-                next_image_index = 0
-        return images[next_image_index]
+                m = re.search(r"saved_entry=(\d+)", grubenv)
+                if m:
+                    next_image_index = int(m.group(1))
+                else:
+                    next_image_index = 0
+            if next_image_index < len(images):
+                return images[next_image_index]
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        return None
 
     def set_default_image(self, image):
         images = self.get_installed_images()
