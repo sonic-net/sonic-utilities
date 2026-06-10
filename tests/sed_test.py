@@ -1,5 +1,13 @@
+import sys
 from click.testing import CliRunner
 from mock import patch, MagicMock
+
+# sonic_platform is a hardware-specific package not available in the
+# build/test environment.  Inject stub modules so @patch can resolve
+# the dotted path without raising ModuleNotFoundError.
+sys.modules['sonic_platform'] = MagicMock()
+sys.modules['sonic_platform.platform'] = MagicMock()
+
 import config.main as config
 
 
