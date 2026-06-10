@@ -82,9 +82,6 @@ class BmcUbootBootloader(OnieInstallerBootloader):
                 return slot
         return None
 
-    # get_current_image is inherited from OnieInstallerBootloader: it parses
-    # loop=<dir>/fs.squashfs from the cmdline, the format the BMC uses.
-
     def get_installed_images(self):
         images = []
         for slot in (1, 2):
