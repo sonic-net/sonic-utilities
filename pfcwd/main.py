@@ -738,13 +738,14 @@ class PfcwdCli(object):
 
         port_num = len(list(self.config_db.get_table('PORT').keys()))
 
+        hw_recovery_limits = self.get_hw_recovery_limits()
+
         # In hardware mode the per-port timers are programmed on dedicated HW
         # resources, so the port-count scaling used in software mode does not
         # apply. Use the baseline DEFAULT_*_TIME on every port.
-        if self.get_hw_recovery_limits() is not None:
+        if hw_recovery_limits is not None:
             detection_time = DEFAULT_DETECTION_TIME
             restoration_time = DEFAULT_RESTORATION_TIME
-            poll_interval = DEFAULT_POLL_INTERVAL
         else:
             # Parameter values positively correlate to the number of ports.
             multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
@@ -764,11 +765,16 @@ class PfcwdCli(object):
         for port in active_ports:
             self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite=True)
 
-        pfcwd_info = {}
-        pfcwd_info['POLL_INTERVAL'] = poll_interval
-        self.config_db.mod_entry(
-            CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
-        )
+        # HW PFCWD orchagent rejects writes to PFC_WD|GLOBAL with task_invalid_entry
+        # ('GLOBAL configuration is not supported for hardware-based PFC watchdog').
+        # Skip the GLOBAL write in HW mode -- POLL_INTERVAL is irrelevant when HW
+        # timers run on dedicated SAI resources.
+        if hw_recovery_limits is None:
+            pfcwd_info = {}
+            pfcwd_info['POLL_INTERVAL'] = poll_interval
+            self.config_db.mod_entry(
+                CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
+            )
 
     @multi_asic_util.run_on_multi_asic
     def counter_poll(self, counter_poll):

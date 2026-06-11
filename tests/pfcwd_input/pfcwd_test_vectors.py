@@ -81,6 +81,18 @@ Ethernet4      drop              3200                3200    disable
 Ethernet8      drop               600                 600    disable
 """
 
+# HW mode: per-port entries use unscaled DEFAULT_*_TIME (200ms) regardless of
+# port count; PFC_WD|GLOBAL is NOT written in HW mode (orchagent rejects it),
+# so POLL_INTERVAL stays at the fixture's pre-existing 600ms.
+pfcwd_show_start_default_hw_mode = """\
+Changed polling interval to 600ms
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               200                 200    disable
+Ethernet4      drop               200                 200    disable
+Ethernet8      drop               600                 600    disable
+"""
+
 pfcwd_show_start_history_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY

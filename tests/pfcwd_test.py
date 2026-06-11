@@ -660,13 +660,14 @@ class TestPfcwd(object):
     @patch('pfcwd.main.os')
     def test_pfcwd_start_default_hardware_mode(self, mock_os):
         """In hardware mode, start_default installs unscaled DEFAULT_*_TIME regardless
-        of port count.
+        of port count, and does not touch PFC_WD|GLOBAL.
 
         With 512 ports, software mode would scale detection/restoration to 3200ms and
         cap poll_interval at 1000ms (multiply=16). Hardware mode skips the scaling
-        because the per-port timers run on dedicated HW resources, so all three end
-        up at the unscaled 200ms baseline - matching the 32-port (multiply=1) SW
-        output captured in pfcwd_show_start_default_32_ports.
+        because the per-port timers run on dedicated HW resources, and skips the
+        GLOBAL write entirely because the HW PFCWD orchagent rejects writes to
+        PFC_WD|GLOBAL. POLL_INTERVAL therefore stays at the fixture's pre-existing
+        600ms.
         """
         import pfcwd.main as pfcwd
         runner = CliRunner()
@@ -693,7 +694,7 @@ class TestPfcwd(object):
             obj=db
         )
         assert result.exit_code == 0
-        assert result.output == test_vectors.pfcwd_show_start_default_32_ports
+        assert result.output == test_vectors.pfcwd_show_start_default_hw_mode
 
     @classmethod
     def teardown_class(cls):
