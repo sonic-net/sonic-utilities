@@ -96,7 +96,11 @@ class BmcUbootBootloader(OnieInstallerBootloader):
             slot = self._boot_slot(var)
             if slot:
                 # Populated slot -> its image; empty slot -> raw marker, so state stays visible.
-                return self._get_slot_image(slot) or self._fw_printenv(self.SLOT_VERSION_VAR[slot]) or self.SLOT_IMAGE_CMD[slot]
+                return (
+                    self._get_slot_image(slot)
+                    or self._fw_printenv(self.SLOT_VERSION_VAR[slot])
+                    or self.SLOT_IMAGE_CMD[slot]
+                )
             selector = (self._fw_printenv(var) or '').strip()
             if selector:
                 return selector  # set but unrecognized selector -> surface it
