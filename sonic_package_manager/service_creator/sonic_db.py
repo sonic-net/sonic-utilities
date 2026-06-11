@@ -110,28 +110,26 @@ class SonicDB:
 
     @classmethod
     def get_namespace_db_connectors(cls):
-        """ Returns namespace CONFIG_DB connectors for multi-ASIC platforms.
+        """ Returns per-ASIC namespace CONFIG_DB connectors (empty on single-ASIC).
 
-        On multi-ASIC systems each ASIC namespace has its own CONFIG_DB.
-        This method returns connectors for all namespace CONFIG_DBs so that
-        callers of get_connectors() write to every CONFIG_DB instance.
+        Resolved once and cached. A namespace that fails to connect raises
+        rather than being skipped, and the cache is populated only once all
+        namespaces connect, so a failed run is retried on the next call.
         """
 
         if in_chroot():
             return []
 
         if cls._namespace_db_conns is None:
-            cls._namespace_db_conns = []
+            conns = []
             if device_info.is_multi_npu():
-                from swsscommon.swsscommon import SonicDBConfig
-                SonicDBConfig.initializeGlobalConfig()
+                if not swsscommon.SonicDBConfig.isGlobalInit():
+                    swsscommon.SonicDBConfig.initializeGlobalConfig()
                 for ns in device_info.get_namespaces():
-                    try:
-                        conn = swsscommon.ConfigDBConnector(namespace=ns)
-                        conn.connect()
-                        cls._namespace_db_conns.append(conn)
-                    except RuntimeError:
-                        pass
+                    conn = swsscommon.ConfigDBConnector(namespace=ns)
+                    conn.connect()
+                    conns.append(conn)
+            cls._namespace_db_conns = conns
 
         return cls._namespace_db_conns
 
