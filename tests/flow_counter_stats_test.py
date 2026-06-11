@@ -958,4 +958,3 @@ class TestGetRouteFlowCounterCapability:
         mock_db_config.initializeGlobalConfig.assert_called_once()
         mock_connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
         mock_db.connect.assert_called_with(mock_db.STATE_DB)
-
