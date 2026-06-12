@@ -1206,7 +1206,8 @@ def _restart_services():
     reset_mgmt_interface_if_usb_not_running()
 
 def _per_namespace_swss_ready(service_name):
-    out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'LoadState', '--value'], return_cmd=True)
+    out, _ = clicommon.run_command(
+        ['systemctl', 'show', str(service_name), '--property', 'LoadState', '--value'], return_cmd=True)
     if out.strip() in ("not-found", "masked"):
         # swss not present on this platform (e.g. BMC): nothing to wait for.
         return True
