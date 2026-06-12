@@ -4200,6 +4200,40 @@ class TestConfigInterface(object):
         assert result.exit_code == 0
         assert db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['admin_status'] == 'up'
 
+    @pytest.mark.parametrize("interface_name", [
+        "Ethernet320-Ethernet376",  # range bounds not numeric
+        "Ethernet0-",               # missing end of range
+        "Ethernet0-foo",            # non-numeric end of range
+        "Eth0-3",                   # range with unsupported prefix
+        "Ethernet8-4",              # start of range greater than the end
+    ])
+    def test_startup_malformed_range(self, interface_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands['interface'].commands['startup'],
+                               [interface_name], obj=obj)
+        assert result.exit_code != 0
+        assert "Invalid interface range" in result.output
+
+    @pytest.mark.parametrize("interface_name", [
+        "Ethernet320-Ethernet376",  # range bounds not numeric
+        "Ethernet0-",               # missing end of range
+        "Ethernet0-foo",            # non-numeric end of range
+        "Eth0-3",                   # range with unsupported prefix
+        "Ethernet8-4",              # start of range greater than the end
+    ])
+    def test_shutdown_malformed_range(self, interface_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands['interface'].commands['shutdown'],
+                               [interface_name], obj=obj)
+        assert result.exit_code != 0
+        assert "Invalid interface range" in result.output
+
     def teardown_method(self):
         print("TEARDOWN")
 
