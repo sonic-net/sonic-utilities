@@ -124,6 +124,9 @@ def status(db, chassis_module_name):
         # Determine admin_status
         if smartswitch:
             admin_status = 'down'
+        elif is_bmc():
+            # On BMC, modules default to 'down' (kept powered off on boot)
+            admin_status = 'down'
         else:
             admin_status = 'up'
         config_data = chassis_cfg_table.get(key_list[1])

@@ -252,6 +252,8 @@ if is_bmc():
         config_db = db.cfgdb
         fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name) or {}
         fvs['power_on_delay'] = str(seconds)
+        # Seed admin_status of SWITCH-HOST with default if not already set
+        fvs.setdefault('admin_status', 'down')
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
         click.echo(f"Power-on-delay for {chassis_module_name} set to {seconds} seconds")
 
@@ -272,5 +274,7 @@ if is_bmc():
         config_db = db.cfgdb
         fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name) or {}
         fvs['graceful_shutdown_timeout'] = str(seconds)
+        # Seed admin_status of SWITCH-HOST with default if not already set
+        fvs.setdefault('admin_status', 'down')
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
         click.echo(f"Shutdown-timeout for {chassis_module_name} set to {seconds} seconds")
