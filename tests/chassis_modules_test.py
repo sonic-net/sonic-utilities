@@ -708,6 +708,69 @@ class TestChassisModuleTimingConfig(object):
         assert entry.get("power_on_delay") == "60"
         assert entry.get("graceful_shutdown_timeout") == "30"
 
+    def test_power_on_delay_seeds_admin_status_when_missing(self):
+        """First-time 'power-on-delay' on a fresh DB must seed admin_status='down'
+        so the entry stays valid for downstream consumers (startup/shutdown)."""
+        runner = CliRunner()
+        db = Db()
+        # Sanity: no entry exists
+        assert db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST") == {}
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "300"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "300"
+        assert entry.get("admin_status") == "down"
+
+    def test_power_on_delay_does_not_overwrite_existing_admin_status(self):
+        """If admin_status is already configured (e.g. 'up'), 'power-on-delay'
+        must NOT downgrade it back to 'down'."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "300"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "300"
+        assert entry.get("admin_status") == "up", "existing admin_status must be preserved"
+
+    def test_shutdown_timeout_seeds_admin_status_when_missing(self):
+        """First-time 'shutdown-timeout' on a fresh DB must seed admin_status='down'."""
+        runner = CliRunner()
+        db = Db()
+        assert db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST") == {}
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "120"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "120"
+        assert entry.get("admin_status") == "down"
+
+    def test_shutdown_timeout_does_not_overwrite_existing_admin_status(self):
+        """If admin_status='up' already, 'shutdown-timeout' must not downgrade it."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "120"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "120"
+        assert entry.get("admin_status") == "up", "existing admin_status must be preserved"
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
