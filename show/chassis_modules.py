@@ -48,9 +48,16 @@ def status(db, chassis_module_name):
     """Show chassis-modules status"""
 
     smartswitch = is_smartswitch()
+    bmc = is_bmc()
     header = ['Name', 'Description', 'Physical-Slot', 'Oper-Status', 'Admin-Status', 'Serial']
     if smartswitch:
         header.append('Ready-Status')
+    if bmc:
+        # Physical-Slot is not meaningful on BMC; drop it and add the
+        # BMC-only timing fields configured via 'config chassis modules
+        # power-on-delay' / 'shutdown-timeout' for SWITCH-HOST modules.
+        header.remove('Physical-Slot')
+        header.extend(['Power-On-Delay (sec)', 'Shutdown-Timeout (sec)'])
 
     chassis_cfg_table = db.cfgdb.get_table('CHASSIS_MODULE')
 
@@ -134,11 +141,25 @@ def status(db, chassis_module_name):
             admin_status = config_data.get(CHASSIS_MODULE_INFO_ADMINSTATUS_FIELD, admin_status)
 
         row = [key_list[1], desc, slot, oper_status, admin_status, serial]
+        if bmc:
+            # Physical-Slot column omitted from header on BMC; drop matching value
+            row.pop(2)
 
         if smartswitch:
             dpu_info = dpu_state_data.get(key_list[1], {})
             ready_status = dpu_info.get(DPU_STATE_READY_STATUS_FIELD, 'N/A')
             row.append(ready_status)
+
+        if bmc:
+            # Only meaningful for SWITCH-HOST modules; other module types show N/A.
+            if key_list[1].startswith("SWITCH-HOST"):
+                cfg = config_data or {}
+                power_on_delay = cfg.get('power_on_delay', '0')
+                shutdown_timeout = cfg.get('graceful_shutdown_timeout', '120')
+            else:
+                power_on_delay = 'N/A'
+                shutdown_timeout = 'N/A'
+            row.extend([power_on_delay, shutdown_timeout])
 
         table.append(tuple(row))
 

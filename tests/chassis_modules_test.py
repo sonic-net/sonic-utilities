@@ -927,6 +927,100 @@ class TestChassisModuleBMCStartupShutdown(object):
         assert result.exit_code == 0
         assert "Empty" in result.output
 
+    def test_show_status_bmc_header_drops_physical_slot_adds_timing_columns(self):
+        """On BMC, Physical-Slot column is removed and Power-On-Delay /
+        Shutdown-Timeout columns are appended."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("no chassis")):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Physical-Slot" not in result.output
+        assert "Power-On-Delay" in result.output
+        assert "Shutdown-Timeout" in result.output
+
+    def test_show_status_bmc_non_switch_host_shows_na_for_timing(self):
+        """On BMC, non-SWITCH-HOST rows display N/A for the timing columns."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("no chassis")):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "N/A" in result.output
+
+    def test_show_status_non_bmc_output_unchanged(self):
+        """Regression: non-BMC output must still contain Physical-Slot and
+        must NOT contain the new BMC-only timing columns."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                []
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Physical-Slot" in result.output
+        assert "Power-On-Delay" not in result.output
+        assert "Shutdown-Timeout" not in result.output
+
+    def test_show_status_bmc_switch_host_shows_configured_timing_values(self):
+        """On BMC, SWITCH-HOST row shows the configured power-on-delay and
+        graceful-shutdown-timeout values from CONFIG_DB."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {
+            'admin_status': 'up',
+            'power_on_delay': '300',
+            'graceful_shutdown_timeout': '90',
+        })
+
+        # Mock state_db to return a SWITCH-HOST entry (mock_tables doesn't have one)
+        switch_host_state = {
+            'desc': 'Switch Host',
+            'slot': '1',
+            'oper_status': 'Online',
+            'serial': 'SH1000101',
+        }
+
+        def fake_keys(_db_id, pattern):
+            if 'SWITCH-HOST' in pattern:
+                return ['CHASSIS_MODULE_TABLE|SWITCH-HOST']
+            return []
+
+        def fake_get_all(_db_id, key):
+            if key.endswith('|SWITCH-HOST'):
+                return switch_host_state
+            return {}
+
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("no chassis")), \
+             mock.patch('show.chassis_modules.SonicV2Connector') as mock_conn_cls:
+            mock_conn = mock.MagicMock()
+            mock_conn.STATE_DB = 'STATE_DB'
+            mock_conn.keys.side_effect = fake_keys
+            mock_conn.get_all.side_effect = fake_get_all
+            mock_conn_cls.return_value = mock_conn
+
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "SWITCH-HOST" in result.output
+        assert "300" in result.output
+        assert "90" in result.output
+        assert "Physical-Slot" not in result.output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
