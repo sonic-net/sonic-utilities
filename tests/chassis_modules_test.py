@@ -868,3 +868,164 @@ class TestChassisModuleBMCStartupShutdown(object):
     def teardown_class(cls):
         print("TEARDOWN")
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestChassisModulesRecovery(object):
+    """Tests for 'show chassis modules recovery' and Ready-Status in status command"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    def _setup_dpu_state_db(self):
+        """Create a mock SonicV2Connector with DPU_STATE data in CHASSIS_STATE_DB."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # DPU0 - healthy
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "true")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "recovery_status", "recoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "reset_count", "2")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "last_down_time", "2026-05-28 10:15:30 UTC")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "last_ready_time", "2026-05-28 10:18:45 UTC")
+        # DPU1 - healthy with no failures
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "ready_status", "true")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "recovery_status", "recoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "reset_count", "0")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "last_ready_time", "2026-05-28 09:00:12 UTC")
+        # DPU2 - unrecoverable
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "ready_status", "false")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "recovery_status", "unrecoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "reset_count", "2")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "last_down_time", "2026-05-28 11:02:00 UTC")
+        return conn
+
+    def test_show_recovery_all(self):
+        """Test show chassis modules recovery shows all DPUs."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "DPU1" in result.output
+        assert "DPU2" in result.output
+        assert "recoverable" in result.output
+        assert "unrecoverable" in result.output
+
+    def test_show_recovery_single_module(self):
+        """Test show chassis modules recovery for a specific DPU."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU0"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "true" in result.output
+        assert "recoverable" in result.output
+        assert "2026-05-28 10:15:30 UTC" in result.output
+        assert "2026-05-28 10:18:45 UTC" in result.output
+
+    def test_show_recovery_non_smartswitch(self):
+        """Test recovery command on non-SmartSwitch platform."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "only supported on SmartSwitch" in result.output
+
+    def test_show_recovery_no_data(self):
+        """Test recovery command when no DPU_STATE data is available."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "No DPU recovery data available" in result.output
+
+    def test_show_recovery_module_not_found(self):
+        """Test recovery command with specific module name that doesn't exist in DPU_STATE."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # Add some DPU data but not the one we'll query
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "true")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU5"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU recovery data not found for module DPU5" in result.output
+
+    def test_show_status_with_ready_status_smartswitch(self):
+        """Test show chassis modules status includes Ready-Status on SmartSwitch."""
+        conn = self._setup_dpu_state_db()
+        # status command also reads STATE_DB CHASSIS_MODULE_TABLE
+        conn.connect(conn.STATE_DB)
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "desc", "DPU Module")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "slot", "N/A")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "oper_status", "Online")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "serial", "SN001")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.is_bmc', return_value=False), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Ready-Status" in result.output
+        assert "true" in result.output
+
+    def test_show_recovery_unrecoverable_dpu(self):
+        """Test that unrecoverable DPU shows correct status."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU2"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU2" in result.output
+        assert "false" in result.output
+        assert "unrecoverable" in result.output
+        assert "2026-05-28 11:02:00 UTC" in result.output
+
+    def test_show_recovery_missing_fields(self):
+        """Test recovery command gracefully handles missing fields."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # DPU with only ready_status set
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "false")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "false" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
