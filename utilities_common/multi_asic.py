@@ -240,6 +240,66 @@ def multi_asic_get_ip_intf_addr_from_ns(namespace, iface):
     return ipaddresses
 
 
+def multi_asic_get_kernel_intf_state(namespace, af):
+    """
+    Bulk-fetch link and address state for the given namespace using two
+    RTNETLINK dumps via pyroute2.  Returns ``(links, addrs)`` where each
+    element is a list of plain dicts:
+
+        links: [{'index': int, 'name': str, 'flags': int,
+                 'master_idx': int|None, 'operstate': str}, ...]
+        addrs: [{'index': int, 'addr': str, 'prefixlen': int}, ...]
+
+    ``af`` is ``netifaces.AF_INET`` or ``netifaces.AF_INET6`` and selects
+    which address family is included in ``addrs``.
+
+    This helper is factored out (and not inlined into ipintutil) so unit
+    tests can monkey-patch it to return synthetic data without going
+    through a real kernel.  Callers must already be running with
+    privileges sufficient to enter the requested namespace.
+    """
+    import socket as _socket
+    import pyroute2
+
+    af_family = _socket.AF_INET if af == netifaces.AF_INET else _socket.AF_INET6
+
+    if namespace != constants.DEFAULT_NAMESPACE:
+        pyroute2.netns.pushns(namespace)
+    try:
+        with pyroute2.IPRoute() as ipr:
+            raw_links = ipr.get_links()
+            raw_addrs = ipr.get_addr(family=af_family)
+    finally:
+        if namespace != constants.DEFAULT_NAMESPACE:
+            pyroute2.netns.popns()
+
+    links = []
+    for link in raw_links:
+        name = link.get_attr('IFLA_IFNAME')
+        if not name:
+            continue
+        links.append({
+            'index': link['index'],
+            'name': name,
+            'flags': link['flags'],
+            'master_idx': link.get_attr('IFLA_MASTER'),
+            'operstate': link.get_attr('IFLA_OPERSTATE') or 'UNKNOWN',
+        })
+
+    addrs = []
+    for addr in raw_addrs:
+        ip_str = addr.get_attr('IFA_LOCAL') or addr.get_attr('IFA_ADDRESS')
+        if not ip_str:
+            continue
+        addrs.append({
+            'index': addr['index'],
+            'addr': ip_str,
+            'prefixlen': addr['prefixlen'],
+        })
+
+    return links, addrs
+
+
 def multi_asic_get_ns_list(namespace=None):
     """Get namespace list to iterate. Returns all if namespace is None on multi-asic."""
     if (namespace is not None and namespace != constants.DEFAULT_NAMESPACE and
