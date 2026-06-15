@@ -2203,19 +2203,20 @@ This command is used to create new ACL tables.
 
 - Usage:
   ```
-  config acl add table [OPTIONS] <table_name> <table_type> [-d <description>] [-p <ports>] [-s (ingress | egress)] [-n <namespace>]
+  config acl add table [OPTIONS] <table_name> <table_type> [-d <description>] [-p <ports>] [-s (ingress | egress)] [-n <namespace>] [-S <services>]
   ```
 
 - Parameters:
   - table_name: The name of the ACL table to create.
-  - table_type: The type of ACL table to create (e.g. "L3", "L3V6", "L3V4V6", "MIRROR")
+  - table_type: The type of ACL table to create (e.g. "L3", "L3V6", "L3V4V6", "MIRROR", "CTRLPLANE")
   - description: A description of the table for the user. (default is the table_name)
-  - ports: A comma-separated list of ports/interfaces to add to the table. The behavior is as follows:
+  - ports: A comma-separated list of ports/interfaces to add to the table. Not valid for CTRLPLANE tables. The behavior is as follows:
     - Physical ports will be bound as physical ports
     - Portchannels will be bound as portchannels - passing a portchannel member is invalid
     - VLANs will be expanded into their members (e.g. "Vlan1000" will become "Ethernet0,Ethernet2,Ethernet4...")
   - stage: The stage this ACL table will be applied to, either ingress or egress. (default is ingress)
   - namespace: Namespace name for multi-ASIC platforms. When specified, the table is created in that ASIC's config DB.
+  - services: A comma-separated list of services for CTRLPLANE ACL tables. Required when table_type is CTRLPLANE. Valid values: ANY, EXTERNAL_CLIENT, NTP, SNMP, SSH. Not valid for non-CTRLPLANE tables.
 
 - Examples:
   ```
@@ -2226,6 +2227,12 @@ This command is used to create new ACL tables.
   ```
   ```
   admin@sonic:~$ sudo config acl add table EXAMPLE_ASIC0 L3 -p Ethernet0 -n asic0
+  ```
+  ```
+  admin@sonic:~$ sudo config acl add table SNMP_ACL CTRLPLANE -S SNMP
+  ```
+  ```
+  admin@sonic:~$ sudo config acl add table ROUTER_ACL CTRLPLANE -S SNMP,SSH,NTP
   ```
 
 **config acl remove table**

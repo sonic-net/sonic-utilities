@@ -8128,7 +8128,11 @@ def expand_vlan_ports(port_name, namespace=None):
     return members
 
 
-def parse_acl_table_info(table_name, table_type, description, ports, stage, namespace=None):
+# Valid services for CTRLPLANE ACL tables, as handled by caclmgrd
+ACL_CTRLPLANE_VALID_SERVICES = {"NTP", "SNMP", "SSH", "EXTERNAL_CLIENT", "ANY"}
+
+
+def parse_acl_table_info(table_name, table_type, description, ports, stage, namespace=None, services=None):
     table_info = {"type": table_type}
 
     if description:
@@ -8136,23 +8140,41 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage, name
     else:
         table_info["policy_desc"] = table_name
 
-    if not ports and ports != None:
-        raise ValueError("Cannot bind empty list of ports")
-
-    port_list = []
-    valid_acl_ports = get_acl_bound_ports(namespace)
-    if ports:
-        for port in ports.split(","):
-            port_list += expand_vlan_ports(port, namespace)
-        port_list = list(set(port_list))  # convert to set first to remove duplicate ifaces
+    if table_type.upper() == "CTRLPLANE":
+        if not services:
+            raise ValueError("CTRLPLANE ACL table requires at least one service via -S/--services (e.g. SNMP,SSH,NTP)")
+        if ports:
+            raise ValueError("CTRLPLANE ACL table cannot bind to ports, use -S/--services instead")
+        service_list = [s.strip().upper() for s in services.split(",")]
+        invalid = [s for s in service_list if s not in ACL_CTRLPLANE_VALID_SERVICES]
+        if invalid:
+            raise ValueError(
+                "Invalid service(s): {}. Valid services are: {}".format(
+                    ", ".join(invalid), ", ".join(sorted(ACL_CTRLPLANE_VALID_SERVICES))
+                )
+            )
+        table_info["services"] = service_list
     else:
-        port_list = valid_acl_ports
+        if services:
+            raise ValueError("--services is only valid for CTRLPLANE ACL tables")
 
-    for port in port_list:
-        if port not in valid_acl_ports:
-            raise ValueError("Cannot bind ACL to specified port {}".format(port))
+        if not ports and ports is not None:
+            raise ValueError("Cannot bind empty list of ports")
 
-    table_info["ports"] = port_list
+        port_list = []
+        valid_acl_ports = get_acl_bound_ports(namespace)
+        if ports:
+            for port in ports.split(","):
+                port_list += expand_vlan_ports(port, namespace)
+            port_list = list(set(port_list))  # convert to set first to remove duplicate ifaces
+        else:
+            port_list = valid_acl_ports
+
+        for port in port_list:
+            if port not in valid_acl_ports:
+                raise ValueError("Cannot bind ACL to specified port {}".format(port))
+
+        table_info["ports"] = port_list
 
     table_info["stage"] = stage
 
@@ -8170,8 +8192,9 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage, name
 @click.option("-p", "--ports")
 @click.option("-s", "--stage", type=click.Choice(["ingress", "egress"]), default="ingress")
 @click.option('-n', '--namespace', help='Namespace name', type=click.Choice(multi_asic.get_namespace_list()))
+@click.option('-S', '--services', help='Comma-separated list of services for CTRLPLANE ACL tables (e.g. SNMP,SSH,NTP)')
 @click.pass_context
-def add_table(ctx, table_name, table_type, description, ports, stage, namespace):
+def add_table(ctx, table_name, table_type, description, ports, stage, namespace, services):
     """
     Add ACL table
     """
@@ -8179,7 +8202,7 @@ def add_table(ctx, table_name, table_type, description, ports, stage, namespace)
     config_db.connect()
 
     try:
-        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage, namespace)
+        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage, namespace, services)
     except ValueError as e:
         ctx.fail("Failed to parse ACL table config: exception={}".format(e))
 
