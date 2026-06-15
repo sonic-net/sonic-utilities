@@ -683,9 +683,15 @@ def statistics(db):
 
 # ("sonic-clear flowcnt-trap")
 @cli.command()
-def flowcnt_trap():
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              show_default=True, help='Namespace name')
+def flowcnt_trap(namespace):
     """ Clear trap flow counters """
     command = ["flow_counters_stat", "-c", '-t', "trap"]
+    # None namespace means default namespace
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 

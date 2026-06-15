@@ -272,6 +272,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
@@ -5421,16 +5422,25 @@ The "route" subcommand is used to display the route flow counter statistics by r
 
 **sonic-clear flowcnt-trap**
 
-This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis.
+This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis. On multi-ASIC platforms, an optional namespace can be supplied to clear counters for a specific ASIC; when omitted, counters are cleared across all ASIC namespaces.
 
 - Usage:
   ```
-  sonic-clear flowcnt-trap
+  sonic-clear flowcnt-trap [-n|--namespace <namespace>]
   ```
+
+- Details:
+  - -n, --namespace: Namespace name (e.g. asic0). On multi-ASIC platforms, omit this option to target all ASIC namespaces; on single-ASIC platforms, the default namespace is used.
 
 - Example:
   ```
   admin@sonic:~$ sonic-clear flowcnt-trap
+  Trap Flow Counters were successfully cleared
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sonic-clear flowcnt-trap -n asic0
   Trap Flow Counters were successfully cleared
   ```
 
@@ -8604,15 +8614,30 @@ If vrf-name is also provided as part of the command, if the vrf is created it wi
 
 ### VRF config commands
 
+The `config vrf` command group accepts an optional `-n|--namespace` option that targets a specific ASIC's CONFIG_DB on multi-ASIC platforms. For data-VRF subcommands (`add <Vrf-*>`, `del <Vrf-*>`, `add_vrf_vni_map`, `del_vrf_vni_map`) the option is required on multi-ASIC platforms. The management-VRF subcommands (`add mgmt`/`del mgmt`) operate on the host/global CONFIG_DB and reject `-n` with an error.
+
+- Usage:
+  ```
+  config vrf [-n|--namespace <namespace>] <subcommand> ...
+  ```
+
+- Details:
+  - -n, --namespace: (Multi-ASIC) Namespace name (e.g. asic0). Required for data-VRF subcommands on multi-ASIC platforms; not applicable to `add mgmt`/`del mgmt`.
+
 **config vrf add**
 
 This command creates vrf in SONiC system with provided vrf-name.
 
 - Usage:
   ```
-  config vrf add <vrf-name>
+  config vrf [-n|--namespace <namespace>] add <vrf-name>
   ```
 Note: vrf-name should always start with keyword "Vrf"
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 add Vrf-red
+  ```
 
 **config vrf del <vrf-name>**
 
@@ -8620,7 +8645,12 @@ This command deletes vrf with name vrf-name.
 
 - Usage:
   ```
-  config vrf del <vrf-name>
+  config vrf [-n|--namespace <namespace>] del <vrf-name>
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 del Vrf-red
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vrf-configuration)
@@ -8738,6 +8768,8 @@ This command displays the configured SNMP Trap server IP addresses.
 
 This command enables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This creates a new interface and l3mdev CGROUP with the name as "mgmt" and enslaves the management interface "eth0" into this master interface "mgmt". Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
 
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
+
 - Usage:
   ```
   config vrf add mgmt
@@ -8751,6 +8783,8 @@ This command enables the management VRF in the system. This command restarts the
 **config vrf del mgmt**
 
 This command disables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This deletes the interface "mgmt" and deletes the l3mdev CGROUP named "mgmt" and puts back the management interface "eth0" into the default VRF. Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
+
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
 
 - Usage:
   ```
@@ -15901,6 +15935,66 @@ EEPROM hexdump for port Ethernet8
         000000d0 00 00 00 02 0a 00 00 00  00 00 00 00 00 00 77 00 |..............w.|
         000000e0 33 30 33 33 30 4b 34 33  34 31 30 44 00 00 00 00 |30330K43410D....|
         000000f0 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 |................|
+```
+
+- Show SFP low-power mode status
+
+  By default the status is read from the module EEPROM. Passing `--use-lpmode-pin` reads it from the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `get_lpmode_via_pin`
+  from `SfpBase`".
+
+```
+admin@sonic:~$ sfputil show lpmode --help
+Usage: sfputil show lpmode [OPTIONS]
+
+  Display low-power mode status of SFP transceiver(s)
+
+Options:
+  -p, --port <port_name>  Display SFP low-power mode status for port
+                          <port_name> only
+  --use-lpmode-pin        Use Xcvr LPMode pin instead of EEPROM
+  --help                  Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  Off
+
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0 --use-lpmode-pin
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+```
+
+- Enable / disable SFP low-power mode
+
+  By default the request is written to the module EEPROM. Passing `--use-lpmode-pin` writes the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `set_lpmode_via_pin`
+  from `SfpBase`.
+
+```
+admin@sonic:~$ sfputil lpmode on --help
+Usage: sfputil lpmode on [OPTIONS] <port_name>
+
+  Enable low-power mode for SFP transceiver
+
+Options:
+  --use-lpmode-pin  Use Xcvr LPMode pin instead of EEPROM
+  --help            Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0
+Disabling low-power mode for port Ethernet0 ... OK
+
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0 --use-lpmode-pin
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0 --use-lpmode-pin
+Disabling low-power mode for port Ethernet0 ... OK
 ```
 
 # SFP Utilities read command

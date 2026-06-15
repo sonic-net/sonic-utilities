@@ -11,6 +11,8 @@ from utilities_common.db import Db
 from utilities_common.general import load_module_from_source
 from minigraph import minigraph_encoder
 
+from .utils import worker_tmp_path
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "config_override_input")
 EMPTY_INPUT = os.path.join(DATA_DIR, "empty_input.json")
@@ -202,7 +204,7 @@ class TestConfigOverride(object):
         # ConfigMgmt will call ConfigDBConnector to load default config_db.json.
         # Here I modify the ConfigMgmt initialization and make it initiated with
         # a source file which share the same as what we write to cfgdb.
-        CONFIG_DB_JSON_FILE = "startConfigDb.json"
+        CONFIG_DB_JSON_FILE = worker_tmp_path('startConfigDb.json')
         write_config_to_file(read_data['running_config'], CONFIG_DB_JSON_FILE)
         with mock.patch('config.main.device_info.is_yang_config_validation_enabled',
                         mock.MagicMock(side_effect=is_yang_config_validation_enabled_side_effect)), \
@@ -246,7 +248,7 @@ class TestConfigOverride(object):
         # ConfigMgmt will call ConfigDBConnector to load default config_db.json.
         # Here I modify the ConfigMgmt initialization and make it initiated with
         # a source file which share the same as what we write to cfgdb.
-        CONFIG_DB_JSON_FILE = "startConfigDb.json"
+        CONFIG_DB_JSON_FILE = worker_tmp_path('startConfigDb.json')
         write_config_to_file(running_config, CONFIG_DB_JSON_FILE)
         with mock.patch('config.main.read_json_file',
                         mock.MagicMock(side_effect=read_json_file_side_effect)), \

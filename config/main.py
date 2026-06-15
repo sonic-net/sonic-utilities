@@ -1206,6 +1206,11 @@ def _restart_services():
     reset_mgmt_interface_if_usb_not_running()
 
 def _per_namespace_swss_ready(service_name):
+    out, _ = clicommon.run_command(
+        ['systemctl', 'show', str(service_name), '--property', 'LoadState', '--value'], return_cmd=True)
+    if out.strip() in ("not-found", "masked"):
+        # swss not present on this platform (e.g. BMC): nothing to wait for.
+        return True
     out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
     if out.strip() != "active":
         return False
@@ -1298,13 +1303,13 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
         if src_port:
             for port in split_mirror_ports(src_port):
                 if 'dst_port' in v and v['dst_port'] == port:
-                    ctx.fail("Error: Source Interface {} already has mirror config".format(port))
+                    ctx.fail("Source Interface {} already has mirror config".format(port))
                 if mirror_entry_has_port(v, port):
                     if check_mirror_direction_config(v, direction):
-                        ctx.fail("Error: Source Interface {} already has mirror config in same direction".format(port))
+                        ctx.fail("Source Interface {} already has mirror config in same direction".format(port))
         if dst_port:
             if ('dst_port' in v and v['dst_port'] == dst_port) or mirror_entry_has_port(v, dst_port):
-                ctx.fail("Error: Destination Interface {} already has mirror config".format(dst_port))
+                ctx.fail("Destination Interface {} already has mirror config".format(dst_port))
 
     return False
 
@@ -1367,30 +1372,30 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
 
     if dst_port:
         if not interface_name_is_valid(config_db, dst_port):
-            ctx.fail("Error: Destination Interface {} is invalid".format(dst_port))
+            ctx.fail("Destination Interface {} is invalid".format(dst_port))
 
         if is_portchannel_present_in_db(config_db, dst_port):
-            ctx.fail("Error: Destination Interface {} is not supported".format(dst_port))
+            ctx.fail("Destination Interface {} is not supported".format(dst_port))
 
         if interface_is_in_vlan(vlan_member_table, dst_port):
-            ctx.fail("Error: Destination Interface {} has vlan config".format(dst_port))
+            ctx.fail("Destination Interface {} has vlan config".format(dst_port))
 
         if interface_is_in_portchannel(portchannel_member_table, dst_port):
-            ctx.fail("Error: Destination Interface {} has portchannel config".format(dst_port))
+            ctx.fail("Destination Interface {} has portchannel config".format(dst_port))
 
         if clicommon.is_port_router_interface(config_db, dst_port):
-            ctx.fail("Error: Destination Interface {} is a L3 interface".format(dst_port))
+            ctx.fail("Destination Interface {} is a L3 interface".format(dst_port))
 
         namespace_set.add(get_port_namespace(dst_port))
 
     if src_port:
         for port in split_mirror_ports(src_port):
             if not interface_name_is_valid(config_db, port):
-                ctx.fail("Error: Source Interface {} is invalid".format(port))
+                ctx.fail("Source Interface {} is invalid".format(port))
         normalized_src_port = normalize_mirror_src_port(config_db, src_port)
         for port in split_mirror_ports(normalized_src_port):
             if dst_port and dst_port == port:
-                ctx.fail("Error: Destination Interface can't be same as Source Interface")
+                ctx.fail("Destination Interface can't be same as Source Interface")
 
             namespace_set.add(get_port_namespace(port))
 
@@ -1399,7 +1404,7 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
 
     if direction:
         if direction not in ['rx', 'tx', 'both']:
-            ctx.fail("Error: Direction {} is invalid".format(direction))
+            ctx.fail("Direction {} is invalid".format(direction))
 
     # Check port mirror capability before allowing configuration.
     # ERSPAN sessions (dst_port=None) use src/dst IPs, not ports; the
@@ -1408,7 +1413,7 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     if not is_erspan:
         for ns in namespace_set:
             if not is_port_mirror_capability_supported(direction, namespace=ns):
-                ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+                ctx.fail("Port mirror direction '{}' is not supported by the ASIC".format(
                     direction if direction else 'both'))
 
     return True
@@ -2788,7 +2793,7 @@ def synchronous_mode(sync_mode):
         config_db.mod_entry('DEVICE_METADATA' , 'localhost', {"synchronous_mode" : sync_mode})
     except ValueError as e:
         ctx = click.get_current_context()
-        ctx.fail("Error: Invalid argument %s, expect either enable or disable" % sync_mode)
+        ctx.fail("Invalid argument %s, expect either enable or disable" % sync_mode)
 
     click.echo("""Wrote %s synchronous mode into CONFIG_DB, swss restart required to apply the configuration: \n
     Option 1. config save -y \n
@@ -2832,7 +2837,7 @@ def yang_config_validation(yang_config_validation):
         config_db.mod_entry('DEVICE_METADATA', 'localhost', {"yang_config_validation": yang_config_validation})
     except ValueError as e:
         ctx = click.get_current_context()
-        ctx.fail("Error: Invalid argument %s, expect either enable or disable" % yang_config_validation)
+        ctx.fail("Invalid argument %s, expect either enable or disable" % yang_config_validation)
 
     click.echo("""Wrote %s yang config validation into CONFIG_DB""" % yang_config_validation)
 
@@ -2913,7 +2918,8 @@ def remove_portchannel(ctx, portchannel_name):
                 ctx.fail("{} has vlan {} configured, remove vlan membership to proceed".format(portchannel_name, str(k)))
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
-            ctx.fail("Error: Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
+            ctx.fail("Portchannel {} contains members. Remove members before deleting Portchannel!"
+                     .format(portchannel_name))
 
         # Dont proceed if the port channel is used in dhcpv4_relay
         try:
@@ -3294,10 +3300,10 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
             front_ns_set = set(namespaces['front_ns'])
             for orig in split_mirror_ports(raw_src_port):
                 if not interface_name_is_valid(None, orig):
-                    ctx.fail("Error: Source Interface {} is invalid".format(orig))
+                    ctx.fail("Source Interface {} is invalid".format(orig))
                 port_ns = get_port_namespace(orig)
                 if port_ns not in front_ns_set:
-                    ctx.fail("Error: Source Interface {} is not a front-panel port".format(orig))
+                    ctx.fail("Source Interface {} is not a front-panel port".format(orig))
                 ns_src_ports.setdefault(port_ns, []).append(orig)
 
         base_session_info = {k: v for k, v in session_info.items()
@@ -3416,19 +3422,19 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
         # Auto-detect namespace from destination port
         dst_port_namespace = get_port_namespace(original_dst_port)
         if dst_port_namespace is None:
-            ctx.fail("Error: Destination Interface {} is invalid".format(original_dst_port))
+            ctx.fail("Destination Interface {} is invalid".format(original_dst_port))
         if dst_port_namespace not in namespaces['front_ns']:
-            ctx.fail("Error: Destination Interface {} is not a front-panel port".format(original_dst_port))
+            ctx.fail("Destination Interface {} is not a front-panel port".format(original_dst_port))
 
         # Verify all source ports are in the same namespace as destination port.
         if src_port:
             for port in split_mirror_ports(src_port):
                 port_ns = get_port_namespace(port)
                 if port_ns is None:
-                    ctx.fail("Error: Source Interface {} is invalid".format(port))
+                    ctx.fail("Source Interface {} is invalid".format(port))
                 if port_ns != dst_port_namespace:
                     ctx.fail(
-                        ("Error: Source Interface {} is not on the same ASIC as "
+                        ("Source Interface {} is not on the same ASIC as "
                          "Destination Interface {}").format(port, dst_port)
                     )
 
@@ -5241,7 +5247,11 @@ def startup(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    intf_fs = parse_interface_in_filter(interface_name)
+    try:
+        intf_fs = parse_interface_in_filter(interface_name)
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if len(intf_fs) > 1 and multi_asic.is_multi_asic():
         ctx.fail("Interface range not supported in multi-asic platforms !!")
 
@@ -5287,7 +5297,11 @@ def shutdown(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    intf_fs = parse_interface_in_filter(interface_name)
+    try:
+        intf_fs = parse_interface_in_filter(interface_name)
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if len(intf_fs) > 1 and multi_asic.is_multi_asic():
         ctx.fail("Interface range not supported in multi-asic platforms !!")
 
@@ -7717,13 +7731,21 @@ def remove_vrrp_v6(ctx, interface_name, vrrp_id):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup, name='vrf')
+@click.option('-n', '--namespace', help='Namespace name', default=None,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def vrf(ctx):
-    """VRF-related configuration tasks"""
-    config_db = ConfigDBConnector()
+def vrf(ctx, namespace):
+    """ VRF-related configuration tasks """
+    # Data VRFs live in the per-ASIC CONFIG_DB; the management VRF lives
+    # in the host/global CONFIG_DB. Connect to the (optionally namespaced)
+    # DB here for data-VRF subcommands; the mgmt-VRF path re-targets the
+    # global DB and rejects -n at runtime.
+    ns = namespace if namespace else DEFAULT_NAMESPACE
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(ns))
     config_db.connect()
     ctx.obj = {}
     ctx.obj['config_db'] = config_db
+    ctx.obj['namespace'] = namespace
 
 @vrf.command('add')
 @click.argument('vrf_name', metavar='<vrf_name>', required=True)
@@ -7735,9 +7757,18 @@ def add_vrf(ctx, vrf_name):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
     if not isInterfaceNameValid(vrf_name):
         ctx.fail("'vrf_name' length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
+
+    is_mgmt = vrf_name in ('mgmt', 'management')
+    if is_mgmt:
+        if ctx.obj['namespace'] is not None:
+            ctx.fail("-n/--namespace is not applicable to the management VRF; it is configured in the host CONFIG_DB.")
+    else:
+        if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+            ctx.fail("-n/--namespace is required for data VRFs on multi-ASIC platforms.")
+
     if is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} already exists!".format(vrf_name))
-    elif (vrf_name == 'mgmt' or vrf_name == 'management'):
+    elif is_mgmt:
         vrf_add_management_vrf(config_db)
     else:
         try:
@@ -7755,6 +7786,15 @@ def del_vrf(ctx, vrf_name):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
     if not isInterfaceNameValid(vrf_name):
         ctx.fail("'vrf_name' length should not exceed {} characters".format((IFACE_NAME_MAX_LEN)))
+
+    is_mgmt = vrf_name in ('mgmt', 'management')
+    if is_mgmt:
+        if ctx.obj['namespace'] is not None:
+            ctx.fail("-n/--namespace is not applicable to the management VRF; it is configured in the host CONFIG_DB.")
+    else:
+        if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+            ctx.fail("-n/--namespace is required for data VRFs on multi-ASIC platforms.")
+
     syslog_table = config_db.get_table("SYSLOG_SERVER")
     syslog_vrf_dev = "mgmt" if vrf_name == "management" else vrf_name
     for syslog_entry, syslog_data in syslog_table.items():
@@ -7769,7 +7809,7 @@ def del_vrf(ctx, vrf_name):
 
     if not is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} does not exist!".format(vrf_name))
-    elif (vrf_name == 'mgmt' or vrf_name == 'management'):
+    elif is_mgmt:
         vrf_delete_management_vrf(config_db)
     else:
         del_interface_bind_to_vrf(config_db, vrf_name)
@@ -7784,6 +7824,8 @@ def del_vrf(ctx, vrf_name):
 @click.argument('vni', metavar='<vni>', required=True)
 @click.pass_context
 def add_vrf_vni_map(ctx, vrfname, vni):
+    if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+        ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
     found = 0
     if vrfname not in config_db.get_table('VRF').keys():
@@ -7823,6 +7865,8 @@ def add_vrf_vni_map(ctx, vrfname, vni):
 @click.argument('vrfname', metavar='<vrf-name>', required=True, type=str)
 @click.pass_context
 def del_vrf_vni_map(ctx, vrfname):
+    if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+        ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
     if vrfname not in config_db.get_table('VRF').keys():
         ctx.fail("vrf {} doesn't exist".format(vrfname))
@@ -9187,7 +9231,7 @@ def global_sample_direction(ctx, direction):
     if ADHOC_VALIDATION:
         if direction:
             if direction not in ['rx', 'tx', 'both']:
-                ctx.fail("Error: Direction {} is invalid".format(direction))
+                ctx.fail("Direction {} is invalid".format(direction))
 
             if ((direction == 'tx' or direction == 'both') and (is_port_egress_sflow_supported() == 'false')):
                 ctx.fail("Sample direction {} is not supported on this platform".format(direction))
@@ -9328,7 +9372,7 @@ def interface_sample_direction(ctx, ifname, direction):
             return
         if direction:
             if direction not in ['rx', 'tx', 'both']:
-                ctx.fail("Error: Direction {} is invalid".format(direction))
+                ctx.fail("Direction {} is invalid".format(direction))
 
             if (direction == 'tx' or direction == 'both') and (is_port_egress_sflow_supported() == 'false'):
                 ctx.fail("Sample direction {} is not supported on this platform".format(direction))

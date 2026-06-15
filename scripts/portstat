@@ -116,7 +116,11 @@ Examples:
     if delete_saved_stats:
         cache.remove()
 
-    intf_list = parse_interface_in_filter(intf_fs)
+    try:
+        intf_list = parse_interface_in_filter(intf_fs)
+    except ValueError as e:
+        print("Error: {}".format(e), file=sys.stderr)
+        sys.exit(1)
 
     # When saving counters to the file, save counters
     # for all ports(Internal and External)

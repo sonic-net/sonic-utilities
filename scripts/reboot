@@ -287,6 +287,16 @@ fi
 
 debug "User requested rebooting device ..."
 
+# SmartSwitch NPU only: close the DHCP gate so DPUs that come back up during
+# the NPU reboot window cannot acquire midplane IPs and therefore cannot bring
+# up pmon/chassisd against a chassis_db that is about to disappear.
+smartswitch=$(is_smartswitch)
+if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "no" ]; then
+    debug "SmartSwitch NPU: disable dhcp_server on bridge-midplane before reboot"
+    config dhcp_server ipv4 disable bridge-midplane 2>/dev/null || \
+        debug "Failed to disable dhcp_server on bridge-midplane"
+fi
+
 handle_smart_switch "$REBOOT_DPU" "$PRE_SHUTDOWN" "$DPU_MODULE_NAME"
 smart_switch_result=$?
 if [[ $smart_switch_result -ne 0 ]]; then
@@ -294,7 +304,6 @@ if [[ $smart_switch_result -ne 0 ]]; then
 fi
 
 # On a smartswitch, complete the DPU reboot and exit
-smartswitch=$(is_smartswitch)
 if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
     exit $smart_switch_result
 fi
