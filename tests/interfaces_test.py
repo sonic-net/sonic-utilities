@@ -1,17 +1,14 @@
 import os
+import pytest
 import traceback
-import config.main as config
 
 from click.testing import CliRunner
 from unittest import mock
 from utilities_common.intf_filter import parse_interface_in_filter
-from utilities_common.db import Db
 
 import config.main as config
 import show.main as show
 from utilities_common.db import Db
-
-import pytest
 
 show_interfaces_alias_output = """\
 Name         Alias
