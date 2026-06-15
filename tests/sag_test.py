@@ -20,6 +20,12 @@ MacAddress    Interfaces
 """
 
 
+def disable_vlan_static_anycast(db, vlan_name="Vlan1000"):
+    vlan_entry = db.cfgdb.get_entry("VLAN_INTERFACE", vlan_name)
+    vlan_entry["static_anycast_gateway"] = "false"
+    db.cfgdb.set_entry("VLAN_INTERFACE", vlan_name, vlan_entry)
+
+
 class TestSag(object):
     @classmethod
     def setup_class(cls):
@@ -41,6 +47,7 @@ class TestSag(object):
     def test_config_del_add_invalid_sag_mac_address(self):
         runner = CliRunner()
         db = Db()
+        disable_vlan_static_anycast(db)
 
         result = runner.invoke(config.config.commands["static-anycast-gateway"].commands["mac_address"].commands["del"],
                                obj=db)
@@ -61,6 +68,7 @@ class TestSag(object):
     def test_config_del_add_sag_mac_address(self):
         runner = CliRunner()
         db = Db()
+        disable_vlan_static_anycast(db)
 
         result = runner.invoke(config.config.commands["static-anycast-gateway"].commands["mac_address"].commands["del"],
                                obj=db)
@@ -81,6 +89,7 @@ class TestSag(object):
     def test_config_del_sag_mac_preserves_other_global_fields(self):
         runner = CliRunner()
         db = Db()
+        disable_vlan_static_anycast(db)
         db.cfgdb.set_entry("SAG", "GLOBAL", {"gateway_mac": "00:11:22:33:44:55", "other_field": "keep"})
 
         result = runner.invoke(config.config.commands["static-anycast-gateway"].commands["mac_address"].commands["del"],
@@ -90,6 +99,16 @@ class TestSag(object):
             f"Output:{result.output}"
         )
         assert {"other_field": "keep"} == db.cfgdb.get_entry("SAG", "GLOBAL")
+
+    def test_config_del_sag_mac_in_use_by_vlan_interface(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["static-anycast-gateway"].commands["mac_address"].commands["del"],
+                               obj=db)
+        assert result.exit_code != 0, f"Expected failure for in-use SAG MAC: {result.output}"
+        assert "in use by VLAN interfaces: Vlan1000" in result.output
+        assert {"gateway_mac": "00:11:22:33:44:55"} == db.cfgdb.get_entry("SAG", "GLOBAL")
 
     def test_config_enable_sag_on_vlan_interface(self):
         runner = CliRunner()
@@ -102,6 +121,17 @@ class TestSag(object):
             f"Output:{result.output}"
         )
         assert {"static_anycast_gateway": "true"}.items() <= db.cfgdb.get_entry("VLAN_INTERFACE", "Vlan2000").items()
+
+    def test_config_enable_sag_requires_global_mac(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("SAG", "GLOBAL", None)
+
+        result = runner.invoke(config.config.commands["vlan"].commands["static-anycast-gateway"].commands["enable"],
+                               ["2000"], obj=db)
+        assert result.exit_code != 0, f"Expected failure without SAG MAC: {result.output}"
+        assert "requires SAG GLOBAL gateway_mac" in result.output
+        assert db.cfgdb.get_entry("VLAN_INTERFACE", "Vlan2000").get("static_anycast_gateway") != "true"
 
     def test_config_disable_sag_on_vlan_interface(self):
         runner = CliRunner()

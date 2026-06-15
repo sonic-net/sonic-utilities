@@ -481,6 +481,10 @@ def enable_vlan_sag(db, vid):
     if vlan_entry and vlan_entry.get('static_anycast_gateway') == 'true':
         ctx.fail("static-anycast-gateway is already enabled")
 
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL') or {}
+    if not sag_entry.get('gateway_mac'):
+        ctx.fail("static-anycast-gateway requires SAG GLOBAL gateway_mac to be configured")
+
     db.cfgdb.mod_entry('VLAN_INTERFACE', vlan, {"static_anycast_gateway": "true"})
     click.echo('static-anycast-gateway setting saved to ConfigDB')
 

@@ -133,6 +133,18 @@ class TestEVPNEthernetSegmentManualConfigParsing():
         configure_esi_w_failure(runner, db, ["PortChannel01", "00:01:02:03:04:05:06:AAAA:08:09"],
                                 "'Byte' AAAA is > 255")
 
+    def test_invalid_manual_esi_short_byte_rejected_before_frr(self, cli_db_connection):
+        runner, db = cli_db_connection
+        configure_esi_w_failure(runner, db, ["PortChannel01", "00:1:02:03:04:05:06:07:08:09"],
+                                "Failed to parse ESI byte '1'")
+        config.run_vtysh_command.assert_not_called()
+
+    def test_invalid_manual_esi_long_zero_byte_rejected_before_frr(self, cli_db_connection):
+        runner, db = cli_db_connection
+        configure_esi_w_failure(runner, db, ["PortChannel01", "000:01:02:03:04:05:06:07:08:09"],
+                                "Failed to parse ESI byte '000'")
+        config.run_vtysh_command.assert_not_called()
+
     def test_reserved_manual_esi_0_rejected(self, cli_db_connection):
         runner, db = cli_db_connection
         configure_esi_w_failure(runner, db, ["PortChannel01", "00:00:00:00:00:00:00:00:00:00"],

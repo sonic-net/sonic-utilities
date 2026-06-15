@@ -5837,6 +5837,8 @@ def parse_esi_input(ctx, esi_input_strs):
                 ctx.fail(f"Failed to parse ESI byte '{byte}' - {e}")
             if parsed_byte > 0xFF:
                 ctx.fail(f"'Byte' {byte} is > 255")
+            if not re.fullmatch(r'[0-9a-fA-F]{2}', byte):
+                ctx.fail(f"Failed to parse ESI byte '{byte}'")
 
         esi_args['type'] = 'TYPE_0_OPERATOR_CONFIGURED'
         esi_args['esi'] = esi_input_strs[0].lower()
@@ -10000,6 +10002,15 @@ def del_mac(db):
         if mac_address == 'unknown':
             click.get_current_context().fail('static-anycast-gateway MAC address not found.')
         log.log_info(f"'static-anycast-gateway mac_address del {mac_address}' executing...")
+        vlan_intf_table = db.cfgdb.get_table('VLAN_INTERFACE') or {}
+        enabled_vlans = sorted(vlan for vlan, entry in vlan_intf_table.items()
+                               if entry.get('static_anycast_gateway') == 'true')
+        if enabled_vlans:
+            click.get_current_context().fail(
+                'static-anycast-gateway MAC address is in use by VLAN interfaces: {}'.format(
+                    ', '.join(enabled_vlans)
+                )
+            )
         remaining_entry = dict(sag_entry)
         remaining_entry.pop('gateway_mac', None)
         db.cfgdb.set_entry('SAG', 'GLOBAL', remaining_entry if remaining_entry else None)
