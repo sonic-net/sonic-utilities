@@ -217,6 +217,9 @@ def port_config_update_validator(scope, patch_element):
 
     def _validate_field(field, port, value):
         if field == "fec":
+            # For chassis, skip fec validation as desired fec is not in supported_fecs of StateDB.
+            if device_info.is_chassis():
+                return True
             supported_fecs_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_fecs")
             if supported_fecs_str:
                 if supported_fecs_str != 'N/A':

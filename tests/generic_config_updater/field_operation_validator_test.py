@@ -202,6 +202,36 @@ class TestValidateFieldOperation:
             assert generic_config_updater.field_operation_validators.\
                 port_config_update_validator(scope, patch_element) is False
 
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_invalid_fec_for_chassis(self):
+        # "rsf" is not in supported fecs, but for chassis, skip fec validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rsf"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_valid_fec_for_nonchassis(self):
+        # "rs" is in supported fecs; on non-chassis the normal validation should pass it
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rs"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_invalid_fec_for_nonchassis(self):
+        # "rsf" is not in supported fecs; on non-chassis the normal validation must reject it
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rsf"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is False
+
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
            mock.Mock(return_value="unknown"))
     def test_rdma_config_update_validator_unknown_asic(self):
