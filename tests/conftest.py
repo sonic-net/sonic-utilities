@@ -293,6 +293,31 @@ generated_services_list = [
 
 
 @pytest.fixture(autouse=True)
+def _ensure_sonic_platform_mock():
+    """Ensure sonic_platform is always mockable in sys.modules.
+
+    _reset_between_files() clears sonic_platform entries from sys.modules
+    between test files to prevent cross-file mock leakage under xdist.
+    This fixture re-injects a MagicMock stub so that any test using
+    @patch('sonic_platform.platform.Platform') (or similar) can resolve
+    the target without ModuleNotFoundError — even if the test file forgot
+    to inject it manually.
+
+    Note: test files that import sonic_platform at module level (e.g.
+    fwutil_test.py, psuutil_test.py, sfputil_test.py) still need their
+    own sys.modules injection before the import line, because module
+    collection happens before fixtures run.
+
+    Runs before every test function (autouse=True).
+    """
+    if 'sonic_platform' not in sys.modules:
+        sys.modules['sonic_platform'] = mock.MagicMock()
+    if 'sonic_platform.platform' not in sys.modules:
+        sys.modules['sonic_platform.platform'] = mock.MagicMock()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def setup_env():
     # This is needed because we call scripts from this module as a separate
     # process when running tests, and so the PYTHONPATH needs to be set

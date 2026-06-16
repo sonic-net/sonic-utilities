@@ -14,17 +14,6 @@ from .utils import get_result_and_return_code
 sys.modules['clicommon'] = mock.Mock()
 
 
-@pytest.fixture(autouse=True)
-def _inject_sonic_platform():
-    # conftest._reset_between_files() clears sys.modules['sonic_platform']
-    # before the first test of each file. Re-inject before every test so that
-    # chassis command handlers that import sonic_platform at call time can find
-    # it. Module-level injection is not sufficient because it runs before the
-    # conftest hook that clears it.
-    sys.modules['sonic_platform'] = mock.MagicMock()
-    yield
-
-
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")

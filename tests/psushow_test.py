@@ -13,8 +13,6 @@ modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, 'scripts')
 sys.path.insert(0, modules_path)
 
-sys.modules['sonic_platform'] = mock.MagicMock()
-
 # Load the file under test
 psushow_path = os.path.join(scripts_path, 'psushow')
 psushow = load_module_from_source('psushow', psushow_path)
