@@ -1,4 +1,5 @@
 import os
+import pytest
 import traceback
 
 from click.testing import CliRunner
@@ -653,6 +654,13 @@ class TestInterfaces(object):
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 3
         assert intf_list == ["Ethernet-BP10", "Ethernet-BP11", "Ethernet-BP12"]
+        # Malformed ranges must raise instead of being silently dropped
+        for intf_filter in ["Ethernet320-Ethernet376", "Ethernet0-", "Ethernet0-foo",
+                            "Eth0-3", "Ethernet-BP10-Ethernet-BP12",
+                            # start of range greater than the end
+                            "Ethernet8-4", "PortChannel10-2", "Ethernet-BP12-10"]:
+            with pytest.raises(ValueError):
+                parse_interface_in_filter(intf_filter)
 
     def test_show_interfaces_switchport_status(self):
         runner = CliRunner()
