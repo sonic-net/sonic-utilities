@@ -2,6 +2,7 @@ import os
 import pytest
 import subprocess
 from click.testing import CliRunner
+from unittest.mock import MagicMock, patch
 
 import show.main as show
 from .utils import get_result_and_return_code
@@ -154,3 +155,169 @@ class TestMultiAsicShowIpInt(object):
         return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv5'])
         assert return_code == 1
         assert result == show_error_invalid_af
+
+
+class TestMultiAsicGetKernelIntfState:
+    """
+    Unit tests for the real utilities_common.multi_asic.multi_asic_get_kernel_intf_state.
+
+    The integration tests in TestShowIpInt / TestMultiAsicShowIpInt monkey-patch
+    this function entirely, so the real pyroute2-based implementation has zero
+    coverage without these dedicated tests.  pyroute2.IPRoute (and the netns
+    helpers) are mocked so no kernel privileges are required.
+    """
+
+    @staticmethod
+    def _make_link(idx, name, flags, master=None, operstate="UP"):
+        link = MagicMock()
+        link.__getitem__ = MagicMock(
+            side_effect={"index": idx, "flags": flags}.__getitem__)
+        link.get_attr.side_effect = {
+            "IFLA_IFNAME": name,
+            "IFLA_MASTER": master,
+            "IFLA_OPERSTATE": operstate,
+        }.get
+        return link
+
+    @staticmethod
+    def _make_addr(idx, local, prefixlen, address=None):
+        addr = MagicMock()
+        addr.__getitem__ = MagicMock(
+            side_effect={"index": idx, "prefixlen": prefixlen}.__getitem__)
+        addr.get_attr.side_effect = {
+            "IFA_LOCAL": local,
+            "IFA_ADDRESS": address if address is not None else local,
+        }.get
+        return addr
+
+    @staticmethod
+    def _ipr_class(links, addrs):
+        """Return a mock IPRoute *class* whose instances yield the given data."""
+        inst = MagicMock()
+        inst.__enter__.return_value = inst
+        inst.get_links.return_value = links
+        inst.get_addr.return_value = addrs
+        return MagicMock(return_value=inst)
+
+    def test_default_namespace_ipv4(self):
+        """Happy path: IPv4, default namespace -- links and addrs parsed correctly."""
+        import netifaces
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        ipr_cls = self._ipr_class(
+            [self._make_link(1, "Ethernet0", 0x1043)],
+            [self._make_addr(1, "10.0.0.1", 24)],
+        )
+        with patch("pyroute2.IPRoute", ipr_cls):
+            links, addrs = multi_asic_get_kernel_intf_state("", netifaces.AF_INET)
+
+        assert links == [{"index": 1, "name": "Ethernet0", "flags": 0x1043,
+                          "master_idx": None, "operstate": "UP"}]
+        assert addrs == [{"index": 1, "addr": "10.0.0.1", "prefixlen": 24}]
+
+    def test_default_namespace_ipv6(self):
+        """Happy path: IPv6, default namespace."""
+        import netifaces
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        ipr_cls = self._ipr_class(
+            [self._make_link(1, "Ethernet0", 0x1043)],
+            [self._make_addr(1, "2001:db8::1", 64)],
+        )
+        with patch("pyroute2.IPRoute", ipr_cls):
+            links, addrs = multi_asic_get_kernel_intf_state("", netifaces.AF_INET6)
+
+        assert len(links) == 1
+        assert links[0]["name"] == "Ethernet0"
+        assert addrs == [{"index": 1, "addr": "2001:db8::1", "prefixlen": 64}]
+
+    def test_non_default_namespace_pushes_and_pops(self):
+        """Non-default namespace: pushns before IPRoute open, popns in finally."""
+        import netifaces
+        import pyroute2
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        ipr_cls = self._ipr_class([], [])
+        with patch("pyroute2.IPRoute", ipr_cls), \
+             patch.object(pyroute2.netns, "pushns") as mock_push, \
+             patch.object(pyroute2.netns, "popns") as mock_pop:
+            multi_asic_get_kernel_intf_state("asic0", netifaces.AF_INET)
+
+        mock_push.assert_called_once_with("asic0")
+        mock_pop.assert_called_once()
+
+    def test_link_missing_ifname_is_skipped(self):
+        """Links where IFLA_IFNAME is None are silently ignored."""
+        import netifaces
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        bad_link = MagicMock()
+        bad_link.__getitem__ = MagicMock(side_effect={"index": 1, "flags": 0}.get)
+        bad_link.get_attr.return_value = None  # IFLA_IFNAME -> None
+
+        ipr_cls = self._ipr_class([bad_link], [])
+        with patch("pyroute2.IPRoute", ipr_cls):
+            links, _ = multi_asic_get_kernel_intf_state("", netifaces.AF_INET)
+
+        assert links == []
+
+    def test_link_missing_operstate_defaults_to_unknown(self):
+        """IFLA_OPERSTATE None -> operstate stored as 'UNKNOWN'."""
+        import netifaces
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        link = MagicMock()
+        link.__getitem__ = MagicMock(side_effect={"index": 1, "flags": 0x1}.get)
+        link.get_attr.side_effect = {
+            "IFLA_IFNAME": "lo",
+            "IFLA_MASTER": None,
+            "IFLA_OPERSTATE": None,
+        }.get
+
+        ipr_cls = self._ipr_class([link], [])
+        with patch("pyroute2.IPRoute", ipr_cls):
+            links, _ = multi_asic_get_kernel_intf_state("", netifaces.AF_INET)
+
+        assert links[0]["operstate"] == "UNKNOWN"
+
+    def test_link_with_master_index(self):
+        """IFLA_MASTER is stored as master_idx."""
+        import netifaces
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        ipr_cls = self._ipr_class(
+            [self._make_link(2, "Ethernet0", 0x1043, master=10)], [])
+        with patch("pyroute2.IPRoute", ipr_cls):
+            links, _ = multi_asic_get_kernel_intf_state("", netifaces.AF_INET)
+
+        assert links[0]["master_idx"] == 10
+
+    def test_addr_falls_back_to_ifa_address(self):
+        """When IFA_LOCAL is None the address is taken from IFA_ADDRESS."""
+        import netifaces
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        ipr_cls = self._ipr_class(
+            [self._make_link(1, "lo", 0x1)],
+            [self._make_addr(1, None, 32, address="127.0.0.1")],
+        )
+        with patch("pyroute2.IPRoute", ipr_cls):
+            _, addrs = multi_asic_get_kernel_intf_state("", netifaces.AF_INET)
+
+        assert addrs == [{"index": 1, "addr": "127.0.0.1", "prefixlen": 32}]
+
+    def test_addr_with_no_ip_is_skipped(self):
+        """Entries where both IFA_LOCAL and IFA_ADDRESS are None are dropped."""
+        import netifaces
+        from utilities_common.multi_asic import multi_asic_get_kernel_intf_state
+
+        bad_addr = MagicMock()
+        bad_addr.__getitem__ = MagicMock(
+            side_effect={"index": 1, "prefixlen": 0}.get)
+        bad_addr.get_attr.return_value = None  # IFA_LOCAL and IFA_ADDRESS -> None
+
+        ipr_cls = self._ipr_class([self._make_link(1, "lo", 0x1)], [bad_addr])
+        with patch("pyroute2.IPRoute", ipr_cls):
+            _, addrs = multi_asic_get_kernel_intf_state("", netifaces.AF_INET)
+
+        assert addrs == []

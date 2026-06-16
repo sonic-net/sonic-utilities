@@ -78,17 +78,9 @@ def get_if_admin_state(iface, namespace):
     """
     Given an interface name, return its admin state reported by the kernel
     """
-    if namespace == constants.DEFAULT_NAMESPACE:
-        # Read sysfs directly — avoids spawning a subprocess per interface
-        try:
-            with open("/sys/class/net/{0}/flags".format(iface)) as f:
-                flags = int(f.read().strip(), 16)
-            return "up" if flags & 0x1 else "down"
-        except (OSError, ValueError):
-            return "error"
-
-    cmd = ["sudo", "ip", "netns", "exec", namespace,
-           "cat", "/sys/class/net/{0}/flags".format(iface)]
+    cmd = ["cat", "/sys/class/net/{0}/flags".format(iface)]
+    if namespace != constants.DEFAULT_NAMESPACE:
+        cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
     try:
         proc = subprocess.Popen(
             cmd,
@@ -108,23 +100,19 @@ def get_if_admin_state(iface, namespace):
     except ValueError:
         return "error"
 
-    return "up" if flags & 0x1 else "down"
+    if flags & 0x1:
+        return "up"
+    else:
+        return "down"
 
 
 def get_if_oper_state(iface, namespace):
     """
     Given an interface name, return its oper state reported by the kernel.
     """
-    if namespace == constants.DEFAULT_NAMESPACE:
-        # Read sysfs directly — avoids spawning a subprocess per interface
-        try:
-            with open("/sys/class/net/{0}/carrier".format(iface)) as f:
-                return "up" if f.read().strip() == "1" else "down"
-        except OSError:
-            return "error"
-
-    cmd = ["sudo", "ip", "netns", "exec", namespace,
-           "cat", "/sys/class/net/{0}/carrier".format(iface)]
+    cmd = ["cat", "/sys/class/net/{0}/carrier".format(iface)]
+    if namespace != constants.DEFAULT_NAMESPACE:
+        cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
     try:
         proc = subprocess.Popen(
             cmd,
@@ -139,7 +127,10 @@ def get_if_oper_state(iface, namespace):
         return "error"
 
     oper_state = state_file.rstrip()
-    return "up" if oper_state == "1" else "down"
+    if oper_state == "1":
+        return "up"
+    else:
+        return "down"
 
 
 def get_if_master(iface):
