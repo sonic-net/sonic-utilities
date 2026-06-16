@@ -615,5 +615,8 @@ class TestCounterpoll(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
+        path_parts = os.environ.get("PATH", "").split(os.pathsep)
+        if path_parts and path_parts[-1] == scripts_path:
+            path_parts = path_parts[:-1]
+        os.environ["PATH"] = os.pathsep.join(path_parts)
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
