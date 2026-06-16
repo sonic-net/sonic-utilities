@@ -89,6 +89,9 @@
 * [Hash](#hash)
   * [Hash show commands](#hash-show-commands)
   * [Hash config commands](#hash-config-commands)
+* [ICMP](#icmp)
+  * [ICMP show commands](#icmp-show-commands)
+  * [ICMP clear commands](#icmp-clear-commands)
 * [Interfaces](#interfaces)
   * [Interface Show Commands](#interface-show-commands)
   * [Interface Config Commands](#interface-config-commands)
@@ -472,6 +475,7 @@ This command displays the full list of show commands available in the software; 
     ecn                   Show ECN configuration
     environment           Show environmentals (voltages, fans, temps)
     feature               Show feature status
+    icmp                  Show icmp-offload information
     interfaces            Show details of the network interfaces
     ip                    Show IP (IPv4) commands
     ipv6                  Show IPv6 commands
@@ -6003,6 +6007,94 @@ Enable/disable Fast Link-Up per interface.
   admin@sonic:~$ config interface fast-linkup Ethernet0 enabled
   admin@sonic:~$ config interface fast-linkup Ethernet4 disabled
   ```
+
+## ICMP
+
+This section explains the show commands available for ICMP offload sessions and counters.
+
+### ICMP show commands
+
+**show icmp sessions**
+
+This command displays ICMP echo session information from `STATE_DB`.
+
+- Usage:
+  ```bash
+  show icmp sessions [<key>]
+  ```
+
+  - `<key>` format: `scope:port:guid:mode` (for example, `default:Ethernet0:0x4eb39592:RX`).
+  - `|` separators are accepted as input for compatibility.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp sessions
+  Key                                    Dst IP          Tx Interval    Rx Interval  HW lookup    Cookie      State
+  -------------------------------------  ------------  -------------  -------------  -----------  ----------  -------
+  default|Ethernet0|0x4eb39592|RX        192.168.0.3               0            300  false        0x58767e7a  Up
+  default|Ethernet8|0x69f578f5|NORMAL    192.168.0.5             100            300  false        0x58767e7a  Up
+  ```
+
+**show icmp summary**
+
+This command displays aggregate ICMP echo session counts.
+
+- Usage:
+  ```bash
+  show icmp summary
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp summary
+  Total Sessions: 4
+  Up sessions: 3
+  RX sessions: 1
+  ```
+
+**show icmp stats**
+
+This command displays per-session ICMP echo counters from `COUNTERS_DB`.
+The output includes receive/transmit packet and byte counters. In native mode, byte counters are shown as `N/A`.
+
+- Usage:
+  ```bash
+  show icmp stats [<key>] [-c|--clear]
+  ```
+
+  - Without `<key>`, all sessions with counters are displayed.
+  - With `<key>`, only the selected session is displayed.
+  - `-c`/`--clear` snapshots current counters as a local baseline. Subsequent `show icmp stats` output is shown as deltas from that baseline.
+  - `show icmp stats -c` is equivalent to `sonic-clear icmp counters`.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp stats default:Ethernet0:0x4eb39592:RX
+  Key                              State      RX Pkts    RX Bytes    TX Pkts    TX Bytes
+  -------------------------------  -------  ---------  ----------  ---------  ----------
+  default:Ethernet0:0x4eb39592:RX  Up            1234      188802          0           0
+  ```
+
+### ICMP clear commands
+
+**sonic-clear icmp counters**
+
+This command snapshots current ICMP echo session counters as the new baseline.
+Subsequent `show icmp stats` output is displayed as deltas from this baseline.
+Hardware counters in `COUNTERS_DB` are not reset.
+
+- Usage:
+  ```bash
+  sonic-clear icmp counters
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ sonic-clear icmp counters
+  Cleared ICMP echo session counter baseline at 2026-06-16 10:00:00
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#icmp)
 
 ## Interfaces
 
