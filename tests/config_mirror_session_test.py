@@ -810,7 +810,7 @@ def test_mirror_session_erspan_add_with_invalid_sample_rate():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--sample_rate", "-1"])
     assert result.exit_code != 0
-    assert 'must be 0 or in range 256..8388608' in result.output
+    assert 'must be 0 or in range 2..4294967295' in result.output
 
     # Verify invalid truncate_size (negative)
     result = runner.invoke(
@@ -824,45 +824,45 @@ def test_mirror_session_erspan_add_with_invalid_sample_rate():
 def test_mirror_session_erspan_add_sample_rate_boundary():
     runner = CliRunner()
 
-    # sample_rate=1 (in the 1-255 hole, should fail)
+    # sample_rate=1 (below minimum of 2, should fail)
     result = runner.invoke(
             config.config.commands["mirror_session"].commands["erspan"].commands["add"],
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--sample_rate", "1"])
     assert result.exit_code != 0
-    assert 'must be 0 or in range 256..8388608' in result.output
+    assert 'must be 0 or in range 2..4294967295' in result.output
 
-    # sample_rate=255 (upper boundary of hole, should fail)
-    result = runner.invoke(
-            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
-            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
-             "--sample_rate", "255"])
-    assert result.exit_code != 0
-    assert 'must be 0 or in range 256..8388608' in result.output
-
-    # sample_rate=256 (minimum valid, should pass)
+    # sample_rate=2 (minimum valid, should pass)
     with mock.patch('config.main.add_erspan') as _:
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
-                 "--sample_rate", "256"])
+                 "--sample_rate", "2"])
         assert result.exit_code == 0
 
-    # sample_rate=8388608 (maximum valid, should pass)
+    # sample_rate=100 (in the valid range, should pass)
     with mock.patch('config.main.add_erspan') as _:
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
-                 "--sample_rate", "8388608"])
+                 "--sample_rate", "100"])
         assert result.exit_code == 0
 
-    # sample_rate=8388609 (above maximum, should fail)
+    # sample_rate=4294967295 (maximum valid, should pass)
+    with mock.patch('config.main.add_erspan') as _:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+                 "--sample_rate", "4294967295"])
+        assert result.exit_code == 0
+
+    # sample_rate=4294967296 (above maximum, should fail)
     result = runner.invoke(
             config.config.commands["mirror_session"].commands["erspan"].commands["add"],
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
-             "--sample_rate", "8388609"])
+             "--sample_rate", "4294967296"])
     assert result.exit_code != 0
-    assert 'must be 0 or in range 256..8388608' in result.output
+    assert 'must be 0 or in range 2..4294967295' in result.output
 
 
 def test_mirror_session_erspan_add_truncate_size_boundary():

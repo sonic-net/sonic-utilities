@@ -128,15 +128,16 @@ GUID_MAX_LEN = 255
 asic_type = None
 
 
-SAMPLE_RATE_MIN = 256
-SAMPLE_RATE_MAX = 8388608
+SAMPLE_RATE_MIN = 2
+SAMPLE_RATE_MAX = 0xFFFFFFFF  # uint32 max
 TRUNCATE_SIZE_MIN = 64
 TRUNCATE_SIZE_MAX = 9216
 
 
 def validate_sample_rate(ctx, param, value):
     if value != 0 and (value < SAMPLE_RATE_MIN or value > SAMPLE_RATE_MAX):
-        raise click.BadParameter(f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX}")
+        raise click.BadParameter(
+            f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX} (uint32 max)")
     return value
 
 
@@ -3222,7 +3223,7 @@ def erspan(ctx):
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
 @click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
-              help="Sampling rate (1-in-N), 256..8388608. 0 disables sampling")
+              help="Sampling rate (1-in-N), 2..4294967295. 0 disables sampling")
 @click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
               help="Truncation size in bytes, 64..9216. 0 disables truncation")
 def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
