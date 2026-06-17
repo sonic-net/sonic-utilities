@@ -2202,9 +2202,14 @@ def ntp(ctx, verbose):
     chronyc_tracking_cmd = ["chronyc", "-n", "tracking"]
     chronyc_sources_cmd = ["chronyc", "-n", "sources"]
     if is_mgmt_vrf_enabled(ctx) is True:
-        # ManagementVRF is enabled. Call chronyc using "ip vrf exec" based on linux version
-        chronyc_tracking_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_tracking_cmd
-        chronyc_sources_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_sources_cmd
+        # Check if NTP is explicitly configured for default VRF
+        try:
+            _ntp_vrf = subprocess.check_output(["sonic-db-cli", "CONFIG_DB", "HGET", "NTP|global", "vrf"], text=True, stderr=subprocess.DEVNULL).strip()
+        except Exception:
+            _ntp_vrf = ""
+        if _ntp_vrf != "default":
+            chronyc_tracking_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_tracking_cmd
+            chronyc_sources_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_sources_cmd
 
     run_command(chronyc_tracking_cmd, display_cmd=verbose)
     run_command(chronyc_sources_cmd, display_cmd=verbose)
