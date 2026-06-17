@@ -1,0 +1,20 @@
+#!/bin/bash
+REBOOT_CAUSE_FILE="/host/reboot-cause/reboot-cause.txt"
+REBOOT_SCRIPT_NAME=$(basename $0)
+REBOOT_USER=$(logname)
+REBOOT_TIME=$(date)
+
+# Exit if not superuser
+if [[ "$EUID" -ne 0 ]]; then
+    echo "This command must be run as root" >&2
+    exit 1
+fi
+
+echo "User issued '${REBOOT_SCRIPT_NAME}' command [User: ${REBOOT_USER}, Time: ${REBOOT_TIME}]"> ${REBOOT_CAUSE_FILE}
+
+# Wait until all buffers synced with disk
+sync
+sleep 1
+sync
+
+exec /sbin/coldreboot $*
