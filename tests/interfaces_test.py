@@ -506,52 +506,54 @@ class TestInterfaces(object):
         assert result.exit_code != 0
         assert "Error: Invalid interface name Ethernet3" in result.output
 
-    @pytest.mark.skip(reason="Test is not working, needs investigation")
     def test_add_remove_sys_mac_portchannel(self):
         runner = CliRunner()
         db = Db()
         obj = {'config_db': db.cfgdb}
-        config.run_vtysh_command = mock.MagicMock(return_value=None)
-        result = runner.invoke(
-            config.config.commands["interface"].commands["sys-mac"].commands["add"],
-            ["PortChannel0001", "00:01:01:01:01:02"],
-            obj=obj,
-        )
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        pc_table = obj['config_db'].get_table("PORTCHANNEL")
-        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:02"
-        result = runner.invoke(
-            config.config.commands["interface"].commands["sys-mac"].commands["add"],
-            ["PortChannel0001", "00:01:01:01:01:03"],
-            obj=obj,
-        )
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        pc_table = obj['config_db'].get_table("PORTCHANNEL")
-        pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
-        result = runner.invoke(
-            config.config.commands["interface"].commands["sys-mac"].commands["remove"],
-            ["PortChannel0001", "00:01:01:01:01:02"],
-            obj=obj,
-        )
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 2
-        pc_table = obj['config_db'].get_table("PORTCHANNEL")
-        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
-        result = runner.invoke(
-            config.config.commands["interface"].commands["sys-mac"].commands["remove"],
-            ["PortChannel0001", "00:01:01:01:01:03"],
-            obj=obj,
-        )
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        pc_table = obj['config_db'].get_table("PORTCHANNEL")
-        assert pc_table["PortChannel0001"]['system_mac'] == 'None'
+        with mock.patch.object(config, 'run_vtysh_command'):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:02"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:02"
+
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["remove"],
+                ["PortChannel0001", "00:01:01:01:01:02"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 2
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["remove"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert 'system_mac' not in pc_table["PortChannel0001"]
 
     def test_invalid_multicast_sys_mac_portchannel(self):
         runner = CliRunner()

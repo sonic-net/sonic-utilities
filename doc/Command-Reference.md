@@ -75,6 +75,9 @@
 * [ECN](#ecn)
   * [ECN show commands](#ecn-show-commands)
   * [ECN config commands](#ecn-config-commands)
+* [EVPN-MH](#evpn-mh)
+  * [EVPN-MH config commands](#evpn-mh-config-commands)
+  * [EVPN-MH show commands](#evpn-mh-show-commands)
 * [Fabric](#fabric)
   * [Fabric config commands](#fabric-config-commands)
 * [Feature](#feature)
@@ -5099,6 +5102,173 @@ The list of the WRED profile fields that are configurable is listed in the below
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#ecn)
+
+## EVPN-MH
+
+This section explains all the Ethernet VPN Multi-Homing (EVPN-MH) commands that are supported in SONiC.
+
+### EVPN-MH config commands
+
+**config evpn-mh startup-delay <startup_delay>**
+
+This command configures the EVPN-MH startup delay in seconds.
+
+- Usage:
+  ```
+  config evpn-mh startup-delay <startup_delay>
+  ```
+
+- Parameters:
+  - _startup_delay_: delay in seconds. Valid values are 0-3600.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh startup-delay 300
+  ```
+
+**config evpn-mh mac-holdtime <mac_holdtime>**
+
+This command configures the EVPN-MH MAC hold time in seconds.
+
+- Usage:
+  ```
+  config evpn-mh mac-holdtime <mac_holdtime>
+  ```
+
+- Parameters:
+  - _mac_holdtime_: hold time in seconds. Valid values are 0-86400.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh mac-holdtime 1080
+  ```
+
+**config evpn-mh neigh-holdtime <neigh_holdtime>**
+
+This command configures the EVPN-MH neighbor hold time in seconds.
+
+- Usage:
+  ```
+  config evpn-mh neigh-holdtime <neigh_holdtime>
+  ```
+
+- Parameters:
+  - _neigh_holdtime_: hold time in seconds. Valid values are 0-86400.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh neigh-holdtime 1080
+  ```
+
+**config interface evpn-esi add <interface_name> <esi_type>**
+**config interface evpn-esi del <interface_name>**
+
+These commands configure or remove an EVPN Ethernet Segment on an interface.
+
+- Usage:
+  ```
+  config interface evpn-esi add <interface_name> <esi_type>
+  config interface evpn-esi del <interface_name>
+  ```
+
+- Parameters:
+  - _interface_name_: PortChannel interface name.
+  - _esi_type_: `auto-system-mac` or a type-0 operator-configured ESI in `XX:XX:XX:XX:XX:XX:XX:XX:XX:XX` format.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface evpn-esi add PortChannel01 auto-system-mac
+  admin@sonic:~$ sudo config interface evpn-esi add PortChannel02 00:01:02:03:04:05:06:07:08:09
+  admin@sonic:~$ sudo config interface evpn-esi del PortChannel01
+  ```
+
+**config interface evpn-df-pref <interface_name> <df_pref>**
+
+This command configures the EVPN Ethernet Segment designated-forwarder preference for an interface.
+
+- Usage:
+  ```
+  config interface evpn-df-pref <interface_name> <df_pref>
+  ```
+
+- Parameters:
+  - _interface_name_: PortChannel interface name.
+  - _df_pref_: designated-forwarder preference. Valid values are 1-65535.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface evpn-df-pref PortChannel01 32767
+  ```
+
+### EVPN-MH show commands
+
+**show evpn**
+
+This command displays EVPN information from BGP.
+
+- Usage:
+  ```
+  show evpn
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn
+  ```
+
+**show evpn es [<esi>]**
+
+This command displays EVPN Ethernet Segment information. An optional ESI filters the output to one Ethernet Segment.
+
+- Usage:
+  ```
+  show evpn es [<esi>]
+  ```
+
+- Parameters:
+  - _esi_: optional ESI in `XX:XX:XX:XX:XX:XX:XX:XX:XX:XX` format.
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn es
+  admin@sonic:~$ show evpn es 00:01:02:03:04:05:06:07:08:09
+  ```
+
+**show evpn es-evi [<vni>|detail]**
+
+This command displays Ethernet Segment per-EVI information.
+
+- Usage:
+  ```
+  show evpn es-evi [<vni>|detail]
+  ```
+
+- Parameters:
+  - _vni_: optional VXLAN Network Identifier. Valid values are 1-16777215.
+  - _detail_: display detailed Ethernet Segment per-EVI information.
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn es-evi
+  admin@sonic:~$ show evpn es-evi 100
+  admin@sonic:~$ show evpn es-evi detail
+  ```
+
+**show evpn l2-nh**
+
+This command displays EVPN Layer 2 nexthops.
+
+- Usage:
+  ```
+  show evpn l2-nh
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn l2-nh
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#evpn-mh)
 
 ## Fabric
 
