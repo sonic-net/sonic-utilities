@@ -24,6 +24,7 @@
         "brkout_mode": "1x100G[40G]"
     },
     "PORT|Ethernet0": {
+        "admin_status": "up",
         "alias": "etp1",
         "description": "etp1",
         "index": "0",
