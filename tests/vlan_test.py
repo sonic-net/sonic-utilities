@@ -1875,7 +1875,6 @@ class TestVlanBriefCache:
         """tagging_by_vlan must have the same order as ports_by_vlan so the
         two columns line up row-for-row in the table."""
         from show.vlan import _get_brief_cache
-        from natsort import natsorted
 
         members = {
             ("Vlan1000", "Ethernet12"): {"tagging_mode": "untagged"},
