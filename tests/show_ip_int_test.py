@@ -167,6 +167,35 @@ class TestMultiAsicGetKernelIntfState:
     helpers) are mocked so no kernel privileges are required.
     """
 
+    @pytest.fixture(autouse=True)
+    def _restore_real_helper(self):
+        """Expose the genuine implementation to the tests in this class.
+
+        tests/conftest.py imports tests.mock_tables.mock_single_asic at session
+        scope, whose module-level code replaces
+        utilities_common.multi_asic.multi_asic_get_kernel_intf_state with a
+        synthetic stub that walks mock_intf_table.  Without undoing that, the
+        ``from utilities_common.multi_asic import multi_asic_get_kernel_intf_state``
+        lines below would import the stub instead of the real pyroute2-based
+        helper.  Load a pristine copy straight from source and temporarily bind
+        it onto the shared module for the duration of each test, restoring the
+        stub afterwards so the rest of the suite is unaffected.
+        """
+        import importlib.util
+        import utilities_common.multi_asic as mod
+
+        spec = importlib.util.spec_from_file_location(
+            "utilities_common._multi_asic_real_for_test", mod.__file__)
+        real_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(real_mod)
+
+        saved = mod.multi_asic_get_kernel_intf_state
+        mod.multi_asic_get_kernel_intf_state = real_mod.multi_asic_get_kernel_intf_state
+        try:
+            yield
+        finally:
+            mod.multi_asic_get_kernel_intf_state = saved
+
     @staticmethod
     def _make_link(idx, name, flags, master=None, operstate="UP"):
         link = MagicMock()
