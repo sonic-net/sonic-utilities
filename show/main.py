@@ -377,6 +377,9 @@ def vrf(vrf_name):
             vrfs = list(vrf_dict.keys())
         elif vrf_name in vrf_dict:
             vrfs = [vrf_name]
+        else:
+            click.echo("VRF '{}' not found.".format(vrf_name))
+            return
         for vrf in vrfs:
             intfs = get_interface_bind_to_vrf(config_db, vrf)
             intfs = natsorted(intfs)
