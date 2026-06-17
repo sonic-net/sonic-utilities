@@ -24,3 +24,27 @@ class TestConfigInterfaceMtu(object):
         result1 = runner.invoke(config.config.commands["interface"].commands["mtu"],
             ["Ethernet0", "9217"], obj=db)
         assert "Error: Invalid value" in result1.output
+
+    def test_portchannel_mtu_check(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb, 'db_wrap': db, 'namespace': ''}
+        # Ethernet32 is already member of PortChannel1001, try (fail) to change mtu
+        result = runner.invoke(
+                            config.config.commands["interface"].commands["mtu"],
+                            ["Ethernet32", "1000"], obj=obj)
+        assert result.exit_code != 0
+        # remove port from portchannel
+        result = runner.invoke(
+                            config.config.commands["portchannel"].commands["member"].commands["del"],
+                            ["PortChannel1001", "Ethernet32"], obj=obj)
+        assert result.exit_code == 0
+        # Set mtu for port interface
+        result = runner.invoke(config.config.commands["interface"].commands["mtu"], ["Ethernet32", "1000"], obj=obj)
+        assert result.exit_code != 0
+        # Add port back to portchannel
+        result = runner.invoke(
+                            config.config.commands["portchannel"].commands["member"].commands["add"],
+                            ["PortChannel1001", "Ethernet32"], obj=obj)
+        print(result.output)
+        assert result.exit_code == 0
