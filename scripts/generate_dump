@@ -1783,9 +1783,19 @@ collect_broadcom() {
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
         # copy all the files in the HWSKU directory
         pushd /usr/share/sonic/device/${platform}/${hwsku} > /dev/null
-        for file in $(find . -maxdepth 2 -type f); do
-            save_file ${file} sai false
-        done
+        # Preserve immediate subdirs (e.g. per-ASIC 0/, 1/) under sai/; basename-only
+        local rel parent supp_sub file
+        while IFS= read -r file; do
+            rel="${file#./}"
+            parent=$(dirname "$rel")
+            if [ "$parent" = "." ]; then
+                supp_sub="sai"
+            else
+                supp_sub="sai/${parent}"
+            fi
+            save_file "${file}" "$supp_sub" false
+        done < <(find . -maxdepth 2 -type f)
+
         popd > /dev/null
 
         if [[ ("$NUM_ASICS" > 1) ]]; then
