@@ -1121,7 +1121,13 @@
         "runner.actor_lacpdu_info.system": "52:54:00:f2:e1:23",
         "runner.aggregator.selected": "false",
         "runner.aggregator.id": "0",
+        "runner.actor_lacpdu_info.key": "5",
+        "runner.partner_lacpdu_info.key": "5",
+        "runner.counters.lacp-out-packets": "23829",
+        "runner.counters.lacp-in-packets": "23808",
+        "runner.counters.lacp-rx-errors": "20",
         "link.up": "false",
+	"link.speed": "10000",
         "ifinfo.ifindex": "98"
     },
     "LAG_MEMBER_TABLE|PortChannel0002|Ethernet116": {
@@ -1137,7 +1143,13 @@
         "runner.actor_lacpdu_info.system": "52:54:00:f2:e1:23",
         "runner.aggregator.selected": "true",
         "runner.aggregator.id": "97",
+        "runner.actor_lacpdu_info.key": "1",
+        "runner.partner_lacpdu_info.key": "1",
+        "runner.counters.lacp-out-packets": "28112",
+        "runner.counters.lacp-in-packets": "28103",
+        "runner.counters.lacp-rx-errors": "0",
         "link.up": "true",
+	"link.speed": "40000",
         "ifinfo.ifindex": "97"
     },
     "LAG_MEMBER_TABLE|PortChannel0003|Ethernet120": {
@@ -1153,10 +1165,17 @@
         "runner.actor_lacpdu_info.system": "52:54:00:f2:e1:23",
         "runner.aggregator.selected": "true",
         "runner.aggregator.id": "100",
+	"runner.actor_lacpdu_info.key": "4",
+	"runner.partner_lacpdu_info.key": "4",
+	"runner.counters.lacp-out-packets": "41539",
+	"runner.counters.lacp-in-packets": "41533",
+	"runner.counters.lacp-rx-errors": "0",
         "link.up": "true",
+	"link.speed": "400000",
         "ifinfo.ifindex": "100"
     },
     "LAG_TABLE|PortChannel0001": {
+	"oper_status": "down",
         "runner.fallback": "false",
         "team_device.ifinfo.dev_addr": "52:54:00:f2:e1:23",
         "team_device.ifinfo.ifindex": "71",
@@ -1164,9 +1183,11 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+	"runner.sys_prio": "10000"
     },
     "LAG_TABLE|PortChannel0002": {
+	"oper_status": "down",
         "runner.fallback": "false",
         "team_device.ifinfo.dev_addr": "52:54:00:f2:e1:23",
         "team_device.ifinfo.ifindex": "72",
@@ -1174,9 +1195,11 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+	"runner.sys_prio": "20000"
     },
     "LAG_TABLE|PortChannel0003": {
+	"oper_status": "up",
         "runner.fallback": "false",
         "team_device.ifinfo.dev_addr": "52:54:00:f2:e1:23",
         "team_device.ifinfo.ifindex": "73",
@@ -1184,7 +1207,8 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+	"runner.sys_prio": "30000"
     },
     "LAG_TABLE|PortChannel0004": {
         "runner.fallback": "false",
@@ -1194,7 +1218,8 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+	"runner.sys_prio": "40000"
     },
     "FAN_INFO|fan1": {
         "drawer_name": "drawer1",
