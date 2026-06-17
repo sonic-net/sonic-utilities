@@ -202,7 +202,7 @@ class NatConfig(object):
         """
             Fetch NAT zone config from CONFIG DB.
         """
-        interfaces = ['INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE', 'LOOPBACK_INTERFACE'] 
+        interfaces = ['INTERFACE', 'VLAN_SUB_INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE', 'LOOPBACK_INTERFACE']
 
         self.nat_zone_data = []
 
