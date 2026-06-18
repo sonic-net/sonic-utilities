@@ -25,6 +25,7 @@ from swsscommon.swsscommon import SonicV2Connector
 header = ['Drawer', 'LED', 'FAN', 'Speed', 'Direction', 'Presence', 'Status', 'Timestamp']
 
 FAN_TABLE_NAME = 'FAN_INFO'
+FAN_DRAWER_TABLE_NAME = 'FAN_DRAWER_INFO'
 DRAWER_FIELD_NAME = 'drawer_name'
 SPEED_FIELD_NAME = 'speed'
 DIRECTION_FIELD_NAME = 'direction'
@@ -39,11 +40,38 @@ class FanShow(object):
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
 
+    def _get_drawer_led_cache(self):
+        """Build a cache of drawer_name -> led_status from FAN_DRAWER_INFO table."""
+        cache = {}
+        drawer_keys = self.db.keys(self.db.STATE_DB, FAN_DRAWER_TABLE_NAME + '*')
+        if not drawer_keys:
+            return cache
+        for key in drawer_keys:
+            key_list = key.split('|')
+            if len(key_list) != 2: # error data in DB, ignore, already logged in show
+                continue
+            drawer_name = key_list[1]
+            data_dict = self.db.get_all(self.db.STATE_DB, key)
+            led = data_dict.get(LED_STATUS_FIELD_NAME, '')
+            if led != '':
+                cache[drawer_name] = led
+        return cache
+
+    def _get_fan_led(self, data_dict, drawer_led_cache):
+        """Get LED status for a fan, falling back to drawer LED if per-fan LED is N/A."""
+        led = data_dict.get(LED_STATUS_FIELD_NAME, '')
+        if led != '':
+            return led
+        drawer_name = data_dict.get(DRAWER_FIELD_NAME, 'N/A')
+        return drawer_led_cache.get(drawer_name, 'N/A')
+
     def show(self):
         keys = self.db.keys(self.db.STATE_DB, FAN_TABLE_NAME + '*')
         if not keys:
             print('Fan Not detected\n')
             return
+
+        drawer_led_cache = self._get_drawer_led_cache()
 
         table = []
         for key in natsorted(keys):
@@ -54,26 +82,33 @@ class FanShow(object):
 
             name = key_list[1]
             data_dict = self.db.get_all(self.db.STATE_DB, key)
-            try:
-                speed = float(data_dict[SPEED_FIELD_NAME])
-                if speed > 100:
-                    speed = '{}RPM'.format(int(speed))
-                else:
-                    speed = '{}%'.format(data_dict[SPEED_FIELD_NAME])
-            except ValueError as e:
-                speed = data_dict[SPEED_FIELD_NAME]
 
-            presence = data_dict[PRESENCE_FIELD_NAME].lower()
-            presence = 'Present' if presence == 'true' else 'Not Present'
-            status = data_dict[STATUS_FIELD_NAME]
+            presence_raw = data_dict.get(PRESENCE_FIELD_NAME, 'N/A').lower()
+            presence = 'Present' if presence_raw == 'true' else 'Not Present'
+
+            if presence == 'Not Present':
+                table.append((data_dict.get(DRAWER_FIELD_NAME, 'N/A'), self._get_fan_led(data_dict, drawer_led_cache), name, 'N/A', 'N/A', presence, 'Not Installed', data_dict.get(TIMESTAMP_FIELD_NAME, 'N/A')))
+                continue
+
+            speed_raw = data_dict.get(SPEED_FIELD_NAME)
+            try:
+                speed = float(speed_raw)
+                if speed > 100:
+                    speed_str = '{}RPM'.format(int(speed))
+                else:
+                    speed_str = '{}%'.format(speed_raw)
+            except (ValueError, TypeError):
+                speed_str = "N/A"
+
+            status = data_dict.get(STATUS_FIELD_NAME, '')
             status_lower = status.lower()
             if status_lower == 'true':
                 status = 'OK'
             elif status_lower == 'false':
                 status = 'Not OK'
 
-            table.append((data_dict[DRAWER_FIELD_NAME], data_dict[LED_STATUS_FIELD_NAME], name, speed, data_dict[DIRECTION_FIELD_NAME], presence, status,
-                          data_dict[TIMESTAMP_FIELD_NAME]))
+            table.append((data_dict.get(DRAWER_FIELD_NAME, 'N/A'), self._get_fan_led(data_dict, drawer_led_cache), name, speed_str, data_dict.get(DIRECTION_FIELD_NAME, 'N/A'), presence, status,
+                          data_dict.get(TIMESTAMP_FIELD_NAME, 'N/A')))
         if table:
             print(tabulate(table, header, tablefmt='simple', stralign='right'))
         else:
