@@ -5324,3 +5324,65 @@ class TestConfigBanner(object):
     @classmethod
     def teardown_class(cls):
         print('TEARDOWN')
+
+
+class TestSwssReady(object):
+    """Tests for the 'config reload' swss readiness gate on platforms without
+    swss (e.g. BMC), plus regression guards for normal switches."""
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        import config.main
+        importlib.reload(config.main)
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+
+    def test_swss_ready_when_service_not_found(self):
+        # BMC: swss not built in -> not-found -> ready, only LoadState queried.
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(return_value=("not-found", 0))) as mock_run:
+            assert config._per_namespace_swss_ready("swss.service") is True
+            assert mock_run.call_count == 1
+
+    def test_swss_ready_when_service_masked(self):
+        # Masked service -> ready, same as not-found.
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(return_value=("masked", 0))) as mock_run:
+            assert config._per_namespace_swss_ready("swss.service") is True
+            assert mock_run.call_count == 1
+
+    def test_swss_not_ready_when_loaded_but_inactive(self):
+        # Switch still booting: loaded but inactive -> not ready.
+        side_effect = [("loaded", 0), ("inactive", 0)]
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)):
+            assert config._per_namespace_swss_ready("swss.service") is False
+
+    def test_swss_not_ready_when_active_but_not_settled(self):
+        # Active for < 120s -> not ready.
+        side_effect = [("loaded", 0), ("active", 0), ("1000000000", 0)]  # up = 1000s
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)), \
+                mock.patch('config.main.time.monotonic',
+                           mock.MagicMock(return_value=1050.0)):  # 50s < 120s
+            assert config._per_namespace_swss_ready("swss.service") is False
+
+    def test_swss_ready_when_active_and_settled(self):
+        # Active for > 120s -> ready.
+        side_effect = [("loaded", 0), ("active", 0), ("1000000000", 0)]  # up = 1000s
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)), \
+                mock.patch('config.main.time.monotonic',
+                           mock.MagicMock(return_value=2000.0)):  # 1000s > 120s
+            assert config._per_namespace_swss_ready("swss.service") is True
+
+    def test_swss_ready_single_asic_not_found(self):
+        # _swss_ready() end-to-end, single-ASIC, swss not-found.
+        with mock.patch('config.main.multi_asic.get_num_asics',
+                        mock.MagicMock(return_value=1)), \
+                mock.patch('config.main.clicommon.run_command',
+                           mock.MagicMock(return_value=("not-found", 0))):
+            assert config._swss_ready() is True

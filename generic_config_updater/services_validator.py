@@ -159,6 +159,31 @@ def caclmgrd_validator(old_config, upd_config, keys):
 def ntp_validator(old_config, upd_config, keys):
     return _service_restart("chrony")
 
+
+def gnmi_validator(old_config, upd_config, keys):
+    old_gnmi = old_config.get("GNMI", {})
+    upd_gnmi = upd_config.get("GNMI", {})
+
+    old_vrf = old_gnmi.get("gnmi", {}).get("vrf", "")
+    upd_vrf = upd_gnmi.get("gnmi", {}).get("vrf", "")
+
+    if old_vrf != upd_vrf:
+        return _service_restart("gnmi")
+    return True
+
+
+def telemetry_validator(old_config, upd_config, keys):
+    old_telemetry = old_config.get("TELEMETRY", {})
+    upd_telemetry = upd_config.get("TELEMETRY", {})
+
+    old_vrf = old_telemetry.get("gnmi", {}).get("vrf", "")
+    upd_vrf = upd_telemetry.get("gnmi", {}).get("vrf", "")
+
+    if old_vrf != upd_vrf:
+        return _service_restart("telemetry")
+    return True
+
+
 def vlanintf_validator(old_config, upd_config, keys):
     old_vlan_intf = old_config.get("VLAN_INTERFACE", {})
     upd_vlan_intf = upd_config.get("VLAN_INTERFACE", {})
