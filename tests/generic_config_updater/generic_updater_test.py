@@ -42,7 +42,7 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier.config_wrapper.get_config_db_as_json.assert_has_calls([call(), call()])
         patch_applier.patch_wrapper.simulate_patch.assert_has_calls(
             [call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, Files.CONFIG_DB_AS_JSON)])
-        patch_applier.patchsorter.sort.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH)])
+        patch_applier.patchsorter.sort.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, trace_io=None)])
         patch_applier.changeapplier.apply.assert_called()
         patch_applier.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
@@ -99,7 +99,9 @@ class TestConfigReplacer(unittest.TestCase):
         config_replacer.config_wrapper.get_config_db_as_json.assert_has_calls([call(), call()])
         config_replacer.patch_wrapper.generate_patch.assert_has_calls(
             [call(Files.CONFIG_DB_AS_JSON, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
-        config_replacer.patch_applier.apply.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH)])
+        config_replacer.patch_applier.apply.assert_has_calls(
+            [call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, trace_io=None)]
+        )
         config_replacer.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
 
@@ -640,7 +642,7 @@ class TestGenericUpdater(unittest.TestCase):
                                     self.any_ignore_paths)
 
         # Assert
-        patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True)])
+        patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)])
 
     def test_replace__creates_replacer_and_replace(self):
         # Arrange
@@ -667,7 +669,7 @@ class TestGenericUpdater(unittest.TestCase):
                                 self.any_ignore_paths)
 
         # Assert
-        config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON)])
+        config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON, trace_io=None)])
 
     def test_rollback__creates_rollbacker_and_rollback(self):
         # Arrange
@@ -784,14 +786,16 @@ class TestDecorator(unittest.TestCase):
         self.decorator.apply(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)
 
         # Assert
-        self.decorated_patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+        self.decorated_patch_applier.apply.assert_has_calls(
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)]
+        )
 
     def test_replace__calls_decorated_replacer(self):
         # Act
         self.decorator.replace(Files.SONIC_YANG_AS_JSON)
 
         # Assert
-        self.decorated_config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON)])
+        self.decorated_config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON, trace_io=None)])
 
     def test_rollback__calls_decorated_rollbacker(self):
         # Act
@@ -835,9 +839,11 @@ class TestSonicYangDecorator(unittest.TestCase):
 
         # Assert
         sonic_yang_decorator.patch_wrapper.convert_sonic_yang_patch_to_config_db_patch.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)]
+        )
         sonic_yang_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH)])
+            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH, True, trace_io=None)]
+        )
 
     def test_replace__converts_to_config_db_and_calls_decorated_class(self):
         # Arrange
@@ -849,11 +855,15 @@ class TestSonicYangDecorator(unittest.TestCase):
         # Assert
         sonic_yang_decorator.config_wrapper.convert_sonic_yang_to_config_db.assert_has_calls(
             [call(Files.SONIC_YANG_AS_JSON)])
-        sonic_yang_decorator.decorated_config_replacer.replace.assert_has_calls([call(Files.CONFIG_DB_AS_JSON)])
+        sonic_yang_decorator.decorated_config_replacer.replace.assert_has_calls(
+            [call(Files.CONFIG_DB_AS_JSON, trace_io=None)]
+        )
 
     def __create_sonic_yang_decorator(self):
         patch_applier = Mock()
-        patch_applier.apply.side_effect = create_side_effect_dict({(str(Files.SINGLE_OPERATION_CONFIG_DB_PATCH),): 0})
+        patch_applier.apply.side_effect = create_side_effect_dict(
+            {(str(Files.SINGLE_OPERATION_CONFIG_DB_PATCH), 'True'): 0}
+        )
 
         patch_wrapper = Mock()
         patch_wrapper.convert_sonic_yang_patch_to_config_db_patch.side_effect = \
@@ -886,7 +896,8 @@ class TestConfigLockDecorator(unittest.TestCase):
         # Assert
         config_lock_decorator.config_lock.acquire_lock.assert_called_once()
         config_lock_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)]
+        )
         config_lock_decorator.config_lock.release_lock.assert_called_once()
 
     def test_replace__lock_config(self):
@@ -898,7 +909,9 @@ class TestConfigLockDecorator(unittest.TestCase):
 
         # Assert
         config_lock_decorator.config_lock.acquire_lock.assert_called_once()
-        config_lock_decorator.decorated_config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON)])
+        config_lock_decorator.decorated_config_replacer.replace.assert_has_calls(
+            [call(Files.SONIC_YANG_AS_JSON, trace_io=None)]
+        )
         config_lock_decorator.config_lock.release_lock.assert_called_once()
 
     def test_rollback__lock_config(self):
@@ -929,7 +942,9 @@ class TestConfigLockDecorator(unittest.TestCase):
         config_lock = Mock()
 
         patch_applier = Mock()
-        patch_applier.apply.side_effect = create_side_effect_dict({(str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH),): 0})
+        patch_applier.apply.side_effect = create_side_effect_dict(
+            {(str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH), 'True'): 0}
+        )
 
         config_replacer = Mock()
         config_replacer.replace.side_effect = create_side_effect_dict({(str(Files.SONIC_YANG_AS_JSON),): 0})

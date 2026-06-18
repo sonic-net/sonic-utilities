@@ -197,8 +197,6 @@ class TestPfcstat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         del_cached_stats()
 
     def test_pfc_counters(self):
@@ -262,9 +260,6 @@ class TestPfcstat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         del_cached_stats()
 
@@ -274,7 +269,6 @@ class TestMultiAsicPfcstat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         del_cached_stats()
@@ -384,11 +378,6 @@ class TestMultiAsicPfcstat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         del_cached_stats()
         import mock_tables.mock_single_asic
         importlib.reload(mock_tables.mock_single_asic)

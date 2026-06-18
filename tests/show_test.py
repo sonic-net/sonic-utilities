@@ -77,7 +77,6 @@ class TestShowRunAllCommands(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
 
@@ -116,7 +115,6 @@ class TestShowRunAllCommandsMasic(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config
@@ -242,15 +240,249 @@ def side_effect_subprocess_popen(*args, **kwargs):
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version():
     runner = CliRunner()
     result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "SONiC Software Version: SONiC.release-1.1-7d94c0c28" in result.output
     assert "SONiC OS Version: 11" in result.output
+    assert "Distribution: Debian 11.6" in result.output
+    assert "Kernel: 5.10" in result.output
+    assert "Build commit: 7d94c0c28" in result.output
+    assert "Build date: Wed Feb 15 06:17:08 UTC 2023" in result.output
+    assert "Built by: AzDevOps" in result.output
+    assert "Platform: x86_64-kvm_x86_64-r0" in result.output
+    assert "HwSKU: Force10-S6000" in result.output
+    assert "ASIC: vs" in result.output
+    assert "ASIC Count: 1" in result.output
+    assert "Serial Number: N/A" in result.output
+    assert "Docker images:" in result.output
+    assert "REPOSITORY   TAG" in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "x86_64-kvm_x86_64-r0",
+        "hwsku": "Force10-S6000",
+        "asic_type": "vs",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "N/A",
+        "model": "N/A",
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_brief():
+    """Test that --brief flag omits docker image information."""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"], ["--brief"])
+    assert result.exit_code == 0
+    assert "SONiC Software Version: SONiC.release-1.1-7d94c0c28" in result.output
+    assert "SONiC OS Version: 11" in result.output
+    assert "Platform: x86_64-kvm_x86_64-r0" in result.output
+    assert "HwSKU: Force10-S6000" in result.output
+    assert "Docker images:" not in result.output
+    assert "REPOSITORY" not in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "",
+        "commit_id": "46415d112",
+        "build_date": "Mon Mar  2 03:02:39 UTC 2026",
+        "built_by": "test@host",
+        "sonic_os_version": "13"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "x86_64-kvm_x86_64-r0",
+        "hwsku": "Force10-S6000",
+        "asic_type": "vs",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "N/A",
+        "model": "N/A",
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_missing_fields():
+    """Test show version doesn't crash when debian_version and kernel_version are missing.
+
+    docker-sonic-vs containers may not have these fields in sonic_version.yml
+    since they are only populated during full image builds.
+    """
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0, "show version crashed: {}".format(result.output)
+    assert "Distribution: Debian N/A" in result.output
+    assert "Kernel:" in result.output
+    assert "Build commit: 46415d112" in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": "SWITCH-SN-789012"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_bmc_with_switch_host_serial():
+    """Test show version displays switch-host serial on BMC platforms"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "SONiC Software Version: SONiC.release-1.1-7d94c0c28" in result.output
+    assert "Platform: arm64-nexthop_b27-r0" in result.output
+    assert "ASIC: aspeed" in result.output
+    assert "Serial Number: BMC-SN-123456" in result.output
+    assert "Switch-Host Serial Number: SWITCH-SN-789012" in result.output
+    assert "Model Number: BMC-MODEL-1" in result.output
+    # Verify the switch-host serial appears after the regular serial
+    serial_pos = result.output.find("Serial Number: BMC-SN-123456")
+    switch_serial_pos = result.output.find("Switch-Host Serial Number: SWITCH-SN-789012")
+    assert serial_pos < switch_serial_pos, "Switch-Host Serial should appear after Serial Number"
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_bmc_without_switch_host_serial():
+    """Test show version doesn't display switch-host serial when N/A"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "Serial Number: BMC-SN-123456" in result.output
+    assert "Switch-Host Serial Number" not in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "x86_64-mlnx_msn2700-r0",
+        "hwsku": "Mellanox-SN2700",
+        "asic_type": "mellanox",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "MT1822K07815",
+        "model": "MSN2700-CS2FO",
+        "revision": "A1",
+        "switch_host_serial": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_non_bmc_platform():
+    """Test show version on non-BMC platform doesn't show switch-host serial"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "Platform: x86_64-mlnx_msn2700-r0" in result.output
+    assert "ASIC: mellanox" in result.output
+    assert "Serial Number: MT1822K07815" in result.output
+    assert "Switch-Host Serial Number" not in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": "SWITCH-SN-789012"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_brief_bmc_with_switch_host_serial():
+    """Test show version --brief displays switch-host serial on BMC platforms"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"], ["--brief"])
+    assert result.exit_code == 0
+    assert "Platform: arm64-nexthop_b27-r0" in result.output
+    assert "Serial Number: BMC-SN-123456" in result.output
+    assert "Switch-Host Serial Number: SWITCH-SN-789012" in result.output
+    # Verify Docker images section is omitted with --brief
+    assert "Docker images:" not in result.output
+    assert "REPOSITORY" not in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": ""}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_bmc_with_empty_switch_host_serial():
+    """Test show version handles empty string switch-host serial"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "Serial Number: BMC-SN-123456" in result.output
+    # Empty string is not N/A, so it should appear
+    assert "Switch-Host Serial Number:" in result.output
+
 
 class TestShowAcl(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -271,12 +503,12 @@ class TestShowAcl(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['acl-loader', 'show', 'table', 'EVERFLOW'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowChassis(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -306,12 +538,12 @@ class TestShowChassis(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['voqutil', '-c', 'system_lags', '-n', 'asic0', '-l', 'Linecard6'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowFabric(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -334,12 +566,12 @@ class TestShowFabric(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(["fabricstat", '-q', '-n', 'asic0'])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowFlowCounters(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -382,12 +614,12 @@ class TestShowFlowCounters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['flow_counters_stat', '-t', 'route', '--prefix', '2001::/64', '--vrf', 'Vrf_1', '-n', 'asic0'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowInterfaces(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -639,12 +871,12 @@ class TestShowInterfaces(object):
             display_cmd=True,
         )
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowIp(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -665,16 +897,20 @@ class TestShowIp(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'ipintutil', '-a', 'ipv6', '-d', 'all'])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowVxlan(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
+    @patch('show.vxlan.ConfigDBConnector')
     @patch('utilities_common.cli.run_command')
-    def test_counters(self, mock_run_command):
+    def test_counters(self, mock_run_command, mock_cfg_db_cls):
+        mock_cfg_db = MagicMock()
+        mock_cfg_db.get_entry.return_value = {'src_ip': '10.0.0.1'}
+        mock_cfg_db_cls.return_value = mock_cfg_db
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['vxlan'].commands['counters'], ['-p', '3', 'tunnel1', '--verbose'])
         print(result.exit_code)
@@ -682,12 +918,12 @@ class TestShowVxlan(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['tunnelstat', '-T', 'vxlan', '-p', '3', '-i', 'tunnel1'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowNat(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -780,12 +1016,12 @@ class TestShowNat(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'natconfig', '-z'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowProcesses(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -815,12 +1051,12 @@ class TestShowProcesses(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['top', '-bn', '1', '-o', '%MEM'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowPlatform(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -881,11 +1117,11 @@ class TestShowPlatform(object):
         assert result.exit_code == 0
         mock_check_call.assert_called_with(["sudo", "fwutil", "show"])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 class TestShowQuagga(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('show.main.run_command')
@@ -920,12 +1156,12 @@ class TestShowQuagga(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 bgp neighbor 0.0.0.0 routes"])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShow(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('show.main.run_command')
@@ -933,14 +1169,54 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["arp"], ['0.0.0.0', '-if', 'Ethernet0', '--verbose'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['nbrshow', '-4', '-ip', '0.0.0.0', '-if', 'Ethernet0'], display_cmd=True)
+        mock_run_command.assert_called_with(
+            ['nbrshow', '-4', '-ip', '0.0.0.0', '-if', 'Ethernet0', '-d', 'all'], display_cmd=True)
 
     @patch('show.main.run_command')
     def test_show_ndp(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["ndp"], ['0.0.0.0', '-if', 'Ethernet0', '--verbose'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['nbrshow', '-6', '-ip', '0.0.0.0', '-if', 'Ethernet0'], display_cmd=True)
+        mock_run_command.assert_called_with(
+            ['nbrshow', '-6', '-ip', '0.0.0.0', '-if', 'Ethernet0', '-d', 'all'], display_cmd=True)
+
+    @patch('show.main.run_command')
+    def test_show_arp_with_display_all(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["arp"], ['-d', 'all', '--verbose'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['nbrshow', '-4', '-d', 'all'], display_cmd=True)
+
+    @patch('show.main.run_command')
+    def test_show_ndp_with_display_all(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["ndp"], ['-d', 'all', '--verbose'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['nbrshow', '-6', '-d', 'all'], display_cmd=True)
+
+    @patch('show.main.run_command')
+    def test_show_arp_with_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["arp"], ['10.0.0.1', '-n', '', '--verbose'], catch_exceptions=False)
+        assert result.exit_code == 0
+        call_args = mock_run_command.call_args[0][0]
+        assert 'nbrshow' in call_args
+        assert '-4' in call_args
+        assert '-ip' in call_args
+        assert '10.0.0.1' in call_args
+        assert '-n' in call_args or '-d' in call_args
+
+    @patch('show.main.run_command')
+    def test_show_ndp_with_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["ndp"], ['fc00::1', '-n', '', '--verbose'], catch_exceptions=False)
+        assert result.exit_code == 0
+        call_args = mock_run_command.call_args[0][0]
+        assert 'nbrshow' in call_args
+        assert '-6' in call_args
+        assert '-ip' in call_args
+        assert 'fc00::1' in call_args
+        assert '-n' in call_args or '-d' in call_args
 
     @patch('show.main.run_command')
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
@@ -948,7 +1224,7 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["mgmt-vrf"], ['routes'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['ip', 'route', 'show', 'table', '5000'])
+        mock_run_command.assert_called_with(['ip', 'route', 'show', 'table', '6000'])
 
     @patch('show.main.run_command')
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
@@ -1216,7 +1492,7 @@ class TestShow(object):
                           call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
@@ -1260,7 +1536,7 @@ class TestShowRunningconfiguration(object):
 
 
 class TestShowSRv6Counters(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -1281,7 +1557,7 @@ class TestShowSRv6Counters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['srv6stat', '-s', '1000:2:30::/48'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 

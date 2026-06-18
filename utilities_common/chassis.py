@@ -18,6 +18,10 @@ def get_chassis_local_interfaces():
     return lst
 
 
+def is_bmc():
+    return hasattr(device_info, 'is_switch_bmc') and device_info.is_switch_bmc()
+
+
 def is_smartswitch():
     return hasattr(device_info, 'is_smartswitch') and device_info.is_smartswitch()
 

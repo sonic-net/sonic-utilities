@@ -76,7 +76,7 @@ class AliasedGroup(click.Group):
 
 
 # To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continous execution of this
+# location (configdb?), so that we prevent the continuous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
@@ -518,20 +518,34 @@ def persistent_watermark(namespace):
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def arp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def arp(ipaddress, namespace):
     """Clear IP ARP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-4', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-4', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 
@@ -541,20 +555,34 @@ def arp(ipaddress):
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def ndp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def ndp(ipaddress, namespace):
     """Clear IPv6 NDP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-6', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-6', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 
@@ -655,9 +683,15 @@ def statistics(db):
 
 # ("sonic-clear flowcnt-trap")
 @cli.command()
-def flowcnt_trap():
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              show_default=True, help='Namespace name')
+def flowcnt_trap(namespace):
     """ Clear trap flow counters """
     command = ["flow_counters_stat", "-c", '-t', "trap"]
+    # None namespace means default namespace
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 

@@ -72,11 +72,6 @@ class TestCrmDash(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        dbconnector.dedicated_dbs['CONFIG_DB'] = None
-        dbconnector.dedicated_dbs['COUNTERS_DB'] = None
-        dbconnector.load_namespace_config()
 
     @pytest.mark.parametrize("obj, cmd", dash_thresholds)
     def test_crm_show_thresholds(self, obj, cmd):
@@ -147,4 +142,3 @@ class TestCrmDash(object):
 
         expected_output = tabulate([(obj_id, obj) + cnt], headers=self.dash_acl_group_resources_header, tablefmt="simple", missingval="")
         assert result.output == "\n" + expected_output + "\n\n"
-
