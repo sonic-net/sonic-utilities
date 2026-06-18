@@ -11,6 +11,7 @@ from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
+from . import orchagent as orchagent_clear
 from . import plugins
 from . import stp
 # This is from the aliases example:
@@ -148,6 +149,11 @@ def ipv6():
 # 'STP'
 #
 cli.add_command(stp.spanning_tree)
+
+#
+# 'orchagent'
+#
+cli.add_command(orchagent_clear.orchagent)
 
 #
 # Inserting BGP functionality into cli's clear parse-chain.
