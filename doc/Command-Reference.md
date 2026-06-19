@@ -1237,7 +1237,7 @@ This command displays information for all the interfaces for the transceiver req
 
 - Usage:
   ```
-  show interfaces transceiver (eeprom [-d|--dom] | info | lpmode | presence | error-status [-hw|--fetch-from-hardware] | pm | status) [<interface_name>]
+  show interfaces transceiver (eeprom [-d|--dom] | info | lpmode | presence | error-status [-hw|--fetch-from-hardware] | pm | status | vdm [flag [--detail]] [-n|--namespace <namespace>]) [<interface_name>]
   ```
 
 - Example (Decode and display information stored on the EEPROM of SFP transceiver connected to Ethernet0):
@@ -1461,6 +1461,141 @@ Ethernet0: SFP EEPROM detected
       Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     0.0           0.0          0.0          0.0
       Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False         0.0          0.0          False
       EVM              %       100.0     100.0     100.0     N/A          N/A          N/A           N/A          N/A          N/A
+  ```
+
+- Example (Display VDM (Versatile Diagnostics Monitoring) real-time values and thresholds of SFP transceiver connected to Ethernet40):
+  ```
+  admin@sonic:~$ show interfaces transceiver vdm Ethernet40
+  Current System Time: Mon Jun 08 19:03:38 2026
+  Update interval: 60 seconds
+  Last updated: Fri Jun 05 18:03:44 2026
+
+  Ethernet40:
+      Port        Lane    Errored Frames Average Host Input    High Alarm    High Warning    Low Warning    Low Alarm
+                                                               Threshold     Threshold       Threshold      Threshold
+      ----------  ------  -----------------------------------  ------------  --------------  -------------  -----------
+      Ethernet40  1       0.0                                  0.0           0.0             0.0            0.0
+                  2       0.0                                  0.0           0.0             0.0            0.0
+                  3       0.0                                  0.0           0.0             0.0            0.0
+                  4       0.0                                  0.0           0.0             0.0            0.0
+                  5       0.0                                  0.0           0.0             0.0            0.0
+                  6       0.0                                  0.0           0.0             0.0            0.0
+                  7       0.0                                  0.0           0.0             0.0            0.0
+                  8       0.0                                  0.0           0.0             0.0            0.0
+
+      Port        Lane    Errored Frames Current Value Host Input    High Alarm    High Warning    Low Warning    Low Alarm
+                                                                     Threshold     Threshold       Threshold      Threshold
+      ----------  ------  -----------------------------------------  ------------  --------------  -------------  -----------
+      Ethernet40  1       0.0                                        0.0           0.0             0.0            0.0
+                  2       0.0                                        0.0           0.0             0.0            0.0
+                  3       0.0                                        0.0           0.0             0.0            0.0
+                  4       0.0                                        0.0           0.0             0.0            0.0
+                  5       0.0                                        0.0           0.0             0.0            0.0
+                  6       0.0                                        0.0           0.0             0.0            0.0
+                  7       0.0                                        0.0           0.0             0.0            0.0
+                  8       0.0                                        0.0           0.0             0.0            0.0
+
+      Port        Lane    Errored Frames Maximum Host Input    High Alarm    High Warning    Low Warning    Low Alarm
+                                                               Threshold     Threshold       Threshold      Threshold
+      ----------  ------  -----------------------------------  ------------  --------------  -------------  -----------
+      Ethernet40  1       0.0                                  0.0           0.0             0.0            0.0
+                  2       0.0                                  0.0           0.0             0.0            0.0
+                  3       0.0                                  0.0           0.0             0.0            0.0
+                  4       0.0                                  0.0           0.0             0.0            0.0
+                  5       0.0                                  0.0           0.0             0.0            0.0
+                  6       0.0                                  0.0           0.0             0.0            0.0
+                  7       0.0                                  0.0           0.0             0.0            0.0
+                  8       0.0                                  0.0           0.0             0.0            0.0
+
+      ...
+  ```
+
+  Notes:
+  - Data is read exclusively from `STATE_DB` (tables `TRANSCEIVER_VDM_REAL_VALUE`
+    and `TRANSCEIVER_VDM_{HALARM,HWARN,LWARN,LALARM}_THRESHOLD`). The CLI does
+    not poll the module directly; `xcvrd` is the writer.
+  - Observables without a bracketed unit (e.g. `Errored Frames Average Host Input`)
+    render without a `(Unit)` line in the column header.
+  - Observables for which neither a real-time value nor any threshold is available
+    are omitted entirely.
+  - When invoked without a port argument the command iterates over every
+    front-panel interface; ports whose modules do not report VDM render as
+    `Transceiver VDM data not applicable`.
+  - On a multi-ASIC platform the optional `-n|--namespace` option can be used to
+    target a specific ASIC namespace.
+  - The `Last updated:` line in the banner reflects the most recent
+    `last_update_time` written by `xcvrd` across the reported ports, or `N/A`
+    if no port has a timestamp.
+
+- Example (Display VDM threshold-crossing flags of SFP transceiver connected to Ethernet100):
+
+  The flag view has the same structure as the value view but the value column is
+  replaced by four flag columns (`High Alarm Flag`, `High Warning Flag`,
+  `Low Warning Flag`, `Low Alarm Flag`). Because there is no value column to host
+  the observable name, the name and unit are printed as a title line above each
+  sub-table.
+  ```
+  admin@sonic:~$ show interfaces transceiver vdm flag Ethernet100
+  Current System Time: Thu Oct 17 03:46:41 2024
+  Update interval: 60 seconds
+  Last updated: Thu Oct 17 03:46:35 2024
+
+  Ethernet100:
+      Errored Frames Average Host Input
+      Port         Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                           Flag          Flag            Flag           Flag
+      -----------  ------  ------------  --------------  -------------  -----------
+      Ethernet100  1       False         False           False          False
+
+      Errored Frames Current Value Host Input
+      Port         Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                           Flag          Flag            Flag           Flag
+      -----------  ------  ------------  --------------  -------------  -----------
+      Ethernet100  1       False         False           False          False
+
+      Errored Frames Maximum Host Input
+      Port         Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                           Flag          Flag            Flag           Flag
+      -----------  ------  ------------  --------------  -------------  -----------
+      Ethernet100  1       False         False           False          False
+
+      ...
+  ```
+
+  When invoked without a port argument, ports whose modules do not report VDM
+  flags render as `Transceiver VDM flags not applicable`.
+
+- Example (Display detailed VDM threshold-crossing flag history of SFP transceiver connected to Ethernet44):
+
+  The `--detail` form of the flag view replaces the per-suffix sub-tables with a
+  single per-port table whose rows enumerate (observable, lane) pairs and whose
+  four threshold columns each render a 4-line cell stacked as
+  `flag / change_count / last_set_time / last_clear_time`. Change counts and
+  timestamps are sourced from the `TRANSCEIVER_VDM_{HALARM,HWARN,LWARN,LALARM}_FLAG_CHANGE_COUNT`,
+  `_FLAG_SET_TIME` and `_FLAG_CLEAR_TIME` STATE_DB tables; when a metadata entry
+  is absent the cell falls back to `0` for the count and `never` for the
+  timestamps.
+  ```
+  admin@sonic:~$ show interfaces transceiver vdm flag --detail Ethernet44
+  Current System Time: Wed Jun 4 12:00:00 2026
+  Update interval: 60 seconds
+  Last updated: Wed Jun 4 12:34:00 2026
+
+  Ethernet44:
+      Port        Observable_Name                     High Alarm                High Warning              Low Warning        Low Alarm
+                                                      Flag/                     Flag/                     Flag/              Flag/
+                                                      Change Count/             Change Count/             Change Count/      Change Count/
+                                                      Last Set Time/            Last Set Time/            Last Set Time/     Last Set Time/
+                                                      Last Clear Time           Last Clear Time           Last Clear Time    Last Clear Time
+      ----------  ----------------------------------  ------------------------  ------------------------  -----------------  -----------------
+      Ethernet44  Errored Frames Average Media Input  False/                    False/                    False/             False/
+                  Lane 1                              1/                        0/                        0/                 0/
+                                                      Wed Jun 4 11:00:00 2026/  never/                    never/             never/
+                                                      Wed Jun 4 11:30:00 2026   never                     never              never
+                  Pre-FEC BER Average Media Input     False/                    False/                    False/             False/
+                  Lane 1                              0/                        2/                        0/                 0/
+                                                      never/                    Wed Jun 4 10:00:00 2026/  never/             never/
+                                                      never                     Wed Jun 4 10:15:00 2026   never              never
   ```
 
 - Example (Display status info of SFP transceiver connected to Ethernet100):

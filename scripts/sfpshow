@@ -7,6 +7,7 @@
 """
 
 import ast
+import datetime
 import os
 import re
 import sys
@@ -28,6 +29,8 @@ from utilities_common.sfp_helper import (
         CCMIS_STATUS_MAP,
         CCMIS_VDM_TO_LEGACY_STATUS_MAP,
         CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP,
+        VDM_OBSERVABLE_NAME_MAP,
+        VDM_THRESHOLD_SUFFIXES,
         get_data_map_sort_key,
         get_transceiver_data_map
 )
@@ -239,6 +242,7 @@ ZR_PM_INFO_MAP = {
     'Rx Total Power': ['dBm', 'rx_tot_power'],
     'Rx Signal Power': ['dBm', 'rx_sig_power'],
     'CD-short link': ['ps/nm', 'cd'],
+    'CD-long link': ['ps/nm', 'cdlong'],
     'PDL': ['dB', 'pdl'],
     'OSNR': ['dB', 'osnr'],
     'eSNR': ['dB', 'esnr'],
@@ -254,6 +258,30 @@ ZR_PM_INFO_MAP = {
 ZR_PM_NOT_APPLICABLE_STR = 'Transceiver performance monitoring not applicable'
 
 QSFP_STATUS_NOT_APPLICABLE_STR = 'Transceiver status info not applicable'
+
+VDM_NOT_APPLICABLE_STR = 'Transceiver VDM data not applicable'
+VDM_FLAG_NOT_APPLICABLE_STR = 'Transceiver VDM flags not applicable'
+VDM_MAX_LANES = 8
+VDM_UPDATE_INTERVAL_SECS = 60
+VDM_TIME_FORMAT = "%a %b %d %H:%M:%S %Y"
+
+# Sentinel rendered for missing/unset VDM flag set/clear timestamps in
+# `sfpshow vdm-flag --detail` cells.
+VDM_FLAG_TIME_NEVER = 'never'
+
+# Per-threshold-column sub-row labels for the `vdm-flag --detail` rendering,
+# stacked beneath the flag value in each cell.
+VDM_FLAG_DETAIL_SUBROWS = (
+    ('change_count', 'Change Count'),
+    ('set_time',     'Last Set Time'),
+    ('clear_time',   'Last Clear Time'),
+)
+
+# Regex used to peel a trailing `[<unit>]` suffix off the human-readable
+# observable name in VDM_OBSERVABLE_NAME_MAP (e.g. `OSNR [dB]` -> `OSNR`, `dB`).
+# Observables without a bracketed unit (e.g. `Pre-FEC BER Minimum Media Input`)
+# render without a `(Unit)` line in the column header.
+VDM_OBSERVABLE_UNIT_RE = re.compile(r'^(.*?)\s*\[([^\[\]]+)\]\s*$')
 
 def display_invalid_intf_eeprom(intf_name):
     output = intf_name + ': SFP EEPROM Not detected\n'
@@ -275,6 +303,17 @@ def display_invalid_intf_status(intf_name):
     output = intf_name + ': %s\n' % QSFP_STATUS_NOT_APPLICABLE_STR
     click.echo(output)
 
+
+def display_invalid_intf_vdm(intf_name):
+    output = intf_name + ': %s\n' % VDM_NOT_APPLICABLE_STR
+    click.echo(output)
+
+
+def display_invalid_intf_vdm_flag(intf_name):
+    output = intf_name + ': %s\n' % VDM_FLAG_NOT_APPLICABLE_STR
+    click.echo(output)
+
+
 class SFPShow(object):
     def __init__(self, intf_name, namespace_option, dump_dom=False):
         super(SFPShow, self).__init__()
@@ -285,6 +324,10 @@ class SFPShow(object):
         self.intf_eeprom: Dict[str, str] = {}
         self.intf_pm: Dict[str, str] = {}
         self.intf_status: Dict[str, str] = {}
+        self.intf_vdm: Dict[str, str] = {}
+        self.intf_vdm_last_update: Dict[str, str] = {}
+        self.intf_vdm_flag: Dict[str, str] = {}
+        self.intf_vdm_flag_last_update: Dict[str, str] = {}
         self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace_option)
 
     # Convert dict values to cli output string
@@ -653,6 +696,289 @@ class SFPShow(object):
             output = ZR_PM_NOT_APPLICABLE_STR + '\n'
         return output
 
+    @staticmethod
+    def _vdm_field_present(value):
+        return value is not None and value != 'N/A'
+
+    @staticmethod
+    def _split_vdm_name_unit(display_name):
+        """Splits a VDM observable label into (name, unit).
+        """
+        match = VDM_OBSERVABLE_UNIT_RE.match(display_name)
+        if match:
+            return match.group(1), match.group(2)
+        return display_name, ''
+
+    def _build_vdm_value_table(self, port_name, real_value_dict, threshold_dicts):
+        """Builds the per-observable sub-table data for `sfpshow vdm`.
+        """
+        blocks = []
+        for db_prefix, display_name in natsorted(VDM_OBSERVABLE_NAME_MAP.items(),
+                                                 key=lambda kv: kv[1]):
+            name, unit = self._split_vdm_name_unit(display_name)
+            rows = []
+            for lane in range(1, VDM_MAX_LANES + 1):
+                # xcvrd's VDMDBUtils strips the `_<suffix>` part from the key
+                # before writing to the per-type threshold/flag tables, so the
+                # field name within each per-type table is `<observable><lane>`.
+                value = real_value_dict.get(f'{db_prefix}{lane}')
+                thresholds = [threshold_dicts[suffix].get(f'{db_prefix}{lane}') for suffix, _ in VDM_THRESHOLD_SUFFIXES]
+                if not self._vdm_field_present(value) and not any(self._vdm_field_present(t) for t in thresholds):
+                    continue
+                port_cell = port_name if not rows else ''
+                row = [port_cell, lane, value if self._vdm_field_present(value) else 'N/A']
+                row += [t if self._vdm_field_present(t) else 'N/A' for t in thresholds]
+                rows.append(row)
+            if rows:
+                blocks.append((name, unit, rows))
+        return blocks
+
+    def _build_vdm_flag_table(self, port_name, flag_dicts):
+        """Builds the per-observable sub-table data for `sfpshow vdm flag`.
+        """
+        blocks = []
+        for db_prefix, display_name in natsorted(VDM_OBSERVABLE_NAME_MAP.items(),
+                                                 key=lambda kv: kv[1]):
+            name, unit = self._split_vdm_name_unit(display_name)
+            rows = []
+            for lane in range(1, VDM_MAX_LANES + 1):
+                flags = [flag_dicts[suffix].get(f'{db_prefix}{lane}')
+                         for suffix, _ in VDM_THRESHOLD_SUFFIXES]
+                if not any(self._vdm_field_present(f) for f in flags):
+                    continue
+                port_cell = port_name if not rows else ''
+                row = [port_cell, lane]
+                row += [f if self._vdm_field_present(f) else 'N/A' for f in flags]
+                rows.append(row)
+            if rows:
+                blocks.append((name, unit, rows))
+        return blocks
+
+    @staticmethod
+    def _vdm_flag_detail_cell(flag, count, set_time, clear_time):
+        """Renders one (observable, lane, threshold) cell as a 4-line stack
+        of `flag / change_count / last_set_time / last_clear_time`.
+        """
+        flag_str = flag if SFPShow._vdm_field_present(flag) else 'N/A'
+        count_str = count if SFPShow._vdm_field_present(count) else '0'
+        set_str = set_time if SFPShow._vdm_field_present(set_time) else VDM_FLAG_TIME_NEVER
+        clear_str = clear_time if SFPShow._vdm_field_present(clear_time) else VDM_FLAG_TIME_NEVER
+        return '{}/\n{}/\n{}/\n{}'.format(flag_str, count_str, set_str, clear_str)
+
+    def _build_vdm_flag_detail_table(self, port_name, flag_dicts,
+                                     count_dicts, set_dicts, clear_dicts):
+        """Builds the flat row table for `sfpshow vdm-flag --detail`.
+
+        One row per (observable, lane) tuple with at least one present flag.
+        The first column repeats the port name only on the first row of the
+        port; subsequent rows leave it blank for visual grouping.
+        """
+        rows = []
+        first_row = True
+        for db_prefix, display_name in natsorted(VDM_OBSERVABLE_NAME_MAP.items(),
+                                                 key=lambda kv: kv[1]):
+            name, unit = self._split_vdm_name_unit(display_name)
+            title = self._vdm_observable_title(name, unit)
+            for lane in range(1, VDM_MAX_LANES + 1):
+                field = f'{db_prefix}{lane}'
+                flags = [flag_dicts[s].get(field) for s, _ in VDM_THRESHOLD_SUFFIXES]
+                if not any(self._vdm_field_present(f) for f in flags):
+                    continue
+                cells = []
+                for s, _ in VDM_THRESHOLD_SUFFIXES:
+                    cells.append(self._vdm_flag_detail_cell(
+                        flag_dicts[s].get(field),
+                        count_dicts[s].get(field),
+                        set_dicts[s].get(field),
+                        clear_dicts[s].get(field),
+                    ))
+                port_cell = port_name if first_row else ''
+                rows.append([port_cell, '{}\nLane {}'.format(title, lane)] + cells)
+                first_row = False
+        return rows
+
+    @staticmethod
+    def _vdm_now_str():
+        return datetime.datetime.now().strftime(VDM_TIME_FORMAT)
+
+    @staticmethod
+    def _vdm_ts_gt(ts_a, ts_b):
+        """Returns True iff `ts_a` is strictly chronologically later than `ts_b`.
+        Parse to datetime before comparing. Unparseable strings fall back to
+        lexicographic comparison so callers degrade gracefully.
+        """
+        try:
+            return (datetime.datetime.strptime(ts_a, VDM_TIME_FORMAT)
+                    > datetime.datetime.strptime(ts_b, VDM_TIME_FORMAT))
+        except (TypeError, ValueError):
+            return ts_a > ts_b
+
+    @classmethod
+    def _vdm_banner(cls, last_update_time):
+        """Renders the three-line banner that precedes every VDM table.
+        """
+        last_str = last_update_time if last_update_time else 'N/A'
+        return (
+            "Current System Time: {}\n"
+            "Update interval: {} seconds\n"
+            "Last updated: {}\n"
+        ).format(cls._vdm_now_str(), VDM_UPDATE_INTERVAL_SECS, last_str)
+
+    @staticmethod
+    def _vdm_value_header(name, unit):
+        """Header row for one VDM value sub-table.
+        """
+        if unit:
+            name_hdr = '{}\n({})'.format(name, unit)
+            thr_hdrs = ['{}\nThreshold\n({})'.format(label, unit)
+                        for _, label in VDM_THRESHOLD_SUFFIXES]
+        else:
+            name_hdr = name
+            thr_hdrs = ['{}\nThreshold'.format(label)
+                        for _, label in VDM_THRESHOLD_SUFFIXES]
+        return ['Port', 'Lane', name_hdr] + thr_hdrs
+
+    @staticmethod
+    def _vdm_flag_header():
+        """Header row for one VDM flag sub-table.
+        """
+        flag_hdrs = ['{}\nFlag'.format(label) for _, label in VDM_THRESHOLD_SUFFIXES]
+        return ['Port', 'Lane'] + flag_hdrs
+
+    @staticmethod
+    def _vdm_flag_detail_header():
+        """Header row for the combined `vdm-flag --detail` table.
+        """
+        subrow_labels = '/\n'.join(label for _, label in VDM_FLAG_DETAIL_SUBROWS)
+        thr_hdrs = ['{}\nFlag/\n{}'.format(label, subrow_labels)
+                    for _, label in VDM_THRESHOLD_SUFFIXES]
+        return ['Port', 'Observable_Name'] + thr_hdrs
+
+    @staticmethod
+    def _vdm_observable_title(name, unit):
+        """Renders the per-sub-table title line, e.g. `OSNR (dB)`."""
+        return '{} ({})'.format(name, unit) if unit else name
+
+    @staticmethod
+    def _vdm_render_sub_table(header, rows):
+        """Renders one observable's tabulate block.
+        """
+        colalign = ('left',) * len(header)
+        return tabulate(rows, header, disable_numparse=True, colalign=colalign)
+
+    @staticmethod
+    def _vdm_indent_block(text, indent):
+        """Indents every non-empty line of `text` by `indent` spaces."""
+        return '\n'.join(((indent + line) if line else line) for line in text.split('\n'))
+
+    def _render_vdm_value_body(self, blocks):
+        """Joins per-observable value sub-tables with a blank line."""
+        return '\n\n'.join(
+            self._vdm_render_sub_table(self._vdm_value_header(name, unit), rows)
+            for name, unit, rows in blocks
+        )
+
+    def _render_vdm_flag_body(self, blocks):
+        """Joins per-observable flag sub-tables with a blank line.
+        """
+        header = self._vdm_flag_header()
+        chunks = []
+        for name, unit, rows in blocks:
+            title = self._vdm_observable_title(name, unit)
+            chunks.append('{}\n{}'.format(title, self._vdm_render_sub_table(header, rows)))
+        return '\n\n'.join(chunks)
+
+    def _render_vdm_flag_detail_body(self, rows):
+        """Renders the combined `vdm-flag --detail` table for a single port.
+        """
+        return self._vdm_render_sub_table(self._vdm_flag_detail_header(), rows)
+
+    def convert_interface_sfp_vdm_to_cli_output_string(self, state_db, interface_name):
+        """Returns (body, last_update_time) for `sfpshow vdm` rendering.
+        """
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP VDM".format(interface_name))
+            return None, None
+
+        real_value_dict = state_db.get_all(
+            state_db.STATE_DB, 'TRANSCEIVER_VDM_REAL_VALUE|{}'.format(first_subport)) or {}
+        threshold_dicts = {
+            suffix: (state_db.get_all(
+                state_db.STATE_DB,
+                'TRANSCEIVER_VDM_{}_THRESHOLD|{}'.format(suffix.upper(), first_subport)) or {})
+            for suffix, _ in VDM_THRESHOLD_SUFFIXES
+        }
+
+        blocks = self._build_vdm_value_table(interface_name, real_value_dict, threshold_dicts)
+        if not blocks:
+            return None, real_value_dict.get('last_update_time')
+
+        return self._render_vdm_value_body(blocks), real_value_dict.get('last_update_time')
+
+    def convert_interface_sfp_vdm_flag_to_cli_output_string(self, state_db, interface_name, detail=False):
+        """Returns (body, last_update_time) for `sfpshow vdm flag` rendering.
+
+        When `detail` is True, also fetches the per-threshold-type flag change
+        count, last-set-time and last-clear-time tables and emits the combined
+        wide-table layout consumed by `sfpshow vdm-flag --detail`.
+        """
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP VDM flags".format(
+                interface_name))
+            return None, None
+
+        flag_dicts = {
+            suffix: (state_db.get_all(
+                state_db.STATE_DB,
+                'TRANSCEIVER_VDM_{}_FLAG|{}'.format(suffix.upper(), first_subport)) or {})
+            for suffix, _ in VDM_THRESHOLD_SUFFIXES
+        }
+
+        if detail:
+            count_dicts = {
+                suffix: (state_db.get_all(
+                    state_db.STATE_DB,
+                    'TRANSCEIVER_VDM_{}_FLAG_CHANGE_COUNT|{}'.format(suffix.upper(), first_subport)) or {})
+                for suffix, _ in VDM_THRESHOLD_SUFFIXES
+            }
+            set_dicts = {
+                suffix: (state_db.get_all(
+                    state_db.STATE_DB,
+                    'TRANSCEIVER_VDM_{}_FLAG_SET_TIME|{}'.format(suffix.upper(), first_subport)) or {})
+                for suffix, _ in VDM_THRESHOLD_SUFFIXES
+            }
+            clear_dicts = {
+                suffix: (state_db.get_all(
+                    state_db.STATE_DB,
+                    'TRANSCEIVER_VDM_{}_FLAG_CLEAR_TIME|{}'.format(suffix.upper(), first_subport)) or {})
+                for suffix, _ in VDM_THRESHOLD_SUFFIXES
+            }
+
+        # Unlike the value path (single TRANSCEIVER_VDM_REAL_VALUE table), flags
+        # live in four per-type tables each with their own `last_update_time`
+        # stamped by xcvrd. They are written in the same cycle so the values
+        # should match, but we pick the most recent in case a write is in flight.
+        last_update_time = None
+        for suffix, _ in VDM_THRESHOLD_SUFFIXES:
+            ts = flag_dicts[suffix].get('last_update_time')
+            if ts and (last_update_time is None or self._vdm_ts_gt(ts, last_update_time)):
+                last_update_time = ts
+
+        if detail:
+            rows = self._build_vdm_flag_detail_table(
+                interface_name, flag_dicts, count_dicts, set_dicts, clear_dicts)
+            if not rows:
+                return None, last_update_time
+            return self._render_vdm_flag_detail_body(rows), last_update_time
+
+        blocks = self._build_vdm_flag_table(interface_name, flag_dicts)
+        if not blocks:
+            return None, last_update_time
+
+        return self._render_vdm_flag_body(blocks), last_update_time
+
     def is_valid_physical_port(self, port_name):
         role = self.db.get(self.db.APPL_DB, 'PORT_TABLE:{}'.format(port_name), multi_asic.PORT_ROLE)
         return multi_asic.is_front_panel_port(port_name, role)
@@ -737,6 +1063,69 @@ class SFPShow(object):
     def display_status(self):
         click.echo(
             "\n".join([f"{k}: {v}" for k, v in natsorted(self.intf_status.items())]))
+
+    @multi_asic_util.run_on_multi_asic
+    def get_vdm(self):
+        if self.intf_name is not None:
+            body, ts = self.convert_interface_sfp_vdm_to_cli_output_string(
+                self.db, self.intf_name)
+            self.intf_vdm[self.intf_name] = body
+            self.intf_vdm_last_update[self.intf_name] = ts
+        else:
+            port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
+            for i in port_table_keys:
+                interface = re.split(':', i, maxsplit=1)[-1].strip()
+                if interface and self.is_valid_physical_port(interface):
+                    body, ts = self.convert_interface_sfp_vdm_to_cli_output_string(
+                        self.db, interface)
+                    self.intf_vdm[interface] = body
+                    self.intf_vdm_last_update[interface] = ts
+
+    @multi_asic_util.run_on_multi_asic
+    def get_vdm_flag(self, detail=False):
+        if self.intf_name is not None:
+            body, ts = self.convert_interface_sfp_vdm_flag_to_cli_output_string(
+                self.db, self.intf_name, detail=detail)
+            self.intf_vdm_flag[self.intf_name] = body
+            self.intf_vdm_flag_last_update[self.intf_name] = ts
+        else:
+            port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
+            for i in port_table_keys:
+                interface = re.split(':', i, maxsplit=1)[-1].strip()
+                if interface and self.is_valid_physical_port(interface):
+                    body, ts = self.convert_interface_sfp_vdm_flag_to_cli_output_string(
+                        self.db, interface, detail=detail)
+                    self.intf_vdm_flag[interface] = body
+                    self.intf_vdm_flag_last_update[interface] = ts
+
+    def _render_vdm_sections(self, bodies, last_updates, not_applicable_str):
+        """Renders the global banner followed by per-port sections.
+        """
+        latest = None
+        for ts in last_updates.values():
+            if ts and (latest is None or self._vdm_ts_gt(ts, latest)):
+                latest = ts
+        banner = self._vdm_banner(latest)
+
+        sections = []
+        for port, body in natsorted(bodies.items()):
+            if body is None:
+                sections.append("{}: {}".format(port, not_applicable_str))
+            else:
+                indent = ' ' * 4
+                sections.append("{}:\n{}".format(port, self._vdm_indent_block(body, indent)))
+        # Blank line between banner and first section, and between sections.
+        return banner + '\n' + '\n\n'.join(sections)
+
+    def display_vdm(self):
+        click.echo(self._render_vdm_sections(
+            self.intf_vdm, self.intf_vdm_last_update, VDM_NOT_APPLICABLE_STR))
+
+    def display_vdm_flag(self):
+        click.echo(self._render_vdm_sections(
+            self.intf_vdm_flag, self.intf_vdm_flag_last_update, VDM_FLAG_NOT_APPLICABLE_STR))
+
+
 # This is our main entrypoint - the main 'sfpshow' command
 
 
@@ -839,6 +1228,44 @@ def status(port, namespace):
     sfp = SFPShow(port, namespace)
     sfp.get_status()
     sfp.display_status()
+
+# 'vdm' subcommand
+
+
+@cli.command()
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP VDM data for port <port_name> only")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+def vdm(port, namespace):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_vdm(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace)
+    sfp.get_vdm()
+    sfp.display_vdm()
+
+# 'vdm-flag' subcommand
+
+
+@cli.command('vdm-flag')
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP VDM flags for port <port_name> only")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+@click.option('-d', '--detail', is_flag=True, default=False,
+              help="Show per-flag change count, last set time and last clear time")
+def vdm_flag(port, namespace, detail):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_vdm_flag(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace)
+    sfp.get_vdm_flag(detail=detail)
+    sfp.display_vdm_flag()
 
 
 if __name__ == "__main__":

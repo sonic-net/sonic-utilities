@@ -486,7 +486,101 @@
         "status": "1",
         "error": "N/A"
     },
+    "TRANSCEIVER_VDM_REAL_VALUE|Ethernet44":{
+        "laser_temperature_media1": "45.5",
+        "esnr_media_input1": "14.2",
+        "prefec_ber_min_media_input1": "1.10E-05",
+        "prefec_ber_min_media_input2": "1.20E-05",
+        "prefec_ber_min_media_input3": "1.05E-05",
+        "prefec_ber_min_media_input4": "1.15E-05",
+        "errored_frames_avg_media_input1": "0.0",
+        "prefec_ber_avg_media_input1": "4.66E-04",
+        "last_update_time": "Wed Jun 4 12:34:00 2026",
+        "biasxi1": "38.5",
+        "biasxp1": "25.5",
+        "biasxq1": "34.1",
+        "biasyi1": "32.3",
+        "biasyp1": "48.5",
+        "biasyq1": "30.7"
+    },
+    "TRANSCEIVER_VDM_HALARM_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "80.0",
+        "esnr_media_input1": "99.0",
+        "prefec_ber_min_media_input1": "1.25E-02",
+        "prefec_ber_min_media_input2": "1.25E-02",
+        "prefec_ber_min_media_input3": "1.25E-02",
+        "prefec_ber_min_media_input4": "1.25E-02",
+        "errored_frames_avg_media_input1": "1000.0",
+        "errored_frames_max_media_input1": "2000.0",
+        "prefec_ber_avg_media_input1": "1.25E-02",
+        "biasxi1": "99.0",
+        "biasxp1": "99.0",
+        "biasxq1": "99.0",
+        "biasyi1": "99.0",
+        "biasyp1": "99.0",
+        "biasyq1": "99.0"
+    },
+    "TRANSCEIVER_VDM_LALARM_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "-10.0",
+        "esnr_media_input1": "8.0",
+        "prefec_ber_min_media_input1": "0.0",
+        "prefec_ber_min_media_input2": "0.0",
+        "prefec_ber_min_media_input3": "0.0",
+        "prefec_ber_min_media_input4": "0.0",
+        "errored_frames_avg_media_input1": "0.0",
+        "errored_frames_max_media_input1": "0.0",
+        "prefec_ber_avg_media_input1": "0.0",
+        "biasxi1": "1.0",
+        "biasxp1": "1.0",
+        "biasxq1": "1.0",
+        "biasyi1": "1.0",
+        "biasyp1": "1.0",
+        "biasyq1": "1.0"
+    },
+    "TRANSCEIVER_VDM_HWARN_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "75.0",
+        "esnr_media_input1": "99.0",
+        "prefec_ber_min_media_input1": "1.10E-02",
+        "prefec_ber_min_media_input2": "1.10E-02",
+        "prefec_ber_min_media_input3": "1.10E-02",
+        "prefec_ber_min_media_input4": "1.10E-02",
+        "errored_frames_avg_media_input1": "1.0",
+        "errored_frames_max_media_input1": "2.0",
+        "prefec_ber_avg_media_input1": "1.10E-02",
+        "biasxi1": "95.0",
+        "biasxp1": "95.0",
+        "biasxq1": "95.0",
+        "biasyi1": "95.0",
+        "biasyp1": "95.0",
+        "biasyq1": "95.0"
+    },
+    "TRANSCEIVER_VDM_LWARN_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "-5.0",
+        "esnr_media_input1": "10.0",
+        "prefec_ber_min_media_input1": "0.0",
+        "prefec_ber_min_media_input2": "0.0",
+        "prefec_ber_min_media_input3": "0.0",
+        "prefec_ber_min_media_input4": "0.0",
+        "errored_frames_avg_media_input1": "0.0",
+        "errored_frames_max_media_input1": "0.0",
+        "prefec_ber_avg_media_input1": "0.0",
+        "biasxi1": "5.0",
+        "biasxp1": "5.0",
+        "biasxq1": "5.0",
+        "biasyi1": "5.0",
+        "biasyp1": "5.0",
+        "biasyq1": "5.0"
+    },
     "TRANSCEIVER_VDM_HALARM_FLAG|Ethernet44":{
+        "laser_temperature_media1": "False",
+        "esnr_media_input1": "False",
+        "prefec_ber_min_media_input1": "False",
+        "prefec_ber_min_media_input2": "False",
+        "prefec_ber_min_media_input3": "False",
+        "prefec_ber_min_media_input4": "False",
+        "errored_frames_avg_media_input1": "False",
+        "errored_frames_max_media_input1": "False",
+        "prefec_ber_avg_media_input1": "False",
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -500,12 +594,20 @@
         "esnr1": "False",
         "osnr1": "False",
         "pdl1": "False",
-        "errored_frames_avg_media_input1": "False",
-        "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
-        "txcurrpower1": "False"
+        "txcurrpower1": "False",
+        "last_update_time": "Wed Jun 4 12:34:00 2026"
     },
     "TRANSCEIVER_VDM_HWARN_FLAG|Ethernet44":{
+        "laser_temperature_media1": "False",
+        "esnr_media_input1": "False",
+        "prefec_ber_min_media_input1": "False",
+        "prefec_ber_min_media_input2": "False",
+        "prefec_ber_min_media_input3": "False",
+        "prefec_ber_min_media_input4": "False",
+        "errored_frames_avg_media_input1": "False",
+        "errored_frames_max_media_input1": "False",
+        "prefec_ber_avg_media_input1": "False",
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -519,12 +621,19 @@
         "esnr1": "False",
         "osnr1": "False",
         "pdl1": "False",
-        "errored_frames_avg_media_input1": "False",
-        "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
         "txcurrpower1": "False"
     },
     "TRANSCEIVER_VDM_LWARN_FLAG|Ethernet44":{
+        "laser_temperature_media1": "False",
+        "esnr_media_input1": "False",
+        "prefec_ber_min_media_input1": "False",
+        "prefec_ber_min_media_input2": "False",
+        "prefec_ber_min_media_input3": "False",
+        "prefec_ber_min_media_input4": "False",
+        "errored_frames_avg_media_input1": "False",
+        "errored_frames_max_media_input1": "False",
+        "prefec_ber_avg_media_input1": "False",
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -538,12 +647,19 @@
         "esnr1": "False",
         "osnr1": "False",
         "pdl1": "False",
-        "errored_frames_avg_media_input1": "False",
-        "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
         "txcurrpower1": "False"
     },
     "TRANSCEIVER_VDM_LALARM_FLAG|Ethernet44":{
+        "laser_temperature_media1": "False",
+        "esnr_media_input1": "False",
+        "prefec_ber_min_media_input1": "False",
+        "prefec_ber_min_media_input2": "False",
+        "prefec_ber_min_media_input3": "False",
+        "prefec_ber_min_media_input4": "False",
+        "errored_frames_avg_media_input1": "False",
+        "errored_frames_max_media_input1": "False",
+        "prefec_ber_avg_media_input1": "False",
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -557,10 +673,34 @@
         "esnr1": "False",
         "osnr1": "False",
         "pdl1": "False",
-        "errored_frames_avg_media_input1": "False",
-        "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
         "txcurrpower1": "False"
+    },
+    "TRANSCEIVER_VDM_HALARM_FLAG_CHANGE_COUNT|Ethernet44":{
+        "errored_frames_avg_media_input1": "1",
+        "errored_frames_max_media_input1": "5",
+        "laser_temperature_media1": "3",
+        "prefec_ber_min_media_input1": "1"
+    },
+    "TRANSCEIVER_VDM_HALARM_FLAG_SET_TIME|Ethernet44":{
+        "errored_frames_avg_media_input1": "Wed Jun 4 11:00:00 2026",
+        "errored_frames_max_media_input1": "Wed Jun 4 07:00:00 2026",
+        "laser_temperature_media1": "Wed Jun 4 09:00:00 2026",
+        "prefec_ber_min_media_input1": "Wed Jun 4 08:00:00 2026"
+    },
+    "TRANSCEIVER_VDM_HALARM_FLAG_CLEAR_TIME|Ethernet44":{
+        "errored_frames_avg_media_input1": "Wed Jun 4 11:30:00 2026",
+        "errored_frames_max_media_input1": "Wed Jun 4 07:30:00 2026",
+        "laser_temperature_media1": "Wed Jun 4 09:30:00 2026"
+    },
+    "TRANSCEIVER_VDM_HWARN_FLAG_CHANGE_COUNT|Ethernet44":{
+        "prefec_ber_avg_media_input1": "2"
+    },
+    "TRANSCEIVER_VDM_HWARN_FLAG_SET_TIME|Ethernet44":{
+        "prefec_ber_avg_media_input1": "Wed Jun 4 10:00:00 2026"
+    },
+    "TRANSCEIVER_VDM_HWARN_FLAG_CLEAR_TIME|Ethernet44":{
+        "prefec_ber_avg_media_input1": "Wed Jun 4 10:15:00 2026"
     },
     "TRANSCEIVER_DOM_FLAG|Ethernet44":{
         "lasertempHAlarm": "False",
@@ -672,7 +812,7 @@
         "tempLAlarm": "False",
         "tempLWarn": "False"
     },
-
+    
     "TRANSCEIVER_INFO|Ethernet64": {
         "type" : "QSFP-DD Double Density 8X Pluggable Transceiver",
         "hardware_rev" : "X.X",
@@ -793,7 +933,7 @@
         "tx8bias": "6.1",
         "rx8power": "0.3",
         "tx8power": "0.4",
-        "laser_temperature": "N/A" 
+        "laser_temperature": "N/A"
     },
     "TRANSCEIVER_DOM_THRESHOLD|Ethernet72": {
         "temphighalarm": "N/A",
@@ -912,7 +1052,7 @@
         "status": "true",
         "model": "0J6J4K",
         "serial": "CN-0J6J4K-17972-5AF-008M-A00",
-	"revision": "A",
+        "revision": "A",
         "temp": "None",
         "temp_threshold": "None",
         "voltage": "12.18",
@@ -1035,7 +1175,7 @@
         "self_mux_direction": "active",
         "grpc_connection_status": "READY",
         "Value": "AABB"
-     },
+    },
     "MUX_CABLE_INFO|Ethernet4": {
         "version_peer_next": "0.2MS",
         "version_peer_active": "0.2MS",
@@ -1440,7 +1580,7 @@
         "supported_speeds": "10000,25000,40000,100000",
         "supported_fecs": "rs,none,test",
         "link_training_status": "not_trained",
-	"fec": "rs"
+        "fec": "rs"
     },
     "PORT_TABLE|Ethernet32": {
         "link_training_status": "trained"
@@ -1596,31 +1736,31 @@
         "status": "trained"
     },
     "LINK_TRAINING|Ethernet112": {
-         "status": "off"
+        "status": "off"
     },
     "ALL_SERVICE_STATUS|mgmt-framework": {
-      "app_ready_status": "OK",
-      "fail_reason": "-",
-      "service_status": "OK",
-      "update_time": "-"
+        "app_ready_status": "OK",
+        "fail_reason": "-",
+        "service_status": "OK",
+        "update_time": "-"
     },
     "ALL_SERVICE_STATUS|swss": {
-      "app_ready_status": "OK",
-      "fail_reason": "-",
-      "service_status": "OK",
-      "update_time": "-"
+        "app_ready_status": "OK",
+        "fail_reason": "-",
+        "service_status": "OK",
+        "update_time": "-"
     },
     "ALL_SERVICE_STATUS|bgp": {
-      "app_ready_status": "Down",
-      "fail_reason": "Inactive",
-      "service_status": "Down",
-      "update_time": "-"
+        "app_ready_status": "Down",
+        "fail_reason": "Inactive",
+        "service_status": "Down",
+        "update_time": "-"
     },
     "ALL_SERVICE_STATUS|pmon": {
-      "app_ready_status": "OK",
-      "fail_reason": "-",
-      "service_status": "OK",
-      "update_time": "-"
+        "app_ready_status": "OK",
+        "fail_reason": "-",
+        "service_status": "OK",
+        "update_time": "-"
     },
     "SYSTEM_READY|SYSTEM_STATE": {
         "Status":"DOWN"
@@ -1758,7 +1898,7 @@
         "critical_high_threshold": "460",
         "critical_low_threshold": "300",
         "current": "410",
-         "unit": "mA",
+        "unit": "mA",
         "high_threshold": "440",
         "is_replaceable": "False",
         "low_threshold": "320",
@@ -1771,7 +1911,7 @@
         "critical_high_threshold": "460",
         "critical_low_threshold": "300",
         "current": "360",
-         "unit": "mA",
+        "unit": "mA",
         "high_threshold": "440",
         "is_replaceable": "False",
         "low_threshold": "320",
