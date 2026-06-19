@@ -769,11 +769,30 @@ class TestConfigReload(object):
                 mock.patch.object(
                     config, "config_file_yang_validation", side_effect=click.Abort) as mock_validate_config:
             runner = CliRunner()
-            result = runner.invoke(config.config.commands["reload"], ["-y", "-f"])
+            result = runner.invoke(config.config.commands["reload"], ["-y", "-n"])
 
             assert result.exit_code != 0
             mock_validate_config.assert_called_once_with(jsonfile_config)
             mock_run_command.assert_not_called()
+
+    def test_config_reload_force_skips_validation(self, get_cmd_module, setup_single_broadcom_asic):
+        (config, show) = get_cmd_module
+
+        config.DEFAULT_CONFIG_DB_FILE = os.path.join(
+            mock_db_path, 'missing_config_db.json'
+        )
+
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch.object(config, "config_file_yang_validation") as mock_validate_config:
+            runner = CliRunner()
+            result = runner.invoke(
+                config.config.commands["reload"], ["-y", "-f", "-n"]
+            )
+
+            assert result.exit_code == 0
+            mock_validate_config.assert_not_called()
 
     def test_config_reload_default_config_missing_file(
         self, get_cmd_module, setup_single_broadcom_asic
@@ -789,7 +808,7 @@ class TestConfigReload(object):
         ) as mock_run_command:
             runner = CliRunner()
             result = runner.invoke(
-                config.config.commands["reload"], ["-y", "-f"]
+                config.config.commands["reload"], ["-y", "-n"]
             )
 
             assert result.exit_code != 0
@@ -820,7 +839,7 @@ class TestConfigReload(object):
                 ):
                     runner = CliRunner()
                     result = runner.invoke(
-                        config.config.commands["reload"], ["-y", "-f"]
+                        config.config.commands["reload"], ["-y", "-n"]
                     )
 
                     assert result.exit_code != 0
@@ -851,7 +870,7 @@ class TestConfigReload(object):
                 ) as mock_validate_config:
                     runner = CliRunner()
                     result = runner.invoke(
-                        config.config.commands["reload"], ["-y", "-f"]
+                        config.config.commands["reload"], ["-y", "-n"]
                     )
 
                     assert result.exit_code != 0
@@ -1258,7 +1277,7 @@ class TestConfigReloadMasic(object):
             runner = CliRunner()
 
             result = runner.invoke(
-                config.config.commands["reload"], ['-y', '-f', '-n']
+                config.config.commands["reload"], ['-y', '-n']
             )
 
             assert result.exit_code == 0
