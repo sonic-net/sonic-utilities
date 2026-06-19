@@ -132,7 +132,7 @@ class TestPfcwd(object):
         )
         print(result.output)
         assert result.exit_code == 1
-        assert "detection time 200ms is smaller than the configured polling interval 600ms" in result.stderr
+        assert "detection time 200ms is smaller than the configured polling interval 600ms" in result.output
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_restoration_time_below_poll_interval(self, mock_os):
@@ -152,7 +152,7 @@ class TestPfcwd(object):
         )
         print(result.output)
         assert result.exit_code == 1
-        assert "restoration time 200ms is smaller than the configured polling interval 600ms" in result.stderr
+        assert "restoration time 200ms is smaller than the configured polling interval 600ms" in result.output
 
     @patch('pfcwd.main.os')
     def test_pfcwd_enable_history_ports_valid(self, mock_os):
