@@ -72,6 +72,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import llr
 
 # mock masic APIs for unit test
 try:
@@ -1799,6 +1800,9 @@ config.add_command(vxlan.vxlan)
 
 # add stp commands
 config.add_command(stp.spanning_tree)
+
+# add llr commands
+config.add_command(llr.llr)
 
 # add mclag commands
 config.add_command(mclag.mclag)

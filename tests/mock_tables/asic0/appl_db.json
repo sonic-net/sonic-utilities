@@ -177,5 +177,20 @@
     "INTF_TABLE:PortChannel4001.20": {
         "admin_status": "up",
         "vlan": "20"
+    },
+    "LLR_PORT_TABLE:Ethernet0": {
+        "llr_mode": "static",
+        "llr_local": "enabled",
+        "llr_remote": "enabled",
+        "llr_profile": "llr_800000_40m_profile"
+    },
+    "LLR_PROFILE_TABLE:llr_800000_40m_profile": {
+        "max_outstanding_frames": "264",
+        "max_outstanding_bytes": "135000",
+        "replay_timer": "40",
+        "replay_count": "3",
+        "pcs_lost_timeout": "100",
+        "data_age_timeout": "500",
+        "ctlos_target_spacing": "16"
     }
 }
