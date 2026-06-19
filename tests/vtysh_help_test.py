@@ -217,6 +217,101 @@ class TestVtyshHelpCommands:
         # Should have been called only once due to caching
         assert mock_subprocess.call_count == 1
 
+    @mock.patch('show.vtysh_helper.subprocess.run')
+    def test_help_with_vtysh_unavailable(self, mock_subprocess):
+        """When rvtysh fails (e.g. chassis supervisor with no local FRR), help
+        renders without crashing and without a Commands section."""
+        mock_result = mock.Mock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "failed to connect to any daemons"
+        mock_subprocess.return_value = mock_result
+
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["ip"].commands["route"], ["--help"])
+
+        assert result.exit_code == 0
+        # Usage + description + options still render.
+        assert "Usage: show ip route" in result.output
+        assert "Show IP (IPv4) routing table" in result.output
+        assert "Options:" in result.output
+        # No Commands section since rvtysh returned no usable subcommand list.
+        assert "Commands:" not in result.output
+
+    @mock.patch('show.vtysh_helper.multi_asic.is_multi_asic')
+    @mock.patch('show.vtysh_helper.multi_asic.get_asic_id_from_name')
+    @mock.patch('show.vtysh_helper.subprocess.run')
+    def test_namespace_passed_through_to_rvtysh(self, mock_subprocess, mock_get_asic_id, mock_is_multi):
+        """On multi-ASIC, --namespace propagates to rvtysh as `-n <asic_id>`."""
+        mock_is_multi.return_value = True
+        mock_get_asic_id.return_value = 0
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "  summary  Summary of all routes\n"
+        mock_subprocess.return_value = mock_result
+
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["route"],
+            ["--namespace", "asic0", "--help"],
+        )
+
+        assert result.exit_code == 0
+        assert mock_subprocess.called
+        # Every rvtysh call for this invocation should target asic0.
+        for call in mock_subprocess.call_args_list:
+            cmd = call.args[0]
+            assert "rvtysh" in cmd
+            assert "-n" in cmd
+            asic_arg = cmd[cmd.index("-n") + 1]
+            assert asic_arg == "0"
+        mock_get_asic_id.assert_called_with("asic0")
+
+    @mock.patch('show.vtysh_helper.multi_asic.is_multi_asic')
+    @mock.patch('show.vtysh_helper.subprocess.run')
+    def test_namespace_ignored_on_single_asic(self, mock_subprocess, mock_is_multi):
+        """On single-ASIC, --namespace is silently ignored for help rendering
+        (the actual route command already rejects --namespace on single-ASIC).
+        SONiC's vtysh wrapper does not consume -n on single-ASIC, so passing
+        it would yield empty help output."""
+        mock_is_multi.return_value = False
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "  summary  Summary of all routes\n"
+        mock_subprocess.return_value = mock_result
+
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["route"],
+            ["--namespace", "asic0", "--help"],
+        )
+
+        assert result.exit_code == 0
+        assert mock_subprocess.called
+        # rvtysh is invoked, but without -n.
+        for call in mock_subprocess.call_args_list:
+            cmd = call.args[0]
+            assert "rvtysh" in cmd
+            assert "-n" not in cmd
+
+    @mock.patch('show.vtysh_helper.subprocess.run')
+    def test_no_namespace_omits_n_flag(self, mock_subprocess):
+        """Without --namespace, rvtysh is invoked without -n (default namespace)."""
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "  summary  Summary of all routes\n"
+        mock_subprocess.return_value = mock_result
+
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["ip"].commands["route"], ["--help"])
+
+        assert result.exit_code == 0
+        assert mock_subprocess.called
+        for call in mock_subprocess.call_args_list:
+            cmd = call.args[0]
+            assert "rvtysh" in cmd
+            assert "-n" not in cmd
+
 
 class TestVtyshCompletionCommands:
     """Test VtyshCommand completion functionality for vtysh-integrated commands."""

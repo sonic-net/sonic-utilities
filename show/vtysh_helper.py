@@ -3,6 +3,8 @@ import functools
 import subprocess
 
 from click.shell_completion import CompletionItem
+from sonic_py_common import multi_asic
+from utilities_common import constants
 
 
 class VtyshParamType(click.types.StringParamType):
@@ -19,7 +21,8 @@ class VtyshParamType(click.types.StringParamType):
         else:
             cmd_prefix = cmd.vtysh_command_prefix
 
-        completions = cmd.get_vtysh_completions(cmd_prefix, completion=False)
+        namespace = ctx.params.get('namespace')
+        completions = cmd.get_vtysh_completions(cmd_prefix, completion=False, namespace=namespace)
 
         if incomplete:
             completions = [c for c in completions if c.startswith(incomplete)]
@@ -54,13 +57,26 @@ class VtyshCommand(click.Command):
                 param.type = VtyshParamType()
 
     def parse_args(self, ctx, args):
-        """Track vtysh command args for later use"""
+        """Track vtysh command args + namespace for later use.
+
+        We extract --namespace here rather than reading ctx.params later because
+        Click's eager --help callback can fire before non-eager options have
+        been populated into ctx.params.
+        """
         help_options = ['-h', '--help', '-?', '?']
         self.raw_args = []
-        for arg in args:
+        self.namespace = None
+        i = 0
+        while i < len(args):
+            arg = args[i]
             if arg in help_options:
                 break
+            if arg in ('-n', '--namespace') and i + 1 < len(args):
+                self.namespace = args[i + 1]
+                i += 2
+                continue
             self.raw_args.append(arg)
+            i += 1
         # SONiC CLI accepts '?' as a hidden help option, handle it explicitly here
         if '?' in args:
             click.echo(ctx.get_help())
@@ -70,6 +86,7 @@ class VtyshCommand(click.Command):
     def get_help(self, ctx):
         """Override Click's get_help to provide enhanced vtysh help."""
         formatter = click.HelpFormatter()
+        namespace = self.namespace
 
         # Try the full command first
         is_valid = False
@@ -83,7 +100,7 @@ class VtyshCommand(click.Command):
                 full_command_prefix += f" {arg_prefix}"
             full_command = f"{self.vtysh_command_prefix} {' '.join(self.raw_args)}"
             # Handle partial commands (ie, "show ip route sum")
-            completions = self.get_vtysh_completions(full_command)
+            completions = self.get_vtysh_completions(full_command, namespace=namespace)
             if len(completions) == 1:
                 last_valid_command = f"{full_command_prefix} {completions[0]}"
                 is_valid = True
@@ -95,11 +112,11 @@ class VtyshCommand(click.Command):
                 test_command = f"{last_valid_command} {arg}"
 
                 # Handle partial commands (ie, "show ip route sum")
-                completions = self.get_vtysh_completions(test_command)
+                completions = self.get_vtysh_completions(test_command, namespace=namespace)
                 if len(completions) == 1:
                     test_command = f"{last_valid_command} {completions[0]}"
                 elif len(completions) > 1:
-                    usage_args = self.get_usage_args(last_valid_command)
+                    usage_args = self.get_usage_args(last_valid_command, namespace=namespace)
                     formatter.write_usage(last_valid_command, usage_args)
                     formatter.write(f'Try "{last_valid_command} -h" for help.')
                     formatter.write_paragraph()
@@ -107,9 +124,9 @@ class VtyshCommand(click.Command):
                     formatter.write_text(f'Error: Too many matches: {", ".join(sorted(completions))}')
                     return formatter.getvalue().rstrip()
 
-                vtysh_help_text = self.get_vtysh_help(test_command)
+                vtysh_help_text = self.get_vtysh_help(test_command, namespace=namespace)
                 if vtysh_help_text and "% There is no matched command." in vtysh_help_text:
-                    usage_args = self.get_usage_args(last_valid_command)
+                    usage_args = self.get_usage_args(last_valid_command, namespace=namespace)
                     formatter.write_usage(last_valid_command, usage_args)
                     formatter.write(f'Try "{last_valid_command} -h" for help.')
                     formatter.write_paragraph()
@@ -120,13 +137,13 @@ class VtyshCommand(click.Command):
                 last_valid_command = test_command
 
         # Add Usage section
-        usage_args = self.get_usage_args(last_valid_command)
+        usage_args = self.get_usage_args(last_valid_command, namespace=namespace)
         formatter.write_usage(last_valid_command, usage_args)
 
         # Add description
         description = None
         if self.raw_args:
-            description = self.get_vtysh_command_description(last_valid_command)
+            description = self.get_vtysh_command_description(last_valid_command, namespace=namespace)
         elif self.callback and self.callback.__doc__:
             description = self.callback.__doc__.strip().split('\n')[0]
         if description:
@@ -144,32 +161,32 @@ class VtyshCommand(click.Command):
                 formatter.write_dl(opts)
 
         # Add Commands section (from vtysh)
-        vtysh_subcommands = self.get_vtysh_subcommands(last_valid_command)
+        vtysh_subcommands = self.get_vtysh_subcommands(last_valid_command, namespace=namespace)
         if len(vtysh_subcommands) > 0:
             with formatter.section("Commands"):
                 formatter.write_dl(vtysh_subcommands)
 
         return formatter.getvalue().rstrip()
 
-    def get_usage_args(self, command):
+    def get_usage_args(self, command, namespace=None):
         """Set usage args appropriately for nested vs. leaf commands."""
-        vtysh_subcommands = self.get_vtysh_subcommands(command)
+        vtysh_subcommands = self.get_vtysh_subcommands(command, namespace=namespace)
         if vtysh_subcommands:
             return "[OPTIONS] COMMAND [ARGS]..."
         return "[OPTIONS]"
 
-    def get_vtysh_command_description(self, command):
+    def get_vtysh_command_description(self, command, namespace=None):
         """Get description for the current command from vtysh help."""
         # remove last arg
         curr_command = command.split()[-1]
         prev_command = command.split()[:-1]
-        vtysh_subcommands = self.get_vtysh_subcommands(" ".join(prev_command))
+        vtysh_subcommands = self.get_vtysh_subcommands(" ".join(prev_command), namespace=namespace)
         for c, d in vtysh_subcommands:
             if c == curr_command:
                 return d
         return ""
 
-    def get_vtysh_completions(self, cmd_prefix, completion=True):
+    def get_vtysh_completions(self, cmd_prefix, completion=True, namespace=None):
         """
         Get completion options from vtysh for the given command.
 
@@ -177,8 +194,9 @@ class VtyshCommand(click.Command):
             cmd_prefix: The command prefix to query
             completion: If True, use "?" (no space) to complete partial words.
                        If False, use " ?" (with space) to show all next commands.
+            namespace: SONiC namespace name (e.g. "asic0") for multi-ASIC targeting.
         """
-        subcommands = self.get_vtysh_subcommands(cmd_prefix, completion=completion)
+        subcommands = self.get_vtysh_subcommands(cmd_prefix, completion=completion, namespace=namespace)
         completions = []
         for cmpl, _ in subcommands:
             if any(c.isupper() for c in cmpl) or (cmpl.startswith("(") and cmpl.endswith(")")):
@@ -187,9 +205,9 @@ class VtyshCommand(click.Command):
             completions.append(cmpl)
         return completions
 
-    def get_vtysh_subcommands(self, command, completion=False):
+    def get_vtysh_subcommands(self, command, completion=False, namespace=None):
         """Get subcommands from vtysh for the given command."""
-        vtysh_help_content = self.get_vtysh_help(command, completion)
+        vtysh_help_content = self.get_vtysh_help(command, completion, namespace)
         if (not vtysh_help_content
                 or "Error response from daemon:" in vtysh_help_content
                 or "failed to connect to any daemons" in vtysh_help_content):
@@ -217,15 +235,38 @@ class VtyshCommand(click.Command):
         return subcommands
 
     @functools.lru_cache()
-    def get_vtysh_help(self, cmd_prefix, completion=False):
+    def get_vtysh_help(self, cmd_prefix, completion=False, namespace=None):
         """
         Get help for a vtysh command.
+
+        Uses rvtysh so that on multi-ASIC platforms the query lands in the
+        right FRR instance. When `namespace` is set, passes `-n <asic_id>`.
+        When unset, rvtysh's default-namespace behavior is used — fine for
+        help/completion because the FRR command tree is identical per ASIC.
         """
         try:
             help_command = f"{cmd_prefix}"
             help_command += "?" if completion else " ?"
+            # rvtysh (read-only vtysh wrapper) — no sudo. Read-only help
+            # queries shouldn't require elevation.
+            cmd = [constants.RVTYSH_COMMAND]
+            # The SONiC vtysh wrapper only consumes `-n N` on multi-ASIC
+            # platforms; on single-ASIC it falls through into the docker
+            # container's vtysh, which then looks for nonexistent
+            # /var/run/frr/N/ and silently returns empty. So gate `-n`
+            # on is_multi_asic() — on single-ASIC, ignore the namespace
+            # (the regular `show ip route` handler already rejects
+            # --namespace on single-ASIC, so this is a misuse edge case).
+            if namespace and multi_asic.is_multi_asic():
+                try:
+                    asic_id = multi_asic.get_asic_id_from_name(namespace)
+                    cmd += ["-n", str(asic_id)]
+                except Exception:
+                    # Namespace name not recognized; fall back to default.
+                    pass
+            cmd += ["-c", help_command]
             result = subprocess.run(
-                ["vtysh", "-c", help_command],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=10

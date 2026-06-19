@@ -1517,7 +1517,7 @@ def interfaces(namespace, display):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def route(args, namespace, display, verbose):
     """Show IPv6 routing table"""
-    # Call common handler to handle the show ip route cmd
+    # Call common handler to handle the show ipv6 route cmd
     bgp_common.show_routes(args, namespace, display, verbose, "ipv6")
 
 # 'protocol' command

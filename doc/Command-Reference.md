@@ -501,6 +501,11 @@ This command displays the full list of show commands available in the software; 
 
 The same syntax applies to all subgroups of `show` which themselves contain subcommands, and subcommands which accept options/arguments.
 
+Some `show` commands that wrap FRR's CLI (currently `show ip route` and
+`show ipv6 route`) provide enhanced help and TAB completion sourced live
+from FRR. Their `-h`/`--help` output lists the subcommands FRR actually
+supports, and shell TAB completion offers the same set as you type.
+
 - Example:
   ```
   admin@sonic:~$ show interfaces -?
@@ -6803,6 +6808,11 @@ This sub-section explains the various IP protocol specific show commands that ar
 
 This command displays either all the route entries from the routing table or a specific route.
 
+`show ip route --help` (or `show ip route -?`) lists the available
+subcommands sourced live from FRR (e.g. `bgp`, `connected`, `static`,
+`summary`, `vrf`, etc.). Shell TAB completion offers the same set as
+you type, including for nested subcommands like `show ip route vrf <TAB>`.
+
 - Usage:
   ```
   show ip route [<vrf-name>] [<ip_address>]
@@ -6932,6 +6942,11 @@ This sub-section explains the various IPv6 protocol specific show commands that 
 **show ipv6 route**
 
 This command displays either all the IPv6 route entries from the routing table or a specific IPv6 route.
+
+`show ipv6 route --help` (or `show ipv6 route -?`) lists the available
+subcommands sourced live from FRR. Shell TAB completion offers the same
+set as you type, including for nested subcommands like
+`show ipv6 route vrf <TAB>`.
 
 - Usage:
   ```
