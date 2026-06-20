@@ -456,7 +456,7 @@ class TestVtyshCompletionCommands:
         # Verify vtysh was called with " ?" (space before ?)
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
-        assert call_args == ['vtysh', '-c', 'show ip route ?']  # Note the space before ?
+        assert call_args == ['rvtysh', '-c', 'show ip route ?']  # Note the space before ?
 
         # Verify we got all completions
         assert "summary" in completions
@@ -485,7 +485,7 @@ class TestVtyshCompletionCommands:
 
         # Verify vtysh was called with "?" (no space before ?)
         call_args = mock_subprocess.call_args[0][0]
-        assert call_args == ['vtysh', '-c', 'show ip route summ?']  # No space before ?
+        assert call_args == ['rvtysh', '-c', 'show ip route summ?']  # No space before ?
 
     @mock.patch('show.vtysh_helper.subprocess.run')
     def test_shell_complete_end_to_end(self, mock_subprocess):
