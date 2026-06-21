@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import re
@@ -91,6 +92,15 @@ COMMAND_TIMEOUT = 300
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
+
+    # The bash one-liner below relies on a nested "bgp" docker container, which
+    # only exists on a real SONiC device. On single-container images such as
+    # docker-sonic-vs (used as cSONiC neighbors in the KVM testbed) there is no
+    # nested docker, so the command would emit "sudo: docker: command not found"
+    # on every show invocation. Skip it and keep the default ('frr') in that case.
+    if shutil.which('docker') is None:
+        return result
+
     command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
     try:
