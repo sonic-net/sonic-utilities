@@ -194,6 +194,10 @@ def hft_delete_harmonizer(ctx, harmonizer_name):
         )
         ctx.exit(1)
 
+    if not _has_table_entry(ctx, HARMONIZER_TABLE_NAME, harmonizer_name):
+        click.echo("Harmonizer '{}' does not exist.".format(harmonizer_name))
+        ctx.exit(1)
+
     remove_entire_table = _is_last_entry(ctx, HARMONIZER_TABLE_NAME)
     harmonizer_payload = _build_harmonizer_remove_patch(harmonizer_name, remove_entire_table)
     _process_payload(ctx, harmonizer_payload)
@@ -389,6 +393,18 @@ def _has_existing_profile(ctx):
     except Exception:
         return False
     return bool(entries)
+
+
+def _has_table_entry(ctx, table_name, entry_name):
+    """Return True if the CFG table contains the requested entry."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return False
+    try:
+        entries = cfgdb.get_table(table_name) or {}
+    except Exception:
+        return False
+    return entry_name in entries
 
 
 def _get_harmonizer_users(ctx, harmonizer_name):

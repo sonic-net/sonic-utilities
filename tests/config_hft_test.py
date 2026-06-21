@@ -164,6 +164,7 @@ class TestConfigHftCli:
     def test_delete_harmonizer_removes_entry(self):
         with patch('config.hft._is_last_entry', return_value=False), \
                 patch('config.hft._get_harmonizer_users', return_value=[]), \
+                patch('config.hft._has_table_entry', return_value=True), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -189,6 +190,19 @@ class TestConfigHftCli:
         assert result.exit_code == 1
         assert "Cannot delete harmonizer 'hm0'" in result.output
         assert 'profileA' in result.output
+        mock_process.assert_not_called()
+
+    def test_delete_harmonizer_rejected_when_harmonizer_does_not_exist(self):
+        with patch('config.hft._get_harmonizer_users', return_value=[]), \
+                patch('config.hft._has_table_entry', return_value=False), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'harmonizer', 'missing']
+            )
+
+        assert result.exit_code == 1
+        assert "Harmonizer 'missing' does not exist." in result.output
         mock_process.assert_not_called()
 
 

@@ -129,7 +129,9 @@ def _build_rows(profile_table, group_table, harmonizer_table=None):
             ])
 
     for harmonizer_name in natsorted(set(harmonizer_table.keys()) - used_harmonizers):
-        reporting_rate, rollover_counters, heatmap_counters = _format_harmonizer(harmonizer_table.get(harmonizer_name, {}))
+        reporting_rate, rollover_counters, heatmap_counters = _format_harmonizer(
+            harmonizer_table.get(harmonizer_name, {})
+        )
         rows.append([
             DEFAULT_CELL_PLACEHOLDER,
             DEFAULT_CELL_PLACEHOLDER,
