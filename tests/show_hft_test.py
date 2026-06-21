@@ -29,11 +29,72 @@ def test_build_rows_with_mixed_profiles_and_groups():
     rows = show_hft._build_rows(profile_table, group_table)
 
     assert rows == [
-        ['profile2', 'disabled', '15', 'PORT', 'Ethernet0\nEthernet1', 'COUNTER0\nCOUNTER2'],
-        ['', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY'],
-        ['profile3', '-', '-', '-', '-', '-'],
-        ['profile10', 'enabled', '2,000', 'BUFFER_POOL', '-', '-']
+        ['profile2', 'disabled', '15', '-', 'PORT', 'Ethernet0\nEthernet1', 'COUNTER0\nCOUNTER2', '-', '-', '-'],
+        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', ''],
+        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+        ['profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-', '-', '-', '-']
     ]
+
+
+def test_build_rows_with_harmonizer_config():
+    profile_table = {
+        'profileA': {'stream_state': 'enabled', 'poll_interval': '1000', 'harmonizer': 'hm0'}
+    }
+    group_table = {
+        'profileA|PORT': {
+            'object_names': ['Ethernet0'],
+            'object_counters': ['IF_IN_UCAST_PKTS']
+        }
+    }
+    harmonizer_table = {
+        'hm0': {
+            'reporting_rate': '5000',
+            'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
+            'heatmap_counters': 'PORT|IF_OUT_ERRORS,QUEUE|WRED_ECN_MARKED_PACKETS'
+        }
+    }
+
+    rows = show_hft._build_rows(profile_table, group_table, harmonizer_table)
+
+    assert rows == [[
+        'profileA',
+        'enabled',
+        '1,000',
+        'hm0',
+        'PORT',
+        'Ethernet0',
+        'IF_IN_UCAST_PKTS',
+        '5,000',
+        'PORT|IF_IN_UCAST_PKTS\nQUEUE|DROPPED_PACKETS',
+        'PORT|IF_OUT_ERRORS\nQUEUE|WRED_ECN_MARKED_PACKETS'
+    ]]
+
+
+def test_build_rows_includes_unbound_harmonizer_config():
+    rows = show_hft._build_rows(
+        {},
+        {},
+        {
+            'hm0': {
+                'reporting_rate': '5000',
+                'rollover_counters': ['PORT|IF_IN_UCAST_PKTS'],
+                'heatmap_counters': []
+            }
+        }
+    )
+
+    assert rows == [[
+        '-',
+        '-',
+        '-',
+        'hm0',
+        '-',
+        '-',
+        '-',
+        '5,000',
+        'PORT|IF_IN_UCAST_PKTS',
+        '-'
+    ]]
 
 
 def test_format_poll_interval_variants():
@@ -106,6 +167,8 @@ def test_display_hft_outputs_table(capsys):
                         'object_counters': ['BYTES']
                     }
                 }
+            if name == show_hft.HARMONIZER_TABLE:
+                return {}
             return {}
 
     class MockDb:

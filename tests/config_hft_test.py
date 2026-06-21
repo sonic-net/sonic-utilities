@@ -15,7 +15,7 @@ class TestConfigHftCli:
         with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['add', 'profile', 'profileA']
+                ['add', 'profile', 'profileA', '--harmonizer', 'hm0']
             )
 
         assert result.exit_code == 0
@@ -26,7 +26,35 @@ class TestConfigHftCli:
             'value': {
                 'profileA': {
                     'stream_state': 'disabled',
-                    'poll_interval': '10000'
+                    'poll_interval': '10000',
+                    'harmonizer': 'hm0'
+                }
+            }
+        }]
+        assert payload == expected_payload
+
+    def test_add_harmonizer_splits_comma_separated_lists(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'harmonizer', 'hm0',
+                    '--reporting_rate', '1000',
+                    '--rollover_counters', 'PORT|IF_IN_UCAST_PKTS, QUEUE|DROPPED_PACKETS',
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS, QUEUE|WRED_ECN_MARKED_PACKETS'
+                ]
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        expected_payload = [{
+            'op': 'add',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_HARMONIZER',
+            'value': {
+                'hm0': {
+                    'reporting_rate': '1000',
+                    'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
+                    'heatmap_counters': ['PORT|IF_OUT_ERRORS', 'QUEUE|WRED_ECN_MARKED_PACKETS']
                 }
             }
         }]
@@ -74,6 +102,37 @@ class TestConfigHftCli:
         }]
         assert payload == expected_payload
 
+    def test_bind_harmonizer_sets_profile_harmonizer_patch(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['bind-harmonizer', 'profileA', 'hm0']
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        expected_payload = [{
+            'op': 'add',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE/profileA/harmonizer',
+            'value': 'hm0'
+        }]
+        assert payload == expected_payload
+
+    def test_unbind_harmonizer_removes_profile_harmonizer_patch(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['unbind-harmonizer', 'profileA']
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        expected_payload = [{
+            'op': 'remove',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE/profileA/harmonizer'
+        }]
+        assert payload == expected_payload
+
     def test_add_profile_rejected_when_profile_already_exists(self):
         with patch('config.hft._has_existing_profile', return_value=True), \
                 patch('config.hft._process_payload') as mock_process:
@@ -101,6 +160,36 @@ class TestConfigHftCli:
             'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE'
         }]
         assert payload == expected_payload
+
+    def test_delete_harmonizer_removes_entry(self):
+        with patch('config.hft._is_last_entry', return_value=False), \
+                patch('config.hft._get_harmonizer_users', return_value=[]), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'harmonizer', 'hm0']
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        expected_payload = [{
+            'op': 'remove',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_HARMONIZER/hm0'
+        }]
+        assert payload == expected_payload
+
+    def test_delete_harmonizer_rejected_when_profile_still_references_it(self):
+        with patch('config.hft._get_harmonizer_users', return_value=['profileA']), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'harmonizer', 'hm0']
+            )
+
+        assert result.exit_code == 1
+        assert "Cannot delete harmonizer 'hm0'" in result.output
+        assert 'profileA' in result.output
+        mock_process.assert_not_called()
 
 
 def test_is_last_entry_true_and_false():
