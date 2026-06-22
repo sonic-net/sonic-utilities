@@ -2164,8 +2164,8 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
             return
 
-    if not force:
-        if filename is None and file_format == 'config_db':
+    if filename is None and file_format == 'config_db':
+        if not force:
             cfg_files_to_validate = [DEFAULT_CONFIG_DB_FILE]
             if multi_asic.is_multi_asic():
                 default_cfg_file_root, default_cfg_file_ext = os.path.splitext(
@@ -2207,13 +2207,13 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                         )
                     )
                     raise click.Abort()
-        elif filename is not None and filename != "/dev/stdin":
-            if multi_asic.is_multi_asic():
-                for cfg_file in cfg_files:
-                    if cfg_file is not None:
-                        config_file_yang_validation(cfg_file)
-            else:
-                config_file_yang_validation(filename)
+    elif filename is not None and filename != "/dev/stdin":
+        if multi_asic.is_multi_asic():
+            for cfg_file in cfg_files:
+                if cfg_file is not None:
+                    config_file_yang_validation(cfg_file)
+        else:
+            config_file_yang_validation(filename)
 
     #Stop services before config push
     if not no_service_restart:
