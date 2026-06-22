@@ -95,6 +95,20 @@ class TestClear(object):
         run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'headroom_pool'])
 
     @patch('clear.main.run_command')
+    def test_clear_buffer_pool_wm(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['buffer_pool'].commands['watermark'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['watermarkstat', '-c', '-t', 'buffer_pool'])
+
+    @patch('clear.main.run_command')
+    def test_clear_buffer_pool_pst_wm(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['buffer_pool'].commands['persistent-watermark'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'buffer_pool'])
+
+    @patch('clear.main.run_command')
     def test_clear_fdb(self, run_command):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['fdb'].commands['all'])
