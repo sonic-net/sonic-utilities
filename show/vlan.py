@@ -38,13 +38,23 @@ def _get_brief_cache(ctx):
     render completes, so the lifetime of the cache is exactly one
     invocation -- it never carries indexes from an earlier ``brief()``
     call into a later one, even when callers share the same ``Db``.
+
+    As a second line of defence (for external callers that invoke the
+    getters directly on a reused ``Db`` without going through
+    ``brief()``), the cache records the identity of the ``vlan_ip_data``
+    and ``vlan_ports_data`` objects it was built from and is rebuilt
+    automatically when a different ``vlan_cfg`` is observed. The source
+    objects are kept referenced (rather than comparing raw ``id()``
+    values) so their identity can never be recycled by a freed object.
     """
     cfg, db = ctx
-    cache = getattr(db, _BRIEF_CACHE_ATTR, None)
-    if cache is not None:
-        return cache
-
     _, vlan_ip_data, vlan_ports_data = cfg
+
+    cache = getattr(db, _BRIEF_CACHE_ATTR, None)
+    if cache is not None and \
+            cache['_source'][0] is vlan_ip_data and \
+            cache['_source'][1] is vlan_ports_data:
+        return cache
 
     # Index VLAN_INTERFACE once: (vlan, prefix) entries provide IP
     # addresses; (vlan,) entries carry per-VLAN attributes like
@@ -76,6 +86,13 @@ def _get_brief_cache(ctx):
                              if naming_mode == 'alias' else None)
 
     cache = {
+        # Identity guard: the exact (vlan_ip_data, vlan_ports_data)
+        # objects this cache was built from. Retrieval compares against
+        # these with ``is`` (an O(1) identity check) and rebuilds on any
+        # mismatch, so a reused ``Db`` can never expose indexes from
+        # stale config. Keeping the references here also prevents their
+        # identity from being recycled by a later, freed object.
+        '_source': (vlan_ip_data, vlan_ports_data),
         'ip_by_vlan': ip_by_vlan,
         'proxy_arp_by_vlan': proxy_arp_by_vlan,
         'ports_by_vlan': ports_by_vlan,

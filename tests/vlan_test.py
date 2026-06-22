@@ -1956,6 +1956,57 @@ class TestVlanBriefCache:
         assert "Vlan1000" not in cache_after["ip_by_vlan"]
         assert cache_before is not cache_after
 
+    def test_cache_rebuilds_when_vlan_ip_data_identity_changes(self):
+        """Identity guard: reusing the same db (cache still attached) with a
+        *different* vlan_ip_data object -- without an explicit
+        _clear_brief_cache -- must rebuild rather than return stale indexes.
+        Covers the ``_source[0] is vlan_ip_data`` arm of the guard."""
+        from show.vlan import _get_brief_cache
+
+        ctx, db = self._make_ctx_shared_db(
+            vlan_ip_data={("Vlan1000", "10.0.0.1/24"): {}},
+            vlan_ports_data={("Vlan1000", "Ethernet4"): {"tagging_mode": "untagged"}},
+        )
+        cache_before = _get_brief_cache(ctx)
+        assert "Vlan1000" in cache_before["ip_by_vlan"]
+
+        # Same db, new vlan_ip_data object -> _source[0] mismatch -> rebuild.
+        new_ip_data = {("Vlan2000", "10.0.2.1/24"): {}}
+        _, _, old_ports = ctx[0]
+        ctx2 = (({}, new_ip_data, old_ports), db)
+
+        cache_after = _get_brief_cache(ctx2)
+        assert cache_after is not cache_before
+        assert "Vlan2000" in cache_after["ip_by_vlan"]
+        assert "Vlan1000" not in cache_after["ip_by_vlan"]
+        assert cache_after["_source"][0] is new_ip_data
+
+    def test_cache_rebuilds_when_vlan_ports_data_identity_changes(self):
+        """Identity guard: a matching vlan_ip_data but a *different*
+        vlan_ports_data object must still trigger a rebuild. Covers the
+        second (short-circuited) ``_source[1] is vlan_ports_data`` arm."""
+        from show.vlan import _get_brief_cache
+
+        shared_ip_data = {("Vlan1000", "10.0.0.1/24"): {}}
+        ctx, db = self._make_ctx_shared_db(
+            vlan_ip_data=shared_ip_data,
+            vlan_ports_data={("Vlan1000", "Ethernet4"): {"tagging_mode": "untagged"}},
+        )
+        cache_before = _get_brief_cache(ctx)
+        assert "Vlan1000" in cache_before["ports_by_vlan"]
+
+        # Same vlan_ip_data object, new vlan_ports_data object ->
+        # _source[0] matches but _source[1] mismatches -> rebuild.
+        new_ports_data = {("Vlan3000", "Ethernet8"): {"tagging_mode": "tagged"}}
+        ctx2 = (({}, shared_ip_data, new_ports_data), db)
+
+        cache_after = _get_brief_cache(ctx2)
+        assert cache_after is not cache_before
+        assert "Vlan3000" in cache_after["ports_by_vlan"]
+        assert "Vlan1000" not in cache_after["ports_by_vlan"]
+        assert cache_after["_source"][0] is shared_ip_data
+        assert cache_after["_source"][1] is new_ports_data
+
     # ------------------------------------------------------------------
     # Integration tests: brief() command
     # ------------------------------------------------------------------
