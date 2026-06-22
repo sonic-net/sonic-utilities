@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from sonic_package_manager.service_creator.sonic_db import SonicDB
 
@@ -44,14 +44,21 @@ class TestGetNamespaceDbConnectors:
         mock_device_info.get_namespaces.return_value = ['asic0', 'asic1']
         mock_swsscommon.SonicDBConfig.isGlobalInit.return_value = False
 
-        mock_conn = MagicMock()
-        mock_swsscommon.ConfigDBConnector.return_value = mock_conn
+        # Distinct connectors per namespace, so the test fails if both
+        # namespaces collapse onto a single shared connector instance.
+        conn0 = MagicMock()
+        conn1 = MagicMock()
+        mock_swsscommon.ConfigDBConnector.side_effect = [conn0, conn1]
 
         result = SonicDB.get_namespace_db_connectors()
 
-        assert result == [mock_conn, mock_conn]
-        assert mock_swsscommon.ConfigDBConnector.call_count == 2
-        assert mock_conn.connect.call_count == 2
+        assert result == [conn0, conn1]
+        assert mock_swsscommon.ConfigDBConnector.call_args_list == [
+            call(namespace='asic0'),
+            call(namespace='asic1'),
+        ]
+        conn0.connect.assert_called_once_with()
+        conn1.connect.assert_called_once_with()
         mock_swsscommon.SonicDBConfig.initializeGlobalConfig.assert_called_once()
 
     @patch('sonic_package_manager.service_creator.sonic_db.in_chroot', return_value=False)

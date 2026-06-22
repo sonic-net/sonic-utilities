@@ -112,9 +112,11 @@ class SonicDB:
     def get_namespace_db_connectors(cls):
         """ Returns per-ASIC namespace CONFIG_DB connectors (empty on single-ASIC).
 
-        Resolved once and cached. A namespace that fails to connect raises
-        rather than being skipped, and the cache is populated only once all
-        namespaces connect, so a failed run is retried on the next call.
+        In chroot this is a fast-path that always returns an empty list
+        without caching. Otherwise the result is resolved once and cached:
+        a namespace that fails to connect raises rather than being skipped,
+        and the cache is populated only once all namespaces connect, so a
+        failed run is retried on the next call.
         """
 
         if in_chroot():

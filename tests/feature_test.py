@@ -205,15 +205,21 @@ class TestSetFeatureStateUnit(object):
 
         mock_cfgdb_with_state = mock.MagicMock()
         mock_cfgdb_with_state.get_entry.return_value = {'state': 'enabled'}
-        mock_cfgdb_with_state.mod_entry = mock.MagicMock()
 
         mock_cfgdb_no_state = mock.MagicMock()
         mock_cfgdb_no_state.get_entry.return_value = {'auto_restart': 'enabled'}
-        mock_cfgdb_no_state.mod_entry = mock.MagicMock()
 
         cfgdb_clients = {'': mock_cfgdb_with_state, 'asic0': mock_cfgdb_no_state}
 
-        set_feature_state(cfgdb_clients, 'bgp', 'disabled', False)
+        # Bypass YANG validation so the test does not depend on a Click
+        # context; ValidatedConfigDBConnector(conn) just returns the connector.
+        with mock.patch('config.feature.ValidatedConfigDBConnector', side_effect=lambda conn: conn):
+            set_feature_state(cfgdb_clients, 'bgp', 'disabled', False)
+
+        # Both namespaces are written, so the namespace that was missing
+        # 'state' gets backfilled to the requested value.
+        mock_cfgdb_with_state.mod_entry.assert_called_once_with('FEATURE', 'bgp', {'state': 'disabled'})
+        mock_cfgdb_no_state.mod_entry.assert_called_once_with('FEATURE', 'bgp', {'state': 'disabled'})
 
     def test_feature_autorestart_missing_auto_restart_key(self, get_cmd_module):
         from unittest.mock import MagicMock
