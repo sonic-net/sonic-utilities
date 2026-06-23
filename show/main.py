@@ -1796,9 +1796,34 @@ def users(verbose):
 @click.option('--debug-dump', is_flag=True, help="Collect Debug Dump Output")
 @click.option('--redirect-stderr', '-r', is_flag=True, help="Redirect an intermediate errors to STDERR")
 @click.option('--flow-dump', is_flag=True, help="Collect DPU flow dump (Only valid on DPU platforms)")
+@click.option('--with-tcpdump', is_flag=True, help="Capture traffic with tcpdump during techsupport")
+@click.option('--tcpdump-duration', 'tcpdump_duration', type=click.IntRange(1, 300), default=None,
+              help="Duration in seconds for tcpdump capture (default: 60, range: 1-300). Requires --with-tcpdump")
+@click.option('--tcpdump-packet-limit', 'tcpdump_packet_limit', type=click.IntRange(1, 100000), default=None,
+              help="Maximum number of packets to capture (default: 10000, range: 1-100000). Requires --with-tcpdump")
+@click.option('--tcpdump-filter', 'tcpdump_filter', type=str, default=None,
+              help="BPF filter expression for tcpdump (e.g., 'port 179', 'udp port 3784'). Requires --with-tcpdump")
 def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
-                silent, debug_dump, redirect_stderr, flow_dump):
+                silent, debug_dump, redirect_stderr, flow_dump,
+                with_tcpdump, tcpdump_duration, tcpdump_packet_limit, tcpdump_filter):
     """Gather information for troubleshooting"""
+
+    # Validate: tcpdump options require --with-tcpdump
+    if not with_tcpdump:
+        if tcpdump_duration is not None:
+            raise click.UsageError("--tcpdump-duration requires --with-tcpdump to be specified")
+        if tcpdump_packet_limit is not None:
+            raise click.UsageError("--tcpdump-packet-limit requires --with-tcpdump to be specified")
+        if tcpdump_filter is not None:
+            raise click.UsageError("--tcpdump-filter requires --with-tcpdump to be specified")
+
+    # Apply defaults when --with-tcpdump is used
+    if with_tcpdump:
+        if tcpdump_duration is None:
+            tcpdump_duration = 60  # default 60 seconds
+        if tcpdump_packet_limit is None:
+            tcpdump_packet_limit = 10000  # default 10k packets
+
     cmd = ["sudo"]
 
     if global_timeout:
@@ -1825,6 +1850,15 @@ def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
     cmd += ['-t', str(cmd_timeout)]
     if redirect_stderr:
         cmd += ["-r"]
+
+    # Add tcpdump options
+    if with_tcpdump:
+        cmd += ['-T']
+        cmd += ['-P', str(tcpdump_duration)]
+        cmd += ['-L', str(tcpdump_packet_limit)]
+        if tcpdump_filter:
+            cmd += ['-F', tcpdump_filter]
+
     run_command(cmd, display_cmd=verbose)
 
 
