@@ -686,6 +686,28 @@ def transceiver_status(interfacename, namespace, verbose):
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
+@transceiver.command('doctor')  # 'doctor' is the actual sub-command name under 'transceiver' command
+@click.argument('interfacename', required=True)
+@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def transceiver_doctor(interfacename, namespace):
+    """Show interface transceiver doctor information"""
+
+    ctx = click.get_current_context()
+
+    cmd = ['sfpshow', 'doctor']
+
+    if interfacename is not None:
+        interfacename = try_convert_interfacename_from_alias(
+            ctx, interfacename)
+
+        cmd += ['-p', str(interfacename)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    clicommon.run_command(cmd, display_cmd=verbose)
 
 @transceiver.command()
 @click.argument('interfacename', required=False)
@@ -777,7 +799,6 @@ def error_status(db, interfacename, fetch_from_hardware, namespace, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
-
 
 #
 # counters group ("show interfaces counters ...")

@@ -769,7 +769,7 @@ def eeprom(port, dump_dom, namespace):
     sfp.get_eeprom()
     sfp.display_eeprom()
 
-# 'info' subcommand
+# 'info' subcommand // kmhwong how does this connects to info???
 
 @cli.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM data for port <port_name> only")
