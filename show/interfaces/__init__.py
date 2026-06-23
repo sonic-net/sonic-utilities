@@ -871,6 +871,7 @@ def fec_stats(namespace, display, period, json_fmt, verbose, nonzero):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
+<<<<<<< HEAD
 def get_port_oid_mapping(db, namespace):
     ''' Returns dictionary of all ports interfaces and their OIDs. '''
     port_oid_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
@@ -906,24 +907,37 @@ def fetch_fec_histogram(db, namespace, port_oid_map, target_port):
 
 
 
+=======
+>>>>>>> 6009f7ce (NOS-8001: Clear all FEC counters in SONiC properly including histogram (#591))
 # 'fec-histogram' subcommand ("show interfaces counters fec-histogram")
 @counters.command('fec-histogram')
 @multi_asic_util.multi_asic_click_options
 @click.argument('interfacename', required=True)
+<<<<<<< HEAD
 @clicommon.pass_db
 def fec_histogram(db, interfacename, namespace, display):
+=======
+@click.pass_context
+def fec_histogram(ctx, interfacename, namespace, display):
+>>>>>>> 6009f7ce (NOS-8001: Clear all FEC counters in SONiC properly including histogram (#591))
     """Show interface counters fec-histogram"""
 
-    if namespace is None:
-        namespace = constants.DEFAULT_NAMESPACE
+    cmd = ['portstat', '-fh', '--relative-timestamp']
 
-    port_oid_map = get_port_oid_mapping(db, namespace)
+    interfacename = try_convert_interfacename_from_alias(ctx, interfacename, check_db=True)
+    cmd += ['-i', str(interfacename)]
+    if multi_asic.is_multi_asic():
+        cmd += ['-s', str(display)]
 
-    # Try to convert interface name from alias
-    interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
 
+<<<<<<< HEAD
     # Fetch and display the FEC histogram
     fetch_fec_histogram(db, namespace, port_oid_map, interfacename)
+=======
+    clicommon.run_command(cmd)
+>>>>>>> 6009f7ce (NOS-8001: Clear all FEC counters in SONiC properly including histogram (#591))
 
 
 # 'rates' subcommand ("show interfaces counters rates")

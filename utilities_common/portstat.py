@@ -9,6 +9,7 @@ from sonic_py_common import device_info
 from swsscommon.swsscommon import SonicV2Connector, CounterTable, PortCounter
 
 from utilities_common import constants
+from utilities_common.general import format_relative_time
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.netstat import ns_diff, table_as_json, format_brate, format_prate, \
                                      format_util, format_number_with_comma, format_util_directly, \
@@ -41,6 +42,7 @@ header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR',
                    'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FLR(O)', 'FLR(P) (Accuracy)', 'FEC_MAX_T']
 header_fec_hist_only = ['IFACE', 'BIN0', 'BIN1', 'BIN2', 'BIN3', 'BIN4', 'BIN5', 'BIN6', 'BIN7',
                         'BIN8', 'BIN9', 'BIN10', 'BIN11', 'BIN12', 'BIN13', 'BIN14', 'BIN15']
+header_fec_hist_vertical = ['Symbol Errors Per Codeword', 'Codewords', 'Last Updated']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
 header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS', 'TRIM_TX_PKTS', 'TRIM_DRP_PKTS']
 
@@ -140,6 +142,7 @@ RATES_TABLE_PREFIX = "RATES:"
 
 COUNTER_TABLE_PREFIX = "COUNTERS:"
 COUNTERS_PORT_NAME_MAP = "COUNTERS_PORT_NAME_MAP"
+SAI_FEC_BIN_TIMESTAMP_KEY = 'SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{}_TIMESTAMP'
 
 PORT_STATUS_TABLE_PREFIX = "PORT_TABLE:"
 PORT_STATE_TABLE_PREFIX = "PORT_TABLE|"
@@ -408,6 +411,49 @@ class Portstat(object):
             self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns)
         return self.db_clients[ns]
 
+    def print_fec_hist_vertical(self, cnstat_new_dict, cnstat_old_dict, intf,
+                                relative_timestamp=False):
+        """
+            Render the FEC histogram for a single interface as one row per BIN,
+            with the per-bin Last Updated timestamp read live from
+            COUNTERS:<oid>.
+        """
+        if intf not in cnstat_new_dict:
+            print("Interface {} not found".format(intf))
+            return
+
+        cntr = cnstat_new_dict[intf]
+        old_cntr = cnstat_old_dict.get(intf) or \
+            NStats._make([0] * len(counter_bucket_dict))._asdict()
+
+        asic_kvp = None
+        for ns in self.multi_asic.get_ns_list_based_on_options():
+            db = self.get_db_client(ns)
+            name_map = db.get_all(db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP) or {}
+            if intf in name_map:
+                asic_kvp = db.get_all(db.COUNTERS_DB,
+                                      COUNTER_TABLE_PREFIX + name_map[intf]) or {}
+                break
+
+        table = []
+        for i in range(16):
+            codewords = ns_diff(cntr['fec_bin{}'.format(i)],
+                                old_cntr['fec_bin{}'.format(i)])
+            ts_ms = asic_kvp.get(SAI_FEC_BIN_TIMESTAMP_KEY.format(i)) if asic_kvp else None
+            if ts_ms:
+                ts_str = datetime.datetime.fromtimestamp(int(ts_ms) / 1000.0) \
+                    .strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                ts_str = STATUS_NA
+            row = ['BIN{}'.format(i), codewords, ts_str]
+            if relative_timestamp:
+                row.append(format_relative_time(ts_ms) if ts_ms else STATUS_NA)
+            table.append(row)
+
+        header = header_fec_hist_vertical + ['Relative Time'] if relative_timestamp \
+            else header_fec_hist_vertical
+        print(tabulate(table, header))
+
     def get_port_state(self, port_name):
         """
             Get the port state
@@ -580,13 +626,19 @@ class Portstat(object):
     def cnstat_diff_print(self, cnstat_new_dict, cnstat_old_dict,
                           ratestat_dict, intf_list, use_json,
                           print_all, errors_only, fec_stats_only,
-                          rates_only, trim_stats_only, fec_hist_only, detail=False, nonzero=False):
+                          rates_only, trim_stats_only, fec_hist_only, detail=False, nonzero=False,
+                          relative_timestamp=False):
         """
             Print the difference between two cnstat results.
         """
 
         if intf_list and detail:
             self.cnstat_intf_diff_print(cnstat_new_dict, cnstat_old_dict, intf_list)
+            return None
+
+        if fec_hist_only and not use_json and intf_list and len(intf_list) == 1:
+            self.print_fec_hist_vertical(cnstat_new_dict, cnstat_old_dict, intf_list[0],
+                                         relative_timestamp)
             return None
 
         table = []
