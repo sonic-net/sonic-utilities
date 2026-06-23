@@ -410,3 +410,66 @@ class TestFWPackageUntar(object):
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
             result = pkg.untar_fwpackage()
         assert result is True
+
+
+class TestFirmwareVersionStatus(object):
+    """Unit tests for the firmware up-to-date decision in ComponentUpdateProvider.
+
+    Covers __compare_versions() and __get_update_status() -- the fix where a
+    component whose running firmware is the same as (or newer than) the version
+    shipped in the SONiC image is reported "up-to-date" instead of
+    "update is required", while non-numeric vendor labels (e.g. SSD
+    "SBR10021"/"0710-001" or hex CPLD/FPGA revisions like "0x13") fall back to
+    the legacy strict-equality behavior.
+    """
+
+    UP_TO_DATE = fwutil_lib.ComponentUpdateProvider.FW_STATUS_UP_TO_DATE
+    UPDATE_REQUIRED = fwutil_lib.ComponentUpdateProvider.FW_STATUS_UPDATE_REQUIRED
+
+    @staticmethod
+    def _compare(current, available):
+        # Reach the name-mangled private static method.
+        cls = fwutil_lib.ComponentUpdateProvider
+        return cls._ComponentUpdateProvider__compare_versions(current, available)
+
+    @staticmethod
+    def _status(current, available):
+        # __get_update_status only reads class constants and calls
+        # __compare_versions, so an uninitialized instance is sufficient
+        # (no Platform/parser construction required).
+        cup = fwutil_lib.ComponentUpdateProvider.__new__(
+            fwutil_lib.ComponentUpdateProvider)
+        return cup._ComponentUpdateProvider__get_update_status(current, available)
+
+    @pytest.mark.parametrize("current, available, expected", [
+        ("0212.0216", "0212.0215", 1),      # motivating case: running newer
+        ("0212.0215", "0212.0216", -1),     # running older
+        ("1.2.3", "1.2.3", 0),              # equal
+        ("4.8", "4.8.0", 0),                # zero-padding: 4.8 == 4.8.0
+        ("4.8.1", "4.8", 1),                # zero-padding: 4.8.1 > 4.8
+        ("29.10", "29.9", 1),               # numeric (10 > 9), not lexical
+        ("3.30", "3.5", 1),                 # numeric (30 > 5)
+        ("SBR10021", "0710-001", None),     # SSD vendor labels: not comparable
+        ("0x13", "0x12", None),             # hex CPLD/FPGA revision: not comparable
+        ("240622.1D", "240622.1C", None),   # mixed alnum token: not comparable
+        (None, "1.0", None),                # guard: missing current
+        ("1.0", None, None),                # guard: missing available
+        ("", "1.0", None),                  # guard: empty string has no number
+    ])
+    def test_compare_versions(self, current, available, expected):
+        assert self._compare(current, available) == expected
+
+    @pytest.mark.parametrize("current, available, up_to_date", [
+        ("1.0", "1.0", True),               # identical
+        ("0212.0216", "0212.0216", True),   # equal numeric
+        ("0212.0216", "0212.0215", True),   # running newer -> up-to-date (the fix)
+        ("0212.0215", "0212.0216", False),  # running older -> update required
+        ("4.8.1", "4.8", True),             # newer with zero-pad -> up-to-date
+        ("SBR10021", "SBR10021", True),     # vendor label equal -> up-to-date
+        ("0710-001", "SBR10021", False),    # vendor mismatch -> update required
+        ("0x13", "0x13", True),             # hex equal -> up-to-date (early equality)
+        ("0x13", "0x12", False),            # hex differ -> strict fallback -> required
+    ])
+    def test_get_update_status(self, current, available, up_to_date):
+        expected = self.UP_TO_DATE if up_to_date else self.UPDATE_REQUIRED
+        assert self._status(current, available) == expected
