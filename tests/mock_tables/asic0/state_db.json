@@ -262,6 +262,8 @@
     },
     "FABRIC_PORT_TABLE|PORT0" : {
         "STATUS": "up",
+        "AUTO_ISOLATED": "1",
+        "ISOLATE_REASON": "crc_errors",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "79",
         "OLD_RX_RATE_AVG": "0",
@@ -288,6 +290,8 @@
     },
     "FABRIC_PORT_TABLE|PORT4" : {
         "STATUS": "up",
+        "CONFIG_ISOLATED": "1",
+        "ISOLATE_REASON": "user_config",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "85",
         "OLD_RX_RATE_AVG": "0",
@@ -301,6 +305,8 @@
     },
     "FABRIC_PORT_TABLE|PORT6" : {
         "STATUS": "up",
+        "ISOLATED": "1",
+        "ISOLATE_REASON": "symbol_errors",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "84",
         "OLD_RX_RATE_AVG": "0",
@@ -341,6 +347,7 @@
         "fabric_capacity": "221580",
         "missing_capacity": "132948",
         "operating_links": "5",
+        "isolated_links": "3",
         "number_of_links": "8",
         "warning_threshold": "100"
     },

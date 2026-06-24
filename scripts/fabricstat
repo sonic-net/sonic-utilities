@@ -35,6 +35,7 @@ PORT_NAME_PREFIX = 'PORT'
 COUNTER_TABLE_PREFIX = COUNTERS_TABLE+":"
 FABRIC_PORT_STATUS_TABLE_PREFIX = APP_FABRIC_PORT_TABLE_NAME+"|"
 FABRIC_PORT_STATUS_FIELD = "STATUS"
+FABRIC_PORT_ISOLATE_REASON_FIELD = "ISOLATE_REASON"
 STATUS_NA = 'N/A'
 
 cnstat_dir = 'N/A'
@@ -119,6 +120,29 @@ portstat_header_all = ['ASIC', 'PORT', 'STATE',
 portstat_header_errors_only = ['ASIC', 'PORT', 'STATE',
                                'CRC', 'FEC_CORRECTABLE', 'FEC_UNCORRECTABLE', 'SYMBOL_ERR']
 
+
+def _fabric_port_counter_diff_int(newstr, oldstr):
+    """Same numeric delta as ns_diff (non-raw); None if new is N/A."""
+    if newstr == STATUS_NA:
+        return None
+    if oldstr == STATUS_NA:
+        oldstr = '0'
+    try:
+        new, old = int(newstr), int(oldstr)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, new - old)
+
+
+def _fabric_port_row_has_nonzero_counter(diffs):
+    for x in diffs:
+        if x is None:
+            return True
+        if x != 0:
+            return True
+    return False
+
+
 class FabricPortStat(FabricStat):
     def get_cnstat(self):
         counter_port_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_FABRIC_PORT_NAME_MAP)
@@ -149,7 +173,7 @@ class FabricPortStat(FabricStat):
         else:
             print("Clear and update saved counters port")
 
-    def cnstat_print(self, cnstat_dict, errors_only=False):
+    def cnstat_print(self, cnstat_dict, errors_only=False, nonzero_only=False):
         if len(cnstat_dict) == 0:
             print("Counters %s empty" % self.namespace)
             return
@@ -183,6 +207,14 @@ class FabricPortStat(FabricStat):
 
             if errors_only:
                 header = portstat_header_errors_only
+                diffs = [
+                    _fabric_port_counter_diff_int(data.crc, diff_cached[4]),
+                    _fabric_port_counter_diff_int(data.fec_correctable, diff_cached[5]),
+                    _fabric_port_counter_diff_int(data.fec_uncorrectable, diff_cached[6]),
+                    _fabric_port_counter_diff_int(data.symbol_err, diff_cached[7]),
+                ]
+                if nonzero_only and not _fabric_port_row_has_nonzero_counter(diffs):
+                    continue
                 table.append((asic_name, port_id, self.get_port_state(key),
                               ns_diff(data.crc, diff_cached[4]),
                               ns_diff(data.fec_correctable, diff_cached[5]),
@@ -190,6 +222,18 @@ class FabricPortStat(FabricStat):
                               ns_diff(data.symbol_err, diff_cached[7])))
             else:
                 header = portstat_header_all
+                diffs = [
+                    _fabric_port_counter_diff_int(data.in_cell, diff_cached[0]),
+                    _fabric_port_counter_diff_int(data.in_octet, diff_cached[1]),
+                    _fabric_port_counter_diff_int(data.out_cell, diff_cached[2]),
+                    _fabric_port_counter_diff_int(data.out_octet, diff_cached[3]),
+                    _fabric_port_counter_diff_int(data.crc, diff_cached[4]),
+                    _fabric_port_counter_diff_int(data.fec_correctable, diff_cached[5]),
+                    _fabric_port_counter_diff_int(data.fec_uncorrectable, diff_cached[6]),
+                    _fabric_port_counter_diff_int(data.symbol_err, diff_cached[7]),
+                ]
+                if nonzero_only and not _fabric_port_row_has_nonzero_counter(diffs):
+                    continue
                 table.append((asic_name, port_id, self.get_port_state(key),
                               ns_diff(data.in_cell, diff_cached[0]),
                               ns_diff(data.in_octet, diff_cached[1]),
@@ -244,7 +288,7 @@ class FabricQueueStat(FabricStat):
         else:
             print("Clear and update saved counters queue")
 
-    def cnstat_print(self, cnstat_dict, errors_only=False):
+    def cnstat_print(self, cnstat_dict, errors_only=False, nonzero_only=False):
         if len(cnstat_dict) == 0:
             print("Counters %s empty" % self.namespace)
             return
@@ -274,6 +318,13 @@ class FabricQueueStat(FabricStat):
             if key in cnstat_cached_dict:
                 diff_cached = cnstat_cached_dict.get(key)
             port_id = port_name[len(PORT_NAME_PREFIX):]
+            diffs = [
+                _fabric_port_counter_diff_int(data.curbyte, diff_cached[2]),
+                _fabric_port_counter_diff_int(data.curlevel, diff_cached[0]),
+                _fabric_port_counter_diff_int(data.watermarklevel, diff_cached[1]),
+            ]
+            if nonzero_only and not _fabric_port_row_has_nonzero_counter(diffs):
+                continue
             table.append((asic_name, port_id, self.get_port_state(port_name), queue_id,
                           ns_diff(data.curbyte, diff_cached[2]),
                           ns_diff(data.curlevel, diff_cached[0]),
@@ -298,8 +349,9 @@ class FabricCapacity(FabricStat):
         fabric_capacity_data = self.db.get_all(self.db.STATE_DB, "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA")
         operational_fap_capacity = 0
         operational_fabric_capacity = 0
-        operational_fabric_links = 0;
-        total_fabric_links = 0;
+        operational_fabric_links = 0
+        isolated_fabric_links = 0
+        total_fabric_links = 0
         ratio = 0
         last_event = "None"
         last_time = "Never"
@@ -312,6 +364,8 @@ class FabricCapacity(FabricStat):
             total_fabric_links = int(fabric_capacity_data['number_of_links'])
         if "operating_links" in fabric_capacity_data:
             operational_fabric_links = int(fabric_capacity_data['operating_links'])
+        if "isolated_links" in fabric_capacity_data:
+            isolated_fabric_links = int(fabric_capacity_data['isolated_links'])
         if "warning_threshold" in fabric_capacity_data:
             th = fabric_capacity_data['warning_threshold']
             th = th + "%"
@@ -336,7 +390,8 @@ class FabricCapacity(FabricStat):
             asic_name = self.namespace
 
         # Update the table to print
-        self.table_cnt.append((asic_name, operational_fabric_links, total_fabric_links, ratio, last_event, last_time))
+        self.table_cnt.append(
+            (asic_name, operational_fabric_links, isolated_fabric_links, total_fabric_links, ratio, last_event, last_time))
 
 class FabricReachability(FabricStat):
     def reachability_print(self):
@@ -366,6 +421,10 @@ class FabricReachability(FabricStat):
         return
 
 class FabricIsolation(FabricStat):
+    def __init__(self, namespace, nonzero_only=False):
+        super(FabricIsolation, self).__init__(namespace)
+        self.nonzero_only = nonzero_only
+
     def isolation_print(self):
         # Connect to database
         self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
@@ -380,7 +439,7 @@ class FabricIsolation(FabricStat):
                 port_number = int(port_key.replace("FABRIC_PORT_TABLE|PORT", ""))
                 port_dict.update({port_number: port_data})
         # Create ordered table of fabric ports.
-        header = ["Local Link", "Auto Isolated", "Manual Isolated", "Isolated"]
+        header = ["Local Link", "Auto Isolated", "Manual Isolated", "Isolated", "Isolate Reason"]
         body = []
         for port_number in sorted(port_dict.keys()):
             auto_isolated = 0
@@ -388,18 +447,34 @@ class FabricIsolation(FabricStat):
             isolated = 0
             port_data = port_dict[port_number]
             if "AUTO_ISOLATED" in port_data:
-                auto_isolated = port_data["AUTO_ISOLATED"]
+                auto_isolated = int(port_data["AUTO_ISOLATED"])
             if "CONFIG_ISOLATED" in port_data:
-                manual_isolated = port_data["CONFIG_ISOLATED"]
+                manual_isolated = int(port_data["CONFIG_ISOLATED"])
             if "ISOLATED" in port_data:
-                isolated = port_data["ISOLATED"]
-            body.append((port_number, auto_isolated, manual_isolated, isolated));
+                isolated = int(port_data["ISOLATED"])
+            isolate_reason = ""
+            if FABRIC_PORT_ISOLATE_REASON_FIELD in port_data:
+                isolate_reason = port_data[FABRIC_PORT_ISOLATE_REASON_FIELD]
+            if self.nonzero_only and auto_isolated == 0 and manual_isolated == 0 and isolated == 0:
+                continue
+            body.append((port_number, auto_isolated, manual_isolated, isolated, isolate_reason))
         if self.namespace:
             print(f"\n{self.namespace}")
         print(tabulate(body, header, tablefmt='simple', stralign='right'))
         return
 
 class FabricRate(FabricStat):
+    def __init__(self, namespace, nonzero_only=False):
+        super(FabricRate, self).__init__(namespace)
+        self.nonzero_only = nonzero_only
+
+    @staticmethod
+    def _rate_mbps_nonzero(rx_mbps, tx_mbps):
+        try:
+            return float(rx_mbps) != 0.0 or float(tx_mbps) != 0.0
+        except (TypeError, ValueError):
+            return True
+
     def rate_print(self):
         # Connect to database
         self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
@@ -413,12 +488,6 @@ class FabricRate(FabricStat):
             port_number = int(port_key.replace("FABRIC_PORT_TABLE|PORT", ""))
             port_dict.update({port_number: port_data})
         # Create ordered table of fabric ports.
-        rxRate = 0
-        rxData = 0
-        txRate = 0
-        txData = 0
-        time = 0
-        local_time = ""
         # RX data , Tx data , Time are for testing
         asic = "asic0"
         if self.namespace:
@@ -427,6 +496,12 @@ class FabricRate(FabricStat):
         body = []
         for port_number in sorted(port_dict.keys()):
             port_data = port_dict[port_number]
+            rxRate = 0
+            rxData = 0
+            txRate = 0
+            txData = 0
+            time = 0
+            local_time = ""
             if "OLD_RX_RATE_AVG" in port_data:
                 rxRate = port_data["OLD_RX_RATE_AVG"]
             if "OLD_RX_DATA" in port_data:
@@ -438,7 +513,11 @@ class FabricRate(FabricStat):
             if "LAST_TIME" in port_data:
                 time = int(port_data["LAST_TIME"])
                 local_time = datetime.fromtimestamp(time)
-            body.append((asic, port_number, rxRate, txRate));
+            if self.nonzero_only and not self._rate_mbps_nonzero(rxRate, txRate):
+                continue
+            body.append((asic, port_number, rxRate, txRate))
+        if self.nonzero_only and len(body) == 0:
+            return
         click.echo()
         click.echo(tabulate(body, header, tablefmt='simple', stralign='right'))
 
@@ -456,10 +535,14 @@ Examples:
     fabricstat -p -n asic0 -e
     fabricstat -q
     fabricstat -q -n asic0
+    fabricstat -q -nz
     fabricstat -c
     fabricstat -c -n asic0
     fabricstat -s
     fabricstat -s -n asic0
+    fabricstat -s -nz
+    fabricstat -i -nz
+    fabricstat -nz
     fabricstat -C
     fabricstat -D
 """)
@@ -470,6 +553,9 @@ Examples:
     parser.add_argument('-e', '--errors', action='store_true', help='Display errors')
     parser.add_argument('-c','--capacity',action='store_true', help='Display fabric capacity')
     parser.add_argument('-i','--isolation', action='store_true', help='Display fabric ports isolation status')
+    parser.add_argument('-nz', '--nonzero', action='store_true',
+                        help='Port, queue (-q), or rate (-s): show only rows with non-zero counter/rate; '
+                             'with -i: show only links with non-zero isolation counters')
     parser.add_argument('-s','--rate', action='store_true', help='Display fabric counters rate')
     parser.add_argument('-C','--clear', action='store_true', help='Copy & clear fabric counters')
     parser.add_argument('-D','--delete', action='store_true', help='Delete saved stats')
@@ -479,6 +565,7 @@ Examples:
     reachability = args.reachability
     capacity_status = args.capacity
     isolation_status = args.isolation
+    nonzero_only = args.nonzero
     rate = args.rate
     namespace = args.namespace
     errors_only = args.errors
@@ -508,11 +595,11 @@ Examples:
             stat.reachability_print()
             return
         elif isolation_status:
-            stat = FabricIsolation(ns)
+            stat = FabricIsolation(ns, nonzero_only)
             stat.isolation_print()
             return
         elif rate:
-            stat = FabricRate(ns)
+            stat = FabricRate(ns, nonzero_only)
             stat.rate_print()
             return
         else:
@@ -521,14 +608,15 @@ Examples:
         if save_fresh_stats:
             stat.save_fresh_stats()
         else:
-            stat.cnstat_print(cnstat_dict, errors_only)
+            stat.cnstat_print(cnstat_dict, errors_only, nonzero_only)
 
     if capacity_status:
         # show fabric capacity command
         capacity_header = []
         table_cnt = []
         threshold = []
-        capacity_header = ["ASIC", "Operating\nLinks", "Total #\nof Links", "%", "Last Event", "Last Time"]
+        capacity_header = [
+            "ASIC", "Operating\nLinks", "Isolated\nLinks", "Total #\nof Links", "% Operating\nLinks", "Last Event", "Last Time"]
         if namespace is None:
             # All asics or all fabric asics
             multi_asic = multi_asic_util.MultiAsic()
