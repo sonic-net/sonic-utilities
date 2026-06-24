@@ -188,7 +188,8 @@ def port_buffer_drop_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def phy(ctx, namespace):
     """ PHY counter commands """
