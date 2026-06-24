@@ -769,12 +769,29 @@ def eeprom(port, dump_dom, namespace):
     sfp.get_eeprom()
     sfp.display_eeprom()
 
-# 'info' subcommand // kmhwong how does this connects to info???
+# 'info' subcommand
 
 @cli.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM data for port <port_name> only")
 @click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
 def info(port, namespace):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_eeprom(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace)
+    sfp.get_eeprom()
+    sfp.display_eeprom()
+
+# 'doctor' subcommand
+
+@cli.command()
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM data for port <port_name> only")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+def doctor(port, namespace):
     if port and multi_asic.is_multi_asic() and namespace is None:
         try:
             namespace = multi_asic.get_namespace_for_port(port)
