@@ -55,6 +55,17 @@ IS_SUPERVISOR=false
 
 ENABLE_FLOW_DUMP=false
 
+# tcpdump capture options
+WITH_TCPDUMP=false
+TCPDUMP_DURATION=60
+TCPDUMP_PACKET_LIMIT=10000
+TCPDUMP_FILTER=""
+TCPDUMP_PID=""
+# Track if tcpdump options were explicitly set (for validation)
+TCPDUMP_DURATION_SET=false
+TCPDUMP_PACKET_LIMIT_SET=false
+TCPDUMP_FILTER_SET=false
+
 # lock dirs/files
 LOCKDIR="/tmp/techsupport-lock"
 PIDFILE="${LOCKDIR}/PID"
@@ -69,6 +80,13 @@ rm_lock_and_exit()
 handle_exit()
 {
     ECODE=$?
+    # Kill tcpdump if still running to prevent orphan processes
+    if [ ! -z "$TCPDUMP_PID" ]; then
+        echo "Killing tcpdump (PID: $TCPDUMP_PID)..." >&2
+        kill $TCPDUMP_PID 2>/dev/null || true
+        wait $TCPDUMP_PID 2>/dev/null || true
+        TCPDUMP_PID=""
+    fi
     echo "Cleaning up working directory $TARDIR"
     $RM -rf $TARDIR
     echo "Removing lock. Exit: $ECODE" >&2
@@ -100,6 +118,85 @@ handle_error() {
 
 escape_quotes() {
     echo $1 | sed 's/\"/\\\"/g'
+}
+
+###############################################################################
+# Start tcpdump capture in background
+# Uses tcpdump's native -G (rotate) and -W (file count limit) options for
+# time-limited capture instead of external timeout command.
+#
+# Includes robustness checks:
+#  - Verifies tcpdump is available
+#  - Adds packet count limit to manage pcap file size
+#
+# Globals:
+#  LOGDIR, TCPDUMP_PID
+# Arguments:
+#  $1 - duration: capture duration in seconds
+#  $2 - packet_limit: maximum number of packets to capture
+#  $3 - filter: BPF filter expression (optional)
+# Returns:
+#  0 on success, 1 on failure (sets TCPDUMP_PID global variable on success)
+###############################################################################
+start_tcpdump_capture() {
+    # Set ERR trap to invoke handle_error on any command failure within this function.
+    # This ensures errors are logged with exit code and line number for debugging.
+    trap 'handle_error $? $LINENO' ERR
+    local duration=$1
+    local packet_limit=$2
+    local filter=$3
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local pcap_file="${LOGDIR}/tcpdump_${duration}s_${timestamp}.pcap"
+
+    # Verify tcpdump is available
+    if ! command -v tcpdump &> /dev/null; then
+        echo "Error: tcpdump not found, skipping capture"
+        return 1
+    fi
+
+    # Ensure LOGDIR exists
+    if [ ! -d "$LOGDIR" ]; then
+        $MKDIR $V -p "$LOGDIR"
+    fi
+
+    # Build tcpdump command
+    # -i any: Capture on all interfaces
+    # -G: Rotate dump file every <duration> seconds
+    # -W 1: Exit after 1 file (i.e., after <duration> seconds)
+    # -s 0: Capture full packets (no truncation)
+    # -c: Packet count limit to manage file size
+    local tcpdump_cmd=""
+    if [ -n "$filter" ]; then
+        tcpdump_cmd="tcpdump -i any -w ${pcap_file} -G ${duration} -W 1 -s 0 -c ${packet_limit} ${filter}"
+        echo "tcpdump: BPF filter: $filter"
+    else
+        tcpdump_cmd="tcpdump -i any -w ${pcap_file} -G ${duration} -W 1 -s 0 -c ${packet_limit}"
+    fi
+
+    echo "tcpdump: Running command: $tcpdump_cmd"
+    $tcpdump_cmd &
+    TCPDUMP_PID=$!
+    echo "tcpdump: Started capture (PID: $TCPDUMP_PID) for $duration seconds (limit: $packet_limit packets)"
+    echo "tcpdump: Output file: $pcap_file"
+    return 0
+}
+
+###############################################################################
+# Wait for tcpdump to complete
+# Globals:
+#  TCPDUMP_PID
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+wait_tcpdump_capture() {
+    if [ ! -z "$TCPDUMP_PID" ]; then
+        echo "Waiting for tcpdump (PID: $TCPDUMP_PID) to complete..."
+        wait $TCPDUMP_PID 2>/dev/null || true
+        echo "tcpdump capture completed"
+        TCPDUMP_PID=""
+    fi
 }
 
 save_bcmcmd() {
@@ -2633,6 +2730,11 @@ main() {
     echo $BASE > $TECHSUPPORT_TIME_INFO
     start_t=$(date +%s%3N)
 
+    # Start tcpdump capture if requested (runs in background during data collection)
+    if $WITH_TCPDUMP; then
+        start_tcpdump_capture "$TCPDUMP_DURATION" "$TCPDUMP_PACKET_LIMIT" "$TCPDUMP_FILTER"
+    fi
+
     # Trigger BMC debug log dump task - Must be the first task to run
     bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
     if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
@@ -2865,9 +2967,17 @@ main() {
 
     wait
 
+    # Wait for the tcpdump capture to finish BEFORE archiving. save_to_tar
+    # appends the dump tree by file content, so a capture still running at
+    # this point would be archived truncated (and the completed pcap, which
+    # is only ever added via this tree append, would never make it in).
+    if $WITH_TCPDUMP; then
+        wait_tcpdump_capture
+    fi
+
     save_to_tar
 
-    save_sai_failure_dump 
+    save_sai_failure_dump
 
     if [[ "$asic" = "mellanox" ]] || [[ "$asic" = "nvidia-bluefield" ]]; then
         collect_nvidia_sdk_dumps
@@ -3044,10 +3154,18 @@ OPTIONS
         Collect the output of debug dump cli
     -f
         On DPU platforms, also collect a DPU flow dump
+    -T
+        Enable tcpdump capture during techsupport collection
+    -P PERIOD
+        Duration in seconds for tcpdump capture (default: 60). Requires -T
+    -L LIMIT
+        Maximum number of packets to capture (default: 10000). Requires -T
+    -F FILTER
+        BPF filter expression for tcpdump (e.g., 'port 179', 'udp port 3784'). Requires -T
 EOF
 }
 
-while getopts ":xnvhzas:t:r:df" opt; do
+while getopts ":xnvhzas:t:r:dfTP:L:F:" opt; do
     case $opt in
         x)
             # enable bash debugging
@@ -3101,12 +3219,51 @@ while getopts ":xnvhzas:t:r:df" opt; do
         f)
             ENABLE_FLOW_DUMP=true
             ;;
+        T)
+            WITH_TCPDUMP=true
+            ;;
+        P)
+            if ! [[ ${OPTARG} =~ ^[0-9]+$ ]]; then
+                echo "Invalid tcpdump duration value: ${OPTARG}, Please enter a numeric value."
+                exit $EXT_GENERAL
+            fi
+            TCPDUMP_DURATION="${OPTARG}"
+            TCPDUMP_DURATION_SET=true
+            ;;
+        L)
+            if ! [[ ${OPTARG} =~ ^[0-9]+$ ]]; then
+                echo "Invalid tcpdump packet limit value: ${OPTARG}, Please enter a numeric value."
+                exit $EXT_GENERAL
+            fi
+            TCPDUMP_PACKET_LIMIT="${OPTARG}"
+            TCPDUMP_PACKET_LIMIT_SET=true
+            ;;
+        F)
+            TCPDUMP_FILTER="${OPTARG}"
+            TCPDUMP_FILTER_SET=true
+            ;;
         /?)
             echo "Invalid option: -$OPTARG" >&2
             exit $EXT_GENERAL
             ;;
     esac
 done
+
+# Validate that tcpdump options (-P, -L, -F) require -T to be specified
+if ! $WITH_TCPDUMP; then
+    if $TCPDUMP_DURATION_SET; then
+        echo "Error: -P (tcpdump duration) requires -T (enable tcpdump) to be specified" >&2
+        exit $EXT_INVALID_ARGUMENT
+    fi
+    if $TCPDUMP_PACKET_LIMIT_SET; then
+        echo "Error: -L (tcpdump packet limit) requires -T (enable tcpdump) to be specified" >&2
+        exit $EXT_INVALID_ARGUMENT
+    fi
+    if $TCPDUMP_FILTER_SET; then
+        echo "Error: -F (tcpdump filter) requires -T (enable tcpdump) to be specified" >&2
+        exit $EXT_INVALID_ARGUMENT
+    fi
+fi
 
 # Check permissions before proceeding further
 if [ `whoami` != root ] && ! $NOOP;
