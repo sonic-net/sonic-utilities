@@ -1,8 +1,7 @@
 import os
 import pytest
 from click.testing import CliRunner
-from unittest.mock import patch, Mock
-import utilities_common
+from unittest.mock import patch
 from .utils import load_source
 
 
@@ -12,6 +11,7 @@ BOOTCHART_OUTPUT_FILES = [
     os.path.join(sonic_bootchart.BOOTCHART_DEFAULT_OUTPUT_DIR, "bootchart-20220504-1040.svg"),
     os.path.join(sonic_bootchart.BOOTCHART_DEFAULT_OUTPUT_DIR, "bootchart-20220504-1045.svg"),
 ]
+
 
 @pytest.fixture(autouse=True)
 def setup(fs):
@@ -62,22 +62,24 @@ class TestSonicBootchart:
         runner = CliRunner()
         result = runner.invoke(sonic_bootchart.cli.commands['show'], [])
         assert not result.exit_code
-        assert result.output == \
-                "Status    Operational Status      Frequency    Time (sec)  Output\n"                               \
-                "--------  --------------------  -----------  ------------  ------------------------------------\n" \
-                "enabled   active                         25            20  /run/log/bootchart-20220504-1040.svg\n" \
-                "                                                           /run/log/bootchart-20220504-1045.svg\n"
+        assert result.output == (
+            "Status    Operational Status      Frequency    Time (sec)  Output\n"
+            "--------  --------------------  -----------  ------------  ------------------------------------\n"
+            "enabled   active                         25            20  /run/log/bootchart-20220504-1040.svg\n"
+            "                                                           /run/log/bootchart-20220504-1045.svg\n"
+        )
 
         result = runner.invoke(sonic_bootchart.cli.commands["config"], ["--time", "2", "--frequency", "50"])
         assert not result.exit_code
 
         result = runner.invoke(sonic_bootchart.cli.commands['show'], [])
         assert not result.exit_code
-        assert result.output == \
-                "Status    Operational Status      Frequency    Time (sec)  Output\n"                               \
-                "--------  --------------------  -----------  ------------  ------------------------------------\n" \
-                "enabled   active                         50             2  /run/log/bootchart-20220504-1040.svg\n" \
-                "                                                           /run/log/bootchart-20220504-1045.svg\n"
+        assert result.output == (
+            "Status    Operational Status      Frequency    Time (sec)  Output\n"
+            "--------  --------------------  -----------  ------------  ------------------------------------\n"
+            "enabled   active                         50             2  /run/log/bootchart-20220504-1040.svg\n"
+            "                                                           /run/log/bootchart-20220504-1045.svg\n"
+        )
 
         # Input validation tests
 
@@ -109,7 +111,10 @@ class TestSonicBootchart:
         runner = CliRunner()
         result = runner.invoke(sonic_bootchart.cli.commands['show'], [])
         assert result.exit_code
-        assert result.output == "Error: Failed to parse bootchart config: invalid literal for int() with base 10: 'abc'\n"
+        assert result.output == (
+            "Error: Failed to parse bootchart config: "
+            "invalid literal for int() with base 10: 'abc'\n"
+        )
 
         with open(sonic_bootchart.BOOTCHART_CONF, 'w') as config_file:
             config_file.write("""

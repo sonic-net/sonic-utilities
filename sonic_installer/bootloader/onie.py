@@ -18,13 +18,15 @@ class OnieInstallerBootloader(Bootloader): # pylint: disable=abstract-method
     DEFAULT_IMAGE_PATH = '/tmp/sonic_image'
 
     def get_current_image(self):
-        cmdline = open('/proc/cmdline', 'r')
-        current = re.search(r"loop=(\S+)/fs.squashfs", cmdline.read()).group(1)
-        cmdline.close()
-        # Replace only the first occurrence, since we are using branch name as
-        # tagging for version, IMAGE_PREFIX in the name of the branch may be
-        # replaced as well.
-        return current.replace(IMAGE_DIR_PREFIX, IMAGE_PREFIX, 1)
+        try:
+            with open('/proc/cmdline', 'r') as cmdline:
+                match = re.search(r"loop=(\S+)/fs.squashfs", cmdline.read())
+                if match:
+                    current = match.group(1)
+                    return current.replace(IMAGE_DIR_PREFIX, IMAGE_PREFIX, 1)
+        except OSError:
+            pass
+        return None
 
     def get_binary_image_version(self, image_path):
         """returns the version of the image"""

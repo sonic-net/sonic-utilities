@@ -2242,6 +2242,7 @@ show_queue_port_voq_counters_json = """\
 class TestQueue(object):
     @classmethod
     def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ['UTILITIES_UNIT_TESTING_IS_SUP'] = "0"
         print("SETUP")
 
@@ -2455,4 +2456,6 @@ class TestQueue(object):
 
     @classmethod
     def teardown_class(cls):
+        os.environ.pop('UTILITIES_UNIT_TESTING', None)
+        os.environ.pop('UTILITIES_UNIT_TESTING_IS_SUP', None)
         print("TEARDOWN")

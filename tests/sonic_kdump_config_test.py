@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 import unittest
-from unittest.mock import patch, mock_open, Mock
+from unittest.mock import patch, mock_open, Mock, MagicMock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
 import argparse
@@ -750,11 +750,19 @@ class TestSonicKdumpConfig(unittest.TestCase):
             except IOError as e:
                 print(f"Error creating file {e}")
 
+    @patch("sonic_kdump_config.get_bootloader")
     @patch("sonic_kdump_config.write_use_kdump")
     @patch("os.path.exists")
-    def test_kdump_disable(self, mock_path_exist, mock_write_kdump):
+    def test_kdump_disable(self, mock_path_exist, mock_write_kdump, mock_get_bootloader):
         """Tests the function `kdump_disable(...)` in script `sonic-kdump-config.py`.
         """
+        mock_bl = MagicMock()
+        mock_bl.detect.return_value = True
+        mock_bl.get_current_image.return_value = "SONiC-OS-20201230.63"
+        mock_bl.get_next_image.return_value = "SONiC-OS-20201231.64"
+        mock_bl.get_image_path.return_value = "/host/image-20201231.64"
+        mock_get_bootloader.return_value = mock_bl
+
         mock_path_exist.return_value = True
         mock_write_kdump.return_value = 0
 
@@ -813,10 +821,11 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with patch("sonic_kdump_config.open", mock_open_func):
             try:
                 sonic_kdump_config.cmd_kdump_config_next(False)
-            except Exception as e:
+            except BaseException as e:
                 print(f"Error {e}")
-            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
             handle = mock_open_func()
+            handle.reset_mock()
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
             handle.writelines.assert_called_once()
 
         mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_DISABLED)
@@ -824,7 +833,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
             return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
             try:
                 sonic_kdump_config.cmd_kdump_disable(False)
-            except Exception as e:
+            except BaseException as e:
                 print(f"Error {e}")
 
         mock_path_exist.return_value = False
