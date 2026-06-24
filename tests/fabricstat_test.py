@@ -34,7 +34,7 @@ multi_asic_fabric_counters = """\
      1       6     down          0           0           0            0      0     53,192,703,023            1,422,986  41,913,682,074
      1       7     down          0           0           0            0      0                  0                    0               0
 
-"""
+"""  # noqa: E501
 
 multi_asic_fabric_counters_nonzero = """\
   ASIC    PORT    STATE    IN_CELL    IN_OCTET    OUT_CELL    OUT_OCTET    CRC    FEC_CORRECTABLE    FEC_UNCORRECTABLE    SYMBOL_ERR
@@ -56,7 +56,7 @@ multi_asic_fabric_counters_nonzero = """\
      1       5     down          0           0           0            0      0                968      105,267,020,477               0
      1       6     down          0           0           0            0      0     53,192,703,023            1,422,986  41,913,682,074
 
-"""
+"""  # noqa: E501
 
 multi_asic_fabric_counters_asic0 = """\
   ASIC    PORT    STATE    IN_CELL    IN_OCTET    OUT_CELL    OUT_OCTET    CRC    FEC_CORRECTABLE    FEC_UNCORRECTABLE    SYMBOL_ERR
@@ -70,7 +70,7 @@ multi_asic_fabric_counters_asic0 = """\
      0       6       up          4         742           0            0      0                 10        1,763,174,090             0
      0       7       up         10       1,855           0            0      0                187        1,768,439,529         1,331
 
-"""
+"""  # noqa: E501
 
 multi_asic_fabric_counters_nonzero_asic0 = """\
   ASIC    PORT    STATE    IN_CELL    IN_OCTET    OUT_CELL    OUT_OCTET    CRC    FEC_CORRECTABLE    FEC_UNCORRECTABLE    SYMBOL_ERR
@@ -83,7 +83,7 @@ multi_asic_fabric_counters_nonzero_asic0 = """\
      0       6       up          4         742           0            0      0                 10        1,763,174,090             0
      0       7       up         10       1,855           0            0      0                187        1,768,439,529         1,331
 
-"""
+"""  # noqa: E501
 clear_counter = """\
 Clear and update saved counters port"""
 
@@ -99,7 +99,7 @@ multi_asic_fabric_counters_asic0_clear = """\
      0       6       up          0           0           0            0      0                  0                    0             0
      0       7       up          0           0           0            0      0                  0                    0             0
 
-"""
+"""  # noqa: E501
 
 fabric_invalid_asic_error = """ValueError: Unknown Namespace asic99"""
 
