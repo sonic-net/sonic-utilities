@@ -179,6 +179,24 @@ class TestConfigHftCli:
         }]
         assert payload == expected_payload
 
+    def test_delete_harmonizer_removes_entire_table_when_last_entry(self):
+        with patch('config.hft._is_last_entry', return_value=True), \
+                patch('config.hft._get_harmonizer_users', return_value=[]), \
+                patch('config.hft._has_table_entry', return_value=True), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'harmonizer', 'hm0']
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        expected_payload = [{
+            'op': 'remove',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_HARMONIZER'
+        }]
+        assert payload == expected_payload
+
     def test_delete_harmonizer_rejected_when_profile_still_references_it(self):
         with patch('config.hft._get_harmonizer_users', return_value=['profileA']), \
                 patch('config.hft._process_payload') as mock_process:
@@ -226,6 +244,41 @@ def test_is_last_entry_true_and_false():
 
     tables = {'HIGH_FREQUENCY_TELEMETRY_PROFILE': {'p1': {}, 'p2': {}}}
     assert config_hft._is_last_entry(MockCtx(tables), 'HIGH_FREQUENCY_TELEMETRY_PROFILE') is False
+
+
+def test_harmonizer_table_helpers():
+    class MockCfgDb:
+        def __init__(self, tables):
+            self.tables = tables
+
+        def get_table(self, name):
+            return self.tables.get(name, {})
+
+    class MockCtx:
+        def __init__(self, tables):
+            self.obj = type('Obj', (), {'cfgdb': MockCfgDb(tables)})
+
+        def find_root(self):
+            return self
+
+    tables = {
+        'HIGH_FREQUENCY_TELEMETRY_HARMONIZER': {
+            'hm0': {},
+            'hm1': {}
+        },
+        'HIGH_FREQUENCY_TELEMETRY_PROFILE': {
+            'profileB': {'harmonizer': 'hm0'},
+            'profileA': {'harmonizer': 'hm0'},
+            'profileC': {'harmonizer': 'hm1'},
+            'profileD': {}
+        }
+    }
+    ctx = MockCtx(tables)
+
+    assert config_hft._has_table_entry(ctx, 'HIGH_FREQUENCY_TELEMETRY_HARMONIZER', 'hm0') is True
+    assert config_hft._has_table_entry(ctx, 'HIGH_FREQUENCY_TELEMETRY_HARMONIZER', 'missing') is False
+    assert config_hft._get_harmonizer_users(ctx, 'hm0') == ['profileA', 'profileB']
+    assert config_hft._get_harmonizer_users(ctx, 'missing') == []
 
 
 def test_materialize_payload_creates_file():
