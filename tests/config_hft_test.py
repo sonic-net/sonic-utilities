@@ -15,7 +15,7 @@ class TestConfigHftCli:
         with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['add', 'profile', 'profileA', '--harmonizer', 'hm0']
+                ['add', 'profile', 'profileA', '--aggregator', 'ag0']
             )
 
         assert result.exit_code == 0
@@ -27,18 +27,18 @@ class TestConfigHftCli:
                 'profileA': {
                     'stream_state': 'disabled',
                     'poll_interval': '10000',
-                    'harmonizer': 'hm0'
+                    'aggregator': 'ag0'
                 }
             }
         }]
         assert payload == expected_payload
 
-    def test_add_harmonizer_splits_comma_separated_lists(self):
+    def test_add_aggregator_splits_comma_separated_lists(self):
         with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
-                    'add', 'harmonizer', 'hm0',
+                    'add', 'aggregator', 'ag0',
                     '--reporting_rate', '1000',
                     '--rollover_counters', 'PORT|IF_IN_UCAST_PKTS, QUEUE|DROPPED_PACKETS',
                     '--heatmap_counters', 'PORT|IF_OUT_ERRORS, QUEUE|WRED_ECN_MARKED_PACKETS'
@@ -49,9 +49,9 @@ class TestConfigHftCli:
         _, payload = mock_process.call_args[0]
         expected_payload = [{
             'op': 'add',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_HARMONIZER',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR',
             'value': {
-                'hm0': {
+                'ag0': {
                     'reporting_rate': '1000',
                     'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
                     'heatmap_counters': ['PORT|IF_OUT_ERRORS', 'QUEUE|WRED_ECN_MARKED_PACKETS']
@@ -102,34 +102,34 @@ class TestConfigHftCli:
         }]
         assert payload == expected_payload
 
-    def test_bind_harmonizer_sets_profile_harmonizer_patch(self):
+    def test_bind_aggregator_sets_profile_aggregator_patch(self):
         with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['bind-harmonizer', 'profileA', 'hm0']
+                ['bind-aggregator', 'profileA', 'ag0']
             )
 
         assert result.exit_code == 0
         _, payload = mock_process.call_args[0]
         expected_payload = [{
             'op': 'add',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE/profileA/harmonizer',
-            'value': 'hm0'
+            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE/profileA/aggregator',
+            'value': 'ag0'
         }]
         assert payload == expected_payload
 
-    def test_unbind_harmonizer_removes_profile_harmonizer_patch(self):
+    def test_unbind_aggregator_removes_profile_aggregator_patch(self):
         with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['unbind-harmonizer', 'profileA']
+                ['unbind-aggregator', 'profileA']
             )
 
         assert result.exit_code == 0
         _, payload = mock_process.call_args[0]
         expected_payload = [{
             'op': 'remove',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE/profileA/harmonizer'
+            'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE/profileA/aggregator'
         }]
         assert payload == expected_payload
 
@@ -161,66 +161,66 @@ class TestConfigHftCli:
         }]
         assert payload == expected_payload
 
-    def test_delete_harmonizer_removes_entry(self):
+    def test_delete_aggregator_removes_entry(self):
         with patch('config.hft._is_last_entry', return_value=False), \
-                patch('config.hft._get_harmonizer_users', return_value=[]), \
+                patch('config.hft._get_aggregator_users', return_value=[]), \
                 patch('config.hft._has_table_entry', return_value=True), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['del', 'harmonizer', 'hm0']
+                ['del', 'aggregator', 'ag0']
             )
 
         assert result.exit_code == 0
         _, payload = mock_process.call_args[0]
         expected_payload = [{
             'op': 'remove',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_HARMONIZER/hm0'
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR/ag0'
         }]
         assert payload == expected_payload
 
-    def test_delete_harmonizer_removes_entire_table_when_last_entry(self):
+    def test_delete_aggregator_removes_entire_table_when_last_entry(self):
         with patch('config.hft._is_last_entry', return_value=True), \
-                patch('config.hft._get_harmonizer_users', return_value=[]), \
+                patch('config.hft._get_aggregator_users', return_value=[]), \
                 patch('config.hft._has_table_entry', return_value=True), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['del', 'harmonizer', 'hm0']
+                ['del', 'aggregator', 'ag0']
             )
 
         assert result.exit_code == 0
         _, payload = mock_process.call_args[0]
         expected_payload = [{
             'op': 'remove',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_HARMONIZER'
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
         }]
         assert payload == expected_payload
 
-    def test_delete_harmonizer_rejected_when_profile_still_references_it(self):
-        with patch('config.hft._get_harmonizer_users', return_value=['profileA']), \
+    def test_delete_aggregator_rejected_when_profile_still_references_it(self):
+        with patch('config.hft._get_aggregator_users', return_value=['profileA']), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['del', 'harmonizer', 'hm0']
+                ['del', 'aggregator', 'ag0']
             )
 
         assert result.exit_code == 1
-        assert "Cannot delete harmonizer 'hm0'" in result.output
+        assert "Cannot delete aggregator 'ag0'" in result.output
         assert 'profileA' in result.output
         mock_process.assert_not_called()
 
-    def test_delete_harmonizer_rejected_when_harmonizer_does_not_exist(self):
-        with patch('config.hft._get_harmonizer_users', return_value=[]), \
+    def test_delete_aggregator_rejected_when_aggregator_does_not_exist(self):
+        with patch('config.hft._get_aggregator_users', return_value=[]), \
                 patch('config.hft._has_table_entry', return_value=False), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
-                ['del', 'harmonizer', 'missing']
+                ['del', 'aggregator', 'missing']
             )
 
         assert result.exit_code == 1
-        assert "Harmonizer 'missing' does not exist." in result.output
+        assert "Aggregator 'missing' does not exist." in result.output
         mock_process.assert_not_called()
 
 
@@ -246,7 +246,7 @@ def test_is_last_entry_true_and_false():
     assert config_hft._is_last_entry(MockCtx(tables), 'HIGH_FREQUENCY_TELEMETRY_PROFILE') is False
 
 
-def test_harmonizer_table_helpers():
+def test_aggregator_table_helpers():
     class MockCfgDb:
         def __init__(self, tables):
             self.tables = tables
@@ -262,23 +262,23 @@ def test_harmonizer_table_helpers():
             return self
 
     tables = {
-        'HIGH_FREQUENCY_TELEMETRY_HARMONIZER': {
-            'hm0': {},
-            'hm1': {}
+        'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR': {
+            'ag0': {},
+            'ag1': {}
         },
         'HIGH_FREQUENCY_TELEMETRY_PROFILE': {
-            'profileB': {'harmonizer': 'hm0'},
-            'profileA': {'harmonizer': 'hm0'},
-            'profileC': {'harmonizer': 'hm1'},
+            'profileB': {'aggregator': 'ag0'},
+            'profileA': {'aggregator': 'ag0'},
+            'profileC': {'aggregator': 'ag1'},
             'profileD': {}
         }
     }
     ctx = MockCtx(tables)
 
-    assert config_hft._has_table_entry(ctx, 'HIGH_FREQUENCY_TELEMETRY_HARMONIZER', 'hm0') is True
-    assert config_hft._has_table_entry(ctx, 'HIGH_FREQUENCY_TELEMETRY_HARMONIZER', 'missing') is False
-    assert config_hft._get_harmonizer_users(ctx, 'hm0') == ['profileA', 'profileB']
-    assert config_hft._get_harmonizer_users(ctx, 'missing') == []
+    assert config_hft._has_table_entry(ctx, 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR', 'ag0') is True
+    assert config_hft._has_table_entry(ctx, 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR', 'missing') is False
+    assert config_hft._get_aggregator_users(ctx, 'ag0') == ['profileA', 'profileB']
+    assert config_hft._get_aggregator_users(ctx, 'missing') == []
 
 
 def test_materialize_payload_creates_file():

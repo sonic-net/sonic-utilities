@@ -14,10 +14,10 @@ GROUP_TYPE_CHOICES = ("PORT", "BUFFER_POOL", "INGRESS_PRIORITY_GROUP", "QUEUE")
 
 PROFILE_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_PROFILE"
 GROUP_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_GROUP"
-HARMONIZER_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_HARMONIZER"
+AGGREGATOR_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR"
 PROFILE_TABLE_PATH = f"/{PROFILE_TABLE_NAME}"
 GROUP_TABLE_PATH = f"/{GROUP_TABLE_NAME}"
-HARMONIZER_TABLE_PATH = f"/{HARMONIZER_TABLE_NAME}"
+AGGREGATOR_TABLE_PATH = f"/{AGGREGATOR_TABLE_NAME}"
 STREAM_STATE_FIELD = "stream_state"
 
 
@@ -44,22 +44,22 @@ def hft_disable(ctx, profile_name):
     _process_payload(ctx, payload)
 
 
-@hft.command('bind-harmonizer', short_help="Bind a harmonizer to an HFT profile")
+@hft.command('bind-aggregator', short_help="Bind an aggregator to an HFT profile")
 @click.argument('profile_name')
-@click.argument('harmonizer_name')
+@click.argument('aggregator_name')
 @click.pass_context
-def hft_bind_harmonizer(ctx, profile_name, harmonizer_name):
-    """Bind an existing harmonizer to an HFT profile."""
-    payload = _build_profile_field_patch(profile_name, "harmonizer", harmonizer_name)
+def hft_bind_aggregator(ctx, profile_name, aggregator_name):
+    """Bind an existing aggregator to an HFT profile."""
+    payload = _build_profile_field_patch(profile_name, "aggregator", aggregator_name)
     _process_payload(ctx, payload)
 
 
-@hft.command('unbind-harmonizer', short_help="Unbind the harmonizer from an HFT profile")
+@hft.command('unbind-aggregator', short_help="Unbind the aggregator from an HFT profile")
 @click.argument('profile_name')
 @click.pass_context
-def hft_unbind_harmonizer(ctx, profile_name):
-    """Remove the harmonizer binding from an HFT profile."""
-    payload = _build_profile_field_remove_patch(profile_name, "harmonizer")
+def hft_unbind_aggregator(ctx, profile_name):
+    """Remove the aggregator binding from an HFT profile."""
+    payload = _build_profile_field_remove_patch(profile_name, "aggregator")
     _process_payload(ctx, payload)
 
 
@@ -76,10 +76,10 @@ def hft_add():
 @click.option('--poll_interval', 'poll_interval', default=DEFAULT_POLL_INTERVAL_USEC,
               type=click.IntRange(min=0), show_default=True,
               help='Polling interval in microseconds.')
-@click.option('--harmonizer', 'harmonizer', default=None,
-              help='Optional harmonizer name to apply to this profile.')
+@click.option('--aggregator', 'aggregator', default=None,
+              help='Optional aggregator name to apply to this profile.')
 @click.pass_context
-def hft_add_profile(ctx, profile_name, stream_state, poll_interval, harmonizer):
+def hft_add_profile(ctx, profile_name, stream_state, poll_interval, aggregator):
     """Create a profile entry for HFT."""
     if _has_existing_profile(ctx):
         click.echo(
@@ -92,8 +92,8 @@ def hft_add_profile(ctx, profile_name, stream_state, poll_interval, harmonizer):
         "stream_state": stream_state,
         "poll_interval": str(poll_interval),
     }
-    if harmonizer:
-        attributes["harmonizer"] = harmonizer
+    if aggregator:
+        attributes["aggregator"] = aggregator
 
     profile_payload = _build_profile_patch(
         op="add",
@@ -126,17 +126,17 @@ def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
     _process_payload(ctx, group_payload)
 
 
-@hft_add.command('harmonizer', short_help="Add an HFT harmonizer")
-@click.argument('harmonizer_name')
+@hft_add.command('aggregator', short_help="Add an HFT aggregator")
+@click.argument('aggregator_name')
 @click.option('--reporting_rate', 'reporting_rate', default=None,
-              type=click.IntRange(min=0), help='Reporting interval after harmonization in microseconds.')
+              type=click.IntRange(min=0), help='Reporting interval after aggregation in microseconds.')
 @click.option('--rollover_counters', 'rollover_counters', default=None,
               help='Comma-separated list of GROUP|COUNTER entries requiring rollover correction.')
 @click.option('--heatmap_counters', 'heatmap_counters', default=None,
               help='Comma-separated list of GROUP|COUNTER entries treated as heatmap data.')
 @click.pass_context
-def hft_add_harmonizer(ctx, harmonizer_name, reporting_rate, rollover_counters, heatmap_counters):
-    """Create a harmonizer definition for HFT."""
+def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters, heatmap_counters):
+    """Create an aggregator definition for HFT."""
     attributes = {}
     if reporting_rate is not None:
         attributes["reporting_rate"] = str(reporting_rate)
@@ -145,12 +145,12 @@ def hft_add_harmonizer(ctx, harmonizer_name, reporting_rate, rollover_counters, 
     if heatmap_counters is not None:
         attributes["heatmap_counters"] = _split_csv_items(heatmap_counters)
 
-    harmonizer_payload = _build_harmonizer_patch(
+    aggregator_payload = _build_aggregator_patch(
         op="add",
-        harmonizer_name=harmonizer_name,
+        aggregator_name=aggregator_name,
         attributes=attributes
     )
-    _process_payload(ctx, harmonizer_payload)
+    _process_payload(ctx, aggregator_payload)
 
 
 @hft.group('del', short_help="Remove HFT resources")
@@ -179,28 +179,28 @@ def hft_delete_group(ctx, profile_name, group_type):
     _process_payload(ctx, group_payload)
 
 
-@hft_delete.command('harmonizer', short_help="Delete an HFT harmonizer")
-@click.argument('harmonizer_name')
+@hft_delete.command('aggregator', short_help="Delete an HFT aggregator")
+@click.argument('aggregator_name')
 @click.pass_context
-def hft_delete_harmonizer(ctx, harmonizer_name):
-    """Remove an existing HFT harmonizer."""
-    profile_users = _get_harmonizer_users(ctx, harmonizer_name)
+def hft_delete_aggregator(ctx, aggregator_name):
+    """Remove an existing HFT aggregator."""
+    profile_users = _get_aggregator_users(ctx, aggregator_name)
     if profile_users:
         click.echo(
-            "Cannot delete harmonizer '{}'; it is still referenced by HFT profile(s): {}".format(
-                harmonizer_name,
+            "Cannot delete aggregator '{}'; it is still referenced by HFT profile(s): {}".format(
+                aggregator_name,
                 ', '.join(profile_users)
             )
         )
         ctx.exit(1)
 
-    if not _has_table_entry(ctx, HARMONIZER_TABLE_NAME, harmonizer_name):
-        click.echo("Harmonizer '{}' does not exist.".format(harmonizer_name))
+    if not _has_table_entry(ctx, AGGREGATOR_TABLE_NAME, aggregator_name):
+        click.echo("Aggregator '{}' does not exist.".format(aggregator_name))
         ctx.exit(1)
 
-    remove_entire_table = _is_last_entry(ctx, HARMONIZER_TABLE_NAME)
-    harmonizer_payload = _build_harmonizer_remove_patch(harmonizer_name, remove_entire_table)
-    _process_payload(ctx, harmonizer_payload)
+    remove_entire_table = _is_last_entry(ctx, AGGREGATOR_TABLE_NAME)
+    aggregator_payload = _build_aggregator_remove_patch(aggregator_name, remove_entire_table)
+    _process_payload(ctx, aggregator_payload)
 
 
 def _process_payload(ctx, payload):
@@ -266,11 +266,11 @@ def _build_group_patch(op, profile_name, group_type, attributes):
     ]
 
 
-def _build_harmonizer_patch(op, harmonizer_name, attributes):
-    """Construct a JSON Patch entry targeting the harmonizer table."""
+def _build_aggregator_patch(op, aggregator_name, attributes):
+    """Construct a JSON Patch entry targeting the aggregator table."""
     return [
-        _build_patch_entry(op, HARMONIZER_TABLE_PATH, {
-            harmonizer_name: attributes
+        _build_patch_entry(op, AGGREGATOR_TABLE_PATH, {
+            aggregator_name: attributes
         })
     ]
 
@@ -322,11 +322,11 @@ def _build_group_remove_patch(profile_name, group_type, remove_entire_table):
     ]
 
 
-def _build_harmonizer_remove_patch(harmonizer_name, remove_entire_table):
-    """Create a remove operation for a harmonizer or the entire table if requested."""
+def _build_aggregator_remove_patch(aggregator_name, remove_entire_table):
+    """Create a remove operation for an aggregator or the entire table if requested."""
     if remove_entire_table:
-        return [_build_remove_entry(HARMONIZER_TABLE_PATH)]
-    return [_build_remove_entry(_join_pointer(HARMONIZER_TABLE_PATH, harmonizer_name))]
+        return [_build_remove_entry(AGGREGATOR_TABLE_PATH)]
+    return [_build_remove_entry(_join_pointer(AGGREGATOR_TABLE_PATH, aggregator_name))]
 
 
 def _build_patch_entry(op, path, value):
@@ -407,8 +407,8 @@ def _has_table_entry(ctx, table_name, entry_name):
     return entry_name in entries
 
 
-def _get_harmonizer_users(ctx, harmonizer_name):
-    """Return profile names that reference the given harmonizer."""
+def _get_aggregator_users(ctx, aggregator_name):
+    """Return profile names that reference the given aggregator."""
     cfgdb = _get_cfgdb(ctx)
     if cfgdb is None:
         return []
@@ -419,6 +419,6 @@ def _get_harmonizer_users(ctx, harmonizer_name):
 
     users = []
     for profile_name, attributes in profiles.items():
-        if isinstance(attributes, dict) and attributes.get('harmonizer') == harmonizer_name:
+        if isinstance(attributes, dict) and attributes.get('aggregator') == aggregator_name:
             users.append(profile_name)
     return sorted(users)

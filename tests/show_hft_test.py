@@ -36,9 +36,9 @@ def test_build_rows_with_mixed_profiles_and_groups():
     ]
 
 
-def test_build_rows_with_harmonizer_config():
+def test_build_rows_with_aggregator_config():
     profile_table = {
-        'profileA': {'stream_state': 'enabled', 'poll_interval': '1000', 'harmonizer': 'hm0'}
+        'profileA': {'stream_state': 'enabled', 'poll_interval': '1000', 'aggregator': 'ag0'}
     }
     group_table = {
         'profileA|PORT': {
@@ -46,21 +46,21 @@ def test_build_rows_with_harmonizer_config():
             'object_counters': ['IF_IN_UCAST_PKTS']
         }
     }
-    harmonizer_table = {
-        'hm0': {
+    aggregator_table = {
+        'ag0': {
             'reporting_rate': '5000',
             'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
             'heatmap_counters': 'PORT|IF_OUT_ERRORS,QUEUE|WRED_ECN_MARKED_PACKETS'
         }
     }
 
-    rows = show_hft._build_rows(profile_table, group_table, harmonizer_table)
+    rows = show_hft._build_rows(profile_table, group_table, aggregator_table)
 
     assert rows == [[
         'profileA',
         'enabled',
         '1,000',
-        'hm0',
+        'ag0',
         'PORT',
         'Ethernet0',
         'IF_IN_UCAST_PKTS',
@@ -70,12 +70,12 @@ def test_build_rows_with_harmonizer_config():
     ]]
 
 
-def test_build_rows_includes_unbound_harmonizer_config():
+def test_build_rows_includes_unbound_aggregator_config():
     rows = show_hft._build_rows(
         {},
         {},
         {
-            'hm0': {
+            'ag0': {
                 'reporting_rate': '5000',
                 'rollover_counters': ['PORT|IF_IN_UCAST_PKTS'],
                 'heatmap_counters': []
@@ -87,7 +87,7 @@ def test_build_rows_includes_unbound_harmonizer_config():
         '-',
         '-',
         '-',
-        'hm0',
+        'ag0',
         '-',
         '-',
         '-',
@@ -167,7 +167,7 @@ def test_display_hft_outputs_table(capsys):
                         'object_counters': ['BYTES']
                     }
                 }
-            if name == show_hft.HARMONIZER_TABLE:
+            if name == show_hft.AGGREGATOR_TABLE:
                 return {}
             return {}
 
