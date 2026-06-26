@@ -3729,7 +3729,7 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
     if not dry_run:
         status = _clear_qos(delay=not no_delay, verbose=verbose)
 
-    _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
+    platform_path, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
     from_db = ['-d']
     if dry_run:
@@ -3765,16 +3765,22 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
         if not no_dynamic_buffer and asic_type in vendors_supporting_dynamic_buffer:
             buffer_template_file = os.path.join(hwsku_path, asic_id_suffix, "buffers_dynamic.json.j2")
+            if not os.path.isfile(buffer_template_file):
+                buffer_template_file = os.path.join(platform_path, asic_id_suffix, "buffers_dynamic.json.j2")
             buffer_model_updated |= _update_buffer_calculation_model(config_db, "dynamic")
         else:
             buffer_template_file = os.path.join(hwsku_path, asic_id_suffix, "buffers.json.j2")
+            if not os.path.isfile(buffer_template_file):
+                buffer_template_file = os.path.join(platform_path, asic_id_suffix, "buffers.json.j2")
             if asic_type in vendors_supporting_dynamic_buffer:
                 buffer_model_updated |= _update_buffer_calculation_model(config_db, "traditional")
 
         if os.path.isfile(buffer_template_file):
-            qos_template_file = os.path.join(
-                hwsku_path, asic_id_suffix, "qos.json.j2"
-            )
+            qos_template_file = os.path.join(hwsku_path, asic_id_suffix, "qos.json.j2")
+            if not os.path.isfile(qos_template_file):
+                qos_template_file = os.path.join(platform_path, asic_id_suffix, "qos.json.j2")
+                if not os.path.isfile(qos_template_file):
+                    qos_template_file = "/usr/share/sonic/templates/qos_config.j2"
             if os.path.isfile(qos_template_file):
                 cmd_ns = [] if ns is DEFAULT_NAMESPACE else ['-n', str(ns)]
                 buffer_fname = "/tmp/cfg_buffer{}.json".format(asic_id_suffix)
