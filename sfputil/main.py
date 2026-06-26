@@ -111,7 +111,19 @@ QSFP_DD_DATA_MAP = {
     'supported_max_tx_power': 'Supported Max TX Power',
     'supported_min_tx_power': 'Supported Min TX Power',
     'supported_max_laser_freq': 'Supported Max Laser Frequency',
-    'supported_min_laser_freq': 'Supported Min Laser Frequency'
+    'supported_min_laser_freq': 'Supported Min Laser Frequency',
+    'rlm_identifier': 'RLM Identifier',
+    'rlm_revision': 'RLM Revision',
+    'rlm_laser_wavelength_grid': 'RLM Laser Wavelength Grid',
+    'rlm_laser_count': 'RLM Laser Count',
+    'rlm_vendor_name': 'RLM Vendor Name',
+    'rlm_vendor_oui': 'RLM Vendor OUI',
+    'rlm_vendor_pn': 'RLM Vendor PN',
+    'rlm_vendor_rev': 'RLM Vendor Rev',
+    'rlm_vendor_sn': 'RLM Vendor SN',
+    'rlm_date_code': 'RLM Vendor Date Code(YYYY-MM-DD Lot)',
+    'rlm_max_power': 'RLM Maximum Power Consumption',
+    'rlm_laser_power_mode_control': 'RLM Laser Power Mode Control'
 }
 
 SFP_DOM_CHANNEL_MONITOR_MAP = {
@@ -204,6 +216,29 @@ DOM_MODULE_MONITOR_MAP = {
     'voltage': 'Vcc'
 }
 
+RLM_DOM_MONITOR_MAP = {
+    'rlm_temperature': 'RLM Temperature',
+    'rlm_voltage': 'RLM Vcc',
+    'rlm_tec_current': 'RLM TEC Current'
+}
+
+RLM_THRESHOLD_MAP = {
+    'rlm_temphighalarm': 'RLM TempHighAlarm',
+    'rlm_templowalarm': 'RLM TempLowAlarm',
+    'rlm_temphighwarning': 'RLM TempHighWarning',
+    'rlm_templowwarning': 'RLM TempLowWarning',
+    'rlm_vcchighalarm': 'RLM VccHighAlarm',
+    'rlm_vcclowalarm': 'RLM VccLowAlarm',
+    'rlm_vcchighwarning': 'RLM VccHighWarning',
+    'rlm_vcclowwarning': 'RLM VccLowWarning',
+    'rlm_txpowerhighalarm': 'RLM TxPowerHighAlarm',
+    'rlm_txpowerlowalarm': 'RLM TxPowerLowAlarm',
+    'rlm_txpowerhighwarning': 'RLM TxPowerHighWarning',
+    'rlm_txpowerlowwarning': 'RLM TxPowerLowWarning',
+    'rlm_txbiashighalarm': 'RLM TxBiasHighAlarm',
+    'rlm_txbiashighwarning': 'RLM TxBiasHighWarning'
+}
+
 DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
     'txpowerhighalarm':   'dBm',
     'txpowerlowalarm':    'dBm',
@@ -228,6 +263,29 @@ DOM_MODULE_THRESHOLD_UNIT_MAP = {
     'vcclowalarm':     'Volts',
     'vcchighwarning':  'Volts',
     'vcclowwarning':   'Volts'
+}
+
+RLM_DOM_MONITOR_UNIT_MAP = {
+    'rlm_temperature': 'C',
+    'rlm_voltage': 'Volts',
+    'rlm_tec_current': '%'
+}
+
+RLM_THRESHOLD_UNIT_MAP = {
+    'rlm_temphighalarm': 'C',
+    'rlm_templowalarm': 'C',
+    'rlm_temphighwarning': 'C',
+    'rlm_templowwarning': 'C',
+    'rlm_vcchighalarm': 'Volts',
+    'rlm_vcclowalarm': 'Volts',
+    'rlm_vcchighwarning': 'Volts',
+    'rlm_vcclowwarning': 'Volts',
+    'rlm_txpowerhighalarm': 'mW',
+    'rlm_txpowerlowalarm': 'mW',
+    'rlm_txpowerhighwarning': 'mW',
+    'rlm_txpowerlowwarning': 'mW',
+    'rlm_txbiashighalarm': 'mA',
+    'rlm_txbiashighwarning': 'mA'
 }
 
 DOM_VALUE_UNIT_MAP = {
@@ -452,6 +510,32 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
             DOM_MODULE_THRESHOLD_UNIT_MAP,
             module_threshold_align)
         output_dom += output_module_threshold
+
+        # RLM Monitor
+        # This is specific for Broadcom CPO DOM value parsing.
+        is_cpo_bailly = sfp_type.startswith('CPO Bailly')
+        if is_cpo_bailly:
+            laser_keys = [key for key in dom_info_dict if key.startswith('RLM') and 'Laser' in key]
+            rlm_dom_monitor_map = RLM_DOM_MONITOR_MAP.copy()
+            rlm_dom_monitor_map.update({key: key for key in laser_keys})
+            rlm_dom_monitor_unit_map = RLM_DOM_MONITOR_UNIT_MAP.copy()
+            rlm_dom_monitor_unit_map.update({key: '' for key in laser_keys})  # laser monitor values include units
+            output_dom += (indent + 'RLMMonitorValues:\n')
+            sorted_key_table = natsorted(rlm_dom_monitor_map)
+            output_rlm_monitor = format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                rlm_dom_monitor_map,
+                rlm_dom_monitor_unit_map)
+            output_dom += output_rlm_monitor
+
+            # RLM Threshold
+            output_dom += (indent + 'RLMThresholdValues:\n')
+            sorted_key_table = natsorted(RLM_THRESHOLD_MAP)
+            output_rlm_threshold = format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                RLM_THRESHOLD_MAP,
+                RLM_THRESHOLD_UNIT_MAP)
+            output_dom += output_rlm_threshold
 
     else:
         output_dom += (indent + 'MonitorData:\n')
