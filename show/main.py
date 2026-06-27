@@ -1830,6 +1830,18 @@ def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
 
 
 #
+# 'gpins-techsupport' command ("show gpins-techsupport")
+#
+
+@cli.command()
+@click.option("--verbose", is_flag=True, help="Enable verbose output")
+def gpins_techsupport(verbose):
+    """Gather debug information for troubleshooting"""
+    cmd = "gpins_techsupport"
+    run_command(cmd, display_cmd=verbose)
+
+
+#
 # 'runningconfiguration' group ("show runningconfiguration")
 #
 
