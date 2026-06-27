@@ -32,6 +32,7 @@ ACL                   5000                enable
 TUNNEL_STAT           3000                enable
 FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
+COPP_STAT             10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
 SRV6_STAT             10000               enable
@@ -51,6 +52,7 @@ ACL                   5000                enable
 TUNNEL_STAT           3000                enable
 FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
+COPP_STAT             10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
 SRV6_STAT             10000               enable

@@ -1068,6 +1068,7 @@
         "MIRRORV6": "true",
         "PORT_TPID_CAPABLE": "true",
         "LAG_TPID_CAPABLE": "true",
+        "COPP_POLICER_STATS_CAPABLE": "true",
         "ACL_ACTION|PACKET_ACTION": "FORWARD"
     },
     "ACL_STAGE_CAPABILITY_TABLE|INGRESS": {

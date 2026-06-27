@@ -1055,6 +1055,11 @@
             "oid:0x600000000063d": "SAI_ROUTER_INTERFACE_TYPE_PORT",
             "oid:0x600000000065f": "SAI_ROUTER_INTERFACE_TYPE_PORT"
     },
+    "COUNTERS_POLICER_NAME_MAP": {
+            "default": "oid:0x17000000002001",
+            "queue4_group1": "oid:0x17000000002002",
+            "queue4_group2": "oid:0x17000000002003"
+    },
     "COUNTERS:oid:0x9000000000000": {
         "SAI_ACL_COUNTER_ATTR_PACKETS": "2",
         "SAI_ACL_COUNTER_ATTR_BYTES": "1"
@@ -2997,5 +3002,35 @@
         "tx_fir_taps_list": "{\"0\": [{\"tap0\": -10}, {\"tap1\": 5}], \"1\": [{\"tap0\": -8}, {\"tap1\": 6}]}"
     },
     "PORT_PHY_ATTR:oid:0x1000000000013": {
+    },
+    "COUNTERS:oid:0x17000000002001":{
+        "SAI_POLICER_STAT_PACKETS": "5",
+        "SAI_POLICER_STAT_ATTR_BYTES": "438",
+        "SAI_POLICER_STAT_GREEN_PACKETS": "5",
+        "SAI_POLICER_STAT_GREEN_BYTES": "438",
+        "SAI_POLICER_STAT_YELLOW_PACKETS": "0",
+        "SAI_POLICER_STAT_YELLOW_BYTES": "0",
+        "SAI_POLICER_STAT_RED_PACKETS": "0",
+        "SAI_POLICER_STAT_RED_BYTES": "0"
+    },
+    "COUNTERS:oid:0x17000000002002":{
+        "SAI_POLICER_STAT_PACKETS": "470",
+        "SAI_POLICER_STAT_ATTR_BYTES": "515344",
+        "SAI_POLICER_STAT_GREEN_PACKETS": "470",
+        "SAI_POLICER_STAT_GREEN_BYTES": "515344",
+        "SAI_POLICER_STAT_YELLOW_PACKETS": "0",
+        "SAI_POLICER_STAT_YELLOW_BYTES": "0",
+        "SAI_POLICER_STAT_RED_PACKETS": "0",
+        "SAI_POLICER_STAT_RED_BYTES": "0"
+    },
+    "COUNTERS:oid:0x17000000002003":{
+        "SAI_POLICER_STAT_PACKETS": "32",
+        "SAI_POLICER_STAT_ATTR_BYTES": "2464",
+        "SAI_POLICER_STAT_GREEN_PACKETS": "16",
+        "SAI_POLICER_STAT_GREEN_BYTES": "1232",
+        "SAI_POLICER_STAT_YELLOW_PACKETS": "0",
+        "SAI_POLICER_STAT_YELLOW_BYTES": "0",
+        "SAI_POLICER_STAT_RED_PACKETS": "16",
+        "SAI_POLICER_STAT_RED_BYTES": "1232"
     }
 }

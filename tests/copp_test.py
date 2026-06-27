@@ -1,3 +1,4 @@
+import importlib
 import pytest
 import os
 import logging
@@ -7,10 +8,13 @@ from .mock_tables import dbconnector
 from unittest.mock import mock_open, patch
 
 from click.testing import CliRunner
+from .utils import get_result_and_return_code
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 input_path = os.path.join(test_path, "copp_input")
 mock_config_path = os.path.join(input_path, "mock_config")
+modules_path = os.path.dirname(test_path)
+scripts_path = os.path.join(modules_path, "scripts")
 
 mock_db_path = os.path.join(test_path, "mock_tables")
 
@@ -84,12 +88,67 @@ show_copp_detailed_invalid_no_option_output = """\
 Either trapid or group must be provided.
 """
 
+# show copp stats output
+show_copp_stats_expected_output = """\
+Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+-------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
+default                   5            438             5            438              0               0           0            0
+queue4_group1           470         515344           470         515344              0               0           0            0
+queue4_group2            32           2464            16           1232              0               0          16         1232
+"""  # noqa: E501
+
+# Multi-ASIC expected outputs for show copp stats
+show_copp_stats_multi_asic_expected_output = """\
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
+asic0      default                  10            876            10            876              0               0           0            0
+asic0      queue4_group1           235         257672           235         257672              0               0           0            0
+asic0      queue4_group2            16           1232             8            616              0               0           8          616
+asic1      default                  15           1314            15           1314              0               0           0            0
+asic1      queue4_group1           300         328800           300         328800              0               0           0            0
+asic1      queue4_group2            20           1540            10            770              0               0          10          770
+"""  # noqa: E501
+
+show_copp_stats_asic0_expected_output = """\
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
+asic0      default                  10            876            10            876              0               0           0            0
+asic0      queue4_group1           235         257672           235         257672              0               0           0            0
+asic0      queue4_group2            16           1232             8            616              0               0           8          616
+"""  # noqa: E501
+
+show_copp_stats_asic1_expected_output = """\
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
+asic1      default                  15           1314            15           1314              0               0           0            0
+asic1      queue4_group1           300         328800           300         328800              0               0           0            0
+asic1      queue4_group2            20           1540            10            770              0               0          10          770
+"""  # noqa: E501
+
+show_copp_stats_expected_output_after_clear = """\
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
+asic0      default                   0              0             0              0              0               0           0            0
+asic0      queue4_group1             0              0             0              0              0               0           0            0
+asic0      queue4_group2             0              0             0              0              0               0           0            0
+asic1      default                   0              0             0              0              0               0           0            0
+asic1      queue4_group1             0              0             0              0              0               0           0            0
+asic1      queue4_group2             0              0             0              0              0               0           0            0
+"""  # noqa: E501
+
+
+def delete_copp_stat_cache():
+    """Delete cached COPP stats data for single-ASIC tests"""
+    cmd = ['coppstat', '-d']
+    get_result_and_return_code(cmd)
+
 
 class TestCoPP:
     @classmethod
     def setup_class(cls):
         logger.info("Setup class: {}".format(cls.__name__))
-        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        os.environ["PATH"] += os.pathsep + scripts_path
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db')
         dbconnector.dedicated_dbs['STATE_DB'] = os.path.join(mock_db_path, 'state_db')
 
@@ -114,10 +173,13 @@ class TestCoPP:
         # Mock the open function to simulate the file content
         cls.patcher = patch('builtins.open', custom_open)
         cls.patcher.start()
+        delete_copp_stat_cache()
 
     @classmethod
     def teardown_class(cls):
         logger.info("Teardown class: {}".format(cls.__name__))
+        delete_copp_stat_cache()
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         dbconnector.dedicated_dbs.clear()
         cls.patcher.stop()
 
@@ -199,3 +261,135 @@ class TestCoPP:
 
         assert result.exit_code == 0
         assert result.output == show_copp_detailed_invalid_no_option_output
+
+    # ----------- show copp stats --------
+    def test_show_copp_stats(self):
+        return_code, result = get_result_and_return_code(['coppstat'])
+        print(result)
+        assert return_code == 0
+        assert result == show_copp_stats_expected_output
+
+
+def delete_copp_cache():
+    """Delete cached COPP stats data"""
+    cmd = ['coppstat', '-d']
+    get_result_and_return_code(cmd)
+
+
+class TestCoppMultiAsic:
+    @classmethod
+    def setup_class(cls):
+        logger.info("Setup class: {}".format(cls.__name__))
+        os.environ["PATH"] += os.pathsep + scripts_path
+        os.environ["UTILITIES_UNIT_TESTING"] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        dbconnector.load_namespace_config()
+        delete_copp_cache()
+
+    @classmethod
+    def teardown_class(cls):
+        logger.info("Teardown class: {}".format(cls.__name__))
+        delete_copp_cache()
+        os.environ["PATH"] = os.pathsep.join(
+            os.environ["PATH"].split(os.pathsep)[:-1]
+        )
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        dbconnector.load_namespace_config()
+
+    def test_show_copp_stats_all_asics(self):
+        """Test show copp stats across all ASICs"""
+        return_code, result = get_result_and_return_code(['coppstat'])
+        print(result)
+        assert return_code == 0
+        assert result == show_copp_stats_multi_asic_expected_output
+
+    def test_show_copp_stats_asic0(self):
+        """Test show copp stats for asic0 only"""
+        return_code, result = get_result_and_return_code(['coppstat', '-n', 'asic0'])
+        print(result)
+        assert return_code == 0
+        assert result == show_copp_stats_asic0_expected_output
+
+    def test_show_copp_stats_asic1(self):
+        """Test show copp stats for asic1 only"""
+        return_code, result = get_result_and_return_code(['coppstat', '-n', 'asic1'])
+        print(result)
+        assert return_code == 0
+        assert result == show_copp_stats_asic1_expected_output
+
+    def test_show_copp_stats_clear(self):
+        """Test clear copp stats on multi-ASIC platform"""
+        return_code, result = get_result_and_return_code(['coppstat', '-c'])
+        assert return_code == 0
+
+        return_code, result = get_result_and_return_code(['coppstat'])
+        print(result)
+        assert return_code == 0
+        assert result == show_copp_stats_expected_output_after_clear
+
+
+# ----------- show/clear copp stats capability gate --------------------------
+# `show copp stats` and `sonic-clear copp` now gate on the STATE_DB
+# SWITCH_CAPABILITY|switch:COPP_POLICER_STATS_CAPABLE flag published by
+# swss/CoppOrch after probing SAI. These tests exercise both branches with
+# the helper patched directly — keeps the test focused on the CLI gate
+# rather than rebuilding the STATE_DB mock for each scenario.
+
+from unittest.mock import patch as _patch  # noqa: E402 (after class for clarity)
+import clear.main as _clear_main           # noqa: E402
+
+
+class TestCoppStatsCapabilityGate:
+    @classmethod
+    def setup_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+    def test_show_copp_stats_unsupported_platform(self):
+        """When COPP_POLICER_STATS_CAPABLE is false, the CLI prints the
+        not-supported message and does NOT invoke coppstat."""
+        runner = CliRunner()
+        with _patch("show.copp.is_copp_policer_stats_supported", return_value=False), \
+             _patch("show.copp.clicommon.run_command") as mock_run:
+            result = runner.invoke(show.cli.commands["copp"].commands["stats"])
+        assert result.exit_code == 0
+        assert "not supported" in result.output
+        mock_run.assert_not_called()
+
+    def test_show_copp_stats_supported_platform_invokes_coppstat(self):
+        """When the capability is true, the CLI invokes coppstat."""
+        runner = CliRunner()
+        with _patch("show.copp.is_copp_policer_stats_supported", return_value=True), \
+             _patch("show.copp.clicommon.run_command") as mock_run:
+            result = runner.invoke(show.cli.commands["copp"].commands["stats"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        assert mock_run.call_args[0][0][0] == "coppstat"
+
+    def test_clear_copp_unsupported_platform(self):
+        """sonic-clear copp gates on the same capability flag."""
+        runner = CliRunner()
+        with _patch("utilities_common.general.is_copp_policer_stats_supported",
+                    return_value=False), \
+             _patch("clear.main.run_command") as mock_run:
+            result = runner.invoke(_clear_main.cli.commands["copp"])
+        assert result.exit_code == 0
+        assert "not supported" in result.output
+        mock_run.assert_not_called()
+
+    def test_clear_copp_supported_platform_invokes_coppstat(self):
+        runner = CliRunner()
+        with _patch("utilities_common.general.is_copp_policer_stats_supported",
+                    return_value=True), \
+             _patch("clear.main.run_command") as mock_run:
+            result = runner.invoke(_clear_main.cli.commands["copp"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once_with(["coppstat", "-c"])
