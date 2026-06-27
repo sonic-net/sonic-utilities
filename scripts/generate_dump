@@ -2667,6 +2667,12 @@ main() {
     echo "[ Capture pstore info ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
     wait
     
+    # capture rasdaemon RAS event database
+    if [ -f /var/lib/rasdaemon/ras-mc_event.db ]; then
+        save_file /var/lib/rasdaemon/ras-mc_event.db "rasdaemon" false &
+        wait
+    fi
+
     # Save all the processes within each docker
     save_cmd "show services" services.summary &
 
