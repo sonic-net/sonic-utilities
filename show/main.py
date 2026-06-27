@@ -1636,6 +1636,18 @@ def link_local_mode(namespace, verbose):
                     else:
                         body.append([port, 'Disabled'])
 
+        sub_intf_dict = config_db.get_table('VLAN_SUB_INTERFACE')
+        for sub_intf in sub_intf_dict.keys():
+            if not isinstance(sub_intf, tuple):
+                value = sub_intf_dict[sub_intf]
+                if 'ipv6_use_link_local_only' in value:
+                    if value['ipv6_use_link_local_only'] == 'enable':
+                        body.append([sub_intf, 'Enabled'])
+                    else:
+                        body.append([sub_intf, 'Disabled'])
+                else:
+                    body.append([sub_intf, 'Disabled'])
+
     click.echo(tabulate(body, header, tablefmt="grid"))
 
 #
