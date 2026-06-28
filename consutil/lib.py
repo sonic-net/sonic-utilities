@@ -534,7 +534,10 @@ def _recv_mirror_message(sock):
     size = struct.unpack("!I", header)[0]
     if size <= 0 or size > MIRROR_CONTROL_MAX_MESSAGE:
         raise RuntimeError("invalid response size")
-    return json.loads(_recv_all(sock, size).decode("utf-8"))
+    try:
+        return json.loads(_recv_all(sock, size).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise RuntimeError("invalid response payload")
 
 
 def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_first_reply=None):
