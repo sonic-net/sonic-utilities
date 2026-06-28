@@ -81,11 +81,25 @@ def bmc():
     pass
 
 
+def _reject_non_switch_host():
+    if not device_info.is_switch_host():
+        raise click.ClickException('Operation only supported on Switch-Host')
+
+
+# 'os' subcommand ("show platform bmc os")
+@bmc.command(name='os')
+def bmc_os():
+    """Show configured BMC operating system (openbmc or sonic)"""
+    _reject_non_switch_host()
+    click.echo(device_info.get_bmc_os())
+
+
 # 'summary' subcommand ("show platform bmc summary")
 @bmc.command(name='summary')
 @click.option('--json', is_flag=True, help="Output in JSON format")
 def bmc_summary(json):
     """Show BMC summary information"""
+    _reject_non_switch_host()
     try:
         import sonic_platform
         chassis = sonic_platform.platform.Platform().get_chassis()
@@ -106,7 +120,7 @@ def bmc_summary(json):
         part_number = eeprom_info.get('PartNumber', 'N/A')
         power_state = eeprom_info.get('PowerState', 'N/A')
         serial_number = eeprom_info.get('SerialNumber', 'N/A')
-        bmc_version = bmc.get_version()
+        bmc_version = 'N/A' if device_info.get_bmc_os() == device_info.BMC_OS_SONIC else bmc.get_version()
 
         if json:
             bmc_summary = {
@@ -135,6 +149,7 @@ def bmc_summary(json):
 @click.option('--json', is_flag=True, help="Output in JSON format")
 def eeprom(json):
     """Show BMC EEPROM information"""
+    _reject_non_switch_host()
     try:
         import sonic_platform
         chassis = sonic_platform.platform.Platform().get_chassis()
