@@ -11,7 +11,7 @@ pfcwd_show_start_config_output_pass = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0   forward               102                 101    disable
+Ethernet0   forward               602                 601    disable
 Ethernet4      drop               600                 600    disable
 Ethernet8      drop               600                 600    disable
 """
@@ -29,8 +29,8 @@ pfcwd_show_start_action_forward_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0   forward               302                 301    disable
-Ethernet4   forward               302                 301    disable
+Ethernet0   forward               602                 601    disable
+Ethernet4   forward               602                 601    disable
 Ethernet8      drop               600                 600    disable
 """
 
@@ -38,8 +38,8 @@ pfcwd_show_start_action_alert_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0     alert               502                 501    disable
-Ethernet4     alert               502                 501    disable
+Ethernet0     alert               702                 701    disable
+Ethernet4     alert               702                 701    disable
 Ethernet8      drop               600                 600    disable
 """
 
@@ -47,8 +47,8 @@ pfcwd_show_start_action_drop_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0      drop               602                 601    disable
-Ethernet4      drop               602                 601    disable
+Ethernet0      drop               802                 801    disable
+Ethernet4      drop               802                 801    disable
 Ethernet8      drop               600                 600    disable
 """
 
@@ -320,10 +320,10 @@ Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
           PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 --------------  --------  ----------------  ------------------  ---------
-     Ethernet0   forward               102                 101    disable
+     Ethernet0   forward               202                 201    disable
      Ethernet4      drop               200                 200    disable
   Ethernet-BP0      drop               200                 200    disable
-  Ethernet-BP4   forward               102                 101    disable
+  Ethernet-BP4   forward               202                 201    disable
 Ethernet-BP256      drop               200                 200    disable
 Ethernet-BP260      drop               200                 200    disable
 """
