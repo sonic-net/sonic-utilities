@@ -202,6 +202,7 @@ class FabricPortStat(FabricStat):
             # e.g. PORT76 ['0', '0', '36', '6669', '0', '13', '302626', '3']
             # Now, set default saved values to 0
             diff_cached = ['0', '0', '0', '0', '0', '0', '0', '0']
+            #If the stats was not cleared before, the cnstat_cached_dict will be empty
             if port_name in cnstat_cached_dict:
                 diff_cached = cnstat_cached_dict.get(port_name)
 
@@ -244,6 +245,8 @@ class FabricPortStat(FabricStat):
                               ns_diff(data.fec_uncorrectable, diff_cached[6]),
                               ns_diff(data.symbol_err, diff_cached[7])))
 
+        if nonzero_only and len(table) == 0:
+            return
         print(tabulate(table, header, tablefmt='simple', stralign='right'))
         print()
 
@@ -391,7 +394,8 @@ class FabricCapacity(FabricStat):
 
         # Update the table to print
         self.table_cnt.append(
-            (asic_name, operational_fabric_links, isolated_fabric_links, total_fabric_links, ratio, last_event, last_time))
+            (asic_name, operational_fabric_links, isolated_fabric_links,
+             total_fabric_links, ratio, last_event, last_time))
 
 class FabricReachability(FabricStat):
     def reachability_print(self):
@@ -458,6 +462,8 @@ class FabricIsolation(FabricStat):
             if self.nonzero_only and auto_isolated == 0 and manual_isolated == 0 and isolated == 0:
                 continue
             body.append((port_number, auto_isolated, manual_isolated, isolated, isolate_reason))
+        if self.nonzero_only and len(body) == 0:
+            return
         if self.namespace:
             print(f"\n{self.namespace}")
         print(tabulate(body, header, tablefmt='simple', stralign='right'))
@@ -555,7 +561,7 @@ Examples:
     parser.add_argument('-i','--isolation', action='store_true', help='Display fabric ports isolation status')
     parser.add_argument('-nz', '--nonzero', action='store_true',
                         help='Port, queue (-q), or rate (-s): show only rows with non-zero counter/rate; '
-                             'with -i: show only links with non-zero isolation counters')
+                        ' (rows with N/A are always shown);. Nout used with capacity and reachability ')
     parser.add_argument('-s','--rate', action='store_true', help='Display fabric counters rate')
     parser.add_argument('-C','--clear', action='store_true', help='Copy & clear fabric counters')
     parser.add_argument('-D','--delete', action='store_true', help='Delete saved stats')
