@@ -236,7 +236,7 @@ class TestAclLoader(object):
         acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))
         assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")]
         assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")] == {
-            "IP_PROTOCOL": 0,
+            "IP_PROTOCOL": 1,
             "PACKET_ACTION": "FORWARD",
             "PRIORITY": "9999"
         }

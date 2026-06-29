@@ -373,7 +373,7 @@
 								},
 								"ip": {
 									"config": {
-										"protocol": "0"
+										"protocol": "1"
 									}
 								}
 							}
