@@ -3,6 +3,7 @@ import sys
 import click
 import subprocess
 from shlex import join
+from . import stp
 
 
 def run_command(command, pager=False):
@@ -280,6 +281,10 @@ else:
         command = ['sudo', 'vtysh', '-c', "debug zebra rib"]
         run_command(command)
 
+#
+# 'STP' group
+#
+cli.add_command(stp.spanning_tree)
 
 if __name__ == '__main__':
     cli()
