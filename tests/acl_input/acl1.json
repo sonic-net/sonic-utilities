@@ -359,6 +359,38 @@
 						"name": "bmc_acl_northbound_v6"
 					}
 				},
+				"acl_noiptype": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "0",
+										"source-ip-address": "172.17.0.200/30"
+									}
+								},
+								"input_interface": {
+									"interface_ref": {
+										"config": {
+											"interface": "Ethernet0,Ethernet1,Ethernet2,Ethernet3,Ethernet4,Ethernet5,Ethernet6,Ethernet7,Ethernet8,Ethernet9,Ethernet10,Ethernet11,Ethernet12,Ethernet13,Ethernet14,Ethernet15,Ethernet16,Ethernet17,Ethernet18,Ethernet19,Ethernet20,Ethernet21,Ethernet22,Ethernet23,Ethernet25,Ethernet26,Ethernet27,Ethernet28,Ethernet29,Ethernet30,Ethernet31,Ethernet32,Ethernet33,Ethernet34,Ethernet35,Ethernet36,Ethernet37,Ethernet38,Ethernet39,Ethernet40,Ethernet41,Ethernet42,Ethernet43,Ethernet44,Ethernet45"
+										}
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "acl_noiptype"
+					}
+				},
 				"DATAACLV4V6": {
 					"acl-entries": {
 						"acl-entry": {

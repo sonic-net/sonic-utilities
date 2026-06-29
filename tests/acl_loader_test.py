@@ -231,6 +231,17 @@ class TestAclLoader(object):
             "PRIORITY": "9998"
         }
 
+    def test_noiptype_custom_acl_table_type(self, acl_loader):
+        acl_loader.rules_info = {}
+        acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))
+        assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")]
+        assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")] == {
+            "IP_PROTOCOL": 0,
+            "SRC_IP": "172.17.0.200/30",
+            "PACKET_ACTION": "FORWARD",
+            "PRIORITY": "9999"
+        }
+
     def test_ingress_default_deny_rule(self, acl_loader):
         acl_loader.set_mirror_stage("ingress")
         acl_loader.get_session_name = mock.MagicMock(return_value="everflow_session_mock")

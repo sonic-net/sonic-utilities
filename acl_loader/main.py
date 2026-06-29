@@ -72,6 +72,7 @@ class AclLoader(object):
 
     ACL_TABLE = "ACL_TABLE"
     ACL_RULE = "ACL_RULE"
+    ACL_TABLE_TYPE = "ACL_TABLE_TYPE"
     CFG_ACL_TABLE = "ACL_TABLE"
     APPL_ACL_TABLE = "ACL_TABLE_TABLE"
     STATE_ACL_TABLE = "ACL_TABLE_TABLE"
@@ -121,6 +122,7 @@ class AclLoader(object):
         self.mirror_stage = None
         self.current_table = None
         self.tables_db_info = {}
+        self.tables_type_info = {}
         self.rules_db_info = {}
         self.rules_info = {}
         self.tables_state_info = None
@@ -202,6 +204,17 @@ class AclLoader(object):
                     else:
                         self.tables_db_info[table]['ports'] += entry.get(
                             'ports', [])
+
+        # Update user defined acl table types
+        host_acl_table_type = self.configdb.get_table(self.ACL_TABLE_TYPE)
+        if self.per_npu_configdb:
+            for ns, config_db in self.per_npu_configdb.items():
+                acl_table_type = config_db.get_table(self.ACL_TABLE_TYPE)
+                for table_type, entry in acl_table_type.items():
+                    if table not in self.tables_type_info:
+                        self.tables_type_info[table_type] = entry
+        else:
+            self.tables_type_info.update(host_acl_table_type)
 
         if self.per_npu_configdb:
             # Note: Ability to read table information from APPL_DB is not yet supported for masic devices
@@ -455,6 +468,16 @@ class AclLoader(object):
         :return: True if table type is ACL_TABLE_TYPE_CTRLPLANE else False
         """
         return self.tables_db_info[tname]['type'].upper() == self.ACL_TABLE_TYPE_CTRLPLANE
+
+    def acl_table_has_match(self, tname, match):
+        """
+        """
+        table_type = self.tables_db_info[tname]["type"]
+        # Predefined table types aren't defined in the tables_type_info
+        if table_type not in self.tables_type_info:
+            return True
+        else:
+            return match in self.tables_type_info[table_type]["MATCHES"]
 
     @staticmethod
     def parse_acl_json(filename):
@@ -795,7 +818,7 @@ class AclLoader(object):
         deep_update(rule_props, self.convert_transport(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_input_interface(table_name, rule_idx, rule))
 
-        if "IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props:
+        if "IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props and self.acl_table_has_match(table_name, "IP_TYPE"):
             # If we don't include IP_TYPE as a qualifier in the IP_PROTOCOL rule
             # we could match on non-IP packets if the bits at the same offset match
             # https://github.com/sonic-net/sonic-mgmt/issues/23960
