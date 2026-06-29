@@ -3,6 +3,7 @@
 declare -r GNMI_PORT=8080 # Default GNMI port
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
+declare -r MODULE_REBOOT_CAUSE_DIR="/host/reboot-cause/module"
 
 declare -r EXIT_DPU_DOWN=2
 
@@ -10,6 +11,21 @@ declare -r EXIT_DPU_DOWN=2
 function log_message() {
     local message=$1
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" >&2
+}
+
+# Function to persist the user who issued a DPU reboot so chassisd can attribute
+# the DPU reboot-cause record to the operator. chassisd reads and removes this
+# marker in persist_dpu_reboot_cause.
+function persist_dpu_reboot_user() {
+    local DPU_NAME=$1
+    local REBOOT_USER=${2:-$(logname 2>/dev/null || whoami)}
+    local dpu_dir="${MODULE_REBOOT_CAUSE_DIR}/${DPU_NAME,,}"
+
+    if ! mkdir -p "${dpu_dir}" 2>/dev/null; then
+        log_message "ERROR: Failed to create ${dpu_dir} to persist reboot user"
+        return
+    fi
+    echo "${REBOOT_USER}" > "${dpu_dir}/prev_reboot_user.txt"
 }
 
 # Function to check if running on smart switch
@@ -229,6 +245,10 @@ function reboot_dpu()
             return ${EXIT_ERROR}
         fi
     fi
+
+    # Persist the operator who issued the reboot so chassisd can record it in
+    # the DPU reboot-cause "user" field (mirrors the NPU reboot-cause flow).
+    persist_dpu_reboot_user "${DPU_NAME}" "${REBOOT_USER:-}"
 
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
