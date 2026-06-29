@@ -818,7 +818,8 @@ class AclLoader(object):
         deep_update(rule_props, self.convert_transport(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_input_interface(table_name, rule_idx, rule))
 
-        if "IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props and self.acl_table_has_match(table_name, "IP_TYPE"):
+        if ("IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props
+            and self.acl_table_has_match(table_name, "IP_TYPE")):
             # If we don't include IP_TYPE as a qualifier in the IP_PROTOCOL rule
             # we could match on non-IP packets if the bits at the same offset match
             # https://github.com/sonic-net/sonic-mgmt/issues/23960
