@@ -588,6 +588,22 @@ def get_port_namespace(port):
 
     return None
 
+
+def validate_interface_names_in_namespace(ctx, intf_fs):
+    """Validate that all interfaces exist and belong to the provided namespace."""
+    config_db = ctx.obj.get('config_db')
+    namespace = ctx.obj.get('namespace', DEFAULT_NAMESPACE)
+    invalid_intfs = []
+
+    for intf in intf_fs:
+        if interface_name_is_valid(config_db, intf) is False:
+            invalid_intfs.append(intf)
+
+    if invalid_intfs:
+        ctx.fail("Provided interface(s) : '{}' are either invalid or not in provided namespace '{}'".format(
+            ', '.join(invalid_intfs), namespace))
+
+
 def del_interface_bind_to_vrf(config_db, vrf_name):
     """del interface bind to vrf
     """
@@ -5256,32 +5272,14 @@ def startup(ctx, interface_name):
     except ValueError as e:
         ctx.fail(str(e))
 
-    if len(intf_fs) > 1 and multi_asic.is_multi_asic():
-        ctx.fail("Interface range not supported in multi-asic platforms !!")
-
-    if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
-        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
+    validate_interface_names_in_namespace(ctx, intf_fs)
 
     log.log_info("'interface startup {}' executing...".format(interface_name))
-    port_dict = config_db.get_table('PORT')
-    for port_name in port_dict:
-        if port_name in intf_fs:
-            config_db.mod_entry("PORT", port_name, {"admin_status": "up"})
-
-    portchannel_list = config_db.get_table("PORTCHANNEL")
-    for po_name in portchannel_list:
-        if po_name in intf_fs:
-            config_db.mod_entry("PORTCHANNEL", po_name, {"admin_status": "up"})
-
-    subport_list = config_db.get_table("VLAN_SUB_INTERFACE")
-    for sp_name in subport_list:
-        if sp_name in intf_fs:
-            config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "up"})
-
-    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
-    for lo in lo_list:
-        if lo in intf_fs:
-            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "up"})
+    for intf in intf_fs:
+        table_name = get_port_table_name(intf)
+        if not table_name:
+            continue
+        config_db.mod_entry(table_name, intf, {"admin_status": "up"})
 
 #
 # 'shutdown' subcommand
@@ -5306,31 +5304,13 @@ def shutdown(ctx, interface_name):
     except ValueError as e:
         ctx.fail(str(e))
 
-    if len(intf_fs) > 1 and multi_asic.is_multi_asic():
-        ctx.fail("Interface range not supported in multi-asic platforms !!")
+    validate_interface_names_in_namespace(ctx, intf_fs)
 
-    if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
-        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
-
-    port_dict = config_db.get_table('PORT')
-    for port_name in port_dict:
-        if port_name in intf_fs:
-            config_db.mod_entry("PORT", port_name, {"admin_status": "down"})
-
-    portchannel_list = config_db.get_table("PORTCHANNEL")
-    for po_name in portchannel_list:
-        if po_name in intf_fs:
-            config_db.mod_entry("PORTCHANNEL", po_name, {"admin_status": "down"})
-
-    subport_list = config_db.get_table("VLAN_SUB_INTERFACE")
-    for sp_name in subport_list:
-        if sp_name in intf_fs:
-            config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "down"})
-
-    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
-    for lo in lo_list:
-        if lo in intf_fs:
-            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
+    for intf in intf_fs:
+        table_name = get_port_table_name(intf)
+        if not table_name:
+            continue
+        config_db.mod_entry(table_name, intf, {"admin_status": "down"})
 
 #
 # 'sys-mac' group ('config interface sys-mac ...')
