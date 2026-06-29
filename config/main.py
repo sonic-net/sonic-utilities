@@ -6100,6 +6100,13 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
                 # If user has configured IPv4/v6 address and the already available row is also IPv4/v6, delete it here.
                 config_db.set_entry("MGMT_INTERFACE", ("eth0", key[1]), None)
 
+        # Ensure MGMT_PORT entry exists for YANG leafref validation.
+        # MGMT_INTERFACE.name is a leafref to MGMT_PORT; without this
+        # entry, YANG validation (e.g. during breakout) will fail.
+        mgmt_port_entry = config_db.get_entry("MGMT_PORT", interface_name)
+        if not mgmt_port_entry:
+            config_db.set_entry("MGMT_PORT", interface_name, {"admin_status": "up"})
+
         # Set the new row with new value
         if not gw:
             config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"NULL": "NULL"})
