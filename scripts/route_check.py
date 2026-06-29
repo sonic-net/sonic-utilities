@@ -417,7 +417,7 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
         if not route_entry.get('selected', False):
             return
         if not route_entry.get('offloaded', False):
-            missing_routes.append(prefix)
+            missing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol', '')})
         if route_entry.get('failed', False):
             failing_routes.append(prefix)
 
@@ -733,20 +733,37 @@ def is_feature_bgp_enabled(namespace):
 
 def check_frr_pending_routes(namespace):
     """
-    Check FRR routes for offload flag presence by executing "show ip route json"
-    Returns a list of routes that have no offload flag.
+    Check FRR routes for offload flag presence by executing "show ip route json".
+    Returns lists of routes that are persistently non-offloaded across all retry
+    iterations (intersection logic).
+
+    Intersection approach: only routes that appear as stuck in *every* poll
+    are returned for mitigation.  A route that clears between iterations is
+    converging normally and should not be mitigated.
     """
+    acc_miss = []
+    acc_fail = []
 
-    missed_rt = []
-    failed_rt = []
-    retries = FRR_CHECK_RETRIES
-    for i in range(retries):
-        missed_rt, failed_rt = get_frr_routes_parallel(namespace)
+    for i in range(FRR_CHECK_RETRIES):
+        curr_miss, curr_fail = get_frr_routes_parallel(namespace)
 
-        if not missed_rt and not failed_rt:
+        if i == 0:
+            acc_miss = curr_miss
+            acc_fail = curr_fail
+        else:
+            curr_miss_set = {entry['prefix'] for entry in curr_miss}
+            curr_fail_set = set(curr_fail)
+            acc_miss = [entry for entry in acc_miss if entry['prefix'] in curr_miss_set]
+            acc_fail = [prefix for prefix in acc_fail if prefix in curr_fail_set]
+
+        if not curr_miss and not curr_fail:
             break
 
-        time.sleep(FRR_WAIT_TIME)
+        if i < FRR_CHECK_RETRIES - 1:
+            time.sleep(FRR_WAIT_TIME)
+
+    missed_rt = acc_miss
+    failed_rt = acc_fail
     print_message(syslog.LOG_DEBUG, f"FRR missed routes: {missed_rt}")
     print_message(syslog.LOG_DEBUG, f"FRR failed routes: {failed_rt}")
     return missed_rt, failed_rt
@@ -888,6 +905,8 @@ def check_routes_for_namespace(namespace):
     rt_frr_miss = []
     rt_frr_failed = []
 
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
+
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
     rt_appl = get_appdb_routes(namespace)
@@ -944,8 +963,6 @@ def check_routes_for_namespace(namespace):
 
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
-
-    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
 
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
