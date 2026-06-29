@@ -2824,6 +2824,10 @@ def suppress_pending_fib(db, state):
         config_db = db.cfgdb_clients[ns]
         config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
 
+    click.echo("""Wrote %s suppress-fib-pending into CONFIG_DB, reload required to apply the configuration:
+    config save -y
+    config reload -y""" % state)
+
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
 #
