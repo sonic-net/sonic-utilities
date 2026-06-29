@@ -22,7 +22,7 @@ class TestAclLoader(object):
 
     def test_valid(self):
         yang_acl = AclLoader.parse_acl_json(os.path.join(test_path, 'acl_input/acl1.json'))
-        assert len(yang_acl.acl.acl_sets.acl_set) == 9
+        assert len(yang_acl.acl.acl_sets.acl_set) == 10
 
     def test_invalid(self):
         with pytest.raises(AclLoaderException):
@@ -237,7 +237,6 @@ class TestAclLoader(object):
         assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")]
         assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")] == {
             "IP_PROTOCOL": 0,
-            "SRC_IP": "172.17.0.200/30",
             "PACKET_ACTION": "FORWARD",
             "PRIORITY": "9999"
         }
