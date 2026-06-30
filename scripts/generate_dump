@@ -52,6 +52,10 @@ RETURN_CODE=$EXT_SUCCESS
 DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 IS_SUPERVISOR=false
+# True on a SONiC Switch-BMC (set below from switch_bmc=1 in platform_env.conf).
+# Switch data-plane collectors (ASIC/SDK, ports, FRR/BGP, STP, SAI) self-skip.
+# Distinct from is_bmc_supported() (Redfish debug-dump availability).
+IS_SWITCH_BMC=false
 
 ENABLE_FLOW_DUMP=false
 
@@ -100,6 +104,35 @@ handle_error() {
 
 escape_quotes() {
     echo $1 | sed 's/\"/\\\"/g'
+}
+
+###############################################################################
+# Record an absent source path as a "<path>.not-found" marker (parent dir
+# created first) so it is not mistaken for collected data.
+# Arguments:
+#  root: destination root (e.g. $TARDIR)
+#  src:  absolute source path that was not found
+###############################################################################
+record_missing_path() {
+    local root="$1"
+    local src="$2"
+    local marker="$root/${src#/}.not-found"
+    $MKDIR $V -p "$(dirname "$marker")"
+    echo "$src not found" > "$marker"
+}
+
+###############################################################################
+# In-place sed a file only if it exists - avoids errors scrubbing optional
+# config files absent on minimal images.
+# Arguments:
+#  expr: sed -E expression
+#  file: target file path
+###############################################################################
+sed_if_exists() {
+    local expr="$1"
+    local file="$2"
+    [ -e "$file" ] || return 0
+    sed -i -E "$expr" "$file"
 }
 
 save_bcmcmd() {
@@ -672,7 +705,7 @@ save_nat_info() {
 ###############################################################################
 save_bfd_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show bfd peers" "frr.bfd.peers"
@@ -712,7 +745,7 @@ save_ip_info() {
 ###############################################################################
 save_bgp_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show ip bgp summary" "bgp.summary"
@@ -752,7 +785,7 @@ save_bgp_info() {
 ###############################################################################
 save_evpn_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show bgp l2vpn evpn" "bgp.l2vpn.evpn"
@@ -788,7 +821,7 @@ save_evpn_info() {
 ###############################################################################
 save_frr_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show running-config" "frr.running_config"
@@ -871,7 +904,11 @@ save_proc() {
                 echo "$CP $V -r $f $TARDIR/proc"
             fi
         else
-            ( [ -e $f ] && $CP $V -r $f $TARDIR/proc ) || echo "$f not found" > $TARDIR/$f
+            if [ -e "$f" ]; then
+                $CP $V -r "$f" $TARDIR/proc
+            else
+                record_missing_path "$TARDIR" "$f"
+            fi
         fi
     done
 
@@ -909,7 +946,11 @@ save_sys() {
                 echo "$cp_cmd $V -r -p $f $TARDIR/sys"
             fi
         else
-            ( [ -e $f ] && $cp_cmd $V -r -p $f $TARDIR/sys ) || echo "$f not found" > $TARDIR/$f
+            if [ -e "$f" ]; then
+                $cp_cmd $V -r -p "$f" $TARDIR/sys
+            else
+                record_missing_path "$TARDIR" "$f"
+            fi
         fi
     done
 
@@ -1035,9 +1076,18 @@ save_pstore() {
                 echo "$CP $V -r -p $f/* $TARDIR/pstore"
             fi
         else
-            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
-            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f/* >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
-            ( [ -e $f ] && $CP $V -r -p $f/* $TARDIR/pstore ) || echo "$f not found" > $TARDIR/$f
+            # Handle absent / empty / populated without globbing an empty dir.
+            if [ ! -e "$f" ]; then
+                echo "$f not found" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+            else
+                ls --time-style='+%d-%m-%Y %H:%M:%S' -last "$f" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+                if [ -n "$(find "$f" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+                    # "$f/." copies contents glob-free (no unmatched "$f/*").
+                    $CP $V -r -p "$f/." $TARDIR/pstore
+                else
+                    echo "$f is empty" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+                fi
+            fi
         fi
     done
 
@@ -1185,6 +1235,11 @@ with open('$filepath') as json_file:
 ###############################################################################
 save_saidump_by_route_size() {
     trap 'handle_error $? $LINENO' ERR
+    # Route-size probe uses vtysh and the SAI dump uses syncd - neither exists
+    # on a Switch-BMC.
+    if $IS_SWITCH_BMC; then
+        return
+    fi
 
     for (( i=0; i<$NUM_ASICS; i++ ))
     do
@@ -2457,6 +2512,10 @@ get_asic_count() {
 ###############################################################################
 save_counter_snapshot() {
     trap 'handle_error $? $LINENO' ERR
+    # Front-panel port/ASIC counters - no front-panel ports on a Switch-BMC.
+    if $IS_SWITCH_BMC; then
+        return
+    fi
     local asic_name="$1"
     local idx=$2
     counter_t=$(date +'%d/%m/%Y %H:%M:%S:%6N')
@@ -2466,7 +2525,9 @@ save_counter_snapshot() {
     save_cmd "show interface counters fec-stats" "interface.counters.fec-stats_$idx"
 
     for netdev in /sys/class/net/Ethernet* ; do
-        iface=$(basename $netdev)
+        # Skip the literal "Ethernet*" when the glob matches nothing.
+        [ -e "$netdev" ] || continue
+        iface=$(basename "$netdev")
         save_cmd "show interface counters fec-histogram $iface" "interface.counters.fec-histogram.$iface.$idx"
     done
 
@@ -2535,6 +2596,10 @@ save_container_files() {
 # Save gearbox data
 ###############################################################################
 save_gearbox_data() {
+    # Gearbox PHY data - not present on a Switch-BMC.
+    if $IS_SWITCH_BMC; then
+        return
+    fi
     save_cmd "gearboxutil phys status" "gearbox.phys_status" &
     save_cmd "gearboxutil interfaces status" "gearbox.interfaces_status" &
     save_cmd "gearboxutil interfaces fec-stats" "gearbox.interfaces_fec_stats" &
@@ -2678,10 +2743,14 @@ main() {
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
     local device_type=`sonic-db-cli CONFIG_DB hget 'DEVICE_METADATA|localhost' type`
     local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
-    # 1st counter snapshot early. Need 2 snapshots to make sense of counters trend.
+
+    # 1st counter snapshot early (self-skips on a Switch-BMC); need 2 for a trend.
     save_counter_snapshot $asic 1
 
-    save_cmd "show asic-sdk-health-event received" "asic.sdk.health.event" &
+    if ! $IS_SWITCH_BMC; then
+        # ASIC/SDK health event - not supported on a Switch-BMC platform.
+        save_cmd "show asic-sdk-health-event received" "asic.sdk.health.event" &
+    fi
 
     save_cmd "systemd-analyze blame" "systemd.analyze.blame" &
     save_cmd "systemd-analyze dump" "systemd.analyze.dump" &
@@ -2712,17 +2781,22 @@ main() {
     save_bridge_info &
     wait
 
+    # FRR/BGP/EVPN and gearbox collectors self-skip on a Switch-BMC.
     save_frr_info &
 
     save_bgp_info &
     save_evpn_info &
     wait
 
-    save_cmd "show interface status -d all" "interface.status" &
-    save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
-    save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
+    # Generic L3 summary (incl. management interfaces) - keep on all platforms.
     save_cmd "show ip interface -d all" "ip.interface" &
-    save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+    if ! $IS_SWITCH_BMC; then
+        # Front-panel interface/transceiver collectors - none on a Switch-BMC.
+        save_cmd "show interface status -d all" "interface.status" &
+        save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
+        save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
+        save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+    fi
     save_gearbox_data &
     wait
 
@@ -2731,16 +2805,22 @@ main() {
         save_cmd "docker exec lldp${sfx} lldpcli show statistics" "lldp${sfx}.statistics" &
         save_cmd "docker exec lldp${sfx} lldpcli show configuration" "lldp${sfx}.config" &
         save_cmd "docker exec lldp${sfx} lldpcli show interfaces" "lldp${sfx}.interfaces" &
-        save_cmd "docker logs bgp${sfx}" "docker.bgp${sfx}.log" &
-        save_cmd "docker logs swss${sfx}" "docker.swss${sfx}.log" &
+        if ! $IS_SWITCH_BMC; then
+            # bgp/swss containers do not run on a Switch-BMC.
+            save_cmd "docker logs bgp${sfx}" "docker.bgp${sfx}.log" &
+            save_cmd "docker logs swss${sfx}" "docker.swss${sfx}.log" &
+        fi
     done
     wait
 
- 	save_cmd "stpctl all" "stp.log"
-    save_cmd "show spanning-tree" "stp.show"
-    save_cmd "show spanning-tree statistics" "stp.stats"
-    save_cmd "show spanning-tree bpdu_guard" "stp.bg"
-    save_cmd "show spanning-tree root_guard" "stp.rg"
+    if ! $IS_SWITCH_BMC; then
+        # Spanning-tree - no STP daemon / stpctl on a Switch-BMC.
+        save_cmd "stpctl all" "stp.log"
+        save_cmd "show spanning-tree" "stp.show"
+        save_cmd "show spanning-tree statistics" "stp.stats"
+        save_cmd "show spanning-tree bpdu_guard" "stp.bg"
+        save_cmd "show spanning-tree root_guard" "stp.rg"
+    fi
 
     save_cmd "ps aux" "ps.aux" &
     save_cmd "top -b -n 1" "top" &
@@ -2784,10 +2864,14 @@ main() {
     save_cmd "who -a" "who" &
     save_cmd "swapon -s" "swapon" &
     wait
-    save_cmd "hdparm -i /dev/sda" "hdparm" &
+    if ! $IS_SWITCH_BMC; then
+        # hdparm not installed; a Switch-BMC boots from eMMC/flash (no /dev/sda).
+        save_cmd "hdparm -i /dev/sda" "hdparm" &
+    fi
     save_cmd "ps -AwwL -o user,pid,lwp,ppid,nlwp,pcpu,pri,nice,vsize,rss,tty,stat,wchan:12,start,bsdtime,command" "ps.extended" &
     wait
 
+    # SAI dump (vtysh route-size probe + syncd) self-skips on a Switch-BMC.
     save_saidump_by_route_size
 
     if [ "$asic" = "barefoot" ]; then
@@ -2828,7 +2912,7 @@ main() {
 
     start_dpu_flow_dump &
 
-    # 2nd counter snapshot late. Need 2 snapshots to make sense of counters trend.
+    # 2nd counter snapshot late (self-skips on a Switch-BMC); need 2 for a trend.
     save_counter_snapshot $asic 2
 
     # Copying the /etc files to a directory and then tar it
@@ -2945,24 +3029,26 @@ remove_secret_from_etc_files() {
     echo "Remove secret from etc files."
     # Remove tacacs passkey from tacplus_nss.conf
     local secret_regex='s/(secret=)([^,|\S]*)(.*)/\1****\3/g'
-    sed -i -E $secret_regex $dumppath/etc/tacplus_nss.conf
+    sed_if_exists "$secret_regex" "$dumppath/etc/tacplus_nss.conf"
 
     # Remove radius passkey from radius_nss.conf
-    sed -i -E $secret_regex $dumppath/etc/radius_nss.conf
+    sed_if_exists "$secret_regex" "$dumppath/etc/radius_nss.conf"
 
     # Remove tacacs passkey from common-auth-sonic
-    sed -i -E 's/(secret=)(\S*)/\1****/g' $dumppath/etc/pam.d/common-auth-sonic
+    sed_if_exists 's/(secret=)(\S*)/\1****/g' "$dumppath/etc/pam.d/common-auth-sonic"
 
     # Remove tacacs passkey from pam_radius_auth.conf
-    sed -i -E 's/^([^#]\S*\s*)(\S*)/\1****/g' $dumppath/etc/pam_radius_auth.conf
+    sed_if_exists 's/^([^#]\S*\s*)(\S*)/\1****/g' "$dumppath/etc/pam_radius_auth.conf"
 
     # Remove radius passkey from per-server conf file /etc/pam_radius_auth.d/{ip}_{port}.conf
-    for filename in $dumppath/etc/pam_radius_auth.d/*.conf; do
-        sed -i -E 's/^([^#]\S*\s*)(\S*)/\1****/g' $filename
+    # Guard the glob: skip when no *.conf files exist (dir absent or empty).
+    for filename in "$dumppath"/etc/pam_radius_auth.d/*.conf; do
+        [ -e "$filename" ] || continue
+        sed -i -E 's/^([^#]\S*\s*)(\S*)/\1****/g' "$filename"
     done
 
     # Remove snmp community string from snmp.yml
-    sed -i -E 's/(\s*snmp_\S*community\s*:\s*)(\S*)/\1****/g' $dumppath/etc/sonic/snmp.yml
+    sed_if_exists 's/(\s*snmp_\S*community\s*:\s*)(\S*)/\1****/g' "$dumppath/etc/sonic/snmp.yml"
 
     # Remove secret from /etc/sonic/config_db.json
     remove_secret_from_config_db_dump_file $dumppath/etc/sonic/config_db.json
@@ -3120,12 +3206,17 @@ fi
 ##
 platform_name=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
 supervisor=0
+switch_bmc=0
 PLATFORM_ENV_CONF=/usr/share/sonic/device/${platform_name}/platform_env.conf
 if [ -f "$PLATFORM_ENV_CONF" ]; then
     source $PLATFORM_ENV_CONF
 fi
 if [[ x"$supervisor" == x"1" ]]; then
     IS_SUPERVISOR=true
+fi
+# Switch-BMC detection, mirroring the supervisor handling above.
+if [[ x"$switch_bmc" == x"1" ]]; then
+    IS_SWITCH_BMC=true
 fi
     
 if $MKDIR "${LOCKDIR}" &>/dev/null; then

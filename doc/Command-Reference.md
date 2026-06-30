@@ -83,6 +83,8 @@
 * [Feature](#feature)
   * [Feature show commands](#feature-show-commands)
   * [Feature config commands](#feature-config-commands)
+* [Fine Grained Next Hop Group (FGNHG)](#fine-grained-next-hop-group-fgnhg)
+  * [FGNHG show commands](#fgnhg-show-commands)
 * [Flow Counters](#flow-counters)
   * [Flow Counters show commands](#flow-counters-show-commands)
   * [Flow Counters clear commands](#flow-counters-clear-commands)
@@ -92,6 +94,9 @@
 * [Hash](#hash)
   * [Hash show commands](#hash-show-commands)
   * [Hash config commands](#hash-config-commands)
+* [ICMP](#icmp)
+  * [ICMP show commands](#icmp-show-commands)
+  * [ICMP clear commands](#icmp-clear-commands)
 * [Interfaces](#interfaces)
   * [Interface Show Commands](#interface-show-commands)
   * [Interface Config Commands](#interface-config-commands)
@@ -481,6 +486,7 @@ This command displays the full list of show commands available in the software; 
     ecn                   Show ECN configuration
     environment           Show environmentals (voltages, fans, temps)
     feature               Show feature status
+    icmp                  Show icmp-offload information
     interfaces            Show details of the network interfaces
     ip                    Show IP (IPv4) commands
     ipv6                  Show IPv6 commands
@@ -5517,6 +5523,92 @@ commands are don't care and will not update state/auto-restart value.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#feature)
 
+## Fine Grained Next Hop Group (FGNHG)
+
+This section explains the show commands for Fine Grained Next Hop Groups (FGNHG). FGNHG provides consistent hashing by maintaining a stable mapping between hash buckets and next hops, including for prefixes installed in user-defined VRFs/VNETs.
+
+### FGNHG show commands
+
+**show fgnhg active-hops**
+
+This command displays the currently active next hops for each FGNHG-managed prefix. Without arguments, all entries are shown. Optional positional arguments allow filtering by NHG name, or by VRF/VNET and prefix.
+
+- Usage:
+  ```
+  show fgnhg active-hops [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, all active next hops for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the next hops belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg active-hops
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ------------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+  default     fc:5::/128       200:200:200:200::4
+                               200:200:200:200::5
+
+  admin@sonic:~$ show fgnhg active-hops fgnhg_v4
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops default 100.50.25.12/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  ```
+
+**show fgnhg hash-view**
+
+This command displays the per-next-hop hash bucket assignment for each FGNHG-managed prefix. The same filtering options as `active-hops` are supported.
+
+- Usage:
+  ```
+  show fgnhg hash-view [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, hash bucket assignments for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the buckets belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg hash-view
+  VNET/VRF    FG NHG Prefix    Next Hop            Hash buckets
+  ----------  ---------------  ------------------  ------------------------------
+  default     100.50.25.12/32  200.200.200.4       0   1   2   3   4   5   6   7
+  default     100.50.25.12/32  200.200.200.5       8   9   10  11  12  13  14  15
+  Vnet1       10.0.0.1/32      200.200.200.4       0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5       4   5   6   7
+  default     fc:5::/128       200:200:200:200::4  0   1   2   3   4   5   6   7
+  default     fc:5::/128       200:200:200:200::5  8   9   10  11  12  13  14  15
+
+  admin@sonic:~$ show fgnhg hash-view Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Next Hop       Hash buckets
+  ----------  ---------------  -------------  --------------
+  Vnet1       10.0.0.1/32      200.200.200.4  0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5  4   5   6   7
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#fine-grained-next-hop-group-fgnhg)
+
 ## Flow Counters
 
 This section explains all the Flow Counters show commands, clear commands and config commands that are supported in SONiC. Flow counters are usually used for debugging, troubleshooting and performance enhancement processes. Flow counters supports case like:
@@ -6193,6 +6285,94 @@ Enable/disable Fast Link-Up per interface.
   admin@sonic:~$ config interface fast-linkup Ethernet0 enabled
   admin@sonic:~$ config interface fast-linkup Ethernet4 disabled
   ```
+
+## ICMP
+
+This section explains the show commands available for ICMP offload sessions and counters.
+
+### ICMP show commands
+
+**show icmp sessions**
+
+This command displays ICMP echo session information from `STATE_DB`.
+
+- Usage:
+  ```bash
+  show icmp sessions [<key>]
+  ```
+
+  - `<key>` format: `scope:port:guid:mode` (for example, `default:Ethernet0:0x4eb39592:RX`).
+  - `|` separators are accepted as input for compatibility.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp sessions
+  Key                                    Dst IP          Tx Interval    Rx Interval  HW lookup    Cookie      State
+  -------------------------------------  ------------  -------------  -------------  -----------  ----------  -------
+  default|Ethernet0|0x4eb39592|RX        192.168.0.3               0            300  false        0x58767e7a  Up
+  default|Ethernet8|0x69f578f5|NORMAL    192.168.0.5             100            300  false        0x58767e7a  Up
+  ```
+
+**show icmp summary**
+
+This command displays aggregate ICMP echo session counts.
+
+- Usage:
+  ```bash
+  show icmp summary
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp summary
+  Total Sessions: 4
+  Up sessions: 3
+  RX sessions: 1
+  ```
+
+**show icmp stats**
+
+This command displays per-session ICMP echo counters from `COUNTERS_DB`.
+The output includes receive/transmit packet and byte counters. In native mode, byte counters are shown as `N/A`.
+
+- Usage:
+  ```bash
+  show icmp stats [<key>] [-c|--clear]
+  ```
+
+  - Without `<key>`, all sessions with counters are displayed.
+  - With `<key>`, only the selected session is displayed.
+  - `-c`/`--clear` snapshots current counters as a local baseline. Subsequent `show icmp stats` output is shown as deltas from that baseline.
+  - `show icmp stats -c` is equivalent to `sonic-clear icmp counters`.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp stats default:Ethernet0:0x4eb39592:RX
+  Key                              State      RX Pkts    RX Bytes    TX Pkts    TX Bytes
+  -------------------------------  -------  ---------  ----------  ---------  ----------
+  default:Ethernet0:0x4eb39592:RX  Up            1234      188802          0           0
+  ```
+
+### ICMP clear commands
+
+**sonic-clear icmp counters**
+
+This command snapshots current ICMP echo session counters as the new baseline.
+Subsequent `show icmp stats` output is displayed as deltas from this baseline.
+Hardware counters in `COUNTERS_DB` are not reset.
+
+- Usage:
+  ```bash
+  sonic-clear icmp counters
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ sonic-clear icmp counters
+  Cleared ICMP echo session counter baseline at 2026-06-16 10:00:00
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#icmp)
 
 ## Interfaces
 
@@ -15072,7 +15252,7 @@ Installing a new image using the sonic-installer will keep using the packages in
 
 **sonic-installer set_default**
 
-This command is be used to change the image which can be loaded by default in all the subsequent reboots.
+This command is be used to change the image which can be loaded by default in all the subsequent reboots. It also clears any pending `set_next_boot` selection, so the next reboot uses this default image.
 
 - Usage:
   ```
@@ -15086,7 +15266,7 @@ This command is be used to change the image which can be loaded by default in al
 
 **sonic-installer set_next_boot**
 
-This command is used to change the image that can be loaded in the *next* reboot only. Note that it will fallback to current image in all other subsequent reboots after the next reboot.
+This command is used to change the image that can be loaded in the *next* reboot only; subsequent reboots fall back to the `set_default` image. Note that a later `set_default` overrides this one-time selection.
 
 - Usage:
   ```
