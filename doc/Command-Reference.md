@@ -177,6 +177,10 @@
 * [Packet Trimming](#packet-trimming)
   * [Packet Trimming Show commands](#packet-trimming-show-commands)
   * [Packet Trimming Config commands](#packet-trimming-config-commands)
+* [PRBS](#prbs)
+  * [PRBS show commands](#prbs-show-commands)
+  * [PRBS config commands](#prbs-config-commands)
+  * [PRBS clear commands](#prbs-clear-commands)
 * [QoS](#qos)
   * [QoS Show commands](#qos-show-commands)
     * [PFC](#pfc)
@@ -11362,6 +11366,240 @@ communicate with the P4RT application.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#pbh)
+
+## PRBS
+
+PRBS (Pseudo-Random Bit Sequence) is a diagnostic feature used to test the signal integrity of physical links between ports. It works by transmitting a known pseudo-random pattern on the TX side and checking for bit errors on the RX side. This helps identify issues such as poor cabling, connector problems, or SerDes tuning issues.
+
+Supported modes: `rx` (receive only, default), `tx` (transmit only), `both` (transmit and receive).
+
+Pattern and mode validation: Pattern names are validated by the CLI using `click.Choice` (case-insensitive). Mode is validated by both `click.Choice` and `validate_mode()`. Pattern-to-SAI mapping is handled internally by the orchagent `prbs_pattern_map` in C++ — no Python-side pattern-to-value dictionary is needed.
+
+### PRBS show commands
+
+**show interfaces prbs status**
+
+This command displays a summary of all PRBS tests across all ports, or detailed per-lane results for a specific interface.
+
+- Usage:
+  ```
+  show interfaces prbs status
+  show interfaces prbs status -i <interface_name>
+  show interfaces prbs status --json
+  ```
+
+- Example (all ports summary):
+  ```
+  admin@sonic:~$ show interfaces prbs status
+  Interface    Mode    Pattern    Status       RX Status          Error Count  BER            Start Time           Duration
+  -----------  ------  ---------  -----------  -----------------  -----------  -------------  -------------------  ----------
+  Ethernet0    both    PRBS31     Running      --                 --           --             2026-02-05 14:20:00  00:03:45
+  Ethernet4    rx      PRBS23     Running      --                 --           --             2026-02-05 14:18:30  00:05:15
+  Ethernet8    rx      PRBS31     Completed    LOCK_WITH_ERRORS   15633        1.15 × 10⁻⁸    2026-02-05 13:10:00  00:30:00
+  Ethernet12   both    PRBS9      Interrupted  --                 --           --             2026-02-05 12:00:00  --
+  Ethernet16   tx      PRBS31     Completed    --                 --           --             2026-02-05 11:45:00  00:01:50
+  ```
+
+- Example (all ports summary — JSON):
+  ```
+  admin@sonic:~$ show interfaces prbs status --json
+  {
+    "Ethernet8": {
+      "mode": "rx",
+      "pattern": "PRBS31",
+      "status": "Completed",
+      "rx_status": "LOCK_WITH_ERRORS",
+      "error_count": 15633,
+      "ber": "1.15e-08",
+      "start_time": "2026-02-05 13:10:00",
+      "duration": "00:30:00"
+    },
+    "Ethernet16": {
+      "mode": "tx",
+      "pattern": "PRBS31",
+      "status": "Completed",
+      "rx_status": null,
+      "error_count": null,
+      "ber": null,
+      "start_time": "2026-02-05 11:45:00",
+      "duration": "00:01:50"
+    }
+  }
+  ```
+
+- Example (detailed per-lane results — RX/both mode after test completed):
+  ```
+  admin@sonic:~$ show interfaces prbs status -i Ethernet0
+  Interface: Ethernet0 | Mode: rx | Pattern: PRBS31 | Status: Completed | Duration: 00:01:41
+
+    Lane  Lock    RX Status           Errors  BER
+  ------  ------  ----------------  --------  ------------
+       0  Locked  LOCK_WITH_ERRORS      2782  0
+       1  Locked  LOCK_WITH_ERRORS      1426  1.18 × 10⁻⁸
+       2  Locked  LOCK_WITH_ERRORS      3189  1.00e+00
+       3  Locked  LOCK_WITH_ERRORS      5252  1.10 × 10⁻⁸
+       4  Locked  LOCK_WITH_ERRORS       812  1.00e+00
+       5  Locked  LOCK_WITH_ERRORS       700  1.19 × 10⁻⁸
+       6  Locked  LOCK_WITH_ERRORS       225  1.18 × 10⁻¹⁴
+       7  Locked  LOCK_WITH_ERRORS      1247  1.26 × 10⁻⁸
+  ```
+
+- Example (JSON output):
+  ```
+  admin@sonic:~$ show interfaces prbs status -i Ethernet0 --json
+  {
+    "interface": "Ethernet0",
+    "mode": "rx",
+    "pattern": "PRBS31",
+    "status": "Completed",
+    "duration": "00:01:41",
+    "lanes": [
+      {
+        "lane": 0,
+        "lock_status": "Locked",
+        "rx_status": "LOCK_WITH_ERRORS",
+        "error_count": 2782,
+        "ber": null,
+        "ber_mantissa": null,
+        "ber_exponent": null
+      }
+    ]
+  }
+  ```
+
+Display status values and their meaning:
+  - **Running**: PRBS test is active and the port oper_status is TESTING.
+  - **Completed**: PRBS test has been stopped and results have been captured.
+  - **Interrupted**: PRBS was set to running but port oper_status is not TESTING (link issue).
+  - **Errored**: SAI returned an error during the PRBS operation.
+  - **Failed**: PRBS test failed to start (SAI enable failed).
+
+### PRBS diag commands
+
+PRBS configuration is transient — it writes to APPL_DB (not CONFIG_DB) and does not survive `config save` or reboot.
+
+**diag interface prbs enable**
+
+This command enables PRBS on a specific interface. The test begins immediately after the command is executed.
+
+- Usage:
+  ```
+  diag interface prbs enable <interface_name> [--mode|-m <mode>] [--pattern|-p <pattern>]
+  ```
+
+- Options:
+  - `--mode`, `-m`: PRBS mode — `rx` (default), `tx`, or `both`. Validated by `click.Choice` (case-insensitive) and `validate_mode()`.
+  - `--pattern`, `-p`: PRBS pattern — `none` (default), `PRBS7`, `PRBS9`, `PRBS10`, `PRBS11`, `PRBS13`, `PRBS15`, `PRBS16`, `PRBS20`, `PRBS23`, `PRBS31`, `PRBS32`, `PRBS49`, `PRBS58`, `PRBS7Q`, `PRBS9Q`, `PRBS13Q`, `PRBS15Q`, `PRBS23Q`, `PRBS31Q`, or `SSPRQ`. Validated by `click.Choice` (case-insensitive). When `none` is used, SAI SDK selects the best default pattern for the platform/port (`SAI_PORT_PRBS_PATTERN_AUTO`).
+
+- Platform-supported pattern validation:
+  If the platform populates `supported_prbs_patterns` in STATE_DB `PORT_TABLE|<interface>`, the CLI checks the explicitly specified pattern against this list. If the pattern is not supported, the command fails with the list of supported patterns. If the field is not populated, the command proceeds without this check.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0 --mode rx --pattern PRBS31
+  PRBS enabled on Ethernet0 (mode=rx, pattern=PRBS31)
+  Note: PRBS test is now running. Use 'diag interface prbs disable Ethernet0' to stop and capture results.
+  ```
+
+- Example (default mode and pattern):
+  ```
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0
+  PRBS enabled on Ethernet0 (mode=rx, pattern=none)
+  Note: PRBS test is now running. Use 'diag interface prbs disable Ethernet0' to stop and capture results.
+  ```
+
+- Example (unsupported pattern on platform):
+  ```
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0 --pattern PRBS58
+  Error: PRBS pattern PRBS58 is not supported on Ethernet0.
+  Supported patterns: PRBS7, PRBS9, PRBS31
+  ```
+
+  NOTE: If PRBS is already enabled on the interface, the command will fail and ask you to disable first:
+  ```
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0
+  Error: PRBS is already enabled on Ethernet0 in 'rx' mode. Please disable first using 'diag interface prbs disable Ethernet0' to capture results, then re-enable with new settings.
+  ```
+
+**diag interface prbs disable**
+
+This command disables PRBS on a specific interface and captures the test results. After disabling, results are stored in STATE_DB and can be viewed using the show command. It is recommended to disable PRBS on the RX side first in order to capture valid PRBS results.
+
+- Usage:
+  ```
+  diag interface prbs disable <interface_name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo diag interface prbs disable Ethernet0
+  PRBS disabled on Ethernet0
+  Results captured and stored. Use 'show interfaces prbs status -i Ethernet0' to view.
+  ```
+
+- Example (PRBS not enabled):
+  ```
+  admin@sonic:~$ sudo diag interface prbs disable Ethernet0
+  PRBS is not enabled on Ethernet0
+  ```
+
+### PRBS clear commands
+
+**clear prbs results**
+
+This command clears PRBS test results from STATE_DB. It can clear results for all interfaces or a specific interface. PRBS must not be running on the target interface(s) when clearing.
+
+- Usage:
+  ```
+  sonic-clear prbs results
+  sonic-clear prbs results -i <interface_name>
+  ```
+
+- Example (clear all):
+  ```
+  admin@sonic:~$ sonic-clear prbs results
+  Cleared PRBS results for all interfaces (12 records deleted)
+  ```
+
+- Example (clear specific interface):
+  ```
+  admin@sonic:~$ sonic-clear prbs results -i Ethernet0
+  Cleared PRBS test results for Ethernet0 (3 records deleted)
+  ```
+
+  NOTE: If PRBS is currently running on the interface, the command will fail:
+  ```
+  admin@sonic:~$ sonic-clear prbs results -i Ethernet0
+  Error: Cannot clear PRBS results while PRBS is running on Ethernet0. Stop the test first with 'diag interface prbs disable Ethernet0'.
+  ```
+
+### PRBS Typical Workflow
+
+1. **Enable** PRBS on the interface:
+   ```
+   Switch-1  ( Tx End )
+   sudo diag interface prbs enable Ethernet0 --mode tx --pattern PRBS31
+   Switch-1  ( Rx End )
+   sudo diag interface prbs enable Ethernet0 --mode rx --pattern PRBS31
+   ```
+2. **Wait** for the desired test duration.
+3. **Disable** PRBS to stop and capture results:
+   ```
+   Switch-1  ( Rx End )
+   sudo diag interface prbs disable Ethernet0 
+   Switch-1  ( Tx End )
+   sudo diag interface prbs disable Ethernet0 
+   ```
+4. **View** the results:
+   ```
+   show interfaces prbs status -i Ethernet0
+   ```
+5. **Clear** results when no longer needed:
+   ```
+   sonic-clear prbs results -i Ethernet0
+   ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#prbs)
 
 ## QoS
 

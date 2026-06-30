@@ -771,5 +771,124 @@ def asic_sdk_health_event(db, namespace):
             state_db.delete(state_db.STATE_DB, key);
 
 
+@cli.group()
+@click.pass_context
+def prbs(ctx):
+    """Clear PRBS test results"""
+    pass
+
+
+def _is_prbs_running_on_any(state_db):
+    """Return True if any PRBS test has status 'running'."""
+    keys = state_db.keys(state_db.STATE_DB, 'PORT_PRBS_TEST*')
+    if not keys:
+        return False
+    for key in keys:
+        test_data = state_db.get_all(state_db.STATE_DB, key)
+        if test_data and test_data.get('status') == 'running':
+            return True
+    return False
+
+
+def _is_prbs_running_on_interface(state_db, interface_name):
+    """Return True if PRBS test on the given interface has status 'running'."""
+    test_key = f'PORT_PRBS_TEST|{interface_name}'
+    if not state_db.exists(state_db.STATE_DB, test_key):
+        return False
+    test_data = state_db.get_all(state_db.STATE_DB, test_key)
+    return test_data is not None and test_data.get('status') == 'running'
+
+
+@prbs.command()
+@click.option('-i', '--interface', 'interface_name', metavar='<interface_name>',
+              required=False, default=None, help='Interface name (e.g. Ethernet0).')
+@click.pass_context
+def results(ctx, interface_name):
+    """Clear PRBS test results
+
+    Without -i, clears results for all interfaces.
+    With -i <interface_name>, clears results for a specific interface.
+    """
+    from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+
+    # Connect to STATE_DB
+    state_db = SonicV2Connector(host='127.0.0.1')
+    state_db.connect(state_db.STATE_DB)
+
+    if interface_name is None:
+        if _is_prbs_running_on_any(state_db):
+            ctx.fail("Cannot clear PRBS results while PRBS is running on one or more interfaces. "
+                     "Stop the test(s) first with 'diag interface prbs disable <interface>'.")
+        # Clear all interfaces
+        deleted_count = 0
+
+        keys = state_db.keys(state_db.STATE_DB, 'PORT_PRBS_TEST*')
+        if keys:
+            for key in keys:
+                state_db.delete(state_db.STATE_DB, key)
+                deleted_count += 1
+
+        results_keys = state_db.keys(state_db.STATE_DB, 'PORT_PRBS_RESULTS*')
+        if results_keys:
+            for key in results_keys:
+                state_db.delete(state_db.STATE_DB, key)
+                deleted_count += 1
+
+        lane_keys = state_db.keys(state_db.STATE_DB, 'PORT_PRBS_LANE_RESULT*')
+        if lane_keys:
+            for key in lane_keys:
+                state_db.delete(state_db.STATE_DB, key)
+                deleted_count += 1
+
+        if deleted_count > 0:
+            click.echo(f"Cleared PRBS results for all interfaces ({deleted_count} records deleted)")
+        else:
+            click.echo("No PRBS results found.")
+        return
+
+    # Normalize interface name if using alias
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = clicommon.iface_alias_converter.alias_to_name(interface_name)
+        if interface_name is None:
+            ctx.fail("Invalid interface name")
+
+    # Validate interface exists
+    port_table = config_db.get_table('PORT')
+    if interface_name not in port_table:
+        ctx.fail(f"Interface {interface_name} does not exist")
+
+    if _is_prbs_running_on_interface(state_db, interface_name):
+        ctx.fail(f"Cannot clear PRBS results while PRBS is running on {interface_name}. "
+                 f"Stop the test first with 'diag interface prbs disable {interface_name}'.")
+
+    # Delete PRBS test results from STATE_DB (all three tables)
+    test_key = f'PORT_PRBS_TEST|{interface_name}'
+    results_key = f'PORT_PRBS_RESULTS|{interface_name}'
+    lane_keys = state_db.keys(state_db.STATE_DB, f'PORT_PRBS_LANE_RESULT|{interface_name}*')
+
+    deleted_count = 0
+
+    if state_db.exists(state_db.STATE_DB, test_key):
+        state_db.delete(state_db.STATE_DB, test_key)
+        deleted_count += 1
+
+    if state_db.exists(state_db.STATE_DB, results_key):
+        state_db.delete(state_db.STATE_DB, results_key)
+        deleted_count += 1
+
+    if lane_keys:
+        for key in lane_keys:
+            state_db.delete(state_db.STATE_DB, key)
+            deleted_count += 1
+
+    if deleted_count > 0:
+        click.echo(f"Cleared PRBS test results for {interface_name} ({deleted_count} records deleted)")
+    else:
+        click.echo(f"No PRBS test results found for {interface_name}")
+
+
 if __name__ == '__main__':
     cli()
