@@ -417,9 +417,9 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
         if not route_entry.get('selected', False):
             return
         if not route_entry.get('offloaded', False):
-            missing_routes.append(prefix)
+            missing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol')})
         if route_entry.get('failed', False):
-            failing_routes.append(prefix)
+            failing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol')})
 
     try:
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
@@ -948,10 +948,10 @@ def check_routes_for_namespace(namespace):
     rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
 
     if rt_frr_miss:
-        results["missed_FRR_routes"] = rt_frr_miss
+        results["missed_FRR_routes"] = [entry['prefix'] for entry in rt_frr_miss]
 
     if rt_frr_failed:
-        results["failed_FRR_routes"] = rt_frr_failed
+        results["failed_FRR_routes"] = [entry['prefix'] for entry in rt_frr_failed]
 
     if results:
         if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
@@ -961,7 +961,7 @@ def check_routes_for_namespace(namespace):
                 mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
         if rt_frr_failed:
             print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {} \
-                          : {}".format(namespace, rt_frr_failed))
+                          : {}".format(namespace, [entry['prefix'] for entry in rt_frr_failed]))
 
     return results, adds, deletes
 
