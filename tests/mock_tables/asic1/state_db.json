@@ -266,6 +266,8 @@
     },
     "FABRIC_PORT_TABLE|PORT4" : {
         "STATUS": "up",
+        "CONFIG_ISOLATED": "1",
+        "ISOLATE_REASON": "user_config",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "75"
     },
@@ -282,6 +284,7 @@
         "fabric_capacity": "88632",
         "missing_capacity": "265896",
         "operating_links": "2",
+        "isolated_links": "1",
         "number_of_links": "8",
         "warning_threshold": "100"
     },

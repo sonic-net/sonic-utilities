@@ -1794,6 +1794,7 @@
         "fabric_capacity": "88632",
         "missing_capacity": "265896",
         "operating_links": "2",
+        "isolated_links": "1",
         "number_of_links": "8",
         "warning_threshold": "100"
     },

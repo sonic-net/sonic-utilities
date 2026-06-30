@@ -566,6 +566,58 @@ class TestShowFabric(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(["fabricstat", '-q', '-n', 'asic0'])
 
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_port_nonzero(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['fabric'].commands['counters'].commands['port'],
+            ['-n', 'asic0', '-e', '-nz'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(["fabricstat", '-n', 'asic0', '-e', '-nz'])
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_queue_nonzero(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['fabric'].commands['counters'].commands['queue'],
+            ['-n', 'asic0', '-nz'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(["fabricstat", '-q', '-n', 'asic0', '-nz'])
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_rate_nonzero(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['fabric'].commands['counters'].commands['rate'],
+            ['-n', 'asic0', '-nz'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(["fabricstat", '-s', '-n', 'asic0', '-nz'])
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_isolation_nonzero(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['fabric'].commands['isolation'],
+            ['-n', 'asic0', '-nz'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(["fabricstat", '-i', '-n', 'asic0', '-nz'])
+
     def teardown_method(self):
         print('TEAR DOWN')
 
