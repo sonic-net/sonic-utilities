@@ -6,6 +6,11 @@
         "LAG_HASH_ALGORITHM_CAPABLE": "true",
         "HASH|NATIVE_HASH_FIELD_LIST": "N/A",
         "ECMP_HASH_ALGORITHM": "N/A",
-        "LAG_HASH_ALGORITHM": "N/A"
+        "LAG_HASH_ALGORITHM": "N/A",
+
+        "ECMP_PKT_TYPE_HASH_CAPABLE": "true",
+        "LAG_PKT_TYPE_HASH_CAPABLE": "true",
+        "HASH|ECMP_PKT_TYPE_LIST": "N/A",
+        "HASH|LAG_PKT_TYPE_LIST": "N/A"
     }
 }
