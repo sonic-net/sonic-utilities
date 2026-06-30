@@ -69,6 +69,7 @@ from . import warm_restart
 from . import plugins
 from . import syslog
 from . import dns
+from . import dldd
 from . import bgp_cli
 from . import stp
 from . import llr
@@ -340,6 +341,7 @@ cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
+cli.add_command(dldd.dldd)
 cli.add_command(stp.spanning_tree)
 cli.add_command(llr.llr)
 cli.add_command(srv6.srv6)
