@@ -23,12 +23,13 @@ def split_docker_domain(name: str):
     sonic-package-manager. Keeping the old behavior makes resolution
     independent of the installed docker-image-py version.
     """
-
     i = name.find('/')
-    if i == -1 or not ('.' in name[:i] or ':' in name[:i] or name[:i] == 'localhost'):
+    if i == -1 or not ('.' in name[:i] or ':' in name[:i] or name[:i] == reference.LOCALHOST):
         domain, remainder = reference.DEFAULT_DOMAIN, name
     else:
         domain, remainder = name[:i], name[i + 1:]
+    if domain == reference.LEGACY_DEFAULT_DOMAIN:
+        domain = reference.DEFAULT_DOMAIN
     if domain == reference.DEFAULT_DOMAIN and '/' not in remainder:
         remainder = reference.OFFICIAL_REPO_NAME + '/' + remainder
     return domain, remainder
