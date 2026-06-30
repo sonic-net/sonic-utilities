@@ -2441,6 +2441,8 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
             raise click.Abort()
 
         config_to_check = read_json_file(golden_config_path)
+        # Check for missing SNMP community in golden config (runs even if config is empty)
+        snmp_community_check(config_to_check)
         # Dependency check golden config json
         asic_list = [HOST_NAMESPACE]
         if multi_asic.is_multi_asic():
@@ -2783,8 +2785,16 @@ def override_config_db(config_db, config_input):
     click.echo("Overriding completed. No service is restarted.")
 
 
+def snmp_community_check(config_json):
+    snmp_community = config_json.get("SNMP_COMMUNITY", {})
+    if not snmp_community:
+        click.secho("Warning: no SNMP community string found in golden config. "
+                    "SNMPv2c will be disabled until a community is configured.", fg="yellow")
+
+
 def table_hard_dependency_check(config_json):
     aaa_table_hard_dependency_check(config_json)
+    snmp_community_check(config_json)
 
 
 def aaa_table_hard_dependency_check(config_json):
