@@ -486,6 +486,99 @@
         "status": "1",
         "error": "N/A"
     },
+<<<<<<< HEAD
+=======
+    "TRANSCEIVER_VDM_REAL_VALUE|Ethernet44":{
+        "laser_temperature_media1": "45.5",
+        "esnr_media_input1": "14.2",
+        "prefec_ber_min_media_input1": "1.10E-05",
+        "prefec_ber_min_media_input2": "1.20E-05",
+        "prefec_ber_min_media_input3": "1.05E-05",
+        "prefec_ber_min_media_input4": "1.15E-05",
+        "errored_frames_avg_media_input1": "0.0",
+        "prefec_ber_avg_media_input1": "4.66E-04",
+        "last_update_time": "Wed Jun 4 12:34:00 2026",
+        "biasxi1": "38.5",
+        "biasxp1": "25.5",
+        "biasxq1": "34.1",
+        "biasyi1": "32.3",
+        "biasyp1": "48.5",
+        "biasyq1": "30.7",
+        "clkreloop1": "50.0"
+    },
+    "TRANSCEIVER_VDM_HALARM_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "80.0",
+        "esnr_media_input1": "99.0",
+        "prefec_ber_min_media_input1": "1.25E-02",
+        "prefec_ber_min_media_input2": "1.25E-02",
+        "prefec_ber_min_media_input3": "1.25E-02",
+        "prefec_ber_min_media_input4": "1.25E-02",
+        "errored_frames_avg_media_input1": "1000.0",
+        "errored_frames_max_media_input1": "2000.0",
+        "prefec_ber_avg_media_input1": "1.25E-02",
+        "biasxi1": "99.0",
+        "biasxp1": "99.0",
+        "biasxq1": "99.0",
+        "biasyi1": "99.0",
+        "biasyp1": "99.0",
+        "biasyq1": "99.0",
+        "clkreloop1": "99.0"
+    },
+    "TRANSCEIVER_VDM_LALARM_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "-10.0",
+        "esnr_media_input1": "8.0",
+        "prefec_ber_min_media_input1": "0.0",
+        "prefec_ber_min_media_input2": "0.0",
+        "prefec_ber_min_media_input3": "0.0",
+        "prefec_ber_min_media_input4": "0.0",
+        "errored_frames_avg_media_input1": "0.0",
+        "errored_frames_max_media_input1": "0.0",
+        "prefec_ber_avg_media_input1": "0.0",
+        "biasxi1": "1.0",
+        "biasxp1": "1.0",
+        "biasxq1": "1.0",
+        "biasyi1": "1.0",
+        "biasyp1": "1.0",
+        "biasyq1": "1.0",
+        "clkreloop1": "0.5"
+    },
+    "TRANSCEIVER_VDM_HWARN_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "75.0",
+        "esnr_media_input1": "99.0",
+        "prefec_ber_min_media_input1": "1.10E-02",
+        "prefec_ber_min_media_input2": "1.10E-02",
+        "prefec_ber_min_media_input3": "1.10E-02",
+        "prefec_ber_min_media_input4": "1.10E-02",
+        "errored_frames_avg_media_input1": "1.0",
+        "errored_frames_max_media_input1": "2.0",
+        "prefec_ber_avg_media_input1": "1.10E-02",
+        "biasxi1": "95.0",
+        "biasxp1": "95.0",
+        "biasxq1": "95.0",
+        "biasyi1": "95.0",
+        "biasyp1": "95.0",
+        "biasyq1": "95.0",
+        "clkreloop1": "95.0"
+    },
+    "TRANSCEIVER_VDM_LWARN_THRESHOLD|Ethernet44":{
+        "laser_temperature_media1": "-5.0",
+        "esnr_media_input1": "10.0",
+        "prefec_ber_min_media_input1": "0.0",
+        "prefec_ber_min_media_input2": "0.0",
+        "prefec_ber_min_media_input3": "0.0",
+        "prefec_ber_min_media_input4": "0.0",
+        "errored_frames_avg_media_input1": "0.0",
+        "errored_frames_max_media_input1": "0.0",
+        "prefec_ber_avg_media_input1": "0.0",
+        "biasxi1": "5.0",
+        "biasxp1": "5.0",
+        "biasxq1": "5.0",
+        "biasyi1": "5.0",
+        "biasyp1": "5.0",
+        "biasyq1": "5.0",
+        "clkreloop1": "1.0"
+    },
+>>>>>>> a6284800 (NOS-10526: C-CMIS Observables CLI addition (#655))
     "TRANSCEIVER_VDM_HALARM_FLAG|Ethernet44":{
         "biasxi1": "False",
         "biasxp1": "False",
@@ -503,7 +596,13 @@
         "errored_frames_avg_media_input1": "False",
         "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
+<<<<<<< HEAD
         "txcurrpower1": "False"
+=======
+        "txcurrpower1": "False",
+        "clkreloop1": "False",
+        "last_update_time": "Wed Jun 4 12:34:00 2026"
+>>>>>>> a6284800 (NOS-10526: C-CMIS Observables CLI addition (#655))
     },
     "TRANSCEIVER_VDM_HWARN_FLAG|Ethernet44":{
         "biasxi1": "False",
@@ -522,7 +621,8 @@
         "errored_frames_avg_media_input1": "False",
         "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
-        "txcurrpower1": "False"
+        "txcurrpower1": "False",
+        "clkreloop1": "False"
     },
     "TRANSCEIVER_VDM_LWARN_FLAG|Ethernet44":{
         "biasxi1": "False",
@@ -541,7 +641,8 @@
         "errored_frames_avg_media_input1": "False",
         "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
-        "txcurrpower1": "False"
+        "txcurrpower1": "False",
+        "clkreloop1": "False"
     },
     "TRANSCEIVER_VDM_LALARM_FLAG|Ethernet44":{
         "biasxi1": "False",
@@ -560,7 +661,8 @@
         "errored_frames_avg_media_input1": "False",
         "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
-        "txcurrpower1": "False"
+        "txcurrpower1": "False",
+        "clkreloop1": "False"
     },
     "TRANSCEIVER_DOM_FLAG|Ethernet44":{
         "lasertempHAlarm": "False",
