@@ -898,6 +898,244 @@ Ethernet4: Transceiver status info not applicable
 Ethernet64: Transceiver status info not applicable
 """
 
+<<<<<<< HEAD
+=======
+# `sfpshow` runs as a subprocess (via clicommon.run_command -> Popen) so the
+# banner's "Current System Time:" line uses the child process's real clock and
+# cannot be frozen with mock.patch. Normalize it to a sentinel before comparing
+# so VDM expected-output constants stay deterministic without a test hook in
+# production code.
+_VDM_CUR_TIME_RE = re.compile(r"^Current System Time: .*$", re.MULTILINE)
+
+
+def _normalize_vdm_banner_time(text):
+    return _VDM_CUR_TIME_RE.sub("Current System Time: <TIME>", text)
+
+
+# Banner prepended to every `sfpshow vdm`/`vdm-flag` output when no port has a
+# `last_update_time` (i.e. the "not applicable" case).
+VDM_NA_BANNER = (
+    "Current System Time: <TIME>\n"
+    "Update interval: 60 seconds\n"
+    "Last updated: N/A\n"
+    "\n"
+)
+
+test_qsfp_dd_vdm_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: Wed Jun 4 12:34:00 2026
+
+Ethernet44:
+    Port        Lane    Clock Recovery Loop    High Alarm    High Warning    Low Warning    Low Alarm
+                        (%)                    Threshold     Threshold       Threshold      Threshold
+                                               (%)           (%)             (%)            (%)
+    ----------  ------  ---------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       50.0                   99.0          95.0            1.0            0.5
+
+    Port        Lane    Laser Temperature    High Alarm    High Warning    Low Warning    Low Alarm
+                        (C)                  Threshold     Threshold       Threshold      Threshold
+                                             (C)           (C)             (C)            (C)
+    ----------  ------  -------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       45.5                 80.0          75.0            -5.0           -10.0
+
+    Port        Lane    Modulator Bias XI    High Alarm    High Warning    Low Warning    Low Alarm
+                        (%)                  Threshold     Threshold       Threshold      Threshold
+                                             (%)           (%)             (%)            (%)
+    ----------  ------  -------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       38.5                 99.0          95.0            5.0            1.0
+
+    Port        Lane    Modulator Bias XP    High Alarm    High Warning    Low Warning    Low Alarm
+                        (%)                  Threshold     Threshold       Threshold      Threshold
+                                             (%)           (%)             (%)            (%)
+    ----------  ------  -------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       25.5                 99.0          95.0            5.0            1.0
+
+    Port        Lane    Modulator Bias XQ    High Alarm    High Warning    Low Warning    Low Alarm
+                        (%)                  Threshold     Threshold       Threshold      Threshold
+                                             (%)           (%)             (%)            (%)
+    ----------  ------  -------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       34.1                 99.0          95.0            5.0            1.0
+
+    Port        Lane    Modulator Bias YI    High Alarm    High Warning    Low Warning    Low Alarm
+                        (%)                  Threshold     Threshold       Threshold      Threshold
+                                             (%)           (%)             (%)            (%)
+    ----------  ------  -------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       32.3                 99.0          95.0            5.0            1.0
+
+    Port        Lane    Modulator Bias YP    High Alarm    High Warning    Low Warning    Low Alarm
+                        (%)                  Threshold     Threshold       Threshold      Threshold
+                                             (%)           (%)             (%)            (%)
+    ----------  ------  -------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       48.5                 99.0          95.0            5.0            1.0
+
+    Port        Lane    Modulator Bias YQ    High Alarm    High Warning    Low Warning    Low Alarm
+                        (%)                  Threshold     Threshold       Threshold      Threshold
+                                             (%)           (%)             (%)            (%)
+    ----------  ------  -------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       30.7                 99.0          95.0            5.0            1.0
+
+    Port        Lane    eSNR Media Input    High Alarm    High Warning    Low Warning    Low Alarm
+                        (dB)                Threshold     Threshold       Threshold      Threshold
+                                            (dB)          (dB)            (dB)           (dB)
+    ----------  ------  ------------------  ------------  --------------  -------------  -----------
+    Ethernet44  1       14.2                99.0          99.0            10.0           8.0
+"""
+
+test_qsfp_dd_vdm_flag_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: Wed Jun 4 12:34:00 2026
+
+Ethernet44:
+    CD Long (ps/nm)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Clock Recovery Loop (%)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Laser Temperature (C)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Modulator Bias XI (%)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Modulator Bias XP (%)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Modulator Bias XQ (%)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Modulator Bias YI (%)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Modulator Bias YP (%)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    Modulator Bias YQ (%)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+
+    eSNR Media Input (dB)
+    Port        Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                        Flag          Flag            Flag           Flag
+    ----------  ------  ------------  --------------  -------------  -----------
+    Ethernet44  1       False         False           False          False
+"""
+
+# Output is formatted to be not as wide as `test_qsfp_dd_vdm_flag_output`
+# but contains the same data.
+test_qsfp_dd_vdm_flag_detail_output = (
+    "Current System Time: <TIME>\n"
+    "Update interval: 60 seconds\n"
+    "Last updated: Wed Jun 4 12:34:00 2026\n"
+    "\n"
+    "Ethernet44:\n"
+    "    Port        Observable_Name          High Alarm                High Warning       Low "
+    "Warning        Low Alarm\n"
+    "                                         Flag/                     Flag/              Flag/              Flag/\n"
+    "                                         Change Count/             Change Count/      Change "
+    "Count/      Change Count/\n"
+    "                                         Last Set Time/            Last Set Time/     Last "
+    "Set Time/     Last Set Time/\n"
+    "                                         Last Clear Time           Last Clear Time    Last "
+    "Clear Time    Last Clear Time\n"
+    "    ----------  -----------------------  ------------------------  -----------------  "
+    "-----------------  -----------------\n"
+    "    Ethernet44  CD Long (ps/nm)          False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                Clock Recovery Loop (%)  False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                Laser Temperature (C)    False/                    False/             False/             False/\n"
+    "                Lane 1                   3/                        0/                 0/                 0/\n"
+    "                                         Wed Jun 4 09:00:00 2026/  never/             never/             never/\n"
+    "                                         Wed Jun 4 09:30:00 2026   never              never              never\n"
+    "                Modulator Bias XI (%)    False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                Modulator Bias XP (%)    False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                Modulator Bias XQ (%)    False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                Modulator Bias YI (%)    False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                Modulator Bias YP (%)    False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                Modulator Bias YQ (%)    False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+    "                eSNR Media Input (dB)    False/                    False/             False/             False/\n"
+    "                Lane 1                   0/                        0/                 0/                 0/\n"
+    "                                         never/                    never/             never/             never/\n"
+    "                                         never                     never              never              never\n"
+)
+
+test_qsfp_dd_vdm_all_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: N/A
+
+Ethernet0: Transceiver VDM data not applicable
+
+Ethernet4: Transceiver VDM data not applicable
+
+Ethernet64: Transceiver VDM data not applicable
+"""
+
+test_qsfp_dd_vdm_flag_all_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: N/A
+
+Ethernet0: Transceiver VDM flags not applicable
+
+Ethernet4: Transceiver VDM flags not applicable
+
+Ethernet64: Transceiver VDM flags not applicable
+"""
+
+
+>>>>>>> a6284800 (NOS-10526: C-CMIS Observables CLI addition (#655))
 class TestSFP(object):
     @classmethod
     def setup_class(cls):
