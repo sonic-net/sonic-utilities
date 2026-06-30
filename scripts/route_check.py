@@ -426,7 +426,7 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
         if not route_entry.get('selected', False):
             return
         if not route_entry.get('offloaded', False):
-            missing_routes.append(prefix)
+            missing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol', '')})
         if route_entry.get('failed', False):
             failing_routes.append(prefix)
 
