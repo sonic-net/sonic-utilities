@@ -78,6 +78,7 @@ class AclLoader(object):
     CFG_ACL_RULE = "ACL_RULE"
     APPL_ACL_RULE = "ACL_RULE_TABLE"
     STATE_ACL_RULE = "ACL_RULE_TABLE"
+    ACL_TABLE_TYPE = "ACL_TABLE_TYPE"
     ACL_TABLE_TYPE_MIRROR = "MIRROR"
     ACL_TABLE_TYPE_CTRLPLANE = "CTRLPLANE"
     CFG_MIRROR_SESSION_TABLE = "MIRROR_SESSION"
@@ -121,6 +122,7 @@ class AclLoader(object):
         self.mirror_stage = None
         self.current_table = None
         self.tables_db_info = {}
+        self.table_types_db_info = {}
         self.rules_db_info = {}
         self.rules_info = {}
         self.tables_state_info = None
@@ -177,6 +179,9 @@ class AclLoader(object):
         Read ACL_TABLE table from configuration database
         :return:
         """
+        # Read custom ACL table type definitions so rule conversion can honor
+        # the match fields each table type actually supports.
+        self.table_types_db_info = self.configdb.get_table(self.ACL_TABLE_TYPE)
         # get the acl table info from host config_db
         host_acl_table = self.configdb.get_table(self.ACL_TABLE)
         # For multi asic get only the control plane acls from the host config_db
@@ -447,6 +452,24 @@ class AclLoader(object):
         :return: True if table type is IPv6 else False
         """
         return self.tables_db_info[tname]["type"].upper() in ("L3V6", "MIRRORV6")
+
+    def is_match_field_supported(self, tname, match_field):
+        """
+        Check whether the table's type supports a given match field.
+        Custom table types (ACL_TABLE_TYPE) only support the matches they
+        declare; built-in types are not enumerated here, so assume supported.
+        :param tname: ACL table name
+        :param match_field: match field name, e.g. "IP_TYPE"
+        :return: True if supported (or table type is built-in), False otherwise
+        """
+        table_type = self.tables_db_info[tname].get("type")
+        if not table_type or table_type not in self.table_types_db_info:
+            # Built-in table type: preserve legacy behavior
+            return True
+        matches = self.table_types_db_info[table_type].get("MATCHES", [])
+        if isinstance(matches, str):
+            matches = matches.split(",")
+        return match_field.upper() in [m.upper() for m in matches]
 
     def is_table_control_plane(self, tname):
         """
@@ -795,10 +818,13 @@ class AclLoader(object):
         deep_update(rule_props, self.convert_transport(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_input_interface(table_name, rule_idx, rule))
 
-        if "IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props:
+        if "IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props \
+                and self.is_match_field_supported(table_name, "IP_TYPE"):
             # If we don't include IP_TYPE as a qualifier in the IP_PROTOCOL rule
             # we could match on non-IP packets if the bits at the same offset match
             # https://github.com/sonic-net/sonic-mgmt/issues/23960
+            # Skip injection for custom table types whose MATCHES omit IP_TYPE,
+            # otherwise orchagent rejects the whole rule (sonic-buildimage #28028).
             rule_props["IP_TYPE"] = "IP"
 
         self.validate_rule_fields(rule_props)

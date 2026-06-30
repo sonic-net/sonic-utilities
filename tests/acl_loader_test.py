@@ -159,6 +159,20 @@ class TestAclLoader(object):
             'ICMPV6_TYPE': 1
         }
 
+    def test_iptype_match_field_support_for_custom_table(self, acl_loader):
+        # Built-in table types are not enumerated, so IP_TYPE injection is preserved
+        acl_loader.tables_db_info["DATAACL"] = {"type": "L3"}
+        assert acl_loader.is_match_field_supported("DATAACL", "IP_TYPE")
+        # Custom table type whose MATCHES omit IP_TYPE must report it unsupported
+        # (MATCHES may be a list or a comma-separated string, as in CONFIG_DB)
+        acl_loader.table_types_db_info["CUSTOM_NOIP"] = {"MATCHES": ["SRC_IP", "IP_PROTOCOL"]}
+        acl_loader.tables_db_info["CUSTOM_NOIP_TBL"] = {"type": "CUSTOM_NOIP"}
+        assert not acl_loader.is_match_field_supported("CUSTOM_NOIP_TBL", "IP_TYPE")
+        # Custom table type that declares IP_TYPE supports it
+        acl_loader.table_types_db_info["CUSTOM_IP"] = {"MATCHES": "SRC_IP,IP_TYPE,IP_PROTOCOL"}
+        acl_loader.tables_db_info["CUSTOM_IP_TBL"] = {"type": "CUSTOM_IP"}
+        assert acl_loader.is_match_field_supported("CUSTOM_IP_TBL", "IP_TYPE")
+
     def test_rule_without_ethertype_inv4v6(self, acl_loader):
         acl_loader.rules_info = {}
         acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/illegal_v4v6_rule_no_ethertype.json'))
