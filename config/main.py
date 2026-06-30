@@ -4074,7 +4074,7 @@ def warm_restart_enable(ctx, namespace, module):
     if namespace is not None:
         if namespace not in ctx.obj["all_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["all_namespaces"]
 
     config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
@@ -4097,7 +4097,7 @@ def warm_restart_disable(ctx, namespace, module):
     if namespace is not None:
         if namespace not in ctx.obj["all_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["all_namespaces"]
 
     config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
@@ -4120,7 +4120,7 @@ def warm_restart_neighsyncd_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 9999):
@@ -4142,7 +4142,7 @@ def warm_restart_bgp_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
@@ -4164,7 +4164,7 @@ def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
@@ -4186,7 +4186,7 @@ def warm_restart_bgp_eoiu(ctx, namespace, enable):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     for namespace in namespaces:
         db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
