@@ -27,6 +27,9 @@ def test_split_docker_domain_preserves_repository():
     # repository path, not be interpreted as a registry domain.
     assert split_docker_domain('Azure/docker-test') == ('docker.io', 'Azure/docker-test')
     assert split_docker_domain('debian') == ('docker.io', 'library/debian')
+    # Legacy Docker Hub domain is canonicalized and official repos still get the
+    # 'library/' prefix: index.docker.io/debian -> docker.io/library/debian.
+    assert split_docker_domain('index.docker.io/debian') == ('docker.io', 'library/debian')
     assert split_docker_domain('registry-server.com/docker') == ('registry-server.com', 'docker')
 
 
