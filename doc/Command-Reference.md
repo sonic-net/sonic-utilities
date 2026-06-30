@@ -6486,12 +6486,12 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
 
 - Usage:
   ```
-  show interfaces counters [-a|--printall] [-p|--period <period>]
-  show interfaces counters errors
-  show interfaces counters rates
-  show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
-  show interfaces counters fec-histogram [-i <interface_name>]
-  show interfaces counters fec-stats
+  show interfaces counters [<interface_name>] [-a|--printall] [-p|--period <period>]
+  show interfaces counters errors [<interface_name>]
+  show interfaces counters rates [<interface_name>]
+  show interfaces counters rif [-p|--period <period>] [<interface_name>]
+  show interfaces counters fec-histogram [<interface_name>]
+  show interfaces counters fec-stats [<interface_name>]
   show interfaces counters detailed <interface_name>
   show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
   ```
@@ -6509,7 +6509,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
    Ethernet20        U   47,983,339,172   35.89 MB/s      0.70%         0     2,174         0   58,986,354,359   51.83 MB/s      1.01%         0         0         0
    Ethernet24        U   33,543,533,441   36.59 MB/s      0.71%         0     1,613         0   43,066,076,370   49.92 MB/s      0.97%         0         0         0
 
-  admin@sonic:~$ show interfaces counters -i Ethernet4,Ethernet12-16
+  admin@sonic:~$ show interfaces counters Ethernet4,Ethernet12-16
         IFACE    STATE            RX_OK       RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR            TX_OK       TX_BPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
   -----------  -------  ---------------  -----------  ---------  --------  --------  --------  ---------------  -----------  ---------  --------  --------  --------
     Ethernet4        U  453,838,006,636  632.97 MB/s     12.36%         0     1,636         0  388,299,875,056  529.34 MB/s     10.34%         0         0         0
@@ -6528,6 +6528,11 @@ The "errors" subcommand is used to display the interface errors.
     Ethernet4        U         0         0         0         0         0         0
     Ethernet8        U         0         1         0         0         0         0
    Ethernet12        U         0         0         0         0         0         0
+
+  admin@str-s6000-acs-11:~$ show interface counters errors Ethernet0
+      IFACE    STATE    RX_ERR    RX_DRP    RX_OVR    TX_ERR    TX_DRP    TX_OVR
+  -----------  -------  --------  --------  --------  --------  --------  --------
+    Ethernet0        U         0         4         0         0         0         0
    ```
 
 The "rates" subcommand is used to disply only the interface rates.
@@ -6541,6 +6546,11 @@ The "rates" subcommand is used to disply only the interface rates.
     Ethernet4        U   469679       N/A       N/A        N/A   469245       N/A       N/A        N/A
     Ethernet8        U   466660       N/A       N/A        N/A   465982       N/A       N/A        N/A
    Ethernet12        U   466579       N/A       N/A        N/A   466318       N/A       N/A        N/A
+
+  admin@str-s6000-acs-11:/usr/bin$ show int counters rates Ethernet4
+      IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    TX_OK    TX_BPS    TX_PPS    TX_UTIL
+  -----------  -------  -------  --------  --------  ---------  -------  --------  --------  ---------
+    Ethernet4        U   469679       N/A       N/A        N/A   469245       N/A       N/A        N/A
    ```
 
 
@@ -6702,6 +6712,11 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------  --------  -------------------  -----------
    Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16  4.31e-10       7.81e-10 (89%)      2.34e-05
    Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14         0       4.81e-10 (84%)      1.87e-05
+  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13  1.24e-10       6.03e-09 (79%)      3.12e-05
+
+  admin@ctd615:~$ show interfaces counters fec-stats Ethernet16
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------  --------  -------------------  -----------
   Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13  1.24e-10       6.03e-09 (79%)      3.12e-05
   ```
 

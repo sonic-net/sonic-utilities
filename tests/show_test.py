@@ -729,12 +729,16 @@ class TestShowInterfaces(object):
     @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_counters(self, mock_run_command):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['interfaces'].commands['counters'], ['-i', 'Ethernet0', '-p', '3', '-a', '-n', 'asic0', '--verbose'])
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'],
+            ['Ethernet0', '-p', '3', '-a', '-n', 'asic0', '--verbose'],
+        )
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['portstat', '-a', '-p', '3', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=True)
 
+    @patch('show.interfaces.try_convert_interfacename_from_alias', lambda ctx, intfname, check_db=False: intfname)
     @patch('utilities_common.cli.run_command')
     @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
     @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
@@ -742,7 +746,7 @@ class TestShowInterfaces(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands['interfaces'].commands['counters'],
-            ['-i', 'Ethernet-BP0', '-p', '3', '-a', '-d', 'all', '--verbose'],
+            ['Ethernet-BP0', '-p', '3', '-a', '-d', 'all', '--verbose'],
         )
 
         print(result.exit_code)
@@ -762,6 +766,41 @@ class TestShowInterfaces(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['portstat', '-e', '-p', '3', '-s', 'all'], display_cmd=True)
 
+    @patch('show.interfaces.try_convert_interfacename_from_alias', lambda ctx, intfname, check_db=False: intfname)
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_counters_error(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'].commands['errors'],
+            ['-p', '3', 'Ethernet-BP0', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['portstat', '-e', '-p', '3', '-i', 'Ethernet-BP0', '-s', 'all'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
+    def test_counters_error_interface_filter(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'].commands['errors'],
+            ['Ethernet0', '-p', '3', '--verbose'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['portstat', '-e', '-p', '3', '-i', 'Ethernet0'],
+            display_cmd=True,
+        )
+
+    @patch('show.interfaces.try_convert_interfacename_from_alias', lambda ctx, intfname, check_db=False: intfname)
     @patch('utilities_common.cli.run_command')
     def test_counters_rates(self, mock_run_command):
         runner = CliRunner()
@@ -769,7 +808,86 @@ class TestShowInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['portstat', '-R', '-p', '3', '-s', 'all'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['portstat', '-R', '-s', 'all', '-p', '3'], display_cmd=True)
+
+    @patch('show.interfaces.try_convert_interfacename_from_alias', lambda ctx, intfname, check_db=False: intfname)
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_counters_rates(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'].commands['rates'],
+            ['-p', '3', 'Ethernet-BP0', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['portstat', '-R', '-i', 'Ethernet-BP0', '-s', 'all', '-p', '3'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
+    def test_counters_rates_interface_filter(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'].commands['rates'],
+            ['Ethernet0', '-p', '3', '--verbose'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['portstat', '-R', '-i', 'Ethernet0', '-p', '3'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
+    def test_counters_fec_stats(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'].commands['fec-stats'],
+            ['-p', '3', '--verbose'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['portstat', '-f', '-s', 'all', '-p', '3'], display_cmd=True)
+
+    @patch('show.interfaces.try_convert_interfacename_from_alias', lambda ctx, intfname, check_db=False: intfname)
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_counters_fec_stats(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'].commands['fec-stats'],
+            ['Ethernet-BP0', '-p', '3', '--verbose'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['portstat', '-f', '-i', 'Ethernet-BP0', '-s', 'all', '-p', '3'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
+    def test_counters_fec_stats_interface_filter(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'].commands['fec-stats'],
+            ['Ethernet0', '-p', '3', '--verbose'],
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['portstat', '-f', '-i', 'Ethernet0', '-p', '3'],
+            display_cmd=True,
+        )
 
     @patch('utilities_common.cli.run_command')
     def test_counters_detailed(self, mock_run_command):
