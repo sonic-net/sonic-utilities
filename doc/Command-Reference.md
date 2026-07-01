@@ -330,7 +330,7 @@ Please follow config_db.json based configuration for the complete list of config
 It is assumed that all configuration commands start with the keyword “config” as prefix.
 Any other scripts/utilities/commands  that need user configuration control are wrapped as sub-commands under the “config” command.
 The direct scripts/utilities/commands (examples given below) that are not wrapped under the "config" command are not in the scope of this document.
-  1. acl_loader – This script is already wrapped inside “config acl” command; i.e. any ACL configuration that user is allowed to do is already part of “config acl” command; users are not expected to use the acl_loader script directly and hence this document need not explain the “acl_loader” script.
+  1. acl-loader – Most ACL workflows are available through `config acl` and `show acl`. The underlying `acl-loader` utility still exists and provides additional advanced options that are not exposed by the wrapper commands.
   2. crm – this command is not explained in this document.
   3. sonic-clear, sfputil, etc., This document does not explain these scripts also.
 
@@ -2039,7 +2039,10 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#tacacs
 
 ## ACL
 
-This section explains the various show commands and configuration commands available for users.
+This section explains the ACL-related wrapper commands exposed through `show` and `config`.
+These commands cover ACL table visibility, ACL rule visibility, ACL table lifecycle operations, and ACL rule updates.
+
+Some advanced ACL operations are still implemented in the underlying `acl-loader` utility. Where the wrapper command accepts fewer options than `acl-loader`, this document calls that out explicitly.
 
 ### ACL show commands
 
@@ -2117,102 +2120,95 @@ Users can choose to have a default permit rule or default deny rule. In case of 
   SSH_ONLY  DEFAULT_RULE  1           DROP                       ETHER_TYPE: 2048
   ```
 
+Related ACL visibility commands are exposed as top-level show commands instead of `show acl` subcommands:
+
+- `show mirror_session [<session_name>]`
+- `show policer [<policer_name>]`
 
 ### ACL config commands
-This sub-section explains the list of configuration options available for ACL module.
-Note that there is no direct command to add or delete or modify the ACL table and ACL rule.
-Existing ACL tables and ACL rules can be updated by specifying the ACL rules in json file formats and configure those files using this CLI command.
+
+This sub-section explains the ACL-related configuration commands currently exposed through `config acl`.
+
+Current wrapper commands support:
+
+- creating ACL tables
+- removing ACL tables
+- performing full ACL rule updates from a file
+- performing incremental ACL rule updates from a file
+
+Advanced options such as `--table_name`, `--session_name`, `--mirror_stage`, and `--max_priority` are available in the underlying `acl-loader` utility, but they are not exposed by the `config acl update ...` wrapper commands shown below.
 
 **config acl update full**
 
-This command is to update the rules in all the tables or in one specific table in full. If a table_name is provided, the operation will be restricted in the specified table. All existing rules in the specified table or all tables will be removed. New rules loaded from file will be installed. If the table_name is specified, only rules within that table will be removed and new rules in that table will be installed. If the table_name is not specified, all rules from all tables will be removed and only the rules present in the input file will be added.
+This command performs a full ACL rule update from the specified file.
 
-The command does not modify anything in the list of acl tables. It modifies only the rules present in those pre-existing tables.
+The wrapper command passes only the input file name to `acl-loader update full`.
 
-In order to create acl tables, either follow the config_db.json method or minigraph method to populate the list of ACL tables.
-
-After creating tables, either the config_db.json method or the minigraph method or the CLI method (explained here) can be used to populate the rules in those ACL tables.
-
-This command updates only the ACL rules and it does not disturb the ACL tables; i.e. the output of "show acl table" is not altered by using this command; only the output of "show acl rule" will be changed after this command.
-
-When "--session_name" optional argument is specified, command sets the session_name for the ACL table with this mirror session name. It fails if the specified mirror session name does not exist.
-
-When "--mirror_stage" optional argument is specified, command sets the mirror action to ingress/egress based on this parameter. By default command sets ingress mirror action in case argument is not specified.
-
-When the optional argument "max_priority"  is specified, each rule’s priority is calculated by subtracting its “sequence_id” value from the “max_priority”. If this value is not passed, the default “max_priority” 10000 is used.
+The command updates ACL rules in existing ACL tables. It does not create or remove ACL tables.
 
 - Usage:
   ```
-  config acl update full [--table_name <table_name>] [--session_name <session_name>] [--mirror_stage (ingress | egress)] [--max_priority <priority_value>] <acl_json_file_name>
+  config acl update full <acl_json_file_name>
   ```
-
-  - Parameters:
-    - table_name: Specify the name of the ACL table to load. Example: config acl update full "--table_name DT_ACL_T1  /etc/sonic/acl_table_1.json"
-    - session_name: Specify the name of the ACL session to load. Example: config acl update full "--session_name mirror_ses1 /etc/sonic/acl_table_1.json"
-    - priority_value: Specify the maximum priority to use when loading ACL rules. Example: config acl update full "--max-priority 100  /etc/sonic/acl_table_1.json"
-
-    *NOTE 1: All these optional parameters should be inside double quotes. If none of the options are provided, double quotes are not required for specifying filename alone.*
-    *NOTE 2: Any number of optional parameters can be configured in the same command.*
 
 - Examples:
   ```
   admin@sonic:~$ sudo config acl update full /etc/sonic/acl_full_snmp_1_2_ssh_4.json
-  admin@sonic:~$ sudo config acl update full "--table_name SNMP-ACL /etc/sonic/acl_full_snmp_1_2_ssh_4.json"
-  admin@sonic:~$ sudo config acl update full "--session_name everflow0 /etc/sonic/acl_full_snmp_1_2_ssh_4.json"
   ```
 
-  This command will remove all rules from all the ACL tables and insert all the rules present in this input file.
-  Refer the example file [acl_full_snmp_1_2_ssh_4.json](#) that adds two rules for SNMP (Rule1 and Rule2) and one rule for SSH (Rule4)
-  Refer an example for input file format [here](https://github.com/sonic-net/sonic-mgmt/blob/master/ansible/roles/test/files/helpers/config_service_acls.sh)
-  Refer another example [here](https://github.com/sonic-net/sonic-mgmt/blob/master/ansible/roles/test/tasks/acl/acltb_test_rules_part_1.json)
+For advanced options supported by the underlying utility, use:
+
+```
+acl-loader update full --help
+```
+
+Reference example:
+
+```
+admin@sonic:~$ sudo acl-loader update full --table_name DATAACL /etc/sonic/acl_rules.json
+```
 
 **config acl update incremental**
 
-This command is used to perform incremental update of ACL rule table. This command gets existing rules from Config DB and compares with rules specified in input file and performs corresponding modifications.
+This command performs an incremental ACL rule update from the specified file.
 
-With respect to DATA ACLs, the command does not assume that new dataplane ACLs can be inserted in between by shifting existing ACLs in all ASICs. Therefore, this command performs a full update on dataplane ACLs.
-With respect to control plane ACLs, this command performs an incremental update.
-If we assume that "file1.json" is the already loaded ACL rules file and if "file2.json" is the input file that is passed as parameter for this command, the following requirements are valid for the input file.
-1) First copy the file1.json to file2.json.
-2) Remove the unwanted ACL rules from file2.json
-3) Add the newly required ACL rules into file2.json.
-4) Modify the existing ACL rules (that require changes) in file2.json.
+The wrapper command passes only the input file name to `acl-loader update incremental`.
 
-NOTE: If any ACL rule that is already available in file1.json is required even after this command execution, such rules should remain unaltered in file2.json. Don't remove them.
-Note that "incremental" is working like "full".
+Behavior depends on ACL type:
 
-When "--session_name" optional argument is specified, command sets the session_name for the ACL table with this mirror session name. It fails if the specified mirror session name does not exist.
-
-When "--mirror_stage" optional argument is specified, command sets the mirror action to ingress/egress based on this parameter. By default command sets ingress mirror action in case argument is not specified.
-
-When the optional argument "max_priority"  is specified, each rule’s priority is calculated by subtracting its “sequence_id” value from the “max_priority”. If this value is not passed, the default “max_priority” 10000 is used.
+- for control-plane ACLs, the update is incremental
+- for data-plane ACLs, the underlying implementation may still perform a full update
 
 - Usage:
   ```
-  config acl update incremental [--session_name <session_name>] [--mirror_stage (ingress | egress)] [--max_priority <priority_value>] <acl_json_file_name>
+  config acl update incremental <acl_json_file_name>
   ```
-
-  - Parameters:
-    - table_name: Specify the name of the ACL table to load. Example: config acl update full "--table_name DT_ACL_T1  /etc/sonic/acl_table_1.json"
-    - session_name: Specify the name of the ACL session to load. Example: config acl update full "--session_name mirror_ses1 /etc/sonic/acl_table_1.json"
-    - priority_value: Specify the maximum priority to use when loading ACL rules. Example: config acl update full "--max-priority 100  /etc/sonic/acl_table_1.json"
-
-    *NOTE 1: All these optional parameters should be inside double quotes. If none of the options are provided, double quotes are not required for specifying filename alone.*
-    *NOTE 2: Any number of optional parameters can be configured in the same command.*
 
 - Examples:
   ```
   admin@sonic:~$ sudo config acl update incremental /etc/sonic/acl_incremental_snmp_1_3_ssh_4.json
   ```
-  ```
-  admin@sonic:~$ sudo config acl update incremental "--session_name everflow0 /etc/sonic/acl_incremental_snmp_1_3_ssh_4.json"
-  ```
 
-  Refer the example file [acl_incremental_snmp_1_3_ssh_4.json](#) that adds two rules for SNMP (Rule1 and Rule3) and one rule for SSH (Rule4)
-  When this "incremental" command is executed after "full" command, it has removed SNMP Rule2 and added SNMP Rule3 in the example.
-  File "acl_full_snmp_1_2_ssh_4.json" has got SNMP Rule1, SNMP Rule2 and SSH Rule4.
-  File "acl_incremental_snmp_1_3_ssh_4.json" has got SNMP Rule1, SNMP Rule3 and SSH Rule4.
-  This file is created by copying the file "acl_full_snmp_1_2_ssh_4.json" to "acl_incremental_snmp_1_3_ssh_4.json" and then removing SNMP Rule2 and adding SNMP Rule3.
+For advanced options supported by the underlying utility, use:
+
+```
+acl-loader update incremental --help
+```
+
+Reference example:
+
+```
+admin@sonic:~$ sudo acl-loader update incremental --session_name everflow0 --mirror_stage egress /etc/sonic/acl_mirror_incremental.json
+```
+
+**acl-loader direct usage examples**
+
+The following example shows an additional case where operators may choose to call `acl-loader` directly instead of using the `config acl` and `show acl` wrappers.
+
+- Delete a specific ACL rule from a table:
+  ```
+  admin@sonic:~$ sudo acl-loader delete DATAACL RULE_1
+  ```
 
 **config acl add table**
 
