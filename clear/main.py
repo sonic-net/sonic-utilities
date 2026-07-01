@@ -514,6 +514,48 @@ def persistent_watermark(namespace):
         command += ['-n', str(namespace)]
     run_command(command)
 
+
+@cli.group(name='buffer_pool')
+def buffer_pool():
+    """Clear buffer_pool WM"""
+    pass
+
+
+@buffer_pool.command('watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_buffer_pool(namespace):
+    """Clear user WM for buffer pools."""
+    command = ['watermarkstat', '-c', '-t', 'buffer_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
+    run_command(command)
+    click.echo("Buffer pool watermark counters cleared.")
+
+
+@buffer_pool.command('persistent-watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_buffer_pool(namespace):
+    """Clear persistent WM for buffer pools."""
+    command = ['watermarkstat', '-c', '-p', '-t', 'buffer_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
+    run_command(command)
+    click.echo("Buffer pool persistent watermark counters cleared.")
+
 #
 # 'arp' command ####
 #
