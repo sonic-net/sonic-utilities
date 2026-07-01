@@ -3,6 +3,8 @@
 import click
 import time
 import re
+import os
+import getpass
 import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, is_bmc, get_all_dpus
@@ -11,6 +13,20 @@ from datetime import timedelta
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
+MODULE_REBOOT_CAUSE_DIR = "/host/reboot-cause/module"
+
+
+def persist_dpu_reboot_user(module_name):
+    """Record the operator who shut down a DPU so chassisd can populate the DPU
+    reboot-cause 'user' field."""
+    try:
+        reboot_user = os.environ.get("SUDO_USER") or getpass.getuser()
+        dpu_dir = os.path.join(MODULE_REBOOT_CAUSE_DIR, module_name.lower())
+        os.makedirs(dpu_dir, exist_ok=True)
+        with open(os.path.join(dpu_dir, "prev_reboot_user.txt"), "w") as f:
+            f.write(reboot_user)
+    except Exception as e:
+        click.echo(f"Warning: failed to record reboot user for {module_name}: {e}")
 
 
 class StateDBHelper:
@@ -166,6 +182,7 @@ def shutdown_chassis_module(db, chassis_module_name):
             return
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
+        persist_dpu_reboot_user(chassis_module_name)
         fvs = {
             'admin_status': 'down',
         }
