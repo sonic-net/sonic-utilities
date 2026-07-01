@@ -57,6 +57,66 @@ PTY_SYMLINK_SUFFIX = "-PTS"
 
 TIMEOUT_SEC = 0.2
 
+CONSOLE_SESSION_SCRIPT = r"""
+set -u
+
+LINE_NUM="${1:?missing line_num}"
+ESCAPE_DISPLAY="${2:?missing escape_display}"
+PICOCOM_CMD="${3:?missing picocom_cmd}"
+
+SAVED_STTY=""
+if [ -r /dev/tty ]; then
+    SAVED_STTY=$(stty -g < /dev/tty 2>/dev/null || true)
+fi
+
+console_state_set() {
+    local ln="$1" st="$2" pid="${3:-}" start="${4:-}"
+    local key="CONSOLE_PORT|${ln}"
+    sonic-db-cli STATE_DB hset "$key" state "$st" > /dev/null 2>&1 || true
+    sonic-db-cli STATE_DB hset "$key" pid "$pid" > /dev/null 2>&1 || true
+    sonic-db-cli STATE_DB hset "$key" start_time "$start" > /dev/null 2>&1 || true
+}
+
+restore_tty() {
+    if [ -w /dev/tty ]; then
+        if [ -n "$SAVED_STTY" ]; then
+            stty "$SAVED_STTY" < /dev/tty 2>/dev/null || stty sane < /dev/tty 2>/dev/null || true
+        else
+            stty sane < /dev/tty 2>/dev/null || true
+        fi
+    fi
+}
+
+picocom_pid=""
+
+forward_signal() {
+    if [ -n "$picocom_pid" ]; then
+        kill -TERM "$picocom_pid" > /dev/null 2>&1 || true
+    fi
+}
+
+cleanup() {
+    if [ -n "$picocom_pid" ]; then
+        wait "$picocom_pid" 2>/dev/null || true
+    fi
+    console_state_set "$LINE_NUM" idle "" ""
+    restore_tty
+}
+
+trap cleanup EXIT
+trap forward_signal HUP INT TERM
+
+printf 'Successful connection to line [%s]\nPress ^%s ^X to disconnect\n' "$LINE_NUM" "$ESCAPE_DISPLAY"
+bash -c "$PICOCOM_CMD" < /dev/tty > /dev/tty 2>&1 &
+picocom_pid=$!
+console_state_set "$LINE_NUM" busy "$picocom_pid" "$(ps -p "$picocom_pid" -o lstart= | sed 's/^ *//')"
+wait "$picocom_pid"
+rc=$?
+restore_tty
+printf '\nTerminating...\nThanks for using picocom\n'
+exit "$rc"
+"""
+
 class ConsolePortProvider(object):
     """
     The console ports' provider.
@@ -253,24 +313,16 @@ class ConsolePortInfo(object):
             escape_cmd, self.baud, flow_cmd,
             SysInfoProvider.DEVICE_PREFIX, self.line_num, PTY_SYMLINK_SUFFIX)
 
-        # start connection
-        try:
-            proc = pexpect.spawn(cmd)
-            proc.send("\n")
-            self._session = ConsoleSession(self, proc)
-        finally:
-            self.refresh()
-
-        # check if connection succeed
-        index = proc.expect([PICOCOM_READY, PICOCOM_BUSY, pexpect.EOF, pexpect.TIMEOUT], timeout=TIMEOUT_SEC)
-        if index == 0:
-            return self._session
-        elif index == 1:
-            self._session = None
-            raise LineBusyError
-        else:
-            self._session = None
-            raise ConnectionFailedError
+        # Hand off the entire interactive session to an inline bash script.
+        # os.execvp replaces this Python process image with bash, so on
+        # success control never returns. If execvp itself fails (e.g.
+        # /bin/bash missing) the OSError propagates to the caller.
+        escape_display = self.escape_char.upper() if self.escape_char else "A"
+        quiet_cmd = cmd.replace("picocom ", "picocom --quiet ", 1)
+        os.execvp("/bin/bash", [
+            "/bin/bash", "-c", CONSOLE_SESSION_SCRIPT,
+            "console_connect", self.line_num, escape_display, quiet_cmd,
+        ])
 
     def clear_session(self):
         """Clear existing session on current line, returns True if the line has been clear"""
