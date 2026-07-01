@@ -1360,6 +1360,13 @@ class TestMultiAsicSFP(object):
         result = get_subport("Ethernet0")
         assert result == 2
 
+        # A missing (None) or empty subport defaults to subport 0 instead of crashing
+        mock_get_value_from_db_by_field.return_value = None
+        assert get_subport("Ethernet0") == 0
+
+        mock_get_value_from_db_by_field.return_value = ''
+        assert get_subport("Ethernet0") == 0
+
     @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
     @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
     @patch('utilities_common.platform_sfputil_helper.multi_asic.get_namespace_for_port', return_value='asic0')

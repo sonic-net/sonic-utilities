@@ -2066,20 +2066,17 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Ethernet0: Set loopback mode failed. Parameter is not supported\n'
         assert result.exit_code == EXIT_FAIL
 
+        # When the subport field cannot be read from CONFIG_DB, loopback should
+        # assume subport 0 and proceed instead of crashing.
+        mock_api.set_loopback_mode.side_effect = None
+        mock_api.set_loopback_mode.return_value = True
         mock_config_db = MagicMock()
         mock_config_db.get.side_effect = TypeError
         mock_config_db_connector.return_value = mock_config_db
         result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
                                ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
-        assert result.exit_code == EXIT_FAIL
-
-
-        mock_sonic_v2_connector.return_value = None
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
-                               ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
-        assert result.exit_code == EXIT_FAIL
+        assert result.output == 'Error: \nEthernet0: enable media-side-input loopback\n'
+        assert result.exit_code == 0
 
     @pytest.mark.parametrize(
         "direction, lane_count, enable, disable_func_result, cmis_version, output_dict, expected_echo, expected_exit",
