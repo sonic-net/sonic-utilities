@@ -10,7 +10,29 @@ from docker_image import reference
 from prettyprinter import pformat
 
 from sonic_package_manager.logger import log
-from sonic_package_manager.utils import DockerReference
+
+
+def split_docker_domain(name: str):
+    """ Split a docker reference into registry domain and remainder.
+
+    Reimplements the pre-0.2.0 docker-image-py heuristic: the first path
+    component is treated as a registry domain only if it contains '.' or ':'
+    or equals 'localhost'. docker-image-py 0.2.0 additionally treats an
+    uppercase first component as a domain (because repository names must be
+    lowercase), which would break the 'Azure/...' repositories used by
+    sonic-package-manager. Keeping the old behavior makes resolution
+    independent of the installed docker-image-py version.
+    """
+    i = name.find('/')
+    if i == -1 or not ('.' in name[:i] or ':' in name[:i] or name[:i] == reference.LOCALHOST):
+        domain, remainder = reference.DEFAULT_DOMAIN, name
+    else:
+        domain, remainder = name[:i], name[i + 1:]
+    if domain == reference.LEGACY_DEFAULT_DOMAIN:
+        domain = reference.DEFAULT_DOMAIN
+    if domain == reference.DEFAULT_DOMAIN and '/' not in remainder:
+        remainder = reference.OFFICIAL_REPO_NAME + '/' + remainder
+    return domain, remainder
 
 
 class AuthenticationServiceError(Exception):
@@ -97,7 +119,7 @@ class Registry:
     def tags(self, repository: str) -> List[str]:
         log.debug(f'getting tags for {repository}')
 
-        _, repository = reference.Reference.split_docker_domain(repository)
+        _, repository = split_docker_domain(repository)
         headers = {'Accept': 'application/json'}
         url = f'{self._get_base_url(repository)}/tags/list'
         response = self._execute_get_request(url, headers)
@@ -112,7 +134,7 @@ class Registry:
     def manifest(self, repository: str, ref: str) -> Dict:
         log.debug(f'getting manifest for {repository}:{ref}')
 
-        _, repository = reference.Reference.split_docker_domain(repository)
+        _, repository = split_docker_domain(repository)
         headers = {'Accept': self.MIME_DOCKER_MANIFEST}
         url = f'{self._get_base_url(repository)}/manifests/{ref}'
         response = self._execute_get_request(url, headers)
@@ -128,7 +150,7 @@ class Registry:
     def blobs(self, repository: str, digest: str):
         log.debug(f'retrieving blob for {repository}:{digest}')
 
-        _, repository = reference.Reference.split_docker_domain(repository)
+        _, repository = split_docker_domain(repository)
         headers = {'Accept': self.MIME_DOCKER_MANIFEST}
         url = f'{self._get_base_url(repository)}/blobs/{digest}'
         response = self._execute_get_request(url, headers)
@@ -150,7 +172,7 @@ class RegistryResolver:
         pass
 
     def get_registry_for(self, ref: str) -> Registry:
-        domain, _ = DockerReference.split_docker_domain(ref)
+        domain, _ = split_docker_domain(ref)
         if domain == reference.DEFAULT_DOMAIN:
             return self.DockerHubRegistry
         # TODO: support insecure registries
