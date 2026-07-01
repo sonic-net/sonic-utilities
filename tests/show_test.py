@@ -1679,3 +1679,69 @@ class TestShowSwitchCounters(object):
     @patch("utilities_common.cli.run_command")
     def test_switch_stats_period(self, mock_run_command, command, options, expected):
         self.verify_stats(mock_run_command, command, options, expected)
+
+
+class TestCsonicNeighborEnv(object):
+    """Tests for cSONiC (docker-sonic-vs) single-container neighbor environments
+    where the nested 'bgp' docker container and the 'rvtysh' wrapper do not
+    exist. See sonic-utilities issue #4632.
+    """
+
+    def setup_method(self):
+        print('SETUP')
+
+    def test_get_routing_stack_no_docker_skips_oneliner(self):
+        # When the 'docker' binary is absent (docker-sonic-vs neighbor), the
+        # docker ps one-liner must NOT run, and the default 'frr' is returned.
+        with mock.patch('show.main.shutil.which', return_value=None), \
+                mock.patch('show.main.subprocess.check_output',
+                           side_effect=AssertionError("docker oneliner should not run")) \
+                as mock_check_output:
+            assert show.get_routing_stack() == 'frr'
+            mock_check_output.assert_not_called()
+
+    def test_get_routing_stack_with_docker_runs_oneliner(self):
+        # When 'docker' is present (real SONiC), the one-liner runs and its
+        # output determines the routing stack.
+        with mock.patch('show.main.shutil.which', return_value='/usr/bin/docker'), \
+                mock.patch('show.main.subprocess.check_output',
+                           return_value='quagga\n') as mock_check_output:
+            assert show.get_routing_stack() == 'quagga'
+            mock_check_output.assert_called_once()
+
+    def test_run_bgp_show_command_falls_back_to_vtysh(self):
+        # When 'rvtysh' is absent (docker-sonic-vs neighbor), run_bgp_show_command
+        # must fall back to the plain 'vtysh' binary instead of 'rvtysh'.
+        captured = {}
+
+        def fake_run_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd, exit_on_fail):
+            captured['shell'] = vtysh_shell_cmd
+            return "{}"
+
+        def fake_which(cmd):
+            # rvtysh missing, vtysh present
+            return None if cmd == constants.RVTYSH_COMMAND else '/usr/bin/vtysh'
+
+        with mock.patch('utilities_common.bgp_util.shutil.which', side_effect=fake_which), \
+                mock.patch('utilities_common.bgp_util.run_bgp_command',
+                           side_effect=fake_run_bgp_command):
+            bgp_util.run_bgp_show_command("show ip bgp summary json")
+            assert captured['shell'] == constants.VTYSH_COMMAND
+
+    def test_run_bgp_show_command_uses_rvtysh_when_present(self):
+        # When 'rvtysh' is present (real SONiC), it is used as before.
+        captured = {}
+
+        def fake_run_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd, exit_on_fail):
+            captured['shell'] = vtysh_shell_cmd
+            return "{}"
+
+        with mock.patch('utilities_common.bgp_util.shutil.which',
+                        return_value='/usr/bin/rvtysh'), \
+                mock.patch('utilities_common.bgp_util.run_bgp_command',
+                           side_effect=fake_run_bgp_command):
+            bgp_util.run_bgp_show_command("show ip bgp summary json")
+            assert captured['shell'] == constants.RVTYSH_COMMAND
+
+    def teardown_method(self):
+        print('TEAR DOWN')
