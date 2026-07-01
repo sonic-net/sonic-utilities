@@ -2081,6 +2081,260 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
         assert result.exit_code == EXIT_FAIL
 
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_capability(self, mock_get_sfp_object):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api.return_value = mock_api
+        mock_get_sfp_object.return_value = mock_sfp
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
+
+        # NotImplementedError from get_xcvr_api: print and continue so multi-port runs aren't aborted
+        mock_sfp.get_xcvr_api.side_effect = NotImplementedError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert result.output == 'Ethernet0: This functionality is not implemented\n'
+        assert result.exit_code == 0
+
+        mock_sfp.get_xcvr_api.side_effect = None
+        mock_sfp.get_xcvr_api.return_value = mock_api
+
+        # Diagnostic pages not supported: per-module, no exit so other ports keep iterating
+        mock_api.get_diag_page_support.return_value = False
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not support diagnostic pages required for loopback' in result.output
+        assert result.exit_code == 0
+
+        # SFF-8636 / non-CMIS module: AttributeError on get_loopback_capability
+        mock_api.get_diag_page_support.return_value = True
+        mock_api.get_loopback_capability.side_effect = AttributeError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert result.output == 'Ethernet0: Loopback capability is not applicable for this module\n'
+        assert result.exit_code == 0
+
+        # CCmisApi: get_diag_page_support absent but get_loopback_capability present
+        mock_api.get_diag_page_support.side_effect = AttributeError
+        mock_api.get_loopback_capability.side_effect = None
+        mock_api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback capability:' in result.output
+        assert result.exit_code == 0
+
+        mock_api.get_diag_page_support.side_effect = None
+        mock_api.get_diag_page_support.return_value = True
+
+        # No capability advertised
+        mock_api.get_loopback_capability.side_effect = None
+        mock_api.get_loopback_capability.return_value = None
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not advertise any loopback capability' in result.output
+        assert result.exit_code == 0
+
+        # Capability advertised
+        mock_api.get_loopback_capability.return_value = {
+            'simultaneous_host_media_loopback_supported': True,
+            'per_lane_media_loopback_supported': False,
+            'per_lane_host_loopback_supported': True,
+            'host_side_input_loopback_supported': True,
+            'host_side_output_loopback_supported': False,
+            'media_side_input_loopback_supported': True,
+            'media_side_output_loopback_supported': False,
+        }
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback capability:' in result.output
+        assert 'host_side_input_loopback_supported: True' in result.output
+        assert 'media_side_output_loopback_supported: False' in result.output
+        assert result.exit_code == 0
+
+    @patch('sfputil.debug.get_logical_list')
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_capability_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+        mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
+
+        def make_sfp(diag_support=True, attr_error=False, cap=None):
+            sfp = MagicMock()
+            api = MagicMock()
+            sfp.get_xcvr_api.return_value = api
+            api.get_diag_page_support.return_value = diag_support
+            if attr_error:
+                api.get_loopback_capability.side_effect = AttributeError
+            else:
+                api.get_loopback_capability.return_value = cap
+            return sfp
+
+        # RJ45 and absent ports: get_sfp_object raises SystemExit (and prints diagnostic).
+        # The helper catches SystemExit so iteration continues past them.
+        mock_get_sfp_object.side_effect = [
+            SystemExit(EXIT_FAIL),  # Ethernet0: simulated RJ45
+            SystemExit(EXIT_FAIL),  # Ethernet4: simulated no transceiver
+            make_sfp(cap={'host_side_input_loopback_supported': True}),
+            make_sfp(cap={'host_side_input_loopback_supported': False}),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet8: loopback capability:' in result.output
+        assert 'Ethernet12: loopback capability:' in result.output
+        # All four ports are visited; iteration is not aborted by the SystemExits.
+        assert mock_get_sfp_object.call_count == 4
+
+        # Mixed: CMIS with cap, no diag support, non-CMIS, no cap advertised.
+        # Every skipped port emits a diagnostic message so the operator sees why.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [
+            make_sfp(cap={'host_side_input_loopback_supported': True}),
+            make_sfp(diag_support=False),
+            make_sfp(attr_error=True),
+            make_sfp(cap=None),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: loopback capability:' in result.output
+        assert 'Ethernet4: The module does not support diagnostic pages required for loopback' in result.output
+        assert 'Ethernet8: Loopback capability is not applicable for this module' in result.output
+        assert 'Ethernet12: The module does not advertise any loopback capability' in result.output
+
+        # No ports support loopback (all non-CMIS): per-port diagnostics + the summary line.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [make_sfp(attr_error=True)] * 4
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: Loopback capability is not applicable for this module' in result.output
+        assert 'Ethernet12: Loopback capability is not applicable for this module' in result.output
+        assert 'No ports found that support loopback capability' in result.output
+
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_status(self, mock_get_sfp_object):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api.return_value = mock_api
+        mock_get_sfp_object.return_value = mock_sfp
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-status']
+
+        # NotImplementedError from get_xcvr_api: print and continue so multi-port runs aren't aborted
+        mock_sfp.get_xcvr_api.side_effect = NotImplementedError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert result.output == 'Ethernet0: This functionality is not implemented\n'
+        assert result.exit_code == 0
+
+        mock_sfp.get_xcvr_api.side_effect = None
+        mock_sfp.get_xcvr_api.return_value = mock_api
+
+        # Diagnostic pages not supported: per-module, no exit
+        mock_api.get_diag_page_support.return_value = False
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not support diagnostic pages required for loopback' in result.output
+        assert result.exit_code == 0
+
+        # Loopback capability not advertised: skip without reading status
+        mock_api.get_diag_page_support.return_value = True
+        mock_api.get_loopback_capability.return_value = None
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not advertise any loopback capability' in result.output
+        assert result.exit_code == 0
+
+        # SFF-8636 / non-CMIS module: AttributeError on a getter
+        mock_api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+        mock_api.get_host_input_loopback.side_effect = AttributeError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: Loopback status is not applicable for this module' in result.output
+        assert result.exit_code == 0
+
+        # CCmisApi: get_diag_page_support absent but loopback getters present
+        mock_api.get_diag_page_support.side_effect = AttributeError
+        mock_api.get_host_input_loopback.side_effect = None
+        mock_api.get_host_input_loopback.return_value = [False] * 8
+        mock_api.get_host_output_loopback.return_value = [False] * 8
+        mock_api.get_media_input_loopback.return_value = False
+        mock_api.get_media_output_loopback.return_value = False
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback status:' in result.output
+        assert result.exit_code == 0
+
+        mock_api.get_diag_page_support.side_effect = None
+        mock_api.get_diag_page_support.return_value = True
+
+        # CMIS module: per-lane host lists, scalar media flags
+        mock_api.get_host_input_loopback.side_effect = None
+        mock_api.get_host_input_loopback.return_value = [True, False, False, False, False, False, False, False]
+        mock_api.get_host_output_loopback.return_value = [False] * 8
+        mock_api.get_media_input_loopback.return_value = False
+        mock_api.get_media_output_loopback.return_value = True
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback status:' in result.output
+        assert 'host-side-input:   [True, False, False, False, False, False, False, False]' in result.output
+        assert 'host-side-output:  [False, False, False, False, False, False, False, False]' in result.output
+        assert 'media-side-input:  False' in result.output
+        assert 'media-side-output: True' in result.output
+        assert result.exit_code == 0
+
+    @patch('sfputil.debug.get_logical_list')
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_status_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+        mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-status']
+
+        def make_cmis_sfp(diag_support=True, attr_error=False):
+            sfp = MagicMock()
+            api = MagicMock()
+            sfp.get_xcvr_api.return_value = api
+            if attr_error:
+                api.get_diag_page_support.return_value = True
+                api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+                api.get_host_input_loopback.side_effect = AttributeError
+            else:
+                api.get_diag_page_support.return_value = diag_support
+                api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+                api.get_host_input_loopback.return_value = [False] * 8
+                api.get_host_output_loopback.return_value = [False] * 8
+                api.get_media_input_loopback.return_value = False
+                api.get_media_output_loopback.return_value = False
+            return sfp
+
+        # RJ45 and absent ports: get_sfp_object raises SystemExit (and prints diagnostic).
+        # The helper catches SystemExit so iteration continues past them.
+        # Ethernet0: RJ45, Ethernet4: no transceiver, Ethernet8: CMIS, Ethernet12: CMIS
+        mock_get_sfp_object.side_effect = [
+            SystemExit(EXIT_FAIL),
+            SystemExit(EXIT_FAIL),
+            make_cmis_sfp(),
+            make_cmis_sfp(),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet8: loopback status:' in result.output
+        assert 'Ethernet12: loopback status:' in result.output
+        # All four ports are visited; iteration is not aborted by the SystemExits.
+        assert mock_get_sfp_object.call_count == 4
+
+        # Mixed CMIS: diag support, no diag support, non-CMIS (AttributeError).
+        # Skipped ports each emit a diagnostic.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [
+            make_cmis_sfp(diag_support=True),
+            make_cmis_sfp(diag_support=False),
+            make_cmis_sfp(attr_error=True),
+            make_cmis_sfp(diag_support=True),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: loopback status:' in result.output
+        assert 'Ethernet4: The module does not support diagnostic pages required for loopback' in result.output
+        assert 'Ethernet8: Loopback status is not applicable for this module' in result.output
+        assert 'Ethernet12: loopback status:' in result.output
+
+        # No ports support loopback (all non-CMIS): per-port diagnostics + the summary line.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [make_cmis_sfp(attr_error=True)] * 4
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: Loopback status is not applicable for this module' in result.output
+        assert 'Ethernet12: Loopback status is not applicable for this module' in result.output
+        assert 'No ports found that support loopback status' in result.output
+
     @pytest.mark.parametrize(
         "direction, lane_count, enable, disable_func_result, cmis_version, output_dict, expected_echo, expected_exit",
         [
