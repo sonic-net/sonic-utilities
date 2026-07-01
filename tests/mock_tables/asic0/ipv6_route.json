@@ -17,7 +17,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 }
             ],
             "prefix": "2064:100::1/128",
@@ -45,7 +46,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "2064:100::3/128",
@@ -73,7 +75,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -82,7 +85,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:10::/64",
@@ -110,7 +114,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel4001",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -119,7 +124,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:11::/64",
@@ -147,7 +153,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -156,7 +163,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:1::/64",
@@ -184,7 +192,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -193,7 +202,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel4001",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:20::/64",
@@ -221,7 +231,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -230,7 +241,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "Ethernet-BP4",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:21::/64",
@@ -258,7 +270,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "Ethernet-BP0",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -267,7 +280,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "Ethernet-BP4",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:30::/64",
@@ -322,7 +336,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -331,7 +346,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "::/0",
