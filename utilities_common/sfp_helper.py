@@ -43,6 +43,21 @@ QSFP_CMIS_DELTA_DATA_MAP = {
     'e2_server_firmware': 'E2 Server Firmware'
 }
 
+BAILLY_RLM_DATA_MAP = {
+    'rlm_identifier': 'RLM Identifier',
+    'rlm_revision': 'RLM Revision',
+    'rlm_laser_wavelength_grid': 'RLM Laser Wavelength Grid',
+    'rlm_laser_count': 'RLM Laser Count',
+    'rlm_vendor_name': 'RLM Vendor Name',
+    'rlm_vendor_oui': 'RLM Vendor OUI',
+    'rlm_vendor_pn': 'RLM Vendor PN',
+    'rlm_vendor_rev': 'RLM Vendor Rev',
+    'rlm_vendor_sn': 'RLM Vendor SN',
+    'rlm_date_code': 'RLM Vendor Date Code(YYYY-MM-DD Lot)',
+    'rlm_max_power': 'RLM Maximum Power Consumption',
+    'rlm_laser_power_mode_control': 'RLM Laser Power Mode Control'
+}
+
 C_CMIS_DELTA_DATA_MAP = {
     'supported_max_tx_power': 'Supported Max TX Power',
     'supported_min_tx_power': 'Supported Min TX Power',
@@ -50,7 +65,7 @@ C_CMIS_DELTA_DATA_MAP = {
     'supported_min_laser_freq': 'Supported Min Laser Frequency',
 }
 
-CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
+CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP, **BAILLY_RLM_DATA_MAP}
 C_CMIS_DATA_MAP = {**CMIS_DATA_MAP, **C_CMIS_DELTA_DATA_MAP}
 
 # Common fields for all types:
@@ -82,7 +97,17 @@ QSFP_STATUS_MAP = {
     'tx6disable': 'TX disable status on lane 6',
     'tx7disable': 'TX disable status on lane 7',
     'tx8disable': 'TX disable status on lane 8',
-    'tx_disabled_channel': 'Disabled TX channels'
+    'tx_disabled_channel': 'Disabled TX channels',
+    'rlm_tempHAlarm': 'RLM temperature high alarm flag',
+    'rlm_tempLAlarm': 'RLM temperature low alarm flag',
+    'rlm_tempHWarn': 'RLM temperature high warning flag',
+    'rlm_tempLWarn': 'RLM temperature low warning flag',
+    'rlm_vccHAlarm': 'RLM Vcc high alarm flag',
+    'rlm_vccLAlarm': 'RLM Vcc low alarm flag',
+    'rlm_vccHWarn': 'RLM Vcc high warning flag',
+    'rlm_vccLWarn': 'RLM Vcc low warning flag',
+    'rlm_module_low_power_state': 'RLM module state',
+    'rlm_interrupt_status': 'RLM interrupt status'
 }
 
 # CMIS specific fields (excluding C-CMIS specific):
