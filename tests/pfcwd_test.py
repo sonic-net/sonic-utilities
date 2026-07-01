@@ -1027,3 +1027,166 @@ class TestMultiAsicPfcwdShow(object):
         importlib.reload(mock_tables.mock_single_asic)
         import pfcwd.main
         importlib.reload(pfcwd.main)
+
+
+class TestPfcwdstatClear(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        scripts_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'scripts'
+        )
+        import importlib.util
+        from importlib.machinery import SourceFileLoader
+        script_path = os.path.join(scripts_path, "pfcwdstat")
+        loader = SourceFileLoader("pfcwdstat", script_path)
+        spec = importlib.util.spec_from_loader("pfcwdstat", loader, origin=script_path)
+        cls.pfcwdstat = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.pfcwdstat)
+        sys.modules['pfcwdstat'] = cls.pfcwdstat
+
+    def _make_mock_db(self, queue_name_map=None, counters=None):
+        mock_db = MagicMock()
+        mock_db.COUNTERS_DB = 'COUNTERS_DB'
+
+        def get_all(db_id, key):
+            if key == 'COUNTERS_QUEUE_NAME_MAP':
+                return queue_name_map
+            return (counters or {}).get(key)
+
+        mock_db.get_all.side_effect = get_all
+        return mock_db
+
+    def _pfc_wd_counters(self, value='100', status='operational'):
+        """Return a COUNTERS hash with all PFC_WD stats fields set to value."""
+        fields = {f: value for f in self.pfcwdstat.PFC_WD_STATS_FIELDS}
+        fields['PFC_WD_STATUS'] = status
+        return fields
+
+    @patch('pfcwdstat.SonicV2Connector')
+    def test_clear_single_queue(self, mock_connector):
+        oid = 'oid:0x100'
+        mock_db = self._make_mock_db(
+            queue_name_map={'Ethernet0:3': oid},
+            counters={'COUNTERS:' + oid: self._pfc_wd_counters()},
+        )
+        mock_connector.return_value = mock_db
+
+        self.pfcwdstat.clear_stats()
+
+        assert mock_db.set.call_count == len(self.pfcwdstat.PFC_WD_STATS_FIELDS)
+        assert all(c[0][1] == 'COUNTERS:' + oid for c in mock_db.set.call_args_list)
+        assert all(c[0][3] == '0' for c in mock_db.set.call_args_list)
+
+    @patch('pfcwdstat.SonicV2Connector')
+    def test_clear_multiple_queues(self, mock_connector):
+        oid_map = {
+            'Ethernet0:3': 'oid:0x100',
+            'Ethernet0:4': 'oid:0x200',
+            'Ethernet4:3': 'oid:0x300',
+        }
+        counters = {
+            'COUNTERS:' + oid: self._pfc_wd_counters()
+            for oid in oid_map.values()
+        }
+        mock_db = self._make_mock_db(queue_name_map=oid_map, counters=counters)
+        mock_connector.return_value = mock_db
+
+        self.pfcwdstat.clear_stats()
+
+        num_fields = len(self.pfcwdstat.PFC_WD_STATS_FIELDS)
+        assert mock_db.set.call_count == num_fields * 3
+        counter_keys = {c[0][1] for c in mock_db.set.call_args_list}
+        assert counter_keys == {
+            'COUNTERS:oid:0x100',
+            'COUNTERS:oid:0x200',
+            'COUNTERS:oid:0x300',
+        }
+
+    @patch('pfcwdstat.SonicV2Connector')
+    def test_clear_no_entries(self, mock_connector):
+        mock_db = self._make_mock_db(queue_name_map=None)
+        mock_connector.return_value = mock_db
+
+        self.pfcwdstat.clear_stats()
+
+        mock_db.set.assert_not_called()
+
+    @patch('pfcwdstat.SonicV2Connector')
+    def test_clear_skips_queue_without_pfc_wd_stats(self, mock_connector):
+        """Queues that have no PFC_WD_QUEUE_STATS_* fields are not touched."""
+        oid = 'oid:0x100'
+        mock_db = self._make_mock_db(
+            queue_name_map={'Ethernet0:3': oid},
+            counters={'COUNTERS:' + oid: {'SAI_QUEUE_STAT_PACKETS': '500'}},
+        )
+        mock_connector.return_value = mock_db
+
+        self.pfcwdstat.clear_stats()
+
+        mock_db.set.assert_not_called()
+
+    @patch('pfcwdstat.SonicV2Connector')
+    def test_clear_stale_stats_no_pfc_wd_table(self, mock_connector):
+        """Stats from inactive queues (PFC_WD_TABLE gone, STATUS=N/A) are cleared.
+
+        An implementation that enumerates queues via PFC_WD_TABLE|* would bail
+        with 'No PFC Watchdog stats found.' when pfcwd is no longer active,
+        leaving residual stats that 'show pfcwd stats' continues to render.
+        """
+        oid = 'oid:0x15000000000032'
+        # No PFC_WD_STATUS field — mirrors the inactive/stale state
+        stale_counters = {f: '100' for f in self.pfcwdstat.PFC_WD_STATS_FIELDS}
+        mock_db = self._make_mock_db(
+            queue_name_map={'Ethernet32:4': oid},
+            counters={'COUNTERS:' + oid: stale_counters},
+        )
+        mock_connector.return_value = mock_db
+
+        self.pfcwdstat.clear_stats()
+
+        assert mock_db.set.call_count == len(self.pfcwdstat.PFC_WD_STATS_FIELDS)
+        assert all(c[0][1] == 'COUNTERS:' + oid for c in mock_db.set.call_args_list)
+        assert all(c[0][3] == '0' for c in mock_db.set.call_args_list)
+
+    @patch('pfcwdstat.SonicV2Connector')
+    def test_clear_skips_active_storm_queue(self, mock_connector):
+        """A queue with an active storm (PFC_WD_STATUS == 'stormed') is not
+        cleared, so the in-flight DEADLOCK_DETECTED/RESTORED pair is not split
+        (which would otherwise leave RESTORED > DETECTED once the storm ends)."""
+        oid = 'oid:0x100'
+        mock_db = self._make_mock_db(
+            queue_name_map={'Ethernet384:3': oid},
+            counters={'COUNTERS:' + oid: self._pfc_wd_counters(status='stormed')},
+        )
+        mock_connector.return_value = mock_db
+
+        self.pfcwdstat.clear_stats()
+
+        mock_db.set.assert_not_called()
+
+    @patch('pfcwdstat.SonicV2Connector')
+    def test_clear_mixed_storm_and_idle(self, mock_connector):
+        """Stormed queues are skipped while non-stormed queues are still cleared
+        in the same invocation."""
+        stormed_oid = 'oid:0x100'
+        idle_oid = 'oid:0x200'
+        mock_db = self._make_mock_db(
+            queue_name_map={'Ethernet0:3': stormed_oid, 'Ethernet4:3': idle_oid},
+            counters={
+                'COUNTERS:' + stormed_oid: self._pfc_wd_counters(status='stormed'),
+                'COUNTERS:' + idle_oid: self._pfc_wd_counters(status='operational'),
+            },
+        )
+        mock_connector.return_value = mock_db
+
+        self.pfcwdstat.clear_stats()
+
+        # Only the non-stormed (idle) queue is zeroed.
+        assert mock_db.set.call_count == len(self.pfcwdstat.PFC_WD_STATS_FIELDS)
+        assert all(c[0][1] == 'COUNTERS:' + idle_oid for c in mock_db.set.call_args_list)
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
