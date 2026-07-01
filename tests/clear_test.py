@@ -79,7 +79,6 @@ class TestClear(object):
         run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'q_shared_uni'])
 
     @patch('clear.main.run_command')
-    @patch('clear.main.os.geteuid', MagicMock(return_value=0))
     def test_clear_hdrm_wm(self, run_command):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['headroom-pool'].commands['watermark'])
@@ -87,7 +86,6 @@ class TestClear(object):
         run_command.assert_called_with(['watermarkstat', '-c', '-t', 'headroom_pool'])
 
     @patch('clear.main.run_command')
-    @patch('clear.main.os.geteuid', MagicMock(return_value=0))
     def test_clear_hdrm_pst_wm(self, run_command):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['headroom-pool'].commands['persistent-watermark'])
