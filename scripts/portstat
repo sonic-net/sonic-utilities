@@ -44,7 +44,44 @@ from utilities_common import constants
 from utilities_common.intf_filter import parse_interface_in_filter
 
 from utilities_common.cli import json_serial, UserCache
-from utilities_common.portstat import Portstat
+from utilities_common.portstat import Portstat, COUNTERS_PORT_NAME_MAP, RATES_TABLE_PREFIX
+
+# FEC rate/window aggregate fields in RATES:<oid> that must be reset on
+# clear (the snapshot-diff cache only covers cumulative counters).
+FEC_RATE_AGGREGATE_FIELDS = (
+    'FEC_PRE_BER_MAX',
+    'FEC_PRE_BER_MIN',
+    'FEC_PRE_BER_AVG',
+    'FEC_POST_BER_MAX',
+    'FEC_POST_BER_MIN',
+    'FEC_POST_BER_AVG',
+    'FEC_FLR',
+    'FEC_FLR_PREDICTED',
+    'FEC_FLR_R_SQUARED',
+    'FEC_MAX_T',
+)
+
+
+def _clear_fec_rate_aggregates(portstat):
+    try:
+        ns_list = portstat.multi_asic.get_ns_list_based_on_options()
+    except Exception as e:
+        print("Warning: failed to clear FEC rate aggregates: {}".format(e), file=sys.stderr)
+        return
+    for ns in ns_list:
+        try:
+            db = portstat.get_db_client(ns)
+            counter_port_name_map = db.get_all(db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
+            if not counter_port_name_map:
+                continue
+            redis_client = db.get_redis_client(db.COUNTERS_DB)
+            for oid in counter_port_name_map.values():
+                redis_client.hdel(RATES_TABLE_PREFIX + oid, *FEC_RATE_AGGREGATE_FIELDS)
+        except Exception as e:
+            print("Warning: failed to clear FEC rate aggregates for namespace '{}': {}".format(ns, e),
+                  file=sys.stderr)
+            continue
+
 
 def main():
     parser  = argparse.ArgumentParser(description='Display the ports state and counters',
@@ -83,6 +120,7 @@ Examples:
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
     parser.add_argument('-l', '--detail', action='store_true', help='Display detailed statistics.')
     parser.add_argument('-nz','--non_zero', action='store_true', help='Display only non-zero counters')
+    parser.add_argument('--relative-timestamp', action='store_true', help='Show relative time since last FEC histogram bin update')
     args = parser.parse_args()
 
     save_fresh_stats = args.clear
@@ -103,6 +141,7 @@ Examples:
     display_option = args.show
     detail = args.detail
     nonzero = args.non_zero
+    relative_timestamp = args.relative_timestamp
 
     cache = UserCache(tag=tag_name)
 
@@ -136,7 +175,8 @@ Examples:
         portstat.cnstat_diff_print(cnstat_dict, {}, ratestat_dict, intf_list,
                                     use_json, print_all, errors_only,
                                     fec_stats_only, rates_only,
-                                    trim_stats_only, fec_hist_only)
+                                    trim_stats_only, fec_hist_only,
+                                    relative_timestamp=relative_timestamp)
         sys.exit(0)
 
     if save_fresh_stats:
@@ -145,6 +185,7 @@ Examples:
         except IOError as e:
             sys.exit(e.errno)
         else:
+            _clear_fec_rate_aggregates(portstat)
             print("Cleared counters")
             sys.exit(0)
 
@@ -158,7 +199,8 @@ Examples:
                 portstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, ratestat_dict,
                                            intf_list, use_json, print_all, errors_only,
                                            fec_stats_only, rates_only, trim_stats_only,
-                                           fec_hist_only, detail, nonzero)
+                                           fec_hist_only, detail, nonzero,
+                                           relative_timestamp=relative_timestamp)
             except IOError as e:
                 print(e.errno, e)
         else:
@@ -169,7 +211,8 @@ Examples:
                 portstat.cnstat_diff_print(cnstat_dict, {}, ratestat_dict, intf_list,
                                            use_json, print_all, errors_only,
                                            fec_stats_only, rates_only, trim_stats_only,
-                                           fec_hist_only, detail, nonzero)
+                                           fec_hist_only, detail, nonzero,
+                                           relative_timestamp=relative_timestamp)
     else:
         #wait for the specified time and then gather the new stats and output the difference.
         time.sleep(wait_time_in_seconds)
@@ -178,7 +221,8 @@ Examples:
         portstat.cnstat_diff_print(cnstat_new_dict, cnstat_dict, ratestat_new_dict,
                                    intf_list, use_json, print_all, errors_only,
                                    fec_stats_only, rates_only, trim_stats_only,
-                                   fec_hist_only, detail, nonzero)
+                                   fec_hist_only, detail, nonzero,
+                                   relative_timestamp=relative_timestamp)
 
 if __name__ == "__main__":
     main()
