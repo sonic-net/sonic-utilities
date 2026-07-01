@@ -9,6 +9,7 @@ from utilities_common.platform_sfputil_helper import (
     logical_port_name_to_physical_port_list, is_sfp_present,
     get_first_subport, get_subport, get_sfp_object, get_value_from_db_by_field
 )
+from .utils import load_source
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -17,6 +18,7 @@ sys.path.insert(0, modules_path)
 
 import show.main as show
 import show as show_module
+sfpshow = load_source("sfpshow", os.path.join(scripts_path, "sfpshow"))
 
 ERROR_INVALID_PORT = 1
 EXIT_FAIL = -1
@@ -898,6 +900,52 @@ Ethernet4: Transceiver status info not applicable
 Ethernet64: Transceiver status info not applicable
 """
 
+test_rlm_dom_info_dict = {
+    'rlm_temperature': '16.16',
+    'rlm_voltage': '3.396',
+    'rlm_tec_current': '0.0',
+    'rlm_temphighalarm': '80.0',
+    'rlm_templowalarm': '-5.0',
+    'rlm_temphighwarning': '70.0',
+    'rlm_templowwarning': '0.0',
+    'rlm_vcchighalarm': '3.63',
+    'rlm_vcclowalarm': '2.97',
+    'rlm_vcchighwarning': '3.465',
+    'rlm_vcclowwarning': '3.135',
+    'rlm_txpowerhighalarm': '7.0',
+    'rlm_txpowerlowalarm': '-6.9',
+    'rlm_txpowerhighwarning': '4.0',
+    'rlm_txpowerlowwarning': '-2.9',
+    'rlm_txbiashighalarm': '162.5',
+    'rlm_txbiashighwarning': '156.248',
+}
+
+test_rlm_dom_output = """\
+        ChannelMonitorValues:
+        ChannelThresholdValues:
+        ModuleMonitorValues:
+        ModuleThresholdValues:
+        RLMMonitorValues:
+                RLM TEC Current: 0.0%
+                RLM Temperature: 16.16C
+                RLM Vcc: 3.396Volts
+        RLMThresholdValues:
+                RLM TempHighAlarm: 80.0C
+                RLM TempHighWarning: 70.0C
+                RLM TempLowAlarm: -5.0C
+                RLM TempLowWarning: 0.0C
+                RLM TxBiasHighAlarm: 162.5mA
+                RLM TxBiasHighWarning: 156.248mA
+                RLM TxPowerHighAlarm: 7.0mW
+                RLM TxPowerHighWarning: 4.0mW
+                RLM TxPowerLowAlarm: -6.9mW
+                RLM TxPowerLowWarning: -2.9mW
+                RLM VccHighAlarm: 3.63Volts
+                RLM VccHighWarning: 3.465Volts
+                RLM VccLowAlarm: 2.97Volts
+                RLM VccLowWarning: 3.135Volts
+"""
+
 class TestSFP(object):
     @classmethod
     def setup_class(cls):
@@ -974,6 +1022,11 @@ Ethernet36  Present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["info"])
         assert result.exit_code == 0
         assert "Ethernet24" not in result.output
+
+    def test_sfpshow_convert_dom_to_output_string_with_rlm(self):
+        sfp_show = sfpshow.SFPShow(None, None, dump_dom=True)
+        output = sfp_show.convert_dom_to_output_string("CPO Bailly", True, test_rlm_dom_info_dict)
+        assert output == test_rlm_dom_output
 
     def test_sfp_eeprom_with_dom(self):
         runner = CliRunner()
