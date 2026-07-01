@@ -521,6 +521,19 @@ class TestSfputil(object):
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    def test_firmware_show(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_sfp.get_presence.return_value = True
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        mock_api.get_module_fw_info.return_value = {'info': ""}
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['firmware'].commands['show'], ["Ethernet0"])
+        assert result.exit_code == 0
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     def test_show_presence(self, mock_chassis):
@@ -667,6 +680,55 @@ Ethernet0  On
         assert result.exit_code == ERROR_NOT_IMPLEMENTED
         mock_sfp.get_lpmode_via_pin.assert_called_once_with()
         assert "This functionality is currently not implemented for this platform" in result.output
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    def test_lpmode_show(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_sfp.get_lpmode.return_value = True
+        mock_sfp.get_presence = MagicMock(return_value=True)
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_lpmode.return_value = False
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  Off
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_presence.return_value = False
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  Not Present
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_lpmode.return_value = False
+        mock_sfp.get_transceiver_info = MagicMock(return_value={'type': sfputil.RJ45_PORT_TYPE})
+        mock_chassis.get_port_or_cage_type = MagicMock(return_value=sfputil.SfpBase.SFP_PORT_TYPE_BIT_RJ45)
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  N/A
+"""
+        assert result.output == expected_output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
@@ -1420,6 +1482,20 @@ EEPROM hexdump for port Ethernet4
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['show'].commands['fwversion'], ["Ethernet0"])
+        assert result.output == 'Show firmware version is not applicable for RJ45 port Ethernet0.\n'
+        assert result.exit_code == EXIT_FAIL
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
+    def test_firmware_show_Rj45(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_sfp.get_presence.return_value = True
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['firmware'].commands['show'], ["Ethernet0"])
         assert result.output == 'Show firmware version is not applicable for RJ45 port Ethernet0.\n'
         assert result.exit_code == EXIT_FAIL
 
