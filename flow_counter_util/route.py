@@ -1,6 +1,6 @@
 import os
 import sys
-from swsscommon.swsscommon import SonicV2Connector
+from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 
 try:
     if os.environ["UTILITIES_UNIT_TESTING"] == "1" or os.environ["UTILITIES_UNIT_TESTING"] == "2":
@@ -54,15 +54,18 @@ def build_route_pattern(vrf, prefix):
         return prefix
 
 
-def get_route_flow_counter_capability():
-    state_db = SonicV2Connector(host="127.0.0.1")
-    state_db.connect(state_db.STATE_DB)
+def get_route_flow_counter_capability(namespace=''):
+    if namespace != '':
+        if not SonicDBConfig.isGlobalInit():
+            SonicDBConfig.initializeGlobalConfig()
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db.connect(state_db.STATE_DB, False)
 
     return state_db.get_all(state_db.STATE_DB, '{}|{}'.format(FLOW_COUNTER_CAPABILITY_TABLE, FLOW_COUNTER_CAPABILITY_KEY))
 
 
-def exit_if_route_flow_counter_not_support():
-    capabilities = get_route_flow_counter_capability()
+def exit_if_route_flow_counter_not_support(namespace=''):
+    capabilities = get_route_flow_counter_capability(namespace)
     if not capabilities:
         print('Waiting for swss to initialize route flow counter capability, please try again later')
         exit(1)
