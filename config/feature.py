@@ -16,12 +16,17 @@ def set_feature_state(cfgdb_clients, name, state, block):
         entry_data = cfgdb.get_entry('FEATURE', name)
         if not entry_data:
             raise Exception("Feature '{}' doesn't exist".format(name))
-        entry_data_set.add(entry_data['state'])
+        entry_state = entry_data.get('state')
+        if entry_state is not None:
+            entry_data_set.add(entry_state)
+
+    if not entry_data_set:
+        raise Exception("Feature '{}' state is not available in any namespace".format(name))
 
     if len(entry_data_set) > 1:
         raise Exception("Feature '{}' state is not consistent across namespaces".format(name))
 
-    if entry_data['state'] == "always_enabled":
+    if entry_data_set.pop() == "always_enabled":
         raise Exception("Feature '{}' state is always enabled and can not be modified".format(name))
 
     for ns, cfgdb in cfgdb_clients.items():
@@ -137,13 +142,19 @@ def feature_autorestart(db, name, autorestart):
         if not entry_data:
             click.echo("Feature '{}' doesn't exist".format(name))
             sys.exit(1)
-        entry_data_set.add(entry_data['auto_restart'])
+        entry_auto_restart = entry_data.get('auto_restart')
+        if entry_auto_restart is not None:
+            entry_data_set.add(entry_auto_restart)
+
+    if not entry_data_set:
+        click.echo("Feature '{}' auto-restart is not available in any namespace".format(name))
+        sys.exit(1)
 
     if len(entry_data_set) > 1:
         click.echo("Feature '{}' auto-restart is not consistent across namespaces".format(name))
         sys.exit(1)
 
-    if entry_data['auto_restart'] == "always_enabled":
+    if entry_data_set.pop() == "always_enabled":
         click.echo("Feature '{}' auto-restart is always enabled and can not be modified".format(name))
         return
 
