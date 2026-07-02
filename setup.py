@@ -184,6 +184,7 @@ setup(
         'scripts/sensorshow',
         'scripts/voqutil',
         'scripts/warm-reboot',
+        'scripts/warm-reboot-gr-fix.py',
         'scripts/watermarkstat',
         'scripts/watermarkcfg',
         'scripts/sonic-kdump-config',
