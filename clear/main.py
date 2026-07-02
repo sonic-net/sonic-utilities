@@ -347,9 +347,12 @@ def queue():
 
 
 @queue.command()
-def wredcounters():
+@click.option('--voq', is_flag=True, help="Clear VOQ counters")
+def wredcounters(voq):
     """Clear queue wredcounters"""
     command = ['wredstat', '-c']
+    if voq:
+        command += ['-V']
     run_command(command)
 
 
