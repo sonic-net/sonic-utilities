@@ -11804,6 +11804,11 @@ Optionally, you can specify an interface name in order to display only that part
   admin@sonic:~$ sonic-clear queue wredcounters
   ```
 
+  To clear VOQ wred counters, use the `--voq` option:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters --voq
+  ```
+
 
 #### Buffer Pool
 
