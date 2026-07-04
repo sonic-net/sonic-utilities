@@ -65,6 +65,24 @@ def _state_entry(db, key):
     return db.db.get_all(db.db.STATE_DB, key) or {}
 
 
+def _state_redis_client():
+    """Return a redis-py client for commands absent from DBConnector."""
+    import redis
+    from swsscommon import swsscommon
+
+    database = "STATE_DB"
+    database_key = swsscommon.SonicDBKey()
+    database_id = swsscommon.SonicDBConfig.getDbId(database, database_key)
+    socket_path = swsscommon.SonicDBConfig.getDbSock(database, database_key)
+    if socket_path:
+        return redis.Redis(unix_socket_path=socket_path, db=database_id)
+    return redis.Redis(
+        host=swsscommon.SonicDBConfig.getDbHostname(database, database_key),
+        port=swsscommon.SonicDBConfig.getDbPort(database, database_key),
+        db=database_id,
+    )
+
+
 def _is_dldd_fault(fault):
     """Return whether a shared FAULT_INFO row is owned by DLDD."""
     try:
@@ -83,7 +101,10 @@ def _heartbeat_age(db):
     """Return an approximate age based on the status key's specified TTL."""
     try:
         redis_client = db.db.get_redis_client(db.db.STATE_DB)
-        ttl = redis_client.ttl(DLDD_STATUS_KEY)
+        ttl_method = getattr(redis_client, "ttl", None)
+        if not callable(ttl_method):
+            ttl_method = _state_redis_client().ttl
+        ttl = ttl_method(DLDD_STATUS_KEY)
     except Exception:
         return "unavailable"
 

@@ -7,7 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from config.dldd import dldd as config_dldd
-from show.dldd import _json_value, dldd as show_dldd
+from show.dldd import _heartbeat_age, _json_value, dldd as show_dldd
 from utilities_common.db import Db
 
 
@@ -228,6 +228,22 @@ def test_show_status_handles_missing_state():
 
     assert result.exit_code == 0, result.output
     assert result.output == "DLDD status is unavailable in STATE_DB.\n"
+
+
+def test_heartbeat_age_uses_redis_client_when_dbconnector_has_no_ttl(monkeypatch):
+    class DBConnector(object):
+        pass
+
+    db = _db()
+    db.db.get_redis_client.return_value = DBConnector()
+    redis_client = Mock()
+    redis_client.ttl.return_value = 90
+    monkeypatch.setattr(
+        "show.dldd._state_redis_client", lambda: redis_client
+    )
+
+    assert _heartbeat_age(db) == "30 seconds (approximate)"
+    redis_client.ttl.assert_called_once_with("DLDD_STATUS|process_state")
 
 
 def test_show_faults_displays_and_filters_records():
