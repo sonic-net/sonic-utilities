@@ -39,22 +39,29 @@ sig-list-to-certs $EFI_CERTS_DIR/db_efi $EFI_CERTS_DIR/db >/dev/null||
     echo "Error: convert sig list to certs: $?"
     clean_up 1
 }
+# Combine all db certificates into a single trust store. The CMS SignerInfo identifies the
+# signing certificate by issuer and serial number, so openssl selects the matching db entry
+# itself. Verifying once against the whole db set is equivalent to trying each certificate
+# individually, but performs a single verification instead of one per db entry. On a failing
+# image this avoids re-reading the payload once for every certificate enrolled in db, which is
+# what made verification of an unsigned/untrusted image scale with the size of db.
+: > $EFI_CERTS_DIR/cert.pem
 for file in $(ls $EFI_CERTS_DIR | grep "db-"); do
-    LOG=$(openssl  x509 -in $EFI_CERTS_DIR/$file -inform der -out $EFI_CERTS_DIR/cert.pem 2>&1)
+    LOG=$(openssl x509 -in $EFI_CERTS_DIR/$file -inform der 2>&1 >> $EFI_CERTS_DIR/cert.pem)
     if [ $? -ne 0 ]; then
         logger "cms_validation: $LOG"
     fi
-    # Verify detached signature
-    LOG=$(verify_image_sign_common $image_file $DATA_FILE $CMS_SIG_FILE)
-    VALIDATION_RES=$?
-    if [ $VALIDATION_RES -eq 0 ]; then
-        RESULT="CMS Verified OK using efi keys"
-        echo "verification ok:$RESULT"
-        # No need to continue.
-        # Exit without error if any success signature verification.
-        clean_up 0
-    fi
 done
+
+# Verify the detached signature against the combined db trust store.
+LOG=$(verify_image_sign_common $image_file $DATA_FILE $CMS_SIG_FILE)
+VALIDATION_RES=$?
+if [ $VALIDATION_RES -eq 0 ]; then
+    RESULT="CMS Verified OK using efi keys"
+    echo "verification ok:$RESULT"
+    clean_up 0
+fi
+
 echo "Failure: CMS signature Verification Failed: $LOG"
 
 clean_up 1
