@@ -2,7 +2,6 @@
 verify_image_sign_common() {
     image_file="${1}"
     cms_sig_file="sig.cms"
-    TMP_DIR=$(mktemp -d)
     DATA_FILE="${2}"
     CMS_SIG_FILE="${3}"
     
@@ -29,7 +28,6 @@ verify_image_sign_common() {
         VALIDATION_RES=$?
         if [ $VALIDATION_RES -eq 0 ]; then
             RESULT="CMS Verified OK"
-            if  [ -d "${TMP_DIR}" ]; then rm -rf ${TMP_DIR}; fi
             echo "verification ok:$RESULT"
             # No need to continue.
             # Exit without error if any success signature verification.
@@ -37,6 +35,5 @@ verify_image_sign_common() {
         fi
     done
 
-    if  [ -d "${TMP_DIR}" ]; then rm -rf ${TMP_DIR}; fi
     return 1
 }
