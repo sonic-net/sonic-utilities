@@ -13,7 +13,11 @@ clean_up ()
     exit $1
 }
 
-TMP_DIR=$(mktemp -d)
+TMP_DIR=$(mktemp -d /host/.verify_image_sign.XXXXXX) ||
+{
+    echo "Error: unable to create image verification workspace on /host"
+    exit 1
+}
 DATA_FILE="${TMP_DIR}/data.bin"
 CMS_SIG_FILE="${TMP_DIR}/${cms_sig_file}"
 TAR_SIZE=$(head -n $lines_for_lookup $image_file | grep "payload_image_size=" | cut -d"=" -f2- )
@@ -23,7 +27,11 @@ SIG_PAYLOAD_SIZE=$(($TAR_SIZE + $SHARCH_SIZE ))
 # Add extra byte for payload
 sed -e '1,/^exit_marker$/d' $image_file | tail -c +$(( $TAR_SIZE + 1 )) > $CMS_SIG_FILE
 # Extract image from signed file
-head -c $SIG_PAYLOAD_SIZE $image_file > $DATA_FILE
+head -c $SIG_PAYLOAD_SIZE $image_file > $DATA_FILE ||
+{
+    echo "Error: unable to extract image payload for signature verification"
+    clean_up 1
+}
 # verify signature with certificate fetched with efi tools
 EFI_CERTS_DIR=/tmp/efi_certs
 [ -d $EFI_CERTS_DIR ] && rm  -rf $EFI_CERTS_DIR
@@ -45,10 +53,16 @@ sig-list-to-certs $EFI_CERTS_DIR/db_efi $EFI_CERTS_DIR/db >/dev/null||
 # individually, but performs a single verification instead of one per db entry. On a failing
 # image this avoids re-reading the payload once for every certificate enrolled in db, which is
 # what made verification of an unsigned/untrusted image scale with the size of db.
-LOG=$(find $EFI_CERTS_DIR -type f -name 'db-*' -execdir openssl x509 -in {} -inform der \; 2>&1 > $EFI_CERTS_DIR/cert.pem)
-if [ $? -ne 0 ]; then
-    logger "cms_validation: $LOG"
-fi
+: > "$EFI_CERTS_DIR/cert.pem"
+for cert in "$EFI_CERTS_DIR"/db-*; do
+    [ -f "$cert" ] || continue
+    cert_pem="$TMP_DIR/db-cert.pem"
+    if LOG=$(openssl x509 -in "$cert" -inform der -out "$cert_pem" 2>&1); then
+        cat "$cert_pem" >> "$EFI_CERTS_DIR/cert.pem"
+    else
+        logger "cms_validation: $LOG"
+    fi
+done
 
 # Verify the detached signature against the combined db trust store.
 LOG=$(verify_image_sign_common $image_file $DATA_FILE $CMS_SIG_FILE)
