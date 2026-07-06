@@ -6623,7 +6623,7 @@ The "detailed" subcommand is used to display more detailed interface counters. A
     Jabbers Received............................... N/A
     Fragments Received............................. N/A
     Undersize Received............................. 0
-    Overruns Received.............................. 0
+    IP Packets Received............................ 0
 
     Packets Transmitted 64 Octets.................. 0
     Packets Transmitted 65-127 Octets.............. 0

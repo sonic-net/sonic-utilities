@@ -26,7 +26,7 @@ NStats = namedtuple("NStats", "rx_ok, rx_err, rx_drop, rx_ovr, tx_ok,\
                     tx_64, tx_65_127, tx_128_255, tx_256_511, tx_512_1023, tx_1024_1518,\
                     tx_1519_2047, tx_2048_4095, tx_4096_9216, tx_9217_16383,\
                     tx_uca, tx_mca, tx_bca, tx_all,\
-                    rx_jbr, rx_frag, rx_usize, rx_ovrrun,\
+                    rx_jbr, rx_frag, rx_usize, rx_ip_recv,\
                     fec_corr, fec_uncorr, fec_symbol_err,\
                     wred_grn_drp_pkt, wred_ylw_drp_pkt, wred_red_drp_pkt, wred_tot_drp_pkt,\
                     trim, trim_sent, trim_drop, fec_bin0, fec_bin1, fec_bin2, fec_bin3,\
@@ -493,8 +493,8 @@ class Portstat(object):
                                                                                       old_cntr['rx_frag'])))
             print("Undersize Received............................. {}".format(ns_diff(cntr['rx_usize'],
                                                                                       old_cntr['rx_usize'])))
-            print("Overruns Received.............................. {}".format(ns_diff(cntr["rx_ovrrun"],
-                                                                                      old_cntr["rx_ovrrun"])))
+            print("IP Packets Received............................ {}".format(ns_diff(cntr["rx_ip_recv"],
+                                                                                      old_cntr["rx_ip_recv"])))
 
             print("")
             print("Packets Transmitted 64 Octets.................. {}".format(ns_diff(cntr['tx_64'],
