@@ -595,6 +595,8 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             raise click.Abort()
 
         if bootloader.is_secure_upgrade_image_verification_supported():
+            echo_and_log("Enrolling image {} Secure Boot db certificate...".format(binary_image_version))
+            bootloader.enroll_image_secure_boot_keys(image_path)
             echo_and_log("Verifying image {} signature...".format(binary_image_version))
             if not bootloader.verify_image_sign(image_path):
                 echo_and_log('Error: Failed verify image signature', LOG_ERR)

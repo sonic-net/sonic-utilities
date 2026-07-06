@@ -201,6 +201,21 @@ class GrubBootloader(OnieInstallerBootloader):
         click.echo(verification_result.stdout.decode())
         return verification_result.returncode == 0
 
+    def enroll_image_secure_boot_keys(self, image_path):
+        # Enroll the db certificate bundled in the image into the UEFI db before the image's
+        # signature is verified. verify_image_sign.sh reads the verification certificate from
+        # the UEFI db, so an image signed with a rotated (KEK-authorized) db key would not be
+        # trusted until its certificate is enrolled. This is best-effort: firmware still
+        # validates the db update against the enrolled KEK, so it does not weaken verification.
+        enroll_script_name = 'secure_boot_enroll_db.sh'
+        script_path = os.path.join('/usr', 'local', 'bin', enroll_script_name)
+        if not os.path.exists(script_path):
+            click.echo("Unable to find Secure Boot enrollment script in path " + script_path)
+            return False
+        enroll_result = subprocess.run([script_path, image_path], capture_output=True)
+        click.echo(enroll_result.stdout.decode())
+        return enroll_result.returncode == 0
+
     @classmethod
     def detect(cls):
         return os.path.isfile(os.path.join(HOST_PATH, 'grub/grub.cfg'))
