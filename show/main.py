@@ -73,6 +73,7 @@ from . import syslog
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import isis
 from . import llr
 from . import srv6
 from . import switch

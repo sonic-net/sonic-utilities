@@ -72,6 +72,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import isis
 from . import evpn_mh
 from . import llr
 
