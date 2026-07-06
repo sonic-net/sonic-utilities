@@ -291,7 +291,7 @@ class TestRouteCheck(object):
                 if not e.get('selected', False):
                     continue
                 if not e.get('offloaded', False):
-                    missed_route_list.append(r)
+                    missed_route_list.append({'prefix': r, 'protocol': e.get('protocol', '')})
                 if e.get('failed', False):
                     failed_route_list.append(r)
         return missed_route_list, failed_route_list  # Return tuple of (missed_routes, failed_routes)
