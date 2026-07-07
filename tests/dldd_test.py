@@ -109,6 +109,32 @@ def test_config_commands_reject_invalid_values(arguments):
     db.cfgdb.mod_entry.assert_not_called()
 
 
+def test_clear_state_invokes_safe_runtime_cleanup(monkeypatch):
+    run_command = Mock()
+    monkeypatch.setattr("config.dldd.clicommon.run_command", run_command)
+
+    result = CliRunner().invoke(config_dldd, ("clear-state", "-y"))
+
+    assert result.exit_code == 0, result.output
+    run_command.assert_called_once_with(["/usr/local/bin/dldd", "clear-state"])
+
+
+def test_clear_state_all_requires_confirmation_and_forwards_scope(monkeypatch):
+    run_command = Mock()
+    monkeypatch.setattr("config.dldd.clicommon.run_command", run_command)
+
+    result = CliRunner().invoke(
+        config_dldd,
+        ("clear-state", "--all"),
+        input="y\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    run_command.assert_called_once_with(
+        ["/usr/local/bin/dldd", "clear-state", "--all"]
+    )
+
+
 def test_show_config_displays_all_operator_fields():
     db = _db()
     db.cfgdb.get_table.return_value = {

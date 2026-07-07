@@ -115,3 +115,29 @@ def active_fault_recheck_interval(db, seconds):
 def rules_inbox_settle_time(db, seconds):
     """Set the rules-inbox stability window in seconds."""
     _set_config(db, "rules_inbox_settle_time", seconds)
+
+
+@dldd.command("clear-state")
+@click.option(
+    "--all",
+    "clear_all",
+    is_flag=True,
+    help=(
+        "Also remove DLDD-owned FAULT_INFO rows and diagnostic artifacts. "
+        "Rules and configuration are preserved."
+    ),
+)
+@click.option("-y", "--yes", is_flag=True, help="Skip the confirmation prompt.")
+def clear_state(clear_all, yes):
+    """Stop DLDD, clear daemon-owned runtime state, and restart if active."""
+
+    scope = "all DLDD runtime state, faults, and artifacts" if clear_all else (
+        "DLDD persisted state and status telemetry"
+    )
+    if not yes and not click.confirm("Clear {}?".format(scope)):
+        click.echo("Aborted.")
+        return
+    command = ["/usr/local/bin/dldd", "clear-state"]
+    if clear_all:
+        command.append("--all")
+    clicommon.run_command(command)
