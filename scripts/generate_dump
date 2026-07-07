@@ -58,6 +58,7 @@ IS_SUPERVISOR=false
 IS_SWITCH_BMC=false
 
 ENABLE_FLOW_DUMP=false
+FLOW_DUMP_MAX_FLOWS=
 
 # lock dirs/files
 LOCKDIR="/tmp/techsupport-lock"
@@ -2649,7 +2650,11 @@ start_dpu_flow_dump() {
     local path_file stderr_file
     path_file=$(mktemp /tmp/ts_dpu_flow_dump_path.XXXXXX)
     stderr_file=$(mktemp /tmp/ts_dpu_flow_dump_err.XXXXXX)
-    sonic-dpu-flow-dump.py --no-flow-state --file-only > "$path_file" 2>"$stderr_file"
+    local flow_dump_cmd=(sonic-dpu-flow-dump.py --no-flow-state --file-only)
+    if [[ -n "${FLOW_DUMP_MAX_FLOWS}" ]]; then
+        flow_dump_cmd+=(--max-flows "${FLOW_DUMP_MAX_FLOWS}")
+    fi
+    "${flow_dump_cmd[@]}" > "$path_file" 2>"$stderr_file"
     local rc=$?
     if [[ "$rc" -eq 0 ]] && [[ -f "$path_file" ]]; then
         echo "DPU flow dump collection successful (rc=${rc})."
@@ -3138,12 +3143,13 @@ OPTIONS
         Redirect any intermediate errors to STDERR
     -d
         Collect the output of debug dump cli
-    -f
-        On DPU platforms, also collect a DPU flow dump
+    -f MAX_FLOWS
+        On DPU platforms, also collect a DPU flow dump with the given
+        maximum number of flows
 EOF
 }
 
-while getopts ":xnvhzas:t:r:df" opt; do
+while getopts ":xnvhzas:t:r:df:" opt; do
     case $opt in
         x)
             # enable bash debugging
@@ -3195,7 +3201,12 @@ while getopts ":xnvhzas:t:r:df" opt; do
             DEBUG_DUMP=true
             ;;
         f)
+            if ! [[ ${OPTARG} =~ ^[0-9]+$ ]]; then
+                echo "Invalid max flows value: ${OPTARG}, Please enter a numeric value."
+                exit $EXT_GENERAL
+            fi
             ENABLE_FLOW_DUMP=true
+            FLOW_DUMP_MAX_FLOWS="${OPTARG}"
             ;;
         /?)
             echo "Invalid option: -$OPTARG" >&2

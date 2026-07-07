@@ -1798,7 +1798,8 @@ def users(verbose):
 @click.option('--silent', is_flag=True, help="Run techsupport in silent mode")
 @click.option('--debug-dump', is_flag=True, help="Collect Debug Dump Output")
 @click.option('--redirect-stderr', '-r', is_flag=True, help="Redirect an intermediate errors to STDERR")
-@click.option('--flow-dump', is_flag=True, help="Collect DPU flow dump (Only valid on DPU platforms)")
+@click.option('--flow-dump', required=False, type=click.IntRange(min=1),
+              help="Collect DPU flow dump with maximum number of flows (Only valid on DPU platforms)")
 def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
                 silent, debug_dump, redirect_stderr, flow_dump):
     """Gather information for troubleshooting"""
@@ -1822,8 +1823,8 @@ def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
     if debug_dump:
         cmd += ["-d"]
 
-    if flow_dump:
-        cmd += ["-f"]
+    if flow_dump is not None:
+        cmd += ["-f", str(flow_dump)]
 
     cmd += ['-t', str(cmd_timeout)]
     if redirect_stderr:
