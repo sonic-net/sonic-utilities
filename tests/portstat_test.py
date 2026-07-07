@@ -571,6 +571,20 @@ class TestPortStat(object):
         assert return_code == 0
         assert result == intf_rates
 
+    @pytest.mark.parametrize("intf_fs", [
+        "Ethernet320-Ethernet376",  # range bounds not numeric
+        "Ethernet0-",               # missing end of range
+        "Ethernet0-foo",            # non-numeric end of range
+        "Eth0-3",                   # range with unsupported prefix
+        "Ethernet8-4",              # start of range greater than the end
+    ])
+    def test_show_intf_counters_malformed_range(self, intf_fs):
+        return_code, result = get_result_and_return_code(['portstat', '-i', intf_fs])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 1
+        assert "Error: Invalid interface range" in result
+
     def test_clear_intf_counters(self):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands["counters"], [])

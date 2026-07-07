@@ -250,7 +250,7 @@ setup(
         'urllib3>=2',
         'click-log>=0.3.2',
         'docker>=4.4.4',
-        'docker-image-py>=0.1.10',
+        'docker-image-py==0.1.13',
         'filelock>=3.0.12',
         'enlighten>=1.8.0',
         'ijson>=3.2.3',

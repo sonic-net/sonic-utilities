@@ -3029,6 +3029,33 @@
         "SAI_COUNTER_STAT_PACKETS": 200,
         "SAI_COUNTER_STAT_BYTES": 204800
     },
+    "COUNTERS_ICMP_ECHO_SESSION_NAME_MAP": {
+        "default:Ethernet0:0x4eb39592:RX|IN":            "oid:0x540000000005a1",
+        "default:Ethernet0:0x4eb39592:RX|OUT":           "oid:0x540000000005a2",
+        "default:Ethernet8:0x69f578f5:NORMAL|IN":        "oid:0x540000000005a3",
+        "default:Ethernet8:0x69f578f5:NORMAL|OUT":       "oid:0x540000000005a4",
+        "default:Ethernet152:0x39e05375:NORMAL":         "oid:0x540000000005b1"
+    },
+    "COUNTERS:oid:0x540000000005a1": {
+        "SAI_COUNTER_STAT_PACKETS": 1234,
+        "SAI_COUNTER_STAT_BYTES":   188802
+    },
+    "COUNTERS:oid:0x540000000005a2": {
+        "SAI_COUNTER_STAT_PACKETS": 0,
+        "SAI_COUNTER_STAT_BYTES":   0
+    },
+    "COUNTERS:oid:0x540000000005a3": {
+        "SAI_COUNTER_STAT_PACKETS": 9876,
+        "SAI_COUNTER_STAT_BYTES":   1511028
+    },
+    "COUNTERS:oid:0x540000000005a4": {
+        "SAI_COUNTER_STAT_PACKETS": 9870,
+        "SAI_COUNTER_STAT_BYTES":   800370
+    },
+    "COUNTERS:oid:0x540000000005b1": {
+        "SAI_ICMP_ECHO_SESSION_STAT_IN_PACKETS":  5555,
+        "SAI_ICMP_ECHO_SESSION_STAT_OUT_PACKETS": 4444
+    },
     "PERSISTENT_DROP_ALERTS":{
         "DEBUG_0|1746495543": "Persistent packet drops detected on Ethernet0",
         "DEBUG_0|1746495767": "Persistent packet drops detected on Ethernet1"

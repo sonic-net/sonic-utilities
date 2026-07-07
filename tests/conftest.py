@@ -84,8 +84,22 @@ def setup_db_config():
     # Per-worker copy of mock_tables so tests that overwrite shared
     # JSON files (e.g. portstat_test replaces counters_db.json) only
     # affect their own worker's sandbox.
+    #
+    # Skip __pycache__ entries during the copy. CPython writes new
+    # bytecode caches atomically by creating .pyc.<nonce> temp files
+    # then os.rename()-ing them onto .pyc. When pytest-xdist starts
+    # workers in parallel and each runs this fixture, one worker's
+    # os.listdir() can return a .pyc.<nonce> path that has already been
+    # renamed to .pyc by another process by the time copytree tries to
+    # stat/copy it, surfacing as FileNotFoundError from shutil.Error.
+    # The bytecode cache is reproducible from the .py source on first
+    # import in each worker, so we simply don't copy it.
     worker_mock_tables = os.path.join(worker_root, 'mock_tables')
-    shutil.copytree(dbconnector.INPUT_DIR, worker_mock_tables)
+    shutil.copytree(
+        dbconnector.INPUT_DIR,
+        worker_mock_tables,
+        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.pyc.*'),
+    )
     dbconnector.INPUT_DIR = worker_mock_tables
     os.environ['MOCK_TABLES_DIR'] = worker_mock_tables
 
@@ -276,6 +290,31 @@ generated_services_list = [
     'syncd.service',
     'snmp.timer',
     'telemetry.timer']
+
+
+@pytest.fixture(autouse=True)
+def _ensure_sonic_platform_mock():
+    """Ensure sonic_platform is always mockable in sys.modules.
+
+    _reset_between_files() clears sonic_platform entries from sys.modules
+    between test files to prevent cross-file mock leakage under xdist.
+    This fixture re-injects a MagicMock stub so that any test using
+    @patch('sonic_platform.platform.Platform') (or similar) can resolve
+    the target without ModuleNotFoundError — even if the test file forgot
+    to inject it manually.
+
+    Note: test files that import sonic_platform at module level (e.g.
+    fwutil_test.py, psuutil_test.py, sfputil_test.py) still need their
+    own sys.modules injection before the import line, because module
+    collection happens before fixtures run.
+
+    Runs before every test function (autouse=True).
+    """
+    if 'sonic_platform' not in sys.modules:
+        sys.modules['sonic_platform'] = mock.MagicMock()
+    if 'sonic_platform.platform' not in sys.modules:
+        sys.modules['sonic_platform.platform'] = mock.MagicMock()
+    yield
 
 
 @pytest.fixture(autouse=True)

@@ -381,14 +381,14 @@ def leak_rack_manager_alerts():
 def leak_profiles():
     """Show leak sensor profiles"""
     try:
-        from utilities_common.db import Db
-        db = Db()
-        keys = db.cfgdb.get_keys(LEAK_PROFILE_TABLE) or []
+        state_db = _get_state_db()
+        keys = state_db.keys(state_db.STATE_DB, f"{LEAK_PROFILE_TABLE}|*") or []
         header = ['Sensor-Type', 'Max-Minor-Duration-Sec']
         rows = []
-        for sensor_type in sorted(keys):
-            entry = db.cfgdb.get_entry(LEAK_PROFILE_TABLE, sensor_type)
-            max_dur = entry.get('max_minor_duration_sec', 'N/A')
+        for key in sorted(keys):
+            sensor_type = key.split('|', 1)[1]
+            data = state_db.get_all(state_db.STATE_DB, key) or {}
+            max_dur = data.get('max_minor_duration_sec', 'N/A')
             rows.append((sensor_type, max_dur))
         if rows:
             click.echo(tabulate(rows, header, tablefmt='simple'))

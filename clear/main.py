@@ -13,6 +13,7 @@ from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
 from . import plugins
 from . import stp
+from . import icmp as icmp_clear
 
 # This is from the aliases example:
 # https://github.com/pallets/click/blob/57c6f09611fc47ca80db0bd010f05998b3c0aa95/examples/aliases/aliases.py
@@ -149,6 +150,7 @@ def ipv6():
 # 'STP'
 #
 cli.add_command(stp.spanning_tree)
+cli.add_command(icmp_clear.icmp)
 
 
 # 'LLR'
@@ -719,9 +721,15 @@ def statistics(db):
 
 # ("sonic-clear flowcnt-trap")
 @cli.command()
-def flowcnt_trap():
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              show_default=True, help='Namespace name')
+def flowcnt_trap(namespace):
     """ Clear trap flow counters """
     command = ["flow_counters_stat", "-c", '-t', "trap"]
+    # None namespace means default namespace
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 

@@ -1141,7 +1141,8 @@ def error_status(port, fetch_from_hardware):
 # 'lpmode' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP low-power mode status for port <port_name> only")
-def lpmode(port):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def lpmode(port, use_lpmode_pin):
     """Display low-power mode status of SFP transceiver(s)"""
     logical_port_list = []
     output_table = []
@@ -1181,9 +1182,13 @@ def lpmode(port):
                     if not sfp.get_presence():
                         output_table.append([port_name, "Not Present"])
                         continue
-                    lpmode = sfp.get_lpmode()
-                except NotImplementedError:
-                    click.echo("This functionality is currently not implemented for this platform")
+                    if use_lpmode_pin:
+                        lpmode = sfp.get_lpmode_via_pin()
+                    else:
+                        lpmode = sfp.get_lpmode()
+                except (NotImplementedError, AttributeError) as e:
+                    click.echo("This functionality is currently not implemented for this platform "
+                               "({}: {})".format(type(e).__name__, e))
                     sys.exit(ERROR_NOT_IMPLEMENTED)
 
                 if lpmode:
@@ -1239,7 +1244,7 @@ def lpmode():
 
 
 # Helper method for setting low-power mode
-def set_lpmode(logical_port, enable):
+def set_lpmode(logical_port, enable, use_lpmode_pin=False):
     ganged = False
     i = 1
 
@@ -1269,9 +1274,13 @@ def set_lpmode(logical_port, enable):
             click.echo("{} low-power mode for port {} ... ".format(
                 "Enabling" if enable else "Disabling",
                 get_physical_port_name(logical_port, i, ganged)), nl=False)
-            result = sfp.set_lpmode(enable)
-        except NotImplementedError:
-            click.echo("This functionality is currently not implemented for this platform")
+            if use_lpmode_pin:
+                result = sfp.set_lpmode_via_pin(enable)
+            else:
+                result = sfp.set_lpmode(enable)
+        except (NotImplementedError, AttributeError) as e:
+            click.echo("This functionality is currently not implemented for this platform "
+                       "({}: {})".format(type(e).__name__, e))
             sys.exit(ERROR_NOT_IMPLEMENTED)
 
         if result:
@@ -1285,17 +1294,19 @@ def set_lpmode(logical_port, enable):
 # 'off' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def off(port_name):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def off(port_name, use_lpmode_pin):
     """Disable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, False)
+    set_lpmode(port_name, False, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'on' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def on(port_name):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def on(port_name, use_lpmode_pin):
     """Enable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, True)
+    set_lpmode(port_name, True, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'reset' subcommand
