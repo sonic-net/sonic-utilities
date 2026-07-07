@@ -290,6 +290,7 @@ def _rule_status_rows():
                     "component": "PSU0",
                     "source_type": "redis",
                     "monitor": "redis",
+                    "async": True,
                     "state": "READY",
                     "sampling_interval": 60.0,
                     "interval_source": "monitor_default",
@@ -447,6 +448,7 @@ def test_show_rules_filters_active_fault_and_displays_detail():
     assert "FAN_SPEED_FAULT" not in result.output
     assert "Rule PSU_OV_FAULT (1000001) work items" in result.output
     assert "PSU0" in result.output
+    assert "async" in result.output
     assert "60.0 (monitor_default)" in result.output
     assert "1000001:1:PSU0:redis" in result.output
     assert "detail was truncated" in result.output

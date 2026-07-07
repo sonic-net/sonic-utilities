@@ -583,6 +583,7 @@ def rules(
                 item.get("component", ""),
                 item.get("source_type", ""),
                 item.get("monitor", ""),
+                "async" if _bool_value(item.get("async", False)) else "inline",
                 item.get("state", ""),
                 "{} ({})".format(
                     item.get("sampling_interval", ""),
@@ -608,6 +609,7 @@ def rules(
                     "Component",
                     "Source type",
                     "Monitor",
+                    "Collection",
                     "State",
                     "Interval",
                     "Active fault",
