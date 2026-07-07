@@ -13,8 +13,18 @@ DLDD_CONFIG_TABLE = "DLDD_CONFIG"
 DLDD_CONFIG_KEY = "global"
 DLDD_STATUS_KEY = "DLDD_STATUS|process_state"
 DLDD_RULE_STATUS_KEY = "DLDD_RULE_STATUS|active"
+DLDD_RULE_STATUS_PREFIX = "DLDD_RULE_STATUS|rule|"
+DLDD_RULE_DETAIL_PREFIX = "DLDD_RULE_DETAIL|rule|"
 FAULT_INFO_PATTERN = "FAULT_INFO|*"
 HEARTBEAT_TTL_SECONDS = 120
+
+FAULT_JSON_FIELDS = {
+    "events": [],
+    "repair_actions": [],
+    "actions_taken": [],
+    "local_action_state": {},
+    "healthz_artifact": {},
+}
 
 CONFIG_FIELDS = (
     ("Individual max failure threshold", "individual_max_failure_threshold"),
@@ -78,6 +88,43 @@ def _timestamp_value(value):
     except (TypeError, ValueError):
         return value
     return math.floor(number) if math.isfinite(number) else value
+
+
+def _int_value(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _decode_key(value):
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return value
+
+
+def _fault_document(key, fault):
+    document = dict(fault)
+    document["redis_key"] = key
+    for field, default in FAULT_JSON_FIELDS.items():
+        if field in document:
+            document[field] = _json_value(document[field], default)
+    for field in (
+        "origin_time",
+        "last_detection_time",
+    ):
+        if field in document:
+            document[field] = _timestamp_value(document[field])
+    for field in (
+        "rule_id",
+        "occurrences",
+        "remote_action_time_window",
+    ):
+        if field in document:
+            document[field] = _int_value(document[field])
+    if "source_stale" in document:
+        document["source_stale"] = _bool_value(document["source_stale"])
+    return document
 
 
 def _state_entry(db, key):
@@ -389,25 +436,79 @@ def rules(
         )
         return
 
+    rule_keys = [
+        _decode_key(key)
+        for key in _json_value(snapshot.get("rule_keys"), [])
+    ]
+    invalid_rule_key = any(
+        not isinstance(key, str)
+        or not key.startswith(DLDD_RULE_STATUS_PREFIX)
+        or key == DLDD_RULE_STATUS_KEY
+        for key in rule_keys
+    )
+    if (
+        invalid_rule_key
+        or len(rule_keys) != _int_value(snapshot.get("rule_count"), -1)
+        or len(rule_keys) != len(set(rule_keys))
+    ):
+        click.echo("DLDD rule status index is incomplete or malformed.")
+        return
+
+    summaries = []
+    for key in rule_keys:
+        rule = _state_entry(db, key)
+        if (
+            not rule
+            or rule.get("active_rules_checksum", "") != checksum
+        ):
+            click.echo(
+                "DLDD rule status is incomplete for the active generation."
+            )
+            return
+        summaries.append(rule)
+
+    detail_cache = {}
+
+    def work_items(rule):
+        detail_key = _decode_key(rule.get("detail_key", ""))
+        if detail_key in detail_cache:
+            return detail_cache[detail_key]
+        if (
+            not isinstance(detail_key, str)
+            or not detail_key.startswith(DLDD_RULE_DETAIL_PREFIX)
+        ):
+            return None
+        detail = _state_entry(db, detail_key)
+        if (
+            not detail
+            or detail.get("active_rules_checksum", "") != checksum
+        ):
+            return None
+        items = _json_value(detail.get("work_items"), [])
+        detail_cache[detail_key] = items
+        return items
+
     selected = []
-    for rule in _json_value(snapshot.get("rules"), []):
-        if not isinstance(rule, dict):
-            continue
+    for rule in summaries:
         health = str(rule.get("health", "")).upper()
-        work_items = _json_value(rule.get("work_items"), [])
-        components = {
-            str(item.get("component", ""))
-            for item in work_items
-            if isinstance(item, dict)
-        }
         if health_filter and health != health_filter.upper():
             continue
-        if component_filter and (
-            str(rule.get("component", "")) != component_filter
-            and component_filter not in components
-        ):
-            continue
-        has_active_fault = int(rule.get("active_faults", 0) or 0) > 0
+        if component_filter:
+            if str(rule.get("component", "")) != component_filter:
+                items = work_items(rule)
+                if items is None:
+                    click.echo(
+                        "DLDD rule detail is incomplete for the active generation."
+                    )
+                    return
+                components = {
+                    str(item.get("component", ""))
+                    for item in items
+                    if isinstance(item, dict)
+                }
+                if component_filter not in components:
+                    continue
+        has_active_fault = _int_value(rule.get("active_faults", 0)) > 0
         if (
             active_fault_filter is not None
             and has_active_fault != active_fault_filter
@@ -417,8 +518,8 @@ def rules(
 
     selected.sort(
         key=lambda rule: (
-            rule.get("rule_id") is None,
-            rule.get("rule_id") or 0,
+            not str(rule.get("rule_id", "")).isdigit(),
+            _int_value(rule.get("rule_id")),
             str(rule.get("rule", "")),
         )
     )
@@ -454,7 +555,7 @@ def rules(
                 "Active faults",
                 "Last attempt",
                 "Last success",
-                "Max failures",
+                "Failure streak",
                 "Reason",
             ),
             tablefmt="simple",
@@ -470,7 +571,12 @@ def rules(
                 rule.get("rule", ""), rule.get("rule_id", "")
             )
         )
-        work_items = _json_value(rule.get("work_items"), [])
+        rule_work_items = work_items(rule)
+        if rule_work_items is None:
+            click.echo(
+                "DLDD rule detail is incomplete for the active generation."
+            )
+            return
         detail_rows = [
             (
                 item.get("event_id", ""),
@@ -491,7 +597,7 @@ def rules(
                 item.get("correlation_key", ""),
                 item.get("reason", ""),
             )
-            for item in work_items
+            for item in rule_work_items
             if isinstance(item, dict)
         ]
         click.echo(
@@ -517,7 +623,7 @@ def rules(
                 disable_numparse=True,
             )
         )
-        omitted = int(rule.get("work_items_omitted", 0) or 0)
+        omitted = _int_value(rule.get("work_items_omitted", 0))
         if omitted:
             click.echo(
                 (
@@ -539,20 +645,31 @@ def rules(
     help="Limit output to one fault status.",
 )
 @click.option("component_filter", "--component", help="Limit output to one component name.")
+@click.option(
+    "detail",
+    "--detail",
+    is_flag=True,
+    help="Show complete scalar metadata and decoded nested fields.",
+)
+@click.option(
+    "json_output",
+    "--json",
+    is_flag=True,
+    help="Emit selected faults as structured JSON.",
+)
 @clicommon.pass_db
-def faults(db, status_filter, component_filter):
+def faults(db, status_filter, component_filter, detail, json_output):
     """Show active and retained inactive DLDD faults."""
     keys = sorted(db.db.keys(db.db.STATE_DB, FAULT_INFO_PATTERN) or [])
-    rows = []
+    faults = []
 
     for key in keys:
-        if isinstance(key, bytes):
-            key = key.decode("utf-8", "replace")
+        key = _decode_key(key)
         fault = _state_entry(db, key)
         if not _is_dldd_fault(fault):
             continue
-        component_info = _json_value(fault.get("component_info"), {})
-        component = component_info.get("name", "") if isinstance(component_info, dict) else ""
+        fault = _fault_document(key, fault)
+        component = fault.get("component_name", "")
         symptom = fault.get("symptom", "")
         fault_status = fault.get("status", "")
 
@@ -560,17 +677,25 @@ def faults(db, status_filter, component_filter):
             continue
         if status_filter and fault_status.upper() != status_filter.upper():
             continue
+        faults.append(fault)
 
-        rows.append((
-            component,
-            symptom,
-            fault_status,
+    if json_output:
+        click.echo(json.dumps(faults, sort_keys=True, indent=2))
+        return
+
+    rows = [
+        (
+            fault.get("component_name", ""),
+            fault.get("symptom", ""),
+            fault.get("status", ""),
             fault.get("severity", ""),
             fault.get("rule", ""),
             fault.get("occurrences", ""),
-            _timestamp_value(fault.get("last_detection_time", "")),
+            fault.get("last_detection_time", ""),
             fault.get("description", ""),
-        ))
+        )
+        for fault in faults
+    ]
 
     click.echo(tabulate(
         rows,
@@ -587,3 +712,65 @@ def faults(db, status_filter, component_filter):
         tablefmt="simple",
         disable_numparse=True,
     ))
+
+    if not detail:
+        return
+    for fault in faults:
+        click.echo(
+            "\nFault {} / {}".format(
+                fault.get("component_name", ""),
+                fault.get("symptom", ""),
+            )
+        )
+        scalar_rows = [
+            ("Redis key", fault.get("redis_key", "")),
+            ("Component type", fault.get("component_type", "")),
+            ("Component name", fault.get("component_name", "")),
+            (
+                "Component serial number",
+                fault.get("component_serial_number", ""),
+            ),
+            ("Rule", fault.get("rule", "")),
+            ("Rule ID", fault.get("rule_id", "")),
+            ("Rule version", fault.get("rule_version", "")),
+            ("Schema version", fault.get("schema_version", "")),
+            (
+                "Active rules checksum",
+                fault.get("active_rules_checksum", ""),
+            ),
+            ("Error type", fault.get("error_type", "")),
+            ("Severity", fault.get("severity", "")),
+            ("Symptom", fault.get("symptom", "")),
+            ("Status", fault.get("status", "")),
+            ("Origin time", fault.get("origin_time", "")),
+            (
+                "Last detection time",
+                fault.get("last_detection_time", ""),
+            ),
+            ("Occurrences", fault.get("occurrences", "")),
+            (
+                "Remote action time window",
+                fault.get("remote_action_time_window", ""),
+            ),
+            ("Source stale", fault.get("source_stale", False)),
+            ("Description", fault.get("description", "")),
+        ]
+        click.echo(tabulate(
+            scalar_rows,
+            headers=("Field", "Value"),
+            tablefmt="simple",
+            disable_numparse=True,
+        ))
+        for field, title in (
+            ("events", "Events"),
+            ("repair_actions", "Repair actions"),
+            ("actions_taken", "Actions taken"),
+            ("local_action_state", "Local action state"),
+            ("healthz_artifact", "Healthz artifact"),
+        ):
+            click.echo("\n{}".format(title))
+            click.echo(json.dumps(
+                fault.get(field, FAULT_JSON_FIELDS[field]),
+                sort_keys=True,
+                indent=2,
+            ))

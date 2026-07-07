@@ -341,16 +341,65 @@ def _rule_status_rows():
     ]
 
 
+def _rule_status_entries(
+    checksum="sha256:test", detail_truncated="false"
+):
+    entries = {
+        "DLDD_STATUS|process_state": {
+            "active_rules_checksum": checksum,
+        }
+    }
+    rule_keys = []
+    for rule in _rule_status_rows():
+        status_key = "DLDD_RULE_STATUS|rule|{}".format(rule["rule"])
+        detail_key = "DLDD_RULE_DETAIL|rule|{}".format(rule["rule"])
+        summary = dict(rule)
+        work_items = summary.pop("work_items")
+        summary.update({
+            "active_rules_checksum": checksum,
+            "detail_key": detail_key,
+        })
+        entries[status_key] = summary
+        entries[detail_key] = {
+            "active_rules_checksum": checksum,
+            "rule_id": rule["rule_id"],
+            "rule": rule["rule"],
+            "work_items": json.dumps(work_items),
+        }
+        rule_keys.append(status_key)
+    entries["DLDD_RULE_STATUS|active"] = {
+        "active_rules_checksum": checksum,
+        "rule_keys": json.dumps(rule_keys),
+        "rule_count": str(len(rule_keys)),
+        "detail_truncated": detail_truncated,
+    }
+    return entries
+
+
+def _use_state_entries(db, entries):
+    db.db.get_all.side_effect = lambda unused_database, key: entries.get(
+        key, {}
+    )
+
+
+def test_show_rules_default_reads_only_small_summary_hashes():
+    db = _db()
+    _use_state_entries(db, _rule_status_entries())
+
+    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
+
+    assert result.exit_code == 0, result.output
+    assert "PSU_OV_FAULT" in result.output
+    assert "FAN_SPEED_FAULT" in result.output
+    requested = [item.args[1] for item in db.db.get_all.call_args_list]
+    assert "DLDD_RULE_STATUS|rule|PSU_OV_FAULT" in requested
+    assert "DLDD_RULE_STATUS|rule|FAN_SPEED_FAULT" in requested
+    assert not any(key.startswith("DLDD_RULE_DETAIL|rule|") for key in requested)
+
+
 def test_show_rules_filters_health_component_and_no_active_fault():
     db = _db()
-    db.db.get_all.side_effect = (
-        {"active_rules_checksum": "sha256:test"},
-        {
-            "active_rules_checksum": "sha256:test",
-            "rules": json.dumps(_rule_status_rows()),
-            "detail_truncated": "false",
-        },
-    )
+    _use_state_entries(db, _rule_status_entries())
 
     result = CliRunner().invoke(
         show_dldd,
@@ -375,18 +424,16 @@ def test_show_rules_filters_health_component_and_no_active_fault():
     assert db.db.get_all.call_args_list == [
         call("STATE_DB", "DLDD_STATUS|process_state"),
         call("STATE_DB", "DLDD_RULE_STATUS|active"),
+        call("STATE_DB", "DLDD_RULE_STATUS|rule|PSU_OV_FAULT"),
+        call("STATE_DB", "DLDD_RULE_STATUS|rule|FAN_SPEED_FAULT"),
+        call("STATE_DB", "DLDD_RULE_DETAIL|rule|FAN_SPEED_FAULT"),
     ]
 
 
 def test_show_rules_filters_active_fault_and_displays_detail():
     db = _db()
-    db.db.get_all.side_effect = (
-        {"active_rules_checksum": "sha256:test"},
-        {
-            "active_rules_checksum": "sha256:test",
-            "rules": json.dumps(_rule_status_rows()),
-            "detail_truncated": "true",
-        },
+    _use_state_entries(
+        db, _rule_status_entries(detail_truncated="true")
     )
 
     result = CliRunner().invoke(
@@ -408,19 +455,32 @@ def test_show_rules_filters_active_fault_and_displays_detail():
 
 def test_show_rules_rejects_stale_generation_snapshot():
     db = _db()
-    db.db.get_all.side_effect = (
-        {"active_rules_checksum": "sha256:current"},
-        {
-            "active_rules_checksum": "sha256:old",
-            "rules": json.dumps(_rule_status_rows()),
-        },
-    )
+    entries = _rule_status_entries(checksum="sha256:old")
+    entries["DLDD_STATUS|process_state"] = {
+        "active_rules_checksum": "sha256:current"
+    }
+    _use_state_entries(db, entries)
 
     result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
 
     assert result.exit_code == 0, result.output
     assert "does not match the active rules generation" in result.output
     assert "PSU_OV_FAULT" not in result.output
+
+
+def test_show_rules_rejects_malformed_rule_key_without_exception():
+    db = _db()
+    entries = _rule_status_entries()
+    entries["DLDD_RULE_STATUS|active"].update({
+        "rule_keys": '[{"not": "a key"}]',
+        "rule_count": "1",
+    })
+    _use_state_entries(db, entries)
+
+    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
+
+    assert result.exit_code == 0, result.output
+    assert "index is incomplete or malformed" in result.output
 
 
 def test_show_faults_displays_and_filters_records():
@@ -434,7 +494,9 @@ def test_show_faults_displays_and_filters_records():
             "rule_id": "2000001",
             "schema_version": "0.0.1",
             "active_rules_checksum": "sha256:test",
-            "component_info": json.dumps({"name": "FAN0"}),
+            "component_type": "FAN",
+            "component_name": "FAN0",
+            "component_serial_number": "FAN-SERIAL",
             "symptom": "SYMPTOM_ABNORMAL",
             "status": "INACTIVE",
             "severity": "WARNING",
@@ -447,7 +509,9 @@ def test_show_faults_displays_and_filters_records():
             "rule_id": "1000001",
             "schema_version": "0.0.1",
             "active_rules_checksum": "sha256:test",
-            "component_info": json.dumps({"name": "PSU0"}),
+            "component_type": "PSU",
+            "component_name": "PSU0",
+            "component_serial_number": "PSU-SERIAL",
             "symptom": "SYMPTOM_OVER_THRESHOLD",
             "status": "ACTIVE",
             "severity": "CRITICAL",
@@ -477,11 +541,92 @@ def test_show_faults_displays_and_filters_records():
     assert "1745614266.0" not in result.output
 
 
+def _detailed_fault_row():
+    return {
+        "rule": "CURRENT_HIGH",
+        "rule_id": "1000001",
+        "rule_version": "1.0.0",
+        "schema_version": "0.0.1",
+        "active_rules_checksum": "sha256:test",
+        "component_type": "CURRENT_SENSOR",
+        "component_name": "SENSOR0",
+        "component_serial_number": "SERIAL0",
+        "error_type": "POWER",
+        "events": json.dumps([
+            {
+                "id": 1,
+                "value_read": "30000",
+                "condition": {"type": "comparison", "value": 21000.0},
+            }
+        ]),
+        "repair_actions": json.dumps([{"action": "ACTION_REPLACE"}]),
+        "actions_taken": "[]",
+        "local_action_state": json.dumps({"state": "IDLE"}),
+        "healthz_artifact": json.dumps({"state": "COMPLETED"}),
+        "remote_action_time_window": "3600",
+        "severity": "WARNING",
+        "symptom": "SYMPTOM_OVER_THRESHOLD",
+        "status": "ACTIVE",
+        "origin_time": "1745614200.9",
+        "last_detection_time": "1745614266.8",
+        "occurrences": "1",
+        "description": "Current is high",
+    }
+
+
+def test_show_faults_detail_decodes_nested_fields():
+    db = _db()
+    db.db.keys.return_value = [
+        b"FAULT_INFO|SENSOR0|SYMPTOM_OVER_THRESHOLD"
+    ]
+    db.db.get_all.return_value = _detailed_fault_row()
+
+    result = CliRunner().invoke(
+        show_dldd, ("faults", "--detail"), obj=db
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Fault SENSOR0 / SYMPTOM_OVER_THRESHOLD" in result.output
+    assert "Component serial number" in result.output
+    assert "SERIAL0" in result.output
+    assert "Events" in result.output
+    assert '"value_read": "30000"' in result.output
+    assert "Local action state" in result.output
+    assert "1745614266.8" not in result.output
+
+
+def test_show_faults_json_emits_structured_documents():
+    db = _db()
+    db.db.keys.return_value = [
+        b"FAULT_INFO|SENSOR0|SYMPTOM_OVER_THRESHOLD"
+    ]
+    db.db.get_all.return_value = _detailed_fault_row()
+
+    result = CliRunner().invoke(
+        show_dldd, ("faults", "--json"), obj=db
+    )
+
+    assert result.exit_code == 0, result.output
+    documents = json.loads(result.output)
+    assert len(documents) == 1
+    fault = documents[0]
+    assert fault["component_type"] == "CURRENT_SENSOR"
+    assert fault["component_name"] == "SENSOR0"
+    assert fault["component_serial_number"] == "SERIAL0"
+    assert fault["rule_id"] == 1000001
+    assert fault["origin_time"] == 1745614200
+    assert fault["last_detection_time"] == 1745614266
+    assert fault["events"][0]["value_read"] == "30000"
+    assert fault["local_action_state"] == {"state": "IDLE"}
+    assert "component_info" not in fault
+
+
 def test_show_faults_ignores_rows_owned_by_other_agents():
     db = _db()
     db.db.keys.return_value = [b"FAULT_INFO|foreign-component|foreign-symptom"]
     db.db.get_all.return_value = {
-        "component_info": json.dumps({"name": "foreign-component"}),
+        "component_type": "FOREIGN",
+        "component_name": "foreign-component",
         "symptom": "foreign-symptom",
         "status": "ACTIVE",
         "description": "foreign fault",
