@@ -1,6 +1,7 @@
 """Operational display commands for the device-local diagnosis daemon."""
 
 import json
+import math
 
 import click
 from tabulate import tabulate
@@ -66,6 +67,17 @@ def _bool_value(value):
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _timestamp_value(value):
+    """Display a timestamp as whole Unix epoch seconds."""
+    if value in (None, "") or isinstance(value, bool):
+        return "" if value in (None, "") else value
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return value
+    return math.floor(number) if math.isfinite(number) else value
 
 
 def _state_entry(db, key):
@@ -187,7 +199,7 @@ def status(db):
                 rule.get("correlation_key", ""),
                 rule.get("state", ""),
                 rule.get("failure_count", ""),
-                rule.get("last_attempt", ""),
+                _timestamp_value(rule.get("last_attempt", "")),
                 rule.get("reason", ""),
             )
             for rule in broken_rules
@@ -217,9 +229,9 @@ def status(db):
                 source.get("state", ""),
                 source.get("failure_count", ""),
                 source.get("graceful", ""),
-                source.get("since", ""),
-                source.get("grace_deadline", ""),
-                source.get("last_success", ""),
+                _timestamp_value(source.get("since", "")),
+                _timestamp_value(source.get("grace_deadline", "")),
+                _timestamp_value(source.get("last_success", "")),
                 _compact(source.get("affected_rules", [])),
                 _compact(source.get("stale_faults", [])),
                 source.get("reason", ""),
@@ -257,13 +269,19 @@ def status(db):
                 evidence.get("correlation_key", ""),
                 evidence.get("state", ""),
                 evidence.get("owning_monitor", ""),
-                evidence.get("since", ""),
-                evidence.get("hold_deadline", ""),
+                _timestamp_value(evidence.get("since", "")),
+                _timestamp_value(evidence.get("hold_deadline", "")),
                 action_state.get("state", "") if isinstance(action_state, dict) else "",
                 action_state.get("worker_id", "") if isinstance(action_state, dict) else "",
-                action_state.get("started_at", "") if isinstance(action_state, dict) else "",
-                action_state.get("completed_at", "") if isinstance(action_state, dict) else "",
-                action_state.get("wait_until", "") if isinstance(action_state, dict) else "",
+                _timestamp_value(action_state.get("started_at", ""))
+                if isinstance(action_state, dict)
+                else "",
+                _timestamp_value(action_state.get("completed_at", ""))
+                if isinstance(action_state, dict)
+                else "",
+                _timestamp_value(action_state.get("wait_until", ""))
+                if isinstance(action_state, dict)
+                else "",
                 action_state.get("last_error", "") if isinstance(action_state, dict) else "",
                 evidence.get("reason", ""),
             ))
@@ -297,7 +315,7 @@ def status(db):
                 diagnostic.get("rule_id", ""),
                 diagnostic.get("component", ""),
                 diagnostic.get("state", ""),
-                diagnostic.get("observed_at", ""),
+                _timestamp_value(diagnostic.get("observed_at", "")),
                 diagnostic.get("reason", ""),
             )
             for diagnostic in diagnostics
@@ -416,8 +434,8 @@ def rules(
                 rule.get("work_items_total", 0),
             ),
             rule.get("active_faults", 0),
-            rule.get("last_attempt", "") or "",
-            rule.get("last_success", "") or "",
+            _timestamp_value(rule.get("last_attempt", "")),
+            _timestamp_value(rule.get("last_success", "")),
             rule.get("failure_count", 0),
             rule.get("reason", ""),
         )
@@ -465,9 +483,9 @@ def rules(
                     item.get("interval_source", ""),
                 ),
                 item.get("active_fault", False),
-                item.get("last_attempt", "") or "",
-                item.get("last_success", "") or "",
-                item.get("next_due", "") or "",
+                _timestamp_value(item.get("last_attempt", "")),
+                _timestamp_value(item.get("last_success", "")),
+                _timestamp_value(item.get("next_due", "")),
                 item.get("failure_count", 0),
                 item.get("source_id", ""),
                 item.get("correlation_key", ""),
@@ -550,7 +568,7 @@ def faults(db, status_filter, component_filter):
             fault.get("severity", ""),
             fault.get("rule", ""),
             fault.get("occurrences", ""),
-            fault.get("last_detection_time", ""),
+            _timestamp_value(fault.get("last_detection_time", "")),
             fault.get("description", ""),
         ))
 

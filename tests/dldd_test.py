@@ -7,7 +7,12 @@ import pytest
 from click.testing import CliRunner
 
 from config.dldd import dldd as config_dldd
-from show.dldd import _heartbeat_age, _json_value, dldd as show_dldd
+from show.dldd import (
+    _heartbeat_age,
+    _json_value,
+    _timestamp_value,
+    dldd as show_dldd,
+)
 from utilities_common.db import Db
 
 
@@ -34,6 +39,22 @@ def _db():
 )
 def test_json_value_decodes_only_expected_container_type(value, default, expected):
     assert _json_value(value, default) == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    (
+        (1745614266.999, 1745614266),
+        ("1745614266.999", 1745614266),
+        (-1.1, -2),
+        (1745614266, 1745614266),
+        (None, ""),
+        ("", ""),
+        ("not-a-timestamp", "not-a-timestamp"),
+    ),
+)
+def test_timestamp_value_displays_whole_epoch_seconds(value, expected):
+    assert _timestamp_value(value) == expected
 
 
 @pytest.mark.parametrize(
@@ -218,6 +239,7 @@ def test_show_status_displays_service_and_broken_rules():
     assert "local_action_wait" in result.output
     assert "Service diagnostics" in result.output
     assert "primary ownership lease expired" in result.output
+    assert "1745614200.0" not in result.output
 
 
 def test_show_status_handles_missing_state():
@@ -348,6 +370,7 @@ def test_show_rules_filters_health_component_and_no_active_fault():
     assert "DEGRADED" in result.output
     assert "0/1" in result.output
     assert "source unavailable" in result.output
+    assert "1745614200.0" not in result.output
     assert "PSU_OV_FAULT" not in result.output
     assert db.db.get_all.call_args_list == [
         call("STATE_DB", "DLDD_STATUS|process_state"),
@@ -380,6 +403,7 @@ def test_show_rules_filters_active_fault_and_displays_detail():
     assert "60.0 (monitor_default)" in result.output
     assert "1000001:1:PSU0:redis" in result.output
     assert "detail was truncated" in result.output
+    assert "1745614266.0" not in result.output
 
 
 def test_show_rules_rejects_stale_generation_snapshot():
@@ -450,6 +474,7 @@ def test_show_faults_displays_and_filters_records():
     assert "PSU_OV_FAULT" in result.output
     assert "PSU output over voltage" in result.output
     assert "FAN0" not in result.output
+    assert "1745614266.0" not in result.output
 
 
 def test_show_faults_ignores_rows_owned_by_other_agents():
