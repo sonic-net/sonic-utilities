@@ -2775,6 +2775,7 @@ main() {
     save_cmd "lspci -vvv -xx" "lspci" &
     save_cmd "lsusb -v" "lsusb" &
     save_cmd "sysctl -a" "sysctl" &
+    save_cmd "dmidecode -t memory" "dmidecode.mem" &
     wait
 
     save_ip_info &
