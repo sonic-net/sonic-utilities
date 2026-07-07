@@ -306,51 +306,68 @@ def status(db):
 
     inflight = _json_value(process_state.get("inflight_fault_evidence"), [])
     if inflight:
-        click.echo("\nIn-flight fault evidence")
+        click.echo("\nPrimary-owned fault work")
         inflight_rows = []
+        action_rows = []
         for evidence in inflight:
             if not isinstance(evidence, dict):
                 continue
             action_state = _json_value(evidence.get("local_action_state"), {})
             inflight_rows.append((
-                evidence.get("correlation_key", ""),
+                evidence.get("rule_id", ""),
+                evidence.get("rule", ""),
+                evidence.get("event_id", ""),
+                evidence.get("component", ""),
                 evidence.get("state", ""),
                 evidence.get("owning_monitor", ""),
                 _timestamp_value(evidence.get("since", "")),
                 _timestamp_value(evidence.get("hold_deadline", "")),
-                action_state.get("state", "") if isinstance(action_state, dict) else "",
-                action_state.get("worker_id", "") if isinstance(action_state, dict) else "",
-                _timestamp_value(action_state.get("started_at", ""))
-                if isinstance(action_state, dict)
-                else "",
-                _timestamp_value(action_state.get("completed_at", ""))
-                if isinstance(action_state, dict)
-                else "",
-                _timestamp_value(action_state.get("wait_until", ""))
-                if isinstance(action_state, dict)
-                else "",
-                action_state.get("last_error", "") if isinstance(action_state, dict) else "",
                 evidence.get("reason", ""),
             ))
+            if isinstance(action_state, dict) and action_state.get("state"):
+                action_rows.append((
+                    evidence.get("rule", "") or evidence.get("rule_id", ""),
+                    evidence.get("component", ""),
+                    action_state.get("state", ""),
+                    action_state.get("worker_id", ""),
+                    _timestamp_value(action_state.get("started_at", "")),
+                    _timestamp_value(action_state.get("completed_at", "")),
+                    _timestamp_value(action_state.get("wait_until", "")),
+                    action_state.get("last_error", ""),
+                ))
         click.echo(tabulate(
             inflight_rows,
             headers=(
-                "Correlation key",
+                "Rule ID",
+                "Rule",
+                "Event",
+                "Component",
                 "State",
                 "Monitor",
                 "Since",
-                "Hold deadline",
-                "Local action",
-                "Worker",
-                "Action started",
-                "Action completed",
-                "Wait until",
-                "Action error",
+                "Deadline",
                 "Reason",
             ),
             tablefmt="simple",
             disable_numparse=True,
         ))
+        if action_rows:
+            click.echo("\nLocal action work")
+            click.echo(tabulate(
+                action_rows,
+                headers=(
+                    "Rule",
+                    "Component",
+                    "State",
+                    "Worker",
+                    "Started",
+                    "Completed",
+                    "Wait until",
+                    "Error",
+                ),
+                tablefmt="simple",
+                disable_numparse=True,
+            ))
 
     diagnostics = _json_value(process_state.get("service_diagnostics"), [])
     if diagnostics:

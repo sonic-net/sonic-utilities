@@ -205,7 +205,11 @@ def test_show_status_displays_service_and_broken_rules():
         ]),
         "inflight_fault_evidence": json.dumps([
             {
-                "correlation_key": "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu",
+                "correlation_key": "inflight-key-that-must-not-be-rendered",
+                "rule_id": 1000001,
+                "rule": "PSU_OV_FAULT",
+                "event_id": 1,
+                "component": "PSU0",
                 "state": "HELD_BY_PRIMARY",
                 "owning_monitor": "redis",
                 "hold_deadline": 1745614300.0,
@@ -258,10 +262,12 @@ def test_show_status_displays_service_and_broken_rules():
     assert "producer unavailable" in result.output
     assert "FAULT_INFO|PSU0|SYMPTOM_OVER_THRESHOLD" in result.output
     assert "Affected rules" in result.output
-    assert "In-flight fault evidence" in result.output
+    assert "Primary-owned fault work" in result.output
+    assert "inflight-key-that-must-not-be-rendered" not in result.output
     assert "WAITING_FOR_RECHECK" in result.output
     assert "action-1" in result.output
-    assert "Action started" in result.output
+    assert "Local action work" in result.output
+    assert "Started" in result.output
     assert "local_action_wait" in result.output
     assert "Service diagnostics" in result.output
     assert "primary ownership lease expired" in result.output
