@@ -360,6 +360,12 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             run_command_or_raise(["mkdir", "-p", new_image_work_dir])
             mount_overlay_fs(new_image_mount, new_image_upper_dir, new_image_work_dir, new_image_mount)
             mount_bind(new_image_docker_dir, new_image_docker_mount)
+
+            # sync to eliminate timeout on the
+            # chroot /tmp/image-fs SONIC_PACKAGE_MANAGER migrate /tmp/packages.json --dockerd-socket DOCKERD_SOCK
+            click.echo('Command sync ...   could take several seconds on slow or removable disk')
+            run_command(["sync"])
+
             mount_procfs_chroot(new_image_mount)
             mount_sysfs_chroot(new_image_mount)
             # Assume if docker.sh script exists we are installing Application Extension compatible image.
