@@ -8522,7 +8522,10 @@ def expand_vlan_ports(port_name, namespace=None):
     return members
 
 
-def parse_acl_table_info(table_name, table_type, description, ports, stage, namespace=None):
+ACL_REDIRECT_MODES = ["ABF"]
+
+
+def parse_acl_table_info(table_name, table_type, description, ports, stage, namespace=None, redirect_mode=None):
     table_info = {"type": table_type}
 
     if description:
@@ -8550,6 +8553,17 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage, name
 
     table_info["stage"] = stage
 
+    if redirect_mode:
+        normalized_redirect_mode = redirect_mode.upper()
+        if normalized_redirect_mode not in ACL_REDIRECT_MODES:
+            raise ValueError(
+                "Invalid redirect mode {}. Allowed values: {}".format(
+                    redirect_mode,
+                    ",".join(ACL_REDIRECT_MODES)
+                )
+            )
+        table_info["redirect_mode"] = normalized_redirect_mode
+
     return table_info
 
 #
@@ -8564,8 +8578,9 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage, name
 @click.option("-p", "--ports")
 @click.option("-s", "--stage", type=click.Choice(["ingress", "egress"]), default="ingress")
 @click.option('-n', '--namespace', help='Namespace name', type=click.Choice(multi_asic.get_namespace_list()))
+@click.option("-r", "--redirect-mode", "redirect_mode", type=click.Choice(ACL_REDIRECT_MODES, case_sensitive=False))
 @click.pass_context
-def add_table(ctx, table_name, table_type, description, ports, stage, namespace):
+def add_table(ctx, table_name, table_type, description, ports, stage, namespace, redirect_mode):
     """
     Add ACL table
     """
@@ -8573,7 +8588,7 @@ def add_table(ctx, table_name, table_type, description, ports, stage, namespace)
     config_db.connect()
 
     try:
-        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage, namespace)
+        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage, namespace, redirect_mode)
     except ValueError as e:
         ctx.fail("Failed to parse ACL table config: exception={}".format(e))
 
