@@ -246,6 +246,159 @@ def test_heartbeat_age_uses_redis_client_when_dbconnector_has_no_ttl(monkeypatch
     redis_client.ttl.assert_called_once_with("DLDD_STATUS|process_state")
 
 
+def _rule_status_rows():
+    return [
+        {
+            "rule_id": 1000001,
+            "rule": "PSU_OV_FAULT",
+            "version": "1.0.0",
+            "component": "PSU",
+            "health": "OK",
+            "work_items_healthy": 1,
+            "work_items_total": 1,
+            "work_items_omitted": 0,
+            "active_faults": 1,
+            "last_attempt": 1745614266.0,
+            "last_success": 1745614266.0,
+            "failure_count": 0,
+            "reason": "",
+            "work_items": [
+                {
+                    "event_id": 1,
+                    "component": "PSU0",
+                    "source_type": "redis",
+                    "monitor": "redis",
+                    "state": "READY",
+                    "sampling_interval": 60.0,
+                    "interval_source": "monitor_default",
+                    "active_fault": True,
+                    "last_attempt": 1745614266.0,
+                    "last_success": 1745614266.0,
+                    "next_due": 1745614326.0,
+                    "failure_count": 0,
+                    "source_id": "redis:PSU_INFO",
+                    "correlation_key": "1000001:1:PSU0:redis",
+                    "reason": "",
+                }
+            ],
+        },
+        {
+            "rule_id": 1000002,
+            "rule": "FAN_SPEED_FAULT",
+            "version": "2.0.0",
+            "component": "FAN",
+            "health": "DEGRADED",
+            "work_items_healthy": 0,
+            "work_items_total": 1,
+            "work_items_omitted": 3,
+            "active_faults": 0,
+            "last_attempt": 1745614200.0,
+            "last_success": 1745614100.0,
+            "failure_count": 3,
+            "reason": "source unavailable",
+            "work_items": [
+                {
+                    "event_id": 2,
+                    "component": "FAN0",
+                    "source_type": "i2c",
+                    "monitor": "common",
+                    "state": "DEGRADED",
+                    "sampling_interval": 10.0,
+                    "interval_source": "event",
+                    "active_fault": False,
+                    "last_attempt": 1745614200.0,
+                    "last_success": 1745614100.0,
+                    "next_due": 1745614210.0,
+                    "failure_count": 3,
+                    "source_id": "i2c:fan0",
+                    "correlation_key": "1000002:2:FAN0:i2c",
+                    "reason": "source unavailable",
+                }
+            ],
+        },
+    ]
+
+
+def test_show_rules_filters_health_component_and_no_active_fault():
+    db = _db()
+    db.db.get_all.side_effect = (
+        {"active_rules_checksum": "sha256:test"},
+        {
+            "active_rules_checksum": "sha256:test",
+            "rules": json.dumps(_rule_status_rows()),
+            "detail_truncated": "false",
+        },
+    )
+
+    result = CliRunner().invoke(
+        show_dldd,
+        (
+            "rules",
+            "--health",
+            "degraded",
+            "--component",
+            "FAN0",
+            "--no-active-fault",
+        ),
+        obj=db,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "FAN_SPEED_FAULT" in result.output
+    assert "DEGRADED" in result.output
+    assert "0/1" in result.output
+    assert "source unavailable" in result.output
+    assert "PSU_OV_FAULT" not in result.output
+    assert db.db.get_all.call_args_list == [
+        call("STATE_DB", "DLDD_STATUS|process_state"),
+        call("STATE_DB", "DLDD_RULE_STATUS|active"),
+    ]
+
+
+def test_show_rules_filters_active_fault_and_displays_detail():
+    db = _db()
+    db.db.get_all.side_effect = (
+        {"active_rules_checksum": "sha256:test"},
+        {
+            "active_rules_checksum": "sha256:test",
+            "rules": json.dumps(_rule_status_rows()),
+            "detail_truncated": "true",
+        },
+    )
+
+    result = CliRunner().invoke(
+        show_dldd,
+        ("rules", "--active-fault", "--detail"),
+        obj=db,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "PSU_OV_FAULT" in result.output
+    assert "FAN_SPEED_FAULT" not in result.output
+    assert "Rule PSU_OV_FAULT (1000001) work items" in result.output
+    assert "PSU0" in result.output
+    assert "60.0 (monitor_default)" in result.output
+    assert "1000001:1:PSU0:redis" in result.output
+    assert "detail was truncated" in result.output
+
+
+def test_show_rules_rejects_stale_generation_snapshot():
+    db = _db()
+    db.db.get_all.side_effect = (
+        {"active_rules_checksum": "sha256:current"},
+        {
+            "active_rules_checksum": "sha256:old",
+            "rules": json.dumps(_rule_status_rows()),
+        },
+    )
+
+    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
+
+    assert result.exit_code == 0, result.output
+    assert "does not match the active rules generation" in result.output
+    assert "PSU_OV_FAULT" not in result.output
+
+
 def test_show_faults_displays_and_filters_records():
     db = _db()
     db.db.keys.return_value = [

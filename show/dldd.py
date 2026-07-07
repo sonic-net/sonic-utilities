@@ -11,6 +11,7 @@ import utilities_common.cli as clicommon
 DLDD_CONFIG_TABLE = "DLDD_CONFIG"
 DLDD_CONFIG_KEY = "global"
 DLDD_STATUS_KEY = "DLDD_STATUS|process_state"
+DLDD_RULE_STATUS_KEY = "DLDD_RULE_STATUS|active"
 FAULT_INFO_PATTERN = "FAULT_INFO|*"
 HEARTBEAT_TTL_SECONDS = 120
 
@@ -59,6 +60,12 @@ def _compact(value):
     if isinstance(value, (dict, list, tuple)):
         return json.dumps(value, sort_keys=True, separators=(",", ":"))
     return value
+
+
+def _bool_value(value):
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
 def _state_entry(db, key):
@@ -310,6 +317,200 @@ def status(db):
             tablefmt="simple",
             disable_numparse=True,
         ))
+
+
+@dldd.command("rules")
+@click.option(
+    "health_filter",
+    "--health",
+    type=click.Choice(
+        ("OK", "DEGRADED", "BROKEN", "SUSPENDED"),
+        case_sensitive=False,
+    ),
+    help="Limit output to one rule health state.",
+)
+@click.option(
+    "component_filter",
+    "--component",
+    help="Limit output to a component type or resolved component name.",
+)
+@click.option(
+    "active_fault_filter",
+    "--active-fault/--no-active-fault",
+    default=None,
+    help="Limit output based on whether the rule has an active fault.",
+)
+@click.option(
+    "detail",
+    "--detail",
+    is_flag=True,
+    help="Show per-event, component, and source work-item state.",
+)
+@clicommon.pass_db
+def rules(
+    db,
+    health_filter,
+    component_filter,
+    active_fault_filter,
+    detail,
+):
+    """Show active rules and their operational health."""
+
+    process_state = _state_entry(db, DLDD_STATUS_KEY)
+    if not process_state:
+        click.echo("DLDD status is unavailable in STATE_DB.")
+        return
+    snapshot = _state_entry(db, DLDD_RULE_STATUS_KEY)
+    if not snapshot:
+        click.echo("DLDD rule status is unavailable in STATE_DB.")
+        return
+    checksum = process_state.get("active_rules_checksum", "")
+    if snapshot.get("active_rules_checksum", "") != checksum:
+        click.echo(
+            "DLDD rule status does not match the active rules generation."
+        )
+        return
+
+    selected = []
+    for rule in _json_value(snapshot.get("rules"), []):
+        if not isinstance(rule, dict):
+            continue
+        health = str(rule.get("health", "")).upper()
+        work_items = _json_value(rule.get("work_items"), [])
+        components = {
+            str(item.get("component", ""))
+            for item in work_items
+            if isinstance(item, dict)
+        }
+        if health_filter and health != health_filter.upper():
+            continue
+        if component_filter and (
+            str(rule.get("component", "")) != component_filter
+            and component_filter not in components
+        ):
+            continue
+        has_active_fault = int(rule.get("active_faults", 0) or 0) > 0
+        if (
+            active_fault_filter is not None
+            and has_active_fault != active_fault_filter
+        ):
+            continue
+        selected.append(rule)
+
+    selected.sort(
+        key=lambda rule: (
+            rule.get("rule_id") is None,
+            rule.get("rule_id") or 0,
+            str(rule.get("rule", "")),
+        )
+    )
+    rows = [
+        (
+            rule.get("rule_id", ""),
+            rule.get("rule", ""),
+            rule.get("version", ""),
+            rule.get("component", ""),
+            rule.get("health", ""),
+            "{}/{}".format(
+                rule.get("work_items_healthy", 0),
+                rule.get("work_items_total", 0),
+            ),
+            rule.get("active_faults", 0),
+            rule.get("last_attempt", "") or "",
+            rule.get("last_success", "") or "",
+            rule.get("failure_count", 0),
+            rule.get("reason", ""),
+        )
+        for rule in selected
+    ]
+    click.echo(
+        tabulate(
+            rows,
+            headers=(
+                "Rule ID",
+                "Rule",
+                "Version",
+                "Component",
+                "Health",
+                "Work items",
+                "Active faults",
+                "Last attempt",
+                "Last success",
+                "Max failures",
+                "Reason",
+            ),
+            tablefmt="simple",
+            disable_numparse=True,
+        )
+    )
+
+    if not detail:
+        return
+    for rule in selected:
+        click.echo(
+            "\nRule {} ({}) work items".format(
+                rule.get("rule", ""), rule.get("rule_id", "")
+            )
+        )
+        work_items = _json_value(rule.get("work_items"), [])
+        detail_rows = [
+            (
+                item.get("event_id", ""),
+                item.get("component", ""),
+                item.get("source_type", ""),
+                item.get("monitor", ""),
+                item.get("state", ""),
+                "{} ({})".format(
+                    item.get("sampling_interval", ""),
+                    item.get("interval_source", ""),
+                ),
+                item.get("active_fault", False),
+                item.get("last_attempt", "") or "",
+                item.get("last_success", "") or "",
+                item.get("next_due", "") or "",
+                item.get("failure_count", 0),
+                item.get("source_id", ""),
+                item.get("correlation_key", ""),
+                item.get("reason", ""),
+            )
+            for item in work_items
+            if isinstance(item, dict)
+        ]
+        click.echo(
+            tabulate(
+                detail_rows,
+                headers=(
+                    "Event",
+                    "Component",
+                    "Source type",
+                    "Monitor",
+                    "State",
+                    "Interval",
+                    "Active fault",
+                    "Last attempt",
+                    "Last success",
+                    "Next due",
+                    "Failures",
+                    "Source ID",
+                    "Correlation key",
+                    "Reason",
+                ),
+                tablefmt="simple",
+                disable_numparse=True,
+            )
+        )
+        omitted = int(rule.get("work_items_omitted", 0) or 0)
+        if omitted:
+            click.echo(
+                (
+                    "{} additional work item(s) omitted from the bounded "
+                    "status snapshot."
+                ).format(omitted)
+            )
+    if _bool_value(snapshot.get("detail_truncated", False)):
+        click.echo(
+            "\nRule work-item detail was truncated by the daemon's publication limit."
+        )
 
 
 @dldd.command("faults")
