@@ -156,6 +156,48 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert 'Invalid value for \'--fast-rate\'' in result.output
 
+    @pytest.mark.parametrize("lacp_mode", ["couple", "independent", "COUPLE", "Independent"])
+    def test_add_portchannel_with_lacp_mode_adhoc_validation(self, lacp_mode):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # add a portchannel with lacp mode
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0005", "--lacp-mode", lacp_mode], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('PORTCHANNEL', 'PortChannel0005')['lacp_mode'] == lacp_mode.lower()
+
+    def test_add_portchannel_default_lacp_mode(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # add a portchannel without specifying lacp mode, should default to 'couple'
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChannel0005"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('PORTCHANNEL', 'PortChannel0005')['lacp_mode'] == 'couple'
+
+    @pytest.mark.parametrize("lacp_mode", ["coupled", "indep"])
+    def test_add_portchannel_with_invalid_lacp_mode(self, lacp_mode):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # add a portchannel with an invalid lacp mode
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0005", "--lacp-mode", lacp_mode], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Invalid value for \'--lacp-mode\'' in result.output
+
     def test_add_portchannel_member_with_invalid_name(self):
         runner = CliRunner()
         db = Db()
