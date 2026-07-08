@@ -58,6 +58,7 @@ PICOCOM_BUSY = "Resource temporarily unavailable"
 # mirror Constants
 MIRROR_RUNTIME_DIR = "/run/console-monitor/mirror"
 MIRROR_CONTROL_MAX_MESSAGE = 1024 * 1024
+MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC = 600
 MIRROR_DIRECTIONS = ("rx", "tx", "both")
 MIRROR_DURATION_SUFFIXES = ("s", "m", "h", "d")
 
@@ -521,15 +522,23 @@ def validate_mirror_timeout_duration(ctx, param, value):
     return value
 
 
-def _recv_mirror_message(sock):
+def _mirror_error_message(response):
+    return response.get("message") or response.get("error") or "mirror request failed"
+
+
+def _recv_mirror_message(sock, timeout=None):
     def _recv_all(sock, size):
         data = b""
         while len(data) < size:
-            chunk = sock.recv(size - len(data))
+            try:
+                chunk = sock.recv(size - len(data))
+            except socket.timeout:
+                raise RuntimeError("timed out waiting for mirror response")
             if not chunk:
                 raise RuntimeError("unexpected EOF")
             data += chunk
         return data
+    sock.settimeout(timeout)
     header = _recv_all(sock, 4)
     size = struct.unpack("!I", header)[0]
     if size <= 0 or size > MIRROR_CONTROL_MAX_MESSAGE:
@@ -549,16 +558,18 @@ def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_fir
             sock.connect(path)
             sock.sendall(struct.pack("!I", len(payload)) + payload)
             first = _recv_mirror_message(sock)
-            if first.get("status") != "ok":
-                raise RuntimeError(first.get("error", "mirror request failed"))
             if wait_for_final:
+                if first.get("status") != "packaging":
+                    raise RuntimeError(_mirror_error_message(first))
                 if on_first_reply is not None:
                     on_first_reply(first)  # callback for first reply
-                final = _recv_mirror_message(sock)
+                final = _recv_mirror_message(
+                    sock, timeout=MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC)
                 if final.get("status") != "ok":
-                    raise RuntimeError(
-                        final.get("error", "mirror request failed"))
+                    raise RuntimeError(_mirror_error_message(final))
                 return first, final
+            if first.get("status") != "ok":
+                raise RuntimeError(_mirror_error_message(first))
             return first
     except (OSError, RuntimeError) as e:
         if quiet:
