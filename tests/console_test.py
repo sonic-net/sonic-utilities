@@ -1487,7 +1487,7 @@ class TestConsutilMirror(object):
                         mock.MagicMock(return_value={
                             "file_path": "/var/log/console/line1.rx.log",
                             "timeout": "30m",
-                            "remaining_text": "30m0s"
+                            "remaining": "30m0s"
                         })) as mock_send:
             result = runner.invoke(
                 consutil.consutil.commands["mirror"].commands["start"],
@@ -1573,7 +1573,7 @@ class TestConsutilMirror(object):
         db = self._db_with_console_ports()
 
         def fake_send(line, request, wait_for_final=False, on_first_reply=None):
-            first = {"status": "ok", "archive_path": "/tmp/line1.zip"}
+            first = {"status": "packaging", "archive_path": "/tmp/line1.zip"}
             final = {"status": "ok",
                      "archive_path": "/var/log/console/line1.zip"}
             assert line == "1"
@@ -1601,7 +1601,7 @@ class TestConsutilMirror(object):
         with mock.patch('consutil.main.send_mirror_message',
                         mock.MagicMock(return_value={
                             "timeout": "2h",
-                            "remaining_text": "1h59m59s"
+                            "remaining": "1h59m59s"
                         })) as mock_send:
             result = runner.invoke(consutil.consutil.commands["mirror"].commands["timeout"],
                                    ['--devicename', 'switch2', '2h'], obj=db)
@@ -1629,7 +1629,7 @@ class TestConsutilMirror(object):
                 "start_time": "2026-06-28 12:00:00",
                 "direction": "both",
                 "timeout": "1h",
-                "remaining_text": "59m",
+                "remaining": "59m",
                 "file_path": "/var/log/console/line1.log",
             }
 
@@ -1670,6 +1670,7 @@ class TestConsoleMirrorProtocol(object):
             self.replies = replies
             self.connected_path = None
             self.sent_data = b""
+            self.timeout = None
 
         def __enter__(self):
             return self
@@ -1683,6 +1684,9 @@ class TestConsoleMirrorProtocol(object):
         def sendall(self, data):
             self.sent_data += data
 
+        def settimeout(self, timeout):
+            self.timeout = timeout
+
         def recv(self, size):
             if not self.replies:
                 return b""
@@ -1691,6 +1695,12 @@ class TestConsoleMirrorProtocol(object):
             if not self.replies[0]:
                 self.replies.pop(0)
             return chunk
+
+    class ArchiveTimeoutSocket(FakeSocket):
+        def recv(self, size):
+            if self.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC:
+                raise consutil_lib.socket.timeout()
+            return super().recv(size)
 
     @staticmethod
     def _frame(message):
@@ -1713,7 +1723,7 @@ class TestConsoleMirrorProtocol(object):
 
     def test_send_mirror_message_final_response(self):
         fake_socket = self.FakeSocket([
-            self._frame({"status": "ok", "archive_path": "/tmp/line1.zip"}),
+            self._frame({"status": "packaging", "archive_path": "/tmp/line1.zip"}),
             self._frame(
                 {"status": "ok", "archive_path": "/var/log/console/line1.zip"}),
         ])
@@ -1726,10 +1736,30 @@ class TestConsoleMirrorProtocol(object):
                 wait_for_final=True,
                 on_first_reply=first_replies.append)
 
-        assert first == {"status": "ok", "archive_path": "/tmp/line1.zip"}
+        assert first == {"status": "packaging", "archive_path": "/tmp/line1.zip"}
         assert final == {"status": "ok",
                          "archive_path": "/var/log/console/line1.zip"}
         assert first_replies == [first]
+        assert fake_socket.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC
+
+    def test_send_mirror_message_archive_timeout_exits_without_waiting(self, capsys):
+        fake_socket = self.ArchiveTimeoutSocket([
+            self._frame({"status": "packaging", "archive_path": "/tmp/line1.zip"}),
+        ])
+        first_replies = []
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message(
+                    "1",
+                    {"op": "stop", "line": "1", "archive": True},
+                    wait_for_final=True,
+                    on_first_reply=first_replies.append)
+
+        assert exc.value.code == consutil_lib.ERR_CMD
+        assert first_replies == [{"status": "packaging", "archive_path": "/tmp/line1.zip"}]
+        assert fake_socket.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC
+        assert "timed out waiting for mirror response" in capsys.readouterr().out
 
     def test_send_mirror_message_exits_on_error_response(self):
         fake_socket = self.FakeSocket(

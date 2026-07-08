@@ -172,7 +172,7 @@ def mirror_start(db, target, devicename, direction, timeout, max_file_size):
     click.echo("Started mirror on line [{}]".format(line))
     click.echo("Recording file: {}".format(response.get("file_path", "-")))
     click.echo("Auto-stop timeout: {}".format(response.get("timeout", "-")))
-    click.echo("Remaining: {}".format(response.get("remaining_text", "-")))
+    click.echo("Remaining: {}".format(response.get("remaining", "-")))
 
 
 # 'mirror stop' subcommand
@@ -221,7 +221,7 @@ def mirror_timeout(db, target, duration, devicename):
     response = send_mirror_message(line, request)
     click.echo("Updated mirror timeout on line [{}]".format(line))
     click.echo("Timeout: {}".format(response.get("timeout", "-")))
-    click.echo("Remaining: {}".format(response.get("remaining_text", "-")))
+    click.echo("Remaining: {}".format(response.get("remaining", "-")))
 
 
 # 'mirror show' subcommand
@@ -246,6 +246,7 @@ def mirror_show(db, target, devicename):
             status = send_mirror_message(
                 line, {"op": "status", "line": line}, quiet=True)
         except (OSError, RuntimeError):
+            # TODO: 
             status = {"line": line, "state": "idle"}
         rows.append([
             line,
@@ -253,7 +254,7 @@ def mirror_show(db, target, devicename):
             status.get("start_time") or "-",
             status.get("direction") or "-",
             status.get("timeout") or "-",
-            status.get("remaining_text") or "-",
+            status.get("remaining") or "-",
             status.get("file_path") or "-",
         ])
 
