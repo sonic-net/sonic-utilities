@@ -294,7 +294,7 @@ def clear_pg_counters():
 
 @priority_group.group(name='persistent-watermark')
 def persistent_watermark():
-    """Clear queue persistent WM."""
+    """Clear priority-group persistent WM."""
 
 
 @persistent_watermark.command('headroom')
