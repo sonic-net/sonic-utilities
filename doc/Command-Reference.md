@@ -11482,6 +11482,14 @@ This command displays the user persistent-watermark for all the buffer pools
              lossy_pool     2464
   ```
 
+- NOTE: "user watermark" and "persistent watermark" can be cleared by user:
+
+  ```
+  admin@sonic:~$ sonic-clear buffer_pool watermark
+
+  admin@sonic:~$ sonic-clear buffer_pool persistent-watermark
+  ```
+
 
 
 ### QoS config commands

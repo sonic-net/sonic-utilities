@@ -534,7 +534,6 @@ def wm_buffer_pool(namespace):
     if namespace:
         command += ['-n', str(namespace)]
     run_command(command)
-    click.echo("Buffer pool watermark counters cleared.")
 
 
 @buffer_pool.command('persistent-watermark')
@@ -552,7 +551,6 @@ def pwm_buffer_pool(namespace):
     if namespace:
         command += ['-n', str(namespace)]
     run_command(command)
-    click.echo("Buffer pool persistent watermark counters cleared.")
 
 #
 # 'arp' command ####

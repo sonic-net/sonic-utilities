@@ -109,6 +109,24 @@ class TestClear(object):
         run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'buffer_pool'])
 
     @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_buffer_pool_wm_with_namespace(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['buffer_pool'].commands['watermark'], ['-n', 'asic0'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['watermarkstat', '-c', '-t', 'buffer_pool', '-n', 'asic0'])
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_buffer_pool_pst_wm_with_namespace(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['buffer_pool'].commands['persistent-watermark'], ['-n', 'asic0'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'buffer_pool', '-n', 'asic0'])
+
+    @patch('clear.main.run_command')
     def test_clear_fdb(self, run_command):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['fdb'].commands['all'])
