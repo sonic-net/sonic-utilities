@@ -187,7 +187,7 @@ def port_buffer_drop_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()),
+              type=click.Choice(get_valid_namespace_choices()),
               default=multi_asic.get_current_namespace())
 @click.pass_context
 def phy(ctx, namespace):
@@ -716,6 +716,46 @@ def srv6_disable(ctx):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
 
 
+# ICMP echo session counter commands. Drives the ICMP_SESSION row of
+# FLEX_COUNTER_TABLE which orchagent's flexcounterorch watches to toggle
+# ICMP echo session stat collection (selective or native back-end,
+# chosen per platform).
+@cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
+@click.pass_context
+def icmp(ctx, namespace):
+    """ ICMP echo session counter commands """
+    ctx.obj = connect_to_db(namespace)
+
+
+@icmp.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def icmp_interval(ctx, poll_interval):
+    """ Set ICMP echo session counter query interval """
+    icmp_info = {'POLL_INTERVAL': poll_interval}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
+@icmp.command(name='enable')
+@click.pass_context
+def icmp_enable(ctx):
+    """ Enable ICMP echo session counter query """
+    icmp_info = {'FLEX_COUNTER_STATUS': ENABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
+@icmp.command(name='disable')
+@click.pass_context
+def icmp_disable(ctx):
+    """ Disable ICMP echo session counter query """
+    icmp_info = {'FLEX_COUNTER_STATUS': DISABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
 # Switch counter commands
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
@@ -798,6 +838,7 @@ def show(namespace):
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
+    icmp_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'ICMP_SESSION')
     switch_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SWITCH')
 
     header = ("Type", "Interval (in ms)", "Status")
@@ -839,6 +880,9 @@ def show(namespace):
     if srv6_info:
         data.append(["SRV6_STAT", srv6_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     srv6_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if icmp_info:
+        data.append(["ICMP_SESSION_STAT", icmp_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    icmp_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if switch_info:
         data.append([
             "SWITCH_STAT",

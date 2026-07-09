@@ -90,7 +90,7 @@ RULE NAME    TABLE NAME    PRIO    PACKETS COUNT    BYTES COUNT
 # Expected output for aclshow -r RULE_4,RULE_6 -vv
 rule4_rule6_verbose_output = '' + \
 """Reading ACL info...
-Total number of ACL Tables: 16
+Total number of ACL Tables: 17
 Total number of ACL Rules: 21
 
 RULE NAME    TABLE NAME      PRIO    PACKETS COUNT    BYTES COUNT

@@ -588,6 +588,12 @@
         "stage": "ingress",
         "type": "BMCDATAV6"
     },
+    "ACL_TABLE|ACL_NOIPTYPE": {
+        "policy_desc": "ACL_NOIPTYPE",
+        "ports@": "Ethernet8,Ethernet0,Ethernet17,Ethernet16,Ethernet37,Ethernet4,Ethernet13,Ethernet45,Ethernet19,Ethernet24,Ethernet31,Ethernet30,Ethernet39,Ethernet40,Ethernet27,Ethernet43,Ethernet7,Ethernet3,Ethernet20,Ethernet6,Ethernet12,Ethernet34,Ethernet26,Ethernet11,Ethernet42,Ethernet5,Ethernet32,Ethernet36,Ethernet15,Ethernet33,Ethernet35,Ethernet9,Ethernet29,Ethernet21,Ethernet18,Ethernet38,Ethernet23,Ethernet41,Ethernet14,Ethernet2,Ethernet28,Ethernet22,Ethernet10,Ethernet25,Ethernet44,Ethernet1",
+        "stage": "ingress",
+        "type": "NOIPTYPE"
+    },
     "ACL_TABLE|DATAACL": {
         "policy_desc": "DATAACL",
         "ports@": "PortChannel0002,PortChannel0005,PortChannel0008,PortChannel0011,PortChannel0014,PortChannel0017,PortChannel0020,PortChannel0023,Ethernet64,Ethernet68,Ethernet72,Ethernet76,Ethernet80,Ethernet84,Ethernet88,Ethernet92,Ethernet96,Ethernet100,Ethernet104,Ethernet108,Ethernet112,Ethernet116,Ethernet120,Ethernet124",
@@ -669,6 +675,11 @@
         "BIND_POINTS": "PORT",
         "MATCHES": "SRC_IPV6,DST_IPV6,ETHER_TYPE,IP_TYPE,IP_PROTOCOL,IN_PORTS,TCP_FLAGS"
     },
+    "ACL_TABLE_TYPE|NOIPTYPE": {
+        "ACTIONS": "PACKET_ACTION,COUNTER",
+        "BIND_POINTS": "PORT",
+        "MATCHES": "SRC_IP,DST_IP,ETHER_TYPE,IP_PROTOCOL,IN_PORTS,TCP_FLAGS"
+    },
     "PBH_TABLE|pbh_table1": {
         "description": "NVGRE",
         "interface_list@": "Ethernet8,Ethernet60"
@@ -688,7 +699,8 @@
         "vlanid": "4000"
     },
     "VLAN_INTERFACE|Vlan1000": {
-        "NULL": "NULL"
+        "NULL": "NULL",
+        "static_anycast_gateway": "true"
     },
     "VLAN_INTERFACE|Vlan2000": {
         "proxy_arp": "enabled"
@@ -741,7 +753,8 @@
         "members@": "Ethernet112",
         "min_links": "1",
         "tpid": "0x8100",
-        "mtu": "9100"
+        "mtu": "9100",
+        "system_mac": "00:01:01:01:01:02"
     },
     "PORTCHANNEL|PortChannel0002": {
         "admin_status": "up",
@@ -3248,6 +3261,9 @@
     },
     "QUEUE|Ethernet96|6": {
         "scheduler": "[SCHEDULER|scheduler.0]"
+    },
+    "SAG|GLOBAL": {
+        "gateway_mac": "00:11:22:33:44:55"
     },
     "MIRROR_SESSION|test_session_db1": {
         "dst_port": "Ethernet44",
