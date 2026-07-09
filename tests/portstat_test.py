@@ -68,30 +68,6 @@ Ethernet4      N/A     110,412             1                 0            N/A   
 Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A  0              4.81e-10 (89%)            3
 """  # noqa: E501
 
-<<<<<<< HEAD
-intf_fec_counters_fec_hist = """\
-Symbol Errors Per Codeword      Codewords
-----------------------------  -----------
-BIN0                              1000000
-BIN1                               900000
-BIN2                               800000
-BIN3                               700000
-BIN4                               600000
-BIN5                               500000
-BIN6                               400000
-BIN7                               300000
-BIN8                                    0
-BIN9                                    0
-BIN10                                   0
-BIN11                                   0
-BIN12                                   0
-BIN13                                   0
-BIN14                                   0
-BIN15                                   0
-"""
-=======
->>>>>>> 6009f7ce (NOS-8001: Clear all FEC counters in SONiC properly including histogram (#591))
-
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
@@ -524,16 +500,12 @@ class TestPortStat(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-<<<<<<< HEAD
-        assert result.output == intf_fec_counters_fec_hist
-=======
         assert mock_run.call_count == 1
         invoked_cmd = mock_run.call_args[0][0]
         assert invoked_cmd[:2] == ['portstat', '-fh']
         assert '-i' in invoked_cmd
         assert invoked_cmd[invoked_cmd.index('-i') + 1] == 'Ethernet0'
         assert '--relative-timestamp' in invoked_cmd
->>>>>>> 6009f7ce (NOS-8001: Clear all FEC counters in SONiC properly including histogram (#591))
 
     def test_show_intf_fec_counters_period(self):
         runner = CliRunner()

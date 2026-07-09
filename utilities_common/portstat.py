@@ -9,7 +9,6 @@ from sonic_py_common import device_info
 from swsscommon.swsscommon import SonicV2Connector, CounterTable, PortCounter
 
 from utilities_common import constants
-from utilities_common.general import format_relative_time
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.netstat import ns_diff, table_as_json, format_brate, format_prate, \
                                      format_util, format_number_with_comma, format_util_directly, \
@@ -169,6 +168,21 @@ def intfsorted(intf_list):
         return [int(i) for i in re.findall(r'\d+', intf)]
 
     return sorted(intf_list, key=sort_key)
+
+
+def format_relative_time(ts_ms):
+    """Format a millisecond epoch timestamp as a human-readable "X <unit> ago" string."""
+    delta_seconds = max(0, int(time.time() - int(ts_ms) / 1000.0))
+
+    for unit_seconds, unit_name in (
+        (86400, 'day'),
+        (3600, 'hour'),
+        (60, 'minute'),
+        (1, 'second'),
+    ):
+        if delta_seconds >= unit_seconds or unit_seconds == 1:
+            value = delta_seconds // unit_seconds
+            return '{} {}{} ago'.format(value, unit_name, '' if value == 1 else 's')
 
 
 def is_non_zero(value):
@@ -439,9 +453,13 @@ class Portstat(object):
         for i in range(16):
             codewords = ns_diff(cntr['fec_bin{}'.format(i)],
                                 old_cntr['fec_bin{}'.format(i)])
-            ts_ms = asic_kvp.get(SAI_FEC_BIN_TIMESTAMP_KEY.format(i)) if asic_kvp else None
+            ts_ms_raw = asic_kvp.get(SAI_FEC_BIN_TIMESTAMP_KEY.format(i)) if asic_kvp else None
+            try:
+                ts_ms = int(ts_ms_raw)
+            except (TypeError, ValueError):
+                ts_ms = 0
             if ts_ms:
-                ts_str = datetime.datetime.fromtimestamp(int(ts_ms) / 1000.0) \
+                ts_str = datetime.datetime.fromtimestamp(ts_ms / 1000.0) \
                     .strftime('%Y-%m-%d %H:%M:%S')
             else:
                 ts_str = STATUS_NA
