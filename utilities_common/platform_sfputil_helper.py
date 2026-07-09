@@ -153,18 +153,44 @@ def get_subport_lane_mask(subport, lane_count):
     return ((1 << lane_count) - 1) << ((0 if subport == 0 else subport - 1) * lane_count)
 
 
-def get_sfp_object(port_name):
+def get_sfp_object(port_name, strict=True, load_platform_if_needed=False):
     """
     Retrieve the SFP object for a given port.
     This function checks whether the port is a valid RJ45 port or if an SFP is present.
     If valid, it retrieves the SFP object for further operations.
     Args:
         port_name (str): The name of the logical port to fetch the SFP object for.
+        strict (bool): When True, echo and exit on failure. When False, return None.
+        load_platform_if_needed (bool): When True, load sfputil, port mappings, and
+            chassis if not already initialized.
     Returns:
         SfpBase: The SFP object associated with the port.
     Raises:
-        SystemExit: If the port is an RJ45 or the SFP EEPROM is not present.
+        SystemExit: If strict is True and the port is invalid, RJ45, or SFP is not present.
     """
+    if load_platform_if_needed:
+        global platform_sfputil
+        global platform_chassis
+
+        if platform_sfputil is None:
+            try:
+                load_platform_sfputil()
+            except (Exception, SystemExit):
+                return None
+
+        if not platform_porttab_mapping_read:
+            try:
+                platform_sfputil_read_porttab_mappings()
+            except (Exception, SystemExit):
+                return None
+
+        if platform_chassis is None:
+            try:
+                import sonic_platform
+                platform_chassis = sonic_platform.platform.Platform().get_chassis()
+            except Exception:
+                return None
+
     # Retrieve the physical port corresponding to the logical port.
     physical_port = logical_port_to_physical_port_index(port_name)
     # Fetch the SFP object for the physical port.
@@ -172,19 +198,55 @@ def get_sfp_object(port_name):
 
     # Check if the port is an RJ45 port and exit if so.
     if is_rj45_port(port_name):
-        click.echo(f"{port_name}: This functionality is not applicable for RJ45 port")
-        sys.exit(EXIT_FAIL)
+        if strict:
+            click.echo(f"{port_name}: This functionality is not applicable for RJ45 port")
+            sys.exit(EXIT_FAIL)
+        return None
 
     # Check if the SFP EEPROM is present and exit if not.
     if not is_sfp_present(port_name):
-        click.echo(f"{port_name}: SFP EEPROM not detected")
-        sys.exit(EXIT_FAIL)
+        if strict:
+            click.echo(f"{port_name}: SFP EEPROM not detected")
+            sys.exit(EXIT_FAIL)
+        return None
 
     if sfp is None:
-        click.echo(f"{port_name}: SFP object is not retrieved")
-        sys.exit(EXIT_FAIL)
+        if strict:
+            click.echo(f"{port_name}: SFP object is not retrieved")
+            sys.exit(EXIT_FAIL)
+        return None
 
     return sfp
+
+
+def get_platform_specific_transceiver_info_format_map(port_name):
+    sfp = get_sfp_object(port_name, strict=False, load_platform_if_needed=True)
+    if sfp is None:
+        return {}
+    try:
+        return sfp.get_platform_specific_transceiver_info_format_map()
+    except Exception:
+        return {}
+
+
+def get_platform_specific_transceiver_status_format_map(port_name):
+    sfp = get_sfp_object(port_name, strict=False, load_platform_if_needed=True)
+    if sfp is None:
+        return {}
+    try:
+        return sfp.get_platform_specific_transceiver_status_format_map()
+    except Exception:
+        return {}
+
+
+def get_platform_specific_dom_format_map(port_name):
+    sfp = get_sfp_object(port_name, strict=False, load_platform_if_needed=True)
+    if sfp is None:
+        return {}, {}
+    try:
+        return sfp.get_platform_specific_dom_format_map()
+    except Exception:
+        return {}, {}
 
 
 def get_host_lane_count(port_name):

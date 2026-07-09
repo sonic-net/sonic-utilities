@@ -70,6 +70,7 @@ Ethernet0: SFP EEPROM detected
                 VccHighWarning : 3.4650Volts
                 VccLowAlarm    : 2.9700Volts
                 VccLowWarning  : 3.1349Volts
+        PlatformSpecificDomValues:
 """
 
 test_qsfp_dd_eeprom_with_dom_output = """\
@@ -162,6 +163,7 @@ Media Assign (0x1)
                 VccHighWarning : 3.4672Volts
                 VccLowAlarm    : 2.9696Volts
                 VccLowWarning  : 3.1304Volts
+        PlatformSpecificDomValues:
 """
 
 test_osfp_eeprom_with_dom_output = """\
@@ -233,6 +235,7 @@ Ethernet72: SFP EEPROM detected
                 Temperature: 40.5C
                 Vcc: 3.331Volts
         ModuleThresholdValues:
+        PlatformSpecificDomValues:
 """
 
 test_sfp_eeprom_output = """\
@@ -730,6 +733,7 @@ Ethernet0: SFP EEPROM detected
                 VccHighWarning : 3.4650Volts
                 VccLowAlarm    : 2.9700Volts
                 VccLowWarning  : 3.1349Volts
+        PlatformSpecificDomValues:
 
 Ethernet4: SFP EEPROM Not detected
 
@@ -806,6 +810,7 @@ Ethernet64: SFP EEPROM detected
                 VccHighWarning : 3.4650Volts
                 VccLowAlarm    : 2.9700Volts
                 VccLowWarning  : 3.1349Volts
+        PlatformSpecificDomValues:
 """
 
 test_sfp_eeprom_all_output = """\

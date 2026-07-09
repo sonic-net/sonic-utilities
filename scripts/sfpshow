@@ -222,6 +222,196 @@ QSFP_DD_DOM_VALUE_UNIT_MAP = {
     'voltage': 'Volts'
 }
 
+CPO_DOM_CHANNEL_MONITOR_MAP = {
+    'els_bias_current_monitor1': 'ELS Lane1BiasMonitor',
+    'els_bias_current_monitor2': 'ELS Lane2BiasMonitor',
+    'els_bias_current_monitor3': 'ELS Lane3BiasMonitor',
+    'els_bias_current_monitor4': 'ELS Lane4BiasMonitor',
+    'els_bias_current_monitor5': 'ELS Lane5BiasMonitor',
+    'els_bias_current_monitor6': 'ELS Lane6BiasMonitor',
+    'els_bias_current_monitor7': 'ELS Lane7BiasMonitor',
+    'els_bias_current_monitor8': 'ELS Lane8BiasMonitor',
+}
+
+CPO_DOM_MODULE_MONITOR_MAP = {
+    'els_temperature': 'ELS temperature',
+    'els_voltage': 'ELS voltage',
+    'els_voltage_monitor1': 'ELS voltage monitor (lane 1)',
+    'els_opt_power_monitor1': 'ELS optical power monitor (lane 1)',
+    'els_voltage_monitor2': 'ELS voltage monitor (lane 2)',
+    'els_opt_power_monitor2': 'ELS optical power monitor (lane 2)',
+    'els_voltage_monitor3': 'ELS voltage monitor (lane 3)',
+    'els_opt_power_monitor3': 'ELS optical power monitor (lane 3)',
+    'els_voltage_monitor4': 'ELS voltage monitor (lane 4)',
+    'els_opt_power_monitor4': 'ELS optical power monitor (lane 4)',
+    'els_voltage_monitor5': 'ELS voltage monitor (lane 5)',
+    'els_opt_power_monitor5': 'ELS optical power monitor (lane 5)',
+    'els_voltage_monitor6': 'ELS voltage monitor (lane 6)',
+    'els_opt_power_monitor6': 'ELS optical power monitor (lane 6)',
+    'els_voltage_monitor7': 'ELS voltage monitor (lane 7)',
+    'els_opt_power_monitor7': 'ELS optical power monitor (lane 7)',
+    'els_voltage_monitor8': 'ELS voltage monitor (lane 8)',
+    'els_opt_power_monitor8': 'ELS optical power monitor (lane 8)'
+}
+
+CPO_DOM_VALUE_UNIT_MAP = {
+    'els_bias_current_monitor1': 'mA',
+    'els_bias_current_monitor2': 'mA',
+    'els_bias_current_monitor3': 'mA',
+    'els_bias_current_monitor4': 'mA',
+    'els_bias_current_monitor5': 'mA',
+    'els_bias_current_monitor6': 'mA',
+    'els_bias_current_monitor7': 'mA',
+    'els_bias_current_monitor8': 'mA',
+    'els_temperature': 'C',
+    'els_voltage': 'Volts',
+    'els_voltage_monitor1': 'Volts',
+    'els_opt_power_monitor1': 'dBm',
+    'els_voltage_monitor2': 'Volts',
+    'els_opt_power_monitor2': 'dBm',
+    'els_voltage_monitor3': 'Volts',
+    'els_opt_power_monitor3': 'dBm',
+    'els_voltage_monitor4': 'Volts',
+    'els_opt_power_monitor4': 'dBm',
+    'els_voltage_monitor5': 'Volts',
+    'els_opt_power_monitor5': 'dBm',
+    'els_voltage_monitor6': 'Volts',
+    'els_opt_power_monitor6': 'dBm',
+    'els_voltage_monitor7': 'Volts',
+    'els_opt_power_monitor7': 'dBm',
+    'els_voltage_monitor8': 'Volts',
+    'els_opt_power_monitor8': 'dBm'
+}
+
+CPO_DOM_MODULE_THRESHOLD_MAP = {
+    'els_temphighalarm': 'ELS TempHighAlarm',
+    'els_templowalarm': 'ELS TempLowAlarm',
+    'els_temphighwarning': 'ELS TempHighWarning',
+    'els_templowwarning': 'ELS TempLowWarning',
+    'els_vcchighalarm': 'ELS VccHighAlarm',
+    'els_vcclowalarm': 'ELS VccLowAlarm',
+    'els_vcchighwarning': 'ELS VccHighWarning',
+    'els_vcclowwarning': 'ELS VccLowWarning',
+    'els_optpowerhighalarm': 'ELS OpticalPowerHighAlarm',
+    'els_optpowerlowalarm': 'ELS OpticalPowerLowAlarm',
+    'els_optpowerhighwarning': 'ELS OpticalPowerHighWarning',
+    'els_optpowerlowwarning': 'ELS OpticalPowerLowWarning',
+    'els_biashighalarm': 'ELS BiasHighAlarm',
+    'els_biaslowalarm': 'ELS BiasLowAlarm',
+    'els_biashighwarning': 'ELS BiasHighWarning',
+    'els_biaslowwarning': 'ELS BiasLowWarning',
+}
+
+CPO_DOM_MODULE_THRESHOLD_UNIT_MAP = {
+    'els_temphighalarm': 'C',
+    'els_templowalarm': 'C',
+    'els_temphighwarning': 'C',
+    'els_templowwarning': 'C',
+    'els_vcchighalarm': 'Volts',
+    'els_vcclowalarm': 'Volts',
+    'els_vcchighwarning': 'Volts',
+    'els_vcclowwarning': 'Volts',
+    'els_optpowerhighalarm': 'dBm',
+    'els_optpowerlowalarm': 'dBm',
+    'els_optpowerhighwarning': 'dBm',
+    'els_optpowerlowwarning': 'dBm',
+    'els_biashighalarm': 'mA',
+    'els_biaslowalarm': 'mA',
+    'els_biashighwarning': 'mA',
+    'els_biaslowwarning': 'mA'
+}
+
+CMIS_CPO_DOM_CHANNEL_MONITOR_MAP = {**CMIS_DOM_CHANNEL_MONITOR_MAP, **CPO_DOM_CHANNEL_MONITOR_MAP}
+CMIS_CPO_DOM_VALUE_UNIT_MAP = {**QSFP_DD_DOM_VALUE_UNIT_MAP, **CPO_DOM_VALUE_UNIT_MAP}
+CMIS_CPO_DOM_MODULE_MONITOR_MAP = {**DOM_MODULE_MONITOR_MAP, **CPO_DOM_MODULE_MONITOR_MAP}
+CMIS_CPO_DOM_MODULE_THRESHOLD_MAP = {**DOM_MODULE_THRESHOLD_MAP, **CPO_DOM_MODULE_THRESHOLD_MAP}
+CMIS_CPO_DOM_MODULE_THRESHOLD_UNIT_MAP = {**DOM_MODULE_THRESHOLD_UNIT_MAP, **CPO_DOM_MODULE_THRESHOLD_UNIT_MAP}
+
+CPO_STATUS_MAP = {
+    'els_module_state': 'ELS Module State',
+    'els_module_fault_cause': 'ELS Module Fault Cause',
+    'els_fault_flag_lane1': 'ELS Fault flag (lane 1)',
+    'els_warn_flag_lane1': 'ELS Warn flag (lane 1)',
+    'els_HighPowerAlarm1': 'ELS TX power high alarm (lane 1)',
+    'els_LowPowerAlarm1': 'ELS TX power low alarm (lane 1)',
+    'els_HighPowerWarn1': 'ELS TX power high warning (lane 1)',
+    'els_LowPowerWarn1': 'ELS TX power low warning (lane 1)',
+    'els_HighBiasAlarm1': 'ELS TX bias high alarm (lane 1)',
+    'els_LowBiasAlarm1': 'ELS TX bias low alarm (lane 1)',
+    'els_HighBiasWarn1': 'ELS TX bias high warning (lane 1)',
+    'els_LowBiasWarn1': 'ELS TX bias low warning (lane 1)',
+    'els_fault_flag_lane2': 'ELS Fault flag (lane 2)',
+    'els_warn_flag_lane2': 'ELS Warn flag (lane 2)',
+    'els_HighPowerAlarm2': 'ELS TX power high alarm (lane 2)',
+    'els_LowPowerAlarm2': 'ELS TX power low alarm (lane 2)',
+    'els_HighPowerWarn2': 'ELS TX power high warning (lane 2)',
+    'els_LowPowerWarn2': 'ELS TX power low warning (lane 2)',
+    'els_HighBiasAlarm2': 'ELS TX bias high alarm (lane 2)',
+    'els_LowBiasAlarm2': 'ELS TX bias low alarm (lane 2)',
+    'els_HighBiasWarn2': 'ELS TX bias high warning (lane 2)',
+    'els_LowBiasWarn2': 'ELS TX bias low warning (lane 2)',
+    'els_fault_flag_lane3': 'ELS Fault flag (lane 3)',
+    'els_warn_flag_lane3': 'ELS Warn flag (lane 3)',
+    'els_HighPowerAlarm3': 'ELS TX power high alarm (lane 3)',
+    'els_LowPowerAlarm3': 'ELS TX power low alarm (lane 3)',
+    'els_HighPowerWarn3': 'ELS TX power high warning (lane 3)',
+    'els_LowPowerWarn3': 'ELS TX power low warning (lane 3)',
+    'els_HighBiasAlarm3': 'ELS TX bias high alarm (lane 3)',
+    'els_LowBiasAlarm3': 'ELS TX bias low alarm (lane 3)',
+    'els_HighBiasWarn3': 'ELS TX bias high warning (lane 3)',
+    'els_LowBiasWarn3': 'ELS TX bias low warning (lane 3)',
+    'els_fault_flag_lane4': 'ELS Fault flag (lane 4)',
+    'els_warn_flag_lane4': 'ELS Warn flag (lane 4)',
+    'els_HighPowerAlarm4': 'ELS TX power high alarm (lane 4)',
+    'els_LowPowerAlarm4': 'ELS TX power low alarm (lane 4)',
+    'els_HighPowerWarn4': 'ELS TX power high warning (lane 4)',
+    'els_LowPowerWarn4': 'ELS TX power low warning (lane 4)',
+    'els_HighBiasAlarm4': 'ELS TX bias high alarm (lane 4)',
+    'els_LowBiasAlarm4': 'ELS TX bias low alarm (lane 4)',
+    'els_HighBiasWarn4': 'ELS TX bias high warning (lane 4)',
+    'els_LowBiasWarn4': 'ELS TX bias low warning (lane 4)',
+    'els_fault_flag_lane5': 'ELS Fault flag (lane 5)',
+    'els_warn_flag_lane5': 'ELS Warn flag (lane 5)',
+    'els_HighPowerAlarm5': 'ELS TX power high alarm (lane 5)',
+    'els_LowPowerAlarm5': 'ELS TX power low alarm (lane 5)',
+    'els_HighPowerWarn5': 'ELS TX power high warning (lane 5)',
+    'els_LowPowerWarn5': 'ELS TX power low warning (lane 5)',
+    'els_HighBiasAlarm5': 'ELS TX bias high alarm (lane 5)',
+    'els_LowBiasAlarm5': 'ELS TX bias low alarm (lane 5)',
+    'els_HighBiasWarn5': 'ELS TX bias high warning (lane 5)',
+    'els_LowBiasWarn5': 'ELS TX bias low warning (lane 5)',
+    'els_fault_flag_lane6': 'ELS Fault flag (lane 6)',
+    'els_warn_flag_lane6': 'ELS Warn flag (lane 6)',
+    'els_HighPowerAlarm6': 'ELS TX power high alarm (lane 6)',
+    'els_LowPowerAlarm6': 'ELS TX power low alarm (lane 6)',
+    'els_HighPowerWarn6': 'ELS TX power high warning (lane 6)',
+    'els_LowPowerWarn6': 'ELS TX power low warning (lane 6)',
+    'els_HighBiasAlarm6': 'ELS TX bias high alarm (lane 6)',
+    'els_LowBiasAlarm6': 'ELS TX bias low alarm (lane 6)',
+    'els_HighBiasWarn6': 'ELS TX bias high warning (lane 6)',
+    'els_LowBiasWarn6': 'ELS TX bias low warning (lane 6)',
+    'els_fault_flag_lane7': 'ELS Fault flag (lane 7)',
+    'els_warn_flag_lane7': 'ELS Warn flag (lane 7)',
+    'els_HighPowerAlarm7': 'ELS TX power high alarm (lane 7)',
+    'els_LowPowerAlarm7': 'ELS TX power low alarm (lane 7)',
+    'els_HighPowerWarn7': 'ELS TX power high warning (lane 7)',
+    'els_LowPowerWarn7': 'ELS TX power low warning (lane 7)',
+    'els_HighBiasAlarm7': 'ELS TX bias high alarm (lane 7)',
+    'els_LowBiasAlarm7': 'ELS TX bias low alarm (lane 7)',
+    'els_HighBiasWarn7': 'ELS TX bias high warning (lane 7)',
+    'els_LowBiasWarn7': 'ELS TX bias low warning (lane 7)',
+    'els_fault_flag_lane8': 'ELS Fault flag (lane 8)',
+    'els_warn_flag_lane8': 'ELS Warn flag (lane 8)',
+    'els_HighPowerAlarm8': 'ELS TX power high alarm (lane 8)',
+    'els_LowPowerAlarm8': 'ELS TX power low alarm (lane 8)',
+    'els_HighPowerWarn8': 'ELS TX power high warning (lane 8)',
+    'els_LowPowerWarn8': 'ELS TX power low warning (lane 8)',
+    'els_HighBiasAlarm8': 'ELS TX bias high alarm (lane 8)',
+    'els_LowBiasAlarm8': 'ELS TX bias low alarm (lane 8)',
+    'els_HighBiasWarn8': 'ELS TX bias high warning (lane 8)',
+    'els_LowBiasWarn8': 'ELS TX bias low warning (lane 8)'
+}
+
 ZR_PM_HEADER = ['Parameter', 'Unit', 'Min', 'Avg', 'Max',
                 'Threshold\nHigh\nAlarm', 'Threshold\nHigh\nWarning',
                 'Threshold\nCrossing\nAlert-High',
@@ -372,21 +562,24 @@ class SFPShow(object):
         return output
 
     # Convert DOM sensor info in DB to CLI output string
-    def convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict):
+    def convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict, port_name=None):
         indent = ' ' * 8
         output_dom = ''
         channel_threshold_align = 18
         module_threshold_align = 15
 
         if sfp_type.startswith('QSFP') or is_sfp_cmis:
+            is_cpo = sfp_type.startswith('CPO')
             # Channel Monitor
             if is_sfp_cmis:
                 output_dom += (indent + 'ChannelMonitorValues:\n')
-                sorted_key_table = natsorted(CMIS_DOM_CHANNEL_MONITOR_MAP)
+                dom_channel_monitor_map = CMIS_CPO_DOM_CHANNEL_MONITOR_MAP if is_cpo else CMIS_DOM_CHANNEL_MONITOR_MAP
+                dom_value_unit_map = CMIS_CPO_DOM_VALUE_UNIT_MAP if is_cpo else QSFP_DD_DOM_VALUE_UNIT_MAP
+                sorted_key_table = natsorted(dom_channel_monitor_map)
                 output_channel = self.format_dict_value_to_string(
                     sorted_key_table, dom_info_dict,
-                    CMIS_DOM_CHANNEL_MONITOR_MAP,
-                    QSFP_DD_DOM_VALUE_UNIT_MAP)
+                    dom_channel_monitor_map,
+                    dom_value_unit_map)
                 output_dom += output_channel
             else:
                 output_dom += (indent + 'ChannelMonitorValues:\n')
@@ -398,10 +591,7 @@ class SFPShow(object):
                 output_dom += output_channel
 
             # Channel Threshold
-            if is_sfp_cmis:
-                dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP
-            else:
-                dom_map = QSFP_DOM_CHANNEL_THRESHOLD_MAP
+            dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP if is_sfp_cmis else QSFP_DOM_CHANNEL_THRESHOLD_MAP
 
             output_dom += (indent + 'ChannelThresholdValues:\n')
             sorted_key_table = natsorted(dom_map)
@@ -414,20 +604,24 @@ class SFPShow(object):
 
             # Module Monitor
             output_dom += (indent + 'ModuleMonitorValues:\n')
-            sorted_key_table = natsorted(DOM_MODULE_MONITOR_MAP)
+            module_monitor_map = CMIS_CPO_DOM_MODULE_MONITOR_MAP if is_cpo else DOM_MODULE_MONITOR_MAP
+            module_monitor_unit_map = CMIS_CPO_DOM_VALUE_UNIT_MAP if is_cpo else DOM_VALUE_UNIT_MAP
+            sorted_key_table = natsorted(module_monitor_map)
             output_module = self.format_dict_value_to_string(
                 sorted_key_table, dom_info_dict,
-                DOM_MODULE_MONITOR_MAP,
-                DOM_VALUE_UNIT_MAP)
+                module_monitor_map,
+                module_monitor_unit_map)
             output_dom += output_module
 
             # Module Threshold
             output_dom += (indent + 'ModuleThresholdValues:\n')
-            sorted_key_table = natsorted(DOM_MODULE_THRESHOLD_MAP)
+            module_threshold_map = CMIS_CPO_DOM_MODULE_THRESHOLD_MAP if is_cpo else DOM_MODULE_THRESHOLD_MAP
+            module_threshold_unit_map = CMIS_CPO_DOM_MODULE_THRESHOLD_UNIT_MAP if is_cpo else DOM_MODULE_THRESHOLD_UNIT_MAP
+            sorted_key_table = natsorted(module_threshold_map)
             output_module_threshold = self.format_dict_value_to_string(
                 sorted_key_table, dom_info_dict,
-                DOM_MODULE_THRESHOLD_MAP,
-                DOM_MODULE_THRESHOLD_UNIT_MAP,
+                module_threshold_map,
+                module_threshold_unit_map,
                 module_threshold_align)
             output_dom += output_module_threshold
 
@@ -467,6 +661,16 @@ class SFPShow(object):
                 channel_threshold_align)
             output_dom += output_channel_threshold
 
+        if port_name is not None:
+            platform_dom_map, platform_dom_unit_map = platform_sfputil_helper.get_platform_specific_dom_format_map(port_name)
+            output_dom += (indent + 'PlatformSpecificDomValues:\n')
+            sorted_key_table = natsorted(platform_dom_map)
+            output_vendor = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                platform_dom_map,
+                platform_dom_unit_map)
+            output_dom += output_vendor
+
         return output_dom
 
     # Convert sfp info and dom sensor info in DB to cli output string
@@ -494,7 +698,7 @@ class SFPShow(object):
                     sfp_type = sfp_info_dict['type']
                     dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(first_subport)) or {}
                     dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport)) or {})
-                    dom_output = self.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
+                    dom_output = self.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict, interface_name)
                     output += dom_output
         else:
             if is_rj45_port(interface_name):
@@ -574,6 +778,12 @@ class SFPShow(object):
             if 'tuning_in_progress' in sfp_status_dict:
                 self.convert_vdm_fields_to_legacy_fields(state_db, first_subport, sfp_status_dict, CCMIS_VDM_TO_LEGACY_STATUS_MAP, 'FLAG')
                 output += self.convert_sfp_status_to_output_string(sfp_status_dict, CCMIS_STATUS_MAP)
+            # CPO specific section
+            if 'els_module_state' in sfp_status_dict:
+                output += self.convert_sfp_status_to_output_string(sfp_status_dict, CPO_STATUS_MAP)
+            # Platform specific section
+            platform_status_map = platform_sfputil_helper.get_platform_specific_transceiver_status_format_map(interface_name)
+            output += self.convert_sfp_status_to_output_string(sfp_status_dict, platform_status_map)
         else:
             output = QSFP_STATUS_NOT_APPLICABLE_STR + '\n'
         return output

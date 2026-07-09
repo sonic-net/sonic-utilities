@@ -50,8 +50,25 @@ C_CMIS_DELTA_DATA_MAP = {
     'supported_min_laser_freq': 'Supported Min Laser Frequency',
 }
 
+CPO_TRANSCEIVER_INFO_MAP = {
+    'els_type': 'ELS type',
+    'els_type_abbrv_name': 'ELS type_abbrv_name',
+    'els_hardware_rev': 'ELS hardware_rev',
+    'els_serial': 'ELS serial',
+    'els_manufacturer': 'ELS manufacturer',
+    'els_model': 'ELS model',
+    'els_connector': 'ELS connector',
+    'els_ext_identifier': 'ELS ext_identifier',
+    'els_cable_type': 'ELS cable_type',
+    'els_vendor_date': 'ELS vendor_date',
+    'els_vendor_oui': 'ELS vendor_oui',
+    'els_vendor_rev': 'ELS vendor_rev',
+    'els_cmis_rev': 'ELS cmis_rev',
+}
+
 CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
 C_CMIS_DATA_MAP = {**CMIS_DATA_MAP, **C_CMIS_DELTA_DATA_MAP}
+CPO_CMIS_DATA_MAP = {**CMIS_DATA_MAP, **CPO_TRANSCEIVER_INFO_MAP}
 
 # Common fields for all types:
 # For non-CMIS, only first 1 or 4 lanes are applicable.
@@ -451,6 +468,18 @@ def is_transceiver_c_cmis(sfp_info_dict):
     return 'supported_max_tx_power' in sfp_info_dict
 
 
+def is_transceiver_cpo(sfp_info_dict):
+    """
+    Check if the transceiver is CPO.
+    If the sfp_info_dict is None, return False.
+    If type starts with 'CPO', return True.
+    """
+    if sfp_info_dict is None:
+        return False
+    sfp_type = sfp_info_dict.get('type', '')
+    return sfp_type.startswith('CPO')
+
+
 def get_data_map_sort_key(sfp_info_dict, data_map=None):
     """
     Create a sorting key function for SFP info keys based on the transceiver type.
@@ -497,17 +526,21 @@ def get_transceiver_data_map(sfp_info_dict):
         sfp_info_dict (dict): The SFP info dictionary to determine transceiver type
 
     Returns:
-        dict: The appropriate data map (C_CMIS_DATA_MAP, CMIS_DATA_MAP, or QSFP_DATA_MAP)
-              Returns QSFP_DATA_MAP as default if sfp_info_dict is None or invalid
+        dict: The appropriate data map (CPO_CMIS_DATA_MAP, C_CMIS_DATA_MAP,
+              CMIS_DATA_MAP, or QSFP_DATA_MAP). Returns QSFP_DATA_MAP as default
+              if sfp_info_dict is None or invalid.
     """
     if sfp_info_dict is None or not isinstance(sfp_info_dict, dict):
         return QSFP_DATA_MAP  # Default fallback
 
+    is_sfp_cpo = is_transceiver_cpo(sfp_info_dict)
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     is_sfp_c_cmis = is_transceiver_c_cmis(sfp_info_dict)
 
     if is_sfp_c_cmis:
         return C_CMIS_DATA_MAP
+    elif is_sfp_cpo:
+        return CPO_CMIS_DATA_MAP
     elif is_sfp_cmis:
         return CMIS_DATA_MAP
     else:
