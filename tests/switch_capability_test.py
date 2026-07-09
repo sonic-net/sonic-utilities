@@ -4,7 +4,6 @@ import os
 import sys
 
 import click
-import pytest
 import show.main as show
 from click.testing import CliRunner
 from unittest.mock import MagicMock, patch
