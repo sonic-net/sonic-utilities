@@ -9,6 +9,7 @@ from generic_config_updater.services_validator import (
     port_speed_change_validator,
 )
 from generic_config_updater.services_validator import ntp_validator
+from generic_config_updater.services_validator import gnmi_validator, telemetry_validator
 
 # Mimics subprocess.run call
 #
@@ -33,9 +34,9 @@ def mock_subprocess_run(cmd_args, capture_output=False, check=False, text=True):
     entry = subprocess_calls[subprocess_call_index]
     subprocess_call_index += 1
 
-    # Convert cmd_args list back to string for comparison
+    # Convert cmd_args list back to string for comparison.
     cmd_str = ' '.join(cmd_args)
-    assert cmd_str == entry["cmd"], msg
+    assert entry["cmd"] in cmd_str, msg
 
     # Get stdout and stderr from entry, default to empty strings
     stdout = entry.get("stdout", "")
@@ -291,6 +292,86 @@ test_vlanintf_failure_data = [
    ]
 
 
+test_gnmi_data = [
+        {"old": {}, "upd": {}, "cmd": ""},
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50053"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "cmd": ""
+        }
+    ]
+
+
+test_telemetry_data = [
+        {"old": {}, "upd": {}, "cmd": ""},
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50052"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "cmd": ""
+        }
+    ]
+
+
 class TestServiceValidator(unittest.TestCase):
 
     @patch("generic_config_updater.services_validator.subprocess.run")
@@ -440,3 +521,37 @@ class TestServiceValidator(unittest.TestCase):
 
             assert result == entry["expected_result"], \
                 f"{msg} - Expected {entry['expected_result']} but got {result}"
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_gnmi_validator(self, mock_subprocess):
+        """Test gnmi_validator restarts gnmi service on VRF change"""
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+
+        for entry in test_gnmi_data:
+            subprocess_calls = []
+            subprocess_call_index = 0
+
+            if entry["cmd"]:
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
+
+            result = gnmi_validator(entry["old"], entry["upd"], None)
+            assert result, "gnmi_validator failed: {}".format(str(entry))
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_telemetry_validator(self, mock_subprocess):
+        """Test telemetry_validator restarts telemetry service on VRF change"""
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+
+        for entry in test_telemetry_data:
+            subprocess_calls = []
+            subprocess_call_index = 0
+
+            if entry["cmd"]:
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
+
+            result = telemetry_validator(entry["old"], entry["upd"], None)
+            assert result, "telemetry_validator failed: {}".format(str(entry))

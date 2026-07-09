@@ -105,7 +105,6 @@ class TestPortChannel(object):
 
         db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", None)
 
-
     def test_add_existing_portchannel_again(self):
         runner = CliRunner()
         db = Db()
@@ -517,5 +516,4 @@ class TestPortChannel(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")

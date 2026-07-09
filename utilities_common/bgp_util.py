@@ -12,10 +12,10 @@ from tabulate import tabulate
 from utilities_common import constants
 
 
-def get_namespace_for_bgp_neighbor(neighbor_ip):
+def get_namespace_for_bgp_neighbor(neighbor_ip, vrf_name=constants.DEFAULT_VRF):
     namespace_list = multi_asic.get_namespace_list()
     for namespace in namespace_list:
-        if is_bgp_neigh_present(neighbor_ip, namespace):
+        if is_bgp_neigh_present(neighbor_ip, namespace, vrf_name):
             return namespace
 
     # neighbor IP not present in any namespace
@@ -23,31 +23,48 @@ def get_namespace_for_bgp_neighbor(neighbor_ip):
                  ' Bgp neighbor {} not configured'.format(neighbor_ip))
 
 
-def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
+def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vrf_name=constants.DEFAULT_VRF):
     config_db = multi_asic.connect_config_db_for_ns(namespace)
 
     tables = [
         multi_asic.BGP_NEIGH_CFG_DB_TABLE,
         multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE,
     ]
-    pattern = re.compile(rf".*\|{re.escape(neighbor_ip)}")
 
     for table in tables:
-        # Check for the neighbor_ip format
-        if config_db.get_entry(table, neighbor_ip):
+        # Check for the neighbor_ip format (no VRF prefix = default VRF)
+        if vrf_name in ('all', constants.DEFAULT_VRF) and config_db.get_entry(table, neighbor_ip):
             return True
 
-        # Check for any string|neighbor_ip format using regex. This is needed
+        # Check for any string|neighbor_ip format. This is needed
         # when unified routing config mode is enabled, as in that case
         # vrfname|neighbor_ip is the key instead of just neighbor_ip
         keys = config_db.get_keys(table)
         for key in keys:
-            # Convert the key from tuple like ('default', 'x.x.x.x') to a string
-            # like 'default|x.x.x.x'
-            if isinstance(key, tuple):
-                key_str = "|".join(key)
-                if pattern.match(key_str) and config_db.get_entry(table, key):
-                    return True
+            if (
+                    isinstance(key, tuple) and len(key) == 2 and key[1] == neighbor_ip and
+                    (vrf_name == 'all' or key[0] == vrf_name) and config_db.get_entry(table, key)
+            ):
+                return True
+
+    # Check if the neighbor IP falls within any dynamic peer range (BGP_PEER_RANGE).
+    # Entry keys are either 'name' or 'vrf_name|name'; filter by vrf_name when provided.
+    peer_range_data = config_db.get_table('BGP_PEER_RANGE')
+    for entry in peer_range_data:
+        try:
+            entry_vrf = entry[0] if isinstance(entry, tuple) else constants.DEFAULT_VRF
+            if vrf_name != 'all' and vrf_name != entry_vrf:
+                continue
+            ip_ranges = peer_range_data[entry].get('ip_range', [])
+            for subnet in ip_ranges:
+                if is_ipv4_address(neighbor_ip) and '.' in subnet:
+                    if ipaddress.IPv4Address(neighbor_ip) in ipaddress.ip_network(subnet, strict=False):
+                        return True
+                elif is_ipv6_address(neighbor_ip) and ':' in subnet:
+                    if ipaddress.IPv6Address(neighbor_ip) in ipaddress.ip_network(subnet, strict=False):
+                        return True
+        except (ValueError, KeyError):
+            continue
 
     return False
 
@@ -89,7 +106,9 @@ def is_ipv6_address(ip_address):
 
 def get_dynamic_neighbor_subnet(db):
     """
-    Returns dict of description and subnet info from bgp_peer_range table
+    Returns dict of description and subnet info from bgp_peer_range table.
+    Keys in BGP_PEER_RANGE can be either 'name' or 'vrf_name|name', where vrf is 'default'
+    for entries without a VRF prefix.
     :param db: config_db
     """
     dynamic_neighbor = {}
@@ -98,12 +117,14 @@ def get_dynamic_neighbor_subnet(db):
     neighbor_data = db.get_table('BGP_PEER_RANGE')
     try:
         for entry in neighbor_data:
-            new_key = neighbor_data[entry]['ip_range'][0]
-            new_value = neighbor_data[entry]['name']
-            if is_ipv4_address(neighbor_data[entry]['src_address']):
-                v4_subnet[new_key] = new_value
-            elif is_ipv6_address(neighbor_data[entry]['src_address']):
-                v6_subnet[new_key] = new_value
+            vrf = entry[0] if isinstance(entry, tuple) else constants.DEFAULT_VRF
+            peer_name = neighbor_data[entry]['name']
+            for ip_range in neighbor_data[entry].get('ip_range', []):
+                subnet = ipaddress.ip_network(ip_range, strict=False)
+                if subnet.version == 4:
+                    v4_subnet[(vrf, ip_range)] = peer_name
+                elif subnet.version == 6:
+                    v6_subnet[(vrf, ip_range)] = peer_name
         dynamic_neighbor[constants.IPV4] = v4_subnet
         dynamic_neighbor[constants.IPV6] = v6_subnet
         return dynamic_neighbor
@@ -141,7 +162,7 @@ def get_external_bgp_neighbors_dict(namespace=multi_asic.DEFAULT_NAMESPACE):
     return external_neighbors
 
 
-def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
+def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors, vrf_name=constants.DEFAULT_VRF):
     """
     return neighbor name for the ip provided
     :param ip: ip address str
@@ -150,28 +171,27 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
     :return: name of neighbor
     """
     # Direct IP match
-    if ip in static_neighbors:
+    if ip in static_neighbors and vrf_name == constants.DEFAULT_VRF:
         return static_neighbors[ip]
     # Try to find the key where IP is the second element of any tuple key.
     # This is to handle the case where the key is a tuple like (vrfname, IP)
     # when unified routing config mode is enabled
     elif matching_key := next(
         (key for key in static_neighbors.keys()
-         if isinstance(key, tuple) and len(key) == 2 and key[1] == ip),
+         if isinstance(key, tuple) and len(key) == 2 and key[1] == ip
+         and (vrf_name == 'all' or key[0] == vrf_name)),
         None
     ):
         return static_neighbors[matching_key]
     elif is_ipv4_address(ip):
-        for subnet in dynamic_neighbors[constants.IPV4]:
-            if ipaddress.IPv4Address(ip) in ipaddress.IPv4Network(subnet):
-                return dynamic_neighbors[constants.IPV4][subnet]
+        for (vrf, subnet) in dynamic_neighbors[constants.IPV4]:
+            if ipaddress.IPv4Address(ip) in ipaddress.ip_network(subnet, strict=False) and vrf == vrf_name:
+                return dynamic_neighbors[constants.IPV4][(vrf, subnet)]
     elif is_ipv6_address(ip):
-        for subnet in dynamic_neighbors[constants.IPV6]:
-            if ipaddress.IPv6Address(ip) in ipaddress.IPv6Network(subnet):
-                return dynamic_neighbors[constants.IPV6][subnet]
-    else:
-        return "NotAvailable"
-
+        for (vrf, subnet) in dynamic_neighbors[constants.IPV6]:
+            if ipaddress.IPv6Address(ip) in ipaddress.ip_network(subnet, strict=False) and vrf == vrf_name:
+                return dynamic_neighbors[constants.IPV6][(vrf, subnet)]
+    return "NotAvailable"
 
 def get_bgp_summary_extended(command_output):
     """
@@ -262,65 +282,73 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
     return output
 
 
-def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf):
+def process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf=constants.DEFAULT_VRF):
+    ctx = click.get_current_context()
+
+    # no bgp neighbors found so print basic device bgp info
+    if key not in cmd_output_json:
+        has_bgp_neighbors = False
+    else:
+        has_bgp_neighbors = True
+        # for multi asic devices or chassis linecards, the output of 'show ip bgp summary json'
+        # will have both internal and external bgp neighbors
+        # So, check if the current namespace has external bgp neighbors.
+        # If not, treat it as no bgp neighbors
+        if (device.get_display_option() == constants.DISPLAY_EXTERNAL):
+            if (device_info.is_chassis() or multi_asic.is_multi_asic()):
+                external_peers_list_in_cfg_db = get_external_bgp_neighbors_dict(device.current_namespace).keys()
+                if not external_peers_list_in_cfg_db:
+                    has_bgp_neighbors = False
+
+    if not has_bgp_neighbors:
+        vtysh_bgp_json_cmd = "show ip bgp vrf {} json".format(vrf)
+        no_neigh_cmd_output = run_bgp_show_command(vtysh_bgp_json_cmd, ns)
+        try:
+            no_neigh_cmd_output_json = json.loads(no_neigh_cmd_output)
+        except ValueError:
+            ctx.fail("bgp summary from bgp container not in json format")
+
+    out_cmd = cmd_output_json[key] if has_bgp_neighbors else no_neigh_cmd_output_json
+    process_bgp_summary_json(bgp_summary, out_cmd, device, has_bgp_neighbors=has_bgp_neighbors)
+
+
+def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf=constants.DEFAULT_VRF):
 
     device = multi_asic_util.MultiAsic(display, namespace)
     ctx = click.get_current_context()
     if af is constants.IPV4:
-        vtysh_cmd = "show ip bgp"
-        if vrf is not None:
-            vtysh_cmd += ' vrf {}'.format(vrf)
-        vtysh_cmd += " summary json"
+        vtysh_cmd = "show ip bgp vrf {} summary json".format(vrf)
         key = 'ipv4Unicast'
     else:
-        vtysh_cmd = "show bgp"
-        if vrf is not None:
-            vtysh_cmd += ' vrf {}'.format(vrf)
-        vtysh_cmd += " ipv6 summary json"
+        vtysh_cmd = "show bgp vrf {} ipv6 summary json".format(vrf)
         key = 'ipv6Unicast'
 
-    bgp_summary = {}
-    cmd_output_json = {}
-
-    for ns in device.get_ns_list_based_on_options():
-        has_bgp_neighbors = True
-        cmd_output = run_bgp_show_command(vtysh_cmd, ns)
-        device.current_namespace = ns
-        try:
-            cmd_output_json = json.loads(cmd_output)
-        except ValueError:
-            ctx.fail("bgp summary from bgp container not in json format")
-
-        # no bgp neighbors found so print basic device bgp info
-        if key not in cmd_output_json:
-            has_bgp_neighbors = False
-        else:
-            # for multi asic devices or chassis linecards, the output of 'show ip bgp summary json'
-            # will have both internal and external bgp neighbors
-            # So, check if the current namespace has external bgp neighbors.
-            # If not, treat it as no bgp neighbors
-            if (device.get_display_option() == constants.DISPLAY_EXTERNAL and
-                (device_info.is_chassis() or multi_asic.is_multi_asic())):
-                external_peers_list_in_cfg_db = get_external_bgp_neighbors_dict(
-                    device.current_namespace).keys()
-                if not external_peers_list_in_cfg_db:
-                    has_bgp_neighbors = False
-
-        if not has_bgp_neighbors:
-            vtysh_bgp_json_cmd = "show ip bgp"
-            if vrf is not None:
-                vtysh_bgp_json_cmd += " vrf {}".format(vrf)
-            vtysh_bgp_json_cmd += " json"
-            no_neigh_cmd_output = run_bgp_show_command(vtysh_bgp_json_cmd, ns)
+    if vrf == 'all':
+        # Return per-VRF summaries as an ordered list of (vrf_name, bgp_summary) tuples
+        vrf_summaries = {}
+        for ns in device.get_ns_list_based_on_options():
+            cmd_output = run_bgp_show_command(vtysh_cmd, ns)
+            device.current_namespace = ns
             try:
-                no_neigh_cmd_output_json = json.loads(no_neigh_cmd_output)
+                cmd_output_json = json.loads(cmd_output)
             except ValueError:
                 ctx.fail("bgp summary from bgp container not in json format")
-
-        out_cmd = cmd_output_json[key] if has_bgp_neighbors else no_neigh_cmd_output_json
-        process_bgp_summary_json(bgp_summary, out_cmd, device, has_bgp_neighbors=has_bgp_neighbors)
-
-    return bgp_summary
+            for vrf_name, vrf_data in cmd_output_json.items():
+                if vrf_name not in vrf_summaries:
+                    vrf_summaries[vrf_name] = {}
+                process_bgp_vrf_summary(vrf_data, vrf_summaries[vrf_name], key, ns, device, vrf_name)
+        return list(vrf_summaries.items())
+    else:
+        bgp_summary = {}
+        for ns in device.get_ns_list_based_on_options():
+            cmd_output = run_bgp_show_command(vtysh_cmd, ns)
+            device.current_namespace = ns
+            try:
+                cmd_output_json = json.loads(cmd_output)
+            except ValueError:
+                ctx.fail("bgp summary from bgp container not in json format")
+            process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf)
+        return [(vrf, bgp_summary)]
 
 
 def display_bgp_summary(bgp_summary, af):
@@ -332,7 +360,6 @@ def display_bgp_summary(bgp_summary, af):
         af: IPV4 or IPV6
 
     '''
-
     # "Neighbhor" is a known typo,
     # but fix it will impact lots of automation scripts that the community users may have developed for years
     # for now, let's keep it as it is.
@@ -444,9 +471,10 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
                 else:
                     peers.append(value['state'])
 
-                # Get the bgp neighbour name ans store it
+                # Get the bgp neighbour name and store it
+                vrf_name = cmd_output.get('vrfName', constants.DEFAULT_VRF)
                 neigh_name = get_bgp_neighbor_ip_to_name(
-                    peer_ip, static_neighbors, dynamic_neighbors)
+                    peer_ip, static_neighbors, dynamic_neighbors, vrf_name)
                 peers.append(neigh_name)
 
                 bgp_summary.setdefault('peers', []).append(peers)

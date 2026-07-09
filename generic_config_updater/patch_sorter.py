@@ -1025,15 +1025,15 @@ class NoDependencyMoveValidator:
         """
         deleted_paths, added_paths = self._get_paths(diff.current_config, simulated_config, [])
 
-        # Note: on replace operations we are loading both current and simulated configs so we have to
-        #       load twice :(
-
-        # For deleted paths, we check the current config has no dependencies between nodes under the removed path
-        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config=True):
+        # Validate added_paths against simulated_config first: FullConfigMoveValidator has
+        # already loaded simulated_config into the sy singleton (via validate_config_db_config),
+        # so _currently_loaded_hash will match and find_ref_paths skips loadData.
+        # Then validate deleted_paths against current_config (requires a fresh loadData).
+        # This ordering gives 2 loadData calls instead of 3 for REPLACE operations.
+        if not self._validate_paths_config(added_paths, simulated_config, reload_config=True):
             return False
 
-        # For added paths, we check the simulated config has no dependencies between nodes under the added path
-        if not self._validate_paths_config(added_paths, simulated_config, reload_config=True):
+        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config=True):
             return False
 
         return True
@@ -1270,6 +1270,62 @@ class KeyLevelMoveGenerator:
             for key in self.path_addressing.configdb_sorted_keys_by_backlinks("/" + table, config1, reverse=reverse):
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
+
+
+class BulkLeafListMoveGenerator:
+    """
+    A non-extendable generator that produces a single REPLACE move for each
+    leaf-list field whose items differ between current and target configs.
+
+    Instead of generating N individual REMOVE/ADD moves (one per list item),
+    this emits one REPLACE of the whole list. The DFS tries non-extendable
+    generators first, so if the bulk replace validates, we skip N-1 moves
+    and their associated loadData() calls.
+
+    This is conservative:
+    - Only handles leaf-lists (lists of scalars, not lists of dicts)
+    - Only replaces lists that already exist in both current and target
+    - If this move fails validation, DFS continues to other generators
+      which produce per-item moves (no explicit fallback mechanism)
+    """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+
+    def generate(self, diff):
+        for move in self._traverse(diff, diff.current_config, diff.target_config, []):
+            yield move
+
+    def _traverse(self, diff, current_ptr, target_ptr, tokens):
+        if not isinstance(current_ptr, dict) or not isinstance(target_ptr, dict):
+            return
+
+        for key in current_ptr:
+            if key not in target_ptr:
+                continue
+
+            tokens.append(key)
+            current_val = current_ptr[key]
+            target_val = target_ptr[key]
+
+            if isinstance(current_val, list) and isinstance(target_val, list):
+                # Only handle leaf-lists (lists of scalars)
+                if (current_val != target_val and
+                        self._is_leaf_list(current_val) and
+                        self._is_leaf_list(target_val)):
+                    yield JsonMoveGroup(
+                        self.__class__.__name__,
+                        JsonMove(diff, OperationType.REPLACE, list(tokens), list(tokens)),
+                    )
+            elif isinstance(current_val, dict) and isinstance(target_val, dict):
+                for move in self._traverse(diff, current_val, target_val, tokens):
+                    yield move
+
+            tokens.pop()
+
+    @staticmethod
+    def _is_leaf_list(lst):
+        """Return True if lst contains only scalars (str, int, float, bool)."""
+        return all(isinstance(item, (str, int, float, bool)) for item in lst)
 
 
 class BulkKeyLevelMoveGenerator:
@@ -1811,7 +1867,7 @@ class LowLevelMoveGenerator:
             yield move
 
     def _traverse_current_list(self, ptr, current_tokens):
-        if len(ptr) == 0:
+        if len(ptr) <= 1:
             yield JsonMoveGroup(self.__class__.__name__, JsonMove(self.diff, OperationType.REMOVE, current_tokens))
             return
 
@@ -2259,6 +2315,7 @@ class SortAlgorithmFactory:
         move_generators = [LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
         move_non_extendable_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
+                                          BulkLeafListMoveGenerator(self.path_addressing),
                                           BulkKeyLevelMoveGenerator(self.path_addressing),
                                           KeyLevelMoveGenerator(self.path_addressing),
                                           BulkKeyGroupLowLevelMoveGenerator(self.path_addressing),

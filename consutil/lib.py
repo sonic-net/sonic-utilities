@@ -9,6 +9,8 @@ import pexpect
 import re
 import subprocess
 import sys
+import time
+
 
 import click
 from sonic_py_common import device_info
@@ -39,6 +41,8 @@ FEATURE_ESCAPE_KEY = "escape_char"
 STATE_KEY = "state"
 PID_KEY = "pid"
 START_TIME_KEY = "start_time"
+OPER_STATE_KEY = "oper_state"
+LAST_STATE_CHANGE_KEY = "last_state_change"
 
 BUSY_FLAG = "busy"
 IDLE_FLAG = "idle"
@@ -48,6 +52,8 @@ PICOCOM_READY = "Terminal ready"
 PICOCOM_BUSY = "Resource temporarily unavailable"
 
 UDEV_PREFIX_CONF_FILENAME = "udevprefix.conf"
+
+PTY_SYMLINK_SUFFIX = "-PTS"
 
 TIMEOUT_SEC = 0.2
 
@@ -177,6 +183,48 @@ class ConsolePortInfo(object):
         return self.cur_state[PID_KEY] if PID_KEY in self.cur_state else None
 
     @property
+    def oper_state(self):
+        return self.cur_state[OPER_STATE_KEY] if OPER_STATE_KEY in self.cur_state else None
+
+    @property
+    def last_state_change(self):
+        return self.cur_state[LAST_STATE_CHANGE_KEY] if LAST_STATE_CHANGE_KEY in self.cur_state else None
+
+    @property
+    def state_duration(self):
+        """Calculate and format the duration since last state change.
+        Format: XdXhXmXs (only shows non-zero parts)
+        """
+        if not self.last_state_change:
+            return None
+        try:
+            ts = int(self.last_state_change)
+            now = int(time.time())
+            diff = now - ts
+            if diff < 0:
+                return None
+
+            # Calculate time components
+            days, remainder = divmod(diff, 24 * 3600)
+            hours, remainder = divmod(remainder, 3600)
+            minutes, seconds = divmod(remainder, 60)
+
+            # Build formatted string, only include non-zero parts for d/h/m, always show seconds
+            parts = []
+            if days > 0:
+                parts.append(f"{days}d")
+            if hours > 0 or days > 0:
+                parts.append(f"{hours}h")
+            if minutes > 0 or hours > 0 or days > 0:
+                parts.append(f"{minutes}m")
+
+            parts.append(f"{seconds}s")  # Always show seconds
+
+            return "".join(parts)
+        except (ValueError, OSError):
+            return None
+
+    @property
     def session_start_date(self):
         return self.cur_state[START_TIME_KEY] if START_TIME_KEY in self.cur_state else None
 
@@ -201,8 +249,9 @@ class ConsolePortInfo(object):
         # build and start picocom command
         flow_cmd = "h" if self.flow_control else "n"
         escape_cmd = "-e {}".format(self.escape_char) if self.escape_char else ""
-        cmd = "picocom {} -b {} -f {} {}{}".format(escape_cmd, self.baud, flow_cmd,
-                                                   SysInfoProvider.DEVICE_PREFIX, self.line_num)
+        cmd = "picocom {} -b {} -f {} {}{}{}".format(
+            escape_cmd, self.baud, flow_cmd,
+            SysInfoProvider.DEVICE_PREFIX, self.line_num, PTY_SYMLINK_SUFFIX)
 
         # start connection
         try:
@@ -312,7 +361,7 @@ class SysInfoProvider(object):
         cmd = ["bash", "-c", "ls " + SysInfoProvider.DEVICE_PREFIX + "*"]
         output, _ = SysInfoProvider.run_command(cmd, abort=False)
         ttys = output.split('\n')
-        ttys = list([dev for dev in ttys if re.match(SysInfoProvider.DEVICE_PREFIX + r"\d+", dev) != None])
+        ttys = list([dev for dev in ttys if re.match(SysInfoProvider.DEVICE_PREFIX + r"\d+$", dev)])
         return ttys
 
     @staticmethod
@@ -345,8 +394,8 @@ class SysInfoProvider(object):
         regex_date = r"([A-Z][a-z]{2} [A-Z][a-z]{2} [\d ]\d \d{2}:\d{2}:\d{2} \d{4})"
         # matches any characters ending in minicom or picocom,
         # then a space and any chars followed by /dev/ttyUSB<any digits>,
-        # then a space and any chars
-        regex_cmd = r".*(?:(?:mini)|(?:pico))com .*" + SysInfoProvider.DEVICE_PREFIX + r"(\d+)(?: .*)?"
+        # then any chars
+        regex_cmd = r".*(?:(?:mini)|(?:pico))com .*" + SysInfoProvider.DEVICE_PREFIX + r"(\d+).*"
         regex_process = re.compile(r"^" + regex_pid + r" " + regex_date + r" " + regex_cmd + r"$")
 
         console_processes = {}
@@ -378,11 +427,63 @@ class DbUtils(object):
         self._state_db.set(self._state_db.STATE_DB, key, STATE_KEY, state)
         self._state_db.set(self._state_db.STATE_DB, key, PID_KEY, pid)
         self._state_db.set(self._state_db.STATE_DB, key, START_TIME_KEY, date)
+
+        # Read existing oper_state and last_state_change from STATE_DB
+        existing_data = self._state_db.get_all(self._state_db.STATE_DB, key)
+        oper_state = existing_data.get(OPER_STATE_KEY, "") if existing_data else ""
+        last_state_change = existing_data.get(LAST_STATE_CHANGE_KEY, "") if existing_data else ""
+
         return {
             STATE_KEY: state,
             PID_KEY: pid,
-            START_TIME_KEY: date
+            START_TIME_KEY: date,
+            OPER_STATE_KEY: oper_state,
+            LAST_STATE_CHANGE_KEY: last_state_change
         }
+
+
+def initialize_console_runtime(db):
+    """Validate console feature state and initialize device prefix."""
+    config_db = db.cfgdb
+    data = config_db.get_entry(CONSOLE_SWITCH_TABLE, FEATURE_KEY)
+    if FEATURE_ENABLED_KEY not in data or data[FEATURE_ENABLED_KEY] == "no":
+        click.echo("Console switch feature is disabled")
+        sys.exit(ERR_DISABLE)
+
+    SysInfoProvider.init_device_prefix()
+
+
+def console_connect(target, use_device=False, db=None):
+    """Connect to a console port. Can be called directly without Click context."""
+    if db is None:
+        from utilities_common.db import Db
+        db = Db()
+        initialize_console_runtime(db)
+
+    port_provider = ConsolePortProvider(db, configured_only=False)
+    try:
+        target_port = port_provider.get(target, use_device=use_device)
+    except LineNotFoundError:
+        click.echo("Cannot connect: target [{}] does not exist".format(target))
+        sys.exit(ERR_DEV)
+
+    line_num = target_port.line_num
+
+    try:
+        session = target_port.connect()
+    except LineBusyError:
+        click.echo("Cannot connect: line [{}] is busy".format(line_num))
+        sys.exit(ERR_BUSY)
+    except InvalidConfigurationError as cfg_err:
+        click.echo("Cannot connect: {}".format(cfg_err.message))
+        sys.exit(ERR_CFG)
+    except ConnectionFailedError:
+        click.echo("Cannot connect: unable to open picocom process")
+        sys.exit(ERR_DEV)
+
+    click.echo("Successful connection to line [{}]\nPress ^{} ^X to disconnect"
+               .format(line_num, target_port.escape_char.upper() if target_port.escape_char is not None else "A"))
+    session.interact()
 
 class InvalidConfigurationError(Exception):
     def __init__(self, config_key, message):

@@ -20,7 +20,6 @@ class TestIPv6LinkLocalMultiAsic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ['UTILITIES_UNIT_TESTING'] = "1"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         from .mock_tables import dbconnector
         from .mock_tables import mock_multi_asic
@@ -137,10 +136,3 @@ class TestIPv6LinkLocalMultiAsic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        from .mock_tables import dbconnector
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        dbconnector.dedicated_dbs = {}
-        dbconnector.load_namespace_config()

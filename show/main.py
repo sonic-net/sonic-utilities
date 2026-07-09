@@ -41,8 +41,10 @@ except KeyError:
 
 from . import acl
 from . import bgp_common
+from .vtysh_helper import vtysh_command
 from . import chassis_modules
 from . import dropcounters
+from . import evpn
 from . import fabric
 from . import feature
 from . import fgnhg
@@ -305,6 +307,7 @@ def cli(ctx):
 cli.add_command(acl.acl)
 cli.add_command(chassis_modules.chassis)
 cli.add_command(dropcounters.dropcounters)
+cli.add_command(evpn.evpn)
 cli.add_command(fabric.fabric)
 cli.add_command(feature.feature)
 cli.add_command(fgnhg.fgnhg)
@@ -364,13 +367,16 @@ def get_interface_bind_to_vrf(config_db, vrf_name):
 
 @cli.command()
 @click.argument('vrf_name', required=False)
-def vrf(vrf_name):
+@click.pass_context
+def vrf(ctx, vrf_name):
     """Show vrf config"""
     config_db = ConfigDBConnector()
     config_db.connect()
     header = ['VRF', 'Interfaces']
     body = []
     vrf_dict = config_db.get_table('VRF')
+    if vrf_name is not None and vrf_name not in vrf_dict:
+        ctx.fail(f"VRF {vrf_name} is not configured.")
     if vrf_dict:
         vrfs = []
         if vrf_name is None:
@@ -831,7 +837,8 @@ def counters(interfacename, namespace, display, all, trim, voq, nonzero, json, v
 @click.option('--json', is_flag=True, help="JSON output")
 @click.option('--voq', is_flag=True, help="VOQ counters")
 @click.option('-nz', '--nonzero', is_flag=True, help="Non Zero Counters")
-def wredcounters(interfacename, namespace, display, verbose, json, voq, nonzero):
+@click.option('--summary', is_flag=True, help="Summary counters")
+def wredcounters(interfacename, namespace, display, verbose, json, voq, nonzero, summary):
     """Show queue wredcounters"""
 
     cmd = ["wredstat"]
@@ -854,6 +861,9 @@ def wredcounters(interfacename, namespace, display, verbose, json, voq, nonzero)
 
     if nonzero:
         cmd += ["-nz"]
+
+    if summary:
+        cmd += ["-s"]
 
     run_command(cmd, display_cmd=verbose)
 
@@ -1200,6 +1210,7 @@ def pwm_headroom_pool(namespace):
 @click.option('-a', '--address')
 @click.option('-t', '--type')
 @click.option('-c', '--count', is_flag=True)
+@click.option('-l', '--local', is_flag=True)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.option('-n',
               '--namespace',
@@ -1209,7 +1220,7 @@ def pwm_headroom_pool(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def mac(ctx, vlan, port, address, type, count, verbose, namespace):
+def mac(ctx, vlan, port, address, type, count, local, verbose, namespace):
     """Show MAC (FDB) entries"""
 
     if ctx.invoked_subcommand is not None:
@@ -1234,6 +1245,9 @@ def mac(ctx, vlan, port, address, type, count, verbose, namespace):
 
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+
+    if local:
+        cmd += ["-l"]
 
     run_command(cmd, display_cmd=verbose)
 
@@ -1440,8 +1454,9 @@ def loopback_action():
 # 'route' subcommand ("show ip route")
 #
 
-@ip.command()
-@click.argument('args', metavar='[IPADDRESS] [vrf <vrf_name>] [...]', nargs=-1, required=False)
+
+@ip.command(cls=vtysh_command("show ip route"))
+@click.argument('args', nargs=-1, required=False)
 @click.option('--display', '-d', 'display', default=None, show_default=False, type=str, help='all|frontend')
 @click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1537,8 +1552,8 @@ def interfaces(namespace, display):
 # 'route' subcommand ("show ipv6 route")
 #
 
-@ipv6.command()
-@click.argument('args', metavar='[IPADDRESS] [vrf <vrf_name>] [...]', nargs=-1, required=False)
+@ipv6.command(cls=vtysh_command("show ipv6 route"))
+@click.argument('args', nargs=-1, required=False)
 @click.option('--display', '-d', 'display', default=None, show_default=False, type=str, help='all|frontend')
 @click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1546,7 +1561,6 @@ def route(args, namespace, display, verbose):
     """Show IPv6 routing table"""
     # Call common handler to handle the show ipv6 route cmd
     bgp_common.show_routes(args, namespace, display, verbose, "ipv6")
-
 
 # 'protocol' command
 @ipv6.command()
@@ -1732,6 +1746,8 @@ def version(brief):
     click.echo("ASIC: {}".format(platform_info['asic_type']))
     click.echo("ASIC Count: {}".format(platform_info['asic_count']))
     click.echo("Serial Number: {}".format(chassis_info['serial']))
+    if chassis_info.get('switch_host_serial') != 'N/A':
+        click.echo("Switch-Host Serial Number: {}".format(chassis_info['switch_host_serial']))
     click.echo("Model Number: {}".format(chassis_info['model']))
     click.echo("Hardware Revision: {}".format(chassis_info['revision']))
     click.echo("Uptime: {}".format(sys_uptime.stdout.read().strip()))
@@ -1780,7 +1796,9 @@ def users(verbose):
 @click.option('--silent', is_flag=True, help="Run techsupport in silent mode")
 @click.option('--debug-dump', is_flag=True, help="Collect Debug Dump Output")
 @click.option('--redirect-stderr', '-r', is_flag=True, help="Redirect an intermediate errors to STDERR")
-def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop, silent, debug_dump, redirect_stderr):
+@click.option('--flow-dump', is_flag=True, help="Collect DPU flow dump (Only valid on DPU platforms)")
+def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
+                silent, debug_dump, redirect_stderr, flow_dump):
     """Gather information for troubleshooting"""
     cmd = ["sudo"]
 
@@ -1801,6 +1819,9 @@ def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
 
     if debug_dump:
         cmd += ["-d"]
+
+    if flow_dump:
+        cmd += ["-f"]
 
     cmd += ['-t', str(cmd_timeout)]
     if redirect_stderr:
@@ -2526,6 +2547,36 @@ def ztp(status, verbose):
        cmd += ["--verbose"]
     run_command(cmd, display_cmd=verbose)
 
+#
+# 'static anycast gateway' command ("show static-anycast-gateway")
+#
+
+
+@cli.command('static-anycast-gateway')
+@clicommon.pass_db
+def sag(db):
+    """Show static anycast gateway information"""
+    header = ['MacAddress', 'Interfaces']
+    body = []
+
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL') or {}
+    sag_mac = sag_entry.get('gateway_mac')
+    intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
+    enabled_vlans = [key for key, value in intf_dict.items()
+                     if value.get('static_anycast_gateway') == 'true']
+
+    if sag_mac:
+        for vlan_name in enabled_vlans:
+            if not body:
+                body.append([sag_mac, vlan_name])
+            else:
+                body.append(['', vlan_name])
+
+    click.echo("Static Anycast Gateway Information")
+    if enabled_vlans and not sag_mac:
+        click.echo("Warning: static-anycast-gateway is enabled on VLAN interfaces but "
+                   "SAG gateway_mac is not configured")
+    click.echo(tabulate(body, header, tablefmt='simple'))
 
 #
 # 'bmp' group ("show bmp ...")

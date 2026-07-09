@@ -51,6 +51,7 @@ from .utils import log
 from . import aaa
 from . import bmc
 from . import chassis_modules
+from . import liquid_cool
 from . import console
 from . import feature
 from . import fabric
@@ -60,6 +61,7 @@ from . import kdump
 from . import kube
 from . import muxcable
 from . import nat
+from . import sed
 from . import vlan
 from . import vxlan
 from . import plugins
@@ -70,6 +72,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import evpn_mh
 
 # mock masic APIs for unit test
 try:
@@ -124,6 +127,26 @@ VNET_NAME_MAX_LEN = 15
 GUID_MAX_LEN = 255
 
 asic_type = None
+
+
+SAMPLE_RATE_MIN = 2
+SAMPLE_RATE_MAX = 0xFFFFFFFF  # uint32 max
+TRUNCATE_SIZE_MIN = 64
+TRUNCATE_SIZE_MAX = 9216
+
+
+def validate_sample_rate(ctx, param, value):
+    if value != 0 and (value < SAMPLE_RATE_MIN or value > SAMPLE_RATE_MAX):
+        raise click.BadParameter(
+            f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX} (uint32 max)")
+    return value
+
+
+def validate_truncate_size(ctx, param, value):
+    if value != 0 and (value < TRUNCATE_SIZE_MIN or value > TRUNCATE_SIZE_MAX):
+        raise click.BadParameter(f"must be 0 or in range {TRUNCATE_SIZE_MIN}..{TRUNCATE_SIZE_MAX}")
+    return value
+
 
 DSCP_RANGE = click.IntRange(min=0, max=63)
 TTL_RANGE = click.IntRange(min=0, max=255)
@@ -531,10 +554,15 @@ def get_port_namespace(port):
     if not multi_asic.is_multi_asic() or port == 'eth0':
         return DEFAULT_NAMESPACE
 
-    # Get the table to check for interface presence
+    # Get the table to check for interface presence.
+    # Physical port aliases do not look like "Ethernet*" so in alias mode we
+    # need to fall back to scanning PORT aliases across namespaces.
     table_name = get_port_table_name(port)
     if table_name == "":
-        return None
+        if clicommon.get_interface_naming_mode() == "alias":
+            table_name = 'PORT'
+        else:
+            return None
 
     ns_list = multi_asic.get_all_namespaces()
     namespaces = ns_list['front_ns'] + ns_list['back_ns']
@@ -542,12 +570,16 @@ def get_port_namespace(port):
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
 
-        # If the interface naming mode is alias, search the tables for alias_name.
-        if clicommon.get_interface_naming_mode() == "alias":
+        # Physical ports should resolve by either canonical name or alias, regardless
+        # of the CLI naming mode. Other interface types (for example PortChannel)
+        # are stored by name and should use direct lookup.
+        if table_name == 'PORT':
             port_dict = config_db.get_table(table_name)
             if port_dict:
                 for port_name in port_dict:
-                    if port == port_dict[port_name]['alias']:
+                    if port == port_name:
+                        return namespace
+                    if clicommon.get_interface_naming_mode() == "alias" and port == port_dict[port_name].get('alias'):
                         return namespace
         else:
             entry = config_db.get_entry(table_name, port)
@@ -1073,6 +1105,66 @@ def _wait_for_monit_service_monitored(service, timeout=10):
     log.log_error("Monit monitor action for '{}' did not complete within {} seconds".format(service, timeout))
 
 
+def get_device_name():
+    """
+    Return the device/model id from /host/machine.conf onie_platform line.
+    Hardware SKU string, e.g. armhf-nokia_ixs7215_52x-r0.
+    """
+    machine_conf = "/host/machine.conf"
+    try:
+        with open(machine_conf) as f:
+            for line in f:
+                if line.startswith("onie_platform="):
+                    return line.strip().split("=", 1)[1]
+    except Exception:
+        return None
+
+
+def get_mgmt_interface():
+    """
+    Parse /etc/sonic/config_db.json to find the management interface name (e.g., eth0).
+    """
+    try:
+        with open('/etc/sonic/config_db.json') as f:
+            config = json.load(f)
+        mgmt_entries = config.get("MGMT_INTERFACE", {})
+        if not mgmt_entries:
+            return None
+        # Example key: "eth0|10.3.141.10/24"
+        return list(mgmt_entries.keys())[0].split('|')[0]
+    except Exception:
+        # Valid - no mgmt interface in config_db.json
+        return None
+
+
+def reset_mgmt_interface_if_usb_not_running():
+    """
+    If the management interface is a USB device and not RUNNING,
+    bring it down and up with delay to trigger re-negotiation.
+    Failures are logged and ignored so reload is not aborted.
+    """
+    iface = get_mgmt_interface()
+    if not iface:
+        return
+    if 'usb' not in os.path.realpath(f"/sys/class/net/{iface}/device"):
+        return
+    try:
+        with open(f"/sys/class/net/{iface}/operstate") as f:
+            operstate = f.read().strip()
+        if operstate == "up":
+            return  # Already RUNNING
+    except Exception:
+        pass  # Continue to attempt reset
+
+    click.echo("Reset USB-based mgmt interface for re-negotiation")
+    try:
+        subprocess.run(["ip", "link", "set", iface, "down"], check=True)
+        time.sleep(1.0)
+        subprocess.run(["ip", "link", "set", iface, "up"], check=True)
+    except (subprocess.CalledProcessError, OSError) as err:
+        log.log_warning("USB mgmt interface reset failed for {}: {}".format(iface, err))
+
+
 def _restart_services():
     last_interface_config_timestamp = get_service_finish_timestamp('interfaces-config')
     last_networking_timestamp = get_service_finish_timestamp('networking')
@@ -1102,7 +1194,25 @@ def _restart_services():
     click.echo("Reloading Monit configuration ...")
     clicommon.run_command(['sudo', 'monit', 'reload'])
 
+    device_model = get_device_name()
+    if device_model == "armhf-nokia_ixs7215_52x-r0":
+        click.echo("ARMHF/Nokia-7215: force restart swss and syncd")
+        time.sleep(15)
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss'])
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'syncd'])
+        time.sleep(1)
+        clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'swss'])
+        clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'syncd'])
+        clicommon.run_command(['sudo', 'systemctl', 'restart', 'swss'])
+
+    reset_mgmt_interface_if_usb_not_running()
+
 def _per_namespace_swss_ready(service_name):
+    out, _ = clicommon.run_command(
+        ['systemctl', 'show', str(service_name), '--property', 'LoadState', '--value'], return_cmd=True)
+    if out.strip() in ("not-found", "masked"):
+        # swss not present on this platform (e.g. BMC): nothing to wait for.
+        return True
     out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
     if out.strip() != "active":
         return False
@@ -1161,19 +1271,47 @@ def check_mirror_direction_config(v, direction):
     else:
         return True
 
+
+def split_mirror_ports(port_list):
+    """Return normalized mirror port tokens from a comma-separated string."""
+    if not port_list:
+        return []
+
+    return [port.strip() for port in port_list.split(",") if port.strip()]
+
+
+def normalize_mirror_src_port(config_db, src_port):
+    """Return canonical source-port list for ConfigDB storage."""
+    if not src_port:
+        return None
+
+    normalized_ports = []
+    for port in split_mirror_ports(src_port):
+        if clicommon.get_interface_naming_mode() == "alias":
+            port = interface_alias_to_name(config_db, port)
+        normalized_ports.append(port)
+
+    return ",".join(normalized_ports)
+
+
+def mirror_entry_has_port(entry, port_name):
+    """Check whether a mirror session entry contains a specific source port."""
+    return port_name in split_mirror_ports(entry.get('src_port', ''))
+
+
 def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
     """ Check if dst/src port is already configured with mirroring in same direction """
     for _, v in mirror_table.items():
         if src_port:
-            for port in src_port.split(","):
+            for port in split_mirror_ports(src_port):
                 if 'dst_port' in v and v['dst_port'] == port:
-                    ctx.fail("Error: Source Interface {} already has mirror config".format(port))
-                if 'src_port' in v and re.search(port,v['src_port']):
+                    ctx.fail("Source Interface {} already has mirror config".format(port))
+                if mirror_entry_has_port(v, port):
                     if check_mirror_direction_config(v, direction):
-                        ctx.fail("Error: Source Interface {} already has mirror config in same direction".format(port))
+                        ctx.fail("Source Interface {} already has mirror config in same direction".format(port))
         if dst_port:
-            if ('dst_port' in v and v['dst_port'] == dst_port) or ('src_port' in v and re.search(dst_port,v['src_port'])):
-                ctx.fail("Error: Destination Interface {} already has mirror config".format(dst_port))
+            if ('dst_port' in v and v['dst_port'] == dst_port) or mirror_entry_has_port(v, dst_port):
+                ctx.fail("Destination Interface {} already has mirror config".format(dst_port))
 
     return False
 
@@ -1205,16 +1343,30 @@ def is_port_mirror_capability_supported(direction, namespace=None):
     return True
 
 
-def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction):
+def mirror_session_exists(config_db, session_name):
+    """Check whether a mirror session name already exists in the given ConfigDB."""
+    return bool(config_db.get_entry('MIRROR_SESSION', session_name))
+
+
+def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction,
+                                   namespace=None, front_asic_configdbs=None):
     """ Check if SPAN mirror-session config is valid """
     ctx = click.get_current_context()
-    if len(config_db.get_entry('MIRROR_SESSION', session_name)) != 0:
+    if mirror_session_exists(config_db, session_name):
         click.echo("Error: {} already exists".format(session_name))
         return False
+    if front_asic_configdbs:
+        for front_asic_configdb in front_asic_configdbs.values():
+            if front_asic_configdb is config_db:
+                continue
+            if mirror_session_exists(front_asic_configdb, session_name):
+                click.echo("Error: {} already exists".format(session_name))
+                return False
 
     vlan_member_table = config_db.get_table('VLAN_MEMBER')
     mirror_table = config_db.get_table('MIRROR_SESSION')
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
+    normalized_src_port = src_port
 
     # Determine namespaces to validate: always include None (single-ASIC/back-compat),
     # and for multi-ASIC include namespaces for dst/src ports if present.
@@ -1222,37 +1374,39 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
 
     if dst_port:
         if not interface_name_is_valid(config_db, dst_port):
-            ctx.fail("Error: Destination Interface {} is invalid".format(dst_port))
+            ctx.fail("Destination Interface {} is invalid".format(dst_port))
 
         if is_portchannel_present_in_db(config_db, dst_port):
-            ctx.fail("Error: Destination Interface {} is not supported".format(dst_port))
+            ctx.fail("Destination Interface {} is not supported".format(dst_port))
 
         if interface_is_in_vlan(vlan_member_table, dst_port):
-            ctx.fail("Error: Destination Interface {} has vlan config".format(dst_port))
+            ctx.fail("Destination Interface {} has vlan config".format(dst_port))
 
         if interface_is_in_portchannel(portchannel_member_table, dst_port):
-            ctx.fail("Error: Destination Interface {} has portchannel config".format(dst_port))
+            ctx.fail("Destination Interface {} has portchannel config".format(dst_port))
 
         if clicommon.is_port_router_interface(config_db, dst_port):
-            ctx.fail("Error: Destination Interface {} is a L3 interface".format(dst_port))
+            ctx.fail("Destination Interface {} is a L3 interface".format(dst_port))
 
         namespace_set.add(get_port_namespace(dst_port))
 
     if src_port:
-        for port in src_port.split(","):
+        for port in split_mirror_ports(src_port):
             if not interface_name_is_valid(config_db, port):
-                ctx.fail("Error: Source Interface {} is invalid".format(port))
+                ctx.fail("Source Interface {} is invalid".format(port))
+        normalized_src_port = normalize_mirror_src_port(config_db, src_port)
+        for port in split_mirror_ports(normalized_src_port):
             if dst_port and dst_port == port:
-                ctx.fail("Error: Destination Interface can't be same as Source Interface")
+                ctx.fail("Destination Interface can't be same as Source Interface")
 
             namespace_set.add(get_port_namespace(port))
 
-    if interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
+    if interface_has_mirror_config(ctx, mirror_table, dst_port, normalized_src_port, direction):
         return False
 
     if direction:
         if direction not in ['rx', 'tx', 'both']:
-            ctx.fail("Error: Direction {} is invalid".format(direction))
+            ctx.fail("Direction {} is invalid".format(direction))
 
     # Check port mirror capability before allowing configuration.
     # ERSPAN sessions (dst_port=None) use src/dst IPs, not ports; the
@@ -1261,7 +1415,7 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     if not is_erspan:
         for ns in namespace_set:
             if not is_port_mirror_capability_supported(direction, namespace=ns):
-                ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+                ctx.fail("Port mirror direction '{}' is not supported by the ASIC".format(
                     direction if direction else 'both'))
 
     return True
@@ -1551,7 +1705,10 @@ def config_file_yang_validation(filename):
     if multi_asic.is_multi_asic():
         asic_list.extend(multi_asic.get_namespace_list())
     for scope in asic_list:
-        config_to_check = config.get(scope) if multi_asic.is_multi_asic() else config
+        if multi_asic.is_multi_asic() and HOST_NAMESPACE in config:
+            config_to_check = config.get(scope)
+        else:
+            config_to_check = config if scope == HOST_NAMESPACE else None
         if config_to_check:
             try:
                 sy.loadData(configdbJson=config_to_check)
@@ -1630,6 +1787,7 @@ config.add_command(aaa.tacacs)
 config.add_command(aaa.radius)
 config.add_command(bmc.bmc)
 config.add_command(chassis_modules.chassis)
+config.add_command(liquid_cool.liquid_cool)
 config.add_command(console.console)
 config.add_command(fabric.fabric)
 config.add_command(feature.feature)
@@ -1642,6 +1800,7 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
+config.add_command(evpn_mh.evpn_mh)
 
 # add stp commands
 config.add_command(stp.spanning_tree)
@@ -1653,6 +1812,9 @@ config.add_command(mclag.mclag_unique_ip)
 
 # syslog module
 config.add_command(syslog.syslog)
+
+# SED module
+config.add_command(sed.sed)
 
 # DNS module
 config.add_command(dns.dns)
@@ -2035,7 +2197,50 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
             return
 
-    if filename is not None and filename != "/dev/stdin":
+    if filename is None and file_format == 'config_db':
+        if not force:
+            cfg_files_to_validate = [DEFAULT_CONFIG_DB_FILE]
+            if multi_asic.is_multi_asic():
+                default_cfg_file_root, default_cfg_file_ext = os.path.splitext(
+                    DEFAULT_CONFIG_DB_FILE
+                )
+                cfg_files_to_validate.extend([
+                    "{}{}{}".format(
+                        default_cfg_file_root,
+                        inst,
+                        default_cfg_file_ext,
+                    )
+                    for inst in range(num_asic)
+                ])
+
+            for cfg_file in cfg_files_to_validate:
+                if not os.path.exists(cfg_file):
+                    click.echo(
+                        "The config file {} doesn't exist".format(cfg_file)
+                    )
+                    raise click.Abort()
+                if not os.access(cfg_file, os.R_OK):
+                    click.echo(
+                        "The config file {} is not readable".format(cfg_file)
+                    )
+                    raise click.Abort()
+                try:
+                    if not config_file_yang_validation(cfg_file):
+                        click.secho(
+                            "Invalid config file:'{}'!".format(cfg_file),
+                            fg='magenta'
+                        )
+                        raise click.Abort()
+                except click.Abort:
+                    raise
+                except Exception as e:
+                    click.echo(
+                        "Failed to read config file {}: {}".format(
+                            cfg_file, str(e)
+                        )
+                    )
+                    raise click.Abort()
+    elif filename is not None and filename != "/dev/stdin":
         if multi_asic.is_multi_asic():
             for cfg_file in cfg_files:
                 if cfg_file is not None:
@@ -2637,7 +2842,7 @@ def synchronous_mode(sync_mode):
         config_db.mod_entry('DEVICE_METADATA' , 'localhost', {"synchronous_mode" : sync_mode})
     except ValueError as e:
         ctx = click.get_current_context()
-        ctx.fail("Error: Invalid argument %s, expect either enable or disable" % sync_mode)
+        ctx.fail("Invalid argument %s, expect either enable or disable" % sync_mode)
 
     click.echo("""Wrote %s synchronous mode into CONFIG_DB, swss restart required to apply the configuration: \n
     Option 1. config save -y \n
@@ -2681,7 +2886,7 @@ def yang_config_validation(yang_config_validation):
         config_db.mod_entry('DEVICE_METADATA', 'localhost', {"yang_config_validation": yang_config_validation})
     except ValueError as e:
         ctx = click.get_current_context()
-        ctx.fail("Error: Invalid argument %s, expect either enable or disable" % yang_config_validation)
+        ctx.fail("Invalid argument %s, expect either enable or disable" % yang_config_validation)
 
     click.echo("""Wrote %s yang config validation into CONFIG_DB""" % yang_config_validation)
 
@@ -2762,7 +2967,8 @@ def remove_portchannel(ctx, portchannel_name):
                 ctx.fail("{} has vlan {} configured, remove vlan membership to proceed".format(portchannel_name, str(k)))
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
-            ctx.fail("Error: Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
+            ctx.fail("Portchannel {} contains members. Remove members before deleting Portchannel!"
+                     .format(portchannel_name))
 
         # Dont proceed if the port channel is used in dhcpv4_relay
         try:
@@ -2774,6 +2980,7 @@ def remove_portchannel(ctx, portchannel_name):
         db.set_entry('PORTCHANNEL', portchannel_name, None)
     except JsonPatchConflict:
         ctx.fail("{} is not present.".format(portchannel_name))
+
 
 @portchannel.group(cls=clicommon.AbbreviationGroup, name='member')
 @click.pass_context
@@ -3064,11 +3271,20 @@ def erspan(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction):
+@click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
+              help="Sampling rate (1-in-N), 2..4294967295. 0 disables sampling")
+@click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
+              help="Truncation size in bytes, 64..9216. 0 disables truncation")
+def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
+               sample_rate, truncate_size):
     """ Add ERSPAN mirror session """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
+               queue, policer, src_port, direction,
+               sample_rate, truncate_size)
 
-def gather_session_info(session_info, policer, queue, src_port, direction):
+
+def gather_session_info(session_info, policer, queue, src_port, direction,
+                        sample_rate=0, truncate_size=0):
     if policer:
         session_info['policer'] = policer
 
@@ -3076,20 +3292,23 @@ def gather_session_info(session_info, policer, queue, src_port, direction):
         session_info['queue'] = queue
 
     if src_port:
-        if clicommon.get_interface_naming_mode() == "alias":
-            src_port_list = []
-            for port in src_port.split(","):
-                src_port_list.append(interface_alias_to_name(None, port))
-            src_port=",".join(src_port_list)
-
-        session_info['src_port'] = src_port
+        session_info['src_port'] = ",".join(split_mirror_ports(src_port))
         if not direction:
             direction = "both"
         session_info['direction'] = direction.upper()
 
+    if sample_rate:
+        session_info['sample_rate'] = str(sample_rate)
+
+    if truncate_size:
+        session_info['truncate_size'] = str(truncate_size)
+
     return session_info
 
-def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port=None, direction=None):
+
+def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
+               policer, src_port=None, direction=None,
+               sample_rate=0, truncate_size=0):
     session_info = {
             "type" : "ERSPAN",
             "src_ip": src_ip,
@@ -3101,7 +3320,9 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
     if gre_type is not None:
         session_info['gre_type'] = gre_type
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    session_info = gather_session_info(session_info, policer, queue, src_port, direction,
+                                       sample_rate, truncate_size)
+    raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
     """
@@ -3112,23 +3333,84 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
         if ADHOC_VALIDATION:
-            if validate_mirror_session_config(config_db, session_name, None, src_port, direction) is False:
+            if validate_mirror_session_config(config_db, session_name, None, raw_src_port, direction) is False:
                 return
+        if raw_src_port:
+            session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
     else:
+        # Validate and write src_port only in the matching namespace
+        # so ERSPAN is still available for ACL-based mirroring everywhere.
+        ns_src_ports = {}
+        if raw_src_port:
+            front_ns_set = set(namespaces['front_ns'])
+            for orig in split_mirror_ports(raw_src_port):
+                if not interface_name_is_valid(None, orig):
+                    ctx.fail("Source Interface {} is invalid".format(orig))
+                port_ns = get_port_namespace(orig)
+                if port_ns not in front_ns_set:
+                    ctx.fail("Source Interface {} is not a front-panel port".format(orig))
+                ns_src_ports.setdefault(port_ns, []).append(orig)
+
+        base_session_info = {k: v for k, v in session_info.items()
+                             if k not in ('src_port', 'direction')}
+
         per_npu_configdb = {}
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(
+                ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            )
             per_npu_configdb[front_asic_namespaces].connect()
-            if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, None, src_port, direction) is False:
-                    return
+
+        ns_session_infos = {}
+        for front_asic_namespaces in namespaces['front_ns']:
+            ns_ports = ns_src_ports.get(front_asic_namespaces)
+            if ns_ports:
+                ns_src_port = ",".join(ns_ports)
+                if ADHOC_VALIDATION:
+                    if validate_mirror_session_config(
+                        per_npu_configdb[front_asic_namespaces],
+                        session_name,
+                        None,
+                        ns_src_port,
+                        direction,
+                        front_asic_namespaces,
+                        front_asic_configdbs=per_npu_configdb
+                    ) is False:
+                        return
+                ns_session_info = dict(base_session_info)
+                ns_session_info['src_port'] = normalize_mirror_src_port(
+                    per_npu_configdb[front_asic_namespaces], ns_src_port
+                )
+                ns_session_info['direction'] = session_info.get('direction', 'BOTH')
+            else:
+                ns_src_port = None
+                if ADHOC_VALIDATION:
+                    if validate_mirror_session_config(
+                        per_npu_configdb[front_asic_namespaces],
+                        session_name,
+                        None,
+                        ns_src_port,
+                        direction,
+                        front_asic_namespaces,
+                        front_asic_configdbs=per_npu_configdb
+                    ) is False:
+                        return
+                ns_session_info = dict(base_session_info)
+
+            ns_session_infos[front_asic_namespaces] = ns_session_info
+
+        for front_asic_namespaces in namespaces['front_ns']:
             try:
-                per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
+                per_npu_configdb[front_asic_namespaces].set_entry(
+                    "MIRROR_SESSION",
+                    session_name,
+                    ns_session_infos[front_asic_namespaces]
+                )
             except ValueError as e:
                 ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
@@ -3138,6 +3420,7 @@ def span(ctx):
     """ SPAN mirror session """
     pass
 
+
 @span.command('add')
 @click.argument('session_name', metavar='<session_name>', required=True)
 @click.argument('dst_port', metavar='<dst_port>', required=True)
@@ -3145,15 +3428,19 @@ def span(ctx):
 @click.argument('direction', metavar='[direction]', required=False)
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
 @click.option('--policer')
-def add(session_name, dst_port, src_port, direction, queue, policer):
+def span_add(session_name, dst_port, src_port, direction, queue, policer):
     """ Add SPAN mirror session """
     add_span(session_name, dst_port, src_port, direction, queue, policer)
 
+
 def add_span(session_name, dst_port, src_port, direction, queue, policer):
+    # Save original dst_port for namespace detection (before alias conversion)
+    original_dst_port = dst_port
+
     if clicommon.get_interface_naming_mode() == "alias":
         dst_port = interface_alias_to_name(None, dst_port)
         if dst_port is None:
-            click.echo("Error: Destination Interface {} is invalid".format(dst_port))
+            click.echo("Error: Destination Interface {} is invalid".format(original_dst_port))
             return False
 
     session_info = {
@@ -3162,6 +3449,7 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             }
 
     session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
     """
@@ -3172,24 +3460,59 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
         if ADHOC_VALIDATION:
-            if validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction) is False:
+            if validate_mirror_session_config(config_db, session_name, dst_port, raw_src_port, direction) is False:
                 return
+        if raw_src_port:
+            session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
     else:
+        # Auto-detect namespace from destination port
+        dst_port_namespace = get_port_namespace(original_dst_port)
+        if dst_port_namespace is None:
+            ctx.fail("Destination Interface {} is invalid".format(original_dst_port))
+        if dst_port_namespace not in namespaces['front_ns']:
+            ctx.fail("Destination Interface {} is not a front-panel port".format(original_dst_port))
+
+        # Verify all source ports are in the same namespace as destination port.
+        if src_port:
+            for port in split_mirror_ports(src_port):
+                port_ns = get_port_namespace(port)
+                if port_ns is None:
+                    ctx.fail("Source Interface {} is invalid".format(port))
+                if port_ns != dst_port_namespace:
+                    ctx.fail(
+                        ("Source Interface {} is not on the same ASIC as "
+                         "Destination Interface {}").format(port, dst_port)
+                    )
+
         per_npu_configdb = {}
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(
+                ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            )
             per_npu_configdb[front_asic_namespaces].connect()
-            if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, dst_port, src_port, direction) is False:
-                    return
-            try:
-                per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
-            except ValueError as e:
-                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+        config_db = per_npu_configdb[dst_port_namespace]
+        if ADHOC_VALIDATION:
+            if validate_mirror_session_config(
+                config_db,
+                session_name,
+                dst_port,
+                raw_src_port,
+                direction,
+                dst_port_namespace,
+                front_asic_configdbs=per_npu_configdb
+            ) is False:
+                return
+        if raw_src_port:
+            session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
+        try:
+            config_db.set_entry("MIRROR_SESSION", session_name, session_info)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
 @mirror_session.command()
@@ -3212,12 +3535,13 @@ def remove(session_name):
     else:
         per_npu_configdb = {}
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))  # noqa: E501
             per_npu_configdb[front_asic_namespaces].connect()
-            try:
-                per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, None)
-            except JsonPatchConflict as e:
-                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+            if per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name):
+                try:
+                    per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, None)
+                except JsonPatchConflict as e:
+                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 #
 # 'pfcwd' group ('config pfcwd ...')
@@ -4244,16 +4568,12 @@ def contact(db):
     pass
 
 
-def is_valid_email(email):
-    return bool(re.search(r"^[\w\.\+\-]+\@[\w]+\.[a-z]{2,3}$", email))
-
-
 @contact.command('add')
 @click.argument('contact', metavar='<contact_name>', required=True)
-@click.argument('contact_email', metavar='<contact_email>', required=True)
+@click.argument('contact_email', metavar='<contact_info>', required=True)
 @clicommon.pass_db
 def add_contact(db, contact, contact_email):
-    """ Add snmp contact name and email """
+    """ Add snmp contact name and contact info """
     snmp = db.cfgdb.get_table("SNMP")
     try:
         if snmp['CONTACT']:
@@ -4261,7 +4581,7 @@ def add_contact(db, contact, contact_email):
             sys.exit(1)
         else:
             db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email}) # TODO: ERROR IN YANG MODEL. Contact name is not defined as key
-            click.echo("Contact name {} and contact email {} have been added to "
+            click.echo("Contact name {} and contact info {} have been added to "
                        "configuration".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
@@ -4272,11 +4592,8 @@ def add_contact(db, contact, contact_email):
                 raise click.Abort()
     except KeyError:
         if "CONTACT" not in snmp.keys():
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
             db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("Contact name {} and contact email {} have been added to "
+            click.echo("Contact name {} and contact info {} have been added to "
                        "configuration".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
@@ -4315,7 +4632,7 @@ def del_contact(db, contact):
 
 @contact.command('modify')
 @click.argument('contact', metavar='<contact>', required=True)
-@click.argument('contact_email', metavar='<contact email>', required=True)
+@click.argument('contact_email', metavar='<contact_info>', required=True)
 @clicommon.pass_db
 def modify_contact(db, contact, contact_email):
     """ Modify snmp contact"""
@@ -4330,11 +4647,8 @@ def modify_contact(db, contact, contact_email):
             click.echo("SNMP contact {} {} already exists".format(contact, contact_email))
             sys.exit(1)
         elif contact == current_snmp_contact_name and contact_email != current_snmp_contact_email:
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
             db.cfgdb.mod_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("SNMP contact {} email updated to {}".format(contact, contact_email))
+            click.echo("SNMP contact {} info updated to {}".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
                 clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
@@ -4343,12 +4657,9 @@ def modify_contact(db, contact, contact_email):
                 click.echo("Restart service snmp failed with error {}".format(e))
                 raise click.Abort()
         else:
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
             db.cfgdb.set_entry('SNMP', 'CONTACT', None)
             db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("SNMP contact {} and contact email {} updated".format(contact, contact_email))
+            click.echo("SNMP contact {} and contact info {} updated".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
                 clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
@@ -4986,7 +5297,11 @@ def startup(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    intf_fs = parse_interface_in_filter(interface_name)
+    try:
+        intf_fs = parse_interface_in_filter(interface_name)
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if len(intf_fs) > 1 and multi_asic.is_multi_asic():
         ctx.fail("Interface range not supported in multi-asic platforms !!")
 
@@ -5032,7 +5347,11 @@ def shutdown(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    intf_fs = parse_interface_in_filter(interface_name)
+    try:
+        intf_fs = parse_interface_in_filter(interface_name)
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if len(intf_fs) > 1 and multi_asic.is_multi_asic():
         ctx.fail("Interface range not supported in multi-asic platforms !!")
 
@@ -5058,6 +5377,93 @@ def shutdown(ctx, interface_name):
     for lo in lo_list:
         if lo in intf_fs:
             config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
+
+#
+# 'sys-mac' group ('config interface sys-mac ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def sys_mac(ctx):
+    pass
+
+
+@sys_mac.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def add_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Add System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if not is_portchannel_name_valid(interface_name):
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                 .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        try:
+            gateway_mac = netaddr.EUI(sys_mac)
+        except Exception:
+            ctx.fail(f'System MAC address {sys_mac} format is not valid.')
+        if (gateway_mac.words[0] & 0b01):
+            ctx.fail(f'System MAC address {sys_mac} is multicast, only unicast allowed.')
+
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+        if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+            if port_id is None:
+                ctx.fail(f"Cannot extract port ID from interface name '{interface_name}'")
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            cmd.append('-c')
+            cmd.append('evpn mh es-sys-mac {}'.format(sys_mac))
+            run_vtysh_command(cmd, ctx)
+
+        try:
+            # Only write to CONFIG_DB after FRR update succeeds
+            config_db.mod_entry("PORTCHANNEL", interface_name, {'system_mac': sys_mac})
+        except (ValueError, JsonPatchConflict) as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@sys_mac.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def del_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Del System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    if not is_portchannel_name_valid(interface_name):
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                 .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        entry = dict(config_db.get_entry("PORTCHANNEL", interface_name))
+        conf_sys_mac = None
+        if 'system_mac' in entry:
+            conf_sys_mac = entry['system_mac']
+            del entry['system_mac']
+        if conf_sys_mac and conf_sys_mac == sys_mac:
+            # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+            cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+            evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+            if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+                cmd.append('-c')
+                cmd.append('no evpn mh es-sys-mac')
+                run_vtysh_command(cmd, ctx)
+
+            try:
+                # Only write to CONFIG_DB after FRR update succeeds
+                config_db.set_entry("PORTCHANNEL", interface_name, entry)
+            except (ValueError, JsonPatchConflict) as e:
+                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        else:
+            ctx.fail("For {} sys-mac is not present or different value is configured.".format(interface_name))
 
 #
 # 'speed' subcommand
@@ -5443,6 +5849,248 @@ def fec(ctx, interface_name, interface_fec, verbose):
         command += ["-vv"]
     clicommon.run_command(command, display_cmd=verbose)
 
+
+#
+# EVPN interface commands
+#
+EVPN_ES_TABLE = 'EVPN_ETHERNET_SEGMENT'
+EVPN_ES_DF_PREF_MIN = 1
+EVPN_ES_DF_PREF_DEFAULT = 32767
+EVPN_ES_DF_PREF_MAX = 65535
+EVPN_ESI_NUM_BYTES = 10
+
+
+def is_reserved_esi(esi_str):
+    reserved = False
+
+    if esi_str == "00:00:00:00:00:00:00:00:00:00":
+        reserved = True
+    elif esi_str.lower() == "ff:ff:ff:ff:ff:ff:ff:ff:ff:ff":
+        reserved = True
+
+    return reserved
+
+
+def parse_esi_input(ctx, esi_input_strs):
+    esi_args = {'df_pref': str(EVPN_ES_DF_PREF_DEFAULT)}
+
+    if esi_input_strs[0] == 'auto-system-mac':
+        esi_args['type'] = 'TYPE_3_MAC_BASED'
+        esi_args['esi'] = 'AUTO'
+    elif ':' in esi_input_strs[0]:
+        if is_reserved_esi(esi_input_strs[0]):
+            ctx.fail("Not allowed to configure a reserved ESI")
+
+        esi_bytes = esi_input_strs[0].split(':')
+        if len(esi_bytes) != EVPN_ESI_NUM_BYTES:
+            ctx.fail(f"Failed to parse manual ESI {esi_input_strs[0]}")
+        try:
+            type_byte = int(esi_bytes[0], 16)
+        except Exception as e:
+            ctx.fail(f"Failed to parse ESI byte '{esi_bytes[0]}' - {e}")
+        if type_byte != 0:
+            ctx.fail(f"Manual ESI must start with type 0, got {esi_bytes[0]}")
+        for byte in esi_bytes:
+            try:
+                parsed_byte = int(byte, 16)
+            except Exception as e:
+                ctx.fail(f"Failed to parse ESI byte '{byte}' - {e}")
+            if parsed_byte > 0xFF:
+                ctx.fail(f"'Byte' {byte} is > 255")
+            if not re.fullmatch(r'[0-9a-fA-F]{2}', byte):
+                ctx.fail(f"Failed to parse ESI byte '{byte}'")
+
+        esi_args['type'] = 'TYPE_0_OPERATOR_CONFIGURED'
+        esi_args['esi'] = esi_input_strs[0].lower()
+    else:
+        ctx.fail(f"Unknown ESI type {esi_input_strs[0]}")
+
+    return esi_args
+
+
+def port_id_from_if_name(if_name):
+    """Extract the numeric port identifier from an interface name.
+    Returns a string of digits (with any underscores removed) if the
+    interface name matches the expected pattern, otherwise returns None.
+    """
+    port_id_re = re.compile(r'[a-zA-Z]+(?P<port_id>[0-9_]+)')
+    match = port_id_re.search(if_name)
+    if not match:
+        return None
+    port_id_group = match.group('port_id')
+    if port_id_group:
+        return port_id_group.replace('_', '')
+    return None
+
+
+def run_vtysh_command(cmd, ctx=None):
+    """
+    Run a vtysh command.
+    If a Click context is provided, capture the return code/output and
+    surface failures via ctx.fail() instead of exiting abruptly.
+    When no context is provided, preserve the original behavior of
+    clicommon.run_command(), which may call sys.exit() on error.
+    """
+    if ctx is None:
+        # Preserve existing behavior for callers that don't use Click ctx
+        return clicommon.run_command(cmd)
+    output, rc = clicommon.run_command(cmd, return_cmd=True, ignore_error=True)
+    if rc != 0:
+        message = output if output else f"Command '{cmd}' failed with return code {rc}"
+        ctx.fail(message)
+    return output
+
+
+def check_if_same_manual_esi_exists(ctx, esi_args, es_data):
+    if esi_args['type'] == 'TYPE_0_OPERATOR_CONFIGURED':
+        for es_intf_name, es_intf_data in es_data.items():
+            if esi_args['esi'].lower() == es_intf_data.get('esi', '').lower():
+                ctx.fail(f"The ESI '{esi_args['esi']}' is already in use by '{es_intf_name}'")
+
+
+def is_valid_df_pref(df_pref):
+    """
+    Validate that the DF preference is an integer within the allowed range.
+    Returns True if df_pref can be parsed as an integer and is between
+    EVPN_ES_DF_PREF_MIN and EVPN_ES_DF_PREF_MAX (inclusive), otherwise False.
+    """
+    try:
+        df_pref_int = int(df_pref)
+    except (ValueError, TypeError):
+        return False
+    return df_pref_int in range(EVPN_ES_DF_PREF_MIN, EVPN_ES_DF_PREF_MAX + 1)
+
+#
+# 'evpn-esi' group ('config interface evpn-esi ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def evpn_esi(ctx):
+    """Set EVPN ES interface attributes"""
+    pass
+
+
+@evpn_esi.command('add')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('esi_type', metavar='<esi_type>', required=True)
+def add_evpn_es(ctx, interface_name, esi_type):
+    """Add EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_data = config_db.get_table(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name in es_data:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} already configured.")
+
+    esi_args = parse_esi_input(ctx, [esi_type])
+
+    check_if_same_manual_esi_exists(ctx, esi_args, es_data)
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        esi_type = esi_args['type']
+        if esi_type == 'TYPE_0_OPERATOR_CONFIGURED' and esi_args['esi']:
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(esi_args['esi']))
+        elif esi_type == 'TYPE_3_MAC_BASED':
+            if port_id is None:
+                ctx.fail(f"Cannot extract port ID from interface name '{interface_name}'")
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            po_table = config_db.get_entry('PORTCHANNEL', interface_name)
+            if po_table and 'system_mac' in po_table:
+                cmd.append('-c')
+                cmd.append('evpn mh es-sys-mac {}'.format(po_table['system_mac']))
+        run_vtysh_command(cmd, ctx)
+
+        # Only write to CONFIG_DB after FRR update succeeds
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, esi_args)
+    except (ValueError, JsonPatchConflict) as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@evpn_esi.command('del')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+def del_evpn_es(ctx, interface_name):
+    """Del EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    evpn_es_keys = config_db.get_keys(EVPN_ES_TABLE)
+    if interface_name not in evpn_es_keys:
+        ctx.fail(f"EVPN Ethernet Segment '{interface_name}' does not exist")
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('no evpn mh es-sys-mac')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-df-pref')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-id')
+        run_vtysh_command(cmd, ctx)
+
+        # Only delete from CONFIG_DB after FRR update succeeds
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, None)
+    except JsonPatchConflict as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@interface.command()
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('df_pref', metavar='<df_pref>', required=True)
+@click.pass_context
+def evpn_df_pref(ctx, interface_name, df_pref):
+    """Set EVPN ES DF Preference"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_keys = config_db.get_keys(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name not in es_keys:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} does not exist")
+
+    if not is_valid_df_pref(df_pref):
+        ctx.fail(
+            f"EVPN Ethernet Segment {interface_name} - DF Preference {df_pref} is not valid. "
+            f"Valid values are {EVPN_ES_DF_PREF_MIN}-{EVPN_ES_DF_PREF_MAX}."
+        )
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('evpn mh es-df-pref {}'.format(int(df_pref)))
+        run_vtysh_command(cmd, ctx)
+
+        # Only write to CONFIG_DB after FRR update succeeds
+        config_db.mod_entry(EVPN_ES_TABLE, interface_name, {'df_pref': str(df_pref)})
+    except (ValueError, JsonPatchConflict) as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 #
 # 'ip' subgroup ('config interface ip ...')
 #
@@ -5643,10 +6291,18 @@ def remove(ctx, interface_name, ip_addr):
             else:
                 output = bgp_util.run_bgp_command(cmd)
             # If there is output data, check is there a static route,
-            # bound to the interface.
+            # bound to the interface.  Works with sub-interfaces as
+            # "." is treated as part of the name (avoids Ethernet0 matching
+            # Ethernet0.10) and digits are not truncated (avoids Ethernet24
+            # matching Ethernet240).
             if output != "":
-                if any(interface_name in output_line for output_line in output.splitlines()):
-                    ctx.fail("Cannot remove the last IP entry of interface {}. A static {} route is still bound to the RIF.".format(interface_name, ip_ver))
+                intf_pattern = re.compile(
+                    r'(?<![\w.]){}(?![\w.])'.format(re.escape(interface_name)))
+                if intf_pattern.search(output):
+                    ctx.fail(
+                        "Cannot remove the last IP entry of interface {}."
+                        " A static {} route is still bound to the RIF."
+                        .format(interface_name, ip_ver))
     if multi_asic.is_multi_asic():
         command = ['sudo', 'ip', 'netns', 'exec', str(ctx.obj['namespace']), 'ip', 'neigh', 'flush', 'dev', str(interface_name), str(ip_address)]
     else:
@@ -6171,17 +6827,19 @@ def frequency(ctx, interface_name, frequency):
     clicommon.run_command(command)
 
 
-#
-# 'tx_power' subcommand ('config interface transceiver tx_power ...')
-# For negative float use:-
-# config interface transceiver tx_power Ethernet0 -- -27.4"
-#
 @transceiver.command('tx_power')
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('tx-power', metavar='<tx-power>', required=True, type=float)
 def tx_power(ctx, interface_name, tx_power):
-    """Set transceiver (only for 400G-ZR) Tx laser power"""
+    """Set transciever (only for 400G-ZR) Tx laser power.
+
+    For negative values, you must insert ``--`` before the value so that
+    Click treats it as a positional argument instead of an option. For example:
+
+      config interface transceiver tx_power Ethernet0 -- -11
+    """
+
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
@@ -7452,13 +8110,21 @@ def remove_vrrp_v6(ctx, interface_name, vrrp_id):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup, name='vrf')
+@click.option('-n', '--namespace', help='Namespace name', default=None,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def vrf(ctx):
-    """VRF-related configuration tasks"""
-    config_db = ConfigDBConnector()
+def vrf(ctx, namespace):
+    """ VRF-related configuration tasks """
+    # Data VRFs live in the per-ASIC CONFIG_DB; the management VRF lives
+    # in the host/global CONFIG_DB. Connect to the (optionally namespaced)
+    # DB here for data-VRF subcommands; the mgmt-VRF path re-targets the
+    # global DB and rejects -n at runtime.
+    ns = namespace if namespace else DEFAULT_NAMESPACE
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(ns))
     config_db.connect()
     ctx.obj = {}
     ctx.obj['config_db'] = config_db
+    ctx.obj['namespace'] = namespace
 
 @vrf.command('add')
 @click.argument('vrf_name', metavar='<vrf_name>', required=True)
@@ -7470,9 +8136,18 @@ def add_vrf(ctx, vrf_name):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
     if not isInterfaceNameValid(vrf_name):
         ctx.fail("'vrf_name' length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
+
+    is_mgmt = vrf_name in ('mgmt', 'management')
+    if is_mgmt:
+        if ctx.obj['namespace'] is not None:
+            ctx.fail("-n/--namespace is not applicable to the management VRF; it is configured in the host CONFIG_DB.")
+    else:
+        if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+            ctx.fail("-n/--namespace is required for data VRFs on multi-ASIC platforms.")
+
     if is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} already exists!".format(vrf_name))
-    elif (vrf_name == 'mgmt' or vrf_name == 'management'):
+    elif is_mgmt:
         vrf_add_management_vrf(config_db)
     else:
         try:
@@ -7490,6 +8165,15 @@ def del_vrf(ctx, vrf_name):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
     if not isInterfaceNameValid(vrf_name):
         ctx.fail("'vrf_name' length should not exceed {} characters".format((IFACE_NAME_MAX_LEN)))
+
+    is_mgmt = vrf_name in ('mgmt', 'management')
+    if is_mgmt:
+        if ctx.obj['namespace'] is not None:
+            ctx.fail("-n/--namespace is not applicable to the management VRF; it is configured in the host CONFIG_DB.")
+    else:
+        if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+            ctx.fail("-n/--namespace is required for data VRFs on multi-ASIC platforms.")
+
     syslog_table = config_db.get_table("SYSLOG_SERVER")
     syslog_vrf_dev = "mgmt" if vrf_name == "management" else vrf_name
     for syslog_entry, syslog_data in syslog_table.items():
@@ -7504,7 +8188,7 @@ def del_vrf(ctx, vrf_name):
 
     if not is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} does not exist!".format(vrf_name))
-    elif (vrf_name == 'mgmt' or vrf_name == 'management'):
+    elif is_mgmt:
         vrf_delete_management_vrf(config_db)
     else:
         del_interface_bind_to_vrf(config_db, vrf_name)
@@ -7519,6 +8203,8 @@ def del_vrf(ctx, vrf_name):
 @click.argument('vni', metavar='<vni>', required=True)
 @click.pass_context
 def add_vrf_vni_map(ctx, vrfname, vni):
+    if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+        ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
     found = 0
     if vrfname not in config_db.get_table('VRF').keys():
@@ -7558,6 +8244,8 @@ def add_vrf_vni_map(ctx, vrfname, vni):
 @click.argument('vrfname', metavar='<vrf-name>', required=True, type=str)
 @click.pass_context
 def del_vrf_vni_map(ctx, vrfname):
+    if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
+        ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
     if vrfname not in config_db.get_table('VRF').keys():
         ctx.fail("vrf {} doesn't exist".format(vrfname))
@@ -7655,6 +8343,21 @@ def add_route(ctx, command_str):
     if tuple(key.split("|")) in keys:
         # If exist update current entry
         current_entry = config_db.get_entry('STATIC_ROUTE', key)
+
+        # Check for duplicate nexthop: build existing (nexthop, nexthop-vrf, ifname) tuples
+        # and reject the add if the incoming tuple is already present.
+        existing_nh = current_entry.get('nexthop', '').split(',')
+        existing_nhvrf = current_entry.get('nexthop-vrf', '').split(',')
+        existing_ifname = current_entry.get('ifname', '').split(',')
+        existing_zip = list(itertools.zip_longest(existing_nh, existing_nhvrf, existing_ifname, fillvalue=''))
+
+        incoming_tuple = (
+            route.get('nexthop', ''),
+            route.get('nexthop-vrf', vrf),
+            route.get('ifname', ''),
+        )
+        if incoming_tuple in existing_zip:
+            ctx.fail('Nexthop {} already exists for route {}'.format(incoming_tuple, key))
 
         for item in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
             if item not in current_entry:
@@ -8922,7 +9625,7 @@ def global_sample_direction(ctx, direction):
     if ADHOC_VALIDATION:
         if direction:
             if direction not in ['rx', 'tx', 'both']:
-                ctx.fail("Error: Direction {} is invalid".format(direction))
+                ctx.fail("Direction {} is invalid".format(direction))
 
             if ((direction == 'tx' or direction == 'both') and (is_port_egress_sflow_supported() == 'false')):
                 ctx.fail("Sample direction {} is not supported on this platform".format(direction))
@@ -9063,7 +9766,7 @@ def interface_sample_direction(ctx, ifname, direction):
             return
         if direction:
             if direction not in ['rx', 'tx', 'both']:
-                ctx.fail("Error: Direction {} is invalid".format(direction))
+                ctx.fail("Direction {} is invalid".format(direction))
 
             if (direction == 'tx' or direction == 'both') and (is_port_egress_sflow_supported() == 'false'):
                 ctx.fail("Sample direction {} is not supported on this platform".format(direction))
@@ -9350,6 +10053,75 @@ def disable_link_local(ctx):
                     continue
                 set_ipv6_link_local_only_on_interface(config_db, table_dict, table_type, key, mode)
 
+# 'static-anycast-gateway' group ('config static-anycast-gateway ...')
+#
+
+
+@config.group(cls=clicommon.AbbreviationGroup, name='static-anycast-gateway')
+def static_anycast_gateway():
+    """sag-related configuration tasks"""
+    pass
+
+#
+# 'static-anycast-gateway mac_address' group
+#
+
+
+@static_anycast_gateway.group(cls=clicommon.AbbreviationGroup, name='mac_address')
+def mac_address():
+    """Add/Delete static-anycast-gateway mac address"""
+    pass
+
+
+@mac_address.command('add')
+@click.argument('mac_address', metavar='<mac_address>', required=True, type=str)
+@clicommon.pass_db
+def add_mac(db, mac_address):
+    """Add static-anycast-gateway mac address command"""
+    log.log_info(f"'static-anycast-gateway mac_address add {mac_address}' executing...")
+
+    try:
+        gateway_mac = netaddr.EUI(mac_address)
+    except Exception:
+        click.get_current_context().fail(f'static-anycast-gateway MAC address {mac_address} format is not valid.')
+
+    if (gateway_mac.words[0] & 0b01):
+        click.get_current_context().fail(
+            f'static-anycast-gateway MAC address {mac_address} is multicast, only allow unicast.')
+
+    if not db.cfgdb.get_entry('SAG', 'GLOBAL'):
+        db.cfgdb.set_entry('SAG', 'GLOBAL', {'gateway_mac': mac_address})
+    else:
+        click.get_current_context().fail(
+            f'static-anycast-gateway MAC address {mac_address} already exists. Remove it first'
+        )
+
+
+@mac_address.command('del')
+@clicommon.pass_db
+def del_mac(db):
+    """Del static-anycast-gateway mac address command"""
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
+    if sag_entry:
+        mac_address = sag_entry.get('gateway_mac', 'unknown')
+        if mac_address == 'unknown':
+            click.get_current_context().fail('static-anycast-gateway MAC address not found.')
+        log.log_info(f"'static-anycast-gateway mac_address del {mac_address}' executing...")
+        vlan_intf_table = db.cfgdb.get_table('VLAN_INTERFACE') or {}
+        enabled_vlans = sorted(vlan for vlan, entry in vlan_intf_table.items()
+                               if entry.get('static_anycast_gateway') == 'true')
+        if enabled_vlans:
+            click.get_current_context().fail(
+                'static-anycast-gateway MAC address is in use by VLAN interfaces: {}'.format(
+                    ', '.join(enabled_vlans)
+                )
+            )
+        remaining_entry = dict(sag_entry)
+        remaining_entry.pop('gateway_mac', None)
+        db.cfgdb.set_entry('SAG', 'GLOBAL', remaining_entry if remaining_entry else None)
+    else:
+        log.log_info("'static-anycast-gateway mac_address del' executing...")
+        click.get_current_context().fail('static-anycast-gateway MAC address not found.')
 
 #
 # 'rate' group ('config rate ...')

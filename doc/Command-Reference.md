@@ -75,11 +75,16 @@
 * [ECN](#ecn)
   * [ECN show commands](#ecn-show-commands)
   * [ECN config commands](#ecn-config-commands)
+* [EVPN-MH](#evpn-mh)
+  * [EVPN-MH config commands](#evpn-mh-config-commands)
+  * [EVPN-MH show commands](#evpn-mh-show-commands)
 * [Fabric](#fabric)
   * [Fabric config commands](#fabric-config-commands)
 * [Feature](#feature)
   * [Feature show commands](#feature-show-commands)
   * [Feature config commands](#feature-config-commands)
+* [Fine Grained Next Hop Group (FGNHG)](#fine-grained-next-hop-group-fgnhg)
+  * [FGNHG show commands](#fgnhg-show-commands)
 * [Flow Counters](#flow-counters)
   * [Flow Counters show commands](#flow-counters-show-commands)
   * [Flow Counters clear commands](#flow-counters-clear-commands)
@@ -89,6 +94,9 @@
 * [Hash](#hash)
   * [Hash show commands](#hash-show-commands)
   * [Hash config commands](#hash-config-commands)
+* [ICMP](#icmp)
+  * [ICMP show commands](#icmp-show-commands)
+  * [ICMP clear commands](#icmp-clear-commands)
 * [Interfaces](#interfaces)
   * [Interface Show Commands](#interface-show-commands)
   * [Interface Config Commands](#interface-config-commands)
@@ -178,12 +186,17 @@
 * [Radius](#radius)
   * [Radius show commands](#show-radius-commands)
   * [Radius config commands](#Radius-config-commands)
+* [SAG MAC](#sag-mac)
+  * [SAG MAC config commands](#SAG-MAC-config-commands)
+  * [SAG MAC show commands](#SAG-MAC-show-commands)
 * [Switch](#switch)
   * [Switch Show commands](#switch-show-commands)
   * [Switch Clear commands](#switch-clear-commands)
 * [sFlow](#sflow)
   * [sFlow Show commands](#sflow-show-commands)
   * [sFlow Config commands](#sflow-config-commands)
+* [SED](#sed)
+  * [SED Config commands](#sed-config-commands)
 * [SNMP](#snmp)
   * [SNMP Show commands](#snmp-show-commands)
   * [SNMP Config commands](#snmp-config-commands)
@@ -270,6 +283,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
@@ -472,6 +486,7 @@ This command displays the full list of show commands available in the software; 
     ecn                   Show ECN configuration
     environment           Show environmentals (voltages, fans, temps)
     feature               Show feature status
+    icmp                  Show icmp-offload information
     interfaces            Show details of the network interfaces
     ip                    Show IP (IPv4) commands
     ipv6                  Show IPv6 commands
@@ -510,6 +525,11 @@ This command displays the full list of show commands available in the software; 
   ```
 
 The same syntax applies to all subgroups of `show` which themselves contain subcommands, and subcommands which accept options/arguments.
+
+Some `show` commands that wrap FRR's CLI (currently `show ip route` and
+`show ipv6 route`) provide enhanced help and TAB completion sourced live
+from FRR. Their `-h`/`--help` output lists the subcommands FRR actually
+supports, and shell TAB completion offers the same set as you type.
 
 - Example:
   ```
@@ -5095,6 +5115,173 @@ The list of the WRED profile fields that are configurable is listed in the below
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#ecn)
 
+## EVPN-MH
+
+This section explains all the Ethernet VPN Multi-Homing (EVPN-MH) commands that are supported in SONiC.
+
+### EVPN-MH config commands
+
+**config evpn-mh startup-delay <startup_delay>**
+
+This command configures the EVPN-MH startup delay in seconds.
+
+- Usage:
+  ```
+  config evpn-mh startup-delay <startup_delay>
+  ```
+
+- Parameters:
+  - _startup_delay_: delay in seconds. Valid values are 0-3600.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh startup-delay 300
+  ```
+
+**config evpn-mh mac-holdtime <mac_holdtime>**
+
+This command configures the EVPN-MH MAC hold time in seconds.
+
+- Usage:
+  ```
+  config evpn-mh mac-holdtime <mac_holdtime>
+  ```
+
+- Parameters:
+  - _mac_holdtime_: hold time in seconds. Valid values are 0-86400.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh mac-holdtime 1080
+  ```
+
+**config evpn-mh neigh-holdtime <neigh_holdtime>**
+
+This command configures the EVPN-MH neighbor hold time in seconds.
+
+- Usage:
+  ```
+  config evpn-mh neigh-holdtime <neigh_holdtime>
+  ```
+
+- Parameters:
+  - _neigh_holdtime_: hold time in seconds. Valid values are 0-86400.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh neigh-holdtime 1080
+  ```
+
+**config interface evpn-esi add <interface_name> <esi_type>**
+**config interface evpn-esi del <interface_name>**
+
+These commands configure or remove an EVPN Ethernet Segment on an interface.
+
+- Usage:
+  ```
+  config interface evpn-esi add <interface_name> <esi_type>
+  config interface evpn-esi del <interface_name>
+  ```
+
+- Parameters:
+  - _interface_name_: PortChannel interface name.
+  - _esi_type_: `auto-system-mac` or a type-0 operator-configured ESI in `XX:XX:XX:XX:XX:XX:XX:XX:XX:XX` format.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface evpn-esi add PortChannel01 auto-system-mac
+  admin@sonic:~$ sudo config interface evpn-esi add PortChannel02 00:01:02:03:04:05:06:07:08:09
+  admin@sonic:~$ sudo config interface evpn-esi del PortChannel01
+  ```
+
+**config interface evpn-df-pref <interface_name> <df_pref>**
+
+This command configures the EVPN Ethernet Segment designated-forwarder preference for an interface.
+
+- Usage:
+  ```
+  config interface evpn-df-pref <interface_name> <df_pref>
+  ```
+
+- Parameters:
+  - _interface_name_: PortChannel interface name.
+  - _df_pref_: designated-forwarder preference. Valid values are 1-65535.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface evpn-df-pref PortChannel01 32767
+  ```
+
+### EVPN-MH show commands
+
+**show evpn**
+
+This command displays EVPN information from BGP.
+
+- Usage:
+  ```
+  show evpn
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn
+  ```
+
+**show evpn es [<esi>]**
+
+This command displays EVPN Ethernet Segment information. An optional ESI filters the output to one Ethernet Segment.
+
+- Usage:
+  ```
+  show evpn es [<esi>]
+  ```
+
+- Parameters:
+  - _esi_: optional ESI in `XX:XX:XX:XX:XX:XX:XX:XX:XX:XX` format.
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn es
+  admin@sonic:~$ show evpn es 00:01:02:03:04:05:06:07:08:09
+  ```
+
+**show evpn es-evi [<vni>|detail]**
+
+This command displays Ethernet Segment per-EVI information.
+
+- Usage:
+  ```
+  show evpn es-evi [<vni>|detail]
+  ```
+
+- Parameters:
+  - _vni_: optional VXLAN Network Identifier. Valid values are 1-16777215.
+  - _detail_: display detailed Ethernet Segment per-EVI information.
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn es-evi
+  admin@sonic:~$ show evpn es-evi 100
+  admin@sonic:~$ show evpn es-evi detail
+  ```
+
+**show evpn l2-nh**
+
+This command displays EVPN Layer 2 nexthops.
+
+- Usage:
+  ```
+  show evpn l2-nh
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn l2-nh
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#evpn-mh)
+
 ## Fabric
 
 This section explains all Fabric commands that are supported in SONiC.
@@ -5336,6 +5523,92 @@ commands are don't care and will not update state/auto-restart value.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#feature)
 
+## Fine Grained Next Hop Group (FGNHG)
+
+This section explains the show commands for Fine Grained Next Hop Groups (FGNHG). FGNHG provides consistent hashing by maintaining a stable mapping between hash buckets and next hops, including for prefixes installed in user-defined VRFs/VNETs.
+
+### FGNHG show commands
+
+**show fgnhg active-hops**
+
+This command displays the currently active next hops for each FGNHG-managed prefix. Without arguments, all entries are shown. Optional positional arguments allow filtering by NHG name, or by VRF/VNET and prefix.
+
+- Usage:
+  ```
+  show fgnhg active-hops [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, all active next hops for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the next hops belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg active-hops
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ------------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+  default     fc:5::/128       200:200:200:200::4
+                               200:200:200:200::5
+
+  admin@sonic:~$ show fgnhg active-hops fgnhg_v4
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops default 100.50.25.12/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  ```
+
+**show fgnhg hash-view**
+
+This command displays the per-next-hop hash bucket assignment for each FGNHG-managed prefix. The same filtering options as `active-hops` are supported.
+
+- Usage:
+  ```
+  show fgnhg hash-view [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, hash bucket assignments for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the buckets belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg hash-view
+  VNET/VRF    FG NHG Prefix    Next Hop            Hash buckets
+  ----------  ---------------  ------------------  ------------------------------
+  default     100.50.25.12/32  200.200.200.4       0   1   2   3   4   5   6   7
+  default     100.50.25.12/32  200.200.200.5       8   9   10  11  12  13  14  15
+  Vnet1       10.0.0.1/32      200.200.200.4       0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5       4   5   6   7
+  default     fc:5::/128       200:200:200:200::4  0   1   2   3   4   5   6   7
+  default     fc:5::/128       200:200:200:200::5  8   9   10  11  12  13  14  15
+
+  admin@sonic:~$ show fgnhg hash-view Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Next Hop       Hash buckets
+  ----------  ---------------  -------------  --------------
+  Vnet1       10.0.0.1/32      200.200.200.4  0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5  4   5   6   7
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#fine-grained-next-hop-group-fgnhg)
+
 ## Flow Counters
 
 This section explains all the Flow Counters show commands, clear commands and config commands that are supported in SONiC. Flow counters are usually used for debugging, troubleshooting and performance enhancement processes. Flow counters supports case like:
@@ -5419,16 +5692,25 @@ The "route" subcommand is used to display the route flow counter statistics by r
 
 **sonic-clear flowcnt-trap**
 
-This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis.
+This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis. On multi-ASIC platforms, an optional namespace can be supplied to clear counters for a specific ASIC; when omitted, counters are cleared across all ASIC namespaces.
 
 - Usage:
   ```
-  sonic-clear flowcnt-trap
+  sonic-clear flowcnt-trap [-n|--namespace <namespace>]
   ```
+
+- Details:
+  - -n, --namespace: Namespace name (e.g. asic0). On multi-ASIC platforms, omit this option to target all ASIC namespaces; on single-ASIC platforms, the default namespace is used.
 
 - Example:
   ```
   admin@sonic:~$ sonic-clear flowcnt-trap
+  Trap Flow Counters were successfully cleared
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sonic-clear flowcnt-trap -n asic0
   Trap Flow Counters were successfully cleared
   ```
 
@@ -5544,6 +5826,75 @@ This command displays basic information about the gearbox phys configured on the
 
   ```
 
+**show gearbox interfaces fec-stats**
+
+This command displays FEC statistics for gearbox interfaces from the GB_COUNTERS_DB. Statistics are shown separately for each port's system side and line side. An optional port name argument filters output to a single port.
+
+- Usage:
+  ```
+  show gearbox interfaces fec-stats [<port_name>]
+  ```
+
+- Example (all ports):
+
+  ```
+  /home/admin# show gearbox interfaces fec-stats
+  GB IFACE           STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FEC_MAX_T
+  ---------------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  -----------
+  Ethernet0 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A            3
+  Ethernet0 System       U           0             0                 0      6.05e-10        0.00e+00                N/A            2
+  Ethernet4 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A            1
+  Ethernet4 System       U           0             0                 0      6.05e-10        0.00e+00                N/A            2
+
+  ```
+
+- Example (single port):
+
+  ```
+  /home/admin# show gearbox interfaces fec-stats Ethernet0
+  GB IFACE           STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FEC_MAX_T
+  ---------------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  -----------
+  Ethernet0 Line         U           0             0                 0      6.05e-10        0.00e+00                N/A           -1
+  Ethernet0 System       U           0             0                 0      6.05e-10        0.00e+00                N/A           -1
+
+  ```
+
+  STATE legend: U = Up, D = Down, N/A = Unknown
+
+**show gearbox interfaces fec-histogram**
+
+This command displays the FEC codeword error histogram for gearbox interfaces. Histogram bins (BIN0–BIN15) count codewords with a given number of symbol errors. An optional port name argument filters output to a single port.
+
+- Usage:
+  ```
+  show gearbox interfaces fec-histogram [<port_name>]
+  ```
+
+- Example (single port):
+
+  ```
+  /home/admin# show gearbox interfaces fec-histogram Ethernet0
+
+  Ethernet0 Line
+  Symbol Errors Per Codeword    Codewords
+  --------------------------  -----------
+  BIN0                              12345
+  BIN1                                  1
+  BIN2                                  0
+  ...
+  BIN15                                 0
+
+  Ethernet0 System
+  Symbol Errors Per Codeword    Codewords
+  --------------------------  -----------
+  BIN0                              12355
+  BIN1                                  0
+  BIN2                                  0
+  ...
+  BIN15                                 0
+
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#gearbox)
 
 
@@ -5580,11 +5931,17 @@ This command displays switch hash global configuration.
 
 - Usage:
   ```bash
-  show switch-hash global
+  show switch-hash global [--json]
+  show switch-hash -n <namespace> global [--json]
   ```
 
 - Options:
   - _-j,--json_: display in JSON format
+  - _-n,--namespace_: namespace name on multi-ASIC systems. Omit it to display all namespaces.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before the sub-command. Without it, output is grouped by namespace.
+  - With _--json_ and no namespace on multi-ASIC systems, output is printed as one JSON block per namespace rather than a single JSON document.
 
 - Example:
   ```bash
@@ -5638,17 +5995,46 @@ This command displays switch hash global configuration.
   +--------+-------------------------------------+
   ```
 
+- Multi-ASIC Example:
+  ```bash
+  admin@sonic:~$ show switch-hash -n asic0 global
+  +--------+--------------------------------+
+  | Hash   | Configuration                  |
+  +========+================================+
+  | ECMP   | +--------------+-------------+ |
+  |        | | Hash Field   | Algorithm   | |
+  |        | |--------------+-------------| |
+  |        | | SRC_IP       | CRC         | |
+  |        | | DST_IP       |             | |
+  |        | +--------------+-------------+ |
+  +--------+--------------------------------+
+  | LAG    | +--------------+-------------+ |
+  |        | | Hash Field   | Algorithm   | |
+  |        | |--------------+-------------| |
+  |        | | SRC_MAC      | XOR         | |
+  |        | | DST_MAC      |             | |
+  |        | +--------------+-------------+ |
+  +--------+--------------------------------+
+  ```
+
 **show switch-hash capabilities**
 
 This command displays switch hash capabilities.
 
 - Usage:
   ```bash
-  show switch-hash capabilities
+  show switch-hash capabilities [--json]
+  show switch-hash -n <namespace> capabilities [--json]
   ```
 
 - Options:
   - _-j,--json_: display in JSON format
+  - _-n,--namespace_: namespace name on multi-ASIC systems. Omit it to display all namespaces.
+
+- Note:
+  - Supported hash fields and algorithms are platform dependent. Use this command to see valid values for the target namespace before configuring switch hash.
+  - On multi-ASIC systems, place _-n,--namespace_ before the sub-command.
+  - On multi-ASIC systems, use _-n,--namespace_ with _--json_ if you need one JSON object for a single namespace.
 
 - Example:
   ```bash
@@ -5706,6 +6092,12 @@ This command displays switch hash capabilities.
   +--------+-------------------------------------+
   ```
 
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ show switch-hash -n asic0 capabilities --json
+  admin@sonic:~$ show switch-hash capabilities
+  ```
+
 ### Hash Config Commands
 
 This subsection explains how to configure switch hash.
@@ -5718,10 +6110,17 @@ This command is used to manage switch hash global configuration.
   ```bash
   config switch-hash global ecmp-hash <hash_field_list>
   config switch-hash global lag-hash <hash_field_list>
+  config switch-hash global -n <namespace> ecmp-hash <hash_field_list>
+  config switch-hash global -n <namespace> lag-hash <hash_field_list>
   ```
 
 - Parameters:
   - _hash_field_list_: hash fields for hashing packets going through ECMP/LAG
+  - _-n,--namespace_: namespace name. Required on multi-ASIC systems.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before _ecmp-hash_ or _lag-hash_.
+  - Use _show switch-hash capabilities_ or _show switch-hash -n <namespace> capabilities_ to see supported values for the target namespace.
 
 - Examples:
   ```bash
@@ -5763,6 +6162,12 @@ This command is used to manage switch hash global configuration.
   'IPV6_FLOW_LABEL'
   ```
 
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ config switch-hash global -n asic0 ecmp-hash SRC_IP DST_IP
+  admin@sonic:~$ config switch-hash global -n asic0 lag-hash SRC_MAC DST_MAC
+  ```
+
 **config switch-hash global ecmp/lag hash algorithm**
 
 This command is used to manage switch hash algorithm global configuration.
@@ -5771,15 +6176,28 @@ This command is used to manage switch hash algorithm global configuration.
   ```bash
   config switch-hash global ecmp-hash-algorithm <hash_algorithm>
   config switch-hash global lag-hash-algorithm <hash_algorithm>
+  config switch-hash global -n <namespace> ecmp-hash-algorithm <hash_algorithm>
+  config switch-hash global -n <namespace> lag-hash-algorithm <hash_algorithm>
   ```
 
 - Parameters:
   - _hash_algorithm_: hash algorithm for hashing packets going through ECMP/LAG
+  - _-n,--namespace_: namespace name. Required on multi-ASIC systems.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before _ecmp-hash-algorithm_ or _lag-hash-algorithm_.
+  - Supported values depend on the target platform. Use _show switch-hash capabilities_ or _show switch-hash -n <namespace> capabilities_ to see supported values for the target namespace.
 
 - Examples:
   ```bash
   admin@sonic:~$ config switch-hash global ecmp-hash-algorithm 'CRC'
   admin@sonic:~$ config switch-hash global lag-hash-algorithm 'CRC'
+  ```
+
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ config switch-hash global -n asic0 ecmp-hash-algorithm CRC
+  admin@sonic:~$ config switch-hash global -n asic0 lag-hash-algorithm XOR
   ```
 
 ## Fast Link-Up
@@ -5867,6 +6285,94 @@ Enable/disable Fast Link-Up per interface.
   admin@sonic:~$ config interface fast-linkup Ethernet0 enabled
   admin@sonic:~$ config interface fast-linkup Ethernet4 disabled
   ```
+
+## ICMP
+
+This section explains the show commands available for ICMP offload sessions and counters.
+
+### ICMP show commands
+
+**show icmp sessions**
+
+This command displays ICMP echo session information from `STATE_DB`.
+
+- Usage:
+  ```bash
+  show icmp sessions [<key>]
+  ```
+
+  - `<key>` format: `scope:port:guid:mode` (for example, `default:Ethernet0:0x4eb39592:RX`).
+  - `|` separators are accepted as input for compatibility.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp sessions
+  Key                                    Dst IP          Tx Interval    Rx Interval  HW lookup    Cookie      State
+  -------------------------------------  ------------  -------------  -------------  -----------  ----------  -------
+  default|Ethernet0|0x4eb39592|RX        192.168.0.3               0            300  false        0x58767e7a  Up
+  default|Ethernet8|0x69f578f5|NORMAL    192.168.0.5             100            300  false        0x58767e7a  Up
+  ```
+
+**show icmp summary**
+
+This command displays aggregate ICMP echo session counts.
+
+- Usage:
+  ```bash
+  show icmp summary
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp summary
+  Total Sessions: 4
+  Up sessions: 3
+  RX sessions: 1
+  ```
+
+**show icmp stats**
+
+This command displays per-session ICMP echo counters from `COUNTERS_DB`.
+The output includes receive/transmit packet and byte counters. In native mode, byte counters are shown as `N/A`.
+
+- Usage:
+  ```bash
+  show icmp stats [<key>] [-c|--clear]
+  ```
+
+  - Without `<key>`, all sessions with counters are displayed.
+  - With `<key>`, only the selected session is displayed.
+  - `-c`/`--clear` snapshots current counters as a local baseline. Subsequent `show icmp stats` output is shown as deltas from that baseline.
+  - `show icmp stats -c` is equivalent to `sonic-clear icmp counters`.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp stats default:Ethernet0:0x4eb39592:RX
+  Key                              State      RX Pkts    RX Bytes    TX Pkts    TX Bytes
+  -------------------------------  -------  ---------  ----------  ---------  ----------
+  default:Ethernet0:0x4eb39592:RX  Up            1234      188802          0           0
+  ```
+
+### ICMP clear commands
+
+**sonic-clear icmp counters**
+
+This command snapshots current ICMP echo session counters as the new baseline.
+Subsequent `show icmp stats` output is displayed as deltas from this baseline.
+Hardware counters in `COUNTERS_DB` are not reset.
+
+- Usage:
+  ```bash
+  sonic-clear icmp counters
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ sonic-clear icmp counters
+  Cleared ICMP echo session counter baseline at 2026-06-16 10:00:00
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#icmp)
 
 ## Interfaces
 
@@ -7529,6 +8035,11 @@ This sub-section explains the various IP protocol specific show commands that ar
 
 This command displays either all the route entries from the routing table or a specific route.
 
+`show ip route --help` (or `show ip route -?`) lists the available
+subcommands sourced live from FRR (e.g. `bgp`, `connected`, `static`,
+`summary`, `vrf`, etc.). Shell TAB completion offers the same set as
+you type, including for nested subcommands like `show ip route vrf <TAB>`.
+
 - Usage:
   ```
   show ip route [<vrf-name>] [<ip_address>]
@@ -7658,6 +8169,11 @@ This sub-section explains the various IPv6 protocol specific show commands that 
 **show ipv6 route**
 
 This command displays either all the IPv6 route entries from the routing table or a specific IPv6 route.
+
+`show ipv6 route --help` (or `show ipv6 route -?`) lists the available
+subcommands sourced live from FRR. Shell TAB completion offers the same
+set as you type, including for nested subcommands like
+`show ipv6 route vrf <TAB>`.
 
 - Usage:
   ```
@@ -8442,7 +8958,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#loopba
 **show vrf**
 
 This command displays all vrfs configured on the system along with interface binding to the vrf.
-If vrf-name is also provided as part of the command, if the vrf is created it will display all interfaces binding to the vrf, if vrf is not created nothing will be displayed.
+If vrf-name is also provided as part of the command, if the vrf is created it will display all interfaces binding to the vrf, if vrf is not created, the command will exit with a failure code and an error message.
 
 - Usage:
   ```
@@ -8466,15 +8982,30 @@ If vrf-name is also provided as part of the command, if the vrf is created it wi
 
 ### VRF config commands
 
+The `config vrf` command group accepts an optional `-n|--namespace` option that targets a specific ASIC's CONFIG_DB on multi-ASIC platforms. For data-VRF subcommands (`add <Vrf-*>`, `del <Vrf-*>`, `add_vrf_vni_map`, `del_vrf_vni_map`) the option is required on multi-ASIC platforms. The management-VRF subcommands (`add mgmt`/`del mgmt`) operate on the host/global CONFIG_DB and reject `-n` with an error.
+
+- Usage:
+  ```
+  config vrf [-n|--namespace <namespace>] <subcommand> ...
+  ```
+
+- Details:
+  - -n, --namespace: (Multi-ASIC) Namespace name (e.g. asic0). Required for data-VRF subcommands on multi-ASIC platforms; not applicable to `add mgmt`/`del mgmt`.
+
 **config vrf add**
 
 This command creates vrf in SONiC system with provided vrf-name.
 
 - Usage:
   ```
-  config vrf add <vrf-name>
+  config vrf [-n|--namespace <namespace>] add <vrf-name>
   ```
 Note: vrf-name should always start with keyword "Vrf"
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 add Vrf-red
+  ```
 
 **config vrf del <vrf-name>**
 
@@ -8482,7 +9013,12 @@ This command deletes vrf with name vrf-name.
 
 - Usage:
   ```
-  config vrf del <vrf-name>
+  config vrf [-n|--namespace <namespace>] del <vrf-name>
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 del Vrf-red
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vrf-configuration)
@@ -8600,6 +9136,8 @@ This command displays the configured SNMP Trap server IP addresses.
 
 This command enables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This creates a new interface and l3mdev CGROUP with the name as "mgmt" and enslaves the management interface "eth0" into this master interface "mgmt". Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
 
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
+
 - Usage:
   ```
   config vrf add mgmt
@@ -8613,6 +9151,8 @@ This command enables the management VRF in the system. This command restarts the
 **config vrf del mgmt**
 
 This command disables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This deletes the interface "mgmt" and deletes the l3mdev CGROUP named "mgmt" and puts back the management interface "eth0" into the default VRF. Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
+
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
 
 - Usage:
   ```
@@ -9189,10 +9729,12 @@ While adding a new ERSPAN session, users need to configure the following fields 
 7) optional - Policer which will be used to control the rate at which frames are mirrored.
 8) optional - List of source ports which can have both Ethernet and LAG ports.
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
+10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
+11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>]
   ```
 
   The following command is also supported to be backward compatible.
@@ -11469,6 +12011,60 @@ This command is to config the radius server for various parameter listed.
 
   ```
 
+## SAG MAC
+
+### SAG MAC config commands
+
+This section explains all the commands that are supported in SONiC to configure static-anycast-gateway MAC address.
+
+**config static-anycast-gateway mac_address add <mac_address>**
+
+This command enables use to add a static-anycast-gateway MAC address
+- Usage:
+  ```
+  config static-anycast-gateway mac_address add <mac_address>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config static-anycast-gateway mac_address add 00:11:22:33:44:55
+  ```
+
+**config static-anycast-gateway mac_address del**
+
+This command enables user to delete the static-anycast-gateway MAC address.
+
+- Usage:
+  ```
+  config static-anycast-gateway mac_address del
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config static-anycast-gateway mac_address del
+  ```
+
+### SAG MAC Show commands
+**show static-anycast-gateway**
+This command displays all the interfaces which have enabled the SAG MAC address.
+- Usage:
+  ```
+  show static-anycast-gateway
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show static-anycast-gateway
+  Static Anycast Gateway Information
+  MacAddress         Interfaces
+  -----------------  ------------
+  00:11:22:33:44:55  Vlan3
+                     Vlan4
+
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#sag)
+
 # Switch
 
 This section explains the various show, configuration and clear commands available for users.
@@ -11544,6 +12140,7 @@ This command is used to clear switch counters.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#switch)
+
 
 ## sFlow
 
@@ -11765,6 +12362,47 @@ This command is used to set the counter polling interval. Default is 20 seconds.
 
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#sflow)
+
+## SED
+
+SED (Self-Encrypting Drive) commands are used to manage password changes for self-encrypting drives in the system.
+
+### SED Config commands
+
+**config sed change-password**
+
+This command changes the SED password. The new password is entered at interactive prompts (hidden input).
+
+- Usage:
+  ```
+  config sed change-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config sed change-password
+  New SED password:
+  Handling SED password change started...
+  SED password change process completed successfully
+  ```
+
+**config sed reset-password**
+
+This command resets the SED password to the default value.
+
+- Usage:
+  ```
+  config sed reset-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config sed reset-password
+  Handling SED password reset started...
+  SED password reset process completed successfully
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#sed)
 
 ## SNMP
 
@@ -13213,7 +13851,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#System
 
 **show vlan brief**
 
-This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, and the proxy ARP status. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
+This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, the proxy ARP status, and the Static Anycast Gateway status. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
@@ -13223,15 +13861,15 @@ This command displays brief information about all the vlans configured in the de
 - Example:
   ```
   admin@sonic:~$ show vlan brief
-
-  +-----------+--------------+-----------+----------------+-----------------------+-------------+
-  |   VLAN ID | IP Address   | Ports     | Port Tagging   | DHCP Helper Address   | Proxy ARP   |
-  +===========+==============+===========+================+=======================+=============+
-  |       100 | 1.1.2.2/16   | Ethernet0 | tagged         | 192.0.0.1             | disabled    |
-  |           |              | Ethernet4 | tagged         | 192.0.0.2             |             |
-  |           |              |           |                | 192.0.0.3             |             |
-  +-----------+--------------+-----------+----------------+-----------------------+-------------+
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  |   VLAN ID | IP Address       | Ports     | Port Tagging   | Proxy ARP   | Static Anycast Gateway   | DHCP Helper Address   |
+  +===========+==================+===========+================+=============+==========================+=======================+
+  |         3 | 200.200.200.1/24 | Ethernet8 | untagged       | disabled    | enabled                  |                       |
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  |         4 | 100.200.200.1/24 | Ethernet4 | untagged       | disabled    | enabled                  |                       |
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
   ```
+
 
 **show vlan config**
 
@@ -13306,6 +13944,22 @@ This command is to add or delete a member port into the already created vlan.
   admin@sonic:~$ sudo config vlan member add 100 Ethernet4
   This command will add Ethernet4 as member of the vlan 100.
   ```
+**config sag enable/disable**
+
+This command is used to enable or disable static-anycast-gateway for a VLAN interface
+
+- Usage:
+  ```
+  config vlan static-anycast-gateway enable/disable <vlan_id>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config vlan static-anycast-gateway enable 3
+  static-anycast-gateway setting saved to ConfigDB
+  admin@sonic:~$ sudo config vlan static-anycast-gateway disable 3
+  static-anycast-gateway setting saved to ConfigDB
+  ```
 
 **config vlan member add/del -m -e**
 This command is to add or delete a member port into multiple already created vlans.
@@ -13319,23 +13973,18 @@ This command is to add or delete a member port into multiple already created vla
   ```
   admin@sonic:~$ sudo config vlan member add -m 100-103 Ethernet0
   This command will add Ethernet0 as member of the vlan 100, vlan 101, vlan 102, vlan 103
-   ```
-   ```
+
   admin@sonic:~$ sudo config vlan member add -m 100,101,102 Ethernet4
   This command will add Ethernet4 as member of the vlan 100, vlan 101, vlan 102
-   ```
-   ```
+
   admin@sonic:~$ sudo config vlan member add -e -m 104,105 Ethernet8
-  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet8 as member of  vlan 100, vlan 101, vlan 102, vlan 103
-  ```
-  ```
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are existing vlans. This command will add Ethernet8 as member of  vlan 100, vlan 101, vlan 102, vlan 103
+
   admin@sonic:~$ sudo config vlan member add -e 100 Ethernet12
-  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet12 as member of vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
-  ```
-   ```
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are existing vlans. This command will add Ethernet12 as member of vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
+
   admin@sonic:~$ sudo config vlan member add all Ethernet20
-  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet20 as member of vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 1
-05
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are existing vlans. This command will add Ethernet20 as member of vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
   ```
 
 **config proxy_arp enabled/disabled**
@@ -13721,14 +14370,16 @@ This command displays vnet neighbor information about all the vnets configured i
                30.30.30.30  11:22:33:44:55:66  Ethernet0.1002
   ```
 
-**show vnet routes all**
+**show vnet routes all [<vnet_name>]**
 
-This command displays all routes information about all the vnets configured in the device. It also show the vnet routes which are configured but may or may not be active based on endpoint BFD status.
+This command displays either all routes information about all the vnets or a specified vnet configured in the device. It also shows the vnet routes which are configured but may or may not be active based on endpoint BFD status.
+
+For ECMP tunnel routes with per-endpoint `mac_address` or `vni` lists, the endpoints, MAC addresses, and VNIs are wrapped together in aligned chunks (2 per row when any item exceeds 15 characters, 3 per row otherwise).
 
 - Usage:
 
   ```
-  show vnet [ -n <namespace> ] routes all
+  show vnet [ -n <namespace> ] routes all [<vnet_name>]
   ```
 
 - Example:
@@ -13740,31 +14391,61 @@ This command displays all routes information about all the vnets configured in t
   Vnet_2000    100.100.3.0/24             Ethernet52
   Vnet_3000    100.100.4.0/24             Vlan2000
 
-  vnet name    prefix          endpoint    mac address        vni    status
-  -----------  --------------  ----------  -----------------  -----  -------
-  Vnet_2000    100.100.1.1/32  10.10.10.1                            active
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04         inactive
-  Vnet_3000    100.100.2.3/32  10.10.10.6  00:00:00:00:03:04
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+  Vnet_3000         100.100.2.1/32   10.10.10.5                           00:00:00:00:03:04                             0         inactive
+  Vnet_3000         100.100.2.3/32   10.10.10.6                           00:00:00:00:03:04
   ```
 
-**show vnet routes tunnel**
+**show vnet routes local [<vnet_name>]**
 
-This command displays tunnel routes information about all the vnets configured in the device.
+This command displays either local routes information about all the vnets or a specified vnet configured in the device.
 
 - Usage:
 
   ```
-  show vnet [ -n <namespace> ] routes tunnel
+  show vnet [ -n <namespace> ] routes local [<vnet_name>]
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vnet routes local
+  vnet name    prefix          nexthop    interface
+  -----------  --------------  ---------  -----------
+  Vnet_2000    100.100.3.0/24             Ethernet52
+  Vnet_3000    100.100.4.0/24             Vlan2000
+  ```
+
+**show vnet routes tunnel [<vnet_name>]**
+
+This command displays tunnel routes information about all the vnets or a specified vnet configured in the device.
+
+For ECMP routes with per-endpoint `mac_address` or `vni` lists, the endpoints, MAC addresses, and VNIs are wrapped together in aligned chunks. An optional vnet name argument filters the output to a single vnet.
+
+- Usage:
+
+  ```
+  show vnet [ -n <namespace> ] routes tunnel [<vnet_name>]
   ```
 
 - Example:
 
   ```
   admin@sonic:~$ show vnet routes tunnel
-  vnet name    prefix          endpoint    mac address        vni
-  -----------  --------------  ----------  -----------------  -----
-  Vnet_2000    100.100.1.1/32  10.10.10.1
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+  Vnet_3000         100.100.2.1/32   10.10.10.5                           00:00:00:00:03:04                             0         inactive
+
+  admin@sonic:~$ show vnet routes tunnel Vnet_2000
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
   ```
 
 **Additional show vnet commands**
@@ -14571,7 +15252,7 @@ Installing a new image using the sonic-installer will keep using the packages in
 
 **sonic-installer set_default**
 
-This command is be used to change the image which can be loaded by default in all the subsequent reboots.
+This command is be used to change the image which can be loaded by default in all the subsequent reboots. It also clears any pending `set_next_boot` selection, so the next reboot uses this default image.
 
 - Usage:
   ```
@@ -14585,7 +15266,7 @@ This command is be used to change the image which can be loaded by default in al
 
 **sonic-installer set_next_boot**
 
-This command is used to change the image that can be loaded in the *next* reboot only. Note that it will fallback to current image in all other subsequent reboots after the next reboot.
+This command is used to change the image that can be loaded in the *next* reboot only; subsequent reboots fall back to the `set_default` image. Note that a later `set_default` overrides this one-time selection.
 
 - Usage:
   ```
@@ -15595,8 +16276,9 @@ Usage: sfputil show eeprom-hexdump [OPTIONS]
   Display EEPROM hexdump of SFP transceiver(s)
 Options:
   -p, --port <port_name>    Display SFP EEPROM hexdump for port <port_name>
-  -n, --page <page_number>  Display SFP EEEPROM hexdump for
-                            <page_number_in_hex>
+  -n, --page <page_number>  Display SFP EEPROM hexdump for <page_number>
+                            (decimal, hex (with 0x prefix) or octal (with 0o
+                            prefix))
   --help                    Show this message and exit.
 ```
 
@@ -15687,6 +16369,66 @@ EEPROM hexdump for port Ethernet8
         000000d0 00 00 00 02 0a 00 00 00  00 00 00 00 00 00 77 00 |..............w.|
         000000e0 33 30 33 33 30 4b 34 33  34 31 30 44 00 00 00 00 |30330K43410D....|
         000000f0 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 |................|
+```
+
+- Show SFP low-power mode status
+
+  By default the status is read from the module EEPROM. Passing `--use-lpmode-pin` reads it from the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `get_lpmode_via_pin`
+  from `SfpBase`".
+
+```
+admin@sonic:~$ sfputil show lpmode --help
+Usage: sfputil show lpmode [OPTIONS]
+
+  Display low-power mode status of SFP transceiver(s)
+
+Options:
+  -p, --port <port_name>  Display SFP low-power mode status for port
+                          <port_name> only
+  --use-lpmode-pin        Use Xcvr LPMode pin instead of EEPROM
+  --help                  Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  Off
+
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0 --use-lpmode-pin
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+```
+
+- Enable / disable SFP low-power mode
+
+  By default the request is written to the module EEPROM. Passing `--use-lpmode-pin` writes the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `set_lpmode_via_pin`
+  from `SfpBase`.
+
+```
+admin@sonic:~$ sfputil lpmode on --help
+Usage: sfputil lpmode on [OPTIONS] <port_name>
+
+  Enable low-power mode for SFP transceiver
+
+Options:
+  --use-lpmode-pin  Use Xcvr LPMode pin instead of EEPROM
+  --help            Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0
+Disabling low-power mode for port Ethernet0 ... OK
+
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0 --use-lpmode-pin
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0 --use-lpmode-pin
+Disabling low-power mode for port Ethernet0 ... OK
 ```
 
 # SFP Utilities read command

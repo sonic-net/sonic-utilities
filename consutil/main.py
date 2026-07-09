@@ -14,6 +14,7 @@ try:
 
     from tabulate import tabulate
     from .lib import *
+    from .lib import initialize_console_runtime, console_connect
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
 
@@ -22,13 +23,7 @@ except ImportError as e:
 @clicommon.pass_db
 def consutil(db):
     """consutil - Command-line utility for interacting with switches via console device"""
-    config_db = db.cfgdb
-    data = config_db.get_entry(CONSOLE_SWITCH_TABLE, FEATURE_KEY)
-    if FEATURE_ENABLED_KEY not in data or data[FEATURE_ENABLED_KEY] == "no":
-        click.echo("Console switch feature is disabled")
-        sys.exit(ERR_DISABLE)
-
-    SysInfoProvider.init_device_prefix()
+    initialize_console_runtime(db)
 
 
 # 'show' subcommand
@@ -44,22 +39,27 @@ def show(db, brief):
     ports.sort(key=lambda p: int(p.line_num))
 
     # set table header style
-    header = ["Line", "Baud", "Flow Control", "PID", "Start Time", "Device"]
+    header = ["Line", "Baud", "Flow Control", "PID", "Start Time", "Device", "Oper State", "State Duration"]
     body = []
     for port in ports:
         # runtime information
         busy = "*" if port.busy else " "
         pid = port.session_pid if port.session_pid else "-"
         date = port.session_start_date if port.session_start_date else "-"
-        baud = port.baud
+        baud = port.baud if port.baud else "-"
         flow_control = "Enabled" if port.flow_control else "Disabled"
+        remote_device = port.remote_device if port.remote_device else "-"
+        oper_state = port.oper_state if port.oper_state else "-"
+        state_duration = port.state_duration if port.state_duration else "-"
         body.append([
             busy+port.line_num,
             baud if baud else "-",
             flow_control,
             pid if pid else "-",
             date if date else "-",
-            port.remote_device,
+            remote_device,
+            oper_state,
+            state_duration,
         ])
     click.echo(tabulate(body, header, stralign='right'))
 
@@ -116,7 +116,6 @@ def clear(db, target, devicename):
     else:
         click.echo("Cleared line")
 
-
 # 'connect' subcommand
 @consutil.command()
 @clicommon.pass_db
@@ -125,33 +124,7 @@ def clear(db, target, devicename):
               help="connect by name - if flag is set, interpret target as device name instead")
 def connect(db, target, devicename):
     """Connect to switch via console device - TARGET is line number or device name of switch"""
-    # identify the target line
-    port_provider = ConsolePortProvider(db, configured_only=False)
-    try:
-        target_port = port_provider.get(target, use_device=devicename)
-    except LineNotFoundError:
-        click.echo("Cannot connect: target [{}] does not exist".format(target))
-        sys.exit(ERR_DEV)
-
-    line_num = target_port.line_num
-
-    # connect
-    try:
-        session = target_port.connect()
-    except LineBusyError:
-        click.echo("Cannot connect: line [{}] is busy".format(line_num))
-        sys.exit(ERR_BUSY)
-    except InvalidConfigurationError as cfg_err:
-        click.echo("Cannot connect: {}".format(cfg_err.message))
-        sys.exit(ERR_CFG)
-    except ConnectionFailedError:
-        click.echo("Cannot connect: unable to open picocom process")
-        sys.exit(ERR_DEV)
-
-    # interact
-    click.echo("Successful connection to line [{}]\nPress ^{} ^X to disconnect"
-               .format(line_num, target_port.escape_char.upper() if target_port.escape_char is not None else "A"))
-    session.interact()
+    console_connect(target, use_device=devicename, db=db)
 
 
 if __name__ == '__main__':

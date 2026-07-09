@@ -408,5 +408,4 @@ Error: 'vxlan_name' length should not exceed 15 characters
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")

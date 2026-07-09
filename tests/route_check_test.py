@@ -241,8 +241,8 @@ class TestRouteCheck(object):
              patch("route_check.swsscommon.Select") as mock_sel, \
              patch("route_check.swsscommon.SubscriberStateTable") as mock_subs, \
              patch("sonic_py_common.multi_asic.connect_config_db_for_ns") as mock_config_db, \
-             patch("route_check.swsscommon.NotificationProducer"):
-            device_info.get_platform = MagicMock(return_value='unittest')
+             patch("route_check.swsscommon.NotificationProducer"), \
+             patch.object(device_info, 'get_platform', return_value='unittest'):
             set_mock(mock_table, mock_conn, mock_sel, mock_subs, mock_config_db)
             yield
 
@@ -291,7 +291,7 @@ class TestRouteCheck(object):
                 if not e.get('selected', False):
                     continue
                 if not e.get('offloaded', False):
-                    missed_route_list.append(r)
+                    missed_route_list.append({'prefix': r, 'protocol': e.get('protocol', '')})
                 if e.get('failed', False):
                     failed_route_list.append(r)
         return missed_route_list, failed_route_list  # Return tuple of (missed_routes, failed_routes)
@@ -339,6 +339,24 @@ class TestRouteCheck(object):
         assert len(msg) == 5
         msg = route_check.print_message(syslog.LOG_ERR, "a", "b", "c", "d", "e", "f")
         assert len(msg) == 5
+
+    def test_logging_truncation_indicator(self):
+        # Test truncation indicator with realistic PRINT_MSG_LEN_MAX
+        route_check.PRINT_MSG_LEN_MAX = 50
+        msg = route_check.print_message(syslog.LOG_ERR, "x" * 100)
+        assert len(msg) == 50
+        assert msg.endswith(" ... (truncated)")
+
+        # Short message should not have truncation indicator
+        msg = route_check.print_message(syslog.LOG_ERR, "short")
+        assert msg == "short"
+        assert " ... (truncated)" not in msg
+
+        # When PRINT_MSG_LEN_MAX is smaller than suffix, no suffix appended
+        route_check.PRINT_MSG_LEN_MAX = 5
+        msg = route_check.print_message(syslog.LOG_ERR, "abcdefghi")
+        assert len(msg) == 5
+        assert " ... (truncated)" not in msg
 
     def test_mitigate_routes(self, mock_dbs):
         namespace = DEFAULTNS

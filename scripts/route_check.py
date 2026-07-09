@@ -47,14 +47,13 @@ import signal
 import traceback
 import subprocess
 import concurrent.futures
-os.environ.setdefault('IJSON_BACKEND', 'python')
-import ijson  # noqa: E402
+import ijson
 
-from ipaddress import ip_network  # noqa: E402
-from swsscommon import swsscommon  # noqa: E402
-from utilities_common import chassis  # noqa: E402
-from sonic_py_common import multi_asic, device_info  # noqa: E402
-from utilities_common.general import load_db_config  # noqa: E402
+from ipaddress import ip_network
+from swsscommon import swsscommon
+from utilities_common import chassis
+from sonic_py_common import multi_asic, device_info
+from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
 ASIC_DB_NAME = 'ASIC_DB'
@@ -77,6 +76,7 @@ MIN_SCAN_INTERVAL = 10      # Every 10 seconds
 MAX_SCAN_INTERVAL = 3600    # An hour
 
 PRINT_MSG_LEN_MAX = 1000
+PRINT_MSG_TRUNCATION_SUFFIX = " ... (truncated)"
 
 FRR_CHECK_RETRIES = 3
 FRR_WAIT_TIME = 15
@@ -130,15 +130,23 @@ def print_message(lvl, *args, write_to_stdout=True):
     :param lvl: Log level for this message as ERR/INFO/DEBUG
     :param args: message as list of strings or convertible to string
     :param write_to_stdout: print the message to stdout if set to true
-    :return None
+    :return msg string (may be truncated)
     """
     msg = ""
+    truncated = False
     if (lvl <= report_level):
         for arg in args:
             rem_len = PRINT_MSG_LEN_MAX - len(msg)
             if rem_len <= 0:
+                truncated = True
                 break
-            msg += str(arg)[0:rem_len]
+            s = str(arg)
+            if len(s) > rem_len:
+                truncated = True
+            msg += s[0:rem_len]
+
+        if truncated and PRINT_MSG_LEN_MAX > len(PRINT_MSG_TRUNCATION_SUFFIX):
+            msg = msg[:PRINT_MSG_LEN_MAX - len(PRINT_MSG_TRUNCATION_SUFFIX)] + PRINT_MSG_TRUNCATION_SUFFIX
 
         if write_to_stdout:
             print(msg)
@@ -418,7 +426,7 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
         if not route_entry.get('selected', False):
             return
         if not route_entry.get('offloaded', False):
-            missing_routes.append(prefix)
+            missing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol', '')})
         if route_entry.get('failed', False):
             failing_routes.append(prefix)
 
@@ -967,6 +975,16 @@ def check_routes_for_namespace(namespace):
     return results, adds, deletes
 
 
+def summarize_results(results):
+    """
+    Summarize mismatch results by counting entries per namespace/category.
+    :param results: dict of {namespace: {category: [entries]}}
+    :return dict of {namespace: {category: count}}
+    """
+    return {ns: {k: len(v) for k, v in entries.items()}
+            for ns, entries in results.items()}
+
+
 def check_routes(namespace):
     """
     Main function to parallelize route checks across all namespaces.
@@ -1001,6 +1019,8 @@ def check_routes(namespace):
                 return -1, results
 
     if results:
+        print_message(syslog.LOG_WARNING, "Route mismatch counts: ",
+                      json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
         print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
         print_message(syslog.LOG_WARNING, "add: ", json.dumps(all_adds, indent=4))
@@ -1071,6 +1091,8 @@ def check_sids(namespace):
                 return -1, results
 
     if results:
+        print_message(syslog.LOG_WARNING, "SID mismatch counts: ",
+                      json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
         return -1, results
     else:

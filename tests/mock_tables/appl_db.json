@@ -35,6 +35,8 @@
         "description": "ARISTA01T2:Ethernet1",
         "speed": "25000",
         "oper_status": "down",
+        "system_oper_status": "up",
+        "line_oper_status": "down",
         "pfc_asym": "off",
         "mtu": "9100",
         "tpid": "0x9200",
@@ -371,9 +373,26 @@
     "TUNNEL_ROUTE_TABLE:10.3.1.1": {
         "alias": "Vlan1000"
     },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-0:160.162.191.1/32": {
+        "nexthop": "100.100.4.1",
+        "ifname": "Ethernet1"
+    },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-0:160.163.191.1/32": {
+        "nexthop": "100.101.4.1, 100.101.4.2",
+        "ifname": "Ethernet1, Ethernet2"
+    },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-0:160.164.191.1/32": {
+        "nexthop": "100.102.4.1, 100.102.4.2, 100.102.4.3",
+        "ifname": "Ethernet1, Ethernet2, Ethernet3"
+    },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-1:160.165.191.1/32": {
+        "nexthop": "100.103.4.1, 100.103.4.2, 100.103.4.3",
+        "ifname": "Ethernet1, Ethernet2, Ethernet3"
+    },
     "VNET_ROUTE_TUNNEL_TABLE:test_v4_in_v4-0:160.163.191.1/32": {
         "endpoint":"100.251.7.1",
-        "endpoint_monitor":"100.251.7.1"
+        "endpoint_monitor":"100.251.7.1",
+        "metric": "0"
     },
     "VNET_ROUTE_TUNNEL_TABLE:Vnet_v6_in_v6-0:fddd:a156:a251::a6:1/128": {
         "endpoint": "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",
@@ -386,6 +405,23 @@
     "VNET_ROUTE_TUNNEL_TABLE:test_v4_in_v4-0:160.164.191.1/32": {
         "endpoint":"100.251.7.1",
         "endpoint_monitor":"100.251.7.1"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE:Vnet_mac_vni_scale:10.0.0.0/24": {
+        "endpoint": "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6",
+        "mac_address": "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02,aa:bb:cc:00:00:03,aa:bb:cc:00:00:04,aa:bb:cc:00:00:05,aa:bb:cc:00:00:06",
+        "vni": "100,200,300,400,500,600"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE:Vnet_7127926:30.0.20.0/24": {
+        "endpoint": "100.106.230.44,10.134.85.10,100.106.229.38,100.106.229.170,100.106.228.160,10.134.84.24,100.106.230.168,10.90.92.16,10.224.116.42,100.106.228.134",
+        "mac_address": "00:22:48:03:8c:f8,60:45:bd:a3:8d:ab,60:45:bd:a3:21:88,60:45:bd:a2:e4:39,7c:1e:52:06:89:0f,7c:1e:52:06:8b:cd,60:45:bd:a3:8f:ae,60:45:bd:a2:e8:f9,60:45:bd:a2:e5:ee,60:45:bd:a4:be:3e",
+        "vni": "7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926",
+        "metric": "5"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE:Vnet_7127926:30.0.21.0/24": {
+        "endpoint": "100.106.230.44,10.134.85.10,100.106.229.38,100.106.229.170,100.106.228.160,10.134.84.24,100.106.230.168,10.90.92.16,10.224.116.42,100.106.228.134,100.106.229.171,100.106.228.161",
+        "mac_address": "00:22:48:03:8c:f8,60:45:bd:a3:8d:ab,60:45:bd:a3:21:88,60:45:bd:a2:e4:39,7c:1e:52:06:89:0f,7c:1e:52:06:8b:cd,60:45:bd:a3:8f:ae,60:45:bd:a2:e8:f9,60:45:bd:a2:e5:ee,60:45:bd:a4:be:3e,60:45:bd:a3:8d:ac,7c:1e:52:06:89:10",
+        "vni": "7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926,7127926",
+        "metric": "5"
     },
     "BGP_PROFILE_TABLE:FROM_SDN_SLB_ROUTES": {
         "community_id" : "1234:1235"
