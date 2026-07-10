@@ -507,6 +507,35 @@ class TestPortStat(object):
         assert invoked_cmd[invoked_cmd.index('-i') + 1] == 'Ethernet0'
         assert '--relative-timestamp' in invoked_cmd
 
+    def test_show_intf_counters_fec_histogram_multi_asic_and_namespace(self):
+        runner = CliRunner()
+        with mock.patch('show.interfaces.clicommon.run_command') as mock_run, \
+                mock.patch('show.interfaces.multi_asic.is_multi_asic', return_value=True):
+            result = runner.invoke(
+                show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"],
+                ["Ethernet0", "-n", "asic0", "-d", "all"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert mock_run.call_count == 1
+        invoked_cmd = mock_run.call_args[0][0]
+        assert '-s' in invoked_cmd
+        assert invoked_cmd[invoked_cmd.index('-s') + 1] == 'all'
+        assert '-n' in invoked_cmd
+        assert invoked_cmd[invoked_cmd.index('-n') + 1] == 'asic0'
+
+    def test_show_intf_counters_fec_histogram_invalid_interface(self):
+        runner = CliRunner()
+        with mock.patch('show.interfaces.clicommon.run_command') as mock_run:
+            result = runner.invoke(
+                show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"],
+                ["Ethernet_Bogus"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
+        assert mock_run.call_count == 0
+
     def test_show_intf_fec_counters_period(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["counters"].commands["fec-stats"],
@@ -649,6 +678,52 @@ class TestPortStat(object):
             assert tuple(fields) == tuple(expected_fields)
         assert called_keys == {'RATES:' + oid for oid in port_name_map.values()}
 
+    def test_clear_fec_rate_aggregates_ns_list_exception(self):
+        # If enumerating namespaces fails, the helper must warn and return
+        # rather than raising out of the clear path.
+        portstat_script = self._load_portstat_script()
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.side_effect = Exception("boom")
+
+        portstat_script._clear_fec_rate_aggregates(mock_portstat)
+
+        mock_portstat.get_db_client.assert_not_called()
+
+    def test_clear_fec_rate_aggregates_empty_port_map(self):
+        # A namespace with no COUNTERS_PORT_NAME_MAP entries must be skipped
+        # without issuing any HDEL.
+        portstat_script = self._load_portstat_script()
+
+        mock_db = mock.MagicMock()
+        mock_db.COUNTERS_DB = 'COUNTERS_DB'
+        mock_db.get_all.return_value = None
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['']
+        mock_portstat.get_db_client.return_value = mock_db
+
+        portstat_script._clear_fec_rate_aggregates(mock_portstat)
+
+        mock_db.get_redis_client.assert_not_called()
+
+    def test_clear_fec_rate_aggregates_redis_exception(self):
+        # A per-namespace redis failure must be warned about and must not
+        # prevent other namespaces from being processed.
+        portstat_script = self._load_portstat_script()
+
+        mock_db = mock.MagicMock()
+        mock_db.COUNTERS_DB = 'COUNTERS_DB'
+        mock_db.get_all.return_value = {'Ethernet0': 'oid:0x1000000000001'}
+        mock_db.get_redis_client.side_effect = Exception("redis down")
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['asic0']
+        mock_portstat.get_db_client.return_value = mock_db
+
+        # Should not raise despite the redis failure.
+        portstat_script._clear_fec_rate_aggregates(mock_portstat)
+
     def test_clear_counters_cache_contains_fec_bins(self):
         # After portstat -c, the per-user snapshot cache must contain all 16
         # fec_binN fields for every port so that subsequent diffs in
@@ -689,6 +764,22 @@ class TestPortStat(object):
         assert return_code == 0
         assert 'Last Updated' in result
         assert 'Relative Time' in result
+
+    def test_format_relative_time(self):
+        from utilities_common.portstat import format_relative_time
+        now_ms = 1_700_000_000_000
+        with mock.patch('utilities_common.portstat.time.time', return_value=now_ms / 1000.0):
+            assert format_relative_time(now_ms - 5_000) == '5 seconds ago'
+            assert format_relative_time(now_ms - 1_000) == '1 second ago'
+            assert format_relative_time(now_ms - 120_000) == '2 minutes ago'
+            assert format_relative_time(now_ms - 3 * 3600_000) == '3 hours ago'
+            assert format_relative_time(now_ms - 2 * 86400_000) == '2 days ago'
+
+    def test_print_fec_hist_vertical_interface_not_found(self, capsys):
+        from utilities_common.portstat import Portstat
+        portstat = Portstat.__new__(Portstat)
+        portstat.print_fec_hist_vertical({}, {}, 'Ethernet0')
+        assert "Interface Ethernet0 not found" in capsys.readouterr().out
 
     def test_show_intf_counters_on_sup(self):
         remove_tmp_cnstat_file()
