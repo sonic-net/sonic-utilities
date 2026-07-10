@@ -1,3 +1,4 @@
+import re
 import sys
 import os
 from click.testing import CliRunner
@@ -898,8 +899,6 @@ Ethernet4: Transceiver status info not applicable
 Ethernet64: Transceiver status info not applicable
 """
 
-<<<<<<< HEAD
-=======
 # `sfpshow` runs as a subprocess (via clicommon.run_command -> Popen) so the
 # banner's "Current System Time:" line uses the child process's real clock and
 # cannot be frozen with mock.patch. Normalize it to a sentinel before comparing
@@ -1135,7 +1134,6 @@ Ethernet64: Transceiver VDM flags not applicable
 """
 
 
->>>>>>> a6284800 (NOS-10526: C-CMIS Observables CLI addition (#655))
 class TestSFP(object):
     @classmethod
     def setup_class(cls):

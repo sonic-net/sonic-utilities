@@ -486,8 +486,6 @@
         "status": "1",
         "error": "N/A"
     },
-<<<<<<< HEAD
-=======
     "TRANSCEIVER_VDM_REAL_VALUE|Ethernet44":{
         "laser_temperature_media1": "45.5",
         "esnr_media_input1": "14.2",
@@ -578,7 +576,6 @@
         "biasyq1": "5.0",
         "clkreloop1": "1.0"
     },
->>>>>>> a6284800 (NOS-10526: C-CMIS Observables CLI addition (#655))
     "TRANSCEIVER_VDM_HALARM_FLAG|Ethernet44":{
         "biasxi1": "False",
         "biasxp1": "False",
@@ -596,13 +593,9 @@
         "errored_frames_avg_media_input1": "False",
         "prefec_ber_avg_media_input1": "False",
         "rxtotpower1": "False",
-<<<<<<< HEAD
-        "txcurrpower1": "False"
-=======
         "txcurrpower1": "False",
         "clkreloop1": "False",
         "last_update_time": "Wed Jun 4 12:34:00 2026"
->>>>>>> a6284800 (NOS-10526: C-CMIS Observables CLI addition (#655))
     },
     "TRANSCEIVER_VDM_HWARN_FLAG|Ethernet44":{
         "biasxi1": "False",

@@ -394,8 +394,6 @@ CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP = {
     'evm1': 'evm'
 }
 
-<<<<<<< HEAD
-=======
 # Maps the VDM observable DB prefix (as written to STATE_DB by xcvrd) to the
 # human-readable observable name.
 VDM_OBSERVABLE_NAME_MAP = {
@@ -432,7 +430,7 @@ VDM_THRESHOLD_SUFFIXES = (
     ('lalarm', 'Low Alarm'),
 )
 
->>>>>>> a6284800 (NOS-10526: C-CMIS Observables CLI addition (#655))
+
 def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
     key = 'application_advertisement'
     field_name = '{}{}: '.format(indent, QSFP_DATA_MAP[key])
