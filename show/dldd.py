@@ -7,14 +7,18 @@ import click
 from tabulate import tabulate
 
 import utilities_common.cli as clicommon
+from utilities_common.dldd import (
+    DLDD_CONFIG_FIELDS,
+    DLDD_CONFIG_KEY,
+    DLDD_CONFIG_TABLE,
+    DLDD_RULE_DETAIL_PREFIX,
+    DLDD_RULE_STATUS_KEY,
+    DLDD_RULE_STATUS_PREFIX,
+    DLDD_STATUS_KEY,
+    is_dldd_fault,
+)
 
 
-DLDD_CONFIG_TABLE = "DLDD_CONFIG"
-DLDD_CONFIG_KEY = "global"
-DLDD_STATUS_KEY = "DLDD_STATUS|process_state"
-DLDD_RULE_STATUS_KEY = "DLDD_RULE_STATUS|active"
-DLDD_RULE_STATUS_PREFIX = "DLDD_RULE_STATUS|rule|"
-DLDD_RULE_DETAIL_PREFIX = "DLDD_RULE_DETAIL|rule|"
 FAULT_INFO_PATTERN = "FAULT_INFO|*"
 HEARTBEAT_TTL_SECONDS = 120
 
@@ -25,20 +29,6 @@ FAULT_JSON_FIELDS = {
     "local_action_state": {},
     "healthz_artifact": {},
 }
-
-CONFIG_FIELDS = (
-    ("Individual max failure threshold", "individual_max_failure_threshold"),
-    ("Broken rules max threshold", "broken_rules_max_threshold"),
-    ("Redis monitor polling interval", "redis_monitor_polling_interval"),
-    ("File monitor polling interval", "file_monitor_polling_interval"),
-    ("Common monitor polling interval", "common_monitor_polling_interval"),
-    ("Source unavailable grace period", "source_unavailable_grace_period"),
-    ("Source recovery samples", "source_recovery_samples"),
-    ("Inactive fault retention period", "inactive_fault_retention_period"),
-    ("Fault evidence ack timeout", "fault_evidence_ack_timeout"),
-    ("Active fault recheck interval", "active_fault_recheck_interval"),
-    ("Rules inbox settle time", "rules_inbox_settle_time"),
-)
 
 STATUS_FIELDS = (
     ("State", "state"),
@@ -131,6 +121,15 @@ def _state_entry(db, key):
     return db.db.get_all(db.db.STATE_DB, key) or {}
 
 
+def _print_table(rows, headers):
+    click.echo(tabulate(
+        rows,
+        headers=headers,
+        tablefmt="simple",
+        disable_numparse=True,
+    ))
+
+
 def _state_redis_client():
     """Return a redis-py client for commands absent from DBConnector."""
     import redis
@@ -146,20 +145,6 @@ def _state_redis_client():
         host=swsscommon.SonicDBConfig.getDbHostname(database, database_key),
         port=swsscommon.SonicDBConfig.getDbPort(database, database_key),
         db=database_id,
-    )
-
-
-def _is_dldd_fault(fault):
-    """Return whether a shared FAULT_INFO row is owned by DLDD."""
-    try:
-        rule_id = int(fault.get("rule_id", 0))
-    except (TypeError, ValueError):
-        return False
-    return bool(
-        rule_id
-        and fault.get("rule")
-        and fault.get("schema_version")
-        and fault.get("active_rules_checksum")
     )
 
 
@@ -200,19 +185,17 @@ def config(db):
             configured.get(field, "not set"),
             effective.get(field, "unavailable"),
         )
-        for description, field in CONFIG_FIELDS
+        for description, field, unused_minimum in DLDD_CONFIG_FIELDS
     ]
-    click.echo(tabulate(
+    _print_table(
         rows,
-        headers=(
+        (
             "Setting",
             "CONFIG_DB field",
             "Configured value",
             "Effective value",
         ),
-        tablefmt="simple",
-        disable_numparse=True,
-    ))
+    )
 
 
 @dldd.command("status")
@@ -229,12 +212,7 @@ def status(db):
         for description, field in STATUS_FIELDS
     ]
     rows.insert(1, ("Heartbeat age", _heartbeat_age(db)))
-    click.echo(tabulate(
-        rows,
-        headers=("Field", "Value"),
-        tablefmt="simple",
-        disable_numparse=True,
-    ))
+    _print_table(rows, ("Field", "Value"))
 
     broken_rules = _json_value(process_state.get("broken_rules"), [])
     if broken_rules:
@@ -252,9 +230,9 @@ def status(db):
             for rule in broken_rules
             if isinstance(rule, dict)
         ]
-        click.echo(tabulate(
+        _print_table(
             rule_rows,
-            headers=(
+            (
                 "Rule",
                 "Version",
                 "Correlation key",
@@ -263,9 +241,7 @@ def status(db):
                 "Last attempt",
                 "Reason",
             ),
-            tablefmt="simple",
-            disable_numparse=True,
-        ))
+        )
 
     source_status = _json_value(process_state.get("source_status"), [])
     if source_status:
@@ -286,9 +262,9 @@ def status(db):
             for source in source_status
             if isinstance(source, dict)
         ]
-        click.echo(tabulate(
+        _print_table(
             source_rows,
-            headers=(
+            (
                 "Source",
                 "State",
                 "Failures",
@@ -300,9 +276,7 @@ def status(db):
                 "Stale faults",
                 "Reason",
             ),
-            tablefmt="simple",
-            disable_numparse=True,
-        ))
+        )
 
     inflight = _json_value(process_state.get("inflight_fault_evidence"), [])
     if inflight:
@@ -335,9 +309,9 @@ def status(db):
                     _timestamp_value(action_state.get("wait_until", "")),
                     action_state.get("last_error", ""),
                 ))
-        click.echo(tabulate(
+        _print_table(
             inflight_rows,
-            headers=(
+            (
                 "Rule ID",
                 "Rule",
                 "Event",
@@ -348,14 +322,12 @@ def status(db):
                 "Deadline",
                 "Reason",
             ),
-            tablefmt="simple",
-            disable_numparse=True,
-        ))
+        )
         if action_rows:
             click.echo("\nLocal action work")
-            click.echo(tabulate(
+            _print_table(
                 action_rows,
-                headers=(
+                (
                     "Rule",
                     "Component",
                     "State",
@@ -365,9 +337,7 @@ def status(db):
                     "Wait until",
                     "Error",
                 ),
-                tablefmt="simple",
-                disable_numparse=True,
-            ))
+            )
 
     diagnostics = _json_value(process_state.get("service_diagnostics"), [])
     if diagnostics:
@@ -385,9 +355,9 @@ def status(db):
             for diagnostic in diagnostics
             if isinstance(diagnostic, dict)
         ]
-        click.echo(tabulate(
+        _print_table(
             diagnostic_rows,
-            headers=(
+            (
                 "Monitor",
                 "Correlation key",
                 "Rule ID",
@@ -396,9 +366,7 @@ def status(db):
                 "Observed at",
                 "Reason",
             ),
-            tablefmt="simple",
-            disable_numparse=True,
-        ))
+        )
 
 
 @dldd.command("rules")
@@ -559,25 +527,21 @@ def rules(
         )
         for rule in selected
     ]
-    click.echo(
-        tabulate(
-            rows,
-            headers=(
-                "Rule ID",
-                "Rule",
-                "Version",
-                "Component",
-                "Health",
-                "Work items",
-                "Active faults",
-                "Last attempt",
-                "Last success",
-                "Failure streak",
-                "Reason",
-            ),
-            tablefmt="simple",
-            disable_numparse=True,
-        )
+    _print_table(
+        rows,
+        (
+            "Rule ID",
+            "Rule",
+            "Version",
+            "Component",
+            "Health",
+            "Work items",
+            "Active faults",
+            "Last attempt",
+            "Last success",
+            "Failure streak",
+            "Reason",
+        ),
     )
 
     if not detail:
@@ -618,29 +582,25 @@ def rules(
             for item in rule_work_items
             if isinstance(item, dict)
         ]
-        click.echo(
-            tabulate(
-                detail_rows,
-                headers=(
-                    "Event",
-                    "Component",
-                    "Source type",
-                    "Monitor",
-                    "Collection",
-                    "State",
-                    "Interval",
-                    "Active fault",
-                    "Last attempt",
-                    "Last success",
-                    "Next due",
-                    "Failures",
-                    "Source ID",
-                    "Correlation key",
-                    "Reason",
-                ),
-                tablefmt="simple",
-                disable_numparse=True,
-            )
+        _print_table(
+            detail_rows,
+            (
+                "Event",
+                "Component",
+                "Source type",
+                "Monitor",
+                "Collection",
+                "State",
+                "Interval",
+                "Active fault",
+                "Last attempt",
+                "Last success",
+                "Next due",
+                "Failures",
+                "Source ID",
+                "Correlation key",
+                "Reason",
+            ),
         )
         omitted = _int_value(rule.get("work_items_omitted", 0))
         if omitted:
@@ -685,7 +645,7 @@ def faults(db, status_filter, component_filter, detail, json_output):
     for key in keys:
         key = _decode_key(key)
         fault = _state_entry(db, key)
-        if not _is_dldd_fault(fault):
+        if not is_dldd_fault(fault):
             continue
         fault = _fault_document(key, fault)
         component = fault.get("component_name", "")
@@ -716,9 +676,9 @@ def faults(db, status_filter, component_filter, detail, json_output):
         for fault in faults
     ]
 
-    click.echo(tabulate(
+    _print_table(
         rows,
-        headers=(
+        (
             "Component",
             "Symptom",
             "Status",
@@ -728,9 +688,7 @@ def faults(db, status_filter, component_filter, detail, json_output):
             "Last detection",
             "Description",
         ),
-        tablefmt="simple",
-        disable_numparse=True,
-    ))
+    )
 
     if not detail:
         return
@@ -774,12 +732,7 @@ def faults(db, status_filter, component_filter, detail, json_output):
             ("Source stale", fault.get("source_stale", False)),
             ("Description", fault.get("description", "")),
         ]
-        click.echo(tabulate(
-            scalar_rows,
-            headers=("Field", "Value"),
-            tablefmt="simple",
-            disable_numparse=True,
-        ))
+        _print_table(scalar_rows, ("Field", "Value"))
         for field, title in (
             ("events", "Events"),
             ("repair_actions", "Repair actions"),

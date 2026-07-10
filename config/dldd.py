@@ -3,20 +3,25 @@
 import click
 
 import utilities_common.cli as clicommon
-
-
-DLDD_CONFIG_TABLE = "DLDD_CONFIG"
-DLDD_CONFIG_KEY = "global"
-
-UINT32_MAX = (1 << 32) - 1
-NON_NEGATIVE_INTEGER = click.IntRange(min=0, max=UINT32_MAX)
-POSITIVE_INTEGER = click.IntRange(min=1, max=UINT32_MAX)
+from utilities_common.dldd import (
+    DLDD_CONFIG_FIELD_MINIMUMS,
+    DLDD_CONFIG_KEY,
+    DLDD_CONFIG_TABLE,
+    UINT32_MAX,
+)
 
 POLLING_INTERVAL_FIELDS = {
     "redis": "redis_monitor_polling_interval",
     "file": "file_monitor_polling_interval",
     "common": "common_monitor_polling_interval",
 }
+
+
+def _config_integer(field):
+    return click.IntRange(
+        min=DLDD_CONFIG_FIELD_MINIMUMS[field],
+        max=UINT32_MAX,
+    )
 
 
 def _set_config(db, field, value):
@@ -42,7 +47,9 @@ def threshold():
 
 
 @threshold.command("individual-max-failure")
-@click.argument("count", type=NON_NEGATIVE_INTEGER)
+@click.argument(
+    "count", type=_config_integer("individual_max_failure_threshold")
+)
 @clicommon.pass_db
 def individual_max_failure(db, count):
     """Set consecutive failures tolerated for an individual rule/key."""
@@ -50,7 +57,7 @@ def individual_max_failure(db, count):
 
 
 @threshold.command("broken-rules-max")
-@click.argument("count", type=NON_NEGATIVE_INTEGER)
+@click.argument("count", type=_config_integer("broken_rules_max_threshold"))
 @clicommon.pass_db
 def broken_rules_max(db, count):
     """Set the broken-rule count tolerated before service failure."""
@@ -62,7 +69,9 @@ def broken_rules_max(db, count):
     "monitor",
     type=click.Choice(tuple(POLLING_INTERVAL_FIELDS), case_sensitive=False),
 )
-@click.argument("seconds", type=POSITIVE_INTEGER)
+@click.argument(
+    "seconds", type=_config_integer("redis_monitor_polling_interval")
+)
 @clicommon.pass_db
 def polling_interval(db, monitor, seconds):
     """Set a redis, file, or common monitor polling interval in seconds."""
@@ -70,7 +79,9 @@ def polling_interval(db, monitor, seconds):
 
 
 @dldd.command("source-unavailable-grace-period")
-@click.argument("seconds", type=NON_NEGATIVE_INTEGER)
+@click.argument(
+    "seconds", type=_config_integer("source_unavailable_grace_period")
+)
 @clicommon.pass_db
 def source_unavailable_grace_period(db, seconds):
     """Set source-unavailability grace time in seconds."""
@@ -78,7 +89,7 @@ def source_unavailable_grace_period(db, seconds):
 
 
 @dldd.command("source-recovery-samples")
-@click.argument("count", type=POSITIVE_INTEGER)
+@click.argument("count", type=_config_integer("source_recovery_samples"))
 @clicommon.pass_db
 def source_recovery_samples(db, count):
     """Set successful samples required to recover a source."""
@@ -86,7 +97,9 @@ def source_recovery_samples(db, count):
 
 
 @dldd.command("inactive-fault-retention-period")
-@click.argument("seconds", type=NON_NEGATIVE_INTEGER)
+@click.argument(
+    "seconds", type=_config_integer("inactive_fault_retention_period")
+)
 @clicommon.pass_db
 def inactive_fault_retention_period(db, seconds):
     """Set inactive-fault retention time in seconds."""
@@ -94,7 +107,9 @@ def inactive_fault_retention_period(db, seconds):
 
 
 @dldd.command("fault-evidence-ack-timeout")
-@click.argument("seconds", type=POSITIVE_INTEGER)
+@click.argument(
+    "seconds", type=_config_integer("fault_evidence_ack_timeout")
+)
 @clicommon.pass_db
 def fault_evidence_ack_timeout(db, seconds):
     """Set the initial fault-evidence acknowledgement timeout in seconds."""
@@ -102,7 +117,9 @@ def fault_evidence_ack_timeout(db, seconds):
 
 
 @dldd.command("active-fault-recheck-interval")
-@click.argument("seconds", type=POSITIVE_INTEGER)
+@click.argument(
+    "seconds", type=_config_integer("active_fault_recheck_interval")
+)
 @clicommon.pass_db
 def active_fault_recheck_interval(db, seconds):
     """Set the active-fault recheck interval in seconds."""
@@ -110,7 +127,7 @@ def active_fault_recheck_interval(db, seconds):
 
 
 @dldd.command("rules-inbox-settle-time")
-@click.argument("seconds", type=POSITIVE_INTEGER)
+@click.argument("seconds", type=_config_integer("rules_inbox_settle_time"))
 @clicommon.pass_db
 def rules_inbox_settle_time(db, seconds):
     """Set the rules-inbox stability window in seconds."""

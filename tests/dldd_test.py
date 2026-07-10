@@ -14,6 +14,7 @@ from show.dldd import (
     dldd as show_dldd,
 )
 from utilities_common.db import Db
+from utilities_common.dldd import DLDD_CONFIG_FIELDS, is_dldd_fault
 
 
 def _db():
@@ -152,8 +153,9 @@ def test_show_config_displays_all_operator_fields():
     result = CliRunner().invoke(show_dldd, ("config",), obj=db)
 
     assert result.exit_code == 0, result.output
-    assert "Individual max failure threshold" in result.output
-    assert "individual_max_failure_threshold" in result.output
+    for description, field, unused_minimum in DLDD_CONFIG_FIELDS:
+        assert description in result.output
+        assert field in result.output
     assert "15" in result.output
     assert "redis_monitor_polling_interval" in result.output
     assert "Rules inbox settle time" in result.output
@@ -525,6 +527,7 @@ def test_show_faults_displays_and_filters_records():
     ]
     db.db.get_all.side_effect = (
         {
+            "producer": "dldd",
             "rule_id": "2000001",
             "schema_version": "0.0.1",
             "active_rules_checksum": "sha256:test",
@@ -540,6 +543,7 @@ def test_show_faults_displays_and_filters_records():
             "description": "Fan recovered",
         },
         {
+            "producer": "dldd",
             "rule_id": "1000001",
             "schema_version": "0.0.1",
             "active_rules_checksum": "sha256:test",
@@ -577,6 +581,7 @@ def test_show_faults_displays_and_filters_records():
 
 def _detailed_fault_row():
     return {
+        "producer": "dldd",
         "rule": "CURRENT_HIGH",
         "rule_id": "1000001",
         "rule_version": "1.0.0",
@@ -659,6 +664,11 @@ def test_show_faults_ignores_rows_owned_by_other_agents():
     db = _db()
     db.db.keys.return_value = [b"FAULT_INFO|foreign-component|foreign-symptom"]
     db.db.get_all.return_value = {
+        "producer": "another-agent",
+        "rule": "FOREIGN_RULE",
+        "rule_id": "1000001",
+        "schema_version": "0.0.1",
+        "active_rules_checksum": "sha256:foreign",
         "component_type": "FOREIGN",
         "component_name": "foreign-component",
         "symptom": "foreign-symptom",
@@ -672,6 +682,18 @@ def test_show_faults_ignores_rows_owned_by_other_agents():
     assert "foreign-component" not in result.output
     assert "foreign-symptom" not in result.output
     assert "foreign fault" not in result.output
+
+
+def test_fault_ownership_uses_explicit_producer_marker():
+    assert is_dldd_fault({"producer": "dldd"})
+    assert is_dldd_fault({b"producer": b"dldd"})
+    assert not is_dldd_fault({"producer": "another-agent"})
+    assert not is_dldd_fault({
+        "rule": "LOOKALIKE",
+        "rule_id": "1000001",
+        "schema_version": "0.0.1",
+        "active_rules_checksum": "sha256:lookalike",
+    })
 
 
 def test_show_faults_handles_empty_table():
