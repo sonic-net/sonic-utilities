@@ -663,43 +663,43 @@ def pm(interfacename, namespace, verbose):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
-@transceiver.group(cls=clicommon.CountersGroup, invoke_without_command=True)
+@transceiver.command()
+@click.argument('args', nargs=-1, metavar='[flag] [<interface_name>]')
+@click.option('-d', '--detail', is_flag=True,
+              help="With 'flag', also show per-flag change count, last set time and last clear time")
 @click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
               type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@click.pass_context
-def vdm(ctx, interface, namespace, verbose):
-    """Show interface transceiver VDM (Versatile Diagnostics Monitoring) information"""
+def vdm(args, detail, namespace, verbose):
+    """Show interface transceiver VDM (Versatile Diagnostics Monitoring) information
 
-    if ctx.invoked_subcommand is None:
-        cmd = ['sfpshow', 'vdm']
-
-        if interface is not None:
-            interface = try_convert_interfacename_from_alias(
-                ctx, interface)
-            cmd += ['-p', str(interface)]
-
-        if namespace is not None:
-            cmd += ['-n', str(namespace)]
-
-        clicommon.run_command(cmd, display_cmd=verbose)
-
-
-@vdm.command('flag')
-@click.argument('interfacename', required=False)
-@click.option('-d', '--detail', is_flag=True, help="Show per-flag change count, last set time and last clear time")
-@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
-              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
-@click.option('--verbose', is_flag=True, help="Enable verbose output")
-def vdm_flag(interfacename, detail, namespace, verbose):
-    """Show interface transceiver VDM flag information"""
+    Use the optional 'flag' keyword to show VDM threshold violation flags, e.g.
+    `show interfaces transceiver vdm flag Ethernet0`.
+    """
 
     ctx = click.get_current_context()
 
-    cmd = ['sfpshow', 'vdm-flag']
+    # An optional leading 'flag' keyword selects the flag view; the remaining
+    # positional (if any) is the interface name.
+    args = list(args)
+    show_flag = bool(args) and args[0] == 'flag'
+    if show_flag:
+        args = args[1:]
 
-    if detail:
-        cmd += ['--detail']
+    interfacename = args[0] if args else None
+    if len(args) > 1:
+        ctx.fail("Too many arguments: {}".format(' '.join(args[1:])))
+
+    if detail and not show_flag:
+        ctx.fail("--detail is only applicable with 'flag'")
+
+    if show_flag:
+        cmd = ['sfpshow', 'vdm-flag']
+
+        if detail:
+            cmd += ['--detail']
+    else:
+        cmd = ['sfpshow', 'vdm']
 
     if interfacename is not None:
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)

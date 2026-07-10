@@ -29,8 +29,11 @@ from utilities_common.sfp_helper import (
         CCMIS_STATUS_MAP,
         CCMIS_VDM_TO_LEGACY_STATUS_MAP,
         CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP,
-        VDM_OBSERVABLE_NAME_MAP,
+        VDM_ROW_SPECS,
         VDM_THRESHOLD_SUFFIXES,
+        VDM_FLAG_DETAIL_HEADER,
+        VDM_FLAG_HEADER,
+        VDM_VALUE_HEADER,
         get_data_map_sort_key,
         get_transceiver_data_map
 )
@@ -269,19 +272,11 @@ VDM_TIME_FORMAT = "%a %b %d %H:%M:%S %Y"
 # `sfpshow vdm-flag --detail` cells.
 VDM_FLAG_TIME_NEVER = 'never'
 
-# Per-threshold-column sub-row labels for the `vdm-flag --detail` rendering,
-# stacked beneath the flag value in each cell.
-VDM_FLAG_DETAIL_SUBROWS = (
-    ('change_count', 'Change Count'),
-    ('set_time',     'Last Set Time'),
-    ('clear_time',   'Last Clear Time'),
-)
+# Display placeholder for missing VDM real-value table cells.
+VDM_VALUE_NA_DISPLAY = '--'
 
-# Regex used to peel a trailing `[<unit>]` suffix off the human-readable
-# observable name in VDM_OBSERVABLE_NAME_MAP (e.g. `OSNR [dB]` -> `OSNR`, `dB`).
-# Observables without a bracketed unit (e.g. `Pre-FEC BER Minimum Media Input`)
-# render without a `(Unit)` line in the column header.
-VDM_OBSERVABLE_UNIT_RE = re.compile(r'^(.*?)\s*\[([^\[\]]+)\]\s*$')
+# Max width for the Parameter column in `sfpshow vdm flag --detail`.
+VDM_FLAG_DETAIL_PARAM_MAX_WIDTH = 14
 
 def display_invalid_intf_eeprom(intf_name):
     output = intf_name + ': SFP EEPROM Not detected\n'
@@ -642,6 +637,84 @@ class SFPShow(object):
         else:
             return str(field)
 
+    @staticmethod
+    def beautify_vdm_field(prefix, field):
+        """Format a VDM observable value with at most three decimal places."""
+        if field is None:
+            return VDM_VALUE_NA_DISPLAY
+        if isinstance(field, bool):
+            return str(field)
+        value = float(field)
+        if prefix in {'prefec_ber'}:
+            if value == 0:
+                return '0.0'
+            return "{:.3E}".format(value)
+        return str(round(value, 3))
+
+    @staticmethod
+    def _vdm_to_float(value):
+        if value is not None and value != 'N/A':
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                pass
+        return None
+
+    @staticmethod
+    def _vdm_format_prefix(value_prefixes):
+        if any(v.startswith('prefec_ber') for v in value_prefixes.values()):
+            return 'prefec_ber'
+        return next(iter(value_prefixes.values()))
+
+    def _build_vdm_unified_table(self, real_value_dict, threshold_dicts):
+        """Build unified VDM value rows for Basic and Statistic observables."""
+        rows = []
+        for display_name, unit, value_prefixes in VDM_ROW_SPECS:
+            format_prefix = self._vdm_format_prefix(value_prefixes)
+            has_statistic = 'avg' in value_prefixes
+            threshold_ref = 'avg' if has_statistic else 'curr'
+
+            for lane in range(1, VDM_MAX_LANES + 1):
+                curr_raw = (real_value_dict.get('{}{}'.format(value_prefixes['curr'], lane))
+                            if 'curr' in value_prefixes else None)
+                min_raw = (real_value_dict.get('{}{}'.format(value_prefixes['min'], lane))
+                           if 'min' in value_prefixes else None)
+                avg_raw = (real_value_dict.get('{}{}'.format(value_prefixes['avg'], lane))
+                           if 'avg' in value_prefixes else None)
+                max_raw = (real_value_dict.get('{}{}'.format(value_prefixes['max'], lane))
+                           if 'max' in value_prefixes else None)
+
+                curr_val = self._vdm_to_float(curr_raw)
+                min_val = self._vdm_to_float(min_raw)
+                avg_val = self._vdm_to_float(avg_raw)
+                max_val = self._vdm_to_float(max_raw)
+
+                threshold_key = '{}{}'.format(value_prefixes[threshold_ref], lane)
+                thresholds = [
+                    self._vdm_to_float(threshold_dicts[suffix].get(threshold_key))
+                    for suffix, _ in VDM_THRESHOLD_SUFFIXES
+                ]
+
+                value_fields = [curr_val, min_val, avg_val, max_val]
+                if all(v is None for v in value_fields) and all(t is None for t in thresholds):
+                    continue
+
+                row = [
+                    display_name,
+                    unit,
+                    lane,
+                    self.beautify_vdm_field(format_prefix, curr_val),
+                    self.beautify_vdm_field(format_prefix, min_val)
+                    if 'min' in value_prefixes else VDM_VALUE_NA_DISPLAY,
+                    self.beautify_vdm_field(format_prefix, avg_val)
+                    if 'avg' in value_prefixes else VDM_VALUE_NA_DISPLAY,
+                    self.beautify_vdm_field(format_prefix, max_val)
+                    if 'max' in value_prefixes else VDM_VALUE_NA_DISPLAY,
+                ]
+                row += [self.beautify_vdm_field(format_prefix, t) for t in thresholds]
+                rows.append(row)
+        return rows
+
     def convert_interface_sfp_pm_to_cli_output_string(self, state_db, interface_name):
         first_subport = platform_sfputil_helper.get_first_subport(interface_name)
         if first_subport is None:
@@ -701,105 +774,169 @@ class SFPShow(object):
         return value is not None and value != 'N/A'
 
     @staticmethod
-    def _split_vdm_name_unit(display_name):
-        """Splits a VDM observable label into (name, unit).
-        """
-        match = VDM_OBSERVABLE_UNIT_RE.match(display_name)
-        if match:
-            return match.group(1), match.group(2)
-        return display_name, ''
+    def _vdm_flag_prefix_order(value_prefixes):
+        if 'avg' in value_prefixes:
+            return [key for key in ('avg', 'min', 'max', 'curr') if key in value_prefixes]
+        return ['curr']
 
-    def _build_vdm_value_table(self, port_name, real_value_dict, threshold_dicts):
-        """Builds the per-observable sub-table data for `sfpshow vdm`.
-        """
-        blocks = []
-        for db_prefix, display_name in natsorted(VDM_OBSERVABLE_NAME_MAP.items(),
-                                                 key=lambda kv: kv[1]):
-            name, unit = self._split_vdm_name_unit(display_name)
-            rows = []
-            for lane in range(1, VDM_MAX_LANES + 1):
-                # xcvrd's VDMDBUtils strips the `_<suffix>` part from the key
-                # before writing to the per-type threshold/flag tables, so the
-                # field name within each per-type table is `<observable><lane>`.
-                value = real_value_dict.get(f'{db_prefix}{lane}')
-                thresholds = [threshold_dicts[suffix].get(f'{db_prefix}{lane}') for suffix, _ in VDM_THRESHOLD_SUFFIXES]
-                if not self._vdm_field_present(value) and not any(self._vdm_field_present(t) for t in thresholds):
-                    continue
-                port_cell = port_name if not rows else ''
-                row = [port_cell, lane, value if self._vdm_field_present(value) else 'N/A']
-                row += [t if self._vdm_field_present(t) else 'N/A' for t in thresholds]
-                rows.append(row)
-            if rows:
-                blocks.append((name, unit, rows))
-        return blocks
+    def _vdm_row_has_flags(self, value_prefixes, lane, flag_dicts):
+        for ref in value_prefixes:
+            field = '{}{}'.format(value_prefixes[ref], lane)
+            if any(self._vdm_field_present(flag_dicts[suffix].get(field))
+                   for suffix, _ in VDM_THRESHOLD_SUFFIXES):
+                return True
+        return False
 
-    def _build_vdm_flag_table(self, port_name, flag_dicts):
-        """Builds the per-observable sub-table data for `sfpshow vdm flag`.
-        """
-        blocks = []
-        for db_prefix, display_name in natsorted(VDM_OBSERVABLE_NAME_MAP.items(),
-                                                 key=lambda kv: kv[1]):
-            name, unit = self._split_vdm_name_unit(display_name)
-            rows = []
+    def _get_vdm_row_field(self, data_dicts, suffix, value_prefixes, lane):
+        for ref in self._vdm_flag_prefix_order(value_prefixes):
+            field = '{}{}'.format(value_prefixes[ref], lane)
+            if field in data_dicts[suffix]:
+                return data_dicts[suffix].get(field)
+        ref = 'avg' if 'avg' in value_prefixes else 'curr'
+        return data_dicts[suffix].get('{}{}'.format(value_prefixes[ref], lane))
+
+    def _build_vdm_unified_flag_table(self, flag_dicts):
+        """Build unified VDM flag rows."""
+        rows = []
+        for display_name, _, value_prefixes in VDM_ROW_SPECS:
             for lane in range(1, VDM_MAX_LANES + 1):
-                flags = [flag_dicts[suffix].get(f'{db_prefix}{lane}')
-                         for suffix, _ in VDM_THRESHOLD_SUFFIXES]
-                if not any(self._vdm_field_present(f) for f in flags):
+                if not self._vdm_row_has_flags(value_prefixes, lane, flag_dicts):
                     continue
-                port_cell = port_name if not rows else ''
-                row = [port_cell, lane]
-                row += [f if self._vdm_field_present(f) else 'N/A' for f in flags]
+                row = [display_name, lane]
+                for suffix, _ in VDM_THRESHOLD_SUFFIXES:
+                    flag = self._get_vdm_row_field(flag_dicts, suffix, value_prefixes, lane)
+                    row.append(flag if self._vdm_field_present(flag) else 'N/A')
                 rows.append(row)
-            if rows:
-                blocks.append((name, unit, rows))
-        return blocks
+        return rows
+
+    @classmethod
+    def _format_vdm_flag_detail_field(cls, field_kind, value):
+        if field_kind == 'flag':
+            return value if cls._vdm_field_present(value) else 'N/A'
+        if field_kind == 'count':
+            return value if cls._vdm_field_present(value) else '0'
+        return cls._format_vdm_flag_relative_time(value)
+
+    _VDM_FLAG_DETAIL_ROW_LABELS = (
+        ('Flag', 'flag'),
+        ('Change Count', 'count'),
+        ('Last Set', 'set_time'),
+        ('Last Clear', 'clear_time'),
+    )
 
     @staticmethod
-    def _vdm_flag_detail_cell(flag, count, set_time, clear_time):
-        """Renders one (observable, lane, threshold) cell as a 4-line stack
-        of `flag / change_count / last_set_time / last_clear_time`.
-        """
-        flag_str = flag if SFPShow._vdm_field_present(flag) else 'N/A'
-        count_str = count if SFPShow._vdm_field_present(count) else '0'
-        set_str = set_time if SFPShow._vdm_field_present(set_time) else VDM_FLAG_TIME_NEVER
-        clear_str = clear_time if SFPShow._vdm_field_present(clear_time) else VDM_FLAG_TIME_NEVER
-        return '{}/\n{}/\n{}/\n{}'.format(flag_str, count_str, set_str, clear_str)
+    def _wrap_vdm_detail_parameter(display_name, max_width):
+        """Split a parameter name across detail rows at word boundaries."""
+        words = display_name.split()
+        if not words:
+            return ['']
+        lines = []
+        current = words[0]
+        for word in words[1:]:
+            candidate = '{} {}'.format(current, word)
+            if len(candidate) <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
 
-    def _build_vdm_flag_detail_table(self, port_name, flag_dicts,
-                                     count_dicts, set_dicts, clear_dicts):
-        """Builds the flat row table for `sfpshow vdm-flag --detail`.
-
-        One row per (observable, lane) tuple with at least one present flag.
-        The first column repeats the port name only on the first row of the
-        port; subsequent rows leave it blank for visual grouping.
-        """
+    def _build_vdm_unified_flag_detail_table(self, flag_dicts, count_dicts,
+                                             set_dicts, clear_dicts):
+        """Build unified VDM flag detail rows grouped by (observable, lane)."""
+        dicts_by_kind = {
+            'flag': flag_dicts,
+            'count': count_dicts,
+            'set_time': set_dicts,
+            'clear_time': clear_dicts,
+        }
         rows = []
-        first_row = True
-        for db_prefix, display_name in natsorted(VDM_OBSERVABLE_NAME_MAP.items(),
-                                                 key=lambda kv: kv[1]):
-            name, unit = self._split_vdm_name_unit(display_name)
-            title = self._vdm_observable_title(name, unit)
+        group_starts = []
+        for display_name, _, value_prefixes in VDM_ROW_SPECS:
             for lane in range(1, VDM_MAX_LANES + 1):
-                field = f'{db_prefix}{lane}'
-                flags = [flag_dicts[s].get(field) for s, _ in VDM_THRESHOLD_SUFFIXES]
-                if not any(self._vdm_field_present(f) for f in flags):
+                if not self._vdm_row_has_flags(value_prefixes, lane, flag_dicts):
                     continue
-                cells = []
-                for s, _ in VDM_THRESHOLD_SUFFIXES:
-                    cells.append(self._vdm_flag_detail_cell(
-                        flag_dicts[s].get(field),
-                        count_dicts[s].get(field),
-                        set_dicts[s].get(field),
-                        clear_dicts[s].get(field),
-                    ))
-                port_cell = port_name if first_row else ''
-                rows.append([port_cell, '{}\nLane {}'.format(title, lane)] + cells)
-                first_row = False
-        return rows
+                group_starts.append(len(rows))
+                param_lines = self._wrap_vdm_detail_parameter(
+                    display_name, VDM_FLAG_DETAIL_PARAM_MAX_WIDTH)
+                for i, (detail_label, field_kind) in enumerate(
+                        self._VDM_FLAG_DETAIL_ROW_LABELS):
+                    param = param_lines[i] if i < len(param_lines) else ''
+                    if i == 0:
+                        row = [param, lane, detail_label]
+                    else:
+                        row = [param, '', detail_label]
+                    data_dicts = dicts_by_kind[field_kind]
+                    for suffix, _ in VDM_THRESHOLD_SUFFIXES:
+                        row.append(self._format_vdm_flag_detail_field(
+                            field_kind,
+                            self._get_vdm_row_field(
+                                data_dicts, suffix, value_prefixes, lane)))
+                    rows.append(row)
+        return rows, group_starts
+
+    @staticmethod
+    def _render_vdm_flag_detail_body(rows, group_starts):
+        """Renders the unified flag-detail table with blank lines between groups."""
+        table = tabulate(rows, VDM_FLAG_DETAIL_HEADER, disable_numparse=True)
+        if len(group_starts) <= 1:
+            return table
+        lines = table.split('\n')
+        for idx in sorted([r + 2 for r in group_starts[1:]], reverse=True):
+            lines.insert(idx, '')
+        return '\n'.join(lines)
+
+    @staticmethod
+    def _vdm_now():
+        return datetime.datetime.now()
 
     @staticmethod
     def _vdm_now_str():
-        return datetime.datetime.now().strftime(VDM_TIME_FORMAT)
+        return SFPShow._vdm_now().strftime(VDM_TIME_FORMAT)
+
+    @staticmethod
+    def _format_vdm_duration_part(value, unit):
+        """Formats one duration component, e.g. `1 hour` or `2 mins`."""
+        if unit == 'min':
+            plural = 'mins'
+        elif unit == 'sec':
+            plural = 'secs'
+        else:
+            plural = unit + 's'
+        label = unit if value == 1 else plural
+        return '{} {}'.format(value, label)
+
+    @classmethod
+    def _format_vdm_flag_relative_time(cls, ts_str, now=None):
+        """Formats a VDM flag set/clear timestamp as a relative duration."""
+        if not cls._vdm_field_present(ts_str):
+            return VDM_FLAG_TIME_NEVER
+        if now is None:
+            now = cls._vdm_now()
+        try:
+            ts = datetime.datetime.strptime(ts_str, VDM_TIME_FORMAT)
+        except (TypeError, ValueError):
+            return VDM_FLAG_TIME_NEVER
+        total = int((now - ts).total_seconds())
+        if total < 0:
+            return VDM_FLAG_TIME_NEVER
+        days, rem = divmod(total, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes, secs = divmod(rem, 60)
+        if days >= 1:
+            return '{}, {}'.format(
+                cls._format_vdm_duration_part(days, 'day'),
+                cls._format_vdm_duration_part(hours, 'hour'))
+        if hours >= 1:
+            return '{}, {}'.format(
+                cls._format_vdm_duration_part(hours, 'hour'),
+                cls._format_vdm_duration_part(minutes, 'min'))
+        if minutes >= 1:
+            return '{}, {}'.format(
+                cls._format_vdm_duration_part(minutes, 'min'),
+                cls._format_vdm_duration_part(secs, 'sec'))
+        return cls._format_vdm_duration_part(secs, 'sec')
 
     @staticmethod
     def _vdm_ts_gt(ts_a, ts_b):
@@ -825,73 +962,9 @@ class SFPShow(object):
         ).format(cls._vdm_now_str(), VDM_UPDATE_INTERVAL_SECS, last_str)
 
     @staticmethod
-    def _vdm_value_header(name, unit):
-        """Header row for one VDM value sub-table.
-        """
-        if unit:
-            name_hdr = '{}\n({})'.format(name, unit)
-            thr_hdrs = ['{}\nThreshold\n({})'.format(label, unit)
-                        for _, label in VDM_THRESHOLD_SUFFIXES]
-        else:
-            name_hdr = name
-            thr_hdrs = ['{}\nThreshold'.format(label)
-                        for _, label in VDM_THRESHOLD_SUFFIXES]
-        return ['Port', 'Lane', name_hdr] + thr_hdrs
-
-    @staticmethod
-    def _vdm_flag_header():
-        """Header row for one VDM flag sub-table.
-        """
-        flag_hdrs = ['{}\nFlag'.format(label) for _, label in VDM_THRESHOLD_SUFFIXES]
-        return ['Port', 'Lane'] + flag_hdrs
-
-    @staticmethod
-    def _vdm_flag_detail_header():
-        """Header row for the combined `vdm-flag --detail` table.
-        """
-        subrow_labels = '/\n'.join(label for _, label in VDM_FLAG_DETAIL_SUBROWS)
-        thr_hdrs = ['{}\nFlag/\n{}'.format(label, subrow_labels)
-                    for _, label in VDM_THRESHOLD_SUFFIXES]
-        return ['Port', 'Observable_Name'] + thr_hdrs
-
-    @staticmethod
-    def _vdm_observable_title(name, unit):
-        """Renders the per-sub-table title line, e.g. `OSNR (dB)`."""
-        return '{} ({})'.format(name, unit) if unit else name
-
-    @staticmethod
-    def _vdm_render_sub_table(header, rows):
-        """Renders one observable's tabulate block.
-        """
-        colalign = ('left',) * len(header)
-        return tabulate(rows, header, disable_numparse=True, colalign=colalign)
-
-    @staticmethod
     def _vdm_indent_block(text, indent):
         """Indents every non-empty line of `text` by `indent` spaces."""
         return '\n'.join(((indent + line) if line else line) for line in text.split('\n'))
-
-    def _render_vdm_value_body(self, blocks):
-        """Joins per-observable value sub-tables with a blank line."""
-        return '\n\n'.join(
-            self._vdm_render_sub_table(self._vdm_value_header(name, unit), rows)
-            for name, unit, rows in blocks
-        )
-
-    def _render_vdm_flag_body(self, blocks):
-        """Joins per-observable flag sub-tables with a blank line.
-        """
-        header = self._vdm_flag_header()
-        chunks = []
-        for name, unit, rows in blocks:
-            title = self._vdm_observable_title(name, unit)
-            chunks.append('{}\n{}'.format(title, self._vdm_render_sub_table(header, rows)))
-        return '\n\n'.join(chunks)
-
-    def _render_vdm_flag_detail_body(self, rows):
-        """Renders the combined `vdm-flag --detail` table for a single port.
-        """
-        return self._vdm_render_sub_table(self._vdm_flag_detail_header(), rows)
 
     def convert_interface_sfp_vdm_to_cli_output_string(self, state_db, interface_name):
         """Returns (body, last_update_time) for `sfpshow vdm` rendering.
@@ -910,11 +983,12 @@ class SFPShow(object):
             for suffix, _ in VDM_THRESHOLD_SUFFIXES
         }
 
-        blocks = self._build_vdm_value_table(interface_name, real_value_dict, threshold_dicts)
+        blocks = self._build_vdm_unified_table(real_value_dict, threshold_dicts)
         if not blocks:
             return None, real_value_dict.get('last_update_time')
 
-        return self._render_vdm_value_body(blocks), real_value_dict.get('last_update_time')
+        return tabulate(blocks, VDM_VALUE_HEADER, disable_numparse=True), \
+            real_value_dict.get('last_update_time')
 
     def convert_interface_sfp_vdm_flag_to_cli_output_string(self, state_db, interface_name, detail=False):
         """Returns (body, last_update_time) for `sfpshow vdm flag` rendering.
@@ -967,17 +1041,17 @@ class SFPShow(object):
                 last_update_time = ts
 
         if detail:
-            rows = self._build_vdm_flag_detail_table(
-                interface_name, flag_dicts, count_dicts, set_dicts, clear_dicts)
+            rows, group_starts = self._build_vdm_unified_flag_detail_table(
+                flag_dicts, count_dicts, set_dicts, clear_dicts)
             if not rows:
                 return None, last_update_time
-            return self._render_vdm_flag_detail_body(rows), last_update_time
+            return self._render_vdm_flag_detail_body(rows, group_starts), last_update_time
 
-        blocks = self._build_vdm_flag_table(interface_name, flag_dicts)
-        if not blocks:
+        rows = self._build_vdm_unified_flag_table(flag_dicts)
+        if not rows:
             return None, last_update_time
 
-        return self._render_vdm_flag_body(blocks), last_update_time
+        return tabulate(rows, VDM_FLAG_HEADER, disable_numparse=True), last_update_time
 
     def is_valid_physical_port(self, port_name):
         role = self.db.get(self.db.APPL_DB, 'PORT_TABLE:{}'.format(port_name), multi_asic.PORT_ROLE)

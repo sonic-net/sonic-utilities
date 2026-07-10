@@ -424,6 +424,71 @@ VDM_THRESHOLD_SUFFIXES = (
     ('lalarm', 'Low Alarm'),
 )
 
+# Column header for the unified `sfpshow vdm` value table.
+VDM_VALUE_HEADER = [
+    'Parameter', 'Unit', 'Lane', 'Current\nValue',
+    'Min', 'Avg', 'Max',
+    'Threshold\nHigh\nAlarm', 'Threshold\nHigh\nWarning',
+    'Threshold\nLow\nWarning', 'Threshold\nLow\nAlarm',
+]
+
+# Column header for the unified `sfpshow vdm flag` table.
+VDM_FLAG_HEADER = [
+    'Parameter', 'Lane',
+    'High Alarm\nFlag', 'High Warning\nFlag',
+    'Low Warning\nFlag', 'Low Alarm\nFlag',
+]
+
+# Column header for the unified `sfpshow vdm flag --detail` table.
+VDM_FLAG_DETAIL_HEADER = [
+    'Parameter', 'Lane', 'Detail',
+    'High Alarm', 'High Warning', 'Low Warning', 'Low Alarm',
+]
+
+# Ordered list of (display_name, unit, value_prefixes) tuples for `sfpshow vdm`.
+# value_prefixes maps optional keys 'curr', 'min', 'avg', 'max' to DB field
+# prefixes; the lane number is appended to form the STATE_DB key.
+VDM_ROW_SPECS = [
+    ('CD Long', 'ps/nm', {'curr': 'cdlong'}),
+    ('eSNR Media Input', 'dB', {'curr': 'esnr_media_input'}),
+    ('eSNR Host Input', 'dB', {'curr': 'esnr_host_input'}),
+    ('Errored Frames Media Input', 'N/A', {
+        'curr': 'errored_frames_curr_media_input',
+        'min':  'errored_frames_min_media_input',
+        'avg':  'errored_frames_avg_media_input',
+        'max':  'errored_frames_max_media_input',
+    }),
+    ('Errored Frames Host Input', 'N/A', {
+        'curr': 'errored_frames_curr_host_input',
+        'min':  'errored_frames_min_host_input',
+        'avg':  'errored_frames_avg_host_input',
+        'max':  'errored_frames_max_host_input',
+    }),
+    ('Laser Temperature', 'C', {'curr': 'laser_temperature_media'}),
+    ('Modulator Bias XI', '%', {'curr': 'biasxi'}),
+    ('Modulator Bias XP', '%', {'curr': 'biasxp'}),
+    ('Modulator Bias XQ', '%', {'curr': 'biasxq'}),
+    ('Modulator Bias YI', '%', {'curr': 'biasyi'}),
+    ('Modulator Bias YP', '%', {'curr': 'biasyp'}),
+    ('Modulator Bias YQ', '%', {'curr': 'biasyq'}),
+    ('PAM4 Level Transition Parameter Media Input', 'dB',
+     {'curr': 'pam4_level_transition_media_input'}),
+    ('PAM4 Level Transition Parameter Host Input', 'dB',
+     {'curr': 'pam4_level_transition_host_input'}),
+    ('Pre-FEC BER Media Input', 'N/A', {
+        'curr': 'prefec_ber_curr_media_input',
+        'min':  'prefec_ber_min_media_input',
+        'avg':  'prefec_ber_avg_media_input',
+        'max':  'prefec_ber_max_media_input',
+    }),
+    ('Pre-FEC BER Host Input', 'N/A', {
+        'curr': 'prefec_ber_curr_host_input',
+        'min':  'prefec_ber_min_host_input',
+        'avg':  'prefec_ber_avg_host_input',
+        'max':  'prefec_ber_max_host_input',
+    }),
+]
+
 def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
     key = 'application_advertisement'
     field_name = '{}{}: '.format(indent, QSFP_DATA_MAP[key])
