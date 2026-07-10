@@ -510,7 +510,10 @@ class TestPortStat(object):
     def test_show_intf_counters_fec_histogram_multi_asic_and_namespace(self):
         runner = CliRunner()
         with mock.patch('show.interfaces.clicommon.run_command') as mock_run, \
-                mock.patch('show.interfaces.multi_asic.is_multi_asic', return_value=True):
+                mock.patch('show.interfaces.multi_asic.is_multi_asic', return_value=True), \
+                mock.patch('utilities_common.multi_asic.multi_asic.is_multi_asic', return_value=True), \
+                mock.patch('utilities_common.multi_asic.multi_asic.get_namespace_list',
+                           return_value=['asic0', 'asic1']):
             result = runner.invoke(
                 show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"],
                 ["Ethernet0", "-n", "asic0", "-d", "all"])
