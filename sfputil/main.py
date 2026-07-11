@@ -731,7 +731,9 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
+@click.option('-n', '--page', metavar='<page_number>',
+              help="Display SFP EEPROM hexdump for <page_number> "
+                   "(decimal, hex (with 0x prefix) or octal (with 0o prefix))")
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
@@ -756,23 +758,25 @@ def eeprom_hexdump(port, page):
             lines.append(output)
         click.echo('\n'.join(lines))
 
-def validate_eeprom_page(page):
+
+def validate_eeprom_page(page: str) -> int:
     """
     Validate input page module EEPROM
     Args:
-        page: str page input by user
+        page: str page input by user (supports decimal, hex with 0x prefix, and octal with 0o prefix)
     Returns:
         int page
     """
     try:
-        page = int(str(page), base=16)
+        validated_page = int(page, base=0)
     except ValueError:
-        click.echo('Please enter a numeric page number')
+        click.echo(f'Please enter a numeric page number (decimal, hex with 0x prefix and octal with '
+                   f'0o prefix). Got: "{page}"')
         sys.exit(ERROR_NOT_IMPLEMENTED)
-    if page < 0 or page > MAX_EEPROM_PAGE:
-        click.echo(f'Error: Invalid page number {page}')
+    if validated_page < 0 or validated_page > MAX_EEPROM_PAGE:
+        click.echo(f'Error: Invalid page number {page}. Must be between 0 and {MAX_EEPROM_PAGE}')
         sys.exit(ERROR_INVALID_PAGE)
-    return page
+    return validated_page
 
 def eeprom_hexdump_single_port(logical_port_name, page):
     """
@@ -1137,7 +1141,8 @@ def error_status(port, fetch_from_hardware):
 # 'lpmode' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP low-power mode status for port <port_name> only")
-def lpmode(port):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def lpmode(port, use_lpmode_pin):
     """Display low-power mode status of SFP transceiver(s)"""
     logical_port_list = []
     output_table = []
@@ -1177,9 +1182,13 @@ def lpmode(port):
                     if not sfp.get_presence():
                         output_table.append([port_name, "Not Present"])
                         continue
-                    lpmode = sfp.get_lpmode()
-                except NotImplementedError:
-                    click.echo("This functionality is currently not implemented for this platform")
+                    if use_lpmode_pin:
+                        lpmode = sfp.get_lpmode_via_pin()
+                    else:
+                        lpmode = sfp.get_lpmode()
+                except (NotImplementedError, AttributeError) as e:
+                    click.echo("This functionality is currently not implemented for this platform "
+                               "({}: {})".format(type(e).__name__, e))
                     sys.exit(ERROR_NOT_IMPLEMENTED)
 
                 if lpmode:
@@ -1235,7 +1244,7 @@ def lpmode():
 
 
 # Helper method for setting low-power mode
-def set_lpmode(logical_port, enable):
+def set_lpmode(logical_port, enable, use_lpmode_pin=False):
     ganged = False
     i = 1
 
@@ -1265,9 +1274,13 @@ def set_lpmode(logical_port, enable):
             click.echo("{} low-power mode for port {} ... ".format(
                 "Enabling" if enable else "Disabling",
                 get_physical_port_name(logical_port, i, ganged)), nl=False)
-            result = sfp.set_lpmode(enable)
-        except NotImplementedError:
-            click.echo("This functionality is currently not implemented for this platform")
+            if use_lpmode_pin:
+                result = sfp.set_lpmode_via_pin(enable)
+            else:
+                result = sfp.set_lpmode(enable)
+        except (NotImplementedError, AttributeError) as e:
+            click.echo("This functionality is currently not implemented for this platform "
+                       "({}: {})".format(type(e).__name__, e))
             sys.exit(ERROR_NOT_IMPLEMENTED)
 
         if result:
@@ -1281,17 +1294,19 @@ def set_lpmode(logical_port, enable):
 # 'off' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def off(port_name):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def off(port_name, use_lpmode_pin):
     """Disable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, False)
+    set_lpmode(port_name, False, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'on' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def on(port_name):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def on(port_name, use_lpmode_pin):
     """Enable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, True)
+    set_lpmode(port_name, True, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'reset' subcommand
@@ -1812,7 +1827,9 @@ def target(port_name, target):
 # 'read-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-s', '--size', metavar='<size>', type=click.IntRange(1, MAX_EEPROM_OFFSET + 1), help="Size of byte to be read", required=True)
 @click.option('--no-format', is_flag=True, help="Display non formatted data")
@@ -1862,7 +1879,9 @@ def read_eeprom(port, page, offset, size, no_format, wire_addr):
 # 'write-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-d', '--data', metavar='<data>', help="Hex string EEPROM data", required=True)
 @click.option('--wire-addr', help="Wire address of sff8472")

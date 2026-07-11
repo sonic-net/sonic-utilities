@@ -46,6 +46,7 @@ def get_asic_name():
             spc3_hwskus = asic_mapping["mellanox_asics"]["spc3"]
             spc4_hwskus = asic_mapping["mellanox_asics"]["spc4"]
             spc5_hwskus = asic_mapping["mellanox_asics"]["spc5"]
+            spc6_hwskus = asic_mapping["mellanox_asics"]["spc6"]
             if hwsku.lower() in [spc1_hwsku.lower() for spc1_hwsku in spc1_hwskus]:
                 asic = "spc1"
                 return asic
@@ -60,6 +61,9 @@ def get_asic_name():
                 return asic
             if hwsku.lower() in [spc5_hwsku.lower() for spc5_hwsku in spc5_hwskus]:
                 asic = "spc5"
+                return asic
+            if hwsku.lower() in [spc6_hwsku.lower() for spc6_hwsku in spc6_hwskus]:
+                asic = "spc6"
                 return asic
         if asic_type == 'broadcom' or asic_type == 'vs':
             broadcom_asics = asic_mapping["broadcom_asics"]
@@ -213,6 +217,9 @@ def port_config_update_validator(scope, patch_element):
 
     def _validate_field(field, port, value):
         if field == "fec":
+            # For chassis, skip fec validation as desired fec is not in supported_fecs of StateDB.
+            if device_info.is_chassis():
+                return True
             supported_fecs_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_fecs")
             if supported_fecs_str:
                 if supported_fecs_str != 'N/A':

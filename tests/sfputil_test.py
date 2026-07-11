@@ -14,6 +14,8 @@ test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
+# sfputil.main imports sonic_platform at module level;
+# inject before importing so collection succeeds.
 sys.modules['sonic_platform'] = mock.MagicMock()
 import sfputil.main as sfputil
 
@@ -630,6 +632,43 @@ Ethernet0  N/A
         assert result.output == expected_output
 
     @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    def test_show_lpmode_use_lpmode_pin(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence = MagicMock(return_value=True)
+        mock_sfp.get_lpmode_via_pin = MagicMock(return_value=True)
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        runner = CliRunner()
+
+        result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == 0
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        mock_sfp.get_lpmode.assert_not_called()
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_lpmode_via_pin.reset_mock()
+        mock_sfp.get_lpmode_via_pin.side_effect = NotImplementedError
+        result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+        mock_sfp.get_lpmode_via_pin.reset_mock()
+        mock_sfp.get_lpmode_via_pin.side_effect = AttributeError
+        result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+    @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
     def test_power_RJ45(self, mock_chassis):
@@ -912,10 +951,12 @@ Ethernet0  N/A
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_sfp.read_eeprom = MagicMock(side_effect=side_effect)
         runner = CliRunner()
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "10"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x10"])
         assert result.exit_code == 0
         assert result.output == page10_expected_output
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "11"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x11"])
         assert result.exit_code == 0
         assert result.output == page11_expected_output
 
@@ -1068,7 +1109,7 @@ Ethernet0  N/A
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'])
         assert result.exit_code == 0
-        expected_output = """EEPROM hexdump for port Ethernet0
+        expected_output = r"""EEPROM hexdump for port Ethernet0
         Lower page 0h
         00000000 00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f |................|
         00000010 10 11 12 13 14 15 16 17  18 19 1a 1b 1c 1d 1e 1f |................|
@@ -1113,6 +1154,59 @@ EEPROM hexdump for port Ethernet4
 
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', 'invalid_number'])
         assert result.exit_code != 0
+
+    def test_validate_eeprom_page_decimal(self):
+        assert sfputil.validate_eeprom_page('0') == 0
+        assert sfputil.validate_eeprom_page('16') == 16
+        assert sfputil.validate_eeprom_page('255') == 255
+
+    def test_validate_eeprom_page_hex(self):
+        assert sfputil.validate_eeprom_page('0x0') == 0
+        assert sfputil.validate_eeprom_page('0x10') == 16
+        assert sfputil.validate_eeprom_page('0xff') == 255
+        assert sfputil.validate_eeprom_page('0xFF') == 255
+
+    def test_validate_eeprom_page_octal(self):
+        assert sfputil.validate_eeprom_page('0o0') == 0
+        assert sfputil.validate_eeprom_page('0o20') == 16
+        assert sfputil.validate_eeprom_page('0o377') == 255
+
+    def test_validate_eeprom_page_invalid_string(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('not_a_number')
+        assert exc_info.value.code == sfputil.ERROR_NOT_IMPLEMENTED
+
+    def test_validate_eeprom_page_out_of_range(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('256')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('-1')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+    def test_validate_eeprom_page_cli_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x10'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0xff'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_octal(self):
+        runner = CliRunner()
+        # octal input that maps to a valid page should be accepted
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0o20'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_out_of_range_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x100'])
+        assert result.exit_code == sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' in result.output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
@@ -1232,6 +1326,48 @@ EEPROM hexdump for port Ethernet4
         result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'], ["Ethernet0"])
         assert result.output == 'Enabling low-power mode is not applicable for RJ45 port Ethernet0.\n'
         assert result.exit_code == EXIT_FAIL
+
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.is_port_type_rj45')
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    def test_lpmode_set_use_lpmode_pin(self, mock_is_rj45, mock_chassis):
+        runner = CliRunner()
+        mock_is_rj45.return_value = False
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.set_lpmode_via_pin = MagicMock(return_value=True)
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == 0
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        mock_sfp.set_lpmode.assert_not_called()
+        assert result.output == "Enabling low-power mode for port Ethernet0 ... OK\n"
+
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['off'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == 0
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(False)
+        assert result.output == "Disabling low-power mode for port Ethernet0 ... OK\n"
+
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        mock_sfp.set_lpmode_via_pin.side_effect = NotImplementedError
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        mock_sfp.set_lpmode_via_pin.side_effect = AttributeError
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        assert "This functionality is currently not implemented for this platform" in result.output
 
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_chassis')
@@ -1930,20 +2066,17 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Ethernet0: Set loopback mode failed. Parameter is not supported\n'
         assert result.exit_code == EXIT_FAIL
 
+        # When the subport field cannot be read from CONFIG_DB, loopback should
+        # assume subport 0 and proceed instead of crashing.
+        mock_api.set_loopback_mode.side_effect = None
+        mock_api.set_loopback_mode.return_value = True
         mock_config_db = MagicMock()
         mock_config_db.get.side_effect = TypeError
         mock_config_db_connector.return_value = mock_config_db
         result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
                                ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
-        assert result.exit_code == EXIT_FAIL
-
-
-        mock_sonic_v2_connector.return_value = None
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
-                               ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
-        assert result.exit_code == EXIT_FAIL
+        assert result.output == 'Error: \nEthernet0: enable media-side-input loopback\n'
+        assert result.exit_code == 0
 
     @pytest.mark.parametrize(
         "direction, lane_count, enable, disable_func_result, cmis_version, output_dict, expected_echo, expected_exit",

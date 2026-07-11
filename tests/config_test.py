@@ -728,8 +728,12 @@ class TestConfigReload(object):
         open(cls.dummy_cfg_file, 'w').close()
 
     def test_config_reload(self, get_cmd_module, setup_single_broadcom_asic):
-        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
-            (config, show) = get_cmd_module
+        (config, show) = get_cmd_module
+
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch.object(config, "config_file_yang_validation") as mock_validate_config:
 
             jsonfile_config = os.path.join(mock_db_path, "config_db.json")
             jsonfile_init_cfg = os.path.join(mock_db_path, "init_cfg.json")
@@ -753,6 +757,132 @@ class TestConfigReload(object):
 
             assert "\n".join([line.rstrip() for line in result.output.split('\n')][:2]) == \
                 reload_config_with_sys_info_command_output.format(config.SYSTEM_RELOAD_LOCK)
+            mock_validate_config.assert_called_once_with(jsonfile_config)
+
+    def test_config_reload_default_config_validation_failure(self, get_cmd_module, setup_single_broadcom_asic):
+        (config, show) = get_cmd_module
+
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+
+        with mock.patch("utilities_common.cli.run_command") as mock_run_command, \
+                mock.patch.object(
+                    config, "config_file_yang_validation", side_effect=click.Abort) as mock_validate_config:
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["reload"], ["-y", "-n"])
+
+            assert result.exit_code != 0
+            mock_validate_config.assert_called_once_with(jsonfile_config)
+            mock_run_command.assert_not_called()
+
+    def test_config_reload_force_skips_validation(self, get_cmd_module, setup_single_broadcom_asic):
+        (config, show) = get_cmd_module
+
+        config.DEFAULT_CONFIG_DB_FILE = os.path.join(
+            mock_db_path, 'missing_config_db.json'
+        )
+
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch.object(config, "config_file_yang_validation") as mock_validate_config:
+            runner = CliRunner()
+            result = runner.invoke(
+                config.config.commands["reload"], ["-y", "-f", "-n"]
+            )
+
+            assert result.exit_code == 0
+            mock_validate_config.assert_not_called()
+
+    def test_config_reload_default_config_missing_file(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+
+        config.DEFAULT_CONFIG_DB_FILE = os.path.join(
+            mock_db_path, 'missing_config_db.json'
+        )
+
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            runner = CliRunner()
+            result = runner.invoke(
+                config.config.commands["reload"], ["-y", "-n"]
+            )
+
+            assert result.exit_code != 0
+            assert (
+                "The config file {} doesn't exist".format(
+                    config.DEFAULT_CONFIG_DB_FILE
+                ) in result.output
+            )
+            assert "Traceback" not in result.output
+            mock_run_command.assert_not_called()
+
+    def test_config_reload_default_config_invalid_json(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            with mock.patch('config.main.os.access', return_value=True):
+                with mock.patch.object(
+                    config,
+                    "config_file_yang_validation",
+                    side_effect=Exception("bad json"),
+                ):
+                    runner = CliRunner()
+                    result = runner.invoke(
+                        config.config.commands["reload"], ["-y", "-n"]
+                    )
+
+                    assert result.exit_code != 0
+                    assert (
+                        "Failed to read config file {}: bad json".format(
+                            jsonfile_config
+                        ) in result.output
+                    )
+                    assert "Traceback" not in result.output
+                    mock_run_command.assert_not_called()
+
+    def test_config_reload_default_config_invalid_root(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            with mock.patch('config.main.os.access', return_value=True):
+                with mock.patch.object(
+                    config,
+                    "config_file_yang_validation",
+                    return_value=False,
+                ) as mock_validate_config:
+                    runner = CliRunner()
+                    result = runner.invoke(
+                        config.config.commands["reload"], ["-y", "-n"]
+                    )
+
+                    assert result.exit_code != 0
+                    assert (
+                        "Invalid config file:'{}'!".format(
+                            jsonfile_config
+                        ) in result.output
+                    )
+                    mock_validate_config.assert_called_once_with(
+                        jsonfile_config
+                    )
+                    mock_run_command.assert_not_called()
 
     def test_config_reload_stdin(self, get_cmd_module, setup_single_broadcom_asic):
         def mock_json_load(f):
@@ -1110,6 +1240,53 @@ class TestConfigReloadMasic(object):
             assert result.exit_code == 0
             assert "\n".join([li.rstrip() for li in result.output.split('\n')]) == \
                 RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
+
+    def test_config_reload_default_files_validate_all_namespaces(self):
+        dummy_cfg_file = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db.json"
+        )
+        dummy_cfg_file_asic0 = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db0.json"
+        )
+        dummy_cfg_file_asic1 = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db1.json"
+        )
+        device_metadata = {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "some_platform",
+                    "mac": "02:42:f0:7f:01:05"
+                }
+            }
+        }
+        self._create_dummy_config(dummy_cfg_file, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(
+                            side_effect=mock_run_command_side_effect
+                        )), \
+                mock.patch.object(
+                    config, 'DEFAULT_CONFIG_DB_FILE', dummy_cfg_file
+                ), \
+                mock.patch(
+                    'config.main.config_file_yang_validation',
+                    return_value=True
+                ) as mock_validate_config:
+            runner = CliRunner()
+
+            result = runner.invoke(
+                config.config.commands["reload"], ['-y', '-n']
+            )
+
+            assert result.exit_code == 0
+            assert mock_validate_config.call_count == 3
+            assert mock_validate_config.call_args_list == [
+                mock.call(dummy_cfg_file),
+                mock.call(dummy_cfg_file_asic0),
+                mock.call(dummy_cfg_file_asic1),
+            ]
 
     @classmethod
     def teardown_class(cls):
@@ -4200,6 +4377,40 @@ class TestConfigInterface(object):
         assert result.exit_code == 0
         assert db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['admin_status'] == 'up'
 
+    @pytest.mark.parametrize("interface_name", [
+        "Ethernet320-Ethernet376",  # range bounds not numeric
+        "Ethernet0-",               # missing end of range
+        "Ethernet0-foo",            # non-numeric end of range
+        "Eth0-3",                   # range with unsupported prefix
+        "Ethernet8-4",              # start of range greater than the end
+    ])
+    def test_startup_malformed_range(self, interface_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands['interface'].commands['startup'],
+                               [interface_name], obj=obj)
+        assert result.exit_code != 0
+        assert "Invalid interface range" in result.output
+
+    @pytest.mark.parametrize("interface_name", [
+        "Ethernet320-Ethernet376",  # range bounds not numeric
+        "Ethernet0-",               # missing end of range
+        "Ethernet0-foo",            # non-numeric end of range
+        "Eth0-3",                   # range with unsupported prefix
+        "Ethernet8-4",              # start of range greater than the end
+    ])
+    def test_shutdown_malformed_range(self, interface_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands['interface'].commands['shutdown'],
+                               [interface_name], obj=obj)
+        assert result.exit_code != 0
+        assert "Invalid interface range" in result.output
+
     def teardown_method(self):
         print("TEARDOWN")
 
@@ -5290,3 +5501,65 @@ class TestConfigBanner(object):
     @classmethod
     def teardown_class(cls):
         print('TEARDOWN')
+
+
+class TestSwssReady(object):
+    """Tests for the 'config reload' swss readiness gate on platforms without
+    swss (e.g. BMC), plus regression guards for normal switches."""
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        import config.main
+        importlib.reload(config.main)
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+
+    def test_swss_ready_when_service_not_found(self):
+        # BMC: swss not built in -> not-found -> ready, only LoadState queried.
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(return_value=("not-found", 0))) as mock_run:
+            assert config._per_namespace_swss_ready("swss.service") is True
+            assert mock_run.call_count == 1
+
+    def test_swss_ready_when_service_masked(self):
+        # Masked service -> ready, same as not-found.
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(return_value=("masked", 0))) as mock_run:
+            assert config._per_namespace_swss_ready("swss.service") is True
+            assert mock_run.call_count == 1
+
+    def test_swss_not_ready_when_loaded_but_inactive(self):
+        # Switch still booting: loaded but inactive -> not ready.
+        side_effect = [("loaded", 0), ("inactive", 0)]
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)):
+            assert config._per_namespace_swss_ready("swss.service") is False
+
+    def test_swss_not_ready_when_active_but_not_settled(self):
+        # Active for < 120s -> not ready.
+        side_effect = [("loaded", 0), ("active", 0), ("1000000000", 0)]  # up = 1000s
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)), \
+                mock.patch('config.main.time.monotonic',
+                           mock.MagicMock(return_value=1050.0)):  # 50s < 120s
+            assert config._per_namespace_swss_ready("swss.service") is False
+
+    def test_swss_ready_when_active_and_settled(self):
+        # Active for > 120s -> ready.
+        side_effect = [("loaded", 0), ("active", 0), ("1000000000", 0)]  # up = 1000s
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)), \
+                mock.patch('config.main.time.monotonic',
+                           mock.MagicMock(return_value=2000.0)):  # 1000s > 120s
+            assert config._per_namespace_swss_ready("swss.service") is True
+
+    def test_swss_ready_single_asic_not_found(self):
+        # _swss_ready() end-to-end, single-ASIC, swss not-found.
+        with mock.patch('config.main.multi_asic.get_num_asics',
+                        mock.MagicMock(return_value=1)), \
+                mock.patch('config.main.clicommon.run_command',
+                           mock.MagicMock(return_value=("not-found", 0))):
+            assert config._swss_ready() is True

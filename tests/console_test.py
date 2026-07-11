@@ -15,7 +15,7 @@ import tests.mock_tables.dbconnector
 from click.testing import CliRunner
 from utilities_common.db import Db
 from consutil.lib import ConsolePortProvider, ConsolePortInfo, ConsoleSession, SysInfoProvider, DbUtils, \
-    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError
+    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError, console_connect
 from sonic_py_common import device_info
 from jsonpatch import JsonPatchConflict
 
@@ -1420,6 +1420,19 @@ class TestConsutilConnect(object):
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         assert result.output == "Successful connection to line [1]\nPress ^A ^X to disconnect\n"
+
+    @mock.patch('consutil.lib.SysInfoProvider.list_console_ttys', mock.MagicMock(return_value=["/dev/ttyUSB1"]))
+    @mock.patch('consutil.lib.SysInfoProvider.init_device_prefix', mock.MagicMock(return_value=None))
+    @mock.patch('consutil.lib.ConsolePortInfo.connect',
+                mock.MagicMock(return_value=mock.MagicMock(interact=mock.MagicMock(return_value=None))))
+    def test_console_connect_without_db(self):
+        prepared_db = Db()
+        prepared_db.cfgdb.set_entry("CONSOLE_SWITCH", "console_mgmt", {"enabled": "yes"})
+        prepared_db.cfgdb.set_entry("CONSOLE_PORT", 1, {"remote_device": "switch1", "baud_rate": "9600"})
+
+        with mock.patch('utilities_common.db.Db', return_value=prepared_db) as mock_db_cls:
+            console_connect('1')
+            mock_db_cls.assert_called_once()
 
 
 class TestConsutilClear(object):
