@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -530,6 +531,60 @@ class TestClearLlrCounters(object):
         )
         print(result.output)
         assert "not found" in result.output
+
+    def test_clear_llr_counters_interface_preserves_others(self):
+        """A per-interface clear must refresh only that interface's baseline
+        and leave the other interfaces' cached baseline untouched."""
+        runner = CliRunner()
+
+        # Start from a clean cache so this test is self-contained.
+        _del_llr_cached_stats()
+        try:
+            # Clear all first so the baseline holds every LLR port.
+            result = runner.invoke(
+                clear.cli.commands["llr"].commands["counters"], []
+            )
+            print(result.output)
+            assert result.exit_code == 0
+
+            baseline_file = os.path.join(
+                UserCache("llrstat").get_directory(), "llrstat"
+            )
+            with open(baseline_file) as f:
+                baseline_all = json.load(f)
+            assert "Ethernet0" in baseline_all
+            assert "Ethernet4" in baseline_all
+
+            # Overwrite both interfaces' cached values with a recognizable
+            # sentinel so we can tell which entries actually get refreshed by
+            # the subsequent per-interface clear.  A string marker is used
+            # deliberately: real counter values are numeric, so the sentinel
+            # can never collide with a re-snapshotted value.
+            sentinel = {k: "SENTINEL" for k in baseline_all["Ethernet0"]}
+            assert sentinel, "expected non-empty LLR counters in the baseline"
+            baseline_all["Ethernet0"] = dict(sentinel)
+            baseline_all["Ethernet4"] = dict(sentinel)
+            with open(baseline_file, "w") as f:
+                json.dump(baseline_all, f)
+
+            # Clear only Ethernet0.
+            result = runner.invoke(
+                clear.cli.commands["llr"].commands["counters"].commands["interface"],
+                ["Ethernet0"]
+            )
+            print(result.output)
+            assert result.exit_code == 0
+
+            with open(baseline_file) as f:
+                baseline_after = json.load(f)
+            # Ethernet4 must be preserved and untouched,
+            assert baseline_after.get("Ethernet4") == sentinel
+
+            # Ethernet0 must have been refreshed to the real counter values.
+            assert "Ethernet0" in baseline_after
+            assert baseline_after["Ethernet0"] != sentinel
+        finally:
+            _del_llr_cached_stats()
 
 
 ###############################################################################

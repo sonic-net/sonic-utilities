@@ -304,7 +304,7 @@ class Llrstat(object):
             print("COUNTERS_PORT_NAME_MAP not found.")
             return
 
-        snapshot = {}
+        snapshot = dict(self.baseline) if self.baseline else {}
         for port in llr_ports:
             port_oid = self.port_name_map.get(port)
             if not port_oid:
