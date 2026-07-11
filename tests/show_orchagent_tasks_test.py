@@ -74,13 +74,13 @@ def test_tasks_renders_table_sorted_by_total(fake_swsscommon):
     assert len(lines) >= 8
     # The combined header text appears across the first few lines.
     header_block = "\n".join(lines[:3])
-    assert "TASK"          in header_block
-    assert "RUN TIME"      in header_block
+    assert "TASK" in header_block
+    assert "RUN TIME" in header_block
     assert "median/q1/q3/max" in header_block
-    assert "RUNS"          in header_block
-    assert "OUTLIERS"      in header_block
+    assert "RUNS" in header_block
+    assert "OUTLIERS" in header_block
     assert "SCHED LATENCY" in header_block
-    assert "TOTAL"         in header_block
+    assert "TOTAL" in header_block
 
     # Rows are sorted by total_run_ns descending.
     body = lines[3:]

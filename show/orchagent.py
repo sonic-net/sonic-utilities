@@ -68,20 +68,20 @@ def _parse_stats(fvs):
             # Skip malformed rows rather than failing the whole table.
             continue
         try:
-            count            = int(parts[0])
-            total_ns         = int(parts[1])
-            median_ns        = int(parts[2])
-            q1_ns            = int(parts[3])
-            q3_ns            = int(parts[4])
-            max_ns           = int(parts[5])
-            high_outliers    = int(parts[6])
-            low_outliers     = int(parts[7])
-            sched_count      = int(parts[8])
-            total_sched_ns   = int(parts[9])
-            sched_median_ns  = int(parts[10])
-            sched_q1_ns      = int(parts[11])
-            sched_q3_ns      = int(parts[12])
-            sched_max_ns     = int(parts[13])
+            count = int(parts[0])
+            total_ns = int(parts[1])
+            median_ns = int(parts[2])
+            q1_ns = int(parts[3])
+            q3_ns = int(parts[4])
+            max_ns = int(parts[5])
+            high_outliers = int(parts[6])
+            low_outliers = int(parts[7])
+            sched_count = int(parts[8])
+            total_sched_ns = int(parts[9])
+            sched_median_ns = int(parts[10])
+            sched_q1_ns = int(parts[11])
+            sched_q3_ns = int(parts[12])
+            sched_max_ns = int(parts[13])
         except ValueError:
             continue
         rows.append({
@@ -112,24 +112,24 @@ def _render_table(rows):
     table = []
     for r in rows:
         if r["count"] == 0:
-            run_quartet  = "-"
-            total_run    = "-"
+            run_quartet = "-"
+            total_run = "-"
         else:
-            run_quartet  = _fmt_quartet(r["median_ns"],
-                                        r["q1_ns"],
-                                        r["q3_ns"],
-                                        r["max_ns"])
-            total_run    = f"{_ms(r['total_ns']):.2f}"
+            run_quartet = _fmt_quartet(r["median_ns"],
+                                       r["q1_ns"],
+                                       r["q3_ns"],
+                                       r["max_ns"])
+            total_run = f"{_ms(r['total_ns']):.2f}"
 
         if r["sched_count"] == 0:
             sched_quartet = "-"
-            total_sched   = "-"
+            total_sched = "-"
         else:
             sched_quartet = _fmt_quartet(r["sched_median_ns"],
                                          r["sched_q1_ns"],
                                          r["sched_q3_ns"],
                                          r["sched_max_ns"])
-            total_sched   = f"{_ms(r['total_sched_ns']):.2f}"
+            total_sched = f"{_ms(r['total_sched_ns']):.2f}"
 
         # TOTAL column shows "<run>/<sched>" so a viewer can see at a
         # glance how much wall-clock the loop spent inside the task vs
