@@ -671,6 +671,7 @@ def faults(db, status_filter, component_filter, detail, json_output):
             fault.get("rule", ""),
             fault.get("occurrences", ""),
             fault.get("last_detection_time", ""),
+            fault.get("reason", ""),
             fault.get("description", ""),
         )
         for fault in faults
@@ -686,6 +687,7 @@ def faults(db, status_filter, component_filter, detail, json_output):
             "Rule",
             "Occurrences",
             "Last detection",
+            "Reason",
             "Description",
         ),
     )
@@ -730,6 +732,7 @@ def faults(db, status_filter, component_filter, detail, json_output):
                 fault.get("remote_action_time_window", ""),
             ),
             ("Source stale", fault.get("source_stale", False)),
+            ("Reason", fault.get("reason", "")),
             ("Description", fault.get("description", "")),
         ]
         _print_table(scalar_rows, ("Field", "Value"))
