@@ -24,6 +24,18 @@ def mock_logical_port_name_to_physical_port_list(port_name):
         index = 0
     return [index]
 
+
+def mock_logical_port_to_physical_port_index(port_name):
+    physical_ports = mock_logical_port_name_to_physical_port_list(port_name)
+    if not physical_ports or physical_ports[0] is None:
+        return None
+    return physical_ports[0]
+
+
+def mock_is_sfp_present(port_name):
+    return True
+
+
 def mock_platform_sfputil_read_porttab_mappings():
     global portMap
     global RJ45Ports
@@ -46,4 +58,6 @@ def mock_platform_sfputil_helper():
     platform_sfputil_helper.platform_porttab_mapping_read = False
     platform_sfputil_helper.platform_sfputil_read_porttab_mappings = mock_platform_sfputil_read_porttab_mappings
     platform_sfputil_helper.logical_port_name_to_physical_port_list = mock_logical_port_name_to_physical_port_list
+    platform_sfputil_helper.logical_port_to_physical_port_index = mock_logical_port_to_physical_port_index
+    platform_sfputil_helper.is_sfp_present = mock_is_sfp_present
     platform_sfputil_helper.get_first_subport = mock_get_first_subport

@@ -114,6 +114,123 @@ QSFP_DD_DATA_MAP = {
     'supported_min_laser_freq': 'Supported Min Laser Frequency'
 }
 
+CPO_TRANSCEIVER_INFO_MAP = {
+    'els_type': 'ELS type',
+    'els_type_abbrv_name': 'ELS type_abbrv_name',
+    'els_hardware_rev': 'ELS hardware_rev',
+    'els_serial': 'ELS serial',
+    'els_manufacturer': 'ELS manufacturer',
+    'els_model': 'ELS model',
+    'els_connector': 'ELS connector',
+    'els_ext_identifier': 'ELS ext_identifier',
+    'els_cable_type': 'ELS cable_type',
+    'els_vendor_date': 'ELS vendor_date',
+    'els_vendor_oui': 'ELS vendor_oui',
+    'els_vendor_rev': 'ELS vendor_rev',
+    'els_cmis_rev': 'ELS cmis_rev',
+}
+
+CMIS_CPO_TRANSCEIVER_INFO_DATA_MAP = {**QSFP_DD_DATA_MAP, **CPO_TRANSCEIVER_INFO_MAP}
+
+CPO_DOM_CHANNEL_MONITOR_MAP = {
+    'els_bias_current_monitor1': 'ELS Lane1BiasMonitor',
+    'els_bias_current_monitor2': 'ELS Lane2BiasMonitor',
+    'els_bias_current_monitor3': 'ELS Lane3BiasMonitor',
+    'els_bias_current_monitor4': 'ELS Lane4BiasMonitor',
+    'els_bias_current_monitor5': 'ELS Lane5BiasMonitor',
+    'els_bias_current_monitor6': 'ELS Lane6BiasMonitor',
+    'els_bias_current_monitor7': 'ELS Lane7BiasMonitor',
+    'els_bias_current_monitor8': 'ELS Lane8BiasMonitor',
+}
+
+CPO_DOM_MODULE_MONITOR_MAP = {
+    'els_temperature': 'ELS temperature',
+    'els_voltage': 'ELS voltage',
+    'els_voltage_monitor1': 'ELS voltage monitor (lane 1)',
+    'els_opt_power_monitor1': 'ELS optical power monitor (lane 1)',
+    'els_voltage_monitor2': 'ELS voltage monitor (lane 2)',
+    'els_opt_power_monitor2': 'ELS optical power monitor (lane 2)',
+    'els_voltage_monitor3': 'ELS voltage monitor (lane 3)',
+    'els_opt_power_monitor3': 'ELS optical power monitor (lane 3)',
+    'els_voltage_monitor4': 'ELS voltage monitor (lane 4)',
+    'els_opt_power_monitor4': 'ELS optical power monitor (lane 4)',
+    'els_voltage_monitor5': 'ELS voltage monitor (lane 5)',
+    'els_opt_power_monitor5': 'ELS optical power monitor (lane 5)',
+    'els_voltage_monitor6': 'ELS voltage monitor (lane 6)',
+    'els_opt_power_monitor6': 'ELS optical power monitor (lane 6)',
+    'els_voltage_monitor7': 'ELS voltage monitor (lane 7)',
+    'els_opt_power_monitor7': 'ELS optical power monitor (lane 7)',
+    'els_voltage_monitor8': 'ELS voltage monitor (lane 8)',
+    'els_opt_power_monitor8': 'ELS optical power monitor (lane 8)'
+}
+
+CPO_DOM_VALUE_UNIT_MAP = {
+    'els_bias_current_monitor1': 'mA',
+    'els_bias_current_monitor2': 'mA',
+    'els_bias_current_monitor3': 'mA',
+    'els_bias_current_monitor4': 'mA',
+    'els_bias_current_monitor5': 'mA',
+    'els_bias_current_monitor6': 'mA',
+    'els_bias_current_monitor7': 'mA',
+    'els_bias_current_monitor8': 'mA',
+    'els_temperature': 'C',
+    'els_voltage': 'Volts',
+    'els_voltage_monitor1': 'Volts',
+    'els_opt_power_monitor1': 'dBm',
+    'els_voltage_monitor2': 'Volts',
+    'els_opt_power_monitor2': 'dBm',
+    'els_voltage_monitor3': 'Volts',
+    'els_opt_power_monitor3': 'dBm',
+    'els_voltage_monitor4': 'Volts',
+    'els_opt_power_monitor4': 'dBm',
+    'els_voltage_monitor5': 'Volts',
+    'els_opt_power_monitor5': 'dBm',
+    'els_voltage_monitor6': 'Volts',
+    'els_opt_power_monitor6': 'dBm',
+    'els_voltage_monitor7': 'Volts',
+    'els_opt_power_monitor7': 'dBm',
+    'els_voltage_monitor8': 'Volts',
+    'els_opt_power_monitor8': 'dBm'
+}
+
+CPO_DOM_MODULE_THRESHOLD_MAP = {
+    'els_temphighalarm': 'ELS TempHighAlarm',
+    'els_templowalarm': 'ELS TempLowAlarm',
+    'els_temphighwarning': 'ELS TempHighWarning',
+    'els_templowwarning': 'ELS TempLowWarning',
+    'els_vcchighalarm': 'ELS VccHighAlarm',
+    'els_vcclowalarm': 'ELS VccLowAlarm',
+    'els_vcchighwarning': 'ELS VccHighWarning',
+    'els_vcclowwarning': 'ELS VccLowWarning',
+    'els_optpowerhighalarm': 'ELS OpticalPowerHighAlarm',
+    'els_optpowerlowalarm': 'ELS OpticalPowerLowAlarm',
+    'els_optpowerhighwarning': 'ELS OpticalPowerHighWarning',
+    'els_optpowerlowwarning': 'ELS OpticalPowerLowWarning',
+    'els_biashighalarm': 'ELS BiasHighAlarm',
+    'els_biaslowalarm': 'ELS BiasLowAlarm',
+    'els_biashighwarning': 'ELS BiasHighWarning',
+    'els_biaslowwarning': 'ELS BiasLowWarning',
+}
+
+CPO_DOM_MODULE_THRESHOLD_UNIT_MAP = {
+    'els_temphighalarm': 'C',
+    'els_templowalarm': 'C',
+    'els_temphighwarning': 'C',
+    'els_templowwarning': 'C',
+    'els_vcchighalarm': 'Volts',
+    'els_vcclowalarm': 'Volts',
+    'els_vcchighwarning': 'Volts',
+    'els_vcclowwarning': 'Volts',
+    'els_optpowerhighalarm': 'dBm',
+    'els_optpowerlowalarm': 'dBm',
+    'els_optpowerhighwarning': 'dBm',
+    'els_optpowerlowwarning': 'dBm',
+    'els_biashighalarm': 'mA',
+    'els_biaslowalarm': 'mA',
+    'els_biashighwarning': 'mA',
+    'els_biaslowwarning': 'mA'
+}
+
 SFP_DOM_CHANNEL_MONITOR_MAP = {
     'rx1power': 'RXPower',
     'tx1bias': 'TXBias',
@@ -276,6 +393,12 @@ QSFP_DD_DOM_VALUE_UNIT_MAP = {
     'voltage': 'Volts'
 }
 
+CMIS_CPO_DOM_CHANNEL_MONITOR_MAP = {**CMIS_DOM_CHANNEL_MONITOR_MAP, **CPO_DOM_CHANNEL_MONITOR_MAP}
+CMIS_CPO_DOM_VALUE_UNIT_MAP = {**QSFP_DD_DOM_VALUE_UNIT_MAP, **CPO_DOM_VALUE_UNIT_MAP}
+CMIS_CPO_DOM_MODULE_MONITOR_MAP = {**DOM_MODULE_MONITOR_MAP, **CPO_DOM_MODULE_MONITOR_MAP}
+CMIS_CPO_DOM_MODULE_THRESHOLD_MAP = {**DOM_MODULE_THRESHOLD_MAP, **CPO_DOM_MODULE_THRESHOLD_MAP}
+CMIS_CPO_DOM_MODULE_THRESHOLD_UNIT_MAP = {**DOM_MODULE_THRESHOLD_UNIT_MAP, **CPO_DOM_MODULE_THRESHOLD_UNIT_MAP}
+
 RJ45_PORT_TYPE = 'RJ45'
 
 # Global platform-specific Chassis class instance
@@ -332,7 +455,6 @@ def format_dict_value_to_string(sorted_key_table,
                                             units)
     return output
 
-
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
@@ -342,8 +464,11 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
         return output
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     if is_sfp_cmis:
+        default_data_map = QSFP_DD_DATA_MAP
+        if sfp_info_dict.get('type', '').startswith('CPO'):
+            default_data_map = CMIS_CPO_TRANSCEIVER_INFO_DATA_MAP
         # Use the utility function with the local QSFP_DD_DATA_MAP for CMIS transceivers
-        get_sort_key = get_data_map_sort_key(sfp_info_dict, QSFP_DD_DATA_MAP)
+        get_sort_key = get_data_map_sort_key(sfp_info_dict, default_data_map)
         sorted_qsfp_dd_info_keys = sorted(sfp_info_dict.keys(), key=get_sort_key)
         for key in sorted_qsfp_dd_info_keys:
             if key == 'cable_type':
@@ -351,18 +476,18 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
             elif key == 'cable_length':
                 pass
             elif key == 'specification_compliance':
-                output += '{}{}: {}\n'.format(indent, QSFP_DD_DATA_MAP[key], sfp_info_dict[key])
+                output += '{}{}: {}\n'.format(indent, default_data_map[key], sfp_info_dict[key])
             elif key == 'supported_max_tx_power' or key == 'supported_min_tx_power':
                 if key in sfp_info_dict:  # C-CMIS compliant / coherent modules
-                    output += '{}{}: {}dBm\n'.format(indent, QSFP_DD_DATA_MAP[key], sfp_info_dict[key])
+                    output += '{}{}: {}dBm\n'.format(indent, default_data_map[key], sfp_info_dict[key])
             elif key == 'supported_max_laser_freq' or key == 'supported_min_laser_freq':
                 if key in sfp_info_dict:  # C-CMIS compliant / coherent modules
-                    output += '{}{}: {}GHz\n'.format(indent, QSFP_DD_DATA_MAP[key], sfp_info_dict[key])
+                    output += '{}{}: {}GHz\n'.format(indent, default_data_map[key], sfp_info_dict[key])
             elif key == 'application_advertisement':
                 output += covert_application_advertisement_to_output_string(indent, sfp_info_dict)
             else:
                 # For both known and unknown keys, use the data map display name if available
-                display_name = QSFP_DD_DATA_MAP.get(key, key)  # Use data_map name if available, otherwise use key
+                display_name = default_data_map.get(key, key)  # Use data_map name if available, otherwise use key
                 output += '{}{}: {}\n'.format(indent, display_name, sfp_info_dict.get(key, 'N/A'))
 
     else:
@@ -394,21 +519,24 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
 
 
 # Convert DOM sensor info in DB to CLI output string
-def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
+def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict, sfp=None):
     indent = ' ' * 8
     output_dom = ''
     channel_threshold_align = 18
     module_threshold_align = 15
 
     if sfp_type.startswith('QSFP') or is_sfp_cmis:
+        is_cpo = sfp_type.startswith('CPO')
         # Channel Monitor
         if is_sfp_cmis:
             output_dom += (indent + 'ChannelMonitorValues:\n')
-            sorted_key_table = natsorted(CMIS_DOM_CHANNEL_MONITOR_MAP)
+            dom_channel_monitor_map = CMIS_CPO_DOM_CHANNEL_MONITOR_MAP if is_cpo else CMIS_DOM_CHANNEL_MONITOR_MAP
+            dom_value_unit_map = CMIS_CPO_DOM_VALUE_UNIT_MAP if is_cpo else QSFP_DD_DOM_VALUE_UNIT_MAP
+            sorted_key_table = natsorted(dom_channel_monitor_map)
             output_channel = format_dict_value_to_string(
                 sorted_key_table, dom_info_dict,
-                CMIS_DOM_CHANNEL_MONITOR_MAP,
-                QSFP_DD_DOM_VALUE_UNIT_MAP)
+                dom_channel_monitor_map,
+                dom_value_unit_map)
             output_dom += output_channel
         else:
             output_dom += (indent + 'ChannelMonitorValues:\n')
@@ -420,10 +548,7 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
             output_dom += output_channel
 
         # Channel Threshold
-        if is_sfp_cmis:
-            dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP
-        else:
-            dom_map = QSFP_DOM_CHANNEL_THRESHOLD_MAP
+        dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP if is_sfp_cmis else QSFP_DOM_CHANNEL_THRESHOLD_MAP
 
         output_dom += (indent + 'ChannelThresholdValues:\n')
         sorted_key_table = natsorted(dom_map)
@@ -436,20 +561,24 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
 
         # Module Monitor
         output_dom += (indent + 'ModuleMonitorValues:\n')
-        sorted_key_table = natsorted(DOM_MODULE_MONITOR_MAP)
+        module_monitor_map = CMIS_CPO_DOM_MODULE_MONITOR_MAP if is_cpo else DOM_MODULE_MONITOR_MAP
+        module_monitor_unit_map = CMIS_CPO_DOM_VALUE_UNIT_MAP if is_cpo else DOM_VALUE_UNIT_MAP
+        sorted_key_table = natsorted(module_monitor_map)
         output_module = format_dict_value_to_string(
             sorted_key_table, dom_info_dict,
-            DOM_MODULE_MONITOR_MAP,
-            DOM_VALUE_UNIT_MAP)
+            module_monitor_map,
+            module_monitor_unit_map)
         output_dom += output_module
 
         # Module Threshold
         output_dom += (indent + 'ModuleThresholdValues:\n')
-        sorted_key_table = natsorted(DOM_MODULE_THRESHOLD_MAP)
+        module_threshold_map = CMIS_CPO_DOM_MODULE_THRESHOLD_MAP if is_cpo else DOM_MODULE_THRESHOLD_MAP
+        module_threshold_unit_map = CMIS_CPO_DOM_MODULE_THRESHOLD_UNIT_MAP if is_cpo else DOM_MODULE_THRESHOLD_UNIT_MAP
+        sorted_key_table = natsorted(module_threshold_map)
         output_module_threshold = format_dict_value_to_string(
             sorted_key_table, dom_info_dict,
-            DOM_MODULE_THRESHOLD_MAP,
-            DOM_MODULE_THRESHOLD_UNIT_MAP,
+            module_threshold_map,
+            module_threshold_unit_map,
             module_threshold_align)
         output_dom += output_module_threshold
 
@@ -488,6 +617,16 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
             DOM_CHANNEL_THRESHOLD_UNIT_MAP,
             channel_threshold_align)
         output_dom += output_channel_threshold
+
+    if sfp is not None:
+        platform_dom_map, platform_dom_unit_map = sfp.get_platform_specific_dom_format_map()
+        output_dom += (indent + 'PlatformSpecificDomValues:\n')
+        sorted_key_table = natsorted(platform_dom_map)
+        output_platform_dom = format_dict_value_to_string(
+            sorted_key_table, dom_info_dict,
+            platform_dom_map,
+            platform_dom_unit_map)
+        output_dom += output_platform_dom
 
     return output_dom
 
@@ -674,8 +813,10 @@ def eeprom(port, dump_dom, namespace):
                 output += '\n'
                 continue
 
+            sfp = platform_chassis.get_sfp(physical_port)
+
             try:
-                presence = platform_chassis.get_sfp(physical_port).get_presence()
+                presence = sfp.get_presence()
             except NotImplementedError:
                 click.echo("Sfp.get_presence() is currently not implemented for this platform")
                 sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -686,7 +827,7 @@ def eeprom(port, dump_dom, namespace):
                 output += "{}: SFP EEPROM detected\n".format(port_name)
 
                 try:
-                    xcvr_info = platform_chassis.get_sfp(physical_port).get_transceiver_info()
+                    xcvr_info = sfp.get_transceiver_info()
                     is_sfp_cmis = is_transceiver_cmis(xcvr_info)
                 except NotImplementedError:
                     click.echo("Sfp.get_transceiver_info() is currently not implemented for this platform")
@@ -696,7 +837,7 @@ def eeprom(port, dump_dom, namespace):
 
                 if dump_dom:
                     try:
-                        api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
+                        api = sfp.get_xcvr_api()
                     except NotImplementedError:
                         output += "API is currently not implemented for this platform\n"
                         click.echo(output)
@@ -706,14 +847,14 @@ def eeprom(port, dump_dom, namespace):
                         click.echo(output)
                         sys.exit(ERROR_NOT_IMPLEMENTED)
                     try:
-                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
+                        xcvr_dom_info = sfp.get_transceiver_dom_real_value()
                     except NotImplementedError:
                         click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
                                    "for this platform")
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
                     try:
-                        xcvr_dom_threshold_info = platform_chassis.get_sfp(physical_port).get_transceiver_threshold_info()
+                        xcvr_dom_threshold_info = sfp.get_transceiver_threshold_info()
                         if xcvr_dom_threshold_info:
                             xcvr_dom_info.update(xcvr_dom_threshold_info)
                     except NotImplementedError:
@@ -721,7 +862,7 @@ def eeprom(port, dump_dom, namespace):
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
                     output += convert_dom_to_output_string(xcvr_info['type'],
-                                                           is_sfp_cmis, xcvr_dom_info)
+                                                           is_sfp_cmis, xcvr_dom_info, sfp)
 
             output += '\n'
 

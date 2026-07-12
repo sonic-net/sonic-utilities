@@ -67,9 +67,56 @@ EMPTY_DOM_VALUES = """        ChannelMonitorValues:
         ChannelThresholdValues:
         ModuleMonitorValues:
         ModuleThresholdValues:
+        PlatformSpecificDomValues:
 
 
 """
+
+CPO_MODULE_EEPROM_SFP_INFO_DICT = {
+    'type': 'CPO',
+    'type_abbrv_name': 'CPO',
+    'cmis_rev': '5.0',
+    'manufacturer': 'Mellanox',
+    'model': 'CPO-MOD',
+    'vendor_rev': 'A',
+    'serial': 'SN',
+    'vendor_oui': '00-00-00',
+    'vendor_date': '2024-01-01',
+    'application_advertisement': 'N/A',
+    'specification_compliance': 'sm',
+    'els_serial': 'ELS-SN-99',
+}
+
+CPO_DOM_FOR_EEPROM_TEST = {
+    'temperature': '41.0C',
+    'voltage': '3.2Volts',
+    'rx1power': '-1.0dBm',
+    'rx2power': '-1.0dBm',
+    'rx3power': '-1.0dBm',
+    'rx4power': '-1.0dBm',
+    'rx5power': '-1.0dBm',
+    'rx6power': '-1.0dBm',
+    'rx7power': '-1.0dBm',
+    'rx8power': '-1.0dBm',
+    'tx1bias': '30.0mA',
+    'tx2bias': '30.0mA',
+    'tx3bias': '30.0mA',
+    'tx4bias': '30.0mA',
+    'tx5bias': '30.0mA',
+    'tx6bias': '30.0mA',
+    'tx7bias': '30.0mA',
+    'tx8bias': '30.0mA',
+    'tx1power': 'N/A',
+    'tx2power': 'N/A',
+    'tx3power': 'N/A',
+    'tx4power': 'N/A',
+    'tx5power': 'N/A',
+    'tx6power': 'N/A',
+    'tx7power': 'N/A',
+    'tx8power': 'N/A',
+    'els_bias_current_monitor1': '12.0',
+    'els_temperature': '42.0',
+}
 
 class TestSfputil(object):
     def test_format_dict_value_to_string(self):
@@ -417,6 +464,25 @@ class TestSfputil(object):
         output = sfputil.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
         assert output == expected_output
 
+    def test_convert_sfp_info_to_output_string_cpo_els(self):
+        """CMIS CPO transceiver info: els_* keys use CPO_TRANSCEIVER_INFO_MAP labels."""
+        sfp_info_dict = dict(CPO_MODULE_EEPROM_SFP_INFO_DICT)
+        sfp_info_dict['els_manufacturer'] = 'ELS-Maker'
+        output = sfputil.convert_sfp_info_to_output_string(sfp_info_dict)
+        assert 'ELS serial: ELS-SN-99' in output
+        assert 'ELS manufacturer: ELS-Maker' in output
+        assert 'Identifier: CPO' in output
+
+    def test_convert_dom_to_output_string_cpo_els(self):
+        """CMIS CPO DOM: append ELS channel / module monitor / module threshold blocks."""
+        dom_info_dict = dict(CPO_DOM_FOR_EEPROM_TEST)
+        dom_info_dict['els_temphighalarm'] = '80.0'
+        output = sfputil.convert_dom_to_output_string(
+            'CPO', is_sfp_cmis=True, dom_info_dict=dom_info_dict)
+        assert 'ELS Lane1BiasMonitor: 12.0mA' in output
+        assert 'ELS temperature: 42.0C' in output
+        assert 'ELS TempHighAlarm: 80.0C' in output
+
     def test_get_physical_port_name(self):
         output = sfputil.get_physical_port_name(0, 0, False)
         assert output == '0'
@@ -431,6 +497,16 @@ class TestSfputil(object):
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['version'], [])
         assert result.output.rstrip() == 'sfputil version {}'.format(sfputil.VERSION)
+
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    def test_fetch_error_status_from_state_db_cpo_error(self):
+        """When status is not '0'/'1', show the error string from DB (e.g. CPO vendor text)."""
+        mock_db = MagicMock()
+        mock_db.STATE_DB = 6
+        mock_db.get_all = MagicMock(
+            return_value={'status': '2', 'error': 'CPO laser fault'})
+        output = sfputil.fetch_error_status_from_state_db('Ethernet0', mock_db)
+        assert output == [['Ethernet0', 'CPO laser fault']]
 
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
     def test_error_status_from_db(self):
@@ -481,6 +557,19 @@ class TestSfputil(object):
 
         output = sfputil.fetch_error_status_from_platform_api('Ethernet0')
         assert output == [['Ethernet0', 'OK']]
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    def test_fetch_error_status_from_platform_api_cpo_style_description(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        mock_sfp.get_error_description = MagicMock(
+            return_value='Fiber check failure')
+
+        output = sfputil.fetch_error_status_from_platform_api('Ethernet0')
+        assert output == [['Ethernet0', 'Fiber check failure']]
 
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
@@ -740,6 +829,7 @@ Ethernet0  On
     @patch('sfputil.main.platform_chassis')
     def test_show_eeprom_dom_conditions(self, mock_chassis, exception, xcvr_api_none, expected_output):
         mock_sfp = MagicMock()
+        mock_sfp.get_platform_specific_dom_format_map.return_value = ({}, {})
         mock_sfp.get_presence.return_value = True
         mock_sfp.get_transceiver_info.return_value = FLAT_MEMORY_MODULE_EEPROM_SFP_INFO_DICT
         mock_chassis.get_sfp.return_value = mock_sfp
@@ -783,6 +873,36 @@ Ethernet0  On
 
         assert result.output == "Sfp.get_transceiver_dom_real_value() is currently not implemented for this platform\n"
         assert result.exit_code == ERROR_NOT_IMPLEMENTED
+
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('sfputil.main.platform_chassis')
+    def test_show_eeprom_cpo_els_displays_els_fields(self, mock_chassis):
+        """`sfputil show eeprom -p -d` includes ELS labels from CPO maps (info + DOM)."""
+        mock_sfp = MagicMock()
+        mock_sfp.get_platform_specific_dom_format_map.return_value = ({}, {})
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_transceiver_info.return_value = dict(CPO_MODULE_EEPROM_SFP_INFO_DICT)
+        mock_sfp.get_transceiver_dom_real_value.return_value = dict(CPO_DOM_FOR_EEPROM_TEST)
+        mock_sfp.get_transceiver_threshold_info.return_value = {'els_temphighalarm': '80.0'}
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_chassis.get_sfp.return_value = mock_sfp
+
+        runner = CliRunner()
+        result = runner.invoke(
+            sfputil.cli.commands['show'].commands['eeprom'],
+            ['-p', 'Ethernet16', '-d'])
+
+        assert result.exit_code == 0
+        assert 'Ethernet16: SFP EEPROM detected' in result.output
+        assert 'ELS serial: ELS-SN-99' in result.output
+        assert 'ELS Lane1BiasMonitor: 12.0mA' in result.output
+        assert 'ELS temperature: 42.0C' in result.output
+        assert 'ELS TempHighAlarm: 80.0C' in result.output
+        assert '        PlatformSpecificDomValues:\n' in result.output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=0)))
