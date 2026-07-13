@@ -412,6 +412,54 @@ class TestSfputil(object):
                 Vcc: 3.2577Volts
         ModuleThresholdValues:
 '''
+        ),
+        (
+            'CPO Bailly',
+            True,
+            {
+                'rlm_temperature': '16.16',
+                'rlm_voltage': '3.396',
+                'rlm_tec_current': '0.0',
+                'rlm_temphighalarm': '80.0',
+                'rlm_templowalarm': '-5.0',
+                'rlm_temphighwarning': '70.0',
+                'rlm_templowwarning': '0.0',
+                'rlm_vcchighalarm': '3.63',
+                'rlm_vcclowalarm': '2.97',
+                'rlm_vcchighwarning': '3.465',
+                'rlm_vcclowwarning': '3.135',
+                'rlm_txpowerhighalarm': '7.0',
+                'rlm_txpowerlowalarm': '-6.9',
+                'rlm_txpowerhighwarning': '4.0',
+                'rlm_txpowerlowwarning': '-2.9',
+                'rlm_txbiashighalarm': '162.5',
+                'rlm_txbiashighwarning': '156.248',
+            },
+            '''\
+        ChannelMonitorValues:
+        ChannelThresholdValues:
+        ModuleMonitorValues:
+        ModuleThresholdValues:
+        RLMMonitorValues:
+                RLM TEC Current: 0.0%
+                RLM Temperature: 16.16C
+                RLM Vcc: 3.396Volts
+        RLMThresholdValues:
+                RLM TempHighAlarm: 80.0C
+                RLM TempHighWarning: 70.0C
+                RLM TempLowAlarm: -5.0C
+                RLM TempLowWarning: 0.0C
+                RLM TxBiasHighAlarm: 162.5mA
+                RLM TxBiasHighWarning: 156.248mA
+                RLM TxPowerHighAlarm: 7.0mW
+                RLM TxPowerHighWarning: 4.0mW
+                RLM TxPowerLowAlarm: -6.9mW
+                RLM TxPowerLowWarning: -2.9mW
+                RLM VccHighAlarm: 3.63Volts
+                RLM VccHighWarning: 3.465Volts
+                RLM VccLowAlarm: 2.97Volts
+                RLM VccLowWarning: 3.135Volts
+'''
         )])
     def test_convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict, expected_output):
         output = sfputil.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
