@@ -755,6 +755,22 @@ def stats(namespace, display, verbose):
 
     run_command(cmd, display_cmd=verbose)
 
+
+@pfcwd.command('status')
+@multi_asic_util.multi_asic_click_options
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def pfcwd_status(namespace, display, json_output, verbose):
+    """Show pfc watchdog hardware recovery status"""
+
+    cmd = ['pfcwd', 'show', 'status', '-d', str(display)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if json_output:
+        cmd += ['--json']
+
+    run_command(cmd, display_cmd=verbose)
+
 #
 # 'watermark' group ("show watermark telemetry interval")
 #
