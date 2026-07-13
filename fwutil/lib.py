@@ -599,6 +599,72 @@ class ComponentUpdateProvider(PlatformDataProvider):
             pcp.module_component_map
         )
 
+    @staticmethod
+    def __compare_versions(current, available):
+        """
+        Compare two dotted, purely-numeric firmware versions.
+
+        Returns:
+             1  if current  >  available
+             0  if current  == available
+            -1  if current  <  available
+            None if either version is not a clean dotted-decimal string
+                 (e.g. SSD vendor strings like "SBR10021"/"0710-001" or hex
+                 CPLD/FPGA revisions like "0x13"/"240622.1D"). In that case the
+                 caller should fall back to a strict equality comparison.
+        """
+        def parse(version):
+            if version is None:
+                return None
+            tokens = str(version).strip().split('.')
+            numeric = []
+            for token in tokens:
+                if not token.isdigit():
+                    return None
+                numeric.append(int(token))
+            return tuple(numeric) if numeric else None
+
+        current_tuple = parse(current)
+        available_tuple = parse(available)
+
+        if current_tuple is None or available_tuple is None:
+            return None
+
+        # Pad the shorter tuple with zeros so "4.8" and "4.8.0" compare equal.
+        length = max(len(current_tuple), len(available_tuple))
+        current_tuple += (0,) * (length - len(current_tuple))
+        available_tuple += (0,) * (length - len(available_tuple))
+
+        if current_tuple > available_tuple:
+            return 1
+        if current_tuple < available_tuple:
+            return -1
+        return 0
+
+    def __get_update_status(self, firmware_version_current, firmware_version_available):
+        """
+        Decide whether a component needs a firmware update.
+
+        A component is considered up-to-date when the running version is the
+        same as, or comparably newer than, the version shipped in the SONiC
+        image, so operators are never asked to "downgrade" (e.g. PSM running
+        0212.0216 vs 0212.0215 available). When the versions are not cleanly
+        comparable as dotted-decimal numbers, fall back to the legacy strict
+        equality check to preserve existing behavior.
+        """
+        if firmware_version_current == firmware_version_available:
+            return self.FW_STATUS_UP_TO_DATE
+
+        comparison = self.__compare_versions(
+            firmware_version_current,
+            firmware_version_available
+        )
+
+        if comparison is not None and comparison >= 0:
+            return self.FW_STATUS_UP_TO_DATE
+
+        return self.FW_STATUS_UPDATE_REQUIRED
+
     def get_updates_status(self):
         status_table = [ ]
         auto_update_status_table = [ ]
@@ -631,10 +697,10 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
                     firmware_version = "{} / {}".format(firmware_version_current, firmware_version_available)
 
-                    if firmware_version_current != firmware_version_available:
-                        status = self.FW_STATUS_UPDATE_REQUIRED
-                    else:
-                        status = self.FW_STATUS_UP_TO_DATE
+                    status = self.__get_update_status(
+                        firmware_version_current,
+                        firmware_version_available
+                    )
 
                     if self.__pcp.UTILITY_KEY in component:
                         update_utility = component[self.__pcp.UTILITY_KEY]
@@ -698,10 +764,10 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
                         firmware_version = "{} / {}".format(firmware_version_current, firmware_version_available)
 
-                        if firmware_version_current != firmware_version_available:
-                            status = self.FW_STATUS_UPDATE_REQUIRED
-                        else:
-                            status = self.FW_STATUS_UP_TO_DATE
+                        status = self.__get_update_status(
+                            firmware_version_current,
+                            firmware_version_available
+                        )
 
                         if self.__pcp.UTILITY_KEY in component:
                             update_utility = component[self.__pcp.UTILITY_KEY]
