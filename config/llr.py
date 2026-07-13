@@ -2,10 +2,7 @@ import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic
-from swsscommon.swsscommon import SonicV2Connector
-
-LLR_CAPABLE_KEY = "SWITCH_CAPABILITY|switch"
-LLR_CAPABLE_FIELD = "LLR_CAPABLE"
+from utilities_common.llr import is_llr_capable
 
 
 def _get_valid_namespace_choices():
@@ -14,20 +11,6 @@ def _get_valid_namespace_choices():
     remains valid but effectively unused.
     """
     return multi_asic_util.multi_asic_ns_choices()
-
-
-def _check_llr_capability(namespace=None):
-    """
-    Check STATE_DB SWITCH_CAPABILITY|switch for LLR_CAPABLE == "true"
-    in the given namespace.
-    Returns True if supported, False otherwise.
-    """
-    if namespace is None:
-        namespace = multi_asic.DEFAULT_NAMESPACE
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=str(namespace))
-    state_db.connect(state_db.STATE_DB)
-    val = state_db.get(state_db.STATE_DB, LLR_CAPABLE_KEY, LLR_CAPABLE_FIELD)
-    return val == "true"
 
 
 def _get_cfgdb(ctx, namespace):
@@ -58,7 +41,7 @@ def _validate_llr_static_mode(cfgdb, interface_name, command_name, namespace):
     """
     Common validation for local/remote commands
     """
-    if not _check_llr_capability(namespace):
+    if not is_llr_capable(namespace):
         click.echo("Error: LLR is not supported on this platform.")
         raise SystemExit(1)
 
@@ -107,7 +90,7 @@ def llr_interface(ctx):
 @click.pass_context
 def llr_interface_mode(ctx, interface_name, llr_mode, namespace):
     """Configure LLR mode on an interface"""
-    if not _check_llr_capability(namespace):
+    if not is_llr_capable(namespace):
         click.echo("Error: LLR is not supported on this platform.")
         raise SystemExit(1)
 

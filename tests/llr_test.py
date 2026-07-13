@@ -339,7 +339,7 @@ class TestConfigLlrInterface(object):
         """Capability absent - command must error with 'not supported'."""
         runner = CliRunner()
         obj = _make_config_obj()
-        with mock.patch("config.llr._check_llr_capability", return_value=False):
+        with mock.patch("config.llr.is_llr_capable", return_value=False):
             result = runner.invoke(
                 config.config.commands["llr"].commands["interface"].commands["mode"],
                 ["Ethernet0", "static"],
@@ -473,7 +473,7 @@ class TestCounterpollLlr(object):
     def test_counterpoll_llr_no_capability(self):
         """counterpoll llr enable rejects when LLR_CAPABLE is not true."""
         runner = CliRunner()
-        with mock.patch("counterpoll.main._check_llr_capability", return_value=False):
+        with mock.patch("counterpoll.main.is_llr_capable", return_value=False):
             result = runner.invoke(
                 counterpoll.cli.commands["llr"], ["enable"]
             )

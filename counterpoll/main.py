@@ -2,9 +2,10 @@ import click
 import os
 from sonic_py_common import device_info, multi_asic
 import utilities_common.multi_asic as multi_asic_util
+from utilities_common.llr import is_llr_capable
 from tabulate import tabulate
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
-from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig, SonicV2Connector
+from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from swsscommon.swsscommon import CFG_FLEX_COUNTER_TABLE_NAME as CFG_FLEX_COUNTER_TABLE
 
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
@@ -814,17 +815,6 @@ def switch_disable(ctx):
 
 
 # LLR counter commands
-def _check_llr_capability(namespace=None):
-    """Check STATE_DB SWITCH_CAPABILITY|switch for LLR_CAPABLE == 'true'
-    in the given namespace."""
-    if namespace is None:
-        namespace = DEFAULT_NAMESPACE
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=str(namespace))
-    state_db.connect(state_db.STATE_DB)
-    val = state_db.get(state_db.STATE_DB, "SWITCH_CAPABILITY|switch", "LLR_CAPABLE")
-    return val == "true"
-
-
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
@@ -833,7 +823,7 @@ def _check_llr_capability(namespace=None):
 @click.pass_context
 def llr(ctx, namespace):
     """ LLR port counter commands """
-    if not _check_llr_capability(namespace):
+    if not is_llr_capable(namespace):
         click.echo("Error: LLR is not supported on this platform.")
         raise SystemExit(1)
     ctx.obj = connect_to_db(namespace)
