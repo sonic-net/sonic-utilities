@@ -28,8 +28,6 @@ sys.path.insert(0, modules_path)
 class TestBuffer(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         print("SETUP")
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
@@ -292,7 +290,6 @@ class TestBuffer(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")
 

@@ -14,8 +14,6 @@ modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, 'scripts')
 sys.path.insert(0, modules_path)
 
-sys.modules['sonic_platform'] = mock.MagicMock()
-
 
 decode_syseeprom_path = os.path.join(scripts_path, 'decode-syseeprom')
 decode_syseeprom = load_module_from_source('decode_syseeprom', decode_syseeprom_path)
@@ -212,3 +210,9 @@ CRC-32               0xFE        4  0xAC518FB3
     def test_support_platforms_no_eeprom(self, mockDbBased, mockNotDbBased):
         ret = decode_syseeprom.main()
         assert ret == errno.ENODEV
+
+    def test_instantiate_eeprom_object(self):
+        """Test instantiate_eeprom_object to cover lazy import of sonic_platform"""
+        eeprom = decode_syseeprom.instantiate_eeprom_object()
+        # Since sonic_platform is mocked, this should return the mocked eeprom object
+        assert eeprom is not None

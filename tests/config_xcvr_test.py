@@ -26,7 +26,6 @@ class TestConfigXcvr(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def test_config_laser_frequency(self, ctx):

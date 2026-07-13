@@ -88,6 +88,27 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert "Error: PortChan005 is invalid!, name should have prefix 'PortChannel' and suffix '<0-9999>'" in result.output
 
+    def test_delete_portchannel_in_use_by_dhcpv4_relay(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChannel10"], obj=obj)
+
+        # Enable has_sonic_dhcpv4_relay flag
+        db.cfgdb.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", {"source_interface": "PortChannel10"})
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["del"], ["PortChannel10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Interface 'PortChannel10' is in use by Vlan100" in result.output
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", None)
+
     def test_add_existing_portchannel_again(self):
         runner = CliRunner()
         db = Db()
@@ -137,7 +158,7 @@ class TestPortChannel(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert 'Invalid value for "--fast-rate"'  in result.output
+        assert 'Invalid value for \'--fast-rate\'' in result.output
 
     def test_add_portchannel_member_with_invalid_name(self):
         runner = CliRunner()
@@ -432,12 +453,15 @@ class TestPortChannel(object):
                 return TestPortChannel.originalSubprocessPopen(*args, **kwargs)
             if self.timeout:
                 return TestPortChannel.originalSubprocessPopen(["sleep", "90"], **kwargs)
-            if commandArgs[5] == "runner.enable_retry_count_feature":
+            # Find the runner item in the command args (handles both with and without -n flag)
+            # For "get": [..., "get", "runner.xxx"] - runner item is last
+            # For "set": [..., "set", "runner.retry_count", value] - runner item is second to last
+            if "runner.enable_retry_count_feature" in commandArgs:
                 return TestPortChannel.originalSubprocessPopen(["echo", "true" if self.retryCountEnabled else "false"], **kwargs)
-            elif commandArgs[5] == "runner.retry_count":
-                if commandArgs[4] == "get":
+            elif "runner.retry_count" in commandArgs:
+                if "get" in commandArgs:
                     return TestPortChannel.originalSubprocessPopen(["echo", "3"], **kwargs)
-                elif commandArgs[4] == "set":
+                elif "set" in commandArgs:
                     return TestPortChannel.originalSubprocessPopen(["echo", ""], **kwargs)
                 else:
                     return TestPortChannel.originalSubprocessPopen(["false"], **kwargs)
@@ -448,7 +472,7 @@ class TestPortChannel(object):
     def test_get_portchannel_retry_count_disabled(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = False
 
@@ -463,7 +487,7 @@ class TestPortChannel(object):
     def test_set_portchannel_retry_count_disabled(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = False
 
@@ -478,7 +502,7 @@ class TestPortChannel(object):
     def test_get_portchannel_retry_count_timeout(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
         subprocessMock.timeout = True
@@ -495,7 +519,7 @@ class TestPortChannel(object):
     def test_set_portchannel_retry_count_timeout(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
         subprocessMock.timeout = True
@@ -512,7 +536,7 @@ class TestPortChannel(object):
     def test_get_portchannel_retry_count(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
 
@@ -528,7 +552,7 @@ class TestPortChannel(object):
     def test_set_portchannel_retry_count(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
 
@@ -540,7 +564,45 @@ class TestPortChannel(object):
         assert result.exit_code == 0
         assert result.output == ""
 
+    @patch("subprocess.Popen", new_callable=SubprocessMock)
+    def test_portchannel_retry_count_group_default_namespace(self, subprocessMock):
+        """Test that portchannel_retry_count group sets up teamdctl_command for default namespace"""
+        runner = CliRunner()
+        db = Db()
+        # Don't pass teamdctl_command - let the group function set it up
+        obj = {'db': db.cfgdb, 'namespace': ''}
+
+        subprocessMock.retryCountEnabled = True
+
+        # Invoke through retry-count group command to trigger the group callback
+        result = runner.invoke(
+            config.config.commands["portchannel"].commands["retry-count"],
+            ["get", "PortChannel1001"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output.strip() == "3"
+
+    @patch("subprocess.Popen", new_callable=SubprocessMock)
+    def test_portchannel_retry_count_group_multi_asic(self, subprocessMock):
+        """Test that portchannel_retry_count group sets up teamdctl_command for non-default namespace (multi-asic)"""
+        runner = CliRunner()
+        db = Db()
+        # Don't pass teamdctl_command - let the group function set it up
+        # Use a non-default namespace to cover the multi-asic code path
+        obj = {'db': db.cfgdb, 'namespace': 'asic0'}
+
+        subprocessMock.retryCountEnabled = True
+
+        # Invoke through retry-count group command to trigger the group callback
+        result = runner.invoke(
+            config.config.commands["portchannel"].commands["retry-count"],
+            ["get", "PortChannel1001"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output.strip() == "3"
+
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")

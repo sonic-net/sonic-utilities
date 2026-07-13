@@ -26,8 +26,6 @@ class TestAsicSdkHealthEvent(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        dbconnector.dedicated_dbs['STATE_DB'] = None
-        dbconnector.dedicated_dbs['CONFIG_DB'] = None
 
     @pytest.mark.parametrize("severity,categories", [
         ("fatal", "cpu_hw"),
@@ -119,7 +117,7 @@ class TestAsicSdkHealthEvent(object):
             config.config.commands["asic-sdk-health-event"].commands["suppress"],
             [severity, "--max-events", "-50"], obj=db)
         assert result.exit_code != 0
-        assert "-50 is smaller than the minimum valid value 0" in result.output
+        assert "-50 is not in the range x>=0" in result.output
         assert not db.cfgdb.get_entry("SUPPRESS_ASIC_SDK_HEALTH_EVENT", severity).get('categories')
         assert not db.cfgdb.get_entry("SUPPRESS_ASIC_SDK_HEALTH_EVENT", severity).get('max_events')
 
@@ -127,7 +125,7 @@ class TestAsicSdkHealthEvent(object):
             config.config.commands["asic-sdk-health-event"].commands["suppress"],
             [severity, "--max-events", "NaN"], obj=db)
         assert result.exit_code != 0
-        assert "NaN is not a valid integer" in result.output
+        assert "'NaN' is not a valid integer" in result.output
         assert not db.cfgdb.get_entry("SUPPRESS_ASIC_SDK_HEALTH_EVENT", severity).get('categories')
         assert not db.cfgdb.get_entry("SUPPRESS_ASIC_SDK_HEALTH_EVENT", severity).get('max_events')
 

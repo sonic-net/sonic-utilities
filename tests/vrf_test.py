@@ -1,6 +1,7 @@
 import os
-import sys
+import importlib
 from click.testing import CliRunner
+from unittest.mock import patch, MagicMock
 from swsscommon.swsscommon import SonicV2Connector
 from utilities_common.db import Db
 
@@ -12,6 +13,7 @@ DEFAULT_NAMESPACE = ''
 test_path = os.path.dirname(os.path.abspath(__file__))
 mock_db_path = os.path.join(test_path, "vrf_input")
 mock_db_path_vnet = os.path.join(test_path, "vnet_input")
+
 
 class TestShowVrf(object):
     @classmethod
@@ -219,6 +221,35 @@ Vrf103  Ethernet4
         assert ('Vrf100') in db.cfgdb.get_table('VRF')
         assert result.exit_code == 0
 
+        # Add dummy VLAN and DHCP relay config using the VRF
+        vlan = "Vlan100"
+        server_ip = "192.0.2.1"
+        db.cfgdb.mod_entry("VLAN", vlan, {})
+
+        # Enable has_sonic_dhcpv4_relay flag
+        db.cfgdb.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", vlan, {
+            "dhcpv4_servers": [server_ip],
+            "server_vrf": "Vrf100",
+            "link_selection": "enable",
+            "vrf_selection": "enable",
+            "server_id_override": "enable"
+        })
+
+        assert result.exit_code == 0
+
+        # Attempt to delete the VRF in use by DHCPv4_RELAY ὀ~T should failfa
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "VRF 'Vrf100' is in use for dhcp_relay configurations for Vlan100" in result.output
+
+        # Clean up the DHCP config to allow VRF deletion
+        db.cfgdb.set_entry("DHCPV4_RELAY", vlan, None)
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert "Vrf100" not in db.cfgdb.get_table("VRF")
+
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf1"], obj=vrf_obj)
         assert "VRF Vrf1 already exists!" in result.output
         assert ('Vrf1') in db.cfgdb.get_table('VRF')
@@ -276,6 +307,149 @@ Error: 'vrf_name' length should not exceed 15 characters
         assert result.exit_code != 0
         assert ('VrfNameTooLong!!!') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
+
+    def test_vrf_show_unconfigured_vrf(self):
+        """Test show VRF command failing where the user specifies the wrong VRF"""
+        runner = CliRunner()
+        db = Db()
+
+        vrf_name = "Vrf-null"
+        result = runner.invoke(show.cli.commands['vrf'], [vrf_name], obj=db)
+
+        assert result.exit_code != 0
+        assert f"Error: VRF {vrf_name} is not configured." in result.output
+
+    @patch('config.main.ValidatedConfigDBConnector')
+    @patch('config.main.ConfigDBConnector')
+    def test_vrf_group_no_namespace_defaults(self, mock_cdb, mock_vcdb):
+        """Single-ASIC: vrf group without -n defaults namespace to DEFAULT_NAMESPACE ('')."""
+        mock_db_instance = MagicMock()
+        mock_cdb.return_value = mock_db_instance
+        mock_vcdb_instance = MagicMock()
+        mock_vcdb_instance.get_keys.return_value = []
+        mock_vcdb.return_value = mock_vcdb_instance
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["vrf"], ['add', 'Vrf200'])
+        assert result.exit_code == 0
+        mock_cdb.assert_called_once_with(use_unix_socket_path=True, namespace='')
+        mock_db_instance.connect.assert_called_once()
+
+
+class TestVrfMultiAsic(object):
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+
+    def test_vrf_add_multi_asic_with_namespace(self):
+        """Add VRF with namespace in context."""
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': 'asic0'}
+
+        result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert 'Vrf100' in db.cfgdb.get_table('VRF')
+
+    def test_vrf_del_multi_asic_with_namespace(self):
+        """Del VRF with namespace in context."""
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': 'asic0'}
+
+        # Add then del (same db, so state is shared)
+        result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code == 0
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert 'Vrf100' not in db.cfgdb.get_table('VRF')
+
+    def test_vrf_multi_asic_without_namespace_fails(self):
+        """Multi-ASIC: config vrf add without -n must fail (namespace required)."""
+        import config.main as config_main
+        try:
+            with patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True)), \
+                 patch('config.main.multi_asic.get_namespace_list',
+                       MagicMock(return_value=['asic0', 'asic1'])):
+                importlib.reload(config_main)
+                runner = CliRunner()
+                result = runner.invoke(config_main.config.commands["vrf"], ['add', 'Vrf100'])
+        finally:
+            # Restore the module to its non-mocked state for subsequent tests.
+            importlib.reload(config_main)
+        assert result.exit_code != 0
+        assert 'Missing option' in result.output or '-n' in result.output or 'namespace' in result.output.lower()
+
+    def test_vrf_invalid_namespace_fails(self):
+        """Multi-ASIC: config vrf with wrong/invalid ASIC namespace must fail."""
+        import config.main as config_main
+        try:
+            with patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True)), \
+                 patch('config.main.multi_asic.get_namespace_list',
+                       MagicMock(return_value=['asic0', 'asic1'])):
+                importlib.reload(config_main)
+                runner = CliRunner()
+                result = runner.invoke(config_main.config.commands["vrf"],
+                                       ['-n', 'invalid_asic', 'add', 'Vrf100'])
+        finally:
+            # Restore the module to its non-mocked state for subsequent tests.
+            importlib.reload(config_main)
+        assert result.exit_code != 0
+        assert 'Invalid value' in result.output or 'invalid_asic' in result.output
+
+    def test_vrf_add_mgmt_with_namespace_fails(self):
+        """config vrf add mgmt with -n must fail: mgmt VRF lives in the host CONFIG_DB."""
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': 'asic0'}
+        result = runner.invoke(config.config.commands["vrf"].commands["add"], ["mgmt"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert '-n' in result.output or 'namespace' in result.output.lower()
+
+    def test_vrf_del_mgmt_with_namespace_fails(self):
+        """config vrf del mgmt with -n must fail: mgmt VRF lives in the host CONFIG_DB."""
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': 'asic0'}
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["mgmt"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert '-n' in result.output or 'namespace' in result.output.lower()
+
+    def test_vrf_del_multi_asic_without_namespace_fails(self):
+        """Multi-ASIC: config vrf del without -n must fail for data VRFs."""
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': None}
+        with patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True)):
+            result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert '-n' in result.output or 'namespace' in result.output.lower()
+
+    def test_add_vrf_vni_map_multi_asic_without_namespace_fails(self):
+        """Multi-ASIC: config vrf add_vrf_vni_map without -n must fail."""
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': None}
+        with patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True)):
+            result = runner.invoke(config.config.commands["vrf"].commands["add_vrf_vni_map"],
+                                   ["Vrf100", "1000"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert '-n' in result.output or 'namespace' in result.output.lower()
+
+    def test_del_vrf_vni_map_multi_asic_without_namespace_fails(self):
+        """Multi-ASIC: config vrf del_vrf_vni_map without -n must fail."""
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': None}
+        with patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True)):
+            result = runner.invoke(config.config.commands["vrf"].commands["del_vrf_vni_map"],
+                                   ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert '-n' in result.output or 'namespace' in result.output.lower()
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
 
 class TestVnet(object):
@@ -337,5 +511,4 @@ class TestVnet(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")

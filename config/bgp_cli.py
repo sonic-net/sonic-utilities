@@ -1,10 +1,13 @@
+import re
 import click
+import ipaddress
 import utilities_common.cli as clicommon
 
 from sonic_py_common import logger
 from utilities_common.bgp import (
     CFG_BGP_DEVICE_GLOBAL,
     BGP_DEVICE_GLOBAL_KEY,
+    CFG_BGP_AGGREGATE_ADDRESS,
     SYSLOG_IDENTIFIER,
     to_str,
 )
@@ -190,3 +193,119 @@ def DEVICE_GLOBAL_WCMP_DISABLED(ctx, db):
     """ Disable Weighted-Cost Multi-Path (W-ECMP) feature """
 
     wcmp_handler(ctx, db, "false")
+
+
+#
+# BGP aggregate-address ------------------------------------------------------------------------------------------------
+#
+
+
+PREFIX_LIST_PATTERN = re.compile(r'^[0-9a-zA-Z_-]*$')
+PREFIX_LIST_MAX_LEN = 128
+
+
+def validate_ip_prefix(ctx, param, value):
+    """ Validate that the argument is a valid IP prefix """
+    try:
+        return str(ipaddress.ip_network(value, strict=False))
+    except ValueError:
+        raise click.BadParameter("'{}' is not a valid IP prefix".format(value))
+
+
+def validate_prefix_list_name(name, field_name):
+    """ Validate prefix list name against YANG schema constraints.
+    Pattern: [0-9a-zA-Z_-]*, max length: 128
+    """
+    if len(name) > PREFIX_LIST_MAX_LEN:
+        raise click.ClickException(
+            "'{}' is invalid for {}: length exceeds {}".format(
+                name, field_name, PREFIX_LIST_MAX_LEN))
+    if not PREFIX_LIST_PATTERN.match(name):
+        raise click.ClickException(
+            "'{}' is invalid for {}: only alphanumeric characters, "
+            "underscores and hyphens are allowed".format(name, field_name))
+
+
+@click.group(
+    name="aggregate-address",
+    cls=clicommon.AliasedGroup
+)
+def AGGREGATE_ADDRESS():
+    """ Configure BGP aggregate addresses """
+
+    pass
+
+
+@AGGREGATE_ADDRESS.command(
+    name="add"
+)
+@click.argument("address", callback=validate_ip_prefix)
+@click.option("--bbr-required", is_flag=True, default=False,
+              help="Set if BBR is required for generating aggregate address")
+@click.option("--summary-only", is_flag=True, default=False,
+              help="Only advertise the summary of aggregate address")
+@click.option("--as-set", is_flag=True, default=False,
+              help="Include the AS set when advertising the aggregated address")
+@click.option("--aggregate-address-prefix-list", default="",
+              help="Prefix list to append aggregated address to")
+@click.option("--contributing-address-prefix-list", default="",
+              help="Prefix list to append contributing address filter to")
+@clicommon.pass_db
+@click.pass_context
+def AGGREGATE_ADDRESS_ADD(ctx, db, address, bbr_required, summary_only, as_set,
+                          aggregate_address_prefix_list, contributing_address_prefix_list):
+    """ Add a BGP aggregate address """
+
+    table = CFG_BGP_AGGREGATE_ADDRESS
+    key = address
+
+    # Validate prefix list names against YANG schema
+    validate_prefix_list_name(aggregate_address_prefix_list,
+                              "aggregate-address-prefix-list")
+    validate_prefix_list_name(contributing_address_prefix_list,
+                              "contributing-address-prefix-list")
+
+    # Check if entry already exists
+    cfg = db.cfgdb.get_config()
+    if table in cfg and key in cfg[table]:
+        ctx.fail("Aggregate address '{}' already exists".format(key))
+
+    data = {
+        "bbr-required": "true" if bbr_required else "false",
+        "summary-only": "true" if summary_only else "false",
+        "as-set": "true" if as_set else "false",
+        "aggregate-address-prefix-list": aggregate_address_prefix_list,
+        "contributing-address-prefix-list": contributing_address_prefix_list,
+    }
+
+    try:
+        db.cfgdb.set_entry(table, key, data)
+        log.log_notice("Added BGP aggregate address: {}".format(key))
+    except Exception as e:
+        log.log_error("Failed to add BGP aggregate address '{}': {}".format(key, str(e)))
+        ctx.fail(str(e))
+
+
+@AGGREGATE_ADDRESS.command(
+    name="remove"
+)
+@click.argument("address", callback=validate_ip_prefix)
+@clicommon.pass_db
+@click.pass_context
+def AGGREGATE_ADDRESS_REMOVE(ctx, db, address):
+    """ Remove a BGP aggregate address """
+
+    table = CFG_BGP_AGGREGATE_ADDRESS
+    key = address
+
+    # Check if entry exists
+    cfg = db.cfgdb.get_config()
+    if table not in cfg or key not in cfg[table]:
+        ctx.fail("Aggregate address '{}' does not exist".format(key))
+
+    try:
+        db.cfgdb.set_entry(table, key, None)
+        log.log_notice("Removed BGP aggregate address: {}".format(key))
+    except Exception as e:
+        log.log_error("Failed to remove BGP aggregate address '{}': {}".format(key, str(e)))
+        ctx.fail(str(e))

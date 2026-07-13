@@ -28,7 +28,7 @@ try:
     import click
     from shlex import join
     from lxml import etree as ET
-    from sonic_py_common import device_info
+    from sonic_py_common import device_info, multi_asic
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
 
@@ -86,7 +86,7 @@ def sniffer_status_get(env_variable_name):
     return enabled
 
 
-def is_issu_status_enabled():
+def is_issu_status_enabled_container(container_name):
     """ This function parses the SAI XML profile used for mlnx to
     get whether ISSU is enabled or disabled
     @return: True/False
@@ -98,7 +98,7 @@ def is_issu_status_enabled():
     # Get the SAI XML path from sai.profile
     sai_profile_path = '/{}/sai.profile'.format(HWSKU_PATH)
 
-    DOCKER_CAT_COMMAND = ['docker', 'exec', CONTAINER_NAME, 'cat', sai_profile_path]
+    DOCKER_CAT_COMMAND = ['docker', 'exec', container_name, 'cat', sai_profile_path]
     sai_profile_content, _ = run_command(DOCKER_CAT_COMMAND, print_to_console=False)
 
     sai_profile_kvs = {}
@@ -116,13 +116,13 @@ def is_issu_status_enabled():
         sys.exit(1)
 
     # Get ISSU from SAI XML
-    DOCKER_CAT_COMMAND = ['docker', 'exec', CONTAINER_NAME, 'cat', sai_xml_path]
+    DOCKER_CAT_COMMAND = ['docker', 'exec', container_name, 'cat', sai_xml_path]
     sai_xml_content, _ = run_command(DOCKER_CAT_COMMAND, print_to_console=False)
 
     try:
         root = ET.fromstring(sai_xml_content)
-    except ET.ParseError:
-        click.echo("Failed to parse SAI xml", err=True)
+    except ET.ParseError as err:
+        click.echo(f"Failed to parse SAI xml: {err}", err=True)
         sys.exit(1)
 
     el = root.find('platform_info').find('issu-enabled')
@@ -131,6 +131,18 @@ def is_issu_status_enabled():
         issu_enabled = int(el.text) == 1
 
     return issu_enabled
+
+
+def is_issu_status_enabled():
+    """ Show ISSU status """
+    num_asics = multi_asic.get_num_asics()
+    if num_asics == 1:
+        containers = [CONTAINER_NAME]
+    else:
+        containers = [f'{CONTAINER_NAME}{i}' for i in range(num_asics)]
+    issu_enabled = [is_issu_status_enabled_container(container) for container in containers]
+    return all(issu_enabled)
+
 
 @mlnx.command('issu')
 def issu_status():

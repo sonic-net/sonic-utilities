@@ -340,7 +340,7 @@ class MellanoxBufferMigrator():
                                          "Mellanox-SN2700": "spc1_2700_t1_pool_shp"}
             },
             "pool_mapped_from_old_version": {
-                # MSFT SKUs and generic SKUs may have different pool seetings
+                # MSFT SKUs and generic SKUs may have different pool settings
                 "spc1_t0_pool": ("sku", "spc1_t0_pool_sku_map"),
                 "spc1_t1_pool": ("sku", "spc1_t1_pool_sku_map"),
                 "spc1_2700_t0_pool": "spc1_2700_t0_single_pool_shp",
@@ -790,7 +790,7 @@ class MellanoxBufferMigrator():
             for name, profile in profiles.items():
                 if name in configdb_buffer_profiles.keys() and profile == configdb_buffer_profiles[name]:
                     continue
-                # return if any default profile isn't in cofiguration
+                # return if any default profile isn't in configuration
                 profile_matched = False
                 break
 
@@ -821,9 +821,12 @@ class MellanoxBufferMigrator():
         if not self.ready:
             return True
 
-        if not self.is_buffer_config_default and not self.is_buffer_config_empty or self.is_default_traditional_model:
+        metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
+        already_dynamic = metadata.get('buffer_model') == 'dynamic' and not self.is_default_traditional_model
+
+        if (not self.is_buffer_config_default and not self.is_buffer_config_empty
+                or self.is_default_traditional_model) and not already_dynamic:
             log.log_notice("No item pending to be updated")
-            metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
             metadata['buffer_model'] = 'traditional'
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
             log.log_notice("Set buffer_model as traditional")

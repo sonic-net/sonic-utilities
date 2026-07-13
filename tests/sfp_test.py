@@ -74,15 +74,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_with_dom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
@@ -130,7 +148,10 @@ Ethernet8: SFP EEPROM detected
                 TxPowerLowAlarm   : -10.5012dBm
                 TxPowerLowWarning : -7.5007dBm
         ModuleMonitorValues:
+                Requested Laser Frequency: 193100GHz
+                Tx Frequency: 193100.0GHz
                 Temperature: 44.9883C
+                Requested Tx Power: -8.5dBm
                 Vcc: 3.2999Volts
         ModuleThresholdValues:
                 TempHighAlarm  : 80.0000C
@@ -180,6 +201,8 @@ Ethernet72: SFP EEPROM detected
         Vendor PN: some-model    
         Vendor Rev: A3
         Vendor SN: serial1   
+        dom_capability: N/A
+        is_replaceable: True
         ChannelMonitorValues:
                 RX1Power: 0.5dBm
                 RX2Power: 0.3dBm
@@ -234,15 +257,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
@@ -290,7 +331,8 @@ Ethernet44:
     DGD              ps      5.37      5.56      5.81      7.0          7.0          False         0.0          0.0          False
     SOPMD            ps^2    0.0       0.0       0.0       655.35       655.35       False         0.0          0.0          False
     SOP ROC          krad/s  1.0       1.0       2.0       N/A          N/A          N/A           N/A          N/A          N/A
-    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     0.0           0.0          0.0          0.0
+    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     False         0.0          0.0\
+          False
     Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False         0.0          0.0          False
     EVM              %       100.0     100.0     100.0     N/A          N/A          N/A           N/A          N/A          N/A
 """
@@ -860,8 +902,6 @@ class TestSFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     def test_sfp_presence(self):
         runner = CliRunner()
@@ -946,7 +986,7 @@ Ethernet36  Present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet8", "-d"])
         assert result.exit_code == 0
         assert result.output == test_qsfp_dd_eeprom_with_dom_output
-        
+
     def test_osfp_eeprom_with_dom(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet72", "-d"])
@@ -1021,7 +1061,6 @@ Ethernet36  Present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -1029,7 +1068,6 @@ class Test_multiAsic_SFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
@@ -1186,9 +1224,14 @@ Ethernet200  Not present
     def test_is_rj45_port(self):
         import utilities_common.platform_sfputil_helper as platform_sfputil_helper
         platform_sfputil_helper.platform_chassis = None
-        if 'sonic_platform' in sys.modules:
-            sys.modules.pop('sonic_platform')
-        assert platform_sfputil_helper.is_rj45_port("Ethernet0") == False
+        # Force `import sonic_platform` to raise ImportError regardless of whether
+        # the package is installed (it is, in per-platform sonic-buildimage CI) and
+        # regardless of whether other tests in this xdist worker pre-loaded it.
+        mods_to_hide = {k: None for k in list(sys.modules)
+                        if k == 'sonic_platform' or k.startswith('sonic_platform.')}
+        mods_to_hide.setdefault('sonic_platform', None)
+        with patch.dict(sys.modules, mods_to_hide):
+            assert platform_sfputil_helper.is_rj45_port("Ethernet0") is False
 
     def test_qsfp_dd_pm_all(self):
         runner = CliRunner()
@@ -1205,7 +1248,6 @@ Ethernet200  Not present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -1318,6 +1360,13 @@ class TestMultiAsicSFP(object):
         result = get_subport("Ethernet0")
         assert result == 2
 
+        # A missing (None) or empty subport defaults to subport 0 instead of crashing
+        mock_get_value_from_db_by_field.return_value = None
+        assert get_subport("Ethernet0") == 0
+
+        mock_get_value_from_db_by_field.return_value = ''
+        assert get_subport("Ethernet0") == 0
+
     @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
     @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
     @patch('utilities_common.platform_sfputil_helper.multi_asic.get_namespace_for_port', return_value='asic0')
@@ -1350,6 +1399,3 @@ class TestMultiAsicSFP(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

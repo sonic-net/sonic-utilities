@@ -3,9 +3,23 @@
 """
     Script to show fan status.
 """
+import argparse
+import json
+from datetime import datetime
+
 from tabulate import tabulate
-from swsscommon.swsscommon import SonicV2Connector
+from swsscommon.swsscommon import SonicDBConfig, SonicV2Connector
 from natsort import natsorted
+
+try:
+    from sonic_py_common import multi_asic
+except ImportError:
+    multi_asic = None
+
+try:
+    from utilities_common import platform_sfputil_helper
+except ImportError:
+    platform_sfputil_helper = None
 
 
 header = ['Sensor', 'Temperature', 'High TH', 'Low TH', 'Crit High TH', 'Crit Low TH', 'Warning', 'Timestamp']
@@ -19,43 +33,274 @@ CRIT_HIGH_THRESH_FIELD_NAME = 'critical_high_threshold'
 CRIT_LOW_THRESH_FIELD_NAME = 'critical_low_threshold'
 WARNING_STATUS_FIELD_NAME = 'warning_status'
 
+# SFP/transceiver temperature is published by xcvrd into the dedicated
+# TRANSCEIVER_DOM_TEMPERATURE table; thresholds come from
+# TRANSCEIVER_DOM_THRESHOLD; per-flag warning/alarm state comes from
+# TRANSCEIVER_DOM_FLAG. Field names are defined by xcvrd.
+SFP_TEMPER_TABLE_NAME = 'TRANSCEIVER_DOM_TEMPERATURE'
+SFP_THRESHOLD_TABLE_NAME = 'TRANSCEIVER_DOM_THRESHOLD'
+SFP_FLAG_TABLE_NAME = 'TRANSCEIVER_DOM_FLAG'
+SFP_DISPLAY_TIME_FORMAT = '%Y%m%d %H:%M:%S'
+SFP_TEMPER_FIELD_NAME = 'temperature'
+# Threshold field names (TRANSCEIVER_DOM_THRESHOLD) are snake_case as
+# defined by the SFP API (e.g. CMIS get_transceiver_threshold_info).
+SFP_TEMP_HIGH_WARN_FIELD = 'temphighwarning'
+SFP_TEMP_LOW_WARN_FIELD = 'templowwarning'
+SFP_TEMP_HIGH_ALARM_FIELD = 'temphighalarm'
+SFP_TEMP_LOW_ALARM_FIELD = 'templowalarm'
+# Flag field names (TRANSCEIVER_DOM_FLAG) are camelCase as defined by the
+# SFP API (e.g. CMIS get_transceiver_dom_flags) and do not match the
+# threshold field names.
+SFP_TEMP_FLAG_HIGH_ALARM_FIELD = 'tempHAlarm'
+SFP_TEMP_FLAG_LOW_ALARM_FIELD = 'tempLAlarm'
+SFP_TEMP_FLAG_HIGH_WARN_FIELD = 'tempHWarn'
+SFP_TEMP_FLAG_LOW_WARN_FIELD = 'tempLWarn'
+SFP_TEMP_FLAG_FIELDS = (
+    SFP_TEMP_FLAG_HIGH_WARN_FIELD,
+    SFP_TEMP_FLAG_LOW_WARN_FIELD,
+    SFP_TEMP_FLAG_HIGH_ALARM_FIELD,
+    SFP_TEMP_FLAG_LOW_ALARM_FIELD,
+)
+
+NA = 'N/A'
+
 
 class TemperShow(object):
     def __init__(self):
+        if multi_asic.is_multi_asic():
+            if not SonicDBConfig.isGlobalInit():
+                SonicDBConfig.load_sonic_global_db_config()
+        else:
+            if not SonicDBConfig.isInit():
+                SonicDBConfig.load_sonic_db_config()
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
+        self._sfp_helper_ready = self._init_sfp_util_helper()
 
-    def show(self):
-        keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
+    @staticmethod
+    def _init_sfp_util_helper():
+        """Initialize the shared SfpUtilHelper for port-name mapping.
+
+        Uses utilities_common.platform_sfputil_helper so multi-ASIC
+        port-config handling stays consistent with other CLIs (sfpshow,
+        sfputil). Returns False if the helper is unavailable; SFP rows
+        will then fall back to displaying the logical port name.
+        """
+        if platform_sfputil_helper is None:
+            return False
+        try:
+            platform_sfputil_helper.load_platform_sfputil()
+            platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
+            return True
+        except (Exception, SystemExit):
+            return False
+
+    def _sfp_display_name(self, port_name):
+        """Map a logical port name (e.g. 'Ethernet0') to 'xSFP module <N> Temp'.
+
+        Falls back to the logical port name if the mapping is unavailable.
+        This matches the legacy thermalctld naming convention so existing
+        consumers/operators see the same sensor labels.
+        """
+        if not self._sfp_helper_ready:
+            return port_name
+        try:
+            physical = platform_sfputil_helper.logical_port_name_to_physical_port_list(port_name)
+            if physical and len(physical) > 0 and physical[0] is not None:
+                # physical port index from SfpUtilHelper is already 1-based
+                return 'xSFP module {} Temp'.format(physical[0])
+        except Exception:
+            pass
+        return port_name
+
+    @staticmethod
+    def _get_sfp_db_connections():
+        """Return a list of STATE_DB connections, one per ASIC namespace.
+
+        On single-ASIC platforms this is a single connection to the host
+        STATE_DB. On multi-ASIC platforms each per-ASIC namespace is
+        included so SFP rows from every namespace are collected.
+        """
+        connections = []
+        if multi_asic is not None and multi_asic.is_multi_asic():
+            try:
+                namespaces = multi_asic.get_front_end_namespaces()
+            except Exception:
+                namespaces = []
+            # Connect per-namespace so a single failing namespace does not
+            # silently drop SFP rows from the other namespaces.
+            for ns in namespaces:
+                try:
+                    connections.append(multi_asic.connect_to_all_dbs_for_ns(ns))
+                except Exception:
+                    continue
+        if not connections:
+            db = SonicV2Connector(host="127.0.0.1")
+            db.connect(db.STATE_DB)
+            connections.append(db)
+        return connections
+
+    def _collect_platform_sensors(self):
+        """Collect chassis/PSU/fan thermal sensors from TEMPERATURE_INFO."""
+        rows = []
+        keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '|*')
         if not keys:
+            return rows
+        for key in natsorted(keys):
+            key_list = key.split('|')
+            if len(key_list) != 2:
+                print('Warn: Invalid key in table {}: {}'.format(TEMPER_TABLE_NAME, key))
+                continue
+            name = key_list[1]
+            data_dict = self.db.get_all(self.db.STATE_DB, key) or {}
+            rows.append({
+                'name': name,
+                'temperature': data_dict.get(TEMPER_FIELD_NAME, NA),
+                'high_th': data_dict.get(HIGH_THRESH_FIELD_NAME, NA),
+                'low_th': data_dict.get(LOW_THRESH_FIELD_NAME, NA),
+                'crit_high_th': data_dict.get(CRIT_HIGH_THRESH_FIELD_NAME, NA),
+                'crit_low_th': data_dict.get(CRIT_LOW_THRESH_FIELD_NAME, NA),
+                'warning': data_dict.get(WARNING_STATUS_FIELD_NAME, NA),
+                'timestamp': data_dict.get(TIMESTAMP_FIELD_NAME, NA),
+            })
+        return rows
+
+    def _collect_sfp_sensors(self):
+        """Collect SFP/transceiver temperatures from xcvrd-managed tables.
+
+        Map xcvrd threshold fields onto tempershow's columns:
+          high_th       <- temphighwarning
+          low_th        <- templowwarning
+          crit_high_th  <- temphighalarm
+          crit_low_th   <- templowalarm
+
+        Warning column is True if any of the temperature high/low
+        warning/alarm flags in TRANSCEIVER_DOM_FLAG are asserted.
+
+        On multi-ASIC platforms, transceiver tables are namespace-scoped,
+        so this iterates every front-end ASIC namespace's STATE_DB and
+        merges the results.
+        """
+        rows = []
+        timestamp = datetime.now().strftime(SFP_DISPLAY_TIME_FORMAT)
+        seen_ports = set()
+        for db in self._get_sfp_db_connections():
+            try:
+                keys = db.keys(db.STATE_DB, SFP_TEMPER_TABLE_NAME + '|*')
+            except Exception:
+                continue
+            if not keys:
+                continue
+            thr_map = self._prefetch_table(db, SFP_THRESHOLD_TABLE_NAME)
+            flag_map = self._prefetch_table(db, SFP_FLAG_TABLE_NAME)
+            for key in natsorted(keys):
+                key_list = key.split('|')
+                if len(key_list) != 2:
+                    print('Warn: Invalid key in table {}: {}'.format(SFP_TEMPER_TABLE_NAME, key))
+                    continue
+                port = key_list[1]
+                if port in seen_ports:
+                    continue
+                seen_ports.add(port)
+                temp_dict = db.get_all(db.STATE_DB, key) or {}
+                thr_dict = thr_map.get(port, {})
+                flag_dict = flag_map.get(port, {})
+                rows.append({
+                    'name': self._sfp_display_name(port),
+                    'temperature': temp_dict.get(SFP_TEMPER_FIELD_NAME, NA),
+                    'high_th': thr_dict.get(SFP_TEMP_HIGH_WARN_FIELD, NA),
+                    'low_th': thr_dict.get(SFP_TEMP_LOW_WARN_FIELD, NA),
+                    'crit_high_th': thr_dict.get(SFP_TEMP_HIGH_ALARM_FIELD, NA),
+                    'crit_low_th': thr_dict.get(SFP_TEMP_LOW_ALARM_FIELD, NA),
+                    'warning': self._derive_sfp_warning(flag_dict),
+                    'timestamp': timestamp,
+                })
+        return rows
+
+    @staticmethod
+    def _prefetch_table(db, table_name):
+        """Build a {port: {field: value}} map for an entire STATE_DB table.
+
+        Used to avoid per-port hgetall round trips when populating SFP rows.
+        Returns an empty dict on any DB error.
+        """
+        result = {}
+        try:
+            keys = db.keys(db.STATE_DB, table_name + '|*')
+        except Exception:
+            return result
+        if not keys:
+            return result
+        for key in keys:
+            parts = key.split('|')
+            if len(parts) != 2:
+                continue
+            try:
+                result[parts[1]] = db.get_all(db.STATE_DB, key) or {}
+            except Exception:
+                continue
+        return result
+
+    @staticmethod
+    def _derive_sfp_warning(flag_dict):
+        """Return 'True'/'False'/'N/A' based on temp flags in TRANSCEIVER_DOM_FLAG.
+
+        Returns string values to stay consistent with the platform sensor
+        warning column (which is read as a string from TEMPERATURE_INFO),
+        keeping the JSON output's 'Warning' field type stable across rows.
+
+        'True'  - any of temphigh/lowwarning/alarm is asserted
+        'False' - all four flags are present and de-asserted
+        'N/A'   - none of the four flags are present
+        """
+        if not flag_dict:
+            return NA
+        seen = False
+        for field in SFP_TEMP_FLAG_FIELDS:
+            value = flag_dict.get(field)
+            if value is None:
+                continue
+            seen = True
+            if str(value).strip().lower() == 'true':
+                return 'True'
+        return 'False' if seen else NA
+
+    def show(self, output_json):
+        rows = self._collect_platform_sensors() + self._collect_sfp_sensors()
+        if not rows:
             print('Thermal Not detected\n')
             return
 
-        table = []
-        for key in natsorted(keys):
-            key_list = key.split('|')
-            if len(key_list) != 2: # error data in DB, log it and ignore
-                print('Warn: Invalid key in table {}: {}'.format(TEMPER_TABLE_NAME, key))
-                continue
+        if output_json:
+            json_output = [{
+                "Sensor": r['name'],
+                "Temperature": r['temperature'],
+                "High_TH": r['high_th'],
+                "Low_TH": r['low_th'],
+                "Crit_High_TH": r['crit_high_th'],
+                "Crit_Low_TH": r['crit_low_th'],
+                "Warning": r['warning'],
+                "Timestamp": r['timestamp'],
+            } for r in rows]
+            print(json.dumps(json_output, indent=2))
+            return
 
-            name = key_list[1]
-            data_dict = self.db.get_all(self.db.STATE_DB, key)
-            table.append((name, 
-                          data_dict[TEMPER_FIELD_NAME], 
-                          data_dict[HIGH_THRESH_FIELD_NAME],
-                          data_dict[LOW_THRESH_FIELD_NAME],
-                          data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
-                          data_dict[CRIT_LOW_THRESH_FIELD_NAME],
-                          data_dict[WARNING_STATUS_FIELD_NAME],
-                          data_dict[TIMESTAMP_FIELD_NAME]
-                          ))
-        
-        if table:
-            print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        else:
-            print('No tempeature data available\n')
+        table = [(r['name'], r['temperature'], r['high_th'], r['low_th'],
+                  r['crit_high_th'], r['crit_low_th'], r['warning'],
+                  r['timestamp']) for r in rows]
+        print(tabulate(table, header, tablefmt='simple', stralign='right'))
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Display the temperature Sensor information',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+Examples:
+  tempershow -j
+""")
+
+    parser.add_argument('-j', '--json', action='store_true', help='Display output in JSON format')
+    args = parser.parse_args()
+    output_json = args.json
     temperShow = TemperShow()
-    temperShow.show()
+    temperShow.show(output_json)

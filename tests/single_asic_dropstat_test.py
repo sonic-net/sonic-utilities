@@ -36,7 +36,6 @@ sonic_drops_test               0                    0
 class TestMultiAsicDropstat(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         print("SETUP")
 
@@ -67,6 +66,4 @@ class TestMultiAsicDropstat(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ.pop("UTILITIES_UNIT_TESTING")
         print("TEARDOWN")

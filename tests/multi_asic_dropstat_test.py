@@ -57,7 +57,6 @@ sonic_drops_test          0
 class TestMultiAsicDropstat(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         print("SETUP")
@@ -104,7 +103,7 @@ class TestMultiAsicDropstat(object):
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))
         assert return_code == 2
-        assert "invalid choice: asic5" in result
+        assert "'asic5' is not one of" in result
 
     def test_show_dropcount_version(self):
         return_code, result = get_result_and_return_code([
@@ -116,7 +115,5 @@ class TestMultiAsicDropstat(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ.pop("UTILITIES_UNIT_TESTING")
         os.environ.pop("UTILITIES_UNIT_TESTING_TOPOLOGY")
         print("TEARDOWN")

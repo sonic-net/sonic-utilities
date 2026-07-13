@@ -9,7 +9,7 @@ import utilities_common.cli as clicommon
 
 from utilities_common.switch_trimming import (
     CFG_SWITCH_TRIMMING,
-    CFG_TRIM_KEY
+    CFG_TRIM_KEY,
 )
 
 
@@ -81,6 +81,7 @@ def SWITCH_TRIMMING_GLOBAL(ctx, db, json_format):
         json_dict = {
             "size": entry.get("size", "N/A"),
             "dscp_value": entry.get("dscp_value", "N/A"),
+            "tc_value": entry.get("tc_value", "N/A"),
             "queue_index": entry.get("queue_index", "N/A")
         }
         click.echo(json.dumps(json_dict, indent=4))
@@ -104,6 +105,18 @@ def SWITCH_TRIMMING_GLOBAL(ctx, db, json_format):
             entry,
             {
                 'name': 'dscp_value',
+                'is-leaf-list': False
+            }
+        )
+    ]
+    body.append(row)
+
+    row = [
+        "Packet trimming TC value",
+        format_attr_value(
+            entry,
+            {
+                'name': 'tc_value',
                 'is-leaf-list': False
             }
         )

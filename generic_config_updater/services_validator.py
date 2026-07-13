@@ -1,4 +1,6 @@
 import os
+import subprocess
+import shlex
 import time
 from .gu_common import genericUpdaterLogging
 
@@ -16,17 +18,49 @@ def set_verbose(verbose=False):
         logger.set_min_log_priority_notice()
 
 
+def command_wrapper(command):
+    """
+    Wrapper for system commands to support GCU in container.
+    """
+    if "systemctl" in command:
+        command = f"nsenter --target 1 --pid --mount --uts --ipc --net {command}"
+    try:
+        # Split command into arguments for shell=False
+        cmd_args = shlex.split(command)
+        result = subprocess.run(cmd_args, capture_output=True, check=False, text=True)
+
+        if result.returncode != 0:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"Command failed: '{command}', returncode: {result.returncode}",
+                       print_to_console)
+            if result.stdout:
+                logger.log(logger.LOG_PRIORITY_ERROR,
+                           f"stdout: {result.stdout}",
+                           print_to_console)
+            if result.stderr:
+                logger.log(logger.LOG_PRIORITY_ERROR,
+                           f"stderr: {result.stderr}",
+                           print_to_console)
+
+        return result.returncode
+    except Exception as e:
+        logger.log(logger.LOG_PRIORITY_ERROR,
+                   f"Command execution failed: {command}, error: {e}",
+                   print_to_console)
+        return 1
+
+
 def _service_restart(svc_name):
-    rc = os.system(f"systemctl restart {svc_name}")
+    rc = command_wrapper(f"systemctl restart {svc_name}")
     if rc != 0:
         # This failure is likely due to too many restarts
         #
-        rc = os.system(f"systemctl reset-failed {svc_name}")
+        rc = command_wrapper(f"systemctl reset-failed {svc_name}")
         logger.log(logger.LOG_PRIORITY_ERROR, 
                 f"Service has been reset. rc={rc}; Try restart again...",
                 print_to_console)
 
-        rc = os.system(f"systemctl restart {svc_name}")
+        rc = command_wrapper(f"systemctl restart {svc_name}")
         if rc != 0:
             # Even with reset-failed, restart fails.
             # Give a pause before retry.
@@ -35,7 +69,7 @@ def _service_restart(svc_name):
                     f"Restart failed for {svc_name} rc={rc} after reset; Pause for 10s & retry",
                     print_to_console)
             time.sleep(10)
-            rc = os.system(f"systemctl restart {svc_name}")
+            rc = command_wrapper(f"systemctl restart {svc_name}")
 
     if rc == 0:
         logger.log(logger.LOG_PRIORITY_NOTICE,
@@ -53,10 +87,29 @@ def rsyslog_validator(old_config, upd_config, keys):
     upd_syslog = upd_config.get("SYSLOG_SERVER", {})
 
     if old_syslog != upd_syslog:
-        os.system("systemctl reset-failed rsyslog-config rsyslog")
-        rc = os.system("systemctl restart rsyslog-config")
+        command_wrapper("systemctl reset-failed rsyslog-config rsyslog")
+        rc = command_wrapper("systemctl restart rsyslog-config")
         if rc != 0:
             return False
+    return True
+
+
+def port_speed_change_validator(old_config, upd_config, keys):
+    old_ports = old_config.get("PORT", {})
+    upd_ports = upd_config.get("PORT", {})
+    for key in set(old_ports.keys()).union(set(upd_ports.keys())):
+        old_speed = old_ports.get(key, {}).get("speed", "")
+        upd_speed = upd_ports.get(key, {}).get("speed", "")
+        if old_speed != "" and upd_speed != "" and old_speed != upd_speed:
+            logger.log(
+                logger.LOG_PRIORITY_NOTICE,
+                (
+                    f"port_speed_change_validator: port speed changed for {key} "
+                    f"from {old_speed} to {upd_speed}, restart telemetry service"
+                ),
+                print_to_console
+            )
+            return _service_restart("telemetry")
     return True
 
 
@@ -106,6 +159,31 @@ def caclmgrd_validator(old_config, upd_config, keys):
 def ntp_validator(old_config, upd_config, keys):
     return _service_restart("chrony")
 
+
+def gnmi_validator(old_config, upd_config, keys):
+    old_gnmi = old_config.get("GNMI", {})
+    upd_gnmi = upd_config.get("GNMI", {})
+
+    old_vrf = old_gnmi.get("gnmi", {}).get("vrf", "")
+    upd_vrf = upd_gnmi.get("gnmi", {}).get("vrf", "")
+
+    if old_vrf != upd_vrf:
+        return _service_restart("gnmi")
+    return True
+
+
+def telemetry_validator(old_config, upd_config, keys):
+    old_telemetry = old_config.get("TELEMETRY", {})
+    upd_telemetry = upd_config.get("TELEMETRY", {})
+
+    old_vrf = old_telemetry.get("gnmi", {}).get("vrf", "")
+    upd_vrf = upd_telemetry.get("gnmi", {}).get("vrf", "")
+
+    if old_vrf != upd_vrf:
+        return _service_restart("telemetry")
+    return True
+
+
 def vlanintf_validator(old_config, upd_config, keys):
     old_vlan_intf = old_config.get("VLAN_INTERFACE", {})
     upd_vlan_intf = upd_config.get("VLAN_INTERFACE", {})
@@ -122,7 +200,10 @@ def vlanintf_validator(old_config, upd_config, keys):
     deleted_keys = list(set(old_keys) - set(upd_keys))
     for key in deleted_keys:
         iface, iface_ip = key
-        rc = os.system(f"ip neigh flush dev {iface} {iface_ip}")
+        rc = command_wrapper(f"ip neigh flush dev {iface} {iface_ip}")
         if rc:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"vlanintf_validator: Failed to flush neighbors for {iface} {iface_ip}, returncode={rc}",
+                       print_to_console)
             return False
     return True
