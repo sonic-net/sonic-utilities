@@ -2908,6 +2908,7 @@ def get_portchannel_retry_count(ctx, portchannel_name):
     except Exception as e:
         ctx.fail("Unable to get the retry count: {}".format(e))
 
+
 @portchannel_retry_count.command('set')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
 @click.argument('retry_count', metavar='<retry_count>', required=True, type=click.IntRange(3,10))
