@@ -2915,6 +2915,7 @@ def mode(ctx):
     """PortChannel mode configuration"""
     pass
 
+
 @mode.command('set')
 @click.argument('mode_type', metavar='<multi-process|unified-process>',
                 type=click.Choice(['multi-process', 'unified-process'],
@@ -2926,7 +2927,7 @@ def mode_set(ctx, mode_type):
     <multi-process|unified-process>: multi or unified mode
     """
     db = ValidatedConfigDBConnector(ctx.obj['db'])
-    
+
     try:
         fvs = {
              'mode': mode_type,
