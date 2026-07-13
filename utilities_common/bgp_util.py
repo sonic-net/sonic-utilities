@@ -23,8 +23,25 @@ def get_namespace_for_bgp_neighbor(neighbor_ip, vrf_name=constants.DEFAULT_VRF):
                  ' Bgp neighbor {} not configured'.format(neighbor_ip))
 
 
+def _canonical_neigh_ip(value):
+    # CONFIG_DB BGP_NEIGHBOR keys for IPv6 neighbors are rendered by
+    # sonic-cfggen/minigraph in a form (e.g. uppercase hextets like
+    # 'FC00::71') that may not match the address string a caller passes in
+    # (e.g. lowercase 'fc00::71' typed on the CLI). Redis keys are
+    # case-sensitive, so an exact-string comparison misses. Canonicalize any
+    # IP to its normalized compressed form so IPv6 case/compression
+    # differences do not cause false negatives. Non-IP values (or VRF-only
+    # keys) are returned unchanged.
+    try:
+        return ipaddress.ip_address(value).compressed
+    except ValueError:
+        return value
+
+
 def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vrf_name=constants.DEFAULT_VRF):
     config_db = multi_asic.connect_config_db_for_ns(namespace)
+
+    neighbor_ip_canon = _canonical_neigh_ip(neighbor_ip)
 
     tables = [
         multi_asic.BGP_NEIGH_CFG_DB_TABLE,
@@ -32,9 +49,21 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
     ]
 
     for table in tables:
-        # Check for the neighbor_ip format (no VRF prefix = default VRF)
+        # Fast path: exact-key lookup (O(1)). Covers IPv4 and any query that
+        # already matches the stored key form (the common case).
         if vrf_name in ('all', constants.DEFAULT_VRF) and config_db.get_entry(table, neighbor_ip):
             return True
+
+        # Fallback (only when the exact match missed): scan keys comparing the
+        # canonical IP form, so an IPv6 case/compression mismatch between the
+        # query and the stored key (e.g. uppercase 'FC00::71' vs 'fc00::71')
+        # is still resolved.
+        if vrf_name in ('all', constants.DEFAULT_VRF):
+            for key in config_db.get_keys(table):
+                if isinstance(key, tuple):
+                    continue
+                if _canonical_neigh_ip(key) == neighbor_ip_canon and config_db.get_entry(table, key):
+                    return True
 
         # Check for any string|neighbor_ip format. This is needed
         # when unified routing config mode is enabled, as in that case
@@ -42,7 +71,8 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
         keys = config_db.get_keys(table)
         for key in keys:
             if (
-                    isinstance(key, tuple) and len(key) == 2 and key[1] == neighbor_ip and
+                    isinstance(key, tuple) and len(key) == 2 and
+                    _canonical_neigh_ip(key[1]) == neighbor_ip_canon and
                     (vrf_name == 'all' or key[0] == vrf_name) and config_db.get_entry(table, key)
             ):
                 return True
