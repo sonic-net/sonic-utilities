@@ -748,6 +748,7 @@ class RemoveCreateOnlyDependencyMoveValidator:
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
         self.create_only_filter = CreateOnlyFilter(path_addressing).get_filter()
+        self.logger = genericUpdaterLogging.get_logger(title="Patch Sorter - RemoveCreateOnly")
 
     def validate(self, group: JsonMoveGroup, diff, simulated_config) -> Tuple[bool, Optional[str]]:
         # Note: group is not used by this validator
@@ -822,7 +823,28 @@ class RemoveCreateOnlyDependencyMoveValidator:
                 return False
 
         member_path = f"/{table_to_check}/{member_name}"
-        for ref_path in self.path_addressing.find_ref_paths(member_path, simulated_config, reload_config=reload_config):
+        try:
+            ref_paths = self.path_addressing.find_ref_paths(
+                member_path, simulated_config, reload_config=reload_config)
+        except (ValueError, KeyError) as e:
+            # An unresolvable or malformed reference against the simulated intermediate config
+            # raises here. The motivating case: a create-only field change (e.g. a PORT breakout
+            # that rewrites lanes) has transiently removed this member from a multi-member leaf-list
+            # (e.g. ACL_TABLE.ports) while a leafref to it is still present, so the dangling leafref
+            # fails to resolve (list.index raises ValueError). Other resolution failures in the
+            # xpath<->configdb-path conversion (schema/key-count mismatches raise ValueError; a table
+            # with no YANG model raises KeyError) likewise indicate the reference cannot be resolved
+            # against this intermediate config. In every case the ordering is an invalid intermediate
+            # move, so reject it and let the sort backtrack rather than aborting the whole sort.
+            # Scope is deliberately limited to reference-resolution errors: a loadData failure
+            # (sonic_yang.SonicYangException) is not caught here because FullConfigMoveValidator has
+            # already loaded this config into the sy singleton, so find_ref_paths skips loadData.
+            self.logger.log_debug(
+                f"Rejecting move: reference resolution failed against simulated config "
+                f"for '{member_path}': {type(e).__name__}: {e}")
+            return False
+
+        for ref_path in ref_paths:
             if not self.path_addressing.has_path(current_config, ref_path):
                 return False
 
@@ -963,6 +985,7 @@ class NoDependencyMoveValidator:
     def __init__(self, path_addressing, config_wrapper):
         self.path_addressing = path_addressing
         self.config_wrapper = config_wrapper
+        self.logger = genericUpdaterLogging.get_logger(title="Patch Sorter - NoDependency")
 
     def validate(self, group: JsonMoveGroup, diff, simulated_config) -> Tuple[bool, Optional[str]]:
         reload_config = True
@@ -979,7 +1002,8 @@ class NoDependencyMoveValidator:
 
         if operation_type == OperationType.ADD:
             # For add operation, we check the simulated config has no dependencies between nodes under the added path
-            if not self._validate_paths_config([path], simulated_config, reload_config):
+            if not self._validate_paths_config([path], simulated_config, reload_config,
+                                               reject_on_unresolvable_ref=True):
                 return False
         elif operation_type == OperationType.REMOVE:
             # For remove operation, we check the current config has no dependencies between nodes under the removed path
@@ -1030,7 +1054,8 @@ class NoDependencyMoveValidator:
         # so _currently_loaded_hash will match and find_ref_paths skips loadData.
         # Then validate deleted_paths against current_config (requires a fresh loadData).
         # This ordering gives 2 loadData calls instead of 3 for REPLACE operations.
-        if not self._validate_paths_config(added_paths, simulated_config, reload_config=True):
+        if not self._validate_paths_config(added_paths, simulated_config, reload_config=True,
+                                           reject_on_unresolvable_ref=True):
             return False
 
         if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config=True):
@@ -1100,11 +1125,31 @@ class NoDependencyMoveValidator:
 
         return deleted_paths, added_paths
 
-    def _validate_paths_config(self, paths, config, reload_config: bool = True):
+    def _validate_paths_config(self, paths, config, reload_config: bool = True,
+                               reject_on_unresolvable_ref: bool = False):
         """
         validates all config under paths do not have config and its references
+
+        reject_on_unresolvable_ref: set only when 'config' is the transient simulated intermediate
+        state. A dangling leafref in that state (e.g. a create-only PORT change that has transiently
+        removed the port from a leaf-list such as ACL_TABLE.ports while a reference to it lingers)
+        makes find_ref_paths raise ValueError; a table with no YANG model makes it raise KeyError.
+        Either way it is an invalid intermediate move, so reject it and let the sort backtrack rather
+        than aborting. When 'config' is diff.current_config (a valid committed state) the flag stays
+        False: such an error there is genuine and must surface instead of being silently swallowed.
+        Scope is limited to reference-resolution errors; a loadData failure
+        (sonic_yang.SonicYangException) is not caught because the config is already loaded into the sy
+        singleton by FullConfigMoveValidator, so find_ref_paths skips loadData for it.
         """
-        refs = self.path_addressing.find_ref_paths(paths, config, reload_config=reload_config)
+        try:
+            refs = self.path_addressing.find_ref_paths(paths, config, reload_config=reload_config)
+        except (ValueError, KeyError) as e:
+            if reject_on_unresolvable_ref:
+                self.logger.log_debug(
+                    f"Rejecting move: reference resolution failed against simulated config "
+                    f"for {paths}: {type(e).__name__}: {e}")
+                return False
+            raise
         for ref in refs:
             for path in paths:
                 if ref.startswith(path):
