@@ -2623,7 +2623,7 @@ def mode(ctx):
 @mode.command('set')
 @click.argument('mode_type', metavar='<multi-process|unified-process>',
                 type=click.Choice(['multi-process', 'unified-process'],
-                case_sensitive=False))
+                                  case_sensitive=False))
 @click.pass_context
 def mode_set(ctx, mode_type):
     """set mode for legacy
