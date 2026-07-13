@@ -2621,7 +2621,9 @@ def mode(ctx):
     pass
 
 @mode.command('set')
-@click.argument('mode_type', metavar='<multi-process|unified-process>', type=click.Choice(['multi-process', 'unified-process'], case_sensitive=False))
+@click.argument('mode_type', metavar='<multi-process|unified-process>',
+                type=click.Choice(['multi-process', 'unified-process'],
+                case_sensitive=False))
 @click.pass_context
 def mode_set(ctx, mode_type):
     """set mode for legacy
@@ -2636,7 +2638,7 @@ def mode_set(ctx, mode_type):
              }
         db.set_entry('TEAMD', "GLOBAL", fvs)
         click.secho(f"[WARNING] mode = {mode_type} is configured. "
-                            "Please restart the teamd docker to take effect.")
+                    "Please restart the teamd docker to take effect.")
     except (ValueError, AttributeError) as e:
         # Improved error message with the actual error
         ctx.fail(f"Failed to set mode: {str(e)}")
@@ -2697,7 +2699,8 @@ def remove_portchannel(ctx, portchannel_name):
         # Dont let to remove port channel if vlan membership exists
         for k,v in db.get_table('VLAN_MEMBER'): # TODO: MISSING CONSTRAINT IN YANG MODEL
             if v == portchannel_name:
-                ctx.fail("{} has vlan {} configured, remove vlan membership to proceed".format(portchannel_name, str(k)))
+                ctx.fail("{} has vlan {} configured, remove vlan membership to proceed"
+                         .format(portchannel_name, str(k)))
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
             ctx.fail("Error: Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
