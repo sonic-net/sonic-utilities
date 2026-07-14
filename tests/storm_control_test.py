@@ -143,6 +143,17 @@ class TestStormControl(object):
         assert result.exit_code == 0
         assert result.output == show_storm_interface_output
 
+    @patch("show.main.multi_asic_util.multi_asic_get_ip_intf_from_ns",
+           mock.Mock(return_value=['Ethernet0']))
+    def test_show_storm_namespace(self):
+        # Ensure the namespace path renders correctly.
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["storm-control"], ["-n", "asic0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_storm_interface_output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
