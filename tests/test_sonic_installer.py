@@ -206,3 +206,141 @@ def test_install_failed(rmtree, run_command, run_command_or_raise, get_bootloade
     runner = CliRunner()
     result = runner.invoke(sonic_installer.commands["install"], [sonic_image_filename, "-y"])
     print(result.output)
+
+
+def _make_remove_bootloader(current="image_1", target="image_2",
+                            secure=True, plan=None, prune_ok=True):
+    """Build a bootloader mock for 'sonic-installer remove' tests."""
+    mock_bootloader = Mock()
+    mock_bootloader.get_installed_images = Mock(return_value=[current, target])
+    mock_bootloader.get_current_image = Mock(return_value=current)
+    mock_bootloader.remove_image = Mock()
+    mock_bootloader.is_secure_upgrade_image_verification_supported = Mock(return_value=secure)
+    mock_bootloader.plan_stale_db_certs_prune = Mock(return_value=plan)
+    mock_bootloader.prune_stale_db_certs = Mock(return_value=prune_ok)
+    return mock_bootloader
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_without_prune_db_cert(get_bootloader):
+    """Backwards-compat: without --prune-db-cert, nothing about db certs happens."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target,
+                                              plan={'missing': 0, 'essential_missing': 0})
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"], [target, "-y"])
+    assert result.exit_code == 0
+    mock_bootloader.remove_image.assert_called_once_with(target)
+    mock_bootloader.plan_stale_db_certs_prune.assert_not_called()
+    mock_bootloader.prune_stale_db_certs.assert_not_called()
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_prune_nothing_missing(get_bootloader):
+    """--prune-db-cert with nothing missing prunes without prompting."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target,
+                                              plan={'missing': 0, 'essential_missing': 0})
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"], [target, "-y", "--prune-db-cert"])
+    assert result.exit_code == 0
+    mock_bootloader.remove_image.assert_called_once_with(target)
+    mock_bootloader.plan_stale_db_certs_prune.assert_called_once()
+    mock_bootloader.prune_stale_db_certs.assert_called_once_with(allow_essential_missing=False)
+    assert "prune completed" in result.output
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_prune_missing_confirm_yes(get_bootloader):
+    """Missing (non-essential) certs, confirm yes -> prune runs (allow_essential_missing=False)."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target,
+                                              plan={'missing': 2, 'essential_missing': 0})
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"],
+                           [target, "-y", "--prune-db-cert"], input="y\n")
+    assert result.exit_code == 0
+    mock_bootloader.prune_stale_db_certs.assert_called_once_with(allow_essential_missing=False)
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_prune_missing_confirm_no(get_bootloader):
+    """Missing (non-essential) certs, decline -> prune skipped."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target,
+                                              plan={'missing': 2, 'essential_missing': 0})
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"],
+                           [target, "-y", "--prune-db-cert"], input="n\n")
+    assert result.exit_code == 0
+    mock_bootloader.prune_stale_db_certs.assert_not_called()
+    assert "Skipping db certificate prune" in result.output
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_prune_essential_missing_approve(get_bootloader):
+    """Essential missing: warning printed + approval -> prune with allow_essential_missing=True."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target,
+                                              plan={'missing': 1, 'essential_missing': 1})
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"],
+                           [target, "-y", "--prune-db-cert"], input="y\n")
+    assert result.exit_code == 0
+    assert "boot-critical" in result.output
+    mock_bootloader.prune_stale_db_certs.assert_called_once_with(allow_essential_missing=True)
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_prune_essential_missing_decline(get_bootloader):
+    """Essential missing: decline approval -> prune skipped."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target,
+                                              plan={'missing': 1, 'essential_missing': 1})
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"],
+                           [target, "-y", "--prune-db-cert"], input="n\n")
+    assert result.exit_code == 0
+    mock_bootloader.prune_stale_db_certs.assert_not_called()
+    assert "Skipping db certificate prune" in result.output
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_prune_secureboot_unsupported(get_bootloader):
+    """--prune-db-cert but Secure Boot off: skip, don't call plan/prune."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target, secure=False)
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"], [target, "-y", "--prune-db-cert"])
+    assert result.exit_code == 0
+    mock_bootloader.plan_stale_db_certs_prune.assert_not_called()
+    mock_bootloader.prune_stale_db_certs.assert_not_called()
+    assert "Secure Boot is not enabled" in result.output
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_remove_prune_plan_unavailable(get_bootloader):
+    """--prune-db-cert but plan cannot be produced: skip prune gracefully."""
+    target = "image_2"
+    mock_bootloader = _make_remove_bootloader(target=target, plan=None)
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["remove"], [target, "-y", "--prune-db-cert"])
+    assert result.exit_code == 0
+    mock_bootloader.plan_stale_db_certs_prune.assert_called_once()
+    mock_bootloader.prune_stale_db_certs.assert_not_called()

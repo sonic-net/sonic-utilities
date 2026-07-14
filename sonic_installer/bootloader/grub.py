@@ -216,6 +216,55 @@ class GrubBootloader(OnieInstallerBootloader):
         click.echo(enroll_result.stdout.decode())
         return enroll_result.returncode == 0
 
+    def _prune_db_certs_script(self):
+        """Return the path to the bundled db-cert prune script, or None if absent."""
+        script_path = os.path.join('/usr', 'local', 'bin', 'remove_stale_db_certs.sh')
+        if not os.path.exists(script_path):
+            click.echo("Unable to find db certificate prune script in path " + script_path)
+            return None
+        return script_path
+
+    def plan_stale_db_certs_prune(self):
+        # Run the prune script in --plan mode: it changes nothing and prints a stable,
+        # machine-readable "PRUNE_PLAN key=value ..." line describing what a prune would do.
+        script_path = self._prune_db_certs_script()
+        if script_path is None:
+            return None
+        result = subprocess.run([script_path, '--plan'], capture_output=True)
+        output = result.stdout.decode()
+        click.echo(output)
+        if result.returncode != 0:
+            click.echo(result.stderr.decode())
+            return None
+        plan = None
+        for line in output.splitlines():
+            if line.startswith('PRUNE_PLAN '):
+                plan = {}
+                for token in line[len('PRUNE_PLAN '):].split():
+                    if '=' in token:
+                        key, _, value = token.partition('=')
+                        try:
+                            plan[key] = int(value)
+                        except ValueError:
+                            plan[key] = value
+        return plan
+
+    def prune_stale_db_certs(self, allow_essential_missing=False):
+        # Run the prune script in commit mode. --yes suppresses the script's own prompt;
+        # confirmation is driven by the caller (sonic-installer). --allow-essential-missing
+        # lets it proceed even when a boot-critical binary would lose its only db signer.
+        script_path = self._prune_db_certs_script()
+        if script_path is None:
+            return False
+        command = [script_path, '--commit', '--yes']
+        if allow_essential_missing:
+            command.append('--allow-essential-missing')
+        result = subprocess.run(command, capture_output=True)
+        click.echo(result.stdout.decode())
+        if result.returncode != 0:
+            click.echo(result.stderr.decode())
+        return result.returncode == 0
+
     @classmethod
     def detect(cls):
         return os.path.isfile(os.path.join(HOST_PATH, 'grub/grub.cfg'))

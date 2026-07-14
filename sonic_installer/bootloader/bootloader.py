@@ -86,6 +86,18 @@ class Bootloader(object):
     def is_secure_upgrade_image_verification_supported(self):
         return False
 
+    def plan_stale_db_certs_prune(self):
+        """Analyse (without changing anything) which UEFI Secure Boot db certificates
+        would be pruned. Returns a dict with keys 'missing', 'essential_missing',
+        'drop', 'reinstall' (and possibly more), or None if pruning is unsupported
+        or the plan could not be produced."""
+        return None
+
+    def prune_stale_db_certs(self, allow_essential_missing=False):
+        """Delete every UEFI Secure Boot db certificate and reinstall only those that
+        sign a still-installed image. Returns True on success."""
+        return False
+
     @classmethod
     def detect(cls):
         """returns True if the bootloader is in use"""

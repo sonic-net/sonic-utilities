@@ -724,8 +724,11 @@ def get_fips(image):
 @sonic_installer.command('remove')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
               expose_value=False, prompt='Image will be removed, continue?')
+@click.option('--prune-db-cert', is_flag=True, default=False,
+              help="After removing the image, prune the UEFI Secure Boot 'db' down to only "
+                   "the certificates that still sign an installed image.")
 @click.argument('image')
-def remove(image):
+def remove(image, prune_db_cert):
     """ Uninstall image """
     bootloader = get_bootloader()
     images = bootloader.get_installed_images()
@@ -738,6 +741,67 @@ def remove(image):
         sys.exit(1)
     # TODO: check if image is next boot or default boot and fix these
     bootloader.remove_image(image)
+
+    if prune_db_cert:
+        prune_stale_db_certs(bootloader)
+
+
+def _confirm_db_cert_prune(question):
+    """Ask the operator to confirm a db certificate prune. On EOF/abort (e.g. a
+    non-interactive session) the prune is declined rather than aborting the whole
+    command, since the image has already been removed."""
+    try:
+        return click.confirm(question, default=False)
+    except click.Abort:
+        echo_and_log("db certificate prune not confirmed; skipping.", LOG_WARN, fg="yellow")
+        return False
+
+
+def prune_stale_db_certs(bootloader):
+    """Prune UEFI Secure Boot 'db' certificates that no longer sign an installed image.
+
+    Confirmation policy:
+      * nothing missing               -> prune without prompting.
+      * some certs missing            -> ask for confirmation before pruning.
+      * essential (boot-critical)     -> print a warning and ask for explicit approval;
+        certs missing                    only then prune, allowing the essential loss.
+    """
+    if not bootloader.is_secure_upgrade_image_verification_supported():
+        echo_and_log("Secure Boot is not enabled; skipping db certificate prune.")
+        return
+
+    plan = bootloader.plan_stale_db_certs_prune()
+    if plan is None:
+        echo_and_log("Could not determine the db certificate prune plan; "
+                     "skipping db certificate prune.", LOG_WARN, fg="yellow")
+        return
+
+    missing = plan.get('missing', 0)
+    essential_missing = plan.get('essential_missing', 0)
+    allow_essential_missing = False
+
+    if essential_missing > 0:
+        echo_and_log(
+            f"WARNING: {essential_missing} boot-critical (shim/grub/MokManager) binary/ies "
+            "would lose every UEFI db signer because no reinstall certificate is available. "
+            "Pruning now may prevent the system from booting under Secure Boot.",
+            LOG_WARN, fg="red")
+        if not _confirm_db_cert_prune("Prune the db certificates anyway?"):
+            echo_and_log("Skipping db certificate prune.")
+            return
+        allow_essential_missing = True
+    elif missing > 0:
+        echo_and_log(
+            f"{missing} db certificate(s) that sign an installed image have no reinstall "
+            "certificate and will be dropped.", fg="yellow")
+        if not _confirm_db_cert_prune("Continue pruning the db certificates?"):
+            echo_and_log("Skipping db certificate prune.")
+            return
+
+    if bootloader.prune_stale_db_certs(allow_essential_missing=allow_essential_missing):
+        echo_and_log("UEFI db certificate prune completed.")
+    else:
+        echo_and_log("UEFI db certificate prune failed.", LOG_ERR)
 
 
 # Retrieve version from binary image file and print to screen

@@ -153,3 +153,73 @@ def test_enroll_image_secure_boot_keys_runs_script():
         assert bootloader.enroll_image_secure_boot_keys(image)
         mock_run.assert_called_once_with(
             ['/usr/local/bin/secure_boot_enroll_db.sh', image], capture_output=True)
+
+
+PRUNE_SCRIPT = '/usr/local/bin/remove_stale_db_certs.sh'
+
+
+def _completed(stdout="", returncode=0, stderr=""):
+    proc = Mock()
+    proc.stdout = stdout.encode()
+    proc.stderr = stderr.encode()
+    proc.returncode = returncode
+    return proc
+
+
+@patch("sonic_installer.bootloader.grub.os.path.exists", Mock(return_value=True))
+@patch("sonic_installer.bootloader.grub.subprocess.run")
+def test_plan_stale_db_certs_prune_parses(run_patch):
+    out = ("some human text\n"
+           "PRUNE_PLAN missing=1 essential_missing=2 drop=3 reinstall=4 used=5 db=6\n"
+           "Plan only - no changes made.\n")
+    run_patch.return_value = _completed(stdout=out, returncode=0)
+
+    bootloader = grub.GrubBootloader()
+    plan = bootloader.plan_stale_db_certs_prune()
+
+    run_patch.assert_called_once_with([PRUNE_SCRIPT, '--plan'], capture_output=True)
+    assert plan == {'missing': 1, 'essential_missing': 2, 'drop': 3,
+                    'reinstall': 4, 'used': 5, 'db': 6}
+
+
+@patch("sonic_installer.bootloader.grub.os.path.exists", Mock(return_value=False))
+def test_plan_stale_db_certs_prune_script_missing():
+    bootloader = grub.GrubBootloader()
+    assert bootloader.plan_stale_db_certs_prune() is None
+
+
+@patch("sonic_installer.bootloader.grub.os.path.exists", Mock(return_value=True))
+@patch("sonic_installer.bootloader.grub.subprocess.run")
+def test_plan_stale_db_certs_prune_failure(run_patch):
+    run_patch.return_value = _completed(stdout="", returncode=2, stderr="boom")
+    bootloader = grub.GrubBootloader()
+    assert bootloader.plan_stale_db_certs_prune() is None
+
+
+@patch("sonic_installer.bootloader.grub.os.path.exists", Mock(return_value=True))
+@patch("sonic_installer.bootloader.grub.subprocess.run")
+def test_prune_stale_db_certs_command(run_patch):
+    run_patch.return_value = _completed(stdout="Done", returncode=0)
+    bootloader = grub.GrubBootloader()
+
+    assert bootloader.prune_stale_db_certs() is True
+    run_patch.assert_called_once_with([PRUNE_SCRIPT, '--commit', '--yes'], capture_output=True)
+
+
+@patch("sonic_installer.bootloader.grub.os.path.exists", Mock(return_value=True))
+@patch("sonic_installer.bootloader.grub.subprocess.run")
+def test_prune_stale_db_certs_allow_essential(run_patch):
+    run_patch.return_value = _completed(stdout="Done", returncode=0)
+    bootloader = grub.GrubBootloader()
+
+    assert bootloader.prune_stale_db_certs(allow_essential_missing=True) is True
+    run_patch.assert_called_once_with(
+        [PRUNE_SCRIPT, '--commit', '--yes', '--allow-essential-missing'], capture_output=True)
+
+
+@patch("sonic_installer.bootloader.grub.os.path.exists", Mock(return_value=True))
+@patch("sonic_installer.bootloader.grub.subprocess.run")
+def test_prune_stale_db_certs_failure(run_patch):
+    run_patch.return_value = _completed(stdout="oops", returncode=4, stderr="err")
+    bootloader = grub.GrubBootloader()
+    assert bootloader.prune_stale_db_certs() is False
