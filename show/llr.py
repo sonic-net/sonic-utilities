@@ -20,11 +20,6 @@ LLR_PROFILE_DISPLAY_FIELDS = [
 STATUS_NA = "N/A"
 
 
-def _get_valid_namespace_choices():
-    """Namespace choices for the -n option (single-asic returns [''])."""
-    return multi_asic_util.multi_asic_ns_choices()
-
-
 def _resolve_namespaces(db, namespace):
     """
     Return the list of (namespace, SonicV2Connector) pairs to iterate.

@@ -5,14 +5,6 @@ from sonic_py_common import multi_asic
 from utilities_common.llr import is_llr_capable
 
 
-def _get_valid_namespace_choices():
-    """Namespace choices for the -n option.
-    On single-asic this returns [''] (DEFAULT_NAMESPACE) so the option
-    remains valid but effectively unused.
-    """
-    return multi_asic_util.multi_asic_ns_choices()
-
-
 def _get_cfgdb(ctx, namespace):
     """
     Return the ConfigDBConnector for the given namespace from

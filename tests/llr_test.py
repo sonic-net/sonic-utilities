@@ -650,6 +650,10 @@ class TestLlrMultiAsic(object):
         print(result.output)
         assert result.exit_code == 0
         assert "llr_800000_40m_profile" in result.output
+        assert "264" in result.output           # max_outstanding_frames
+        assert "135000" in result.output        # max_outstanding_bytes
+        assert "2048" in result.output          # ctlos_spacing_bytes
+        assert "best_effort" in result.output   # init_action / flush_action
 
     def test_config_llr_mode_namespace(self):
         """config llr interface mode Ethernet0 static -n asic0."""
