@@ -8,6 +8,11 @@ filterFdbEntriesTestVector = [
         "fdb": [
         ],
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d"
+                }
+            }
         },
         "expected_fdb": [
         ],
@@ -39,6 +44,11 @@ filterFdbEntriesTestVector = [
             },
         ],
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d"
+                }
+            }, 
             "VLAN": {
                 "Vlan1000": {}
             },
@@ -78,6 +88,11 @@ filterFdbEntriesTestVector = [
             },
         ],
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            }, 
             "VLAN": {
                 "Vlan1000": {}
             },
@@ -116,6 +131,11 @@ filterFdbEntriesTestVector = [
             },
         ],
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            }, 
             "VLAN": {
                 "Vlan1": {}
             },
@@ -153,6 +173,62 @@ filterFdbEntriesTestVector = [
             },
         ],
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            }, 
+            "VLAN": {
+                "Vlan1": {}
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1|25.103.178.1/21": {},
+                "Vlan1": {}, 
+                "Vlan1|fc02:1000::1/64": {}
+            },
+        },
+        "expected_fdb": [
+            {
+                "FDB_TABLE:Vlan1:50-2f-a8-cb-76-7c": {
+                    "type": "dynamic",
+                    "port": "Ethernet22"
+                },
+                "OP": "SET"
+            },
+        ],
+    },
+    {
+        "arp":[
+            {
+                "NEIGH_TABLE:Vlan1000:192.168.0.10": {
+                    "neigh": "72:06:00:01:01:16",
+                    "family": "IPv4"
+                },
+                "OP": "SET"
+            },
+            {
+                "NEIGH_TABLE:Vlan1:fc02:1000::100": {
+                    "neigh": "50:2f:a8:cb:76:7c",
+                    "family": "IPv6"
+                },
+                "OP": "SET"
+            },
+        ],
+        "fdb": [
+            {
+                "FDB_TABLE:Vlan1:50-2f-a8-cb-76-7c": {
+                    "type": "dynamic",
+                    "port": "Ethernet22"
+                },
+                "OP": "SET"
+            },
+        ],
+        "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            }, 
             "VLAN": {
                 "Vlan1": {}
             },
@@ -199,6 +275,11 @@ filterFdbEntriesTestVector = [
             },
         ],
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            }, 
             "VLAN": {
                 "Vlan1000": {}
             },
@@ -237,6 +318,11 @@ filterFdbEntriesTestVector = [
             },
         ],
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            }, 
             "VLAN": {
                 "Vlan1": {}
             },
@@ -257,6 +343,11 @@ filterFdbEntriesTestVector = [
         "arp": "tests/filter_fdb_input/arp.json",
         "fdb": "tests/filter_fdb_input/fdb.json",
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            }, 
             "VLAN": {
                 "Vlan1": {}
             },
@@ -271,8 +362,71 @@ filterFdbEntriesTestVector = [
         "arp": "tests/filter_fdb_input/arp.json",
         "fdb": "tests/filter_fdb_input/fdb.json",
         "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d" 
+                }
+            } 
         },
         "expected_fdb": [
+        ],
+    },
+    {
+        "arp":[
+            {
+                "NEIGH_TABLE:Vlan1000:192.168.0.10": {
+                    "neigh": "72:06:00:01:00:08",
+                    "family": "IPv4"
+                },
+                "OP": "SET"
+            },
+            {
+                "NEIGH_TABLE:Vlan1000:192.168.0.10": {
+                    "neigh": "f4:8e:38:16:bc:8d",
+                    "family": "IPv4"
+                },
+                "OP": "SET"
+            },
+        ],
+        "fdb": [
+            {
+                "FDB_TABLE:Vlan1000:72-06-00-01-00-08": {
+                    "type": "dynamic",
+                    "port": "Ethernet22"
+                },
+                "OP": "SET"
+            },
+            {
+                "FDB_TABLE:Vlan1000:F4-8E-38-16-BC-8D": {
+                    "type": "dynamic",
+                    "port": "Ethernet22"
+                },
+                "OP": "SET"
+            },
+        ],
+        "config_db": {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "mac": "f4:8e:38:16:bc:8d"
+                }
+            }, 
+            "VLAN": {
+                "Vlan1000": {}
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {}, 
+                "Vlan1000|192.168.0.1/21": {},
+                "Vlan1000|fc02:1000::1/64": {}
+            }, 
+        },
+        "expected_fdb": [
+            {
+                "FDB_TABLE:Vlan1000:72-06-00-01-00-08": {
+                    "type": "dynamic",
+                    "port": "Ethernet22"
+                },
+                "OP": "SET"
+            },
         ],
     },
 ]
