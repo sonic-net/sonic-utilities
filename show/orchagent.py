@@ -4,10 +4,16 @@ import sys
 from swsscommon import swsscommon
 from tabulate import tabulate
 
+from sonic_py_common import multi_asic
+from utilities_common.multi_asic import multi_asic_click_option_namespace
+
 
 TASK_STATS_QUERY_CHANNEL = "ORCH_TASK_STATS_QUERY"
 TASK_STATS_REPLY_CHANNEL = "ORCH_TASK_STATS_REPLY"
 REPLY_TIMEOUT_MS = 10000
+# DBConnector connection timeout (0 = library default); the reply wait is
+# governed separately by REPLY_TIMEOUT_MS on the Select below.
+REDIS_TIMEOUT_MSECS = 0
 
 
 def _ms(ns):
@@ -23,13 +29,17 @@ def _fmt_quartet(median_ns, q1_ns, q3_ns, max_ns):
             f"{_ms(max_ns):.2f}")
 
 
-def _query_orchagent(op):
+def _query_orchagent(op, namespace):
     """Send a query to orchagent over APPL_DB notification channels and
     return (op_ret, data_ret, fvs) on success.
 
+    On a multi-ASIC platform orchagent runs per-ASIC inside each asicN
+    namespace with its own APPL_DB, so the query must target the right
+    namespace's DB. `namespace` is '' for the default/single-ASIC DB.
+
     Raises RuntimeError on timeout or transport error.
     """
-    db = swsscommon.DBConnector("APPL_DB", 0)
+    db = swsscommon.DBConnector("APPL_DB", REDIS_TIMEOUT_MSECS, True, namespace)
     producer = swsscommon.NotificationProducer(db, TASK_STATS_QUERY_CHANNEL)
     consumer = swsscommon.NotificationConsumer(db, TASK_STATS_REPLY_CHANNEL)
 
@@ -63,9 +73,14 @@ def _parse_stats(fvs):
     """
     rows = []
     for name, blob in fvs:
-        parts = blob.split("|")
+        # Tolerate a trailing delimiter (e.g. "a|b|...|n|") from the daemon.
+        parts = blob.rstrip("|").split("|")
         if len(parts) != 14:
-            # Skip malformed rows rather than failing the whole table.
+            # Skip malformed rows rather than failing the whole table, but
+            # surface it so a daemon/CLI version-format mismatch is visible
+            # instead of producing a silently incomplete table.
+            click.echo(f"Warning: skipping malformed stats for '{name}' "
+                       f"({len(parts)} fields, expected 14)", err=True)
             continue
         try:
             count = int(parts[0])
@@ -83,6 +98,8 @@ def _parse_stats(fvs):
             sched_q3_ns = int(parts[12])
             sched_max_ns = int(parts[13])
         except ValueError:
+            click.echo(f"Warning: skipping stats with non-integer field "
+                       f"for '{name}'", err=True)
             continue
         rows.append({
             "name":            name,
@@ -104,7 +121,7 @@ def _parse_stats(fvs):
     return rows
 
 
-def _render_table(rows):
+def _render_table(rows, multi_asic_mode=False):
     # Sort: total_ns descending, ties broken by name ascending.
     rows = sorted(rows,
                   key=lambda r: (-r["total_ns"], r["name"]))
@@ -138,14 +155,19 @@ def _render_table(rows):
 
         outliers = r["high_outliers"] + r["low_outliers"]
 
-        table.append([
+        row = [
             r["name"],
             run_quartet,
             r["count"],
             outliers,
             sched_quartet,
             total_str,
-        ])
+        ]
+        # On multi-ASIC, prepend the owning namespace so rows from different
+        # ASICs are distinguishable in the aggregated table.
+        if multi_asic_mode:
+            row.insert(0, r.get("asic", ""))
+        table.append(row)
 
     headers = [
         "TASK",
@@ -155,6 +177,8 @@ def _render_table(rows):
         "SCHED LATENCY\nmedian/q1/q3/max\n(in msec)",
         "TOTAL\nrun/sched\n(in msec)",
     ]
+    if multi_asic_mode:
+        headers.insert(0, "ASIC")
     return tabulate(table, headers=headers, tablefmt="plain")
 
 
@@ -165,13 +189,35 @@ def orchagent():
 
 
 @orchagent.command("tasks")
-def tasks():
+@multi_asic_click_option_namespace
+def tasks(namespace):
     """Show per-Executor execution timing in orchagent"""
-    try:
-        _, _, fvs = _query_orchagent("show")
-    except RuntimeError as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+    # get_namespace_list('' / None) -> [''] on single-ASIC, the per-ASIC
+    # namespaces on multi-ASIC, and only the requested one when -n is given.
+    # On a supervisor (fabric-only) it is empty, so this becomes a graceful
+    # no-op instead of a blind timeout.
+    namespaces = multi_asic.get_namespace_list(namespace)
+    multi_asic_mode = len(namespaces) > 1
 
-    rows = _parse_stats(fvs)
-    click.echo(_render_table(rows))
+    rows = []
+    errors = []
+    for ns in namespaces:
+        try:
+            _, _, fvs = _query_orchagent("show", ns)
+        except RuntimeError as e:
+            errors.append((ns, e))
+            continue
+        ns_rows = _parse_stats(fvs)
+        for r in ns_rows:
+            r["asic"] = ns
+        rows.extend(ns_rows)
+
+    # Print the table when we have data, or when there were no errors at all
+    # (e.g. an empty reply or a no-op sup) so headers still render.
+    if rows or not errors:
+        click.echo(_render_table(rows, multi_asic_mode=multi_asic_mode))
+
+    for ns, e in errors:
+        click.echo(f"Error ({ns or 'default'}): {e}", err=True)
+    if errors:
+        sys.exit(1)

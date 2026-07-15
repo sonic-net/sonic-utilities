@@ -60,7 +60,12 @@ def fake_swsscommon():
     fake.FieldValuePairs.side_effect = lambda x: x
     fake.DBConnector.return_value = mock.MagicMock()
 
-    with mock.patch.object(show_orchagent, "swsscommon", fake):
+    # Default to single-ASIC: one default namespace, no ASIC column.
+    with mock.patch.object(show_orchagent, "swsscommon", fake), \
+         mock.patch.object(show_orchagent.multi_asic, "get_namespace_list",
+                           return_value=['']), \
+         mock.patch.object(show_orchagent.multi_asic, "is_multi_asic",
+                           return_value=False):
         yield fake
 
 
@@ -222,3 +227,52 @@ def test_tasks_sends_show_op(fake_swsscommon):
     assert producer.send.call_count == 1
     op_arg = producer.send.call_args[0][0]
     assert op_arg == "show"
+
+
+def test_tasks_multi_asic_iterates_namespaces(fake_swsscommon):
+    """On multi-ASIC, query each asicN namespace's APPL_DB and render an
+    aggregated table with an ASIC column."""
+    with mock.patch.object(show_orchagent.multi_asic, "get_namespace_list",
+                           return_value=["asic0", "asic1"]), \
+         mock.patch.object(show_orchagent.multi_asic, "is_multi_asic",
+                           return_value=True):
+        runner = CliRunner()
+        result = runner.invoke(show_orchagent.orchagent, ["tasks"])
+    assert result.exit_code == 0, result.output
+
+    # One query per namespace.
+    producer = fake_swsscommon.NotificationProducer.return_value
+    assert producer.send.call_count == 2
+
+    # DBConnector opened per-namespace (4-arg form: name, timeout, wait, ns).
+    ns_args = [c.args[3] for c in fake_swsscommon.DBConnector.call_args_list
+               if len(c.args) >= 4]
+    assert "asic0" in ns_args and "asic1" in ns_args
+
+    # Aggregated table has an ASIC column populated for both namespaces.
+    assert "ASIC" in result.output
+    assert "asic0" in result.output
+    assert "asic1" in result.output
+
+
+def test_tasks_single_asic_has_no_asic_column(fake_swsscommon):
+    """Single-ASIC output is unchanged (no ASIC column)."""
+    runner = CliRunner()
+    result = runner.invoke(show_orchagent.orchagent, ["tasks"])
+    assert result.exit_code == 0
+    assert "ASIC" not in result.output
+
+
+def test_tasks_malformed_row_warns_and_skips(fake_swsscommon):
+    """A row with the wrong field count is skipped with a stderr warning
+    rather than silently dropped."""
+    fake_swsscommon.NotificationConsumer.return_value.pop.return_value = (
+        "ok", "", [("RouteOrch", "1|2|3")])  # only 3 fields
+
+    runner = CliRunner()
+    result = runner.invoke(show_orchagent.orchagent, ["tasks"])
+    assert result.exit_code == 0
+    assert "Warning" in result.output and "malformed" in result.output
+    # RouteOrch skipped -> not a data row.
+    assert not any(ln.lstrip().split()[:1] == ["RouteOrch"]
+                   for ln in result.output.splitlines())
