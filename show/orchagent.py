@@ -197,7 +197,10 @@ def tasks(namespace):
     # On a supervisor (fabric-only) it is empty, so this becomes a graceful
     # no-op instead of a blind timeout.
     namespaces = multi_asic.get_namespace_list(namespace)
-    multi_asic_mode = len(namespaces) > 1
+    # Show the ASIC column on any multi-ASIC platform (including when a single
+    # namespace is selected with -n) so the row's owning ASIC stays explicit;
+    # single-ASIC boxes keep the original column set.
+    multi_asic_mode = multi_asic.is_multi_asic()
 
     rows = []
     errors = []

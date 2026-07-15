@@ -263,6 +263,26 @@ def test_tasks_single_asic_has_no_asic_column(fake_swsscommon):
     assert "ASIC" not in result.output
 
 
+def test_tasks_multi_asic_single_namespace_keeps_asic_column(fake_swsscommon):
+    """On a multi-ASIC platform, selecting one namespace with -n still shows
+    the ASIC column so the owning ASIC stays explicit."""
+    with mock.patch.object(show_orchagent.multi_asic, "get_namespace_list",
+                           return_value=["asic0"]), \
+         mock.patch.object(show_orchagent.multi_asic, "is_multi_asic",
+                           return_value=True):
+        runner = CliRunner()
+        result = runner.invoke(show_orchagent.orchagent, ["tasks", "-n", "asic0"])
+    assert result.exit_code == 0, result.output
+
+    # Only the selected namespace is queried.
+    producer = fake_swsscommon.NotificationProducer.return_value
+    assert producer.send.call_count == 1
+
+    # ASIC column is present and populated for the single namespace.
+    assert "ASIC" in result.output
+    assert "asic0" in result.output
+
+
 def test_tasks_malformed_row_warns_and_skips(fake_swsscommon):
     """A row with the wrong field count is skipped with a stderr warning
     rather than silently dropped."""
