@@ -13102,6 +13102,38 @@ This command resets the SED password to the default value.
   SED password reset process completed successfully
   ```
 
+**config sed wipe-ssd**
+
+This command performs a graceful SSD wipe: SED PSID revert (crypto erase) followed by NVMe sanitize (block erase). The operation is **irreversible** - after wipe the switch cannot boot until re-imaged (ONIE / rescue image).
+
+The wipe runs from a RAM-disk after the OS root is pivoted, so it survives an SSH disconnect. Follow progress in syslog via `journalctl -f -t ssd_erase.sh`.
+
+- Usage:
+
+  ```console
+  config sed wipe-ssd [-y | --yes]
+  ```
+
+- Options:
+  - `-y, --yes` : skip the interactive confirmation prompt (for automation).
+
+- Example (interactive):
+
+  ```console
+  admin@sonic:~$ config sed wipe-ssd
+  This will PERMANENTLY erase the SSD. Continue? [y/N]: y
+  =========================================================================
+   SSD ERASE STARTED
+     * Do NOT power off the switch or interrupt this session.
+     * The wipe runs from a RAM-disk and will keep going even if SSH drops.
+     * Follow progress in syslog: journalctl -f -t ssd_erase.sh
+     * When it finishes, reboot with: sudo /sbin/reboot
+  =========================================================================
+  SSD wipe completed successfully. Reboot now with `sudo /sbin/reboot`.
+  ```
+
+After the wipe completes, reboot with `sudo /sbin/reboot` (or via BMC / power cycle). The full SONiC `/usr/local/bin/reboot` script is not supported after wipe because it depends on `/host` and Redis, which no longer exist.
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#sed)
 
 ## SNMP
