@@ -57,16 +57,15 @@ def ensure_statedb_connected(db):
 def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb
     fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name)
-    if not fvs:
-        if is_smartswitch():
-            return 'down'
-        elif is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
-            # On BMC, SWITCH-HOST default is 'down' to keep it powered off on boot
-            return 'down'
-        else:
-            return 'up'
-    else:
-        return fvs['admin_status']
+    admin_status = fvs.get('admin_status') if fvs else None
+    if admin_status:
+        return admin_status
+    if is_smartswitch():
+        return 'down'
+    if is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
+        # On BMC, SWITCH-HOST default is 'down' to keep it powered off on boot
+        return 'down'
+    return 'up'
 
 #
 # Name: check_config_module_state_with_timeout

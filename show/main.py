@@ -71,6 +71,7 @@ from . import syslog
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import llr
 from . import srv6
 from . import switch
 from . import icmp
@@ -334,6 +335,7 @@ cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
 cli.add_command(stp.spanning_tree)
+cli.add_command(llr.llr)
 cli.add_command(srv6.srv6)
 cli.add_command(switch.switch)
 cli.add_command(icmp.icmp)

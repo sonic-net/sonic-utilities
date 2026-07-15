@@ -2296,6 +2296,27 @@
         "POLL_INTERVAL": "60000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|LLR": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "LLR_PORT|Ethernet0": {
+        "llr_mode": "static",
+        "llr_local": "enabled",
+        "llr_remote": "enabled",
+        "llr_profile": "llr_800000_40m_profile"
+    },
+    "LLR_PORT|Ethernet4": {
+        "llr_mode": "static",
+        "llr_local": "enabled",
+        "llr_remote": "disabled",
+        "llr_profile": "llr_400000_5m_profile"
+    },
+    "LLR_PORT|Ethernet8": {
+        "llr_mode": "static",
+        "llr_local": "enabled",
+        "llr_remote": "disabled"
+    },
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",

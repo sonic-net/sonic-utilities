@@ -56,6 +56,8 @@
   * [CMIS firmware target mode commands](#cmis-firmware-target-mode-commands)
 * [CMIS debug](#cmis-debug)
 * [CMIS debug loopback](#cmis-debug-loopback)
+* [CMIS debug loopback-capability](#cmis-debug-loopback-capability)
+* [CMIS debug loopback-status](#cmis-debug-loopback-status)
 * [CMIS debug rx-output](#cmis-debug-rx-output)
 * [CMIS debug tx-output](#cmis-debug-tx-output)
 * [DHCP Relay](#dhcp-relay)
@@ -123,6 +125,10 @@
   * [LDAP global config commands](#LDAP-global-config-commands)
   * [show LDAP server commands](#LDAP-server-show-commands)
   * [LDAP server config commands](#LDAP-server-config-commands)
+* [LLR](#llr)
+  * [LLR show commands](#llr-show-commands)
+  * [LLR config commands](#llr-config-commands)
+  * [LLR clear commands](#llr-clear-commands)
 * [LLDP](#lldp)
   * [LLDP show commands](#lldp-show-commands)
 * [Loading, Reloading And Saving Configuration](#loading-reloading-and-saving-configuration)
@@ -1392,6 +1398,138 @@ Ethernet0: SFP EEPROM detected
                 VccLowWarning  : 3.15Volts
 ```
 
+- Example (Decode and display information stored on the EEPROM of CPO connected to Ethernet0):
+```
+admin@sonic:~$ show interfaces transceiver eeprom -d Ethernet0
+Ethernet0: SFP EEPROM detected
+        Active Firmware: N/A
+        Active application selected code assigned to host lane 1: 6
+        Active application selected code assigned to host lane 2: 6
+        Active application selected code assigned to host lane 3: 6
+        Active application selected code assigned to host lane 4: 6
+        Active application selected code assigned to host lane 5: 6
+        Active application selected code assigned to host lane 6: 6
+        Active application selected code assigned to host lane 7: 6
+        Active application selected code assigned to host lane 8: 6
+        Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
+                                   200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
+                                   Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
+                                   CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
+                                   Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
+                                   800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
+        CMIS Rev: 5.2
+        Connector: LC
+        ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        ELS Laser Count: 8
+        ELS Maximum Power Consumption: 12.0
+        ELS Revision: 0.1
+        ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
+        ELS Vendor Name: BROADCOM
+        ELS Vendor OUI: ec-01-e2
+        ELS Vendor PN: ARLM-96F8DMZ
+        ELS Vendor Rev: A0
+        ELS Vendor SN: FD2424VG006
+        Encoding: N/A
+        Extended Identifier: Power Class 8 (20.0W Max)
+        Extended RateSelect Compliance: N/A
+        Host Lane Count: 8
+        Identifier: CPO Bailly
+        Inactive Firmware: N/A
+        Length Cable Assembly(m): 0.0
+        Media Interface Technology: Others
+        Media Lane Count: 8
+        Module Hardware Rev: 0.0
+        Nominal Bit Rate(100Mbs): N/A
+        RLM Laser Lpower Mode Control: 0
+        RLM Laser Wavelength Grid: CWDM4
+        Specification compliance: sm_media_interface
+        Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
+        Vendor Name: BROADCOM
+        Vendor OUI: 38-ba-b0
+        Vendor PN: BCM789096FBB0KLG
+        Vendor Rev: A0
+        Vendor SN: SB243500200
+        is_replaceable: False
+        type_abbrv_name: QSFP-DD
+        vdm_supported: False
+        ChannelMonitorValues:
+                RX1Power: 1.757dBm
+                RX2Power: 1.898dBm
+                RX3Power: 2.279dBm
+                RX4Power: 2.458dBm
+                RX5Power: 0.9dBm
+                RX6Power: 1.475dBm
+                RX7Power: 1.678dBm
+                RX8Power: 1.159dBm
+                TX1Bias: 79.6mA
+                TX1Power: 1.952dBm
+                TX2Bias: 57.22mA
+                TX2Power: 1.994dBm
+                TX3Bias: 68.8mA
+                TX3Power: 1.879dBm
+                TX4Bias: 63.024mA
+                TX4Power: 2.101dBm
+                TX5Bias: 79.6mA
+                TX5Power: 1.939dBm
+                TX6Bias: 57.22mA
+                TX6Power: 1.927dBm
+                TX7Bias: 68.8mA
+                TX7Power: 1.874dBm
+                TX8Bias: 63.024mA
+                TX8Power: 2.037dBm
+        ChannelThresholdValues:
+                RxPowerHighAlarm  : 6.0dBm
+                RxPowerHighWarning: 4.003dBm
+                RxPowerLowAlarm   : -11.203dBm
+                RxPowerLowWarning : -8.202dBm
+                TxBiasHighAlarm   : 137.5mA
+                TxBiasHighWarning : 132.5mA
+                TxBiasLowAlarm    : 5.0mA
+                TxBiasLowWarning  : 7.5mA
+                TxPowerHighAlarm  : 6.0dBm
+                TxPowerHighWarning: 4.0dBm
+                TxPowerLowAlarm   : -7.201dBm
+                TxPowerLowWarning : -4.201dBm
+        ModuleMonitorValues:
+                Temperature: 81.363C
+                Vcc: 3.311Volts
+        ModuleThresholdValues:
+                TempHighAlarm  : 90.0C
+                TempHighWarning: 85.0C
+                TempLowAlarm   : 15.0C
+                TempLowWarning : 20.0C
+                VccHighAlarm   : 3.465Volts
+                VccHighWarning : 3.399Volts
+                VccLowAlarm    : 3.135Volts
+                VccLowWarning  : 3.201Volts
+        ELSMonitorValues:
+                RLM0_Laser4_current: 252.38 mA
+                RLM0_Laser4_power: 72.290 mW 18.591 dBm
+                RLM0_Laser5_current: 275.49 mA
+                RLM0_Laser5_power: 76.700 mW 18.848 dBm
+                RLM0_Laser6_current: 228.96 mA
+                RLM0_Laser6_power: 66.600 mW 18.235 dBm
+                RLM0_Laser7_current: 318.41 mA
+                RLM0_Laser7_power: 88.060 mW 19.448 dBm
+                ELS Temperature: 25.027C
+                ELS Vcc: 3.365Volts
+        ELSThresholdValues:
+                ELS TempHighAlarm: 0.0C
+                ELS TempHighWarning: 0.0C
+                ELS TempLowAlarm: 0.0C
+                ELS TempLowWarning: 0.0C
+                ELS TxBiasHighAlarm: 0.0mA
+                ELS TxBiasHighWarning: 0.0mA
+                ELS TxPowerHighAlarm: 0.0mW
+                ELS TxPowerHighWarning: 0.0mW
+                ELS TxPowerLowAlarm: 0.0mW
+                ELS TxPowerLowWarning: 0.0mW
+                ELS VccHighAlarm: 0.0Volts
+                ELS VccHighWarning: 0.0Volts
+                ELS VccLowAlarm: 0.0Volts
+                ELS VccLowWarning: 0.0Volts
+```
+
 - Example (Decode and display information stored on the EEPROM of SFP transceiver connected to Ethernet16):
   ```
   admin@sonic:~$ show interfaces transceiver info Ethernet16
@@ -1432,6 +1570,62 @@ Ethernet0: SFP EEPROM detected
           Vendor PN: DP04QSDD-E20-00E
           Vendor Rev: 01
           Vendor SN: 210753986
+  ```
+
+- Example (Decode and display information stored on the EEPROM of CPO connected to Ethernet0):
+  ```
+admin@sonic:~$ show interfaces transceiver info Ethernet0
+Ethernet0: SFP EEPROM detected
+        Active Firmware: N/A
+        Active application selected code assigned to host lane 1: 6
+        Active application selected code assigned to host lane 2: 6
+        Active application selected code assigned to host lane 3: 6
+        Active application selected code assigned to host lane 4: 6
+        Active application selected code assigned to host lane 5: 6
+        Active application selected code assigned to host lane 6: 6
+        Active application selected code assigned to host lane 7: 6
+        Active application selected code assigned to host lane 8: 6
+        Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
+                                   200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
+                                   Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
+                                   CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
+                                   Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
+                                   800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
+        CMIS Rev: 5.2
+        Connector: LC
+        ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        ELS Laser Count: 8
+        ELS Maximum Power Consumption: 12.0
+        ELS Revision: 0.1
+        ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
+        ELS Vendor Name: BROADCOM
+        ELS Vendor OUI: ec-01-e2
+        ELS Vendor PN: ARLM-96F8DMZ
+        ELS Vendor Rev: A0
+        ELS Vendor SN: FD2424VG006
+        Encoding: N/A
+        Extended Identifier: Power Class 8 (20.0W Max)
+        Extended RateSelect Compliance: N/A
+        Host Lane Count: 8
+        Identifier: CPO Bailly
+        Inactive Firmware: N/A
+        Length Cable Assembly(m): 0.0
+        Media Interface Technology: Others
+        Media Lane Count: 8
+        Module Hardware Rev: 0.0
+        Nominal Bit Rate(100Mbs): N/A
+        RLM Laser Lpower Mode Control: 0
+        RLM Laser Wavelength Grid: CWDM4
+        Specification compliance: sm_media_interface
+        Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
+        Vendor Name: BROADCOM
+        Vendor OUI: 38-ba-b0
+        Vendor PN: BCM789096FBB0KLG
+        Vendor Rev: A0
+        Vendor SN: SB243500200
+        is_replaceable: False
+        type_abbrv_name: QSFP-DD
+        vdm_supported: False
   ```
 
 - Example (Display status of low-power mode of SFP transceiver connected to Ethernet100):
@@ -1764,6 +1958,221 @@ Ethernet0: SFP EEPROM detected
           Rxtotpower high warning flag: False
           Rxtotpower low warning flag: False
           Rxtotpower low alarm flag: False
+  ```
+
+- Example (Display status info of CPO connected to Ethernet0):
+  ```
+admin@sonic:~$ show interfaces transceiver status Ethernet0
+Ethernet0: 
+        CMIS State (SW): READY
+        Tx fault flag on media lane 1: False
+        Tx fault flag on media lane 2: False
+        Tx fault flag on media lane 3: False
+        Tx fault flag on media lane 4: False
+        Tx fault flag on media lane 5: False
+        Tx fault flag on media lane 6: False
+        Tx fault flag on media lane 7: False
+        Tx fault flag on media lane 8: False
+        Rx loss of signal flag on media lane 1: False
+        Rx loss of signal flag on media lane 2: False
+        Rx loss of signal flag on media lane 3: False
+        Rx loss of signal flag on media lane 4: False
+        Rx loss of signal flag on media lane 5: False
+        Rx loss of signal flag on media lane 6: False
+        Rx loss of signal flag on media lane 7: False
+        Rx loss of signal flag on media lane 8: False
+        TX disable status on lane 1: False
+        TX disable status on lane 2: False
+        TX disable status on lane 3: False
+        TX disable status on lane 4: False
+        TX disable status on lane 5: False
+        TX disable status on lane 6: False
+        TX disable status on lane 7: False
+        TX disable status on lane 8: False
+        Disabled TX channels: 0
+        Current module state: ModuleReady
+        Reason of entering the module fault state: No Fault detected
+        Datapath firmware fault: False
+        Module firmware fault: False
+        Module state changed: False
+        Data path state indicator on host lane 1: DataPathActivated
+        Data path state indicator on host lane 2: DataPathActivated
+        Data path state indicator on host lane 3: DataPathActivated
+        Data path state indicator on host lane 4: DataPathActivated
+        Data path state indicator on host lane 5: DataPathActivated
+        Data path state indicator on host lane 6: DataPathActivated
+        Data path state indicator on host lane 7: DataPathActivated
+        Data path state indicator on host lane 8: DataPathActivated
+        Tx output status on media lane 1: True
+        Tx output status on media lane 2: True
+        Tx output status on media lane 3: True
+        Tx output status on media lane 4: True
+        Tx output status on media lane 5: True
+        Tx output status on media lane 6: True
+        Tx output status on media lane 7: True
+        Tx output status on media lane 8: True
+        Rx output status on host lane 1: True
+        Rx output status on host lane 2: True
+        Rx output status on host lane 3: True
+        Rx output status on host lane 4: True
+        Rx output status on host lane 5: True
+        Rx output status on host lane 6: True
+        Rx output status on host lane 7: True
+        Rx output status on host lane 8: True
+        Tx loss of signal flag on host lane 1: False
+        Tx loss of signal flag on host lane 2: False
+        Tx loss of signal flag on host lane 3: False
+        Tx loss of signal flag on host lane 4: False
+        Tx loss of signal flag on host lane 5: False
+        Tx loss of signal flag on host lane 6: False
+        Tx loss of signal flag on host lane 7: False
+        Tx loss of signal flag on host lane 8: False
+        Tx clock and data recovery loss of lock on host lane 1: N/A
+        Tx clock and data recovery loss of lock on host lane 2: N/A
+        Tx clock and data recovery loss of lock on host lane 3: N/A
+        Tx clock and data recovery loss of lock on host lane 4: N/A
+        Tx clock and data recovery loss of lock on host lane 5: N/A
+        Tx clock and data recovery loss of lock on host lane 6: N/A
+        Tx clock and data recovery loss of lock on host lane 7: N/A
+        Tx clock and data recovery loss of lock on host lane 8: N/A
+        Rx clock and data recovery loss of lock on media lane 1: N/A
+        Rx clock and data recovery loss of lock on media lane 2: N/A
+        Rx clock and data recovery loss of lock on media lane 3: N/A
+        Rx clock and data recovery loss of lock on media lane 4: N/A
+        Rx clock and data recovery loss of lock on media lane 5: N/A
+        Rx clock and data recovery loss of lock on media lane 6: N/A
+        Rx clock and data recovery loss of lock on media lane 7: N/A
+        Rx clock and data recovery loss of lock on media lane 8: N/A
+        Configuration status for the data path of host line 1: ConfigSuccess
+        Configuration status for the data path of host line 2: ConfigSuccess
+        Configuration status for the data path of host line 3: ConfigSuccess
+        Configuration status for the data path of host line 4: ConfigSuccess
+        Configuration status for the data path of host line 5: ConfigSuccess
+        Configuration status for the data path of host line 6: ConfigSuccess
+        Configuration status for the data path of host line 7: ConfigSuccess
+        Configuration status for the data path of host line 8: ConfigSuccess
+        Data path configuration updated on host lane 1: True
+        Data path configuration updated on host lane 2: True
+        Data path configuration updated on host lane 3: True
+        Data path configuration updated on host lane 4: True
+        Data path configuration updated on host lane 5: True
+        Data path configuration updated on host lane 6: True
+        Data path configuration updated on host lane 7: True
+        Data path configuration updated on host lane 8: True
+        Temperature high alarm flag: False
+        Temperature high warning flag: False
+        Temperature low warning flag: False
+        Temperature low alarm flag: False
+        Vcc high alarm flag: False
+        Vcc high warning flag: False
+        Vcc low warning flag: False
+        Vcc low alarm flag: False
+        Tx power high alarm flag on lane 1: False
+        Tx power high alarm flag on lane 2: False
+        Tx power high alarm flag on lane 3: False
+        Tx power high alarm flag on lane 4: False
+        Tx power high alarm flag on lane 5: False
+        Tx power high alarm flag on lane 6: False
+        Tx power high alarm flag on lane 7: False
+        Tx power high alarm flag on lane 8: False
+        Tx power high warning flag on lane 1: False
+        Tx power high warning flag on lane 2: False
+        Tx power high warning flag on lane 3: False
+        Tx power high warning flag on lane 4: False
+        Tx power high warning flag on lane 5: False
+        Tx power high warning flag on lane 6: False
+        Tx power high warning flag on lane 7: False
+        Tx power high warning flag on lane 8: False
+        Tx power low warning flag on lane 1: False
+        Tx power low warning flag on lane 2: False
+        Tx power low warning flag on lane 3: False
+        Tx power low warning flag on lane 4: False
+        Tx power low warning flag on lane 5: False
+        Tx power low warning flag on lane 6: False
+        Tx power low warning flag on lane 7: False
+        Tx power low warning flag on lane 8: False
+        Tx power low alarm flag on lane 1: False
+        Tx power low alarm flag on lane 2: False
+        Tx power low alarm flag on lane 3: False
+        Tx power low alarm flag on lane 4: False
+        Tx power low alarm flag on lane 5: False
+        Tx power low alarm flag on lane 6: False
+        Tx power low alarm flag on lane 7: False
+        Tx power low alarm flag on lane 8: False
+        Rx power high alarm flag on lane 1: False
+        Rx power high alarm flag on lane 2: False
+        Rx power high alarm flag on lane 3: False
+        Rx power high alarm flag on lane 4: False
+        Rx power high alarm flag on lane 5: False
+        Rx power high alarm flag on lane 6: False
+        Rx power high alarm flag on lane 7: False
+        Rx power high alarm flag on lane 8: False
+        Rx power high warning flag on lane 1: False
+        Rx power high warning flag on lane 2: False
+        Rx power high warning flag on lane 3: False
+        Rx power high warning flag on lane 4: False
+        Rx power high warning flag on lane 5: False
+        Rx power high warning flag on lane 6: False
+        Rx power high warning flag on lane 7: False
+        Rx power high warning flag on lane 8: False
+        Rx power low warning flag on lane 1: False
+        Rx power low warning flag on lane 2: False
+        Rx power low warning flag on lane 3: False
+        Rx power low warning flag on lane 4: False
+        Rx power low warning flag on lane 5: False
+        Rx power low warning flag on lane 6: False
+        Rx power low warning flag on lane 7: False
+        Rx power low warning flag on lane 8: False
+        Rx power low alarm flag on lane 1: False
+        Rx power low alarm flag on lane 2: False
+        Rx power low alarm flag on lane 3: False
+        Rx power low alarm flag on lane 4: False
+        Rx power low alarm flag on lane 5: False
+        Rx power low alarm flag on lane 6: False
+        Rx power low alarm flag on lane 7: False
+        Rx power low alarm flag on lane 8: False
+        Tx bias high alarm flag on lane 1: False
+        Tx bias high alarm flag on lane 2: False
+        Tx bias high alarm flag on lane 3: False
+        Tx bias high alarm flag on lane 4: False
+        Tx bias high alarm flag on lane 5: False
+        Tx bias high alarm flag on lane 6: False
+        Tx bias high alarm flag on lane 7: False
+        Tx bias high alarm flag on lane 8: False
+        Tx bias high warning flag on lane 1: False
+        Tx bias high warning flag on lane 2: False
+        Tx bias high warning flag on lane 3: False
+        Tx bias high warning flag on lane 4: False
+        Tx bias high warning flag on lane 5: False
+        Tx bias high warning flag on lane 6: False
+        Tx bias high warning flag on lane 7: False
+        Tx bias high warning flag on lane 8: False
+        Tx bias low warning flag on lane 1: False
+        Tx bias low warning flag on lane 2: False
+        Tx bias low warning flag on lane 3: False
+        Tx bias low warning flag on lane 4: False
+        Tx bias low warning flag on lane 5: False
+        Tx bias low warning flag on lane 6: False
+        Tx bias low warning flag on lane 7: False
+        Tx bias low warning flag on lane 8: False
+        Tx bias low alarm flag on lane 1: False
+        Tx bias low alarm flag on lane 2: False
+        Tx bias low alarm flag on lane 3: False
+        Tx bias low alarm flag on lane 4: False
+        Tx bias low alarm flag on lane 5: False
+        Tx bias low alarm flag on lane 6: False
+        Tx bias low alarm flag on lane 7: False
+        Tx bias low alarm flag on lane 8: False
+        ELS temperature high alarm flag: False
+        ELS temperature low alarm flag: False
+        ELS temperature high warning flag: False
+        ELS temperature low warning flag: False
+        ELS Vcc high alarm flag: False
+        ELS Vcc low alarm flag: False
+        ELS Vcc high warning flag: False
+        ELS Vcc low warning flag: False
+        ELS module state: High power mode
+        ELS interrupt status: Interrupt event cleared
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#basic-show-commands)
@@ -3855,6 +4264,66 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
   ```
   admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input enable
   admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
+  ```
+
+### CMIS debug loopback-capability
+
+This command displays the loopback modes advertised as supported by the CMIS module. If no port is specified, it prints capability for all ports that support loopback.
+
+**sfputil debug loopback-capability**
+
+- Usage:
+  ```
+  sfputil debug loopback-capability [PORT_NAME]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug loopback-capability Ethernet88
+  Ethernet88: loopback capability:
+    host_side_input_loopback_supported: True
+    host_side_output_loopback_supported: True
+    media_side_input_loopback_supported: False
+    media_side_output_loopback_supported: False
+
+  admin@sonic:~$ sfputil debug loopback-capability
+  Ethernet0: loopback capability:
+    host_side_input_loopback_supported: True
+    host_side_output_loopback_supported: True
+    media_side_input_loopback_supported: False
+    media_side_output_loopback_supported: False
+  Ethernet4: loopback capability:
+    ...
+  ```
+
+### CMIS debug loopback-status
+
+This command displays the current loopback enablement state for each loopback mode on the CMIS module. If no port is specified, it prints status for all ports that support loopback. For host-side it prints per lane.
+
+**sfputil debug loopback-status**
+
+- Usage:
+  ```
+  sfputil debug loopback-status [PORT_NAME]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug loopback-status Ethernet88
+  Ethernet88: loopback status:
+    host-side-input:   [True, False, False, False, False, False, False, False]
+    host-side-output:  [False, False, False, False, False, False, False, False]
+    media-side-input:  False
+    media-side-output: False
+
+  admin@sonic:~$ sfputil debug loopback-status
+  Ethernet0: loopback status:
+    host-side-input:   [False, False, False, False, False, False, False, False]
+    host-side-output:  [False, False, False, False, False, False, False, False]
+    media-side-input:  False
+    media-side-output: False
+  Ethernet4: loopback status:
+    ...
   ```
 
 ### CMIS debug rx-output
@@ -8650,6 +9119,224 @@ Since this command might require changing the kernel parameters to specify the a
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#linux-kernel-dump)
 
+## LLR
+
+This section explains the show, configuration and clear commands for LLR (Link Layer Retry). LLR enables local retransmission of lost frames at the data link layer to reduce reliance on higher-layer recovery.
+
+All LLR configuration commands check LLR capability in STATE_DB. If the switch does not support LLR, commands are rejected with an error message.
+
+### LLR show commands
+
+**show llr interface**
+
+This command displays LLR interface configuration from APPL_DB. Optionally specify an interface name to filter.
+
+- Usage:
+  ```
+  show llr interface [<interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr interface
+
+  LLR Interface Configuration
+  ----------------------------
+
+  PORT          LLR Mode    LLR Local    LLR Remote    LLR Profile
+  ----------    --------    ----------   -----------   ------------------------------
+  Ethernet0     static      enabled      enabled       llr_800000_40m_profile
+  Ethernet4     static      enabled      disabled      llr_400000_5m_profile
+  ```
+
+**show llr profile**
+
+This command displays LLR profile configuration from APPL_DB. Optionally specify a profile name to filter.
+
+- Usage:
+  ```
+  show llr profile [<profile-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr profile llr_800000_40m_profile
+  +---------------------------------------+--------------+
+  | LLR Profile: llr_800000_40m_profile                  |
+  +=======================================+==============+
+  | Maximum Outstanding Frames            | 264          |
+  +---------------------------------------+--------------+
+  | Maximum Outstanding Bytes             | 135000       |
+  +---------------------------------------+--------------+
+  | Maximum Replay Count                  | 3            |
+  +---------------------------------------+--------------+
+  | Maximum Replay Timer(ns)              | 5000         |
+  +---------------------------------------+--------------+
+  | PCS Lost Status Timeout(ns)           | 50000        |
+  +---------------------------------------+--------------+
+  | Data Age Timeout(ns)                  | 20000        |
+  +---------------------------------------+--------------+
+  | CTLOS Spacing Bytes                   | 2048         |
+  +---------------------------------------+--------------+
+  | Init Action                           | best_effort  |
+  +---------------------------------------+--------------+
+  | Flush Action                          | best_effort  |
+  +---------------------------------------+--------------+
+  ```
+
+**show llr counters**
+
+This command displays LLR counter statistics (summary view). Use `-i` to filter by interface.
+
+- Usage:
+  ```
+  show llr counters [-i <interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr counters -i Ethernet0
+
+  Port Rx    STATUS   RX_INIT  RX_INIT_ECHO    RX_ACK     RX_NACK      RX_OK      RX_BAD        RX_POISONED    RX_REPLAY
+  ---------  -------  -------  ------------    ------     -------      -----      ------        -----------    ---------
+  Ethernet0  Enable         1             1     15000           0      35000         0                  0            0
+
+  Port Tx    STATUS   TX_INIT  TX_INIT_ECHO    TX_ACK     TX_NACK      TX_OK      TX_DISCARD    TX_POISONED    TX_REPLAY
+  ---------  -------  -------  ------------    ------     -------      -----      ----------    -----------    ---------
+  Ethernet0  Enable         1             1     15000           0      35000           0              0            0
+  ```
+
+**show llr counters detailed**
+
+This command displays detailed LLR counter statistics per port, including all RX/TX counters. Optionally specify an interface name.
+
+- Usage:
+  ```
+  show llr counters detailed [<interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr counters detailed Ethernet0
+
+  LLR Counters - Ethernet0
+  -----------------------
+  LLR_INIT      CtrlOS Transmitted ............................. 1
+  LLR_INIT_ECHO CtrlOS Transmitted ............................. 1
+  LLR_ACK       CtrlOS Transmitted ............................. 35000
+  LLR_NACK      CtrlOS Transmitted ............................. 0
+
+  LLR Frames Transmitted OK .................................... 35000
+  LLR Frames Transmitted as poisoned ........................... 0
+  LLR Frames Discarded at Transmit ............................. 0
+  LLR Tx Replay Triggered Count ................................ 0
+
+  LLR_INIT      CtrlOS Received ................................ 1
+  LLR_INIT_ECHO CtrlOS Received ................................ 1
+  LLR_ACK       CtrlOS Received ................................ 15000
+  LLR_NACK      CtrlOS Received ................................ 0
+  LLR_ACK/NACK  CtrlOS Received with SeqNum error .............. 0
+
+  LLR Frames Received OK ....................................... 35000
+  LLR Frames Received as Poisoned .............................. 0
+  LLR Frames Received as Bad ................................... 0
+  LLR Rx Replay Detect Count ................................... 0
+
+  LLR Frames Received OK with expected seq num ................. 0
+  LLR Frames Received Poisoned with expected seq num ........... 0
+  LLR Frames Received Bad with expected seq num ................ 0
+
+  LLR Frames Received with Unexpected seq num .................. 0
+  LLR Frames Received with Duplicate seq num ................... 0
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
+### LLR config commands
+
+**config llr interface mode**
+
+This command configures the LLR mode on a per-port basis.
+
+- Usage:
+  ```
+  config llr interface mode <interface-name> <static>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface mode Ethernet0 static
+  ```
+
+**config llr interface local**
+
+This command enables or disables LLR local (reception) on an interface. Only applicable when the port's LLR mode is `static`.
+
+- Usage:
+  ```
+  config llr interface local <interface-name> {enabled|disabled}
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface local Ethernet0 enabled
+  ```
+
+**config llr interface remote**
+
+This command enables or disables LLR remote (transmission) on an interface. Only applicable when the port's LLR mode is `static`.
+
+- Usage:
+  ```
+  config llr interface remote <interface-name> {enabled|disabled}
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface remote Ethernet0 enabled
+  ```
+
+**counterpoll llr**
+
+These commands enable, disable, or set the polling interval for LLR counters.
+
+- Usage:
+  ```
+  counterpoll llr enable
+  counterpoll llr disable
+  counterpoll llr interval <milliseconds>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo counterpoll llr enable
+  admin@sonic:~$ sudo counterpoll llr interval 1000
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
+### LLR clear commands
+
+**sonic-clear llr counters**
+
+This command clears LLR counter statistics for all ports or a specific interface.
+
+- Usage:
+  ```
+  sonic-clear llr counters
+  sonic-clear llr counters interface <interface-name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sonic-clear llr counters
+  LLR counters cleared.
+  admin@sonic:~$ sonic-clear llr counters interface Ethernet0
+  LLR counters cleared for Ethernet0.
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
 ## LLDP
 
 ### LLDP show commands
@@ -11865,6 +12552,11 @@ Optionally, you can specify an interface name in order to display only that part
   admin@sonic:~$ sonic-clear queue wredcounters
   ```
 
+  To clear VOQ wred counters, use the `--voq` option:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters --voq
+  ```
+
 
 #### Buffer Pool
 
@@ -11909,6 +12601,14 @@ This command displays the user persistent-watermark for all the buffer pools
   ---------------------  -------
   ingress_lossless_pool        0
              lossy_pool     2464
+  ```
+
+- NOTE: "user watermark" and "persistent watermark" can be cleared by user:
+
+  ```
+  admin@sonic:~$ sonic-clear buffer_pool watermark
+
+  admin@sonic:~$ sonic-clear buffer_pool persistent-watermark
   ```
 
 
