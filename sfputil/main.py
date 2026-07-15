@@ -772,36 +772,41 @@ def eeprom(port, dump_dom, namespace):
                     click.echo("Sfp.get_transceiver_info() is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                output += convert_sfp_info_to_output_string(xcvr_info)
+                if xcvr_info is None:
+                    output += "{}{}\n".format(' ' * 8, "Error: Failed to read EEPROM for this port")
+                else:
+                    output += convert_sfp_info_to_output_string(xcvr_info)
 
-                if dump_dom:
-                    try:
-                        api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
-                    except NotImplementedError:
-                        output += "API is currently not implemented for this platform\n"
-                        click.echo(output)
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
-                    if api is None:
-                        output += "API is none while getting DOM info!\n"
-                        click.echo(output)
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
-                    try:
-                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
-                    except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
-                                   "for this platform")
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                    if dump_dom:
+                        try:
+                            api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
+                        except NotImplementedError:
+                            output += "API is currently not implemented for this platform\n"
+                            click.echo(output)
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                        if api is None:
+                            output += "API is none while getting DOM info!\n"
+                            click.echo(output)
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                        try:
+                            xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
+                        except NotImplementedError:
+                            click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
+                                       "for this platform")
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    try:
-                        xcvr_dom_threshold_info = platform_chassis.get_sfp(physical_port).get_transceiver_threshold_info()
-                        if xcvr_dom_threshold_info:
-                            xcvr_dom_info.update(xcvr_dom_threshold_info)
-                    except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_threshold_info() is currently not implemented for this platform")
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                        try:
+                            xcvr_dom_threshold_info = platform_chassis.get_sfp(
+                                physical_port).get_transceiver_threshold_info()
+                            if xcvr_dom_threshold_info:
+                                xcvr_dom_info.update(xcvr_dom_threshold_info)
+                        except NotImplementedError:
+                            click.echo("Sfp.get_transceiver_threshold_info() is currently "
+                                       "not implemented for this platform")
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    output += convert_dom_to_output_string(xcvr_info['type'],
-                                                           is_sfp_cmis, xcvr_dom_info)
+                        output += convert_dom_to_output_string(xcvr_info['type'],
+                                                               is_sfp_cmis, xcvr_dom_info)
 
             output += '\n'
 
@@ -1284,6 +1289,9 @@ def show_firmware_version(physical_port):
     try:
         sfp = platform_chassis.get_sfp(physical_port)
         api = sfp.get_xcvr_api()
+        if api is None:
+            click.echo("Error: Failed to access transceiver EEPROM")
+            sys.exit(EXIT_FAIL)
         out = api.get_module_fw_info()
         click.echo(out['info'])
     except NotImplementedError:

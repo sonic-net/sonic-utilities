@@ -778,6 +778,43 @@ Ethernet0  On
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('sfputil.main.platform_chassis')
+    def test_show_eeprom_transceiver_info_none(self, mock_chassis):
+        """Test that sfputil show eeprom handles get_transceiver_info() returning None
+        (e.g. SFP present but EEPROM unreadable due to I2C timeout)."""
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_transceiver_info.return_value = None
+        mock_chassis.get_sfp.return_value = mock_sfp
+
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom'], ["-p", "Ethernet16"])
+        assert result.exit_code == 0
+        assert "Error: Failed to read EEPROM for this port" in result.output
+        assert "Ethernet16: SFP EEPROM detected" in result.output
+
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('sfputil.main.platform_chassis')
+    def test_show_eeprom_transceiver_info_none_with_dom(self, mock_chassis):
+        """Test that sfputil show eeprom -d handles get_transceiver_info() returning None
+        without crashing when trying to access DOM data."""
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_transceiver_info.return_value = None
+        mock_chassis.get_sfp.return_value = mock_sfp
+
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom'], ["-p", "Ethernet16", "-d"])
+        assert result.exit_code == 0
+        assert "Error: Failed to read EEPROM for this port" in result.output
+
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
     @pytest.mark.parametrize("exception, xcvr_api_none, expected_output", [
         (None, False, EMPTY_DOM_VALUES),
         (NotImplementedError, False, '''API is currently not implemented for this platform\n\n'''),
