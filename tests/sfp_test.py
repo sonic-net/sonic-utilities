@@ -10,6 +10,7 @@ from utilities_common.platform_sfputil_helper import (
     logical_port_name_to_physical_port_list, is_sfp_present,
     get_first_subport, get_subport, get_sfp_object, get_value_from_db_by_field
 )
+from .utils import load_source
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -18,6 +19,7 @@ sys.path.insert(0, modules_path)
 
 import show.main as show
 import show as show_module
+sfpshow = load_source("sfpshow", os.path.join(scripts_path, "sfpshow"))
 
 ERROR_INVALID_PORT = 1
 EXIT_FAIL = -1
@@ -1134,6 +1136,50 @@ Ethernet64: Transceiver VDM flags not applicable
 """
 
 
+test_els_dom_info_dict = {
+    'els_temperature': '16.16',
+    'els_voltage': '3.396',
+    'els_temphighalarm': '80.0',
+    'els_templowalarm': '-5.0',
+    'els_temphighwarning': '70.0',
+    'els_templowwarning': '0.0',
+    'els_vcchighalarm': '3.63',
+    'els_vcclowalarm': '2.97',
+    'els_vcchighwarning': '3.465',
+    'els_vcclowwarning': '3.135',
+    'els_txpowerhighalarm': '7.0',
+    'els_txpowerlowalarm': '-6.9',
+    'els_txpowerhighwarning': '4.0',
+    'els_txpowerlowwarning': '-2.9',
+    'els_txbiashighalarm': '162.5',
+    'els_txbiashighwarning': '156.248',
+}
+
+test_els_dom_output = """\
+        ChannelMonitorValues:
+        ChannelThresholdValues:
+        ModuleMonitorValues:
+        ModuleThresholdValues:
+        ELSMonitorValues:
+                ELS Temperature: 16.16C
+                ELS Vcc: 3.396Volts
+        ELSThresholdValues:
+                ELS TempHighAlarm: 80.0C
+                ELS TempHighWarning: 70.0C
+                ELS TempLowAlarm: -5.0C
+                ELS TempLowWarning: 0.0C
+                ELS TxBiasHighAlarm: 162.5mA
+                ELS TxBiasHighWarning: 156.248mA
+                ELS TxPowerHighAlarm: 7.0mW
+                ELS TxPowerHighWarning: 4.0mW
+                ELS TxPowerLowAlarm: -6.9mW
+                ELS TxPowerLowWarning: -2.9mW
+                ELS VccHighAlarm: 3.63Volts
+                ELS VccHighWarning: 3.465Volts
+                ELS VccLowAlarm: 2.97Volts
+                ELS VccLowWarning: 3.135Volts
+"""
+
 class TestSFP(object):
     @classmethod
     def setup_class(cls):
@@ -1210,6 +1256,11 @@ Ethernet36  Present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["info"])
         assert result.exit_code == 0
         assert "Ethernet24" not in result.output
+
+    def test_sfpshow_convert_dom_to_output_string_with_els(self):
+        sfp_show = sfpshow.SFPShow(None, None, dump_dom=True)
+        output = sfp_show.convert_dom_to_output_string("CPO", True, test_els_dom_info_dict)
+        assert output == test_els_dom_output
 
     def test_sfp_eeprom_with_dom(self):
         runner = CliRunner()
@@ -1595,6 +1646,13 @@ class TestMultiAsicSFP(object):
         # assuming config_db is passed or mocked elsewhere
         result = get_subport("Ethernet0")
         assert result == 2
+
+        # A missing (None) or empty subport defaults to subport 0 instead of crashing
+        mock_get_value_from_db_by_field.return_value = None
+        assert get_subport("Ethernet0") == 0
+
+        mock_get_value_from_db_by_field.return_value = ''
+        assert get_subport("Ethernet0") == 0
 
     @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
     @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')

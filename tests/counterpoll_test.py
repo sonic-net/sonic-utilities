@@ -36,6 +36,7 @@ WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
 SRV6_STAT             10000               enable
 SWITCH_STAT           60000               enable
+LLR_STAT              10000               enable
 """
 
 expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status
@@ -55,6 +56,7 @@ WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
 SRV6_STAT             10000               enable
 SWITCH_STAT           60000               enable
+LLR_STAT              10000               enable
 ENI_STAT              1000                enable
 HA_SET_STAT           1000                enable
 """

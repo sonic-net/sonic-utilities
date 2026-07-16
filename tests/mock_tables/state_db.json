@@ -1163,7 +1163,23 @@
         "MIRRORV6": "true",
         "PORT_TPID_CAPABLE": "true",
         "LAG_TPID_CAPABLE": "true",
-        "ACL_ACTION|PACKET_ACTION": "FORWARD"
+        "ACL_ACTION|PACKET_ACTION": "FORWARD",
+        "LLR_CAPABLE": "true",
+        "LLR_SUPPORTED_PROFILE_ATTRIBUTES": "OUTSTANDING_BYTES_MAX,OUTSTANDING_FRAMES_MAX,REPLAY_TIMER_MAX,REPLAY_COUNT_MAX,PCS_LOST_TIMEOUT,DATA_AGE_TIMEOUT,CTLOS_TARGET_SPACING"
+    },
+    "PORT_COUNTER_CAPABILITIES|LLR": {
+        "LLR_TX_INIT_CTL_OS": "true",
+        "LLR_TX_INIT_ECHO_CTL_OS": "true",
+        "LLR_TX_ACK_CTL_OS": "true",
+        "LLR_TX_NACK_CTL_OS": "true",
+        "LLR_TX_OK": "true",
+        "LLR_TX_DISCARD": "true",
+        "LLR_TX_POISONED": "true",
+        "LLR_TX_REPLAY": "true",
+        "LLR_RX_INIT_CTL_OS": "true",
+        "LLR_RX_INIT_ECHO_CTL_OS": "true",
+        "LLR_RX_ACK_CTL_OS": "true",
+        "LLR_RX_NACK_CTL_OS": "true"
     },
     "ACL_STAGE_CAPABILITY_TABLE|INGRESS": {
         "action_list": "PACKET_ACTION,REDIRECT_ACTION,MIRROR_INGRESS_ACTION"
