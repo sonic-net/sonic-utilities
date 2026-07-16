@@ -149,10 +149,14 @@ def mirror():
 def mirror_start(db, target, devicename, direction, timeout, max_file_size):
     """Start mirroring a console line"""
     def _current_user():
+        sudo_user = os.environ.get("SUDO_USER")
+        if sudo_user:
+            return sudo_user
+        uid = os.getuid()
         try:
-            return pwd.getpwuid(os.getuid()).pw_name
+            return pwd.getpwuid(uid).pw_name
         except KeyError:
-            return str(os.getuid())
+            return str(uid)
 
     require_root()
     line = get_target_line(db, target, use_device=devicename)
@@ -246,8 +250,7 @@ def mirror_show(db, target, devicename):
             status = send_mirror_message(
                 line, {"op": "status", "line": line}, quiet=True)
         except (OSError, RuntimeError):
-            # TODO: 
-            status = {"line": line, "state": "idle"}
+            status = {"line": line, "state": "error"}
         rows.append([
             line,
             status.get("state", "idle"),
