@@ -47,6 +47,7 @@ import signal
 import traceback
 import subprocess
 import concurrent.futures
+import ijson
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
@@ -66,7 +67,7 @@ TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
 
 UNIT_TESTING = 0
 
-os.environ['PYTHONUNBUFFERED']='True'
+os.environ['PYTHONUNBUFFERED'] = 'True'
 
 PREFIX_SEPARATOR = '/'
 IPV6_SEPARATOR = ':'
@@ -75,11 +76,13 @@ MIN_SCAN_INTERVAL = 10      # Every 10 seconds
 MAX_SCAN_INTERVAL = 3600    # An hour
 
 PRINT_MSG_LEN_MAX = 1000
+PRINT_MSG_TRUNCATION_SUFFIX = " ... (truncated)"
 
 FRR_CHECK_RETRIES = 3
 FRR_WAIT_TIME = 15
 
 REDIS_TIMEOUT_MSECS = 0
+
 
 class Level(Enum):
     ERR = 'ERR'
@@ -93,10 +96,12 @@ class Level(Enum):
 report_level = syslog.LOG_WARNING
 write_to_syslog = False
 
+
 def handler(signum, frame):
-    print_message(syslog.LOG_ERR,
-            "Aborting routeCheck.py upon timeout signal after {} seconds".
-            format(TIMEOUT_SECONDS))
+    print_message(
+        syslog.LOG_ERR,
+        "Aborting routeCheck.py upon timeout signal after {} seconds".
+        format(TIMEOUT_SECONDS))
     print_message(syslog.LOG_ERR, str(traceback.extract_stack()))
     raise Exception("timeout occurred")
 
@@ -125,15 +130,23 @@ def print_message(lvl, *args, write_to_stdout=True):
     :param lvl: Log level for this message as ERR/INFO/DEBUG
     :param args: message as list of strings or convertible to string
     :param write_to_stdout: print the message to stdout if set to true
-    :return None
+    :return msg string (may be truncated)
     """
     msg = ""
+    truncated = False
     if (lvl <= report_level):
         for arg in args:
             rem_len = PRINT_MSG_LEN_MAX - len(msg)
             if rem_len <= 0:
+                truncated = True
                 break
-            msg += str(arg)[0:rem_len]
+            s = str(arg)
+            if len(s) > rem_len:
+                truncated = True
+            msg += s[0:rem_len]
+
+        if truncated and PRINT_MSG_LEN_MAX > len(PRINT_MSG_TRUNCATION_SUFFIX):
+            msg = msg[:PRINT_MSG_LEN_MAX - len(PRINT_MSG_TRUNCATION_SUFFIX)] + PRINT_MSG_TRUNCATION_SUFFIX
 
         if write_to_stdout:
             print(msg)
@@ -209,8 +222,8 @@ def diff_sorted_lists(t1, t2):
     t1_x = t2_x = 0
     t1_miss = []
     t2_miss = []
-    t1_len = len(t1);
-    t2_len = len(t2);
+    t1_len = len(t1)
+    t2_len = len(t2)
     while t1_x < t1_len and t2_x < t2_len:
         d = cmps(t1[t1_x], t2[t2_x])
         if (d == 0):
@@ -385,12 +398,74 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
-def fetch_routes(cmd):
+def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
     Fetch routes using the given command.
+    Uses ijson for streaming JSON parsing to handle large route tables efficiently.
+    Parses each prefix entry as soon as it becomes available instead of waiting for the entire JSON.
     """
-    output = subprocess.check_output(cmd, text=True)
-    return json.loads(output)
+    missing_routes = []
+    failing_routes = []
+
+    asic_id = []
+    if namespace is not multi_asic.DEFAULT_NAMESPACE:
+        asic_id = ['-n', str(multi_asic.get_asic_id_from_name(namespace))]
+
+    if ipv6:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ipv6 route json"]
+    else:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ip route json"]
+
+    def process_route_entry(prefix, route_entry):
+        """Process a single route entry and add to missing_routes if needed."""
+        if route_entry.get('protocol') in ('connected', 'kernel', 'static'):
+            return
+        if route_entry.get('vrfName') != 'default':
+            return
+        # skip if this bgp source prefix is not selected as best
+        if not route_entry.get('selected', False):
+            return
+        if not route_entry.get('offloaded', False):
+            missing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol', '')})
+        if route_entry.get('failed', False):
+            failing_routes.append(prefix)
+
+    try:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
+            try:
+                # Use ijson to parse the JSON stream incrementally
+                # kvitems('') iterates over key-value pairs at the root level
+                # This gives us each prefix and its route entries as they become available
+                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
+                    # Process each route entry for this prefix
+                    if isinstance(route_entries, list):
+                        for route_entry in route_entries:
+                            process_route_entry(prefix, route_entry)
+                    else:
+                        # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
+                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+
+            except ijson.JSONError as e:
+                # Handle JSON parsing errors
+                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
+            except UnicodeDecodeError as e:
+                # Handle UTF-8 decoding errors
+                print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
+            except Exception as e:
+                # Handle any other unexpected errors during parsing
+                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
+
+            # Wait for the process to terminate and get the return code
+            return_code = proc.wait()
+            if return_code != 0:
+                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
+
+    except FileNotFoundError:
+        print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
+    except Exception as e:
+        print_message(syslog.LOG_ERR, f"An error occurred: {e}")
+
+    return missing_routes, failing_routes
 
 
 def get_frr_routes_parallel(namespace):
@@ -398,25 +473,22 @@ def get_frr_routes_parallel(namespace):
     Read routes from zebra through CLI command for IPv4 and IPv6 in parallel
     :return combined IPv4 and IPv6 routes dictionary.
     """
-    if namespace == multi_asic.DEFAULT_NAMESPACE:
-        v4_route_cmd = ['show', 'ip', 'route', 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', 'json']
-    else:
-        v4_route_cmd = ['show', 'ip', 'route', '-n', namespace, 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', '-n', namespace, 'json']
-
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_v4 = executor.submit(fetch_routes, v4_route_cmd)
-        future_v6 = executor.submit(fetch_routes, v6_route_cmd)
+        future_v4 = executor.submit(fetch_routes, ipv6=False, namespace=namespace)
+        future_v6 = executor.submit(fetch_routes, ipv6=True, namespace=namespace)
 
         # Wait for both results to complete
         v4_routes = future_v4.result()
         v6_routes = future_v6.result()
 
     # Combine both IPv4 and IPv6 routes
-    v4_routes.update(v6_routes)
-    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, v4_routes))
-    return v4_routes
+    v4_miss_rt, v4_fail_rt = v4_routes
+    v6_miss_rt, v6_fail_rt = v6_routes
+    v4_miss_rt += v6_miss_rt
+    v4_fail_rt += v6_fail_rt
+    print_message(syslog.LOG_DEBUG, "FRR Missing Routes: namespace={}, routes={}".format(namespace, v4_miss_rt))
+    print_message(syslog.LOG_DEBUG, "FRR Failed Routes: namespace={}, routes={}".format(namespace, v4_fail_rt))
+    return v4_miss_rt, v4_fail_rt
 
 
 def get_interfaces(namespace):
@@ -510,7 +582,7 @@ def filter_out_local_interfaces(namespace, keys):
     :return keys filtered out of local
     """
     rt = []
-    local_if_lst = {'eth0', 'eth1', 'docker0'}  #eth1 is added to skip route installed in AAPL_DB on packet-chassis
+    local_if_lst = {'eth0', 'eth1', 'docker0'}  # eth1 is added to skip route installed in AAPL_DB on packet-chassis
     local_if_lo = [r'tun0', r'lo', r'Loopback\d+']
 
     chassis_local_intfs = chassis.get_chassis_local_interfaces()
@@ -558,8 +630,9 @@ def filter_out_voq_neigh_routes(namespace, keys):
         if not e:
             # Prefix might have been added. So try w/o it.
             e = dict(tbl.get(prefix[0])[1])
-        if not e or all([not (re.match(x, e['ifname']) and
-            ((prefix[1] == "32" and e['nexthop'] == "0.0.0.0") or
+        if not e or \
+            all([not (re.match(x, e['ifname']) and
+                ((prefix[1] == "32" and e['nexthop'] == "0.0.0.0") or
                 (prefix[1] == "128" and e['nexthop'] == "::"))) for x in local_if_re]):
             rt.append(k)
 
@@ -598,7 +671,6 @@ def filter_out_vnet_routes(namespace, routes):
 
     for vnet_route_db_key in vnet_routes_db_keys:
         vnet_route_attrs = vnet_route_db_key.split(':', 1)
-        vnet_name = vnet_route_attrs[0]
         vnet_route = vnet_route_attrs[1]
         vnet_routes.append(vnet_route)
 
@@ -653,6 +725,7 @@ def filter_out_standalone_tunnel_routes(namespace, routes):
 
     return updated_routes
 
+
 def is_feature_bgp_enabled(namespace):
     """
     Check if bgp feature is enabled or disabled.
@@ -666,45 +739,50 @@ def is_feature_bgp_enabled(namespace):
             bgp_enabled = True
     return bgp_enabled
 
+
 def check_frr_pending_routes(namespace):
     """
-    Check FRR routes for offload flag presence by executing "show ip route json"
-    Returns a list of routes that have no offload flag.
+    Check FRR routes for offload flag presence by executing "show ip route json".
+    Returns lists of routes that are persistently non-offloaded across all retry
+    iterations (intersection logic).
+
+    Intersection approach: only routes that appear as stuck in *every* poll
+    are returned for mitigation.  A route that clears between iterations is
+    converging normally and should not be mitigated.
     """
+    acc_miss = []
+    acc_fail = []
 
-    missed_rt = []
-    retries = FRR_CHECK_RETRIES
-    for i in range(retries):
-        missed_rt = []
-        failed_rt = []
-        frr_routes = get_frr_routes_parallel(namespace)
+    for i in range(FRR_CHECK_RETRIES):
+        curr_miss, curr_fail = get_frr_routes_parallel(namespace)
 
-        for route_prefix, entries in frr_routes.items():
-            for entry in entries:
-                if entry['protocol'] in ('connected', 'kernel', 'static'):
-                    continue
+        if i == 0:
+            acc_miss = curr_miss
+            acc_fail = curr_fail
+        else:
+            curr_miss_set = {entry['prefix'] for entry in curr_miss}
+            curr_fail_set = set(curr_fail)
+            acc_miss = [entry for entry in acc_miss if entry['prefix'] in curr_miss_set]
+            acc_fail = [prefix for prefix in acc_fail if prefix in curr_fail_set]
 
-                # TODO: Also handle VRF routes. Currently this script does not check for VRF routes so it would be incorrect for us
-                # to assume they are installed in ASIC_DB, so we don't handle them.
-                if entry['vrfName'] != 'default':
-                    continue
-
-                # skip if this bgp source prefix is not selected as best
-                if not entry.get('selected', False):
-                    continue
-
-                if not entry.get('offloaded', False):
-                    missed_rt.append(entry)
-
-                if entry.get('failed', False):
-                    failed_rt.append(route_prefix)
-
-        if not missed_rt and not failed_rt:
+        if not acc_miss and not acc_fail:
             break
 
-        time.sleep(FRR_WAIT_TIME)
-    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(json.dumps(missed_rt, indent=4)))
-    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(json.dumps(failed_rt, indent=4)))
+        if i < FRR_CHECK_RETRIES - 1:
+            time.sleep(FRR_WAIT_TIME)
+
+    missed_rt = acc_miss
+    failed_rt = acc_fail
+
+    excluded_miss = {entry['prefix'] for entry in curr_miss} - {entry['prefix'] for entry in acc_miss}
+    excluded_fail = set(curr_fail) - set(acc_fail)
+    if excluded_miss or excluded_fail:
+        print_message(syslog.LOG_DEBUG,
+                      f"Routes pending in final poll but excluded by intersection "
+                      f"(not mitigated): missed={excluded_miss} failed={excluded_fail}")
+
+    print_message(syslog.LOG_DEBUG, f"FRR missed routes: {missed_rt}")
+    print_message(syslog.LOG_DEBUG, f"FRR failed routes: {failed_rt}")
     return missed_rt, failed_rt
 
 
@@ -831,7 +909,7 @@ def check_routes_for_namespace(namespace):
     If there are FRR routes that aren't marked offloaded but all APPL & ASIC DB
     routes are in sync report failure and perform a mitigation action.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 
@@ -843,6 +921,8 @@ def check_routes_for_namespace(namespace):
     rt_asic_miss = []
     rt_frr_miss = []
     rt_frr_failed = []
+
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
 
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
@@ -877,6 +957,11 @@ def check_routes_for_namespace(namespace):
         # Look for subscribe updates for a second
         adds, deletes = get_subscribe_updates(selector, subs)
 
+    # Release the subscriber. If we keep the subscriber open then route updates will accumulate in the subscriber queue
+    # causing high client memory usage in redis.
+    del subs
+    del selector
+
     # Drop all those for which SET received
     rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds)
 
@@ -896,8 +981,6 @@ def check_routes_for_namespace(namespace):
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
-    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
-
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
 
@@ -915,6 +998,16 @@ def check_routes_for_namespace(namespace):
                           : {}".format(namespace, rt_frr_failed))
 
     return results, adds, deletes
+
+
+def summarize_results(results):
+    """
+    Summarize mismatch results by counting entries per namespace/category.
+    :param results: dict of {namespace: {category: [entries]}}
+    :return dict of {namespace: {category: count}}
+    """
+    return {ns: {k: len(v) for k, v in entries.items()}
+            for ns, entries in results.items()}
 
 
 def check_routes(namespace):
@@ -951,6 +1044,8 @@ def check_routes(namespace):
                 return -1, results
 
     if results:
+        print_message(syslog.LOG_WARNING, "Route mismatch counts: ",
+                      json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
         print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
         print_message(syslog.LOG_WARNING, "add: ", json.dumps(all_adds, indent=4))
@@ -969,7 +1064,7 @@ def check_sids_for_namespace(namespace):
     this function does not wait for subscriber updates, as SIDs are not
     expected to change frequently.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 
@@ -1021,6 +1116,8 @@ def check_sids(namespace):
                 return -1, results
 
     if results:
+        print_message(syslog.LOG_WARNING, "SID mismatch counts: ",
+                      json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
         return -1, results
     else:
@@ -1035,15 +1132,39 @@ def main():
     with given interval in-between calls to check_route
     :return Same return value as returned by check_route.
     """
+    global TIMEOUT_SECONDS
     interval = 0
-    parser=argparse.ArgumentParser(description="Verify routes between APPL-DB & ASIC-DB are in sync")
-    parser.add_argument('-m', "--mode", type=Level, choices=list(Level), default='ERR')
-    parser.add_argument("-i", "--interval", type=int, default=0, help="Scan interval in seconds")
-    parser.add_argument("-s", "--log_to_syslog", action="store_true", default=True, help="Write message to syslog")
-    parser.add_argument('-n','--namespace',   default=multi_asic.DEFAULT_NAMESPACE, help='Verify routes for this specific namespace')
+    parser = argparse.ArgumentParser(
+        description="Verify routes between APPL-DB & ASIC-DB are in sync")
+    parser.add_argument('-m',
+                        "--mode",
+                        type=Level,
+                        choices=list(Level),
+                        default='ERR')
+    parser.add_argument("-i",
+                        "--interval",
+                        type=int,
+                        default=0,
+                        help="Scan interval in seconds")
+    parser.add_argument("-s",
+                        "--log_to_syslog",
+                        action="store_true",
+                        default=True,
+                        help="Write message to syslog")
+    parser.add_argument('-n', '--namespace',
+                        default=multi_asic.DEFAULT_NAMESPACE,
+                        help='Verify routes for this specific namespace')
+    parser.add_argument('-t',
+                        '--timeout',
+                        type=int,
+                        default=TIMEOUT_SECONDS,
+                        help='Timeout in secs')
     args = parser.parse_args()
 
     namespace = args.namespace
+
+    TIMEOUT_SECONDS = args.timeout
+
     if namespace is not multi_asic.DEFAULT_NAMESPACE and not multi_asic.is_multi_asic():
         print_message(syslog.LOG_ERR, "Namespace option is not valid for a single-ASIC device")
         return -1, None

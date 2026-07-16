@@ -34,6 +34,9 @@ import re
 
 from utilities_common.general import load_db_config
 
+#Option used to display only locally learnt mac(s)
+display_only_local = False
+
 # mock the redis for unit test purposes #
 try: # pragma: no cover
     if os.environ["UTILITIES_UNIT_TESTING"] == "1":
@@ -50,7 +53,8 @@ try: # pragma: no cover
                           "4": 'asic_db_no_bridge',
                           "5": 'asic_db_fetch_except',
                           "6": 'asic_db_no_static',
-                          "7": 'asic_db_mac_case'}
+                          "7": 'asic_db_mac_case',
+                          "8": 'asic_db_evpn_mh'}
         mock_db_path = os.path.join(test_path, "fdbshow_input")
         file_name = mock_variants[os.environ["FDBSHOW_MOCK"]]
         jsonfile_asic = os.path.join(mock_db_path, file_name)
@@ -72,6 +76,13 @@ class FdbShow(object):
 
     HEADER = ['No.', 'Vlan', 'MacAddress', 'Port', 'Type']
 
+    BRIDGE_PORT_NHG_TYPE = "SAI_BRIDGE_PORT_TYPE_BRIDGE_PORT_NEXT_HOP_GROUP"
+    BRIDGE_PORT_KEY = "ASIC_STATE:SAI_OBJECT_TYPE_BRIDGE_PORT:oid:0x"
+    NHG_MEMBER_KEY_PATTERN = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP_MEMBER:oid:*"
+    NEXT_HOP_KEY = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP:"
+    OID_PREFIX = "oid:0x"
+    TUNNEL_KEY = "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:"
+
     def __init__(self, namespace=None):
         super(FdbShow,self).__init__()
         if namespace is not None:
@@ -91,6 +102,45 @@ class FdbShow(object):
         self.if_br_oid_map = port_util.get_bridge_port_map(self.db)
         self.fetch_fdb_data()
         return
+
+    def get_oid_value(self, oid):
+        if not oid or not oid.startswith(self.OID_PREFIX):
+            return None
+        return oid[len(self.OID_PREFIX):]
+
+    def get_evpn_mh_remote_endpoints(self, br_port_id):
+        br_port = self.db.get_all(self.db.ASIC_DB, self.BRIDGE_PORT_KEY + br_port_id)
+        if not br_port or br_port.get("SAI_BRIDGE_PORT_ATTR_TYPE") != self.BRIDGE_PORT_NHG_TYPE:
+            return []
+
+        next_hop_grp_oid = br_port.get("SAI_BRIDGE_PORT_ATTR_BRIDGE_PORT_NEXT_HOP_GROUP_ID")
+        next_hop_grp_id = self.get_oid_value(next_hop_grp_oid)
+        if not next_hop_grp_id:
+            return []
+
+        endpoints = []
+        next_hop_grp_mem_keys = self.db.keys(self.db.ASIC_DB, self.NHG_MEMBER_KEY_PATTERN) or []
+        for member_key in next_hop_grp_mem_keys:
+            grp_mem = self.db.get_all(self.db.ASIC_DB, member_key)
+            member_grp_oid = grp_mem.get("SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_GROUP_ID") \
+                if grp_mem else None
+            member_grp_id = self.get_oid_value(member_grp_oid)
+            if member_grp_id != next_hop_grp_id:
+                continue
+
+            next_hop_oid = grp_mem.get("SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID")
+            if not next_hop_oid:
+                continue
+            next_hop = self.db.get_all(self.db.ASIC_DB, self.NEXT_HOP_KEY + next_hop_oid)
+            tunnel_oid = next_hop.get("SAI_NEXT_HOP_ATTR_TUNNEL_ID") if next_hop else None
+            if not tunnel_oid:
+                continue
+            tunnel = self.db.get_all(self.db.ASIC_DB, self.TUNNEL_KEY + tunnel_oid)
+            dst_ip = tunnel.get("SAI_TUNNEL_ATTR_ENCAP_DST_IP") if tunnel else None
+            if dst_ip:
+                endpoints.append(dst_ip)
+
+        return endpoints
 
     def fetch_fdb_data(self):
         """
@@ -122,13 +172,35 @@ class FdbShow(object):
             br_port_id = ent["SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID"][oid_pfx:]
             ent_type = ent["SAI_FDB_ENTRY_ATTR_TYPE"]
             fdb_type = ['Dynamic','Static'][ent_type == "SAI_FDB_ENTRY_TYPE_STATIC"]
-            if br_port_id not in self.if_br_oid_map:
-                continue
-            port_id = self.if_br_oid_map[br_port_id]
-            if port_id in self.if_oid_map:
-                if_name = self.if_oid_map[port_id]
+
+            #If we have VXLAN tunnel port FDBs try getting them
+            try:
+                endpoint_ip = ent["SAI_FDB_ENTRY_ATTR_ENDPOINT_IP"]
+            except KeyError:
+                endpoint_ip = None
+
+            #If endpoint_ip exists then use that as if_name
+            #Otherwise try to check if it's from multi-home first
+            if not endpoint_ip:
+                if br_port_id not in self.if_br_oid_map:
+                    if display_only_local:
+                        continue
+                    endpoints = self.get_evpn_mh_remote_endpoints(br_port_id)
+                    if not endpoints:
+                        continue
+                    if_name = "\n".join(endpoints)
+
+                else:
+                    port_id = self.if_br_oid_map[br_port_id]
+                    if port_id in self.if_oid_map:
+                        if_name = self.if_oid_map[port_id]
+                    else:
+                        if_name = port_id
             else:
-                if_name = port_id
+                if display_only_local:
+                    continue
+                if_name = endpoint_ip
+
             if 'vlan' in fdb:
                 vlan_id = fdb["vlan"]
             else:
@@ -216,6 +288,7 @@ class FdbShow(object):
         return True
 
 def main():
+    global display_only_local
     
     parser = argparse.ArgumentParser(description='Display ASIC FDB entries',
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -225,7 +298,10 @@ def main():
     parser.add_argument('-t', '--type', type=str, help='FDB display of specific type of mac address', default=None)
     parser.add_argument('-c', '--count', action='store_true', help='FDB display count of mac address')
     parser.add_argument('-n', '--namespace', type=str, help='Namespace name or all', default=None)
+    parser.add_argument('-l', '--local', action='store_true', help='Display only the locally learnt mac address')
     args = parser.parse_args()
+
+    display_only_local = args.local
 
     try:
         fdb = FdbShow(namespace=args.namespace)

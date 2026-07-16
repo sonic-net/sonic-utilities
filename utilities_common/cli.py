@@ -116,6 +116,13 @@ class AliasedGroup(click.Group):
             return None
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
+
+        # In completion context, Click sets ctx.resilient_parsing = True.
+        # Return None instead of raising an error to avoid showing traceback during tab completion.
+        if ctx.resilient_parsing:
+            return None
+
+        # For normal command execution, use ctx.fail() to show usage error properly
         ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
 
 
@@ -545,12 +552,12 @@ def vni_id_is_valid(vni):
     return True
 
 
-def is_vni_vrf_mapped(db, vni):
+def is_vni_vrf_mapped(cfgdb, vni):
     """Check if the vni is mapped to vrf
     """
 
     found = 0
-    vrf_table = db.cfgdb.get_table('VRF')
+    vrf_table = cfgdb.get_table('VRF')
     vrf_keys = vrf_table.keys()
     if vrf_keys is not None:
         for vrf_key in vrf_keys:
@@ -924,10 +931,11 @@ class UserCache:
             tag (str): Tag the user cache. Different tags correspond
              to different cache directories even for the same user.
         """
+        cache_dir = os.environ.get("SONIC_CLI_CACHE_DIR", self.CACHE_DIR)
         self.uid = os.getuid()
         self.app_name = os.path.basename(sys.argv[0]) if app_name is None else app_name
         self.cache_directory_suffix = str(self.uid) if tag is None else f"{self.uid}-{tag}"
-        self.cache_directory_app = os.path.join(self.CACHE_DIR, self.app_name)
+        self.cache_directory_app = os.path.join(cache_dir, self.app_name)
 
         prev_umask = os.umask(0)
         try:

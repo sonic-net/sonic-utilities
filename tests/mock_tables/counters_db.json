@@ -1278,7 +1278,29 @@
         "SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S15": "0",
         "SAI_PORT_STAT_TRIM_PACKETS": "100",
         "SAI_PORT_STAT_DROPPED_TRIM_PACKETS": "50",
-        "SAI_PORT_STAT_TX_TRIM_PACKETS": "50"
+        "SAI_PORT_STAT_TX_TRIM_PACKETS": "50",
+        "SAI_PORT_STAT_LLR_TX_INIT_CTL_OS": "1",
+        "SAI_PORT_STAT_LLR_TX_INIT_ECHO_CTL_OS": "1",
+        "SAI_PORT_STAT_LLR_TX_ACK_CTL_OS": "15000",
+        "SAI_PORT_STAT_LLR_TX_NACK_CTL_OS": "0",
+        "SAI_PORT_STAT_LLR_TX_OK": "35000",
+        "SAI_PORT_STAT_LLR_TX_DISCARD": "0",
+        "SAI_PORT_STAT_LLR_TX_POISONED": "0",
+        "SAI_PORT_STAT_LLR_TX_REPLAY": "5",
+        "SAI_PORT_STAT_LLR_RX_INIT_CTL_OS": "1",
+        "SAI_PORT_STAT_LLR_RX_INIT_ECHO_CTL_OS": "1",
+        "SAI_PORT_STAT_LLR_RX_ACK_CTL_OS": "15000",
+        "SAI_PORT_STAT_LLR_RX_NACK_CTL_OS": "0",
+        "SAI_PORT_STAT_LLR_RX_ACK_NACK_SEQ_ERROR": "0",
+        "SAI_PORT_STAT_LLR_RX_OK": "35000",
+        "SAI_PORT_STAT_LLR_RX_POISONED": "0",
+        "SAI_PORT_STAT_LLR_RX_BAD": "0",
+        "SAI_PORT_STAT_LLR_RX_EXPECTED_SEQ_GOOD": "35000",
+        "SAI_PORT_STAT_LLR_RX_EXPECTED_SEQ_POISONED": "0",
+        "SAI_PORT_STAT_LLR_RX_EXPECTED_SEQ_BAD": "0",
+        "SAI_PORT_STAT_LLR_RX_MISSING_SEQ": "0",
+        "SAI_PORT_STAT_LLR_RX_DUPLICATE_SEQ": "0",
+        "SAI_PORT_STAT_LLR_RX_REPLAY": "5"
     },
     "COUNTERS:oid:0x1000000000013": {
         "SAI_PORT_STAT_IF_IN_UCAST_PKTS": "4",
@@ -1377,7 +1399,29 @@
         "SAI_PORT_STAT_WRED_DROPPED_PACKETS":"101",
         "SAI_PORT_STAT_TRIM_PACKETS": "20000",
         "SAI_PORT_STAT_DROPPED_TRIM_PACKETS": "10000",
-        "SAI_PORT_STAT_TX_TRIM_PACKETS": "10000"
+        "SAI_PORT_STAT_TX_TRIM_PACKETS": "10000",
+        "SAI_PORT_STAT_LLR_TX_INIT_CTL_OS": "2",
+        "SAI_PORT_STAT_LLR_TX_INIT_ECHO_CTL_OS": "2",
+        "SAI_PORT_STAT_LLR_TX_ACK_CTL_OS": "8000",
+        "SAI_PORT_STAT_LLR_TX_NACK_CTL_OS": "1",
+        "SAI_PORT_STAT_LLR_TX_OK": "20000",
+        "SAI_PORT_STAT_LLR_TX_DISCARD": "1",
+        "SAI_PORT_STAT_LLR_TX_POISONED": "0",
+        "SAI_PORT_STAT_LLR_TX_REPLAY": "10",
+        "SAI_PORT_STAT_LLR_RX_INIT_CTL_OS": "2",
+        "SAI_PORT_STAT_LLR_RX_INIT_ECHO_CTL_OS": "2",
+        "SAI_PORT_STAT_LLR_RX_ACK_CTL_OS": "8000",
+        "SAI_PORT_STAT_LLR_RX_NACK_CTL_OS": "1",
+        "SAI_PORT_STAT_LLR_RX_ACK_NACK_SEQ_ERROR": "1",
+        "SAI_PORT_STAT_LLR_RX_OK": "20000",
+        "SAI_PORT_STAT_LLR_RX_POISONED": "0",
+        "SAI_PORT_STAT_LLR_RX_BAD": "2",
+        "SAI_PORT_STAT_LLR_RX_EXPECTED_SEQ_GOOD": "20000",
+        "SAI_PORT_STAT_LLR_RX_EXPECTED_SEQ_POISONED": "0",
+        "SAI_PORT_STAT_LLR_RX_EXPECTED_SEQ_BAD": "2",
+        "SAI_PORT_STAT_LLR_RX_MISSING_SEQ": "1",
+        "SAI_PORT_STAT_LLR_RX_DUPLICATE_SEQ": "0",
+        "SAI_PORT_STAT_LLR_RX_REPLAY": "10"
     },
     "COUNTERS:oid:0x1000000000014": {
         "SAI_PORT_STAT_IF_IN_UCAST_PKTS": "6",
@@ -2985,8 +3029,44 @@
         "SAI_COUNTER_STAT_PACKETS": 200,
         "SAI_COUNTER_STAT_BYTES": 204800
     },
+    "COUNTERS_ICMP_ECHO_SESSION_NAME_MAP": {
+        "default:Ethernet0:0x4eb39592:RX|IN":            "oid:0x540000000005a1",
+        "default:Ethernet0:0x4eb39592:RX|OUT":           "oid:0x540000000005a2",
+        "default:Ethernet8:0x69f578f5:NORMAL|IN":        "oid:0x540000000005a3",
+        "default:Ethernet8:0x69f578f5:NORMAL|OUT":       "oid:0x540000000005a4",
+        "default:Ethernet152:0x39e05375:NORMAL":         "oid:0x540000000005b1"
+    },
+    "COUNTERS:oid:0x540000000005a1": {
+        "SAI_COUNTER_STAT_PACKETS": 1234,
+        "SAI_COUNTER_STAT_BYTES":   188802
+    },
+    "COUNTERS:oid:0x540000000005a2": {
+        "SAI_COUNTER_STAT_PACKETS": 0,
+        "SAI_COUNTER_STAT_BYTES":   0
+    },
+    "COUNTERS:oid:0x540000000005a3": {
+        "SAI_COUNTER_STAT_PACKETS": 9876,
+        "SAI_COUNTER_STAT_BYTES":   1511028
+    },
+    "COUNTERS:oid:0x540000000005a4": {
+        "SAI_COUNTER_STAT_PACKETS": 9870,
+        "SAI_COUNTER_STAT_BYTES":   800370
+    },
+    "COUNTERS:oid:0x540000000005b1": {
+        "SAI_ICMP_ECHO_SESSION_STAT_IN_PACKETS":  5555,
+        "SAI_ICMP_ECHO_SESSION_STAT_OUT_PACKETS": 4444
+    },
     "PERSISTENT_DROP_ALERTS":{
         "DEBUG_0|1746495543": "Persistent packet drops detected on Ethernet0",
         "DEBUG_0|1746495767": "Persistent packet drops detected on Ethernet1"
+    },
+    "PORT_PHY_ATTR:oid:0x1000000000012": {
+        "phy_rx_signal_detect": "{\"0\": [\"T\", 1678886400000, 5], \"1\": [\"F\", 0, 0]}",
+        "pcs_fec_lane_alignment_lock": "{\"0\": [\"T*\", 1678886400000, 10], \"1\": [\"T\", 1678886400000, 3]}",
+        "rx_snr": "{\"0\": 36697, \"1\": 35200, \"2\": 34500, \"3\": 36000}",
+        "rx_vga": "{\"0\": 100, \"1\": 95, \"2\": 98, \"3\": 102}",
+        "tx_fir_taps_list": "{\"0\": [{\"tap0\": -10}, {\"tap1\": 5}], \"1\": [{\"tap0\": -8}, {\"tap1\": 6}]}"
+    },
+    "PORT_PHY_ATTR:oid:0x1000000000013": {
     }
 }

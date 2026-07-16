@@ -28,7 +28,7 @@ def dummy_f2(bypass_lock=True):
 
 
 class TestFLock:
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
         f0_exit.clear()
         f1_exit.clear()
@@ -180,7 +180,7 @@ class TestFLock:
                 f2_exit.set()
                 thrd.join()
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
         f0_exit.clear()
         f1_exit.clear()

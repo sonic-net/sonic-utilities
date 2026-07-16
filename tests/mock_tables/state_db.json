@@ -130,7 +130,11 @@
         "tx5power": "1.175",
         "tx6power": "1.175",
         "tx7power": "1.175",
-        "tx8power": "1.175"
+        "tx8power": "1.175",
+        "laser_temperature": "47.7265625",
+        "laser_config_freq": "193100",
+        "laser_curr_freq": "193100.0",
+        "tx_config_power": "-8.5"
     },
     "TRANSCEIVER_DOM_THRESHOLD|Ethernet8": {
         "rxpowerhighalarm": "6.9999",
@@ -1064,7 +1068,23 @@
         "MIRRORV6": "true",
         "PORT_TPID_CAPABLE": "true",
         "LAG_TPID_CAPABLE": "true",
-        "ACL_ACTION|PACKET_ACTION": "FORWARD"
+        "ACL_ACTION|PACKET_ACTION": "FORWARD",
+        "LLR_CAPABLE": "true",
+        "LLR_SUPPORTED_PROFILE_ATTRIBUTES": "OUTSTANDING_BYTES_MAX,OUTSTANDING_FRAMES_MAX,REPLAY_TIMER_MAX,REPLAY_COUNT_MAX,PCS_LOST_TIMEOUT,DATA_AGE_TIMEOUT,CTLOS_TARGET_SPACING"
+    },
+    "PORT_COUNTER_CAPABILITIES|LLR": {
+        "LLR_TX_INIT_CTL_OS": "true",
+        "LLR_TX_INIT_ECHO_CTL_OS": "true",
+        "LLR_TX_ACK_CTL_OS": "true",
+        "LLR_TX_NACK_CTL_OS": "true",
+        "LLR_TX_OK": "true",
+        "LLR_TX_DISCARD": "true",
+        "LLR_TX_POISONED": "true",
+        "LLR_TX_REPLAY": "true",
+        "LLR_RX_INIT_CTL_OS": "true",
+        "LLR_RX_INIT_ECHO_CTL_OS": "true",
+        "LLR_RX_ACK_CTL_OS": "true",
+        "LLR_RX_NACK_CTL_OS": "true"
     },
     "ACL_STAGE_CAPABILITY_TABLE|INGRESS": {
         "action_list": "PACKET_ACTION,REDIRECT_ACTION,MIRROR_INGRESS_ACTION"
@@ -1275,6 +1295,16 @@
         "13": "200.200.200.5@Vlan1000",
         "14": "200.200.200.5@Vlan1000",
         "15": "200.200.200.5@Vlan1000"
+    },
+    "FG_ROUTE_TABLE|Vnet1|10.0.0.1/32": {
+        "0": "100.100.100.4@Vlan2000",
+        "1": "100.100.100.4@Vlan2000",
+        "2": "100.100.100.4@Vlan2000",
+        "3": "100.100.100.4@Vlan2000",
+        "4": "100.100.100.5@Vlan2000",
+        "5": "100.100.100.5@Vlan2000",
+        "6": "100.100.100.5@Vlan2000",
+        "7": "100.100.100.5@Vlan2000"
     },
     "REBOOT_CAUSE|2020_10_09_04_53_58": {
         "cause": "warm-reboot",
@@ -1631,6 +1661,18 @@
     },
     "VNET_ROUTE_TUNNEL_TABLE|Vnet_v6_in_v6-0|fddd:a156:a251::a6:1/128": {
         "active_endpoints":"fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",
+        "state":"active"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE|Vnet_mac_vni_scale|10.0.0.0/24": {
+        "active_endpoints":"10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6",
+        "state":"active"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE|Vnet_7127926|30.0.21.0/24": {
+        "active_endpoints":"100.106.230.44,10.134.85.10,100.106.229.38,100.106.229.170,100.106.228.160,10.134.84.24,100.106.230.168,10.90.92.16,10.224.116.42,100.106.228.134,100.106.229.171,100.106.228.161",
+        "state":"active"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE|Vnet_7127926|30.0.20.0/24": {
+        "active_endpoints":"100.106.230.44,10.134.85.10,100.106.229.38,100.106.229.170,100.106.228.160,10.134.84.24,100.106.230.168,10.90.92.16,10.224.116.42,100.106.228.134",
         "state":"active"
     },
     "BFD_SESSION_TABLE|default|default|100.251.7.1": {

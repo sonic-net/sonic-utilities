@@ -10,29 +10,24 @@ from tabulate import tabulate
 
 VERSION = '1.0'
 
-
-
 def get_psu_status_list():
+    """
+    Build list of PSU/PDB status from STATE_DB PSU_INFO table.
+    Keys may be "PSU 1", "PSU 2" (PSU platform) or "PDB 1", "PDB 2" (PDB platform).
+    Returns empty list when no entries exist (no error; HLD: output is simply no rows).
+    """
     psu_status_list = []
-
     db = SonicV2Connector(host="127.0.0.1")
     db.connect(db.STATE_DB)
 
-    # Currently set chassis_num to 1, need to improve it once new platform API is implemented
-    chassis_num = 1
-    chassis_name = "chassis {}".format(chassis_num)
-    num_psus = db.get(db.STATE_DB, 'CHASSIS_INFO|{}'.format(chassis_name), 'psu_num')
-    if not num_psus:
-        print('Error: Failed to get the number of PSUs')
-        return None
+    keys = db.keys(db.STATE_DB, "PSU_INFO|*")
+    if not keys:
+        return psu_status_list
 
-    for psu_idx, psu_key in enumerate(natsorted(db.keys(db.STATE_DB, "PSU_INFO|*")), start = 1):
-        psu_key = psu_key.replace("PSU_INFO|", "")
+    for psu_idx, psu_key in enumerate(natsorted(keys), start=1):
+        psu_name = psu_key.replace("PSU_INFO|", "")
         psu_status = {}
-
         psu_status['index'] = str(psu_idx)
-
-        psu_name = psu_key
         psu_status['name'] = psu_name
 
         presence = db.get(db.STATE_DB, 'PSU_INFO|{}'.format(psu_name), 'presence')
@@ -64,21 +59,21 @@ def get_psu_status_list():
 
 
 def psu_status_show_table(index):
+    """
+    Show PSU/PDB status table. Columns stay the same for consistent experience (HLD).
+    When no PSU/PDB present, output is simply header and no rows (no error message).
+    """
     psu_status_list = get_psu_status_list()
-
-    if not psu_status_list:
-        print('Error: Failed to get PSU status')
-        return None
-
-    header = ['PSU',  'Model', 'Serial', 'HW Rev', 'Voltage (V)', 'Current (A)', 'Power (W)', 'Status', 'LED']
+    header = ['PSU', 'Model', 'Serial', 'HW Rev', 'Voltage (V)', 'Current (A)', 'Power (W)', 'Status', 'LED']
     status_table = []
 
     if index > 0:
+        if not psu_status_list:
+            print("Error: PSU {} is not available. Number of supported PSUs: 0".format(index))
+            return -1
         if index > len(psu_status_list):
             print("Error: PSU {} is not available. Number of supported PSUs: {}".format(index, len(psu_status_list)))
             return -1
-
-        # Trim the list down to contain only the requested PSU
         psu_status_list = [psu_status_list[index-1]]
 
     for psu_status in psu_status_list:
@@ -92,25 +87,23 @@ def psu_status_show_table(index):
                              psu_status['status'],
                              psu_status['led_status']])
 
-    if status_table:
-        print(tabulate(status_table, header, tablefmt="simple", floatfmt='.2f'))
-
+    print(tabulate(status_table, header, tablefmt="simple", floatfmt='.2f'))
     return 0
 
 
 def psu_status_show_json(index):
+    """
+    Show PSU/PDB status in JSON. When no PSU/PDB present, output [] (no error message).
+    """
     psu_status_list = get_psu_status_list()
 
-    if not psu_status_list:
-        print('Error: Failed to get PSU status')
-        return None
-
     if index > 0:
+        if not psu_status_list:
+            print("Error: PSU {} is not available. Number of supported PSUs: 0".format(index))
+            return -1
         if index > len(psu_status_list):
             print("Error: PSU {} is not available. Number of supported PSUs: {}".format(index, len(psu_status_list)))
             return -1
-
-        # Trim the list down to contain only the requested PSU
         psu_status_list = [psu_status_list[index-1]]
 
     print(json.dumps(psu_status_list, indent=4))
@@ -143,10 +136,10 @@ Examples:
         else:
             ret = psu_status_show_table(psu_index)
 
-        if ret != 0:
-            print("Error: failed to get PSU status from state DB")
+        if ret == -1:
             return 1
-
+        # ret == 0: success (including empty list: header + no rows, or JSON [])
+        # No "PSU not detected" when list is empty (HLD: output is simply no rows)
     return 0
 
 

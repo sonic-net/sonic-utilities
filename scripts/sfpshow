@@ -141,7 +141,32 @@ CMIS_DOM_CHANNEL_MONITOR_MAP = {
 
 DOM_MODULE_MONITOR_MAP = {
     'temperature': 'Temperature',
-    'voltage': 'Vcc'
+    'voltage': 'Vcc',
+    'laser_curr_freq': 'Tx Frequency',
+    'laser_config_freq': 'Requested Laser Frequency',
+    'tx_config_power': 'Requested Tx Power'
+}
+
+ELS_DOM_MONITOR_MAP = {
+    'els_temperature': 'ELS Temperature',
+    'els_voltage': 'ELS Vcc',
+}
+
+ELS_THRESHOLD_MAP = {
+    'els_temphighalarm': 'ELS TempHighAlarm',
+    'els_templowalarm': 'ELS TempLowAlarm',
+    'els_temphighwarning': 'ELS TempHighWarning',
+    'els_templowwarning': 'ELS TempLowWarning',
+    'els_vcchighalarm': 'ELS VccHighAlarm',
+    'els_vcclowalarm': 'ELS VccLowAlarm',
+    'els_vcchighwarning': 'ELS VccHighWarning',
+    'els_vcclowwarning': 'ELS VccLowWarning',
+    'els_txpowerhighalarm': 'ELS TxPowerHighAlarm',
+    'els_txpowerlowalarm': 'ELS TxPowerLowAlarm',
+    'els_txpowerhighwarning': 'ELS TxPowerHighWarning',
+    'els_txpowerlowwarning': 'ELS TxPowerLowWarning',
+    'els_txbiashighalarm': 'ELS TxBiasHighAlarm',
+    'els_txbiashighwarning': 'ELS TxBiasHighWarning'
 }
 
 DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
@@ -170,6 +195,28 @@ DOM_MODULE_THRESHOLD_UNIT_MAP = {
     'vcclowwarning':   'Volts'
 }
 
+ELS_DOM_MONITOR_UNIT_MAP = {
+    'els_temperature': 'C',
+    'els_voltage': 'Volts',
+}
+
+ELS_THRESHOLD_UNIT_MAP = {
+    'els_temphighalarm': 'C',
+    'els_templowalarm': 'C',
+    'els_temphighwarning': 'C',
+    'els_templowwarning': 'C',
+    'els_vcchighalarm': 'Volts',
+    'els_vcclowalarm': 'Volts',
+    'els_vcchighwarning': 'Volts',
+    'els_vcclowwarning': 'Volts',
+    'els_txpowerhighalarm': 'mW',
+    'els_txpowerlowalarm': 'mW',
+    'els_txpowerhighwarning': 'mW',
+    'els_txpowerlowwarning': 'mW',
+    'els_txbiashighalarm': 'mA',
+    'els_txbiashighwarning': 'mA'
+}
+
 DOM_VALUE_UNIT_MAP = {
     'rx1power': 'dBm',
     'rx2power': 'dBm',
@@ -184,7 +231,10 @@ DOM_VALUE_UNIT_MAP = {
     'tx3power': 'dBm',
     'tx4power': 'dBm',
     'temperature': 'C',
-    'voltage': 'Volts'
+    'voltage': 'Volts',
+    'laser_curr_freq': 'GHz',
+    'laser_config_freq': 'GHz',
+    'tx_config_power': 'dBm'
 }
 
 QSFP_DD_DOM_VALUE_UNIT_MAP = {
@@ -372,7 +422,7 @@ class SFPShow(object):
         channel_threshold_align = 18
         module_threshold_align = 15
 
-        if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
+        if sfp_type.startswith('QSFP') or is_sfp_cmis:
             # Channel Monitor
             if is_sfp_cmis:
                 output_dom += (indent + 'ChannelMonitorValues:\n')
@@ -424,6 +474,31 @@ class SFPShow(object):
                 DOM_MODULE_THRESHOLD_UNIT_MAP,
                 module_threshold_align)
             output_dom += output_module_threshold
+
+            # This is specific for CPO DOM value parsing.
+            is_cpo = sfp_type.startswith('CPO')
+            if is_cpo:
+                laser_keys = [key for key in dom_info_dict if key.startswith('RLM') and 'Laser' in key]
+                dom_monitor_map = ELS_DOM_MONITOR_MAP.copy()
+                dom_monitor_map.update({key: key for key in laser_keys})
+                dom_monitor_unit_map = ELS_DOM_MONITOR_UNIT_MAP.copy()
+                dom_monitor_unit_map.update({key: '' for key in laser_keys})  # laser monitor values include units
+                output_dom += (indent + 'ELSMonitorValues:\n')
+                sorted_key_table = natsorted(dom_monitor_map)
+                output_monitor = self.format_dict_value_to_string(
+                    sorted_key_table, dom_info_dict,
+                    dom_monitor_map,
+                    dom_monitor_unit_map)
+                output_dom += output_monitor
+
+                # Threshold
+                output_dom += (indent + 'ELSThresholdValues:\n')
+                sorted_key_table = natsorted(ELS_THRESHOLD_MAP)
+                output_threshold = self.format_dict_value_to_string(
+                    sorted_key_table, dom_info_dict,
+                    ELS_THRESHOLD_MAP,
+                    ELS_THRESHOLD_UNIT_MAP)
+                output_dom += output_threshold
 
         else:
             output_dom += (indent + 'MonitorData:\n')

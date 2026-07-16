@@ -7,7 +7,7 @@ from tabulate import tabulate
 from sonic_py_common import multi_asic
 from utilities_common.constants import DEFAULT_NAMESPACE
 from dump.match_infra import RedisSource, JsonSource, MatchEngine, CONN
-from swsscommon.swsscommon import ConfigDBConnector
+from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from dump import plugins
 
 
@@ -61,6 +61,9 @@ def state(ctx, module, identifier, db, table, key_map, verbose, namespace):
     if multi_asic.is_multi_asic() and (namespace != DEFAULT_NAMESPACE and namespace not in multi_asic.get_namespace_list()):
         click.echo("Namespace option is not valid. Choose one of {}".format(multi_asic.get_namespace_list()))
         ctx.exit()
+
+    if multi_asic.is_multi_asic() and not SonicDBConfig.isGlobalInit():
+        SonicDBConfig.initializeGlobalConfig()
 
     if module not in plugins.dump_modules:
         click.echo("No Matching Plugin has been Implemented")

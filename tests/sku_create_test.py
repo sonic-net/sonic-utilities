@@ -58,9 +58,6 @@ sys.path.insert(0, test_path)
 sys.path.insert(0, modules_path)
 
 class TestSkuCreate(object):
-    @classmethod
-    def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
 
     def are_file_contents_same(self,fname1,fname2):
         #Open the file for reading in text mode (default mode)
@@ -525,7 +522,7 @@ class TestSkuCreate(object):
             sku.fpp_split = {1: [['etp1a', 'etp1b'], [1, 2]]}
             sku.default_lanes_per_port = ['0,1,2', '3,4,5', '6,7,8']
             sku.set_lanes()
-        mock_print.assert_called_once_with("Lanes(0,1,2) could not be evenly splitted by 2.")
+        mock_print.assert_called_once_with("Lanes(0,1,2) could not be evenly split by 2.")
         assert e.value.code == 1
 
     @patch('builtins.print')
@@ -585,4 +582,3 @@ class TestSkuCreate(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])

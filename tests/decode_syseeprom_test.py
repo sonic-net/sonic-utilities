@@ -14,8 +14,6 @@ modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, 'scripts')
 sys.path.insert(0, modules_path)
 
-sys.modules['sonic_platform'] = mock.MagicMock()
-
 
 decode_syseeprom_path = os.path.join(scripts_path, 'decode-syseeprom')
 decode_syseeprom = load_module_from_source('decode_syseeprom', decode_syseeprom_path)

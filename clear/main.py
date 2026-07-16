@@ -13,6 +13,8 @@ from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
 from . import plugins
 from . import stp
+from . import icmp as icmp_clear
+
 # This is from the aliases example:
 # https://github.com/pallets/click/blob/57c6f09611fc47ca80db0bd010f05998b3c0aa95/examples/aliases/aliases.py
 class Config(object):
@@ -76,7 +78,7 @@ class AliasedGroup(click.Group):
 
 
 # To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continous execution of this
+# location (configdb?), so that we prevent the continuous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
@@ -148,6 +150,42 @@ def ipv6():
 # 'STP'
 #
 cli.add_command(stp.spanning_tree)
+cli.add_command(icmp_clear.icmp)
+
+
+# 'LLR'
+#
+@cli.group(cls=clicommon.AliasedGroup)
+def llr():
+    """Clear LLR (Link Layer Retry) counters"""
+    pass
+
+
+@llr.group(name='counters', invoke_without_command=True, cls=clicommon.AliasedGroup)
+@click.option('-n', '--namespace', help='Namespace name', required=False,
+              type=multi_asic_util.LazyChoice(multi_asic_util.multi_asic_ns_choices),
+              default=None)
+@click.pass_context
+def llr_counters(ctx, namespace):
+    """Clear LLR counter statistics (all ports)"""
+    if ctx.invoked_subcommand is None:
+        command = ["llrstat", "-c"]
+        if namespace:
+            command += ["-n", str(namespace)]
+        run_command(command)
+
+
+@llr_counters.command(name='interface')
+@click.argument('interface_name', metavar='<interface-name>')
+@click.option('-n', '--namespace', help='Namespace name', required=False,
+              type=multi_asic_util.LazyChoice(multi_asic_util.multi_asic_ns_choices),
+              default=None)
+def llr_counters_interface(interface_name, namespace):
+    """Clear LLR counter statistics for a specific interface"""
+    command = ["llrstat", "-c", "-i", str(interface_name)]
+    if namespace:
+        command += ["-n", str(namespace)]
+    run_command(command)
 
 #
 # Inserting BGP functionality into cli's clear parse-chain.
@@ -345,9 +383,12 @@ def queue():
 
 
 @queue.command()
-def wredcounters():
+@click.option('--voq', is_flag=True, help="Clear VOQ counters")
+def wredcounters(voq):
     """Clear queue wredcounters"""
     command = ['wredstat', '-c']
+    if voq:
+        command += ['-V']
     run_command(command)
 
 
@@ -512,26 +553,80 @@ def persistent_watermark(namespace):
         command += ['-n', str(namespace)]
     run_command(command)
 
+
+@cli.group(name='buffer_pool')
+def buffer_pool():
+    """Clear buffer_pool WM"""
+    pass
+
+
+@buffer_pool.command('watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_buffer_pool(namespace):
+    """Clear user WM for buffer pools."""
+    command = ['watermarkstat', '-c', '-t', 'buffer_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
+    run_command(command)
+
+
+@buffer_pool.command('persistent-watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_buffer_pool(namespace):
+    """Clear persistent WM for buffer pools."""
+    command = ['watermarkstat', '-c', '-p', '-t', 'buffer_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
+    run_command(command)
+
 #
 # 'arp' command ####
 #
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def arp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def arp(ipaddress, namespace):
     """Clear IP ARP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-4', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-4', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 
@@ -541,20 +636,34 @@ def arp(ipaddress):
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def ndp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def ndp(ipaddress, namespace):
     """Clear IPv6 NDP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-6', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-6', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 
@@ -655,9 +764,15 @@ def statistics(db):
 
 # ("sonic-clear flowcnt-trap")
 @cli.command()
-def flowcnt_trap():
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              show_default=True, help='Namespace name')
+def flowcnt_trap(namespace):
     """ Clear trap flow counters """
     command = ["flow_counters_stat", "-c", '-t', "trap"]
+    # None namespace means default namespace
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 

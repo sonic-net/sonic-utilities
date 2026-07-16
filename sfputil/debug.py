@@ -1,11 +1,13 @@
 import sys
 import time
 import click
+from natsort import natsorted
 import utilities_common.cli as clicommon
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
     get_subport,
     get_sfp_object,
+    get_logical_list,
     get_subport_lane_mask,
     get_media_lane_count,
     get_host_lane_count,
@@ -65,6 +67,10 @@ def loopback(port_name, loopback_mode, enable):
     lane_mask = get_subport_lane_mask(int(subport), lane_count)
 
     try:
+        if not api.get_diag_page_support():
+            click.echo(f"{port_name}: The module does not support diagnostic pages required for loopback configuration")
+            click.echo(f"{port_name}: {enable} {loopback_mode} loopback failed")
+            sys.exit(EXIT_FAIL)
         status = api.set_loopback_mode(loopback_mode, lane_mask=lane_mask, enable=(enable == 'enable'))
     except AttributeError:
         click.echo(f"{port_name}: Set loopback mode is not applicable for this module")
@@ -166,6 +172,111 @@ def set_output(port_name, enable, direction):
     except Exception as e:
         click.echo(f"{port_name}: {direction.upper()} disable failed due to {str(e)}")
         sys.exit(EXIT_FAIL)
+
+
+def _get_loopback_api_and_capability(port_name):
+    """Get xcvr API and loopback capability dict for a port.
+
+    Returns (api, cap) when the module exposes the loopback API; cap may be an empty/None
+    dict if the module does not advertise any capability. Returns (None, None) when the
+    port can't be read (RJ45 / EEPROM not detected / xcvr API not implemented / no diag
+    pages / no get_loopback_capability method).
+    """
+    try:
+        sfp = get_sfp_object(port_name)
+    except SystemExit:
+        # get_sfp_object already echoed the reason (RJ45 / EEPROM not detected).
+        return None, None
+
+    try:
+        api = sfp.get_xcvr_api()
+    except NotImplementedError:
+        click.echo(f"{port_name}: This functionality is not implemented")
+        return None, None
+
+    try:
+        if not api.get_diag_page_support():
+            click.echo(f"{port_name}: The module does not support diagnostic pages required for loopback")
+            return None, None
+    except AttributeError:
+        pass  # Older sonic-platform-common does not have get_diag_page_support
+
+    try:
+        cap = api.get_loopback_capability()
+    except AttributeError:
+        click.echo(f"{port_name}: Loopback capability is not applicable for this module")
+        return None, None
+
+    return api, cap
+
+
+@debug.command(name='loopback-capability')
+@click.argument('port_name', required=False, default=None)
+def loopback_capability(port_name):
+    """Show the loopback modes advertised as supported by the module.
+
+    If PORT_NAME is omitted, prints capability for all ports that support loopback.
+    """
+    port_list = [port_name] if port_name else natsorted(set(get_logical_list()))
+    single_port = port_name is not None
+    found = False
+
+    for port in port_list:
+        api, cap = _get_loopback_api_and_capability(port)
+        if api is None:
+            continue
+
+        found = True
+        if not cap:
+            click.echo(f"{port}: The module does not advertise any loopback capability")
+            continue
+
+        click.echo(f"{port}: loopback capability:")
+        for key in sorted(cap):
+            click.echo(f"  {key}: {cap[key]}")
+
+    if not single_port and not found:
+        click.echo("No ports found that support loopback capability")
+
+
+@debug.command(name='loopback-status')
+@click.argument('port_name', required=False, default=None)
+def loopback_status(port_name):
+    """Show which loopback modes are currently enabled on the module.
+
+    If PORT_NAME is omitted, prints status for all ports that support loopback.
+    """
+    port_list = [port_name] if port_name else natsorted(set(get_logical_list()))
+    single_port = port_name is not None
+    found = False
+
+    for port in port_list:
+        api, cap = _get_loopback_api_and_capability(port)
+        if api is None:
+            continue
+
+        if not cap:
+            click.echo(f"{port}: The module does not advertise any loopback capability")
+            continue
+
+        try:
+            host_input = api.get_host_input_loopback()
+            host_output = api.get_host_output_loopback()
+            media_input = api.get_media_input_loopback()
+            media_output = api.get_media_output_loopback()
+        except AttributeError:
+            click.echo(f"{port}: Loopback status is not applicable for this module")
+            continue
+
+        found = True
+        click.echo(f"{port}: loopback status:")
+        click.echo(f"  host-side-input:   {host_input}")
+        click.echo(f"  host-side-output:  {host_output}")
+        click.echo(f"  media-side-input:  {media_input}")
+        click.echo(f"  media-side-output: {media_output}")
+
+    if not single_port and not found:
+        click.echo("No ports found that support loopback status")
 
 
 @debug.command()

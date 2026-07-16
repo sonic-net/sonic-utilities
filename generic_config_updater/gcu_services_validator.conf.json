@@ -51,6 +51,12 @@
         },
         "VLAN_INTERFACE": {
             "services_to_validate": [ "vlanintf-service" ]
+        },
+        "GNMI": {
+            "services_to_validate": [ "gnmi-service" ]
+        },
+        "TELEMETRY": {
+            "services_to_validate": [ "telemetry-service" ]
         }
     },
     "services": {
@@ -58,7 +64,7 @@
             "validate_commands": [ ]
         },
         "port_service": {
-            "validate_commands": [ ]
+            "validate_commands": [ "generic_config_updater.services_validator.port_speed_change_validator" ]
         },
         "rsyslog": {
             "validate_commands": [ "generic_config_updater.services_validator.rsyslog_validator" ]
@@ -77,6 +83,12 @@
         },
         "vlanintf-service": {
             "validate_commands": [ "generic_config_updater.services_validator.vlanintf_validator" ]
+        },
+        "gnmi-service": {
+            "validate_commands": [ "generic_config_updater.services_validator.gnmi_validator" ]
+        },
+        "telemetry-service": {
+            "validate_commands": [ "generic_config_updater.services_validator.telemetry_validator" ]
         }
     }
 }

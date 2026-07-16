@@ -141,8 +141,6 @@ class TestShowRunBgpSingleAsic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
         from .mock_tables import dbconnector
         dbconnector.load_namespace_config()
 
@@ -163,11 +161,6 @@ class TestShowRunBgpSingleAsic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config()
 
 
 class TestShowRunBgpMultiAsic(object):
@@ -222,7 +215,3 @@ class TestShowRunBgpMultiAsic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config
