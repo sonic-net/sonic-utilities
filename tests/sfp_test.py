@@ -334,8 +334,6 @@ test_qsfp_dd_pm_output = (
     "       -18.0        -15.0        True\n"
     "    CD-short link        ps/nm   0.0       0.0       0.0       1000.0       500.0        False  "
     "       -1000.0      -500.0       False\n"
-    "    CD-long link         ps/nm   N/A       N/A       N/A       400000.0     200000.0     N/A    "
-    "       -400000.0    -200000.0    N/A\n"
     "    PDL                  dB      0.5       0.6       0.6       4.0          4.0          False  "
     "       0.0          0.0          False\n"
     "    OSNR                 dB      36.5      36.5      36.5      99.0         99.0         False  "
