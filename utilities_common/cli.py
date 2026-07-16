@@ -56,6 +56,12 @@ class AbbreviationGroup(click.Group):
             else:
                 return click.Group.get_command(self, ctx, shortest)
 
+            # During shell completion Click sets ctx.resilient_parsing and does not
+            # catch exceptions raised from get_command. Raising here would dump a
+            # traceback into the user's terminal, so degrade gracefully instead.
+            if ctx.resilient_parsing:
+                return None
+
             ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
 
 
