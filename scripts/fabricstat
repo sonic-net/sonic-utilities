@@ -202,7 +202,7 @@ class FabricPortStat(FabricStat):
             # e.g. PORT76 ['0', '0', '36', '6669', '0', '13', '302626', '3']
             # Now, set default saved values to 0
             diff_cached = ['0', '0', '0', '0', '0', '0', '0', '0']
-            #If the stats was not cleared before, the cnstat_cached_dict will be empty
+            # If the stats was not cleared before, the cnstat_cached_dict will be empty
             if port_name in cnstat_cached_dict:
                 diff_cached = cnstat_cached_dict.get(port_name)
 
@@ -333,6 +333,8 @@ class FabricQueueStat(FabricStat):
                           ns_diff(data.curlevel, diff_cached[0]),
                           ns_diff(data.watermarklevel, diff_cached[1])))
 
+        if nonzero_only and len(table) == 0:
+            return
         print(tabulate(table, queuestat_header, tablefmt='simple', stralign='right'))
         print()
 
@@ -561,7 +563,7 @@ Examples:
     parser.add_argument('-i','--isolation', action='store_true', help='Display fabric ports isolation status')
     parser.add_argument('-nz', '--nonzero', action='store_true',
                         help='Port, queue (-q), or rate (-s): show only rows with non-zero counter/rate; '
-                        ' (rows with N/A are always shown);. Nout used with capacity and reachability ')
+                        ' (rows with N/A are always shown);. Not used with capacity and reachability ')
     parser.add_argument('-s','--rate', action='store_true', help='Display fabric counters rate')
     parser.add_argument('-C','--clear', action='store_true', help='Copy & clear fabric counters')
     parser.add_argument('-D','--delete', action='store_true', help='Delete saved stats')
@@ -622,7 +624,8 @@ Examples:
         table_cnt = []
         threshold = []
         capacity_header = [
-            "ASIC", "Operating\nLinks", "Isolated\nLinks", "Total #\nof Links", "% Operating\nLinks", "Last Event", "Last Time"]
+            "ASIC", "Operating\nLinks", "Isolated\nLinks", "Total #\nof Links",
+            "% Operating\nLinks", "Last Event", "Last Time"]
         if namespace is None:
             # All asics or all fabric asics
             multi_asic = multi_asic_util.MultiAsic()
