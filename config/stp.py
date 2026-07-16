@@ -1335,7 +1335,7 @@ def stp_interface_enable(_db, interface_name):
     db = _db.cfgdb
 
     # Check and display the current STP mode
-    stp_global_entry = db.get_entry('STP_GLOBAL', 'GLOBAL')
+    stp_global_entry = db.get_entry('STP', 'GLOBAL')
     current_mode = stp_global_entry.get('mode', 'none')
     click.echo(f"Current STP mode: {current_mode}")
     if current_mode == "none":
@@ -1355,7 +1355,7 @@ def stp_interface_enable(_db, interface_name):
     }
 
     # Add mode-specific attributes
-    if current_mode == 'mstp':
+    if current_mode == 'mst':
         fvs.update({
             'edge_port': 'false',
             'link_type': 'auto',
@@ -1387,7 +1387,7 @@ def stp_interface_disable(_db, interface_name):
     db = _db.cfgdb
 
     # Check and display the current STP mode
-    stp_global_entry = db.get_entry('STP_GLOBAL', 'GLOBAL')
+    stp_global_entry = db.get_entry('STP', 'GLOBAL')
     current_mode = stp_global_entry.get('mode', 'none')
     click.echo(f"Current STP mode: {current_mode}")
 
@@ -1395,11 +1395,17 @@ def stp_interface_disable(_db, interface_name):
     check_if_interface_is_valid(ctx, db, interface_name)
 
     # Clear all entries for the interface except the disable attribute
-    if current_mode in ['mstp', 'pvst']:
+    if current_mode in ['mst', 'pvst']:
         db.set_entry('STP_PORT', interface_name, {'enabled': 'false'})
         click.echo(f"STP mode {current_mode} is disabled for {interface_name}")
     else:
-        click.echo("No STP mode selected. Please select a mode first.")
+        # Allow clearing stp port setting even when STP is disabled globally
+        stp_port_tbl = db.get_table('STP_PORT')
+        if interface_name in stp_port_tbl:
+            db.set_entry('STP_PORT', interface_name, {'enabled': 'false'})
+            click.echo(f"STP disabled for {interface_name}")
+        else :
+            click.echo(f"No STP_PORT entry for {interface_name}")
 
 
 # config spanning_tree interface edge_port {enable|disable} <ifname>

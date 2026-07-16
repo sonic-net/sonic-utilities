@@ -1270,7 +1270,7 @@ class TestStpInterfaceDisable:
 
         assert result.exit_code == 0
         assert "Current STP mode: none" in result.output
-        assert "No STP mode selected" in result.output
+        assert "No STP_PORT entry for Ethernet9" in result.output
 
 
 class TestMstpInterfaceedge_port:
