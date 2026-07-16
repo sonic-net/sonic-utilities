@@ -4,12 +4,15 @@ import pytest
 import show.main as show
 from click.testing import CliRunner
 from wm_input.wm_test_vectors import testData
+from .utils import load_source
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")
 sys.path.insert(0, test_path)
 sys.path.insert(0, modules_path)
+
+watermarkstat = load_source('watermarkstat', os.path.join(scripts_path, 'watermarkstat'))
 
 
 @pytest.fixture(scope="function")
@@ -100,6 +103,25 @@ class TestWatermarkstat(object):
 
     def test_show_headroom_pool_persistent_wm(self):
         self.executor(testData['show_hdrm_pool_pwm'])
+
+    def test_empty_all_queue_map(self, capsys):
+        wm_stat = watermarkstat.Watermarkstat.__new__(watermarkstat.Watermarkstat)
+        wm_type = {
+            "obj_map": {
+                "Ethernet0": {},
+                "Ethernet4": {},
+            },
+            "header_prefix": "ALL",
+        }
+
+        with pytest.raises(SystemExit) as exc_info:
+            wm_stat.build_header(wm_type, "q_shared_all")
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert captured.out == ("Object map from the COUNTERS_DB is empty because "
+                                "queue type ALL is not configured in the CONFIG_DB!\n")
+        assert captured.err == ""
 
     def executor(self, testcase):
         runner = CliRunner()
