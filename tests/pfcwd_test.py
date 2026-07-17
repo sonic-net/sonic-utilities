@@ -98,8 +98,8 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "101",
-                "Ethernet0", "102"
+                "--action", "forward", "--restoration-time", "601",
+                "Ethernet0", "602"
             ],
             obj=db
         )
@@ -114,6 +114,45 @@ class TestPfcwd(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == test_vectors.pfcwd_show_start_config_output_pass
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_detection_time_below_poll_interval(self, mock_os):
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            [
+                "--action", "forward", "--restoration-time", "601",
+                "Ethernet0", "200"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert "detection time 200ms is smaller than the configured polling interval 600ms" in result.output
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_restoration_time_below_poll_interval(self, mock_os):
+        # detection_time=602 is valid, but restoration_time=200 is below POLL_INTERVAL=600
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            [
+                "--action", "drop", "--restoration-time", "200",
+                "Ethernet0", "602"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert "restoration time 200ms is smaller than the configured polling interval 600ms" in result.output
 
     @patch('pfcwd.main.os')
     def test_pfcwd_enable_history_ports_valid(self, mock_os):
@@ -171,8 +210,8 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "301",
-                "all", "302"
+                "--action", "forward", "--restoration-time", "601",
+                "all", "602"
             ],
             obj=db
         )
@@ -191,8 +230,8 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "alert", "--restoration-time", "501",
-                "all", "502"
+                "--action", "alert", "--restoration-time", "701",
+                "all", "702"
             ],
             obj=db
         )
@@ -211,8 +250,8 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "drop", "--restoration-time", "601",
-                "all", "602"
+                "--action", "drop", "--restoration-time", "801",
+                "all", "802"
             ],
             obj=db
         )
@@ -730,8 +769,8 @@ class TestMultiAsicPfcwdShow(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "101",
-                "Ethernet0", "Ethernet-BP4", "102"
+                "--action", "forward", "--restoration-time", "201",
+                "Ethernet0", "Ethernet-BP4", "202"
             ],
             obj=db
         )
