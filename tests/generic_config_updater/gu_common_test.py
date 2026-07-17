@@ -221,6 +221,18 @@ class TestConfigWrapper(unittest.TestCase):
         self.assertEqual(expected, actual)
         self.assertIsNotNone(error)
 
+    def test_validate_config_db_config__portchannel_learn_mode__returns_true(self):
+        # Arrange
+        config_wrapper = gu_common.ConfigWrapper()
+        expected = True
+
+        # Act
+        actual, error = config_wrapper.validate_config_db_config(Files.CONFIG_DB_WITH_PORTCHANNEL_LEARN_MODE)
+
+        # Assert
+        self.assertEqual(expected, actual)
+        self.assertIsNone(error)
+
     def test_validate_config_db_config__same_config_called_twice__loadData_called_once(self):
         """Cache hit: second call with same config must not call loadData again."""
         config_wrapper = gu_common.ConfigWrapper()
