@@ -452,6 +452,19 @@ class TestVrfMultiAsic(object):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
 
+
+    def test_vrf_show_unconfigured(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vrf'], ["NonExistentVrf"], obj=db)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "VRF 'NonExistentVrf' not found." in result.output
+
 class TestVnet(object):
     @classmethod
     def setup_class(cls):
