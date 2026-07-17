@@ -447,13 +447,11 @@ def write_kdump_remote():
 
     if remote:
         # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/#SSH/SSH/' %s" % kdump_cfg, use_shell=False)
-        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' %s" % kdump_cfg, use_shell=False)
+        run_command("/bin/sed -i 's/^#SSH/SSH/' %s" % kdump_cfg, use_shell=False)
         print("SSH and SSH_KEY uncommented for remote configuration.")
     else:
         # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/SSH/#SSH/' %s" % kdump_cfg, use_shell=False)
-        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' %s" % kdump_cfg, use_shell=False)
+        run_command("/bin/sed -i 's/^SSH/#SSH/' %s" % kdump_cfg, use_shell=False)
         print("SSH and SSH_KEY commented out for local configuration.")
 
 def read_ssh_string():
@@ -513,7 +511,7 @@ def read_ssh_path():
         sys.exit(1)
 
 def write_ssh_path(ssh_path):
-    cmd = "/bin/sed -i -e 's/#*SSH_KEY=.*/SSH_KEY=\"%s\"/' %s" % (ssh_path, kdump_cfg)
+    cmd = "/bin/sed -i -e 's|#*SSH_KEY=.*|SSH_KEY=\"%s\"|' %s" % (ssh_path, kdump_cfg)
 
     (rc, lines, err_str) = run_command(cmd, use_shell=False)  # Make sure to set use_shell=True
     if rc == 0 and type(lines) == list and len(lines) == 0:
@@ -772,14 +770,12 @@ def cmd_kdump_remote(verbose):
 
     if remote:
         # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
-        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        run_command("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
         if verbose:
             print("SSH and SSH_KEY uncommented for remote configuration.")
     else:
         # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
-        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        run_command("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
         if verbose:
             print("SSH and SSH_KEY commented out for local configuration.")
 
@@ -798,10 +794,8 @@ def cmd_kdump_ssh_path(verbose, ssh_path):
         (rc, lines, err_str) = run_command("show kdump ssh_path", use_shell=False)
         print('\n'.join(lines))
     else:
-        current_ssh_path = read_ssh_path()
-        if current_ssh_path != ssh_path:
-            write_ssh_path(ssh_path)
-            print("SSH path updated. Changes will take effect after reboot.")
+        write_ssh_path(ssh_path)
+        print("SSH path updated. Changes will take effect after reboot.")
 
 def main():
 
@@ -846,7 +840,7 @@ def main():
         help='Maximum number of kernel dump files stored')
 
     parser.add_argument('--remote', action='store_true', default=False,
-                help='Enable remote kdump via SSH')
+                help='Update remote kdump via SSH based on CONFIG_DB')
     
     parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=False,
             help='ssh_string for remote kdump')
@@ -892,7 +886,7 @@ def main():
         elif options.ssh_string:
             cmd_kdump_ssh_string(options.verbose, options.ssh_string)
         elif options.ssh_path:
-            cmd_kdump_ssh_path(options.verbos, options.ssh_path)
+            cmd_kdump_ssh_path(options.verbose, options.ssh_path)
         elif options.num_dumps != False:
             cmd_kdump_num_dumps(options.verbose, options.num_dumps)
         elif options.dump_db:
