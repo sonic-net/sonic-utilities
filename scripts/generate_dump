@@ -2403,15 +2403,23 @@ collect_bmc_files() {
 #  None
 ###############################################################################
 save_warmboot_files() {
-    # Copy the warmboot files
+    # Copy the warmboot files (single-ASIC: /host/warmboot; multi-ASIC: /host/warmboot0, /host/warmboot1, ...)
     trap 'handle_error $? $LINENO' ERR
     start_t=$(date +%s%3N)
     if $NOOP; then
-        echo "$CP $V -rf /host/warmboot $TARDIR"
+        for d in /host/warmboot*; do
+            [ -d "$d" ] && echo "$CP $V -rf $d $TARDIR"
+        done
     else
         mkdir -p $TARDIR
-        $CP $V -rf /host/warmboot $TARDIR
-        chmod ugo+rw -R $DUMPDIR/$BASE/warmboot
+        for d in /host/warmboot*; do
+            if [ -d "$d" ]; then
+                $CP $V -rf "$d" $TARDIR
+            fi
+        done
+        for d in $TARDIR/warmboot*; do
+            [ -d "$d" ] && chmod ugo+rw -R "$d"
+        done
     fi
     end_t=$(date +%s%3N)
     echo "[ Warm-boot Files ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
