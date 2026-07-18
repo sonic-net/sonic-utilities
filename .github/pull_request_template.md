@@ -1,32 +1,45 @@
 <!--
-    Please make sure you've read and understood our contributing guidelines:
-    https://github.com/Azure/SONiC/blob/gh-pages/CONTRIBUTING.md
+Please make sure you've read and understood our contributing guidelines;
+https://github.com/Azure/SONiC/blob/gh-pages/CONTRIBUTING.md
 
-    ** Make sure all your commits include a signature generated with `git commit -s` **
-
-    If this is a bug fix, make sure your description includes "closes #xxxx",
-    "fixes #xxxx" or "resolves #xxxx" so that GitHub automatically closes the related
-    issue when the PR is merged.
-
-    If you are adding/modifying/removing any command or utility script, please also
-    make sure to add/modify/remove any unit tests from the tests
-    directory as appropriate.
-
-    If you are modifying or removing an existing 'show', 'config' or 'sonic-clear'
-    subcommand, or you are adding a new subcommand, please make sure you also
-    update the Command Line Reference Guide (doc/Command-Reference.md) to reflect
-    your changes.
-
-    Please provide the following information:
+Please provide following information to help code review process a bit easier:
+-->
+### Description of PR
+<!--
+- Please include a summary of the change and which issue is fixed.
+- Please also include relevant motivation and context. Where should reviewer start? background context?
+- List any dependencies that are required for this change.
 -->
 
-#### What I did
+Summary:
+Fixes # (issue)
 
-#### How I did it
+### Type of change
 
-#### How to verify it
+<!--
+- Fill x for your type of change.
+- e.g.
+- [x] Bug fix
+-->
 
-#### Previous command output (if the output of a command-line utility has changed)
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactor / cleanup
+- [ ] Documentation update
+- [ ] Test improvement
 
-#### New command output (if the output of a command-line utility has changed)
+### Approach
+#### What is the motivation for this PR?
 
+#### How did you do it?
+
+#### How did you verify/test it?
+
+#### Any platform specific information?
+
+### Documentation
+<!--
+(If it's a new feature, new test case)
+Did you update documentation/Wiki relevant to your implementation?
+Link to the wiki page?
+-->
