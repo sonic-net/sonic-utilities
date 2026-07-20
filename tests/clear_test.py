@@ -53,7 +53,7 @@ class TestClear(object):
     def test_clear_pg_wm_hdrm_nonroot(self, run_command):
         runner = CliRunner()
         result = runner.invoke(
-            clear.cli.commands['priority-group'].commands['watermark'].commands['headroom'])
+            clear.cli, ['priority-group', 'watermark', 'headroom'])
         assert result.exit_code == 0
         run_command.assert_called_with(['watermarkstat', '-c', '-t', 'pg_headroom'])
 
@@ -62,7 +62,7 @@ class TestClear(object):
     def test_clear_q_pst_wm_uni_nonroot(self, run_command):
         runner = CliRunner()
         result = runner.invoke(
-            clear.cli.commands['queue'].commands['persistent-watermark'].commands['unicast'])
+            clear.cli, ['queue', 'persistent-watermark', 'unicast'])
         assert result.exit_code == 0
         run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'q_shared_uni'])
 
