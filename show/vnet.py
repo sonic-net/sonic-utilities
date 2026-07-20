@@ -692,6 +692,6 @@ def _show_tunnel_helper(vnet_name=None, appl_db=None, state_db=None):
             metric = int(raw_metric) if raw_metric else ''
         except (ValueError, TypeError):
             metric = raw_metric
-        pretty_print(table, r, epval, mac_addr, vni, metric, state)
+        pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state)
 
     click.echo(tabulate(table, tunnel_header))

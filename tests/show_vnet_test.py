@@ -22,14 +22,14 @@ class TestShowVnetRoutesAll(object):
         state = "active"
         epval = "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1"
 
-        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output = [['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', 'fddd:a100:a251::a10:1,fddd:a101:a251::a10:1', '', '', '0', 'active']]
         assert table == expected_output
 
         table =[]
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         epval = "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a100:a251::a11:1,fddd:a100:a251::a12:1,fddd:a100:a251::a13:1"
-        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output = [
             ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', 'fddd:a100:a251::a10:1,fddd:a101:a251::a10:1', '', '', '0', 'active'],
             ['',                '',                         'fddd:a100:a251::a11:1,fddd:a100:a251::a12:1', '', '', '', ''],
@@ -40,7 +40,7 @@ class TestShowVnetRoutesAll(object):
         table =[]
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         epval = "192.168.1.1,192.168.1.2,192.168.1.3,192.168.1.4,192.168.1.5,192.168.1.6,192.168.1.7,192.168.1.8,192.168.1.9,192.168.1.10,192.168.1.11,192.168.1.12,192.168.1.13,192.168.1.14,192.168.1.15"
-        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output =[
             ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1,192.168.1.2,192.168.1.3',    '', '', '0', 'active'],
             ['',                '',                         '192.168.1.4,192.168.1.5,192.168.1.6',    '', '', '', ''],
@@ -52,7 +52,7 @@ class TestShowVnetRoutesAll(object):
         table =[]
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         epval = "192.168.1.1"
-        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output =[
             ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1', '', '', '0', 'active']]
         assert table == expected_output
@@ -65,7 +65,7 @@ class TestShowVnetRoutesAll(object):
         vni = "100,200,300,400"
         metric = ""
         # MAC items are 17 chars > 15, so row_width=2
-        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output = [
             ["TestVnet", "10.0.0.1/32", "1.1.1.1,1.1.1.1", "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02", "100,200", "", "active"],
             ["",         "",            "1.1.1.1,1.1.1.1", "aa:bb:cc:00:00:03,aa:bb:cc:00:00:04", "300,400", "", ""],
@@ -80,7 +80,7 @@ class TestShowVnetRoutesAll(object):
         vni = "100,200,300"
         metric = "5"
         # All endpoints are <=7 chars, MAC items are 17 chars > 15 → row_width=2
-        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output = [
             ["TestVnet", "10.0.0.1/32", "1.1.1.1,2.2.2.2", "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02", "100,200", "5",  "active"],
             ["",         "",            "3.3.3.3",          "aa:bb:cc:00:00:03",                   "300",     "",   ""],
@@ -103,7 +103,7 @@ class TestShowVnetRoutesAll(object):
 
         table = []
         row = [vnet_name, prefix]
-        vnet.pretty_print(table, row,
+        vnet.pretty_print_tunnel(table, row,
                           ",".join(endpoints_list),
                           ",".join(macs_list),
                           ",".join(vnis_list),
