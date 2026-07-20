@@ -540,16 +540,13 @@ def pretty_print_local(table, r, nexthop_val, ifname_val):
     i = 0
     while i < max_entries:
         r.append(",".join(nexthops[i:i + row_width]) if i < len(nexthops) else "")
-        if interfaces:
-            r.append(",".join(interfaces[i:i + row_width]) if i < len(interfaces) else "")
-        else:
-            r.append(ifname_val if i == 0 else "")
+        r.append(",".join(interfaces[i:i + row_width]) if i < len(interfaces) else "")
         i += row_width
         table.append(r)
         r = ["", ""]
 
 
-def pretty_print(table, r, epval, mac_addr, vni, metric, state):
+def pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state):
     endpoints = epval.split(',') if epval else []
     if not endpoints:
         endpoints = [""]
