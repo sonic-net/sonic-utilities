@@ -42,12 +42,12 @@ def deep_update(dst, src):
 class AclAction:
     """ namespace for ACL action keys """
 
-    PACKET = "PACKET_ACTION"
-    REDIRECT = "REDIRECT_ACTION"
-    MIRROR = "MIRROR_ACTION"
+    PACKET         = "PACKET_ACTION"
+    REDIRECT       = "REDIRECT_ACTION"
+    MIRROR         = "MIRROR_ACTION"
     MIRROR_INGRESS = "MIRROR_INGRESS_ACTION"
-    MIRROR_EGRESS = "MIRROR_EGRESS_ACTION"
-    ECN = "ECN_ACTION"
+    MIRROR_EGRESS  = "MIRROR_EGRESS_ACTION"
+    ECN            = "ECN_ACTION"
 
 
 class PacketAction:
