@@ -606,13 +606,40 @@ function abort_reboot_if_cpa_tunnel_is_leftover()
     fi
 }
 
+# Tomahawk4/5/6 chip family (DEV_IS_LTSW_THX() in brcm_sai_feat_checks.h)
+# can't do the VxLAN tunnel CPA's neighbor_advertiser needs
+function is_th_ltsw_platform()
+{
+    local chip
+    chip=$(lspci -d 14e4: 2>/dev/null | grep -oP '\[\K(Tomahawk|Trident)[0-9A-Za-z]*(?=\])' | head -n1)
+    case "$chip" in
+        Tomahawk4|Tomahawk5|Tomahawk6*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
+# neither are LTSW-generation chips (Tomahawk4/5/6 family).
+function is_cpa_supported()
+{
+    case "${HWSKU}" in
+        DellEMC-Z9332f-M-O16C64|DellEMC-Z9332f-M-O16C64-lab)
+            return 1
+            ;;
+    esac
+    ! is_th_ltsw_platform
+}
+
 function setup_control_plane_assistant()
 {
     abort_reboot_if_cpa_tunnel_is_leftover
 
     if [[ -n "${ASSISTANT_IP_LIST}" && -x ${ASSISTANT_SCRIPT} ]]; then
-        # TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
-        if [[ "${HWSKU}" != "DellEMC-Z9332f-M-O16C64" && "${HWSKU}" != "DellEMC-Z9332f-M-O16C64-lab" ]]; then
+        if is_cpa_supported; then
             debug "Setting up control plane assistant: ${ASSISTANT_IP_LIST} ..."
             ${ASSISTANT_SCRIPT} -s ${ASSISTANT_IP_LIST} -m set
 	    check_mirror_session_acls
@@ -628,8 +655,7 @@ function setup_control_plane_assistant()
 function teardown_control_plane_assistant()
 {
     if [[ -n "${ASSISTANT_IP_LIST}" && -x ${ASSISTANT_SCRIPT} ]]; then
-        # TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
-        if [[ "${HWSKU}" != "DellEMC-Z9332f-M-O16C64" && "${HWSKU}" != "DellEMC-Z9332f-M-O16C64-lab" ]]; then
+        if is_cpa_supported; then
             debug "Tearing down control plane assistant: ${ASSISTANT_IP_LIST} ..."
             ${ASSISTANT_SCRIPT} -s ${ASSISTANT_IP_LIST} -m reset
         fi
