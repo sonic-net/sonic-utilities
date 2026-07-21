@@ -47,7 +47,7 @@ class AclAction:
     MIRROR         = "MIRROR_ACTION"
     MIRROR_INGRESS = "MIRROR_INGRESS_ACTION"
     MIRROR_EGRESS  = "MIRROR_EGRESS_ACTION"
-    ECN            = "ECN_ACTION"
+    ECN            = "ECN_ACTION"  # noqa: E221
 
 
 class PacketAction:
