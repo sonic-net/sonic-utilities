@@ -794,6 +794,90 @@ class TestConfigReload(object):
             assert result.exit_code == 0
             mock_validate_config.assert_not_called()
 
+    def test_config_reload_blocked_during_warm_boot(self, get_cmd_module, setup_single_broadcom_asic):
+        """config reload must abort when a warm-boot is in progress (Redmine #5154490)."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = True
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = False
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch.object(config, 'config_file_yang_validation'):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y"])
+            assert result.exit_code != 0
+            assert "warm-boot" in result.output
+            assert "still in progress" in result.output
+
+    def test_config_reload_blocked_during_fast_boot(self, get_cmd_module, setup_single_broadcom_asic):
+        """config reload must abort when a fast-reboot is in progress.
+        fast-reboot sets both FAST_RESTART_ENABLE_TABLE and WARM_RESTART_ENABLE_TABLE;
+        isFastBootInProgress is checked first so the label is correct."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = True
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = True
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch.object(config, 'config_file_yang_validation'):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y"])
+            assert result.exit_code != 0
+            assert "fast-reboot" in result.output
+            assert "still in progress" in result.output
+
+    def test_config_reload_not_blocked_when_no_boot_in_progress(self, get_cmd_module, setup_single_broadcom_asic):
+        """Guard runs but does not block when no boot is in progress; both checks are invoked."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = False
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = False
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch.object(config, 'config_file_yang_validation'), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch('config.main._stop_services'), \
+                mock.patch('config.main._restart_services'), \
+                mock.patch('config.main._reset_failed_services'), \
+                mock.patch("utilities_common.cli.run_command",
+                           mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y"])
+            assert result.exit_code == 0
+            assert "still in progress" not in result.output
+            mock_swsscommon.RestartWaiter.isFastBootInProgress.assert_called_once()
+            mock_swsscommon.RestartWaiter.isWarmBootInProgress.assert_called_once()
+
+    def test_config_reload_no_service_restart_skips_guard(self, get_cmd_module, setup_single_broadcom_asic):
+        """With -n (no_service_restart), guard is skipped — no syncd teardown, no risk."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = True
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch.object(config, 'config_file_yang_validation'), \
+                mock.patch("utilities_common.cli.run_command",
+                           mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y", "-n"])
+            assert result.exit_code == 0
+            assert "still in progress" not in result.output
+            mock_swsscommon.RestartWaiter.isFastBootInProgress.assert_not_called()
+            mock_swsscommon.RestartWaiter.isWarmBootInProgress.assert_not_called()
+
     def test_config_reload_default_config_missing_file(
         self, get_cmd_module, setup_single_broadcom_asic
     ):
