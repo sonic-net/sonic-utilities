@@ -9646,12 +9646,14 @@ def global_sample_direction(ctx, direction):
     except ValueError as e:
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
+
 def is_sflow_mirror_on_drop_supported():
     state_db = SonicV2Connector(use_unix_socket_path=True)
     state_db.connect(state_db.STATE_DB, False)
-    entry_name="SWITCH_CAPABILITY|switch"
+    entry_name = "SWITCH_CAPABILITY|switch"
     supported = state_db.get(state_db.STATE_DB, entry_name, "MIRROR_ON_DROP_CAPABLE")
     return supported
+
 
 #
 # 'sflow' command ('config sflow drop-monitor-limit ...')

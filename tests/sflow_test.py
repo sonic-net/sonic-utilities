@@ -64,7 +64,9 @@ class TestShowSflow(object):
         assert result.exit_code == 0
         assert result.output == show_sflow_intf_output
 
-    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch(
+        "config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+        mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_disable_enable_yang_validation(self):
         db = Db()
@@ -197,7 +199,9 @@ class TestShowSflow(object):
 
         return
 
-    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch(
+        "config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+        mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     def test_config_sflow_collector_invalid_yang_validation(self):
@@ -216,7 +220,9 @@ class TestShowSflow(object):
             ["prod", "fe80::6e82:6aff:fe1e:cd8e", "--vrf", "mgmt"], obj=obj)
         assert "Invalid ConfigDB. Error" in result.output
 
-    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch(
+        "config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+        mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_polling_interval_yang_validation(self):
         db = Db()
@@ -269,7 +275,9 @@ class TestShowSflow(object):
         return
 
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value={'Ethernet1': {'admin_state': 'sample_state'}}))
-    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch(
+        "config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+        mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_existing_intf_enable_yang_validation(self):
         db = Db()
@@ -283,7 +291,9 @@ class TestShowSflow(object):
         assert "Invalid ConfigDB. Error" in result.output
 
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value=None))
-    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch(
+        "config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+        mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_nonexistent_intf_enable_yang_validation(self):
         db = Db()
@@ -469,7 +479,7 @@ class TestShowSflow(object):
         # config sflow drop-monitor-limit <limit>
         db = Db()
         runner = CliRunner()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         # drop-monitor-limit : Invalid
         result = runner.invoke(config.config.commands["sflow"].commands["drop-monitor-limit"], ["NA"], obj=obj)
@@ -477,7 +487,7 @@ class TestShowSflow(object):
         expected = "Error: Invalid value for \"<packet_per_second>\": NA is not a valid integer"
         assert expected in result.output
 
-        #disable
+        # disable
         result = runner.invoke(config.config.commands["sflow"].commands["drop-monitor-limit"], ["0"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
