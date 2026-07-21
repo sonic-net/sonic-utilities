@@ -676,9 +676,9 @@ class TestPortStat(object):
         called_keys = set()
         for call in mock_redis.hdel.call_args_list:
             key = call[0][0]
-            fields = call[0][1:]
+            fields = call[0][1]
             called_keys.add(key)
-            assert tuple(fields) == tuple(expected_fields)
+            assert fields == expected_fields
         assert called_keys == {'RATES:' + oid for oid in port_name_map.values()}
 
     def test_clear_fec_rate_aggregates_ns_list_exception(self):

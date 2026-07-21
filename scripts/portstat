@@ -76,7 +76,7 @@ def _clear_fec_rate_aggregates(portstat):
                 continue
             redis_client = db.get_redis_client(db.COUNTERS_DB)
             for oid in counter_port_name_map.values():
-                redis_client.hdel(RATES_TABLE_PREFIX + oid, *FEC_RATE_AGGREGATE_FIELDS)
+                redis_client.hdel(RATES_TABLE_PREFIX + oid, FEC_RATE_AGGREGATE_FIELDS)
         except Exception as e:
             print("Warning: failed to clear FEC rate aggregates for namespace '{}': {}".format(ns, e),
                   file=sys.stderr)
