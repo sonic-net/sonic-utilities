@@ -41,8 +41,12 @@ def readJsonFile(fileName):
     return result
 
 
-def try_convert_interfacename_from_alias(ctx, interfacename):
-    """try to convert interface name from alias"""
+def try_convert_interfacename_from_alias(ctx, interfacename, check_db=False):
+    """
+    Try to convert interface name from alias
+
+    If `check_db` is true, this function will check if `interfacename` exists in CONFIG_DB
+    """
 
     if clicommon.get_interface_naming_mode() == "alias":
         alias = interfacename
@@ -51,6 +55,10 @@ def try_convert_interfacename_from_alias(ctx, interfacename):
         # the port name for the alias
         if interfacename == alias:
             ctx.fail("cannot find interface name for alias {}".format(alias))
+    elif check_db:
+        port_dict = multi_asic.get_port_table(namespace=None)
+        if not port_dict or interfacename not in port_dict:
+            ctx.fail("interface {} does not exist".format(interfacename))
 
     return interfacename
 
@@ -871,59 +879,25 @@ def fec_stats(namespace, display, period, json_fmt, verbose, nonzero):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
-def get_port_oid_mapping(db, namespace):
-    ''' Returns dictionary of all ports interfaces and their OIDs. '''
-    port_oid_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
-    return port_oid_map
-
-
-def fetch_fec_histogram(db, namespace, port_oid_map, target_port):
-    ''' Fetch and display FEC histogram for the given port. '''
-
-    if target_port not in port_oid_map:
-        click.echo('Port {} not found in COUNTERS_PORT_NAME_MAP'.format(target_port), err=True)
-        raise click.Abort()
-
-    port_oid = port_oid_map[target_port]
-    asic_db_kvp = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS:{}'.format(port_oid))
-
-    if asic_db_kvp is not None:
-
-        fec_errors = {f'BIN{i}': asic_db_kvp.get
-                      (f'SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{i}', '0') for i in range(16)}
-
-        # Prepare the data for tabulation
-        table_data = [(bin_label, error_value) for bin_label, error_value in fec_errors.items()]
-
-        # Define headers
-        headers = ["Symbol Errors Per Codeword", "Codewords"]
-
-        # Print FEC histogram using tabulate
-        click.echo(tabulate(table_data, headers=headers))
-    else:
-        click.echo('No kvp found in ASIC DB for port {}, exiting'.format(target_port), err=True)
-        raise click.Abort()
-
-
-
 # 'fec-histogram' subcommand ("show interfaces counters fec-histogram")
 @counters.command('fec-histogram')
 @multi_asic_util.multi_asic_click_options
 @click.argument('interfacename', required=True)
-@clicommon.pass_db
-def fec_histogram(db, interfacename, namespace, display):
+@click.pass_context
+def fec_histogram(ctx, interfacename, namespace, display):
     """Show interface counters fec-histogram"""
 
-    if namespace is None:
-        namespace = constants.DEFAULT_NAMESPACE
+    cmd = ['portstat', '-fh', '--relative-timestamp']
 
-    port_oid_map = get_port_oid_mapping(db, namespace)
+    interfacename = try_convert_interfacename_from_alias(ctx, interfacename, check_db=True)
+    cmd += ['-i', str(interfacename)]
+    if multi_asic.is_multi_asic():
+        cmd += ['-s', str(display)]
 
-    # Try to convert interface name from alias
-    interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
 
-    # Fetch and display the FEC histogram
-    fetch_fec_histogram(db, namespace, port_oid_map, interfacename)
+    clicommon.run_command(cmd)
 
 
 # 'rates' subcommand ("show interfaces counters rates")
