@@ -484,8 +484,9 @@ class TestShowSflow(object):
         # drop-monitor-limit : Invalid
         result = runner.invoke(config.config.commands["sflow"].commands["drop-monitor-limit"], ["NA"], obj=obj)
         print(result.output)
-        expected = "Error: Invalid value for \"<packet_per_second>\": NA is not a valid integer"
-        assert expected in result.output
+        assert result.exit_code != 0
+        assert "Invalid value for '<packet_per_second>'" in result.output
+        assert "'NA' is not a valid integer" in result.output
 
         # disable
         result = runner.invoke(config.config.commands["sflow"].commands["drop-monitor-limit"], ["0"], obj=obj)
