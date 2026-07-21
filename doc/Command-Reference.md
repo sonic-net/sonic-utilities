@@ -227,6 +227,7 @@
     * [VLAN show commands](#vlan-show-commands)
     * [VLAN Config commands](#vlan-config-commands)
   * [FDB](#fdb)
+    * [FDB config commands](#fdb-config-commands)
     * [FDB show commands](#fdb-show-commands)
 * [VxLAN & Vnet](#vxlan--vnet)
   * [VxLAN](#vxlan)
@@ -14705,6 +14706,38 @@ This command is used to enable or disable proxy ARP for a VLAN interface
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vlan--FDB)
 
 ### FDB
+
+#### FDB config commands
+
+**config mac add**
+
+This command adds a static MAC (FDB) entry: frames destined to `<mac-address>` on VLAN
+`<vlan-id>` are forwarded to the given interface. The entry is written to the CONFIG_DB
+`FDB` table and programmed as a static FDB entry.
+
+- Usage:
+  ```
+  config mac add <mac-address> <vlan-id> <interface-name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config mac add 00:11:22:33:44:55 1000 Ethernet192
+  ```
+
+**config mac del**
+
+This command deletes a previously configured static MAC (FDB) entry.
+
+- Usage:
+  ```
+  config mac del <mac-address> <vlan-id>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config mac del 00:11:22:33:44:55 1000
+  ```
 
 #### FDB show commands
 

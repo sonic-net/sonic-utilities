@@ -10825,5 +10825,72 @@ def del_vnet_route(db, vnet_name, prefix):
         click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 
+#
+# 'mac' group ('config mac ...')
+#
+
+@config.group(cls=clicommon.AbbreviationGroup)
+def mac():
+    """Static FDB (MAC) configuration tasks"""
+    pass
+
+
+def is_static_mac_valid(mac):
+    """Return True if mac is a well-formed unicast (non-zero, non-broadcast) MAC address."""
+    if not re.match('^' + '[:-]'.join(['([0-9a-fA-F]{2})'] * 6) + '$', mac):
+        return False
+    octets = re.split('[:-]', mac.lower())
+    # reject the all-zero and broadcast (all-ff) addresses
+    # (note: builtins all()/any() are shadowed by a 'config ... all' command here)
+    if octets == ['00'] * 6 or octets == ['ff'] * 6:
+        return False
+    # reject multicast addresses (group bit set in the first octet)
+    if int(octets[0], 16) & 1:
+        return False
+    return True
+
+
+@mac.command('add')
+@click.argument('mac', metavar='<mac-address as xx:xx:xx:xx:xx:xx>', required=True)
+@click.argument('vlan', metavar='<vlan-id>', required=True, type=click.IntRange(1, 4094))
+@click.argument('interface_name', metavar='<interface-name>', required=True)
+@clicommon.pass_db
+def mac_add(db, mac, vlan, interface_name):
+    """Add a static MAC entry to a VLAN"""
+    ctx = click.get_current_context()
+
+    if not is_static_mac_valid(mac):
+        ctx.fail("{} is not a valid unicast MAC address".format(mac))
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(db.cfgdb, interface_name)
+        if interface_name is None:
+            ctx.fail("Invalid interface alias")
+
+    if interface_name_is_valid(db.cfgdb, interface_name) is False:
+        ctx.fail("Interface name {} is invalid".format(interface_name))
+
+    vlan_name = 'Vlan{}'.format(vlan)
+    if vlan_name not in db.cfgdb.get_table('VLAN'):
+        ctx.fail("{} does not exist".format(vlan_name))
+
+    db.cfgdb.set_entry('FDB', (vlan_name, mac), {'port': interface_name})
+
+
+@mac.command('del')
+@click.argument('mac', metavar='<mac-address as xx:xx:xx:xx:xx:xx>', required=True)
+@click.argument('vlan', metavar='<vlan-id>', required=True, type=click.IntRange(1, 4094))
+@clicommon.pass_db
+def mac_del(db, mac, vlan):
+    """Delete a static MAC entry from a VLAN"""
+    ctx = click.get_current_context()
+
+    if not is_static_mac_valid(mac):
+        ctx.fail("{} is not a valid unicast MAC address".format(mac))
+
+    vlan_name = 'Vlan{}'.format(vlan)
+    db.cfgdb.set_entry('FDB', (vlan_name, mac), None)
+
+
 if __name__ == '__main__':
     config()
