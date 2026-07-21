@@ -31,7 +31,11 @@ class TestConfigHftCli:
         assert payload == expected_payload
 
     def test_add_group_splits_comma_separated_lists(self):
-        with patch('config.hft._process_payload') as mock_process:
+        # Stub the runtime guard so this payload-shape assertion doesn't
+        # depend on swsscommon or the host STATE_DB. The guard has its
+        # own dedicated tests below.
+        with patch('config.hft._reject_if_stream_active'), \
+                patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
@@ -146,6 +150,27 @@ class TestConfigHftCli:
 
         assert result.exit_code == 0
         mock_process.assert_called_once()
+
+    def test_add_group_rejected_when_state_db_query_fails(self):
+        """Fail closed: if STATE_DB cannot be queried, refuse the
+        mutation rather than silently permitting it.
+        """
+        with patch('config.hft._get_state_db',
+                   side_effect=RuntimeError("state_db unreachable")), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'group', 'profileA',
+                    '--group_type', 'PORT',
+                    '--object_names', 'Ethernet0',
+                    '--object_counters', 'COUNTER_A'
+                ]
+            )
+
+        assert result.exit_code != 0
+        assert 'Unable to determine HFT runtime stream state' in result.output
+        mock_process.assert_not_called()
 
     def test_add_group_rejected_when_sibling_group_active_in_mixed(self):
         """MIXED-mode scenario: adding BUFFER_POOL is rejected because a

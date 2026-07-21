@@ -320,13 +320,11 @@ def _get_state_db(namespace=None):
 def _active_session_groups(state_db, profile_name):
     """Return sorted group names for `profile_name` whose STATE_DB entry
     reports `stream_status == "enabled"`. Missing entries are treated as
-    inactive.
+    inactive. Propagates any underlying STATE_DB error so callers can
+    decide the failure policy.
     """
     pattern = f"{STATE_SESSION_TABLE_NAME}|{profile_name}|*"
-    try:
-        keys = state_db.keys(state_db.STATE_DB, pattern) or []
-    except Exception:
-        return []
+    keys = state_db.keys(state_db.STATE_DB, pattern) or []
     active = []
     for key in keys:
         entry = state_db.get_all(state_db.STATE_DB, key) or {}
@@ -342,9 +340,19 @@ def _reject_if_stream_active(profile_name, namespace=None):
     be 'disabled' while orchagent is still tearing down the runtime stream.
     STATE_DB reflects the operational state written after the SAI transition
     completes.
+
+    Fails closed: if STATE_DB cannot be reached or queried, the mutation is
+    refused rather than silently permitted, so we never mutate group config
+    against a stream whose state we cannot verify.
     """
-    state_db = _get_state_db(namespace=namespace)
-    active = _active_session_groups(state_db, profile_name)
+    try:
+        state_db = _get_state_db(namespace=namespace)
+        active = _active_session_groups(state_db, profile_name)
+    except Exception as exc:  # noqa: BLE001 - fail-closed on any STATE_DB error
+        raise click.ClickException(
+            "Unable to determine HFT runtime stream state; refusing group "
+            "mutation. Ensure STATE_DB is reachable, then retry."
+        ) from exc
     if not active:
         return
     raise click.ClickException(
