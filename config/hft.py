@@ -18,6 +18,10 @@ PROFILE_TABLE_PATH = f"/{PROFILE_TABLE_NAME}"
 GROUP_TABLE_PATH = f"/{GROUP_TABLE_NAME}"
 STREAM_STATE_FIELD = "stream_state"
 
+STATE_SESSION_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_SESSION_TABLE"
+STREAM_STATUS_FIELD = "stream_status"
+STREAM_STATUS_ENABLED = "enabled"
+
 
 @click.group(name='hft', short_help="Manage high frequency telemetry")
 def hft():
@@ -87,6 +91,7 @@ def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
 @click.pass_context
 def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
     """Create a group definition under an HFT profile."""
+    _reject_if_stream_active(profile_name)
     group_payload = _build_group_patch(
         op="add",
         profile_name=profile_name,
@@ -120,6 +125,7 @@ def hft_delete_profile(ctx, profile_name):
 @click.pass_context
 def hft_delete_group(ctx, profile_name, group_type):
     """Remove a group definition from an HFT profile."""
+    _reject_if_stream_active(profile_name)
     remove_entire_table = _is_last_entry(ctx, GROUP_TABLE_NAME)
     group_payload = _build_group_remove_patch(profile_name, group_type, remove_entire_table)
     _process_payload(ctx, group_payload)
@@ -299,3 +305,51 @@ def _has_existing_profile(ctx):
     except Exception:
         return False
     return bool(entries)
+
+
+def _get_state_db(namespace=None):
+    """Connect to STATE_DB for the given namespace. `namespace=None` maps
+    to the localhost/default DB.
+    """
+    from swsscommon.swsscommon import SonicV2Connector
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db.connect(state_db.STATE_DB, False)
+    return state_db
+
+
+def _active_session_groups(state_db, profile_name):
+    """Return sorted group names for `profile_name` whose STATE_DB entry
+    reports `stream_status == "enabled"`. Missing entries are treated as
+    inactive.
+    """
+    pattern = f"{STATE_SESSION_TABLE_NAME}|{profile_name}|*"
+    try:
+        keys = state_db.keys(state_db.STATE_DB, pattern) or []
+    except Exception:
+        return []
+    active = []
+    for key in keys:
+        entry = state_db.get_all(state_db.STATE_DB, key) or {}
+        if entry.get(STREAM_STATUS_FIELD) == STREAM_STATUS_ENABLED:
+            # STATE_DB key: HIGH_FREQUENCY_TELEMETRY_SESSION_TABLE|profile|group
+            active.append(key.split("|", 2)[-1])
+    return sorted(active)
+
+
+def _reject_if_stream_active(profile_name, namespace=None):
+    """Refuse the group mutation while any of the profile's runtime streams
+    is still active. CONFIG_DB.stream_state alone is not sufficient - it can
+    be 'disabled' while orchagent is still tearing down the runtime stream.
+    STATE_DB reflects the operational state written after the SAI transition
+    completes.
+    """
+    state_db = _get_state_db(namespace=namespace)
+    active = _active_session_groups(state_db, profile_name)
+    if not active:
+        return
+    raise click.ClickException(
+        f"Profile '{profile_name}' has active runtime streams for group(s): "
+        f"{', '.join(active)}. Run `config hft disable {profile_name}` and "
+        f"wait until STATE_DB {STATE_SESSION_TABLE_NAME}|{profile_name}|* "
+        f"reports {STREAM_STATUS_FIELD}=disabled before modifying groups."
+    )
