@@ -15,7 +15,6 @@ from portconfig import get_child_ports
 import sonic_platform_base.sonic_sfp.sfputilhelper
 
 from . import portchannel
-from . import top
 from collections import OrderedDict
 from datetime import datetime
 
@@ -453,7 +452,6 @@ def mpls(ctx, interfacename, namespace, display):
 
 
 interfaces.add_command(portchannel.portchannel)
-interfaces.add_command(top.top)
 
 
 @interfaces.command()
