@@ -132,4 +132,3 @@ class TestPortStatTopN:
                           'total_bps', 'total_pps', 'rx_util_pct', 'tx_util_pct'):
                 assert isinstance(iface[field], float), \
                     f"Expected float for {field} in {iface['iface']}, got {type(iface[field])}: {iface[field]}"
-
