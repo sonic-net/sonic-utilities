@@ -272,8 +272,8 @@ class AclLoader(object):
         :return:
         """
 
-        # Policer configuration can be ASIC-specific, so merge entries from
-        # every front ASIC namespace.
+        # Merge ASIC-specific policers from every front namespace, preserving
+        # the first namespace's value for duplicate names to retain existing behavior.
         if self.per_npu_configdb:
             self.policers_db_info = {}
             for namespace_configdb in self.per_npu_configdb.values():
