@@ -365,6 +365,35 @@ class TestMasicAclLoader(object):
         assert len(acl_loader.per_npu_configdb) == 2
         assert len(acl_loader.per_npu_statedb) == 2
 
+    def test_read_policers_from_all_namespaces(self):
+        acl_loader = object.__new__(AclLoader)
+        asic0_configdb = mock.MagicMock()
+        asic1_configdb = mock.MagicMock()
+        asic0_configdb.get_table.return_value = {
+            "policer_asic0": {
+                "meter_type": "bytes",
+                "mode": "sr_tcm",
+                "cir": "10000000",
+                "cbs": "10000000",
+            }
+        }
+        asic1_configdb.get_table.return_value = {
+            "policer_asic1": {
+                "meter_type": "bytes",
+                "mode": "sr_tcm",
+                "cir": "12500000",
+                "cbs": "12500000",
+            }
+        }
+        acl_loader.per_npu_configdb = {
+            "asic0": asic0_configdb,
+            "asic1": asic1_configdb,
+        }
+
+        acl_loader.read_policers_info()
+
+        assert set(acl_loader.policers_db_info) == {"policer_asic0", "policer_asic1"}
+
     def test_incremental_update(self, acl_loader):
         acl_loader.rules_info = {}
         acl_loader.tables_db_info['NTP_ACL'] = {
