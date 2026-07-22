@@ -2,13 +2,13 @@ import json
 import os
 import sys
 
-import show.main as show
-from click.testing import CliRunner
-
-# Path setup for imports
+# Path setup for imports before any flake8-imported modules
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
+
+import show.main as show
+from click.testing import CliRunner
 
 from .utils import get_result_and_return_code
 
@@ -30,11 +30,11 @@ class TestPortStatTopN:
 
         lines = result.output.strip().splitlines()
         table_rows = [
-            l for l in lines if l.strip()
-            and not l.startswith('Sampled at')
-            and not l.startswith('---')
-            and 'RANK' not in l
-            and 'IFACE' not in l
+            line for line in lines if line.strip()
+            and not line.startswith('Sampled at')
+            and not line.startswith('---')
+            and 'RANK' not in line
+            and 'IFACE' not in line
         ]
         assert len(table_rows) == 3, f"Expected 3 rows, got {len(table_rows)}: {table_rows}"
         assert 'Ethernet0' in table_rows[0], \
@@ -51,11 +51,11 @@ class TestPortStatTopN:
         assert result.exit_code == 0, f"CLI exited with code {result.exit_code}: {result.output}"
         lines = result.output.strip().splitlines()
         table_rows = [
-            l for l in lines if l.strip()
-            and not l.startswith('Sampled at')
-            and not l.startswith('---')
-            and 'RANK' not in l
-            and 'IFACE' not in l
+            line for line in lines if line.strip()
+            and not line.startswith('Sampled at')
+            and not line.startswith('---')
+            and 'RANK' not in line
+            and 'IFACE' not in line
         ]
         assert len(table_rows) == 2, f"Expected 2 rows, got {len(table_rows)}: {table_rows}"
 
@@ -66,11 +66,11 @@ class TestPortStatTopN:
         assert result.exit_code == 0, f"CLI exited with code {result.exit_code}: {result.output}"
         lines = result.output.strip().splitlines()
         table_rows = [
-            l for l in lines if l.strip()
-            and not l.startswith('Sampled at')
-            and not l.startswith('---')
-            and 'RANK' not in l
-            and 'IFACE' not in l
+            line for line in lines if line.strip()
+            and not line.startswith('Sampled at')
+            and not line.startswith('---')
+            and 'RANK' not in line
+            and 'IFACE' not in line
         ]
         assert len(table_rows) == 3, f"Expected 3 rows, got {len(table_rows)}: {table_rows}"
 

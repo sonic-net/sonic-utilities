@@ -773,7 +773,6 @@ class Portstat(object):
         elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")
 
-
     def _compute_util_float(self, bps, port_speed):
         """
         Compute link utilization as a raw float (0-100), NOT a formatted string.
@@ -843,7 +842,7 @@ class Portstat(object):
             else:
                 value = 0.0
 
-            return (-value, natsort_keygen()(name))
+            return (-value, natsort_key(name))
 
         sorted_interfaces = sorted(ratestat_dict.items(), key=sort_key_func)
         return sorted_interfaces[:n]
