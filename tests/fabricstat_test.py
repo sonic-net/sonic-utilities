@@ -239,15 +239,15 @@ asic0
 ------------  ---------------  -----------------  ----------  ----------------
            0                1                  0           0        crc_errors
            2                0                  0           0
-           4                0                  1           0       user_config
-           6                0                  0           1     symbol_errors
+           4                0                  1           0            config
+           6                1                  0           1  fec_uncorrectable
            7                0                  0           0
 
 asic1
   Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
 ------------  ---------------  -----------------  ----------  ----------------
            0                0                  0           0
-           4                0                  1           0       user_config
+           4                0                  1           0            config
 """
 
 multi_asic_fabric_isolation_asic0 = """\
@@ -257,8 +257,8 @@ asic0
 ------------  ---------------  -----------------  ----------  ----------------
            0                1                  0           0        crc_errors
            2                0                  0           0
-           4                0                  1           0       user_config
-           6                0                  0           1     symbol_errors
+           4                0                  1           0            config
+           6                1                  0           1  fec_uncorrectable
            7                0                  0           0
 """
 
@@ -268,13 +268,13 @@ asic0
   Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
 ------------  ---------------  -----------------  ----------  ----------------
            0                1                  0           0        crc_errors
-           4                0                  1           0       user_config
-           6                0                  0           1     symbol_errors
+           4                0                  1           0            config
+           6                1                  0           1  fec_uncorrectable
 
 asic1
   Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
 ------------  ---------------  -----------------  ----------  ----------------
-           4                0                  1           0       user_config
+           4                0                  1           0            config
 """
 
 multi_asic_fabric_isolation_nz_asic0 = """\
@@ -283,8 +283,8 @@ asic0
   Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
 ------------  ---------------  -----------------  ----------  ----------------
            0                1                  0           0        crc_errors
-           4                0                  1           0       user_config
-           6                0                  0           1     symbol_errors
+           4                0                  1           0            config
+           6                1                  0           1  fec_uncorrectable
 """
 
 multi_asic_fabric_rate = """\

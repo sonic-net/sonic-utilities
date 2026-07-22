@@ -35,6 +35,10 @@ PORT_NAME_PREFIX = 'PORT'
 COUNTER_TABLE_PREFIX = COUNTERS_TABLE+":"
 FABRIC_PORT_STATUS_TABLE_PREFIX = APP_FABRIC_PORT_TABLE_NAME+"|"
 FABRIC_PORT_STATUS_FIELD = "STATUS"
+# ISOLATE_REASON values from orchagent fabricportsorch.cpp:
+# none | config | permanent | crc_errors | fec_uncorrectable |
+# crc_errors,fec_uncorrectable | auto | unknown |
+# link_event_counters_reset | admin_unisolate
 FABRIC_PORT_ISOLATE_REASON_FIELD = "ISOLATE_REASON"
 STATUS_NA = 'N/A'
 

@@ -267,7 +267,7 @@
     "FABRIC_PORT_TABLE|PORT4" : {
         "STATUS": "up",
         "CONFIG_ISOLATED": "1",
-        "ISOLATE_REASON": "user_config",
+        "ISOLATE_REASON": "config",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "75"
     },

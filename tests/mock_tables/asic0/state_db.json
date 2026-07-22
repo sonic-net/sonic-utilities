@@ -291,7 +291,7 @@
     "FABRIC_PORT_TABLE|PORT4" : {
         "STATUS": "up",
         "CONFIG_ISOLATED": "1",
-        "ISOLATE_REASON": "user_config",
+        "ISOLATE_REASON": "config",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "85",
         "OLD_RX_RATE_AVG": "0",
@@ -305,8 +305,9 @@
     },
     "FABRIC_PORT_TABLE|PORT6" : {
         "STATUS": "up",
+        "AUTO_ISOLATED": "1",
         "ISOLATED": "1",
-        "ISOLATE_REASON": "symbol_errors",
+        "ISOLATE_REASON": "fec_uncorrectable",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "84",
         "OLD_RX_RATE_AVG": "0",
