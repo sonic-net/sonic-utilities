@@ -2,15 +2,14 @@ import json
 import os
 import sys
 
-# Path setup for imports before any flake8-imported modules
+# Path setup for imports must happen before importing local SONiC modules
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
-import show.main as show
-from click.testing import CliRunner
-
-from .utils import get_result_and_return_code
+import show.main as show  # noqa: E402
+from click.testing import CliRunner  # noqa: E402
+from .utils import get_result_and_return_code  # noqa: E402
 
 
 class TestPortStatTopN:
@@ -133,3 +132,4 @@ class TestPortStatTopN:
                           'total_bps', 'total_pps', 'rx_util_pct', 'tx_util_pct'):
                 assert isinstance(iface[field], float), \
                     f"Expected float for {field} in {iface['iface']}, got {type(iface[field])}: {iface[field]}"
+
