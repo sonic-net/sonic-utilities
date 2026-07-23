@@ -235,11 +235,11 @@ Monitored fabric capacity threshold: 100%
 multi_asic_fabric_isolation = """\
 
 asic0
-  Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
-------------  ---------------  -----------------  ----------  ----------------
-           0                1                  0           0        crc_errors
+  Local Link    Auto Isolated    Manual Isolated    Isolated     Isolate Reason
+------------  ---------------  -----------------  ----------  -----------------
+           0                1                  0           0         crc_errors
            2                0                  0           0
-           4                0                  1           0            config
+           4                0                  1           0             config
            6                1                  0           1  fec_uncorrectable
            7                0                  0           0
 
@@ -253,11 +253,11 @@ asic1
 multi_asic_fabric_isolation_asic0 = """\
 
 asic0
-  Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
-------------  ---------------  -----------------  ----------  ----------------
-           0                1                  0           0        crc_errors
+  Local Link    Auto Isolated    Manual Isolated    Isolated     Isolate Reason
+------------  ---------------  -----------------  ----------  -----------------
+           0                1                  0           0         crc_errors
            2                0                  0           0
-           4                0                  1           0            config
+           4                0                  1           0             config
            6                1                  0           1  fec_uncorrectable
            7                0                  0           0
 """
@@ -265,10 +265,10 @@ asic0
 multi_asic_fabric_isolation_nz = """\
 
 asic0
-  Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
-------------  ---------------  -----------------  ----------  ----------------
-           0                1                  0           0        crc_errors
-           4                0                  1           0            config
+  Local Link    Auto Isolated    Manual Isolated    Isolated     Isolate Reason
+------------  ---------------  -----------------  ----------  -----------------
+           0                1                  0           0         crc_errors
+           4                0                  1           0             config
            6                1                  0           1  fec_uncorrectable
 
 asic1
@@ -280,10 +280,10 @@ asic1
 multi_asic_fabric_isolation_nz_asic0 = """\
 
 asic0
-  Local Link    Auto Isolated    Manual Isolated    Isolated    Isolate Reason
-------------  ---------------  -----------------  ----------  ----------------
-           0                1                  0           0        crc_errors
-           4                0                  1           0            config
+  Local Link    Auto Isolated    Manual Isolated    Isolated     Isolate Reason
+------------  ---------------  -----------------  ----------  -----------------
+           0                1                  0           0         crc_errors
+           4                0                  1           0             config
            6                1                  0           1  fec_uncorrectable
 """
 
