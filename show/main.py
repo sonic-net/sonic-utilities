@@ -523,7 +523,7 @@ def storm_control(ctx, namespace, display):
         if namespace is None:
             display_storm_all()
         else:
-            interfaces = multi_asic.multi_asic_get_ip_intf_from_ns(namespace)
+            interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
             for intf in interfaces:
                 get_storm_interface(intf, body)
             click.echo(tabulate(body, header, tablefmt="grid"))
