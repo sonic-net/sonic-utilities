@@ -2153,9 +2153,41 @@ collect_nvidia_bluefield() {
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local sai_dump_folder="/root/saisdkdump"
     local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump_$(date +"%m_%d_%Y_%I_%M_%p")"
+    # SDK techsupport CT dump sentinel path. Keep in sync across:
+    #   config/plugins/nvidia_bluefield.py (SDK_TECHSUPPORT_CT_DUMP_SENTINEL)
+    #   scripts/generate_dump (sdk_techsupport_ct_dump_sentinel)
+    #   sonic-sairedis/syncd/scripts/syncd_init_common.sh (config_syncd_nvidia_bluefield)
+    local sdk_techsupport_ct_dump_sentinel="/var/run/sonic-platform-nvidia-bluefield/sdk-techsupport-ct-dump.enabled"
+    local sdk_techsupport_saisdkdump_profile=""
 
     ${CMD_PREFIX}docker exec syncd mkdir -p $sai_dump_folder
-    ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+
+    local prepare_ct_dump_profile_script='
+profile="$1"
+# Start from the running SAI profile if present, otherwise an empty file
+if [ -f /tmp/sai.profile ]; then cp /tmp/sai.profile "$profile"; else : > "$profile"; fi
+# Guard against a source profile with no trailing newline.
+if [ -s "$profile" ] && [ "$(tail -c1 "$profile")" != "" ]; then
+    echo >> "$profile"
+fi
+# Drop any existing CT_TABLE_DUMP_ENABLE=... lines, then append CT_TABLE_DUMP_ENABLE=true.
+sed -i "/^CT_TABLE_DUMP_ENABLE=/d" "$profile"
+echo CT_TABLE_DUMP_ENABLE=true >> "$profile"
+'
+
+    if docker exec syncd test -f $sdk_techsupport_ct_dump_sentinel; then
+        if $NOOP; then
+            echo "docker exec syncd mktemp /tmp/techsupport-saisdkdump.XXXXXX"
+            sdk_techsupport_saisdkdump_profile="/tmp/techsupport-saisdkdump.XXXXXX"
+        else
+            sdk_techsupport_saisdkdump_profile=$(docker exec syncd mktemp /tmp/techsupport-saisdkdump.XXXXXX)
+        fi
+
+        ${CMD_PREFIX}docker exec syncd sh -c "$prepare_ct_dump_profile_script" _ "$sdk_techsupport_saisdkdump_profile"
+        ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename -p $sdk_techsupport_saisdkdump_profile
+    else
+        ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+    fi
 
     if [ $? != 0 ]; then
         echo "Failed to collect saisdkdump."
@@ -2169,6 +2201,9 @@ collect_nvidia_bluefield() {
 
     ${CMD_PREFIX}rm -rf $sai_dump_folder
     ${CMD_PREFIX}docker exec syncd rm -rf $sai_dump_folder
+    if [ -n "$sdk_techsupport_saisdkdump_profile" ]; then
+        ${CMD_PREFIX}docker exec syncd rm -f "$sdk_techsupport_saisdkdump_profile"
+    fi
 
     DUMP_FILE=/usr/bin/platform-dump.sh
     if [ -f "$DUMP_FILE" ]; then
