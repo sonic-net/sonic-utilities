@@ -242,6 +242,47 @@ static_object_complex_2 = {
    ]
 }
 
+static_object_complex_3 = {
+   "tables": [
+      {
+         "description": "TABLE_3 description",
+         "name": "TABLE_3",
+         "static-objects": [
+            {
+                "name": "OBJECT_3",
+                "description": "OBJECT_3 description",
+                "attrs": [
+                    {
+                        "name": "OBJ-3-LEAF-1",
+                        "description": "OBJ-3-LEAF-1 description",
+                        "is-mandatory": False,
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name": "OBJ-3-LEAF-LIST-1",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
+                    },
+                    {
+                        "name": "OBJ-3-CHOICE-1-LEAF-1",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name": "OBJ-3-CHOICE-1-LEAF-2",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": False
+                    }
+                ]
+            }
+         ]
+      }
+   ]
+}
+
 dynamic_object_complex_1 = {
    "tables":[
       {
