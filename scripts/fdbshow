@@ -304,11 +304,27 @@ def main():
     display_only_local = args.local
 
     try:
-        fdb = FdbShow(namespace=args.namespace)
-        if not fdb.validate_params(args.vlan, args.port, args.address, args.type):
-           sys.exit(1)
+        # On multi-ASIC platforms the FDB is maintained per ASIC namespace.
+        if args.namespace is not None:
+            ns_list = [args.namespace]
+        else:
+            ns_list = multi_asic.get_namespace_list()
 
-        fdb.display(args.vlan, args.port, args.address, args.type, args.count)
+        displayed = False
+        for ns in ns_list:
+            namespace = None if ns in (None, multi_asic.DEFAULT_NAMESPACE) else ns
+            fdb = FdbShow(namespace=namespace)
+            if not fdb.validate_params(args.vlan, args.port, args.address, args.type):
+                # -p port may exist on only some ASICs; fail only if none matched.
+                continue
+
+            if len(ns_list) > 1:
+                print("Namespace: {}".format(ns))
+            fdb.display(args.vlan, args.port, args.address, args.type, args.count)
+            displayed = True
+
+        if not displayed:
+            sys.exit(1)
     except Exception as e:
         print(str(e))
         sys.exit(1)
