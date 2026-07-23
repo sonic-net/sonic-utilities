@@ -1,8 +1,9 @@
 import datetime
+import json
 import time
 import re
 from collections import OrderedDict, namedtuple
-from natsort import natsorted
+from natsort import natsorted, natsort_keygen
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
@@ -178,6 +179,20 @@ def is_non_zero(value):
         value = value.replace(',', '')
 
     return int(value) != 0
+
+
+def safe_float(val):
+    """
+    Convert a value to float safely. Handles STATUS_NA, None, empty strings,
+    and percent-formatted strings (e.g. '68.17%') from formatted util output.
+    """
+    if val is None or val == STATUS_NA or val == '':
+        return 0.0
+    s = str(val).rstrip('%').strip()
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return 0.0
 
 
 class Portstat(object):
@@ -757,3 +772,207 @@ class Portstat(object):
             return
         elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")
+
+    def _compute_util_float(self, bps, port_speed):
+        """
+        Compute link utilization as a raw float (0-100), NOT a formatted string.
+        Uses the same formula as SONiC's format_util:
+            (bps * 8) / (speed_mbps * 1e6) * 100
+        Returns 0.0 if any input is missing or invalid.
+        """
+        if bps is None or bps == STATUS_NA:
+            return 0.0
+        try:
+            bps_val = safe_float(bps)
+            if port_speed is None or port_speed == STATUS_NA:
+                return 0.0
+            speed_val = safe_float(port_speed)
+            if speed_val > 0:
+                return round((bps_val * 8.0) / (speed_val * 1000000.0) * 100.0, 2)
+            return 0.0
+        except (ValueError, TypeError):
+            return 0.0
+
+    def get_top_n(self, ratestat_dict, n, sort_key='total', units='bps'):
+        """
+        Sort interfaces by the specified rate key and return the top N.
+
+        Args:
+            ratestat_dict: OrderedDict mapping port_name -> RateStats namedtuple
+            n: Number of top interfaces to return
+            sort_key: 'rx', 'tx', 'total', or 'util'
+            units: 'bps' or 'pps'
+
+        Returns:
+            List of (port_name, RateStats) tuples, sorted descending by the
+            specified key, with natsorted tie-breaking for deterministic output.
+        """
+        natsort_key = natsort_keygen()
+
+        def sort_key_func(item):
+            name, rates = item
+            rx_bps = safe_float(rates.rx_bps)
+            tx_bps = safe_float(rates.tx_bps)
+            rx_pps = safe_float(rates.rx_pps)
+            tx_pps = safe_float(rates.tx_pps)
+
+            if units == 'bps':
+                rx = rx_bps
+                tx = tx_bps
+            else:
+                rx = rx_pps
+                tx = tx_pps
+
+            if sort_key == 'total':
+                value = rx + tx
+            elif sort_key == 'rx':
+                value = rx
+            elif sort_key == 'tx':
+                value = tx
+            elif sort_key == 'util':
+                rx_util_val = safe_float(rates.rx_util)
+                tx_util_val = safe_float(rates.tx_util)
+                # If both util values are 0.0 (likely STATUS_NA -> 0),
+                # fall back to computing from BPS + port_speed
+                if rx_util_val == 0.0 and tx_util_val == 0.0:
+                    port_speed = self.get_port_speed(name)
+                    rx_util_val = self._compute_util_float(rates.rx_bps, port_speed)
+                    tx_util_val = self._compute_util_float(rates.tx_bps, port_speed)
+                value = max(rx_util_val, tx_util_val)
+            else:
+                value = 0.0
+
+            return (-value, natsort_key(name))
+
+        sorted_interfaces = sorted(ratestat_dict.items(), key=sort_key_func)
+        return sorted_interfaces[:n]
+
+    def top_n_diff_print(self, cnstat_new_dict, cnstat_old_dict, ratestat_dict,
+                         top_n_count, sort_key, units, use_json):
+        """
+        Display the top N interfaces ranked by the specified rate key.
+
+        Args:
+            cnstat_new_dict: Current counter stats (unused, signature compatibility)
+            cnstat_old_dict: Previous counter stats (unused, signature compatibility)
+            ratestat_dict: Rate stats from RATES: table
+            top_n_count: Number of top interfaces to display
+            sort_key: 'rx', 'tx', 'total', or 'util'
+            units: 'bps' or 'pps'
+            use_json: Whether to output JSON
+        """
+        interfaces = self.get_top_n(ratestat_dict, top_n_count, sort_key, units)
+
+        if not interfaces:
+            if use_json:
+                timestamp = datetime.datetime.now().isoformat()
+                sort_key_str = self._build_sort_key_str(sort_key, units)
+                print(json.dumps({
+                    "sampled_at": timestamp,
+                    "sort_key": sort_key_str,
+                    "count": 0,
+                    "interfaces": []
+                }, indent=4))
+            else:
+                print("No rate data available. RATES: table may be empty.")
+            return
+
+        if use_json:
+            self._print_top_n_json(interfaces, sort_key, units)
+        else:
+            self._print_top_n_table(interfaces)
+
+    def _print_top_n_json(self, interfaces, sort_key, units):
+        """Print top N interfaces as JSON with raw float values."""
+        timestamp = datetime.datetime.now().isoformat()
+        sort_key_str = self._build_sort_key_str(sort_key, units)
+
+        interface_list = []
+        for rank, (name, rates) in enumerate(interfaces, start=1):
+            rx_bps = safe_float(rates.rx_bps)
+            tx_bps = safe_float(rates.tx_bps)
+            rx_pps = safe_float(rates.rx_pps)
+            tx_pps = safe_float(rates.tx_pps)
+
+            port_speed = self.get_port_speed(name)
+
+            # Use raw float computation — never use formatted strings in JSON
+            if rates.rx_util != STATUS_NA:
+                rx_util_pct = safe_float(rates.rx_util)
+            else:
+                rx_util_pct = self._compute_util_float(rates.rx_bps, port_speed)
+
+            if rates.tx_util != STATUS_NA:
+                tx_util_pct = safe_float(rates.tx_util)
+            else:
+                tx_util_pct = self._compute_util_float(rates.tx_bps, port_speed)
+
+            interface_list.append({
+                "rank": rank,
+                "iface": name,
+                "state": self.get_port_state(name),
+                "rx_bps": rx_bps,
+                "rx_pps": rx_pps,
+                "tx_bps": tx_bps,
+                "tx_pps": tx_pps,
+                "total_bps": rx_bps + tx_bps,
+                "total_pps": rx_pps + tx_pps,
+                "rx_util_pct": rx_util_pct,
+                "tx_util_pct": tx_util_pct
+            })
+
+        print(json.dumps({
+            "sampled_at": timestamp,
+            "sort_key": sort_key_str,
+            "count": len(interfaces),
+            "interfaces": interface_list
+        }, indent=4))
+
+    def _print_top_n_table(self, interfaces):
+        """Print top N interfaces as a formatted table."""
+        table = []
+        header = ['RANK', 'IFACE', 'STATE', 'RX_BPS', 'RX_PPS', 'TX_BPS',
+                  'TX_PPS', 'TOTAL_BPS', 'TOTAL_PPS', 'UTIL']
+
+        for rank, (name, rates) in enumerate(interfaces, start=1):
+            rx_bps = safe_float(rates.rx_bps)
+            tx_bps = safe_float(rates.tx_bps)
+            rx_pps = safe_float(rates.rx_pps)
+            tx_pps = safe_float(rates.tx_pps)
+
+            port_speed = self.get_port_speed(name)
+
+            # Compute RX and TX util strings, with STATUS_NA fallback to BPS-based
+            rx_util_str = (format_util_directly(rates.rx_util)
+                           if rates.rx_util != STATUS_NA
+                           else format_util(rates.rx_bps, port_speed))
+            tx_util_str = (format_util_directly(rates.tx_util)
+                           if rates.tx_util != STATUS_NA
+                           else format_util(rates.tx_bps, port_speed))
+
+            # Pick the max util direction by comparing raw numeric values
+            # safe_float strips '%' so we can compare "68.17%" vs "45.23%"
+            rx_util_numeric = safe_float(rx_util_str)
+            tx_util_numeric = safe_float(tx_util_str)
+            util_str = rx_util_str if rx_util_numeric >= tx_util_numeric else tx_util_str
+
+            table.append((
+                rank,
+                name,
+                self.get_port_state(name),
+                format_brate(rx_bps),
+                format_prate(rx_pps),
+                format_brate(tx_bps),
+                format_prate(tx_pps),
+                format_brate(rx_bps + tx_bps),
+                format_prate(rx_pps + tx_pps),
+                util_str
+            ))
+
+        print(tabulate(table, header, tablefmt='simple', stralign='right'))
+
+    def _build_sort_key_str(self, sort_key, units):
+        """Build the sort_key label string for JSON output (e.g., 'total_bps')."""
+        if sort_key == 'util':
+            return 'total_util_bps'
+        return '{}_{}'.format(sort_key, units)

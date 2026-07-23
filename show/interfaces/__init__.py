@@ -948,6 +948,25 @@ def rates(namespace, display, period, json_fmt, verbose):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
+# 'top' subcommand ("show interfaces counters top")
+@counters.command()
+@multi_asic_util.multi_asic_click_options
+@click.option('-n', '--count', type=click.INT, default=5, help='Number of top interfaces to show.')
+@click.option('--sort', type=click.Choice(['rx', 'tx', 'total', 'util']), default='total', help='Sort key.')
+@click.option('--units', type=click.Choice(['bps', 'pps']), default='pps', help='Rank by bytes/sec or packets/sec.')
+@click.option('-j', '--json', is_flag=True, help='JSON output.')
+@click.option('--verbose', is_flag=True, help='Print the underlying command.')
+def top(namespace, display, count, sort, units, json, verbose):
+    """Show top N interfaces by traffic."""
+    cmd = ['portstat', '-X', str(count), '--sort', sort, '--units', units]
+    cmd += ['-s', str(display)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if json:
+        cmd += ['-j']
+    clicommon.run_command(cmd, display_cmd=verbose)
+
+
 # 'counters' subcommand ("show interfaces counters rif")
 @counters.command()
 @click.argument('interface', metavar='[INTERFACE_NAME]', required=False, type=str)
