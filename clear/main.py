@@ -283,9 +283,7 @@ def priority_group():
 
 @priority_group.group()
 def watermark():
-    """Clear priority_group user WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear priority_group user WM."""
 
 
 @click.option('--namespace',
@@ -329,17 +327,12 @@ def drop():
 @drop.command('counters')
 def clear_pg_counters():
     """Clear priority-group dropped packets counter """
-
-    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
-        sys.exit("Root privileges are required for this operation")
     command = ['pg-drop', '-c', 'clear']
     run_command(command)
 
 @priority_group.group(name='persistent-watermark')
 def persistent_watermark():
-    """Clear queue persistent WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear priority-group persistent WM."""
 
 
 @persistent_watermark.command('headroom')
@@ -394,9 +387,7 @@ def wredcounters(voq):
 
 @queue.group()
 def watermark():
-    """Clear queue user WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear queue user WM."""
 
 
 @watermark.command('unicast')
@@ -452,9 +443,7 @@ def clear_wm_q_all(namespace):
 
 @queue.group(name='persistent-watermark')
 def persistent_watermark():
-    """Clear queue persistent WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear queue persistent WM."""
 
 
 @persistent_watermark.command('unicast')
@@ -524,10 +513,7 @@ def headroom_pool():
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def watermark(namespace):
-    """Clear headroom pool user WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
-
+    """Clear headroom pool user WM."""
     command = ['watermarkstat', '-c', '-t', 'headroom_pool']
     if namespace:
         command += ['-n', str(namespace)]
@@ -544,10 +530,7 @@ def watermark(namespace):
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def persistent_watermark(namespace):
-    """Clear headroom pool persistent WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
-
+    """Clear headroom pool persistent WM."""
     command = ['watermarkstat', '-c', '-p', '-t', 'headroom_pool']
     if namespace:
         command += ['-n', str(namespace)]

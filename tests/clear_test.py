@@ -36,6 +36,36 @@ class TestClear(object):
         assert result.exit_code == 0
         run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'pg_shared'])
 
+    # Regression tests for the removed root/sudo gate (this PR). CI runs as root,
+    # so geteuid() returns 0 and the old check passed regardless; mocking a
+    # non-root uid exercises the path that used to sys.exit("Root privileges...").
+    @patch('clear.main.run_command')
+    @patch('clear.main.os.geteuid', MagicMock(return_value=1000))
+    def test_clear_pg_drop_counters_nonroot(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            clear.cli.commands['priority-group'].commands['drop'].commands['counters'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['pg-drop', '-c', 'clear'])
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.os.geteuid', MagicMock(return_value=1000))
+    def test_clear_pg_wm_hdrm_nonroot(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            clear.cli, ['priority-group', 'watermark', 'headroom'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['watermarkstat', '-c', '-t', 'pg_headroom'])
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.os.geteuid', MagicMock(return_value=1000))
+    def test_clear_q_pst_wm_uni_nonroot(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            clear.cli, ['queue', 'persistent-watermark', 'unicast'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'q_shared_uni'])
+
     @patch('clear.main.run_command')
     def test_clear_q_wm_all(self, run_command):
         runner = CliRunner()
@@ -79,7 +109,6 @@ class TestClear(object):
         run_command.assert_called_with(['watermarkstat', '-c', '-p', '-t', 'q_shared_uni'])
 
     @patch('clear.main.run_command')
-    @patch('clear.main.os.geteuid', MagicMock(return_value=0))
     def test_clear_hdrm_wm(self, run_command):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['headroom-pool'].commands['watermark'])
@@ -87,7 +116,6 @@ class TestClear(object):
         run_command.assert_called_with(['watermarkstat', '-c', '-t', 'headroom_pool'])
 
     @patch('clear.main.run_command')
-    @patch('clear.main.os.geteuid', MagicMock(return_value=0))
     def test_clear_hdrm_pst_wm(self, run_command):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['headroom-pool'].commands['persistent-watermark'])
