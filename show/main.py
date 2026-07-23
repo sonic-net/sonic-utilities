@@ -2705,10 +2705,10 @@ def tables(db):
     bmp_body = []
     click.echo("BMP tables: ")
     bmp_keys = db.cfgdb.get_table('BMP')
-    if bmp_keys['table']:
-        bmp_body.append(['bgp_neighbor_table', bmp_keys['table']['bgp_neighbor_table']])
-        bmp_body.append(['bgp_rib_in_table', bmp_keys['table']['bgp_rib_in_table']])
-        bmp_body.append(['bgp_rib_out_table', bmp_keys['table']['bgp_rib_out_table']])
+    table_config = bmp_keys.get('table', {})
+    bmp_body.append(['bgp_neighbor_table', table_config.get('bgp_neighbor_table', 'false')])
+    bmp_body.append(['bgp_rib_in_table', table_config.get('bgp_rib_in_table', 'false')])
+    bmp_body.append(['bgp_rib_out_table', table_config.get('bgp_rib_out_table', 'false')])
     click.echo(tabulate(bmp_body, bmp_headers))
 
 
