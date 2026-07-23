@@ -1,7 +1,37 @@
-#! /bin/bash
+#!/bin/bash
 
-timeout --foreground 30 smartctl -xa /dev/sda > /tmp/smartctl
+get_storage_device() {
+    local src disk
+
+    src=$(findmnt -rn -o SOURCE /host 2>/dev/null) || return 1
+    src=$(readlink -f "$src" 2>/dev/null) || return 1
+
+    [ -b "$src" ] || return 1
+
+    disk=$(lsblk -no PKNAME "$src" 2>/dev/null)
+
+    if [ -n "$disk" ]; then
+        echo "/dev/$disk"
+    else
+        echo "$src"
+    fi
+}
+
+SSD_DEVICE=$(get_storage_device)
+
+if [ -z "$SSD_DEVICE" ]; then
+    logger "log_ssd_health: unable to determine storage device from /host"
+    exit 0
+fi
+
+case "$SSD_DEVICE" in
+    /dev/mmcblk*)
+        logger "log_ssd_health: $SSD_DEVICE is eMMC; smartctl is not supported"
+        exit 0
+        ;;
+esac
+
+timeout --foreground 30 smartctl -xa "$SSD_DEVICE" > /tmp/smartctl
 if [ -f /tmp/smartctl ];then
     logger -f /tmp/smartctl
 fi
-
