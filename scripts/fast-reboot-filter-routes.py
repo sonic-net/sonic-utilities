@@ -21,6 +21,14 @@ def get_connected_routes():
         for route in route_info.keys():
             connected_routes.append(route)
 
+    cmd = ['sudo', 'vtysh', '-c', "show ipv6 route connected json"]
+    output, ret = clicommon.run_command(cmd, return_cmd=True)
+    if ret != 0:
+        raise RuntimeError("Failed to execute {}: {}".format(" ".join(cmd), output.rstrip('\n')))
+    if output is not None:
+        route_info = json.loads(output)
+        connected_routes.extend(route_info)
+
     return connected_routes
 
 def get_route(db, route):
