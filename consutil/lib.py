@@ -4,9 +4,13 @@
 # Helper code for CLI for interacting with switches via console device
 #
 
+import json
 import os
+import pwd
 import pexpect
 import re
+import socket
+import struct
 import subprocess
 import sys
 import time
@@ -50,6 +54,13 @@ IDLE_FLAG = "idle"
 # picocom Constants
 PICOCOM_READY = "Terminal ready"
 PICOCOM_BUSY = "Resource temporarily unavailable"
+
+# mirror Constants
+MIRROR_RUNTIME_DIR = "/run/console-monitor/mirror"
+MIRROR_CONTROL_MAX_MESSAGE = 1024 * 1024
+MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC = 600
+MIRROR_DIRECTIONS = ("rx", "tx", "both")
+MIRROR_DURATION_SUFFIXES = ("s", "m", "h", "d")
 
 UDEV_PREFIX_CONF_FILENAME = "udevprefix.conf"
 
@@ -536,6 +547,91 @@ def console_connect(target, use_device=False, db=None):
     click.echo("Successful connection to line [{}]\nPress ^{} ^X to disconnect"
                .format(line_num, target_port.escape_char.upper() if target_port.escape_char is not None else "A"))
     session.interact()
+
+
+def get_target_line(db, target, use_device=False):
+    port_provider = ConsolePortProvider(db, configured_only=True)
+    try:
+        return port_provider.get(target, use_device=use_device).line_num
+    except LineNotFoundError:
+        click.echo("Target [{}] does not exist".format(target))
+        sys.exit(ERR_DEV)
+
+
+def require_root():
+    """Check if the current user is root, exit with error if not."""
+    if os.geteuid() != 0:
+        click.echo("Root privileges are required for this operation")
+        sys.exit(ERR_CMD)
+
+
+def validate_mirror_timeout_duration(ctx, param, value):
+    if value is None:
+        return None
+    if len(value) < 2 or value[-1] not in MIRROR_DURATION_SUFFIXES or not value[:-1].isdigit() or int(value[:-1]) <= 0:
+        raise click.BadParameter(
+            "must be a positive duration ending in s, m, h, or d")
+    return value
+
+
+def _mirror_error_message(response):
+    return response.get("message") or response.get("error") or "mirror request failed"
+
+
+def _recv_mirror_message(sock, timeout=None):
+    def _recv_all(sock, size):
+        data = b""
+        while len(data) < size:
+            try:
+                chunk = sock.recv(size - len(data))
+            except socket.timeout:
+                raise RuntimeError("timed out waiting for mirror response")
+            if not chunk:
+                raise RuntimeError("unexpected EOF")
+            data += chunk
+        return data
+    sock.settimeout(timeout)
+    header = _recv_all(sock, 4)
+    size = struct.unpack("!I", header)[0]
+    if size <= 0 or size > MIRROR_CONTROL_MAX_MESSAGE:
+        raise RuntimeError("invalid response size")
+    try:
+        response = json.loads(_recv_all(sock, size).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise RuntimeError("invalid response payload")
+    if not isinstance(response, dict):
+        raise RuntimeError("invalid response payload")
+    return response
+
+
+def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_first_reply=None):
+    path = os.path.join(MIRROR_RUNTIME_DIR, "line{}.sock".format(line))
+    payload = json.dumps(message, separators=(",", ":"),
+                         sort_keys=True).encode("utf-8")
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(path)
+            sock.sendall(struct.pack("!I", len(payload)) + payload)
+            first = _recv_mirror_message(sock)
+            if wait_for_final:
+                if first.get("status") != "packaging":
+                    raise RuntimeError(_mirror_error_message(first))
+                if on_first_reply is not None:
+                    on_first_reply(first)  # callback for first reply
+                final = _recv_mirror_message(
+                    sock, timeout=MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC)
+                if final.get("status") != "ok":
+                    raise RuntimeError(_mirror_error_message(final))
+                return first, final
+            if first.get("status") != "ok":
+                raise RuntimeError(_mirror_error_message(first))
+            return first
+    except (OSError, RuntimeError) as e:
+        if quiet:
+            raise
+        click.echo("Mirror request failed on line [{}]: {}".format(line, e))
+        sys.exit(ERR_CMD)
+
 
 class InvalidConfigurationError(Exception):
     def __init__(self, config_key, message):

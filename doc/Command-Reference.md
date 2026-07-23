@@ -47,6 +47,7 @@
   * [Console config commands](#console-config-commands)
   * [Console connect commands](#console-connect-commands)
   * [Console clear commands](#console-clear-commands)
+  * [Console mirror commands](#console-mirror-commands)
   * [DPU serial console utility](#dpu-serial-console-utility)
 * [CRM](#crm)
   * [CRM show commands](#crm-show-commands)
@@ -289,6 +290,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v12 | Jul-16-2026 | Add console mirror commands |
 | v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
@@ -3935,6 +3937,121 @@ Optionally, you can clear with a remote device name by specifying the `-d` or `-
 - Example:
   ```
   admin@sonic:~$ sonic-clear --devicename switch1
+  ```
+
+### Console mirror commands
+
+The `consutil mirror` commands manage console traffic recording sessions without
+interrupting an active interactive console connection. Starting, stopping,
+updating, and showing mirror sessions require root privileges.
+
+By default, `<target>` is interpreted as a console line number. Specify `-d` or
+`--devicename` to interpret it as the configured remote device name instead.
+
+**consutil mirror start**
+
+This command starts a mirror recording session for a console line. Only one
+mirror session can be active for a line at a time.
+
+- Usage:
+  ```
+  consutil mirror start <target> [-d|--devicename] [--direction {rx|tx|both}] [--timeout <duration>] [--max-file-size <MB>]
+  ```
+
+The recording direction defaults to `both`. The timeout must be a positive
+integer followed by `s`, `m`, `h`, or `d` and defaults to `24h`. The maximum
+file size is a positive integer in MB and defaults to `64`; when the limit is
+reached, recording continues in a new part file.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror start 1 --direction both
+  Started mirror on line [1]
+  Recording file: /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z-part0001.log
+  Auto-stop timeout: 24h
+  Remaining: 24h
+  ```
+
+The target can also be selected by remote device name, and the recording
+timeout and part size can be overridden:
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror start switch1 --devicename --direction rx --timeout 2h --max-file-size 128
+  Started mirror on line [1]
+  Recording file: /var/log/sonic/console-mirror/line1/console-mirror-line1-rx-20260613T141200Z-part0001.log
+  Auto-stop timeout: 2h
+  Remaining: 2h
+  ```
+
+**consutil mirror stop**
+
+This command stops an active mirror session. By default, all recording part
+files are retained.
+
+- Usage:
+  ```
+  consutil mirror stop <target> [-d|--devicename] [-a|--archive]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror stop 1
+  Stopped mirror on line [1]
+  Recording files retained with prefix:
+  /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z
+  ```
+
+Specify `-a` or `--archive` to package all part files into a ZIP archive. Source
+log files are removed only after packaging completes successfully. After the
+initial packaging response, the CLI waits up to 10 minutes for the final
+response.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror stop 1 --archive
+  Stopped mirror on line [1]; packaging recording
+  Expected archive: /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z.zip
+  Waiting for packaging to complete...
+
+  Recording archive: /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z.zip
+  ```
+
+**consutil mirror timeout**
+
+This command replaces the timeout of an active mirror session. The remaining
+time is reset from the moment the command is processed.
+
+- Usage:
+  ```
+  consutil mirror timeout <target> <duration> [-d|--devicename]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror timeout 1 2h
+  Updated mirror timeout on line [1]
+  Timeout: 2h
+  Remaining: 2h
+  ```
+
+**consutil mirror show**
+
+This command displays the mirror status for one console line. If `<target>` is
+omitted, it displays the status of all configured console lines.
+
+- Usage:
+  ```
+  consutil mirror show [<target>] [-d|--devicename]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror show
+    Line  State    Start Time            Direction    Timeout    Remaining    File
+  ------  -------  --------------------  -----------  ---------  -----------  -------------------------------------------------------------------------------------------
+       1  active   2026-06-13T14:12:00Z  both         24h        12h15m       /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z-part0001.log
+       2  idle     -                     -            -          -            -
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#console)

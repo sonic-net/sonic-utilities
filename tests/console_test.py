@@ -1,26 +1,40 @@
 import os
 import sys
 import subprocess
+import json
 import jsonpatch
 import pexpect
+import struct
 from unittest import mock
 from mock import patch
 
 import pytest
 
 import config.main as config
+import consutil.lib as consutil_lib
 import consutil.main as consutil
 import tests.mock_tables.dbconnector
 
 from click.testing import CliRunner
 from utilities_common.db import Db
 from consutil.lib import ConsolePortProvider, ConsolePortInfo, ConsoleSession, SysInfoProvider, DbUtils, \
-    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError, console_connect
+    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError, console_connect, send_mirror_message
 from sonic_py_common import device_info
 from jsonpatch import JsonPatchConflict
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 CONSOLE_MOCK_DIR = SCRIPT_DIR + "/console_mock"
+MIRROR_LINE1_PREFIX = (
+    "/var/log/sonic/console-mirror/line1/"
+    "console-mirror-line1-both-20260613T141200Z"
+)
+MIRROR_LINE1_FILE = MIRROR_LINE1_PREFIX + "-part0001.log"
+MIRROR_LINE1_RX_FILE = (
+    "/var/log/sonic/console-mirror/line1/"
+    "console-mirror-line1-rx-20260613T141200Z-part0001.log"
+)
+MIRROR_LINE1_ARCHIVE = MIRROR_LINE1_PREFIX + ".zip"
+MIRROR_LINE1_START_TIME = "2026-06-13T14:12:00Z"
 
 
 class TestConfigConsoleCommands(object):
@@ -1434,6 +1448,531 @@ class TestConsutilConnect(object):
         with mock.patch('utilities_common.db.Db', return_value=prepared_db) as mock_db_cls:
             console_connect('1')
             mock_db_cls.assert_called_once()
+
+
+class TestConsutilMirror(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+
+    def _db_with_console_ports(self):
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", 1, {
+                           "remote_device": "switch1", "baud_rate": "9600"})
+        db.cfgdb.set_entry("CONSOLE_PORT", 2, {
+                           "remote_device": "switch2", "baud_rate": "9600"})
+        return db
+
+    def _default_start_response(self):
+        return {
+            "status": "ok",
+            "file_path": MIRROR_LINE1_FILE,
+            "timeout": "24h",
+            "remaining": "24h",
+        }
+
+    @pytest.mark.parametrize(("command", "arguments"), [
+        ("start", ["1"]),
+        ("stop", ["1"]),
+        ("timeout", ["1", "2h"]),
+        ("show", ["1"]),
+    ])
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=1))
+    def test_mirror_commands_require_root(self, command, arguments):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        result = runner.invoke(
+            consutil.consutil.commands["mirror"].commands[command], arguments, obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 2
+        assert "Root privileges are required for this operation" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_start_line_not_found(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        result = runner.invoke(
+            consutil.consutil.commands["mirror"].commands["start"], ['9'], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 3
+        assert "Target [9] does not exist" in result.output
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": "admin"})
+    @mock.patch('os.getuid', mock.MagicMock(side_effect=AssertionError("getuid should not be used under sudo")))
+    @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    @mock.patch('pwd.getpwuid', mock.MagicMock(side_effect=AssertionError("getpwuid should not be used under sudo")))
+    def test_mirror_start_success_with_options(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={
+                            "status": "ok",
+                            "file_path": MIRROR_LINE1_RX_FILE,
+                            "timeout": "30m",
+                            "remaining": "30m"
+                        })) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"],
+                ['--direction', 'rx', '--timeout', '30m',
+                    '--max-file-size', '128', '1'],
+                obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1",
+            {
+                "op": "start",
+                "line": "1",
+                "direction": "rx",
+                "owner_pid": 4321,
+                "started_by": "admin",
+                "timeout": "30m",
+                "max_file_size": 128,
+            })
+        assert "Started mirror on line [1]" in result.output
+        assert "Recording file: {}".format(MIRROR_LINE1_RX_FILE) in result.output
+        assert "Auto-stop timeout: 30m" in result.output
+        assert "Remaining: 30m" in result.output
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": "admin"})
+    @mock.patch('os.getuid', mock.MagicMock(side_effect=AssertionError("getuid should not be used under sudo")))
+    @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_start_uses_protocol_defaults(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value=self._default_start_response())) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
+
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1",
+            {
+                "op": "start",
+                "line": "1",
+                "direction": "both",
+                "owner_pid": 4321,
+                "started_by": "admin",
+            })
+        assert "Recording file: {}".format(MIRROR_LINE1_FILE) in result.output
+        assert "Auto-stop timeout: 24h" in result.output
+        assert "Remaining: 24h" in result.output
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": ""})
+    @mock.patch('os.getuid', mock.MagicMock(return_value=1000))
+    @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    @mock.patch('pwd.getpwuid', mock.MagicMock(side_effect=KeyError))
+    def test_mirror_start_uses_uid_when_user_lookup_fails(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value=self._default_start_response())) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert mock_send.call_args[0][1]["started_by"] == "1000"
+        assert mock_send.call_args[0][1]["direction"] == "both"
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": ""})
+    @mock.patch('os.getuid', mock.MagicMock(return_value=1000))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    @mock.patch('pwd.getpwuid', mock.MagicMock(return_value=mock.MagicMock(pw_name="admin")))
+    def test_mirror_start_uses_real_user_without_sudo(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value=self._default_start_response())) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
+
+        assert result.exit_code == 0
+        assert mock_send.call_args[0][1]["started_by"] == "admin"
+
+    @pytest.mark.parametrize("duration", ["", "1", "1x", "xm", "0m"])
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_start_rejects_invalid_timeout(self, duration):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        result = runner.invoke(
+            consutil.consutil.commands["mirror"].commands["start"],
+            ['--timeout', duration, '1'],
+            obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code != 0
+        assert "must be a positive duration ending in s, m, h, or d" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_stop_retains_files(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={
+                            "recording_prefix": MIRROR_LINE1_PREFIX
+                        })) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["stop"], ['1'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1", {"op": "stop", "line": "1", "archive": False})
+        assert "Stopped mirror on line [1]" in result.output
+        assert MIRROR_LINE1_PREFIX in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_stop_archive_waits_for_final_response(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        def fake_send(line, request, wait_for_final=False, on_first_reply=None):
+            first = {"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}
+            final = {"status": "ok",
+                     "archive_path": MIRROR_LINE1_ARCHIVE}
+            assert line == "1"
+            assert request == {"op": "stop", "line": "1", "archive": True}
+            assert wait_for_final is True
+            on_first_reply(first)
+            return first, final
+
+        with mock.patch('consutil.main.send_mirror_message', mock.MagicMock(side_effect=fake_send)) as mock_send:
+            result = runner.invoke(consutil.consutil.commands["mirror"].commands["stop"],
+                                   ['--archive', '1'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert mock_send.call_count == 1
+        assert "Expected archive: {}".format(MIRROR_LINE1_ARCHIVE) in result.output
+        assert "Recording archive: {}".format(MIRROR_LINE1_ARCHIVE) in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_timeout_success_by_device_name(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={
+                            "timeout": "2h",
+                            "remaining": "2h"
+                        })) as mock_send:
+            result = runner.invoke(consutil.consutil.commands["mirror"].commands["timeout"],
+                                   ['--devicename', 'switch2', '2h'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "2", {"op": "timeout", "line": "2", "timeout": "2h"})
+        assert "Updated mirror timeout on line [2]" in result.output
+        assert "Remaining: 2h" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_show_all_lines(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        def fake_send(line, request, quiet=False):
+            assert request == {"op": "status", "line": line}
+            assert quiet is True
+            if line == "2":
+                raise OSError("missing socket")
+            return {
+                "state": "active",
+                "start_time": MIRROR_LINE1_START_TIME,
+                "direction": "both",
+                "timeout": "1h",
+                "remaining": "59m",
+                "file_path": MIRROR_LINE1_FILE,
+            }
+
+        with mock.patch('consutil.main.send_mirror_message', mock.MagicMock(side_effect=fake_send)) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["show"], [], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert mock_send.call_count == 2
+        assert "Line  State" in result.output
+        assert "1  active" in result.output
+        assert "2  error" in result.output
+        assert MIRROR_LINE1_START_TIME in result.output
+        assert MIRROR_LINE1_FILE in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_show_one_line_by_device_name(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={"state": "idle"})) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"],
+                ['show', '--devicename', 'switch2'],
+                obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "2", {"op": "status", "line": "2"}, quiet=True)
+        assert "2  idle" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_show_reports_runtime_error(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(side_effect=RuntimeError("invalid response"))) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["show"], ['1'], obj=db)
+
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1", {"op": "status", "line": "1"}, quiet=True)
+        assert "1  error" in result.output
+
+
+class TestConsoleMirrorProtocol(object):
+    class FakeSocket(object):
+        def __init__(self, replies):
+            self.replies = replies
+            self.connected_path = None
+            self.sent_data = b""
+            self.timeout = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def connect(self, path):
+            self.connected_path = path
+
+        def sendall(self, data):
+            self.sent_data += data
+
+        def settimeout(self, timeout):
+            self.timeout = timeout
+
+        def recv(self, size):
+            if not self.replies:
+                return b""
+            chunk = self.replies[0][:size]
+            self.replies[0] = self.replies[0][size:]
+            if not self.replies[0]:
+                self.replies.pop(0)
+            return chunk
+
+    class ArchiveTimeoutSocket(FakeSocket):
+        def recv(self, size):
+            if self.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC:
+                raise consutil_lib.socket.timeout()
+            return super().recv(size)
+
+    @staticmethod
+    def _frame(message):
+        payload = json.dumps(message).encode("utf-8")
+        return struct.pack("!I", len(payload)) + payload
+
+    def test_send_mirror_message_success(self):
+        fake_socket = self.FakeSocket(
+            [self._frame({"status": "ok", "file_path": MIRROR_LINE1_FILE})])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            response = send_mirror_message("1", {"op": "status", "line": "1"})
+
+        sent_size = struct.unpack("!I", fake_socket.sent_data[:4])[0]
+        sent_payload = json.loads(
+            fake_socket.sent_data[4:4 + sent_size].decode("utf-8"))
+        assert fake_socket.connected_path == "/run/console-monitor/mirror/line1.sock"
+        assert sent_payload == {"op": "status", "line": "1"}
+        assert response == {"status": "ok", "file_path": MIRROR_LINE1_FILE}
+
+    def test_send_mirror_message_final_response(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}),
+            self._frame(
+                {"status": "ok", "archive_path": MIRROR_LINE1_ARCHIVE}),
+        ])
+        first_replies = []
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            first, final = send_mirror_message(
+                "1",
+                {"op": "stop", "line": "1", "archive": True},
+                wait_for_final=True,
+                on_first_reply=first_replies.append)
+
+        assert first == {"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}
+        assert final == {"status": "ok",
+                         "archive_path": MIRROR_LINE1_ARCHIVE}
+        assert first_replies == [first]
+        assert fake_socket.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC
+
+    def test_send_mirror_message_final_response_without_callback(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}),
+            self._frame({"status": "ok", "archive_path": MIRROR_LINE1_ARCHIVE}),
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            first, final = send_mirror_message(
+                "1",
+                {"op": "stop", "line": "1", "archive": True},
+                wait_for_final=True)
+
+        assert first == {"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}
+        assert final == {"status": "ok", "archive_path": MIRROR_LINE1_ARCHIVE}
+
+    def test_send_mirror_message_archive_rejects_unexpected_first_response(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "error", "message": "cannot package"}),
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="cannot package"):
+                send_mirror_message(
+                    "1",
+                    {"op": "stop", "line": "1", "archive": True},
+                    wait_for_final=True,
+                    quiet=True)
+
+    def test_send_mirror_message_archive_rejects_error_final_response(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "packaging"}),
+            self._frame({"status": "error"}),
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="mirror request failed"):
+                send_mirror_message(
+                    "1",
+                    {"op": "stop", "line": "1", "archive": True},
+                    wait_for_final=True,
+                    quiet=True)
+
+    def test_send_mirror_message_archive_timeout_exits_without_waiting(self, capsys):
+        fake_socket = self.ArchiveTimeoutSocket([
+            self._frame({"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}),
+        ])
+        first_replies = []
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message(
+                    "1",
+                    {"op": "stop", "line": "1", "archive": True},
+                    wait_for_final=True,
+                    on_first_reply=first_replies.append)
+
+        assert exc.value.code == consutil_lib.ERR_CMD
+        assert first_replies == [{"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}]
+        assert fake_socket.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC
+        assert "timed out waiting for mirror response" in capsys.readouterr().out
+
+    def test_send_mirror_message_exits_on_error_response(self):
+        fake_socket = self.FakeSocket(
+            [self._frame({"status": "error", "error": "busy"})])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message("1", {"op": "start", "line": "1"})
+
+        assert exc.value.code == 2
+
+    def test_send_mirror_message_exits_on_invalid_json_response(self):
+        payload = b"{invalid json"
+        fake_socket = self.FakeSocket(
+            [struct.pack("!I", len(payload)) + payload])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message("1", {"op": "status", "line": "1"})
+
+        assert exc.value.code == 2
+
+    @pytest.mark.parametrize("response", [[], None, "ok", 1])
+    def test_send_mirror_message_rejects_non_object_json_response(self, response):
+        fake_socket = self.FakeSocket([self._frame(response)])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="invalid response payload"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_rejects_unexpected_eof(self):
+        fake_socket = self.FakeSocket([b"\x00\x00"])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="unexpected EOF"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_rejects_zero_length_response(self):
+        fake_socket = self.FakeSocket([struct.pack("!I", 0)])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="invalid response size"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_rejects_invalid_utf8_response(self):
+        payload = b"\xff"
+        fake_socket = self.FakeSocket(
+            [struct.pack("!I", len(payload)) + payload])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="invalid response payload"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_accepts_fragmented_response(self):
+        frame = self._frame({"status": "ok", "state": "active"})
+        fake_socket = self.FakeSocket([
+            frame[:1],
+            frame[1:3],
+            frame[3:7],
+            frame[7:],
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            response = send_mirror_message(
+                "1", {"op": "status", "line": "1"})
+
+        assert response == {"status": "ok", "state": "active"}
+
+    def test_send_mirror_message_quiet_reraises_error(self):
+        fake_socket = self.FakeSocket(
+            [struct.pack("!I", consutil_lib.MIRROR_CONTROL_MAX_MESSAGE + 1)])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
 
 
 class TestConsutilClear(object):
