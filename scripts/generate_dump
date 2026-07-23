@@ -2806,6 +2806,7 @@ main() {
         save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
         save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
         save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+        save_cmd "show interface link-training status" "interface.link_training.status" &
     fi
     save_gearbox_data &
     wait
