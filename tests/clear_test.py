@@ -134,6 +134,13 @@ class TestClear(object):
         run_command.assert_called_with(['fdbclear'])
 
     @patch('clear.main.run_command')
+    def test_clear_pfcwdstats(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['pfcwdstats'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['pfcwdstat', '-c'])
+
+    @patch('clear.main.run_command')
     def test_clear_srv6counters(self, run_command):
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['srv6counters'])
