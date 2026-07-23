@@ -1371,6 +1371,9 @@ def set_lpmode(logical_port, enable, use_lpmode_pin=False):
         i += 1
 
 
+# 'show' subcommand — alias of `sfputil show lpmode`
+lpmode.add_command(show.commands['lpmode'], name='show')
+
 # 'off' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
@@ -1511,6 +1514,10 @@ def update_firmware_info_to_state_db(port_name):
 def firmware():
     """Download/Upgrade firmware on the transceiver"""
     pass
+
+
+# 'show' subcommand — alias of `sfputil show fwversion`
+firmware.add_command(show.commands['fwversion'], name='show')
 
 def run_firmware(port_name, mode):
     """

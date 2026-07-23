@@ -4130,9 +4130,18 @@ The sfputil command shows the current major and minor versions of active/inactiv
   Inactive Firmware: 0.3.5
   ```
 
+**sfputil firmware show**
+
+Alias of `sfputil show fwversion`. Usage and output are identical to `sfputil show fwversion` above.
+
+- Usage:
+  ```
+  sfputil firmware show PORT_NAME
+  ```
+
 ### CMIS firmware upgrade commands
 
-The sfputil commands are used to download/upgrade firmware on transciver modules. The download/upgrade actually happens using set of CMIS CDB commands. The module may replace the exisiting image or copy into the inactive bank of the module. The host issues a download complete CDB command when the entire firmware image has been written to LPL or EPL pages. Each steps can be verified using the 'sfputil show fwversion PORT_NAME'
+The sfputil commands are used to download/upgrade firmware on transciver modules. The download/upgrade actually happens using set of CMIS CDB commands. The module may replace the exisiting image or copy into the inactive bank of the module. The host issues a download complete CDB command when the entire firmware image has been written to LPL or EPL pages. Each steps can be verified using `sfputil show fwversion PORT_NAME` (or its alias `sfputil firmware show PORT_NAME`).
 
 **sfputil firmware download**
 
@@ -17130,6 +17139,27 @@ Enabling low-power mode for port Ethernet0 ... OK
 admin@sonic:~$ sudo sfputil lpmode off Ethernet0 --use-lpmode-pin
 Disabling low-power mode for port Ethernet0 ... OK
 ```
+
+# SFP Utilities lpmode commands
+
+These commands control and inspect the low-power mode of SFP transceivers.
+
+**sfputil lpmode show**
+
+Display the low-power mode status of one or all SFP transceivers. Equivalent to `sfputil show lpmode`.
+
+- Usage:
+  ```
+  sfputil lpmode show [-p <port_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil lpmode show -p Ethernet0
+  Port       Low-power Mode
+  ---------  ----------------
+  Ethernet0  On
+  ```
 
 # SFP Utilities read command
 
