@@ -2800,18 +2800,14 @@ main() {
 
     # Generic L3 summary (incl. management interfaces) - keep on all platforms.
     save_cmd "show ip interface -d all" "ip.interface" &
-<<<<<<< HEAD
     if ! $IS_SWITCH_BMC; then
         # Front-panel interface/transceiver collectors - none on a Switch-BMC.
         save_cmd "show interface status -d all" "interface.status" &
         save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
         save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
         save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+        save_cmd "show interface link-training status" "interface.link_training.status" &
     fi
-=======
-    save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
-    save_cmd "show interface link-training status" "interface.link_training.status" &
->>>>>>> dc9fb8ec (NOS-5780: Add output for show interface link-training status to generate_dump (#775))
     save_gearbox_data &
     wait
 
