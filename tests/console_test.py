@@ -1715,7 +1715,7 @@ class TestConsutilMirror(object):
         assert mock_send.call_count == 2
         assert "Line  State" in result.output
         assert "1  active" in result.output
-        assert "2  idle" in result.output
+        assert "2  error" in result.output
         assert MIRROR_LINE1_START_TIME in result.output
         assert MIRROR_LINE1_FILE in result.output
 
@@ -1726,8 +1726,10 @@ class TestConsutilMirror(object):
 
         with mock.patch('consutil.main.send_mirror_message',
                         mock.MagicMock(return_value={"state": "idle"})) as mock_send:
-            result = runner.invoke(consutil.consutil.commands["mirror"].commands["show"],
-                                   ['--devicename', 'switch2'], obj=db)
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"],
+                ['show', '--devicename', 'switch2'],
+                obj=db)
 
         print(result.exit_code)
         print(sys.stderr, result.output)
@@ -1737,7 +1739,7 @@ class TestConsutilMirror(object):
         assert "2  idle" in result.output
 
     @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
-    def test_mirror_show_treats_runtime_error_as_idle(self):
+    def test_mirror_show_reports_runtime_error(self):
         runner = CliRunner()
         db = self._db_with_console_ports()
 
@@ -1749,7 +1751,7 @@ class TestConsutilMirror(object):
         assert result.exit_code == 0
         mock_send.assert_called_once_with(
             "1", {"op": "status", "line": "1"}, quiet=True)
-        assert "1  idle" in result.output
+        assert "1  error" in result.output
 
 
 class TestConsoleMirrorProtocol(object):
