@@ -1,7 +1,16 @@
+import json
+
 import click
+import tabulate
 
 import utilities_common.cli as clicommon
-from utilities_common import multi_asic
+from utilities_common import constants
+import utilities_common.multi_asic as multi_asic_util
+from sonic_py_common import multi_asic
+from utilities_common.switch_hash import (
+    STATE_SWITCH_CAPABILITY,
+    SW_CAP_KEY,
+)
 
 
 #
@@ -18,6 +27,80 @@ def switch():
     pass
 
 
+def _switch_capability_db_key():
+    return "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY)
+
+
+def _format_switch_capabilities_body(entry):
+    body = []
+    for key in sorted(entry.keys()):
+        body.append([key, entry[key]])
+    return body
+
+
+def _print_switch_capabilities_namespace(ctx, state_db, ns, namespace_option, json_fmt, idx):
+    entry = state_db.get_all(state_db.STATE_DB, _switch_capability_db_key())
+
+    if not entry:
+        if not multi_asic.is_multi_asic() or namespace_option:
+            ctx.fail("No data is present in STATE DB")
+        return False
+
+    if multi_asic.is_multi_asic() and not namespace_option:
+        if idx > 0:
+            click.echo()
+        if ns != constants.DEFAULT_NAMESPACE:
+            click.echo("Namespace {}:".format(ns))
+
+    if json_fmt:
+        click.echo(json.dumps(entry, indent=4))
+    else:
+        header = ["Capability", "Value"]
+        body = _format_switch_capabilities_body(entry)
+        click.echo(tabulate.tabulate(body, header, tablefmt="grid"))
+
+    return True
+
+
+@switch.command(
+    name="capabilities"
+)
+@multi_asic_util.multi_asic_click_option_namespace
+@click.option(
+    "-j", "--json", "json_fmt",
+    help="Display in JSON format",
+    is_flag=True,
+    default=False
+)
+@clicommon.pass_db
+@click.pass_context
+def capabilities(ctx, db, namespace, json_fmt):
+    """ Show switch capabilities """
+
+    ns_list = multi_asic.get_namespace_list(namespace)
+    json_output = {}
+    found = False
+
+    for idx, ns in enumerate(ns_list):
+        state_db = db.db_clients.get(ns, db.db)
+
+        if json_fmt and len(ns_list) > 1:
+            entry = state_db.get_all(state_db.STATE_DB, _switch_capability_db_key())
+            if not entry:
+                continue
+            found = True
+            json_output[ns if ns else "host"] = entry
+            continue
+
+        if _print_switch_capabilities_namespace(ctx, state_db, ns, namespace, json_fmt, idx):
+            found = True
+
+    if not found:
+        ctx.fail("No data is present in STATE DB")
+    if json_fmt and len(ns_list) > 1:
+        click.echo(json.dumps(json_output, indent=4))
+
+
 @switch.group(
     name="counters",
     cls=clicommon.AliasedGroup,
@@ -30,7 +113,7 @@ def switch():
     default=0,
     show_default=True
 )
-@multi_asic.multi_asic_click_options
+@multi_asic_util.multi_asic_click_options
 @click.option(
     "-j", "--json", "json_fmt",
     help="Display in JSON format",
@@ -74,7 +157,7 @@ def counters(ctx, period, display, namespace, json_fmt, verbose):
     default=0,
     show_default=True
 )
-@multi_asic.multi_asic_click_options
+@multi_asic_util.multi_asic_click_options
 @click.option(
     "-j", "--json", "json_fmt",
     help="Display in JSON format",
@@ -114,7 +197,7 @@ def all_stats(period, display, namespace, json_fmt, verbose):
     default=0,
     show_default=True
 )
-@multi_asic.multi_asic_click_options
+@multi_asic_util.multi_asic_click_options
 @click.option(
     "-j", "--json", "json_fmt",
     help="Display in JSON format",
@@ -154,7 +237,7 @@ def trim_stats(period, display, namespace, json_fmt, verbose):
     default=0,
     show_default=True
 )
-@multi_asic.multi_asic_click_options
+@multi_asic_util.multi_asic_click_options
 @click.option(
     "-v", "--verbose",
     help="Enable verbose output",
