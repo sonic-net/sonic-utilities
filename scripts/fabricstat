@@ -500,7 +500,6 @@ class FabricRate(FabricStat):
             port_number = int(port_key.replace("FABRIC_PORT_TABLE|PORT", ""))
             port_dict.update({port_number: port_data})
         # Create ordered table of fabric ports.
-        # RX data , Tx data , Time are for testing
         asic = "asic0"
         if self.namespace:
             asic = self.namespace
@@ -509,22 +508,11 @@ class FabricRate(FabricStat):
         for port_number in sorted(port_dict.keys()):
             port_data = port_dict[port_number]
             rxRate = 0
-            rxData = 0
             txRate = 0
-            txData = 0
-            time = 0
-            local_time = ""
             if "OLD_RX_RATE_AVG" in port_data:
                 rxRate = port_data["OLD_RX_RATE_AVG"]
-            if "OLD_RX_DATA" in port_data:
-                rxData = port_data["OLD_RX_DATA"]
             if "OLD_TX_RATE_AVG" in port_data:
                 txRate = port_data["OLD_TX_RATE_AVG"]
-            if "OLD_TX_DATA" in port_data:
-                txData = port_data["OLD_TX_DATA"]
-            if "LAST_TIME" in port_data:
-                time = int(port_data["LAST_TIME"])
-                local_time = datetime.fromtimestamp(time)
             if self.nonzero_only and not self._rate_mbps_nonzero(rxRate, txRate):
                 continue
             body.append((asic, port_number, rxRate, txRate))
@@ -566,8 +554,8 @@ Examples:
     parser.add_argument('-c','--capacity',action='store_true', help='Display fabric capacity')
     parser.add_argument('-i','--isolation', action='store_true', help='Display fabric ports isolation status')
     parser.add_argument('-nz', '--nonzero', action='store_true',
-                        help='Port, queue (-q), or rate (-s): show only rows with non-zero counter/rate; '
-                        ' (rows with N/A are always shown);. Not used with capacity and reachability ')
+                        help='Port, queue (-q) or rate (-s): show only rows with non-zero counter/rate '
+                        '(rows with N/A are always shown). Not used with capacity or reachability.')
     parser.add_argument('-s','--rate', action='store_true', help='Display fabric counters rate')
     parser.add_argument('-C','--clear', action='store_true', help='Copy & clear fabric counters')
     parser.add_argument('-D','--delete', action='store_true', help='Delete saved stats')
