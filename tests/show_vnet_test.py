@@ -151,7 +151,7 @@ class TestShowVnetRoutesAll(object):
         vnet.pretty_print_local(table, row, "192.168.1.1", "Ethernet1")
         assert table == [["TestVnet", "10.0.0.0/24", "192.168.1.1", "Ethernet1"]]
 
-        # 3 short nexthops, all fit on one row
+        # 3 short nexthops — at T=200, row_width=10, all fit on one row
         table = []
         row = ["TestVnet", "10.0.0.0/24"]
         vnet.pretty_print_local(table, row, "1.1.1.1,2.2.2.2,3.3.3.3", "Eth1,Eth2,Eth3")
@@ -172,7 +172,7 @@ class TestShowVnetRoutesAll(object):
             ["TestVnet", "10.0.0.0/24", "1.1.1.1,2.2.2.2,3.3.3.3,4.4.4.4,5.5.5.5", "Eth1,Eth2,Eth3,Eth4,Eth5"],
         ]
 
-        # PortChannel names (19 chars) — at T=200, row_width=4, all 3 fit on one row
+        # PortChannel interface names (19 chars) — at T=200, row_width=4, all 3 fit on one row
         table = []
         row = ["TestVnet", "10.0.0.0/24"]
         vnet.pretty_print_local(table, row,

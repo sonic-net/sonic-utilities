@@ -1,12 +1,14 @@
-import click
+import ipaddress
 import shutil
-from sonic_py_common import multi_asic
-import utilities_common.cli as clicommon
-import utilities_common.multi_asic as multi_asic_util
+
+import click
 from natsort import natsorted
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
-import ipaddress
+
+from sonic_py_common import multi_asic
+import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
 
 #
 # 'vnet' command ("show vnet")
@@ -544,16 +546,15 @@ def _ecmp_row_width(max_item_len, num_wrap_cols, fixed_cols_est):
 
 
 def pretty_print_local(table, r, nexthop_val, ifname_val):
-    nexthops = [nexthop.strip() for nexthop in nexthop_val.split(',')] if nexthop_val else []
+    nexthops = [nexthop.strip() for nexthop in nexthop_val.split(',')] if nexthop_val else [""]
     interfaces = [interface.strip() for interface in ifname_val.split(',')] if ifname_val else []
-    if not nexthops:
-        nexthops = [""]
 
     all_items = list(nexthops) + list(interfaces)
     max_len = max((len(item) for item in all_items), default=0)
     # route_header: ['vnet name', 'prefix', 'nexthop', 'interface']
     # fixed_cols_est = vnet_name(~15) + prefix(~18) + 4-col spacing(6) = 39
-    row_width = _ecmp_row_width(max_len, num_wrap_cols=2, fixed_cols_est=39)
+    # cap at 2 so nexthop/interface columns stay readable on any terminal width
+    row_width = min(2, _ecmp_row_width(max_len, num_wrap_cols=2, fixed_cols_est=39))
 
     max_entries = max(len(nexthops), len(interfaces))
     i = 0
@@ -566,9 +567,7 @@ def pretty_print_local(table, r, nexthop_val, ifname_val):
 
 
 def pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state):
-    endpoints = epval.split(',') if epval else []
-    if not endpoints:
-        endpoints = [""]
+    endpoints = epval.split(',') if epval else [""]
     # When mac_address or vni is a per-endpoint list, split so all three fields
     # wrap in the same chunks — keeps rows aligned at any ECMP scale.
     macs = mac_addr.split(',') if mac_addr and ',' in mac_addr else None
