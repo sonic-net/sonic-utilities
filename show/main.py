@@ -76,6 +76,7 @@ from . import srv6
 from . import switch
 from . import icmp
 from . import copp
+from . import monitor_link
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -320,6 +321,7 @@ cli.add_command(kdump.kdump)
 cli.add_command(interfaces.interfaces)
 cli.add_command(kdump.kdump)
 cli.add_command(kube.kubernetes)
+cli.add_command(monitor_link.monitor_link)
 cli.add_command(muxcable.muxcable)
 cli.add_command(nat.nat)
 cli.add_command(platform.platform)

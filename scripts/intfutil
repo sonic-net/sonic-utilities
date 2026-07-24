@@ -47,6 +47,21 @@ PORT_MTU_STATUS = "mtu"
 PORT_FEC = "fec"
 PORT_DESCRIPTION = "description"
 PORT_OPTICS_TYPE = "type"
+
+# monitor-link-group can hold a managed-link admin DOWN when its group's
+# monitored-link count falls below min-monitored-links. intfmgrd publishes
+# per-interface state in STATE_DB.MONITOR_LINK_GROUP_MEMBER:
+#   state == "allow_up"  -- group is healthy; admin_status reflects user intent.
+#   anything else (e.g. "force_down") -- MLG is holding the port down;
+#                                        down_due_to lists the group(s).
+# We surface that as "error-down (mlg)" in show interface status so operators
+# can distinguish a policy-driven down from a user-driven shutdown. The
+# "(mlg)" tag names the source: today MLG is the only feature that drives
+# admin-down via this path, but if a new feature is added it should use its
+# own tag rather than collapse to a generic "error-down" -- otherwise
+# operators cannot tell which feature drove the port down.
+MONITOR_LINK_GROUP_MEMBER_TABLE_PREFIX = "MONITOR_LINK_GROUP_MEMBER|"
+PORT_ADMIN_STATUS_ERROR_DOWN_MLG = "error-down (mlg)"
 PORT_PFC_ASYM_STATUS = "pfc_asym"
 PORT_AUTONEG = 'autoneg'
 PORT_ADV_SPEEDS = 'adv_speeds'
@@ -181,6 +196,14 @@ def appl_db_port_status_get(appl_db, intf_name, status_type):
     status = appl_db.get(appl_db.APPL_DB, full_table_id, status_type)
     if status is None:
         return "N/A"
+    # Distinguish monitor-link-group-driven admin-down from user-driven
+    # shutdown. The "(mlg)" tag in the rendered value names the source so a
+    # future cause does not collapse into the same string. Also affects
+    # every other view that reads admin_status through this getter --
+    # consistent rendering across those views is intentional.
+    if status_type == PORT_ADMIN_STATUS and status == "down":
+        if _is_held_down_by_monitor_link_group(appl_db, intf_name):
+            return PORT_ADMIN_STATUS_ERROR_DOWN_MLG
     if status_type == PORT_SPEED and status != "N/A":
         optics_type = port_optics_get(appl_db, intf_name, PORT_OPTICS_TYPE)
         status = port_speed_parse(status, optics_type)
@@ -192,6 +215,27 @@ def appl_db_port_status_get(appl_db, intf_name, status_type):
             new_speed_list.append(port_speed_parse(s, optics_type))
         status = ','.join(new_speed_list)
     return status
+
+
+def _is_held_down_by_monitor_link_group(db, intf_name):
+    """Return True if the interface is currently held DOWN by monitor-link-group
+    policy (per intfmgrd's STATE_DB.MONITOR_LINK_GROUP_MEMBER table), else
+    False.
+
+    `db` is the multi-DB SonicV2Connector handle that the surrounding readers
+    use (it exposes both APPL_DB and STATE_DB attributes); we read STATE_DB.
+
+    See cfgmgr/monitorlinkgroupmgr.cpp::writeMonitorLinkGroupMemberStateToDb
+    for the producer side -- single source of truth, so this stays consistent
+    with the daemon's view.
+    """
+    if db is None:
+        return False
+    full_table_id = MONITOR_LINK_GROUP_MEMBER_TABLE_PREFIX + intf_name
+    state = db.get(db.STATE_DB, full_table_id, "state")
+    # Missing key, missing field, or healthy group: not held down.
+    return bool(state) and state != "allow_up"
+
 
 def state_db_port_status_get(db, intf_name, field):
     """
@@ -425,9 +469,17 @@ def appl_db_portchannel_status_get(appl_db, config_db, po_name, status_type, por
     #print(status)
     if status is None:
         return "N/A"
+    # Same monitor-link-group treatment as physical ports: a PortChannel held
+    # down by MLG renders as "error-down (mlg)" so operators can distinguish
+    # it from a user-driven shutdown.
+    if status_type == PORT_ADMIN_STATUS and status == "down":
+        if _is_held_down_by_monitor_link_group(appl_db, po_name):
+            return PORT_ADMIN_STATUS_ERROR_DOWN_MLG
     return status
 
 def appl_db_sub_intf_status_get(appl_db, config_db, front_panel_ports_list, portchannel_speed_dict, sub_intf_name, status_type):
+    # Sub-interfaces are not tracked by monitor-link-group (intfmgrd only
+    # publishes PORT and PORTCHANNEL members); admin_status is passed through.
     sub_intf_sep_idx = sub_intf_name.find(VLAN_SUB_INTERFACE_SEPARATOR)
     if sub_intf_sep_idx != -1:
         parent_port_name = get_intf_longname(sub_intf_name[:sub_intf_sep_idx])
