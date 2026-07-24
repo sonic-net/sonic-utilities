@@ -1,4 +1,5 @@
 import click
+import shutil
 from sonic_py_common import multi_asic
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
@@ -526,6 +527,22 @@ def routes():
     pass
 
 
+def _ecmp_row_width(max_item_len, num_wrap_cols, fixed_cols_est):
+    """Compute how many ECMP items fit per row to stay within the current terminal width.
+
+    :param max_item_len:   length of the longest individual item string
+    :param num_wrap_cols:  number of columns that wrap (2 for nexthop+interface,
+                           3 for endpoint+mac+vni)
+    :param fixed_cols_est: estimated width of non-wrapping column content plus all
+                           inter-column tabulate spacing (2 spaces × (ncols-1))
+    """
+    if max_item_len <= 0:
+        return 1
+    terminal_cols = shutil.get_terminal_size((80, 24)).columns
+    row_width = (terminal_cols - fixed_cols_est) // (num_wrap_cols * (max_item_len + 1))
+    return max(1, row_width)
+
+
 def pretty_print_local(table, r, nexthop_val, ifname_val):
     nexthops = [nexthop.strip() for nexthop in nexthop_val.split(',')] if nexthop_val else []
     interfaces = [interface.strip() for interface in ifname_val.split(',')] if ifname_val else []
@@ -534,7 +551,9 @@ def pretty_print_local(table, r, nexthop_val, ifname_val):
 
     all_items = list(nexthops) + list(interfaces)
     max_len = max((len(item) for item in all_items), default=0)
-    row_width = 2 if max_len > 15 else 3
+    # route_header: ['vnet name', 'prefix', 'nexthop', 'interface']
+    # fixed_cols_est = vnet_name(~15) + prefix(~18) + 4-col spacing(6) = 39
+    row_width = _ecmp_row_width(max_len, num_wrap_cols=2, fixed_cols_est=39)
 
     max_entries = max(len(nexthops), len(interfaces))
     i = 0
@@ -563,7 +582,9 @@ def pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state):
     if vnis:
         all_items.extend(vnis)
     max_len = max((len(item) for item in all_items), default=0)
-    row_width = 2 if max_len > 15 else 3
+    # tunnel_header: ['vnet name', 'prefix', 'endpoint', 'mac address', 'vni', 'metric', 'status']
+    # fixed_cols_est = vnet_name(~15) + prefix(~16) + metric(6) + status(6) + 7-col spacing(12) = 55
+    row_width = _ecmp_row_width(max_len, num_wrap_cols=3, fixed_cols_est=55)
 
     i = 0
     while i < len(endpoints):
