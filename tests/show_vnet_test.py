@@ -1,9 +1,12 @@
 # flake8: noqa: E501
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
 from click.testing import CliRunner
+
 from utilities_common.db import Db
+
 import show.main as show
 import show.vnet as vnet
 from tests.mock_tables import dbconnector
@@ -148,7 +151,7 @@ class TestShowVnetRoutesAll(object):
         vnet.pretty_print_local(table, row, "192.168.1.1", "Ethernet1")
         assert table == [["TestVnet", "10.0.0.0/24", "192.168.1.1", "Ethernet1"]]
 
-        # 3 short nexthops, row_width=3, all fit on one row
+        # 3 short nexthops, all fit on one row
         table = []
         row = ["TestVnet", "10.0.0.0/24"]
         vnet.pretty_print_local(table, row, "1.1.1.1,2.2.2.2,3.3.3.3", "Eth1,Eth2,Eth3")
