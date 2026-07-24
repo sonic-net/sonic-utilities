@@ -79,6 +79,10 @@ class Bootloader(object):
         """verify image signature is valid"""
         raise NotImplementedError
 
+    def enroll_image_secure_boot_keys(self, image_path):
+        """enroll Secure Boot keys bundled in the image before signature verification"""
+        return True
+
     def is_secure_upgrade_image_verification_supported(self):
         return False
 
