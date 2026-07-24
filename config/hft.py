@@ -14,8 +14,10 @@ GROUP_TYPE_CHOICES = ("PORT", "BUFFER_POOL", "INGRESS_PRIORITY_GROUP", "QUEUE")
 
 PROFILE_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_PROFILE"
 GROUP_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_GROUP"
+AGGREGATOR_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR"
 PROFILE_TABLE_PATH = f"/{PROFILE_TABLE_NAME}"
 GROUP_TABLE_PATH = f"/{GROUP_TABLE_NAME}"
+AGGREGATOR_TABLE_PATH = f"/{AGGREGATOR_TABLE_NAME}"
 STREAM_STATE_FIELD = "stream_state"
 
 
@@ -42,6 +44,25 @@ def hft_disable(ctx, profile_name):
     _process_payload(ctx, payload)
 
 
+@hft.command('bind-aggregator', short_help="Bind an aggregator to an HFT profile")
+@click.argument('profile_name')
+@click.argument('aggregator_name')
+@click.pass_context
+def hft_bind_aggregator(ctx, profile_name, aggregator_name):
+    """Bind an existing aggregator to an HFT profile."""
+    payload = _build_profile_field_patch(profile_name, "aggregator", aggregator_name)
+    _process_payload(ctx, payload)
+
+
+@hft.command('unbind-aggregator', short_help="Unbind the aggregator from an HFT profile")
+@click.argument('profile_name')
+@click.pass_context
+def hft_unbind_aggregator(ctx, profile_name):
+    """Remove the aggregator binding from an HFT profile."""
+    payload = _build_profile_field_remove_patch(profile_name, "aggregator")
+    _process_payload(ctx, payload)
+
+
 @hft.group('add', short_help="Add HFT resources")
 def hft_add():
     """Group of add operations for HFT."""
@@ -55,8 +76,10 @@ def hft_add():
 @click.option('--poll_interval', 'poll_interval', default=DEFAULT_POLL_INTERVAL_USEC,
               type=click.IntRange(min=0), show_default=True,
               help='Polling interval in microseconds.')
+@click.option('--aggregator', 'aggregator', default=None,
+              help='Optional aggregator name to apply to this profile.')
 @click.pass_context
-def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
+def hft_add_profile(ctx, profile_name, stream_state, poll_interval, aggregator):
     """Create a profile entry for HFT."""
     if _has_existing_profile(ctx):
         click.echo(
@@ -65,13 +88,17 @@ def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
         )
         ctx.exit(1)
 
+    attributes = {
+        "stream_state": stream_state,
+        "poll_interval": str(poll_interval),
+    }
+    if aggregator:
+        attributes["aggregator"] = aggregator
+
     profile_payload = _build_profile_patch(
         op="add",
         profile_name=profile_name,
-        attributes={
-            "stream_state": stream_state,
-            "poll_interval": str(poll_interval),
-        }
+        attributes=attributes
     )
     _process_payload(ctx, profile_payload)
 
@@ -99,6 +126,33 @@ def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
     _process_payload(ctx, group_payload)
 
 
+@hft_add.command('aggregator', short_help="Add an HFT aggregator")
+@click.argument('aggregator_name')
+@click.option('--reporting_rate', 'reporting_rate', default=None,
+              type=click.IntRange(min=0), help='Reporting interval after aggregation in microseconds.')
+@click.option('--rollover_counters', 'rollover_counters', default=None,
+              help='Comma-separated list of GROUP|COUNTER entries requiring rollover correction.')
+@click.option('--heatmap_counters', 'heatmap_counters', default=None,
+              help='Comma-separated list of GROUP|COUNTER entries treated as heatmap data.')
+@click.pass_context
+def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters, heatmap_counters):
+    """Create an aggregator definition for HFT."""
+    attributes = {}
+    if reporting_rate is not None:
+        attributes["reporting_rate"] = str(reporting_rate)
+    if rollover_counters is not None:
+        attributes["rollover_counters"] = _split_csv_items(rollover_counters)
+    if heatmap_counters is not None:
+        attributes["heatmap_counters"] = _split_csv_items(heatmap_counters)
+
+    aggregator_payload = _build_aggregator_patch(
+        op="add",
+        aggregator_name=aggregator_name,
+        attributes=attributes
+    )
+    _process_payload(ctx, aggregator_payload)
+
+
 @hft.group('del', short_help="Remove HFT resources")
 def hft_delete():
     """Group of delete operations for HFT."""
@@ -123,6 +177,30 @@ def hft_delete_group(ctx, profile_name, group_type):
     remove_entire_table = _is_last_entry(ctx, GROUP_TABLE_NAME)
     group_payload = _build_group_remove_patch(profile_name, group_type, remove_entire_table)
     _process_payload(ctx, group_payload)
+
+
+@hft_delete.command('aggregator', short_help="Delete an HFT aggregator")
+@click.argument('aggregator_name')
+@click.pass_context
+def hft_delete_aggregator(ctx, aggregator_name):
+    """Remove an existing HFT aggregator."""
+    profile_users = _get_aggregator_users(ctx, aggregator_name)
+    if profile_users:
+        click.echo(
+            "Cannot delete aggregator '{}'; it is still referenced by HFT profile(s): {}".format(
+                aggregator_name,
+                ', '.join(profile_users)
+            )
+        )
+        ctx.exit(1)
+
+    if not _has_table_entry(ctx, AGGREGATOR_TABLE_NAME, aggregator_name):
+        click.echo("Aggregator '{}' does not exist.".format(aggregator_name))
+        ctx.exit(1)
+
+    remove_entire_table = _is_last_entry(ctx, AGGREGATOR_TABLE_NAME)
+    aggregator_payload = _build_aggregator_remove_patch(aggregator_name, remove_entire_table)
+    _process_payload(ctx, aggregator_payload)
 
 
 def _process_payload(ctx, payload):
@@ -188,19 +266,42 @@ def _build_group_patch(op, profile_name, group_type, attributes):
     ]
 
 
+def _build_aggregator_patch(op, aggregator_name, attributes):
+    """Construct a JSON Patch entry targeting the aggregator table."""
+    return [
+        _build_patch_entry(op, AGGREGATOR_TABLE_PATH, {
+            aggregator_name: attributes
+        })
+    ]
+
+
 def _build_stream_state_patch(profile_name, state):
     """Construct a JSON Patch entry to update a profile stream state."""
+    return _build_profile_field_patch(profile_name, STREAM_STATE_FIELD, state)
+
+
+def _build_profile_field_patch(profile_name, field_name, value):
+    """Construct a JSON Patch entry to update a profile field."""
     path = _join_pointer(
         _join_pointer(PROFILE_TABLE_PATH, profile_name),
-        STREAM_STATE_FIELD
+        field_name
     )
     return [
         {
             "op": "add",
             "path": path,
-            "value": state,
+            "value": value,
         }
     ]
+
+
+def _build_profile_field_remove_patch(profile_name, field_name):
+    """Construct a JSON Patch entry to remove a profile field."""
+    path = _join_pointer(
+        _join_pointer(PROFILE_TABLE_PATH, profile_name),
+        field_name
+    )
+    return [_build_remove_entry(path)]
 
 
 def _build_profile_remove_patch(profile_name, remove_entire_table):
@@ -219,6 +320,13 @@ def _build_group_remove_patch(profile_name, group_type, remove_entire_table):
             _join_pointer(GROUP_TABLE_PATH, _compose_group_key(profile_name, group_type))
         )
     ]
+
+
+def _build_aggregator_remove_patch(aggregator_name, remove_entire_table):
+    """Create a remove operation for an aggregator or the entire table if requested."""
+    if remove_entire_table:
+        return [_build_remove_entry(AGGREGATOR_TABLE_PATH)]
+    return [_build_remove_entry(_join_pointer(AGGREGATOR_TABLE_PATH, aggregator_name))]
 
 
 def _build_patch_entry(op, path, value):
@@ -285,3 +393,32 @@ def _has_existing_profile(ctx):
     except Exception:
         return False
     return bool(entries)
+
+
+def _has_table_entry(ctx, table_name, entry_name):
+    """Return True if the CFG table contains the requested entry."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return False
+    try:
+        entries = cfgdb.get_table(table_name) or {}
+    except Exception:
+        return False
+    return entry_name in entries
+
+
+def _get_aggregator_users(ctx, aggregator_name):
+    """Return profile names that reference the given aggregator."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return []
+    try:
+        profiles = cfgdb.get_table(PROFILE_TABLE_NAME) or {}
+    except Exception:
+        return []
+
+    users = []
+    for profile_name, attributes in profiles.items():
+        if isinstance(attributes, dict) and attributes.get('aggregator') == aggregator_name:
+            users.append(profile_name)
+    return sorted(users)

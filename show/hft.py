@@ -11,14 +11,19 @@ import utilities_common.cli as clicommon
 
 PROFILE_TABLE = 'HIGH_FREQUENCY_TELEMETRY_PROFILE'
 GROUP_TABLE = 'HIGH_FREQUENCY_TELEMETRY_GROUP'
+AGGREGATOR_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
 DEFAULT_CELL_PLACEHOLDER = '-'
 TABLE_HEADER = [
     'Profile',
     'Stream State',
     'Poll Interval (usec)',
+    'Aggregator',
     'Group Type',
     'Object Names',
-    'Object Counters'
+    'Object Counters',
+    'Reporting Rate (usec)',
+    'Rollover Counters',
+    'Heatmap Counters'
 ]
 
 
@@ -66,8 +71,9 @@ def hft_counters(stats_interval, max_stats_per_report, log_level, log_format):
 def _display_hft(db):
     profile_table = db.cfgdb.get_table(PROFILE_TABLE) or {}
     group_table = db.cfgdb.get_table(GROUP_TABLE) or {}
+    aggregator_table = db.cfgdb.get_table(AGGREGATOR_TABLE) or {}
 
-    rows = _build_rows(profile_table, group_table)
+    rows = _build_rows(profile_table, group_table, aggregator_table)
     if not rows:
         click.echo("No high frequency telemetry configuration present.")
         return
@@ -75,8 +81,10 @@ def _display_hft(db):
     click.echo(tabulate(rows, TABLE_HEADER, tablefmt='grid'))
 
 
-def _build_rows(profile_table, group_table):
+def _build_rows(profile_table, group_table, aggregator_table=None):
     group_index = _index_groups(group_table)
+    aggregator_table = aggregator_table or {}
+    used_aggregators = set()
     rows = []
 
     for profile_name in natsorted(profile_table.keys()):
@@ -84,6 +92,11 @@ def _build_rows(profile_table, group_table):
         stream_state = profile_entry.get('stream_state', DEFAULT_CELL_PLACEHOLDER)
         poll_interval_raw = profile_entry.get('poll_interval', DEFAULT_CELL_PLACEHOLDER)
         poll_interval = _format_poll_interval(poll_interval_raw)
+        aggregator_name = profile_entry.get('aggregator', DEFAULT_CELL_PLACEHOLDER)
+        if aggregator_name != DEFAULT_CELL_PLACEHOLDER:
+            used_aggregators.add(aggregator_name)
+        aggregator = aggregator_table.get(aggregator_name, {}) if aggregator_name != DEFAULT_CELL_PLACEHOLDER else {}
+        reporting_rate, rollover_counters, heatmap_counters = _format_aggregator(aggregator)
         groups = group_index.get(profile_name)
 
         if not groups:
@@ -91,9 +104,13 @@ def _build_rows(profile_table, group_table):
                 profile_name,
                 stream_state,
                 poll_interval,
+                aggregator_name,
                 DEFAULT_CELL_PLACEHOLDER,
                 DEFAULT_CELL_PLACEHOLDER,
-                DEFAULT_CELL_PLACEHOLDER
+                DEFAULT_CELL_PLACEHOLDER,
+                reporting_rate,
+                rollover_counters,
+                heatmap_counters
             ])
             continue
 
@@ -102,12 +119,40 @@ def _build_rows(profile_table, group_table):
                 profile_name if idx == 0 else '',
                 stream_state if idx == 0 else '',
                 poll_interval if idx == 0 else '',
+                aggregator_name if idx == 0 else '',
                 group['type'],
                 group['names'],
-                group['counters']
+                group['counters'],
+                reporting_rate if idx == 0 else '',
+                rollover_counters if idx == 0 else '',
+                heatmap_counters if idx == 0 else ''
             ])
 
+    for aggregator_name in natsorted(set(aggregator_table.keys()) - used_aggregators):
+        reporting_rate, rollover_counters, heatmap_counters = _format_aggregator(
+            aggregator_table.get(aggregator_name, {})
+        )
+        rows.append([
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            aggregator_name,
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            reporting_rate,
+            rollover_counters,
+            heatmap_counters
+        ])
+
     return rows
+
+
+def _format_aggregator(aggregator):
+    reporting_rate = _format_poll_interval(aggregator.get('reporting_rate', DEFAULT_CELL_PLACEHOLDER))
+    rollover_counters = _format_list(aggregator.get('rollover_counters')) or DEFAULT_CELL_PLACEHOLDER
+    heatmap_counters = _format_list(aggregator.get('heatmap_counters')) or DEFAULT_CELL_PLACEHOLDER
+    return reporting_rate, rollover_counters, heatmap_counters
 
 
 def _index_groups(group_table):
