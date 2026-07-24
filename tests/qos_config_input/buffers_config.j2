@@ -13,6 +13,9 @@ def
 {%-         set filename_postfix = 't0' %}
 {%-     elif 'leafrouter' in switch_role.lower() and 'mgmt' not in switch_role.lower()%}
 {%-         set filename_postfix = 't1' %}
+{%-     elif 'spinerouter' in switch_role.lower() and 'mgmt' not in switch_role.lower()%}
+{%-         set topo = 't2' %}
+{%-         set filename_postfix = 't1' %}
 {%-     else %}
 {%-         set filename_postfix = set_default_topology() %}
 {%-     endif %}
@@ -134,16 +137,23 @@ def
 {{ defs.generate_profile_lists(port_names_active) }},
 {% endif %}
 
-{%- if defs.generate_pg_profils is defined %}
-{{ defs.generate_pg_profils(port_names_active) }}
+{% if defs.generate_pg_profiles is defined %}
+{{ defs.generate_pg_profiles(port_names_active) }}
 {% else %}
     "BUFFER_PG": {
-{% for port in PORT_ACTIVE %}
+    {%- if DEVICE_METADATA is defined and DEVICE_METADATA['localhost']['type'] is defined and DEVICE_METADATA['localhost']['type'] == 'spinerouter'%}
+    {% for port in PORT_ACTIVE %}
+        "lc1|asic0|{{ port }}|0": {
+            "profile" : "ingress_lossy_profile"
+        }{% if not loop.last %},{% endif %}
+    {% endfor %}
+    {% else %}
+    {% for port in PORT_ACTIVE %}
         "{{ port }}|0": {
             "profile" : "ingress_lossy_profile"
         }{% if not loop.last %},{% endif %}
-
-{% endfor %}
+    {% for port in PORT_ACTIVE %}
+    {% endif %}
     },
 {% endif %}
 
