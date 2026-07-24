@@ -199,6 +199,8 @@ setup(
         'scripts/storm_control.py',
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
+        'scripts/secure_boot_enroll_db.sh',
+        'scripts/remove_stale_db_certs.sh',
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
         'scripts/wredstat',
