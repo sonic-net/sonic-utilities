@@ -35,6 +35,23 @@ class TestSuppressFibPending:
         print(result.output)
         assert result.exit_code != 0
 
+    def test_config_suppress_fib_pending_no_change(self):
+        runner = CliRunner()
+
+        db = Db()
+
+        # An actual config change should notify that a config reload is required
+        result = runner.invoke(config.config.commands['suppress-fib-pending'], ['disabled'], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert 'This does NOT take effect until a config reload' in result.output
+
+        # Re-applying the same state should not prompt for a reload
+        result = runner.invoke(config.config.commands['suppress-fib-pending'], ['disabled'], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == "suppress-fib-pending is already 'disabled'; no change made.\n"
+
 
 class TestSuppressFibPendingMultiAsic(object):
     @classmethod

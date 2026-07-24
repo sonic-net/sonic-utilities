@@ -2870,9 +2870,22 @@ def suppress_pending_fib(db, state):
     if multi_asic.get_num_asics() > 1:
         namespace_list = multi_asic.get_namespaces_from_linux()
 
+    changed = False
     for ns in namespace_list:
         config_db = db.cfgdb_clients[ns]
+        entry = config_db.get_entry('DEVICE_METADATA', 'localhost')
+        if entry.get('suppress-fib-pending') == state:
+            continue
         config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
+        changed = True
+
+    if changed:
+        click.echo(f"""suppress-fib-pending set to '{state}' in CONFIG_DB. This does NOT take effect until a config reload.
+Persist and apply with:
+    config save -y
+    config reload -y""")
+    else:
+        click.echo(f"suppress-fib-pending is already '{state}'; no change made.")
 
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
