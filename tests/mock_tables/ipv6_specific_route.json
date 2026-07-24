@@ -17,7 +17,8 @@
                     "flags": 3, 
                     "interfaceIndex": 928, 
                     "interfaceName": "PortChannel0011", 
-                    "ip": "fc00::e"
+                    "ip": "fc00::e",
+                    "weight": "1"
                 }, 
                 {
                     "active": true, 
@@ -26,7 +27,8 @@
                     "flags": 3, 
                     "interfaceIndex": 927, 
                     "interfaceName": "PortChannel0008", 
-                    "ip": "fc00::a"
+                    "ip": "fc00::a",
+                    "weight": "1"
                 }
             ], 
             "prefix": "20c0:a8c7:0:81::/64", 
