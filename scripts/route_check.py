@@ -83,6 +83,11 @@ FRR_WAIT_TIME = 15
 
 REDIS_TIMEOUT_MSECS = 0
 
+# Retry constants for transient route mismatch recovery.
+# BGP reconvergence after session disruption can take up to 2 minutes,
+# so retries use full DB re-reads with a sleep aligned to FRR_WAIT_TIME.
+ROUTE_CHECK_RETRIES = 8
+ROUTE_CHECK_WAIT_TIME = 15
 
 class Level(Enum):
     ERR = 'ERR'
@@ -957,11 +962,6 @@ def check_routes_for_namespace(namespace):
         # Look for subscribe updates for a second
         adds, deletes = get_subscribe_updates(selector, subs)
 
-    # Release the subscriber. If we keep the subscriber open then route updates will accumulate in the subscriber queue
-    # causing high client memory usage in redis.
-    del subs
-    del selector
-
     # Drop all those for which SET received
     rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds)
 
@@ -971,6 +971,63 @@ def check_routes_for_namespace(namespace):
     # Filter local p2p IPs if any that are reported as missing in APPL_DB
     if rt_appl_miss:
         rt_appl_miss = filter_out_local_p2p_ips(namespace, rt_appl_miss)
+
+    # Retry logic: if an initial mismatch is found, wait for route convergence before
+    # declaring failure. Routes can take up to 2 minutes to appear in ASIC_DB after a
+    # BGP session disruption.
+    #
+    # For rt_appl_miss: reuse the existing ASIC_DB subscriber (selector/subs). Events
+    # that arrive while we sleep are buffered in the subscriber; draining them via
+    # get_subscribe_updates is O(new events) with no full table scan or new connection.
+    #
+    # For rt_asic_miss: re-read only APPL_DB (lightweight getKeys()), and only when
+    # rt_asic_miss is still non-empty.
+    if rt_appl_miss or rt_asic_miss:
+        for retry_attempt in range(ROUTE_CHECK_RETRIES):
+            print_message(syslog.LOG_INFO,
+                          "Route mismatch in namespace {} (attempt {}/{}). Waiting {}s for "
+                          "convergence...".format(namespace, retry_attempt + 1,
+                                                  ROUTE_CHECK_RETRIES, ROUTE_CHECK_WAIT_TIME))
+            print_message(syslog.LOG_DEBUG, "Mismatches: appl_miss={}, asic_miss={}".format(
+                len(rt_appl_miss), len(rt_asic_miss)))
+
+            time.sleep(ROUTE_CHECK_WAIT_TIME)
+
+            # Drain ASIC_DB events buffered during the sleep.
+            # SET events resolve rt_appl_miss; DEL events resolve rt_asic_miss.
+            # No new DB connection or full table scan — only incremental events are processed.
+            new_adds, new_deletes = get_subscribe_updates(selector, subs)
+
+            if rt_appl_miss:
+                rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, new_adds)
+
+            if rt_asic_miss:
+                # First try DEL events from ASIC_DB (route removed from ASIC).
+                rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, new_deletes)
+                # Then re-read APPL_DB (getKeys only) for routes that appeared there.
+                if rt_asic_miss:
+                    rt_appl_retry_set = set(get_appdb_routes(namespace))
+                    rt_asic_miss = [r for r in rt_asic_miss if r not in rt_appl_retry_set]
+
+            print_message(syslog.LOG_DEBUG,
+                          "After retry {}: appl_miss={}, asic_miss={}".format(
+                              retry_attempt + 1, len(rt_appl_miss), len(rt_asic_miss)))
+
+            # Early exit if resolved
+            if not rt_appl_miss and not rt_asic_miss:
+                print_message(syslog.LOG_INFO, "Route check passed for namespace {} after {} retries".format(
+                    namespace, retry_attempt + 1))
+                break
+        else:
+            # Retries exhausted - likely a genuine issue
+            print_message(syslog.LOG_WARNING,
+                          "Route mismatch persists in namespace {} after {} retries".format(
+                              namespace, ROUTE_CHECK_RETRIES))
+
+    # Release the subscriber. If we keep the subscriber open then route updates will accumulate in the subscriber queue
+    # causing high client memory usage in redis.
+    del subs
+    del selector
 
     if rt_appl_miss:
         results["missed_ROUTE_TABLE_routes"] = rt_appl_miss
