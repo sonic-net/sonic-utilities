@@ -957,3 +957,26 @@ class UserCache:
     def remove_all(self):
         """ Remove the content of the cache for all users """
         shutil.rmtree(self.cache_directory_app)
+
+
+def get_interface_operational_status(state_db, interface_name):
+    """
+    Get interface operational status from STATE_DB.
+    Tries PORT_TABLE (physical ports) then LAG_TABLE (port channels).
+
+    Returns:
+        str: "UP", "DOWN", or "N/A"
+    """
+    port_data = state_db.get_all(state_db.STATE_DB, f"PORT_TABLE|{interface_name}")
+    if port_data:
+        status = port_data.get('netdev_oper_status', '')
+        if status:
+            return "UP" if status.lower() == "up" else "DOWN"
+
+    lag_data = state_db.get_all(state_db.STATE_DB, f"LAG_TABLE|{interface_name}")
+    if lag_data:
+        status = lag_data.get('oper_status', '')
+        if status:
+            return "UP" if status.lower() == "up" else "DOWN"
+
+    return "N/A"
