@@ -272,11 +272,14 @@ class AclLoader(object):
         :return:
         """
 
-        # For multi-npu platforms we will read from any one of front asic namespace
-        # config db as the information should be same across all config db
+        # Merge ASIC-specific policers from every front namespace, preserving
+        # the first namespace's value for duplicate names to retain existing behavior.
         if self.per_npu_configdb:
-            namespace_configdb = list(self.per_npu_configdb.values())[0]
-            self.policers_db_info = namespace_configdb.get_table(self.POLICER)
+            self.policers_db_info = {}
+            for namespace_configdb in self.per_npu_configdb.values():
+                for policer_name, policer_config in namespace_configdb.get_table(self.POLICER).items():
+                    if policer_name not in self.policers_db_info:
+                        self.policers_db_info[policer_name] = policer_config
         else:
             self.policers_db_info = self.configdb.get_table(self.POLICER)
 
