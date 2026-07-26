@@ -6,17 +6,14 @@
 
 import json
 import os
-import pwd
-import pexpect
 import re
 import socket
 import struct
-import subprocess
 import sys
 import time
 
-
 import click
+import pexpect
 from sonic_py_common import device_info
 from sonic_py_common.general import getstatusoutput_noshell_pipe
 
@@ -523,12 +520,18 @@ def validate_mirror_timeout_duration(ctx, param, value):
 
 
 def _mirror_error_message(response):
-    message = response.get("message") or response.get("error") or "mirror request failed"
+    message = (
+        response.get("message") or response.get("error") or "mirror request failed"
+    )
     details = []
     archive_path = response.get("archive_path")
     details += [f"archive path: {archive_path}"] if archive_path else []
     undeleted_source_paths = response.get("source_paths")
-    details += [f"source paths: {', '.join(undeleted_source_paths)}"] if (undeleted_source_paths and isinstance(undeleted_source_paths, list)) else []
+    details += (
+        [f"source paths: {', '.join(undeleted_source_paths)}"]
+        if (undeleted_source_paths and isinstance(undeleted_source_paths, list))
+        else []
+    )
     return "{}\n{}".format(message, "\n".join(details)) if details else message
 
 
@@ -544,6 +547,7 @@ def _recv_mirror_message(sock, timeout=None):
                 raise RuntimeError("unexpected EOF")
             data += chunk
         return data
+
     sock.settimeout(timeout)
     header = _recv_all(sock, 4)
     size = struct.unpack("!I", header)[0]
@@ -559,9 +563,8 @@ def _recv_mirror_message(sock, timeout=None):
 
 
 def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_first_reply=None):
-    path = os.path.join(MIRROR_RUNTIME_DIR, "line{}.sock".format(line))
-    payload = json.dumps(message, separators=(",", ":"),
-                         sort_keys=True).encode("utf-8")
+    path = os.path.join(MIRROR_RUNTIME_DIR, f"line{line}.sock")
+    payload = json.dumps(message, separators=(",", ":"), sort_keys=True).encode("utf-8")
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(path)
@@ -573,7 +576,8 @@ def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_fir
                 if on_first_reply is not None:
                     on_first_reply(first)  # callback for first reply
                 final = _recv_mirror_message(
-                    sock, timeout=MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC)
+                    sock, timeout=MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC
+                )
                 if final.get("status") != "ok":
                     raise RuntimeError(_mirror_error_message(final))
                 return first, final
@@ -583,7 +587,7 @@ def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_fir
     except (OSError, RuntimeError) as e:
         if quiet:
             raise
-        click.echo("Mirror request failed on line [{}]: {}".format(line, e))
+        click.echo(f"Mirror request failed on line [{line}]: {e}")
         sys.exit(ERR_CMD)
 
 
