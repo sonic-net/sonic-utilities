@@ -523,7 +523,13 @@ def validate_mirror_timeout_duration(ctx, param, value):
 
 
 def _mirror_error_message(response):
-    return response.get("message") or response.get("error") or "mirror request failed"
+    message = response.get("message") or response.get("error") or "mirror request failed"
+    details = []
+    archive_path = response.get("archive_path")
+    details += [f"archive path: {archive_path}"] if archive_path else []
+    undeleted_source_paths = response.get("source_paths")
+    details += [f"source paths: {', '.join(undeleted_source_paths)}"] if (undeleted_source_paths and isinstance(undeleted_source_paths, list)) else []
+    return "{}\n{}".format(message, "\n".join(details)) if details else message
 
 
 def _recv_mirror_message(sock, timeout=None):
