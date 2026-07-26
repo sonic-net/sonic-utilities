@@ -560,7 +560,7 @@ def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_fir
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(path)
             sock.sendall(struct.pack("!I", len(payload)) + payload)
-            first = _recv_mirror_message(sock)
+            first = _recv_mirror_message(sock, timeout=10)
             if wait_for_final:
                 if first.get("status") != "packaging":
                     raise RuntimeError(_mirror_error_message(first))

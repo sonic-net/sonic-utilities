@@ -1672,6 +1672,7 @@ class TestConsutilMirror(object):
 
         with mock.patch('consutil.main.send_mirror_message',
                         mock.MagicMock(return_value={
+                            "status": "ok",
                             "timeout": "2h",
                             "remaining": "2h"
                         })) as mock_send:
@@ -1697,6 +1698,7 @@ class TestConsutilMirror(object):
             if line == "2":
                 raise OSError("missing socket")
             return {
+                "status": "ok",
                 "state": "active",
                 "start_time": MIRROR_LINE1_START_TIME,
                 "direction": "both",
