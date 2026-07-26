@@ -957,7 +957,7 @@ fi
 
 sonic_asic_type=$(sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)
 if [[ "$REBOOT_TYPE" == "express-reboot" ]] && \
-   [[ "$sonic_asic_type" != "cisco-8000" ]] && \
+   [[ "$sonic_asic_type" != "cisco-8000" && "$sonic_asic_type" != "cisco" ]] && \
    [[ "$sonic_asic_type" != "marvell-teralynx" ]]; then
     echo "eXpress Boot is not supported"
     exit "${EXIT_FAILURE}"

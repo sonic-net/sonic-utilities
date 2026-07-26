@@ -1769,7 +1769,7 @@ def config(ctx):
         print("Caught an exception: " + str(e))
         raise click.Abort()
 
-    if asic_type == 'cisco-8000':
+    if asic_type in ('cisco-8000', 'cisco'):
         from sonic_platform.cli.cisco import cisco
         platform.add_command(cisco)
 
