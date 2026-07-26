@@ -10,6 +10,7 @@ import jsonpatch
 import sys
 import unittest
 import ipaddress
+import types
 
 from datetime import timezone
 from unittest import mock
@@ -433,6 +434,44 @@ class TestHelper(object):
 class TestConfig(object):
     def setup_method(self):
         print("SETUP")
+
+    def test_config_registers_cisco_platform_plugin(self):
+        @click.command()
+        def cisco_test_noop():
+            pass
+
+        cisco_command = click.Command("cisco")
+        sonic_platform_module = types.ModuleType("sonic_platform")
+        sonic_platform_cli_module = types.ModuleType("sonic_platform.cli")
+        sonic_platform_cisco_module = types.ModuleType("sonic_platform.cli.cisco")
+        sonic_platform_cisco_module.cisco = cisco_command
+        original_platform_commands = config.platform.commands.copy()
+
+        try:
+            config.config.add_command(cisco_test_noop, "cisco-test-noop")
+            with mock.patch.dict(sys.modules, {
+                    "sonic_platform": sonic_platform_module,
+                    "sonic_platform.cli": sonic_platform_cli_module,
+                    "sonic_platform.cli.cisco": sonic_platform_cisco_module
+                    }), \
+                    mock.patch(
+                        'sonic_py_common.device_info.get_sonic_version_info',
+                        return_value={'asic_type': 'cisco'}
+                    ), \
+                    mock.patch('config.main.load_db_config') as mock_load_db_config, \
+                    mock.patch('config.main.os.geteuid', return_value=0), \
+                    mock.patch('config.main.Db') as mock_db:
+                runner = CliRunner()
+                result = runner.invoke(config.config, ["cisco-test-noop"])
+
+            assert result.exit_code == 0
+            assert config.platform.commands["cisco"] is cisco_command
+            mock_load_db_config.assert_called_once()
+            mock_db.assert_called_once()
+        finally:
+            config.config.commands.pop("cisco-test-noop", None)
+            config.platform.commands.clear()
+            config.platform.commands.update(original_platform_commands)
 
     @patch('config.main.subprocess.check_call')
     def test_platform_fw_install(self, mock_check_call):
