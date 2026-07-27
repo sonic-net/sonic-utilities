@@ -26,7 +26,7 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
     new_image_folder = f"/images/{new_image_version}"
     image_docker_folder = os.path.join(new_image_folder, "docker")
     mounted_image_folder = f"/tmp/image-{new_image_version}-fs"
-    dockerd_opts = ["--iptables=false", "--bip=1.1.1.1/24"]
+    dockerd_opts = ["--iptables=false", "--bip=1.1.1.1/24", "-H", "fd://"]
 
     # Setup mock files needed for our test scenario
     fs.create_file(sonic_image_filename)
@@ -34,6 +34,11 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
     fs.create_dir(os.path.join(mounted_image_folder, "usr/lib/docker/docker.sh"))
     fs.create_file("/var/run/docker.pid", contents="15")
     fs.create_file("/proc/15/cmdline", contents="\x00".join(["dockerd"] + dockerd_opts))
+    # Simulate new image: /etc/resolv.conf is a dangling symlink (target doesn't exist in squashfs)
+    fs.create_symlink(f"{mounted_image_folder}/etc/resolv.conf", "/run/resolvconf/resolv.conf")
+
+    # Expect fd:// to be replaced by unix://
+    expected_dockerd_opts = [opt if opt != "fd://" else "unix://" for opt in dockerd_opts]
 
     # Setup bootloader mock
     mock_bootloader = Mock()
@@ -83,7 +88,12 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
         call(["chroot", mounted_image_folder, "mount", "proc", "/proc", "-t", "proc"]),
         call(["chroot", mounted_image_folder, "mount", "sysfs", "/sys", "-t", "sysfs"]),
         call(["cp", f"{mounted_image_folder}/etc/default/docker", f"{mounted_image_folder}/tmp/docker_config_backup"]),
-        call(["sh", "-c", f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(dockerd_opts)}\"' >> {mounted_image_folder}/etc/default/docker"]), # dockerd started with added options as host dockerd
+        # dockerd started with unix:// instead of fd://
+        call([
+            "sh", "-c",
+            f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(expected_dockerd_opts)}\"' "
+            f">> {mounted_image_folder}/etc/default/docker"
+        ]),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "start"]),
         call(["cp", "/var/lib/sonic-package-manager/packages.json", f"{mounted_image_folder}/tmp/packages.json"]),
         call(["mkdir", "-p", "/var/lib/sonic-package-manager/manifests"]),
@@ -91,12 +101,12 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
              f"{mounted_image_folder}/var/lib/sonic-package-manager"]),
         call(["touch", f"{mounted_image_folder}/tmp/docker.sock"]),
         call(["mount", "--bind", "/var/run/docker.sock", f"{mounted_image_folder}/tmp/docker.sock"]),
-        call(["cp", f"{mounted_image_folder}/etc/resolv.conf", "/tmp/resolv.conf.backup"]),
-        call(["cp", "/etc/resolv.conf", f"{mounted_image_folder}/etc/resolv.conf"]),
+        # /etc/resolv.conf is a dangling symlink -> /run/resolvconf/resolv.conf, populate its target
+        call(["mkdir", "-p", f"{mounted_image_folder}/run/resolvconf"]),
+        call(["cp", "-L", "/etc/resolv.conf", f"{mounted_image_folder}/run/resolvconf/resolv.conf"]),
         call(["chroot", mounted_image_folder, "sh", "-c", "command -v sonic-package-manager"]),
         call(["chroot", mounted_image_folder, "sonic-package-manager", "migrate", "/tmp/packages.json", "--dockerd-socket", "/tmp/docker.sock", "-y"], capture=False),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "stop"], raise_exception=False),
-        call(["cp", "/tmp/resolv.conf.backup", f"{mounted_image_folder}/etc/resolv.conf"], raise_exception=False),
         call(["umount", "-f", "-R", mounted_image_folder], raise_exception=False),
         call(["umount", "-r", "-f", mounted_image_folder], raise_exception=False),
         call(["rm", "-rf", mounted_image_folder], raise_exception=False),
@@ -147,3 +157,52 @@ def test_runtime_exception(mock_popen):
     assert '\nSTDERR:\nFailed' in sre.value.notes, "Invalid STDERR"
 
     assert all(v in str(sre.value) for v in ['test.sh', 'Running', 'Failed']), "Invalid message"
+
+
+@patch("sonic_installer.main.SWAPAllocator")
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.run_command_or_raise")
+@patch("sonic_installer.main.run_command")
+@patch('shutil.rmtree')
+def test_install_failed(rmtree, run_command, run_command_or_raise, get_bootloader, swap, fs):
+    """ This test covers the "sonic-installer" install image failed handling. """
+
+    sonic_image_filename = "sonic.bin"
+    current_image_version = "image_1"
+    new_image_version = "image_2"
+    new_image_folder = f"/images/{new_image_version}"
+    image_docker_folder = os.path.join(new_image_folder, "docker")
+    mounted_image_folder = f"/tmp/image-{new_image_version}-fs"
+    dockerd_opts = ["--iptables=false", "--bip=1.1.1.1/24", "-H", "fd://"]
+
+    # Setup mock files needed for our test scenario
+    fs.create_file(sonic_image_filename)
+    fs.create_dir(image_docker_folder)
+    fs.create_dir(os.path.join(mounted_image_folder, "usr/lib/docker/docker.sh"))
+    fs.create_file("/var/run/docker.pid", contents="15")
+    fs.create_file("/proc/15/cmdline", contents="\x00".join(["dockerd"] + dockerd_opts))
+
+    # Setup bootloader mock
+    mock_bootloader = Mock()
+    mock_bootloader.get_binary_image_version = Mock(return_value=new_image_version)
+    mock_bootloader.get_installed_images = Mock(return_value=[current_image_version])
+    mock_bootloader.get_image_path = Mock(return_value=new_image_folder)
+    mock_bootloader.verify_image_sign = Mock(return_value=True)
+
+    def mock_install_image(arg):
+        sys.exit(1)
+
+    mock_bootloader.install_image = mock_install_image
+
+    @contextmanager
+    def rootfs_path_mock(path):
+        yield mounted_image_folder
+
+    mock_bootloader.get_rootfs_path = rootfs_path_mock
+
+    get_bootloader.return_value = mock_bootloader
+
+    # Invoke CLI command
+    runner = CliRunner()
+    result = runner.invoke(sonic_installer.commands["install"], [sonic_image_filename, "-y"])
+    print(result.output)

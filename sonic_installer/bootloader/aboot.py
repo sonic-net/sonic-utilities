@@ -71,6 +71,8 @@ class AbootBootloader(Bootloader):
 
     def _boot_config_read(self, path=BOOT_CONFIG_PATH):
         config = collections.OrderedDict()
+        if not os.path.exists(path):
+            return config
         with open(path) as f:
             for line in f.readlines():
                 line = line.strip()
@@ -112,7 +114,10 @@ class AbootBootloader(Bootloader):
 
     def get_next_image(self):
         config = self._boot_config_read()
-        match = re.search(r"flash:/*(\S+)/", config['SWI'])
+        swi = config.get('SWI', '')
+        match = re.search(r"flash:/*(\S+)/", swi)
+        if not match:
+            return swi.split(':', 1)[-1]
         return match.group(1).replace(IMAGE_DIR_PREFIX, IMAGE_PREFIX, 1)
 
     def set_default_image(self, image):

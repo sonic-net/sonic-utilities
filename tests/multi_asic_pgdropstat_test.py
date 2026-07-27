@@ -27,10 +27,10 @@ Ingress PG dropped packets:
     PG14    PG15
 --------------  -----  -----  -----  -----  -----  -----  -----  -----  -----  -----  ------  ------  ------  ------\
   ------  ------
-     Ethernet0      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
-       0       0
-     Ethernet4      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
-       0       0
+     Ethernet0    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A\
+     N/A     N/A
+     Ethernet4    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A\
+     N/A     N/A
   Ethernet-BP0      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
        0       0
   Ethernet-BP4      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
@@ -45,8 +45,6 @@ Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A   
 class TestMultiAsicPgDropstat(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         print("SETUP")
 
@@ -88,8 +86,5 @@ class TestMultiAsicPgDropstat(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         UserCache('pg-drop').remove_all()
         print("TEARDOWN")

@@ -4,6 +4,7 @@ import click
 import subprocess
 from shlex import join
 
+
 def run_command(command, pager=False):
     command_str = join(command)
     click.echo(click.style("Command: ", fg='cyan') + click.style(command_str, fg='green'))
@@ -24,6 +25,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 def cli():
     """SONiC command line - 'debug' command"""
     pass
+
 
 prefix_pattern = '^[A-Za-z0-9.:/]*$'
 p = subprocess.check_output(['sudo', 'vtysh', '-c', 'show version'], text=True)

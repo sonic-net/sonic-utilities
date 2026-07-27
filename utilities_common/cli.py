@@ -116,6 +116,13 @@ class AliasedGroup(click.Group):
             return None
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
+
+        # In completion context, Click sets ctx.resilient_parsing = True.
+        # Return None instead of raising an error to avoid showing traceback during tab completion.
+        if ctx.resilient_parsing:
+            return None
+
+        # For normal command execution, use ctx.fail() to show usage error properly
         ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
 
 
@@ -210,6 +217,18 @@ def is_ipaddress(val):
     return True
 
 
+def is_ipprefix(val):
+    """ Validate if an entry is a valid IP address prefix """
+    import netaddr
+    if not val:
+        return False
+    try:
+        netaddr.IPNetwork(str(val))
+    except netaddr.core.AddrFormatError:
+        return False
+    return True
+
+
 def ipaddress_type(val):
     """ Return the IP address type """
     if not val:
@@ -221,6 +240,14 @@ def ipaddress_type(val):
         return None
 
     return ip_version.version
+
+
+def is_mac_address_valid(mac):
+    """Check if MAC address is valid
+    """
+    if not mac:
+        return False
+    return bool(re.match("^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$", mac))
 
 
 def is_ip_prefix_in_key(key):
@@ -411,6 +438,16 @@ def interface_is_in_portchannel(portchannel_member_table, interface_name):
     return False
 
 
+def is_vxlan_tunnel_exists(config_db, vxlan_tunnel_name):
+    """Check if VXLAN tunnel exists
+    """
+    keys = config_db.get_keys("VXLAN_TUNNEL")
+    if keys:
+        if vxlan_tunnel_name in keys:
+            return True
+    return False
+
+
 def is_port_router_interface(config_db, port):
     """Check if port is a router interface"""
 
@@ -515,12 +552,12 @@ def vni_id_is_valid(vni):
     return True
 
 
-def is_vni_vrf_mapped(db, vni):
+def is_vni_vrf_mapped(cfgdb, vni):
     """Check if the vni is mapped to vrf
     """
 
     found = 0
-    vrf_table = db.cfgdb.get_table('VRF')
+    vrf_table = cfgdb.get_table('VRF')
     vrf_keys = vrf_table.keys()
     if vrf_keys is not None:
         for vrf_key in vrf_keys:
@@ -803,6 +840,19 @@ def is_interface_in_config_db(config_db, interface_name):
     return True
 
 
+def get_interface_dhcp_mitigation_rate(config_db, interface):
+    port_data = config_db.get_entry('PORT', interface)
+
+    if "dhcp_rate_limit" in port_data:
+        rate = port_data["dhcp_rate_limit"]
+    else:
+        rate = "0"
+
+    if rate == "0":
+        return ""
+    return rate
+
+
 class MutuallyExclusiveOption(click.Option):
     """
     This option type is extended with `mutually_exclusive` parameter which make
@@ -881,10 +931,11 @@ class UserCache:
             tag (str): Tag the user cache. Different tags correspond
              to different cache directories even for the same user.
         """
+        cache_dir = os.environ.get("SONIC_CLI_CACHE_DIR", self.CACHE_DIR)
         self.uid = os.getuid()
         self.app_name = os.path.basename(sys.argv[0]) if app_name is None else app_name
         self.cache_directory_suffix = str(self.uid) if tag is None else f"{self.uid}-{tag}"
-        self.cache_directory_app = os.path.join(self.CACHE_DIR, self.app_name)
+        self.cache_directory_app = os.path.join(cache_dir, self.app_name)
 
         prev_umask = os.umask(0)
         try:

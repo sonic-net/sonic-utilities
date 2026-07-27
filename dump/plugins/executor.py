@@ -25,7 +25,10 @@ class Executor(ABC):
     @abstractmethod
     def get_all_args(self, ns):
         pass
-    
+
+    def return_pb2_obj(self):
+        return None
+
     def add_to_ret_template(self, table, db, keys, err, add_to_tables_not_found=True):
         if db not in self.ret_temp:
             return []

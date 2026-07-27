@@ -43,7 +43,8 @@ TRAP_ID_MAP = {
     "bfd": "SAI_HOSTIF_TRAP_TYPE_BFD",
     "bfdv6": "SAI_HOSTIF_TRAP_TYPE_BFDV6",
     "src_nat_miss": "SAI_HOSTIF_TRAP_TYPE_SNAT_MISS",
-    "dest_nat_miss": "SAI_HOSTIF_TRAP_TYPE_DNAT_MISS"
+    "dest_nat_miss": "SAI_HOSTIF_TRAP_TYPE_DNAT_MISS",
+    "neighbor_miss": "SAI_HOSTIF_TRAP_TYPE_NEIGHBOR_MISS"
 }
 
 CFG_COPP_TRAP_TABLE_NAME = "COPP_TRAP"
@@ -134,7 +135,7 @@ class Copp(Executor):
             err_str_tup = ("The Associated Trap_group for the trap_id found in APPL",
                            "and CONFIG_DB/CONFIG_FILE did not match.",
                            "In APPL_DB: {}, CONFIG_DB: {}",
-                           "\n Proceding with the trap group found in APPL DB")
+                           "\n Proceeding with the trap group found in APPL DB")
             err_str = " ".join(err_str_tup)
             err_str = err_str.format(tg, self.trap_group)
             handle_error(err_str, False)

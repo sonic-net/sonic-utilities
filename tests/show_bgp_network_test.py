@@ -16,7 +16,22 @@ def executor(test_vector, show):
         exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["network"]
 
     result = runner.invoke(exec_cmd, input['args'])
+    check_result(result, input)
 
+
+def executor_vrf(test_vector, show):
+    runner = CliRunner()
+    input = bgp_network_test_vector.testData[test_vector]
+    if test_vector.startswith('bgp_v6'):
+        exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["vrf"]
+    else:
+        exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["vrf"]
+
+    result = runner.invoke(exec_cmd, [input['vrf'], 'network'] + input['args'])
+    check_result(result, input)
+
+
+def check_result(result, input):
     print(result.exit_code)
     print(result.output)
 
@@ -36,15 +51,11 @@ def executor(test_vector, show):
         output = result.output.strip().split("\n")[0]
         assert input['rc_warning_msg'] in output
 
-
 class TestBgpNetwork(object):
 
     @classmethod
     def setup_class(cls):
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
         from .mock_tables import dbconnector
-        dbconnector.load_database_config
 
 
     @pytest.mark.parametrize(
@@ -57,12 +68,14 @@ class TestBgpNetwork(object):
          ('bgp_v4_network_bestpath', 'bgp_v4_network_bestpath'),
          ('bgp_v6_network_longer_prefixes', 'bgp_v6_network_longer_prefixes'),
          ('bgp_v4_network', 'bgp_v4_network_longer_prefixes_error'),
-         ('bgp_v4_network', 'bgp_v6_network_longer_prefixes_error')],
+         ('bgp_v4_network', 'bgp_v6_network_longer_prefixes_error'),
+         ('bgp_v4_network', 'bgp_v4_network_all_asic_on_single_asic')],
         indirect=['setup_single_bgp_instance'])
     def test_bgp_network(self, setup_bgp_commands, test_vector,
                          setup_single_bgp_instance):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
 
 class TestMultiAsicBgpNetwork(object):
@@ -77,24 +90,23 @@ class TestMultiAsicBgpNetwork(object):
 
     @pytest.mark.parametrize(
         'setup_multi_asic_bgp_instance, test_vector',
-        [('bgp_v4_network', 'bgp_v4_network_multi_asic'),
+        [('bgp_v4_network_all_asic', 'bgp_v4_network_default_multi_asic'),
          ('bgp_v6_network', 'bgp_v6_network_multi_asic'),
          ('bgp_v4_network_asic0', 'bgp_v4_network_asic0'),
          ('bgp_v4_network_ip_address_asic0', 'bgp_v4_network_ip_address_asic0'),
          ('bgp_v4_network_bestpath_asic0', 'bgp_v4_network_bestpath_asic0'),
         ('bgp_v6_network_asic0', 'bgp_v6_network_asic0'),
          ('bgp_v6_network_ip_address_asic0', 'bgp_v6_network_ip_address_asic0'),
-         ('bgp_v6_network_bestpath_asic0', 'bgp_v6_network_bestpath_asic0')],
+         ('bgp_v6_network_bestpath_asic0', 'bgp_v6_network_bestpath_asic0'),
+         ('bgp_v4_network_all_asic', 'bgp_v4_network_all_asic'),
+         ('bgp_v4_network', 'bgp_v4_network_asic_unknown')],
         indirect=['setup_multi_asic_bgp_instance'])
     def test_bgp_network(self, setup_bgp_commands, test_vector,
                          setup_multi_asic_bgp_instance):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config

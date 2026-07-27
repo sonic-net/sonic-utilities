@@ -197,6 +197,9 @@ class PlatformDataProvider(object):
     def get_chassis(self):
         return self.__chassis
 
+    def is_smart_switch(self):
+        return self.__chassis.is_smartswitch()
+
     def is_modular_chassis(self):
         return len(self.module_component_map) > 0
 
@@ -305,9 +308,23 @@ class FWPackage(object):
 
     def untar_fwpackage(self):
         if self.fwupdate_package_name is not None:
-            fwupdate_tar = tarfile.open(self.fwupdate_package_name)
-            fwupdate_tar.extractall(FWUPDATE_FWPACKAGE_DIR)
-            fwupdate_tar.close()
+            with tarfile.open(self.fwupdate_package_name) as fwupdate_tar:  # nosemgrep
+                extract_dir = os.path.realpath(FWUPDATE_FWPACKAGE_DIR)
+                for member in fwupdate_tar.getmembers():
+                    if member.issym() or member.islnk():
+                        if os.path.isabs(member.linkname):
+                            raise ValueError("Firmware package contains unsafe link: {}".format(member.name))
+                        link_target = os.path.realpath(
+                            os.path.join(extract_dir, os.path.dirname(member.name), member.linkname))
+                        if not link_target.startswith(extract_dir + os.sep) and link_target != extract_dir:
+                            raise ValueError("Firmware package contains unsafe link: {}".format(member.name))
+                    else:
+                        member_path = os.path.realpath(os.path.join(extract_dir, member.name))
+                        if not member_path.startswith(extract_dir + os.sep) and member_path != extract_dir:
+                            raise ValueError("Firmware package contains unsafe path: {}".format(member.name))
+                # TODO: Replace manual validation with filter='data' once CI upgrades to Python 3.12+
+                # fwupdate_tar.extractall(FWUPDATE_FWPACKAGE_DIR, filter='data')
+                fwupdate_tar.extractall(FWUPDATE_FWPACKAGE_DIR)  # nosemgrep
             return True
         return False
 
@@ -535,8 +552,8 @@ class ComponentUpdateProvider(PlatformDataProvider):
             os.mkdir(FIRMWARE_AU_STATUS_DIR)
 
         self.__root_path = root_path
-
-        self.__pcp = PlatformComponentsParser(self.is_modular_chassis())
+        is_modular_chassis = self.is_modular_chassis() and not self.is_smart_switch()
+        self.__pcp = PlatformComponentsParser(is_modular_chassis)
         self.__pcp.parse_platform_components(root_path)
 
         self.__validate_platform_schema(self.__pcp)
@@ -546,6 +563,9 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
     def __validate_component_map(self, section, pdp_map, pcp_map):
         diff_keys = self.__diff_keys(list(pdp_map.keys()), list(pcp_map.keys()))
+
+        if diff_keys and section == self.SECTION_MODULE and self.is_smart_switch():
+            return
 
         if diff_keys:
             raise RuntimeError(

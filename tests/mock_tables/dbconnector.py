@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import re
+import ipaddress
 from unittest import mock
 
 import mockredis
@@ -68,6 +69,32 @@ def config_set(self, *args):
 
 
 class MockPubSub:
+    class MessageList:
+        """A custom subscriptable class to hold messages in a list-like format"""
+        def __init__(self, channel):
+            self._data = []
+            self._channel = channel
+
+        def __getitem__(self, index):
+            return self._data[index]
+
+        def __setitem__(self, index, value):
+            self._data[index] = value
+
+        def append(self, msg):
+            print(f"Message published to {self._channel}: ", msg)
+            self._data.append(msg)
+
+    def __init__(self, namespace):
+        # Initialize channels required for testing
+        self.messages = self.MessageList('WATERMARK_CLEAR_REQUEST')
+        self.channels = {'WATERMARK_CLEAR_REQUEST': self.messages}
+        self.namespace = namespace
+
+    def __getitem__(self, key):
+        print("Channel:", key, "accessed in namespace:", self.namespace)
+        return self.channels[key]
+
     def get_message(self):
         return None
 
@@ -86,7 +113,10 @@ class MockPubSub:
     def clear(self):
         pass
 
-INPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Allow per-worker override via env var so subprocesses (e.g. portstat)
+# also read from the worker's sandbox copy of mock_tables.
+INPUT_DIR = os.environ.get('MOCK_TABLES_DIR', os.path.dirname(os.path.abspath(__file__)))
 
 
 class SwssSyncClient(mockredis.MockRedis):
@@ -99,7 +129,7 @@ class SwssSyncClient(mockredis.MockRedis):
         db_name = kwargs.pop('db_name')
         self.decode_responses = kwargs.pop('decode_responses', False) == True
         fname = db_name.lower() + ".json"
-        self.pubsub = MockPubSub()
+        self.pubsub = MockPubSub(namespace)
 
         if namespace is not None and namespace is not multi_asic.DEFAULT_NAMESPACE:
             fname = os.path.join(INPUT_DIR, namespace, fname)
@@ -202,6 +232,43 @@ class CounterTable:
         return True, tuple(self.db.get("COUNTERS:" + key).items())
 
 
+class DBConnector:
+
+    def __init__(self, *args):
+
+        self.data = None
+        ip_to_asic = {
+            "192.168.3.10": "asic0",
+            "192.168.3.11": "asic1",
+            "192.168.5.1": "asic2",
+            "192.168.6.1": "asic3"
+        }
+
+        redis_kwargs = {}
+
+        # Check if IP is being used to connect to redis
+        if len(args) == 4:
+            try:
+                ip = args[1]
+                ipaddress.ip_address(args[1])
+                redis_kwargs['namespace'] = ip_to_asic[ip] if ip is not None else ip
+            except ValueError:
+                redis_kwargs['namespace'] = None
+
+        redis_kwargs['db_name'] = 'counters_db'
+        redis_kwargs['topo'] = None
+        redis_kwargs['unix_socket_path'] = None
+        redis_kwargs['decode_responses'] = True
+        self.swsssyncclient = SwssSyncClient(**redis_kwargs)
+
+    def hgetall(self, key):
+        return self.swsssyncclient.hgetall(key)
+
+    def hget(self, key, attr):
+        return self.swsssyncclient.hget(key, attr)
+
+
+swsscommon.DBConnector = DBConnector
 swsssdk.interface.DBInterface._subscribe_keyspace_notification = _subscribe_keyspace_notification
 swsssdk.interface.DBInterface.close = mock_close
 mockredis.MockRedis.config_set = config_set

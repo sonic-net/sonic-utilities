@@ -53,3 +53,28 @@ show_device_global_wcmp_enabled_json = """\
     "w-ecmp": "enabled"
 }
 """
+
+show_aggregate_address_ipv4 = """\
+Flags: A - As Set, B - BBR Required, S - Summary Only
+
+Prefix          State    Option Flags    Aggregate Address Prefix List    Contributing Address Prefix List
+--------------  -------  --------------  -------------------------------  ----------------------------------
+10.0.0.0/24     N/A      A,B,S
+192.168.0.0/24  N/A      B               AGG_ROUTES_V4                    AGG_CONTRIBUTING_ROUTES_V4
+"""
+
+show_aggregate_address_ipv6 = """\
+Flags: A - As Set, B - BBR Required, S - Summary Only
+
+Prefix       State    Option Flags    Aggregate Address Prefix List    Contributing Address Prefix List
+-----------  -------  --------------  -------------------------------  ----------------------------------
+fc00:1::/64  N/A      A               AGG_ROUTES_V6                    AGG_CONTRIBUTING_ROUTES_V6
+fc00:3::/64  N/A      B,S
+"""
+
+show_aggregate_address_empty = """\
+Flags: A - As Set, B - BBR Required, S - Summary Only
+
+Prefix    State    Option Flags    Aggregate Address Prefix List    Contributing Address Prefix List
+--------  -------  --------------  -------------------------------  ----------------------------------
+"""

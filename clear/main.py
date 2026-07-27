@@ -5,13 +5,16 @@ import sys
 import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from sonic_py_common.general import getstatusoutput_noshell_pipe
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
+from . import orchagent as orchagent_clear
 from . import plugins
+from . import stp
+from . import icmp as icmp_clear
 
 # This is from the aliases example:
 # https://github.com/pallets/click/blob/57c6f09611fc47ca80db0bd010f05998b3c0aa95/examples/aliases/aliases.py
@@ -76,23 +79,23 @@ class AliasedGroup(click.Group):
 
 
 # To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continous execution of this
+# location (configdb?), so that we prevent the continuous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
-    cmd0 = ["sudo", "docker", "ps"]
-    cmd1 = ["grep", "bgp"]
-    cmd2 = ["awk", '{print$2}']
-    cmd3 = ["cut", "-d-", "-f3"]
-    cmd4 = ["cut", "-d:", "-f1"]
+    result = 'frr'
+
+    cmd0 = ["sudo", "docker", "ps", "--format", "{{.Image}}\t{{.Names}}"]
+    cmd1 = ["awk", '$2 ~ /^bgp([0-9]+)?$/']
+    cmd2 = ["cut", "-d-", "-f3"]
+    cmd3 = ["cut", "-d:", "-f1"]
+    cmd4 = ["head", "-n", "1"]
 
     try:
         _, result = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-
     except OSError as e:
         raise OSError("Cannot detect routing-stack")
 
     return (result)
-
 
 # Global Routing-Stack variable
 routing_stack = get_routing_stack()
@@ -145,6 +148,52 @@ def ipv6():
     pass
 
 
+# 'STP'
+#
+cli.add_command(stp.spanning_tree)
+cli.add_command(icmp_clear.icmp)
+
+
+# 'LLR'
+#
+@cli.group(cls=clicommon.AliasedGroup)
+def llr():
+    """Clear LLR (Link Layer Retry) counters"""
+    pass
+
+
+@llr.group(name='counters', invoke_without_command=True, cls=clicommon.AliasedGroup)
+@click.option('-n', '--namespace', help='Namespace name', required=False,
+              type=multi_asic_util.LazyChoice(multi_asic_util.multi_asic_ns_choices),
+              default=None)
+@click.pass_context
+def llr_counters(ctx, namespace):
+    """Clear LLR counter statistics (all ports)"""
+    if ctx.invoked_subcommand is None:
+        command = ["llrstat", "-c"]
+        if namespace:
+            command += ["-n", str(namespace)]
+        run_command(command)
+
+
+@llr_counters.command(name='interface')
+@click.argument('interface_name', metavar='<interface-name>')
+@click.option('-n', '--namespace', help='Namespace name', required=False,
+              type=multi_asic_util.LazyChoice(multi_asic_util.multi_asic_ns_choices),
+              default=None)
+def llr_counters_interface(interface_name, namespace):
+    """Clear LLR counter statistics for a specific interface"""
+    command = ["llrstat", "-c", "-i", str(interface_name)]
+    if namespace:
+        command += ["-n", str(namespace)]
+    run_command(command)
+
+
+#
+# 'orchagent'
+#
+cli.add_command(orchagent_clear.orchagent)
+
 #
 # Inserting BGP functionality into cli's clear parse-chain.
 # BGP commands are determined by the routing-stack being elected.
@@ -178,9 +227,11 @@ def rifcounters(interface):
 @cli.command()
 def queuecounters():
     """Clear queue counters"""
-    command = ["queuestat", "-c"]
-    run_command(command)
-
+    if(device_info.is_supervisor()):
+        print("INFO: On Supervisor, only Aggregate VOQ counters will be cleared")
+    else:
+        command = ["queuestat", "-c"]
+        run_command(command)
     command = ["queuestat", "-c", "--voq"]
     run_command(command)
 
@@ -214,6 +265,20 @@ def tunnelcounters():
     command = ["tunnelstat", "-c"]
     run_command(command)
 
+
+@cli.command()
+def srv6counters():
+    """Clear SRv6 counters"""
+    command = ["srv6stat", "-c"]
+    run_command(command)
+
+
+@cli.command()
+def switchcounters():
+    """Clear switch counters"""
+    command = ["switchstat", "-c"]
+    run_command(command)
+
 #
 # 'clear watermarks
 #
@@ -225,20 +290,40 @@ def priority_group():
 
 @priority_group.group()
 def watermark():
-    """Clear priority_group user WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear priority_group user WM."""
 
+
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
 @watermark.command('headroom')
-def clear_wm_pg_headroom():
+def clear_wm_pg_headroom(namespace):
     """Clear user headroom WM for pg"""
     command = ['watermarkstat', '-c', '-t', 'pg_headroom']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @watermark.command('shared')
-def clear_wm_pg_shared():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_pg_shared(namespace):
     """Clear user shared WM for pg"""
     command = ['watermarkstat', '-c', '-t', 'pg_shared']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 @priority_group.group()
@@ -249,105 +334,253 @@ def drop():
 @drop.command('counters')
 def clear_pg_counters():
     """Clear priority-group dropped packets counter """
-
-    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
-        sys.exit("Root privileges are required for this operation")
     command = ['pg-drop', '-c', 'clear']
     run_command(command)
 
 @priority_group.group(name='persistent-watermark')
 def persistent_watermark():
-    """Clear queue persistent WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear priority-group persistent WM."""
+
 
 @persistent_watermark.command('headroom')
-def clear_pwm_pg_headroom():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_pg_headroom(namespace):
     """Clear persistent headroom WM for pg"""
     command = ['watermarkstat', '-c', '-p', '-t', 'pg_headroom']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @persistent_watermark.command('shared')
-def clear_pwm_pg_shared():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_pg_shared(namespace):
     """Clear persistent shared WM for pg"""
     command = ['watermarkstat', '-c', '-p', '-t', 'pg_shared']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 
 @cli.group()
 def queue():
-    """Clear queue WM"""
+    """Clear queue"""
     pass
+
+
+@queue.command()
+@click.option('--voq', is_flag=True, help="Clear VOQ counters")
+def wredcounters(voq):
+    """Clear queue wredcounters"""
+    command = ['wredstat', '-c']
+    if voq:
+        command += ['-V']
+    run_command(command)
+
 
 @queue.group()
 def watermark():
-    """Clear queue user WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear queue user WM."""
+
 
 @watermark.command('unicast')
-def clear_wm_q_uni():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_q_uni(namespace):
     """Clear user WM for unicast queues"""
     command = ['watermarkstat', '-c', '-t', 'q_shared_uni']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @watermark.command('multicast')
-def clear_wm_q_multi():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_q_multi(namespace):
     """Clear user WM for multicast queues"""
     command = ['watermarkstat', '-c', '-t', 'q_shared_multi']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @watermark.command('all')
-def clear_wm_q_all():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_q_all(namespace):
     """Clear user WM for all queues"""
     command = ['watermarkstat', '-c', '-t', 'q_shared_all']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @queue.group(name='persistent-watermark')
 def persistent_watermark():
-    """Clear queue persistent WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
+    """Clear queue persistent WM."""
+
 
 @persistent_watermark.command('unicast')
-def clear_pwm_q_uni():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_q_uni(namespace):
     """Clear persistent WM for persistent queues"""
     command = ['watermarkstat', '-c', '-p', '-t', 'q_shared_uni']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @persistent_watermark.command('multicast')
-def clear_pwm_q_multi():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_q_multi(namespace):
     """Clear persistent WM for multicast queues"""
     command = ['watermarkstat', '-c', '-p', '-t', 'q_shared_multi']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @persistent_watermark.command('all')
-def clear_pwm_q_all():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_q_all(namespace):
     """Clear persistent WM for all queues"""
     command = ['watermarkstat', '-c', '-p', '-t', 'q_shared_all']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @cli.group(name='headroom-pool')
 def headroom_pool():
     """Clear headroom pool WM"""
     pass
 
-@headroom_pool.command('watermark')
-def watermark():
-    """Clear headroom pool user WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
 
+@headroom_pool.command('watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def watermark(namespace):
+    """Clear headroom pool user WM."""
     command = ['watermarkstat', '-c', '-t', 'headroom_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
-@headroom_pool.command('persistent-watermark')
-def persistent_watermark():
-    """Clear headroom pool persistent WM. One does not simply clear WM, root is required"""
-    if os.geteuid() != 0:
-        sys.exit("Root privileges are required for this operation")
 
+@headroom_pool.command('persistent-watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def persistent_watermark(namespace):
+    """Clear headroom pool persistent WM."""
     command = ['watermarkstat', '-c', '-p', '-t', 'headroom_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
+    run_command(command)
+
+
+@cli.group(name='buffer_pool')
+def buffer_pool():
+    """Clear buffer_pool WM"""
+    pass
+
+
+@buffer_pool.command('watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_buffer_pool(namespace):
+    """Clear user WM for buffer pools."""
+    command = ['watermarkstat', '-c', '-t', 'buffer_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
+    run_command(command)
+
+
+@buffer_pool.command('persistent-watermark')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_buffer_pool(namespace):
+    """Clear persistent WM for buffer pools."""
+    command = ['watermarkstat', '-c', '-p', '-t', 'buffer_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 #
@@ -356,20 +589,34 @@ def persistent_watermark():
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def arp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def arp(ipaddress, namespace):
     """Clear IP ARP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-4', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-4', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-4', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-4', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 
@@ -379,20 +626,34 @@ def arp(ipaddress):
 
 @click.command()
 @click.argument('ipaddress', required=False)
-def ndp(ipaddress):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def ndp(ipaddress, namespace):
     """Clear IPv6 NDP table"""
+    cmd_prefix = ['sudo', 'ip', 'netns', 'exec', namespace] if namespace else ['sudo']
+
     if ipaddress is not None:
-        command = ['sudo', 'ip', '-6', 'neigh', 'show', ipaddress]
+        command = cmd_prefix + ['ip', '-6', 'neigh', 'show', ipaddress]
         (out, err) = run_command(command, return_output=True)
         if not err and 'dev' in out:
             outputList = out.split()
             dev = outputList[outputList.index('dev') + 1]
-            command = ['sudo', 'ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
+            command = cmd_prefix + ['ip', '-6', 'neigh', 'del', ipaddress, 'dev', dev]
         else:
-            click.echo("Neighbor {} not found".format(ipaddress))
+            msg = "Neighbor {} not found".format(ipaddress)
+            if namespace:
+                msg += " in namespace {}".format(namespace)
+            click.echo(msg)
             return
     else:
-        command = ['sudo', 'ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
+        command = cmd_prefix + ['ip', '-6', '-s', '-s', 'neigh', 'flush', 'all']
 
     run_command(command)
 
@@ -493,9 +754,15 @@ def statistics(db):
 
 # ("sonic-clear flowcnt-trap")
 @cli.command()
-def flowcnt_trap():
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              show_default=True, help='Namespace name')
+def flowcnt_trap(namespace):
     """ Clear trap flow counters """
     command = ["flow_counters_stat", "-c", '-t', "trap"]
+    # None namespace means default namespace
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 

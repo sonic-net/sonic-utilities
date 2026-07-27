@@ -8,7 +8,8 @@
         "pfc_asym": "off",
         "speed": "10000",
         "fec": "none",
-        "autoneg": "1"
+        "autoneg": "1",
+        "dhcp_rate_limit": "100"
     },
     "PORT|Ethernet2": {
         "index": "0",

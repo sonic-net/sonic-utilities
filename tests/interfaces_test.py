@@ -1,4 +1,5 @@
 import os
+import pytest
 import traceback
 
 from click.testing import CliRunner
@@ -263,6 +264,201 @@ PortChannel0004  routed
 PortChannel1001  trunk               4000
 """
 
+intf_flap_expected_output_with_data = """\
+Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+-----------  ------------  -------  ------  --------------------------  ------------------------
+Ethernet0               3  Up       Down    Sat Jan 17 00:04:42 2025    Sat Jan 18 00:08:42 2025
+"""
+
+intf_flap_expected_output_with_data_concise = """\
+Interface    Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+-----------  ------------  -------  -------  --------------------------  ------------------------
+Ethernet4    Never         Unknown  Unknown  Never                       Never
+"""
+
+intf_flap_expected_output_all_data = """\
+Interface    Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+-----------  ------------  -------  -------  --------------------------  ------------------------
+Ethernet0    3             Up       Down     Sat Jan 17 00:04:42 2025    Sat Jan 18 00:08:42 2025
+Ethernet4    Never         Unknown  Unknown  Never                       Never
+Ethernet8    Never         Unknown  Unknown  Never                       Never
+Ethernet12   Never         Unknown  Unknown  Never                       Never
+Ethernet16   7             Up       Up       Sat Jan 19 00:04:42 2025    Sat Jan 20 00:04:42 2025
+Ethernet20   Never         Unknown  Unknown  Never                       Never
+Ethernet24   Never         Up       Up       Never                       Never
+Ethernet28   Never         Up       Up       Never                       Never
+Ethernet32   Never         Up       Up       Never                       Never
+Ethernet36   7             Up       Up       Never                       Sat Jan 20 00:04:42 2025
+Ethernet40   Never         Unknown  Unknown  Never                       Never
+Ethernet44   Never         Unknown  Unknown  Never                       Never
+Ethernet48   Never         Unknown  Unknown  Never                       Never
+Ethernet52   Never         Unknown  Unknown  Never                       Never
+Ethernet56   Never         Unknown  Unknown  Never                       Never
+Ethernet60   Never         Unknown  Unknown  Never                       Never
+Ethernet64   Never         Unknown  Unknown  Never                       Never
+Ethernet68   Never         Unknown  Unknown  Never                       Never
+Ethernet72   Never         Unknown  Unknown  Never                       Never
+Ethernet76   Never         Unknown  Unknown  Never                       Never
+Ethernet80   Never         Unknown  Unknown  Never                       Never
+Ethernet84   Never         Unknown  Unknown  Never                       Never
+Ethernet88   Never         Unknown  Unknown  Never                       Never
+Ethernet92   Never         Unknown  Unknown  Never                       Never
+Ethernet96   Never         Unknown  Unknown  Never                       Never
+Ethernet100  Never         Unknown  Unknown  Never                       Never
+Ethernet104  Never         Unknown  Unknown  Never                       Never
+Ethernet108  Never         Unknown  Unknown  Never                       Never
+Ethernet112  Never         Up       Up       Never                       Never
+Ethernet116  Never         Up       Up       Never                       Never
+Ethernet120  Never         Up       Up       Never                       Never
+Ethernet124  Never         Up       Up       Never                       Never
+"""
+
+intf_errors_Ethernet64 = """\
+Port Errors                     Count  Last timestamp(UTC)
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       0  Never
+high ber error                      0  Never
+high ser error                      0  Never
+mac local fault                    26  2025-01-17 18:40:56
+mac remote fault                14483  2025-01-17 19:51:12
+no rx reachability                  0  Never
+oper error status                   2  2025-01-17 19:51:12
+signal local error                  0  Never
+"""
+
+intf_errors_Ethernet16 = """\
+Port Errors                     Count  Last timestamp(UTC)
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       0  Never
+high ber error                      0  Never
+high ser error                      0  Never
+mac local fault                     0  Never
+mac remote fault                    0  Never
+no rx reachability                  0  Never
+oper error status                   0  Never
+signal local error                  0  Never
+"""
+
+intf_errors_Ethernet32 = """\
+Port Errors                     Count  Last timestamp(UTC)
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       3  2025-01-16 13:45:20
+high ber error                      1  2025-01-16 14:30:10
+high ser error                      0  Never
+mac local fault                     5  2025-01-16 12:05:34
+mac remote fault                    0
+no rx reachability                  0  Never
+oper error status                   0  Never
+signal local error                  0  Never
+"""
+
+intf_errors_Ethernet48 = """\
+Port Errors                     Count  Last timestamp(UTC)
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       0  Never
+high ber error                      0  Never
+high ser error                      0  Never
+mac local fault                     0
+mac remote fault                    0
+no rx reachability                  0  Never
+oper error status                   0  Never
+signal local error                  0  Never
+"""
+
+# PHY Signal expected outputs
+phy_signal_all_options_output = """\
+Interface: Ethernet0
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane0:               T                5          2023-03-15 13:20:00
+Lane1:               F                0          Never
+
+FEC Alignment Lock:    Current State    Changes    Last Change (UTC)
+---------------------  ---------------  ---------  -------------------
+Lane0:                 T*               10         2023-03-15 13:20:00
+Lane1:                 T                3          2023-03-15 13:20:00
+
+"""
+
+phy_signal_no_data_output = """\
+No PHY attribute data available for Ethernet4
+Ensure 'counterpoll phy enable' has been run
+"""
+
+# PHY SERDES expected outputs
+phy_serdes_all_options_output = """\
+Interface: Ethernet0
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  0      1      2      3
+SNR:   36697  35200  34500  36000
+
+RX VGA:
+--------------------------------------------------------------------------------
+Lane:  0    1   2   3
+VGA:   100  95  98  102
+
+TX FIR Taps:
+Lane    Tap0    Tap1
+------  ------  ------
+0       -10     5
+1       -8      6
+
+"""
+
+phy_serdes_no_data_output = """\
+No PHY SERDES data available for Ethernet4
+Ensure 'counterpoll phy enable' has been run
+"""
+
+# PHY Signal alias mode expected output
+phy_signal_alias_mode_output = """\
+Interface: etp1
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane0:               T                5          2023-03-15 13:20:00
+Lane1:               F                0          Never
+
+"""
+
+# PHY SERDES alias mode expected output
+phy_serdes_alias_mode_output = """\
+Interface: etp1
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  0      1      2      3
+SNR:   36697  35200  34500  36000
+
+"""
+
 
 class TestInterfaces(object):
     @classmethod
@@ -310,6 +506,167 @@ class TestInterfaces(object):
         assert result.exit_code != 0
         assert "Error: Invalid interface name Ethernet3" in result.output
 
+    def test_add_remove_sys_mac_portchannel(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+        with mock.patch.object(config, 'run_vtysh_command'):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:02"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:02"
+
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["remove"],
+                ["PortChannel0001", "00:01:01:01:01:02"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 2
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["remove"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            pc_table = obj['config_db'].get_table("PORTCHANNEL")
+            assert 'system_mac' not in pc_table["PortChannel0001"]
+
+    def test_invalid_multicast_sys_mac_portchannel(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+        result = runner.invoke(
+            config.config.commands["interface"].commands["sys-mac"].commands["add"],
+            ["PortChannel0001", "01:01:01:01:01:02"],
+            obj=obj,
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "System MAC address 01:01:01:01:01:02 is multicast, only unicast allowed." in result.output
+
+    def test_invalid_sys_mac_portchannel(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+        result = runner.invoke(
+            config.config.commands["interface"].commands["sys-mac"].commands["add"],
+            ["PortChannel0001", "00:01:01:01:01:"],
+            obj=obj,
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "System MAC address 00:01:01:01:01: format is not valid." in result.output
+
+    def test_sys_mac_no_evpn_es_does_not_call_vtysh(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        with mock.patch.object(config, 'run_vtysh_command') as mock_vtysh:
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code == 0, result.output
+        mock_vtysh.assert_not_called()
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+    def test_sys_mac_type3_programs_frr_before_config_db(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+        db.cfgdb.set_entry("EVPN_ETHERNET_SEGMENT", "PortChannel0001", {
+            "type": "TYPE_3_MAC_BASED",
+            "esi": "AUTO",
+            "df_pref": "32767",
+        })
+
+        with mock.patch.object(config, 'run_vtysh_command') as mock_vtysh:
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code == 0, result.output
+        mock_vtysh.assert_called_once()
+        vtysh_cmd = mock_vtysh.call_args[0][0]
+        assert "evpn mh es-id 0001" in vtysh_cmd
+        assert "evpn mh es-sys-mac 00:01:01:01:01:03" in vtysh_cmd
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+
+    def test_sys_mac_frr_failure_does_not_update_config_db(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+        db.cfgdb.set_entry("EVPN_ETHERNET_SEGMENT", "PortChannel0001", {
+            "type": "TYPE_3_MAC_BASED",
+            "esi": "AUTO",
+            "df_pref": "32767",
+        })
+
+        def fail_vtysh(cmd, ctx):
+            ctx.fail("vtysh failed")
+
+        with mock.patch.object(config, 'run_vtysh_command', side_effect=fail_vtysh):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code != 0, result.output
+        assert "vtysh failed" in result.output
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:02"
+
+    def test_sys_mac_config_db_failure_is_reported(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        with mock.patch.object(config, 'run_vtysh_command') as mock_vtysh, \
+                mock.patch.object(db.cfgdb, 'mod_entry', side_effect=ValueError("DB write failed")):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["sys-mac"].commands["add"],
+                ["PortChannel0001", "00:01:01:01:01:03"],
+                obj=obj,
+            )
+
+        assert result.exit_code != 0, result.output
+        mock_vtysh.assert_not_called()
+        assert "Invalid ConfigDB" in result.output
+
     def test_show_interfaces_naming_mode_default(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["naming_mode"], [])
@@ -339,7 +696,8 @@ class TestInterfaces(object):
 
     def test_show_interfaces_neighbor_expected_t1(self, setup_t1_topo):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], [])
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], [])
         print(result.exit_code)
         print(result.output)
         # traceback.print_tb(result.exc_info[2])
@@ -358,7 +716,8 @@ class TestInterfaces(object):
 
     def test_show_interfaces_neighbor_expected_t1_Ethernet0(self, setup_t1_topo):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["Ethernet0"])
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["Ethernet0"])
         print(result.exit_code)
         print(result.output)
         # traceback.print_tb(result.exc_info[2])
@@ -368,7 +727,8 @@ class TestInterfaces(object):
     def test_show_interfaces_neighbor_expected_etp29(self):
         runner = CliRunner()
         os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
-        result = runner.invoke(show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["etp29"])
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["etp29"])
         os.environ['SONIC_CLI_IFACE_MODE'] = "default"
         print(result.exit_code)
         print(result.output)
@@ -443,36 +803,37 @@ class TestInterfaces(object):
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 1
         assert intf_list[0] == "Ethernet0"
-
         intf_filter = "Ethernet1-3"
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 3
         assert intf_list == ["Ethernet1", "Ethernet2", "Ethernet3"]
-
         intf_filter = "Ethernet-BP10"
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 1
         assert intf_list[0] == "Ethernet-BP10"
-
         intf_filter = "Ethernet-BP10-12"
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 3
         assert intf_list == ["Ethernet-BP10", "Ethernet-BP11", "Ethernet-BP12"]
+        # Malformed ranges must raise instead of being silently dropped
+        for intf_filter in ["Ethernet320-Ethernet376", "Ethernet0-", "Ethernet0-foo",
+                            "Eth0-3", "Ethernet-BP10-Ethernet-BP12",
+                            # start of range greater than the end
+                            "Ethernet8-4", "PortChannel10-2", "Ethernet-BP12-10"]:
+            with pytest.raises(ValueError):
+                parse_interface_in_filter(intf_filter)
 
     def test_show_interfaces_switchport_status(self):
         runner = CliRunner()
         db = Db()
-
         result = runner.invoke(
             config.config.commands["switchport"].commands["mode"], ["routed", "PortChannel0001"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-
         result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"])
         print(result.exit_code)
         print(result.output)
-
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_status_output
 
@@ -481,7 +842,6 @@ class TestInterfaces(object):
         result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["config"])
         print(result.exit_code)
         print(result.output)
-
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_output
 
@@ -492,9 +852,255 @@ class TestInterfaces(object):
         os.environ['SONIC_CLI_IFACE_MODE'] = "default"
         print(result.exit_code)
         print(result.output)
-
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_in_alias_mode_output
+
+    def test_show_intf_flap_no_data(self):
+        """Test case for an interface with no flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"], ["Ethernet5"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 2
+
+    def test_show_intf_flap_with_data(self):
+        """Test case for an interface with valid flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"], ["Ethernet0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_flap_expected_output_with_data
+
+    def test_show_intf_flap_with_data_concise(self):
+        """Test case for an interface with valid flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"], ["Ethernet4"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_flap_expected_output_with_data_concise
+
+    def test_show_intf_flap_with_all_ports_data(self):
+        """Test case for an interface with valid flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_flap_expected_output_all_data
+
+    def test_show_intf_errors_filled_data(self):
+        """Test case for an interface with filled error data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet64"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_errors_Ethernet64
+
+    def test_show_intf_errors_empty_data(self):
+        """Test case for an interface with no error data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet16"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_errors_Ethernet16
+
+    def test_show_intf_errors_partial_data(self):
+        """Test case for an interface with partial error data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet32"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_errors_Ethernet32
+
+    def test_show_intf_errors_default_values(self):
+        """Test case for an interface with default values."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet48"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_errors_Ethernet48
+
+    # PHY Signal Tests
+    def test_phy_signal_no_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "At least one option must be specified" in result.output
+
+    def test_phy_signal_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Eth-invalid", "--rxsig"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid interface name" in result.output
+
+    @mock.patch('show.interfaces.multi_asic.get_port_table')
+    def test_phy_signal_not_in_port_map(self, mock_port_table):
+        runner = CliRunner()
+        # Use Ethernet100 which is NOT in COUNTERS_PORT_NAME_MAP
+        mock_port_table.return_value = {'Ethernet100': {}}
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet100", "--rxsig"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+
+    def test_phy_signal_no_data(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet4", "--rxsig"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_signal_no_data_output
+
+    def test_phy_signal_all_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0", "--rxsig", "--feclock"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_signal_all_options_output
+
+    def test_phy_signal_alias_mode(self):
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["etp1", "--rxsig"]
+        )
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_signal_alias_mode_output
+
+    def test_phy_signal_namespace(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0", "--rxsig", "-n", ""]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+    # PHY SERDES Tests
+    def test_phy_serdes_no_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet0"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "At least one option must be specified" in result.output
+
+    def test_phy_serdes_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Eth-invalid", "--snr"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid interface name" in result.output
+
+    @mock.patch('show.interfaces.multi_asic.get_port_table')
+    def test_phy_serdes_not_in_port_map(self, mock_port_table):
+        runner = CliRunner()
+        # Use Ethernet100 which is NOT in COUNTERS_PORT_NAME_MAP
+        mock_port_table.return_value = {'Ethernet100': {}}
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet100", "--snr"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+
+    def test_phy_serdes_no_data(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet4", "--snr"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_serdes_no_data_output
+
+    def test_phy_serdes_all_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet0", "--snr", "--rxvga", "--txfir"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_serdes_all_options_output
+
+    def test_phy_serdes_alias_mode(self):
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["etp1", "--snr"]
+        )
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_serdes_alias_mode_output
+
+    def test_phy_serdes_namespace(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet0", "--snr", "-n", ""]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
 
     @classmethod
     def teardown_class(cls):

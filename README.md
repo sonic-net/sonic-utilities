@@ -31,9 +31,8 @@ The sonic-utilities package depends on a number of other packages, many of which
 Currently, this list of dependencies is as follows:
 
 
-- libyang_1.0.73_amd64.deb
-- libyang-cpp_1.0.73_amd64.deb
-- python3-yang_1.0.73_amd64.deb
+- libyang3_*.deb
+- python3-libyang_*.deb
 - redis_dump_load-1.1-py3-none-any.whl
 - sonic_py_common-1.0-py3-none-any.whl
 - sonic_config_engine-1.0-py3-none-any.whl
@@ -51,7 +50,7 @@ A convenient alternative is to let the SONiC build system configure a build envi
 
 2. Build the sonic-utilities Python wheel package inside the Bullseye slave container, and tell the build system to keep the container alive when finished
     ```
-    make NOSTRETCH=1 NOBUSTER=1 KEEP_SLAVE_ON=yes target/python-wheels/bullseye/sonic_utilities-1.2-py3-none-any.whl
+    make -f Makefile.work BLDENV=bookworm KEEP_SLAVE_ON=yes target/python-wheels/bookworm/sonic_utilities-1.2-py3-none-any.whl
     ```
 
 3. When the build finishes, your prompt will change to indicate you are inside the slave container. Change into the `src/sonic-utilities/` directory
@@ -66,6 +65,7 @@ A convenient alternative is to let the SONiC build system configure a build envi
 ```
 python3 setup.py bdist_wheel
 ```
+Note: This command by default will not update the wheel package in target/. To specify the destination location of wheel package, use "-d" option.
 
 #### To run unit tests
 
@@ -73,6 +73,12 @@ python3 setup.py bdist_wheel
 python3 setup.py test
 ```
 
+#### To install the package on a SONiC machine
+```
+sudo pip uninstall sonic-utilities
+sudo pip install YOUR_WHEEL_PACKAGE
+```
+Note: Don't use "--force-reinstall".
 
 ### sonic-utilities-data
 

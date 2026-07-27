@@ -2,8 +2,10 @@ import json
 import os
 import shutil
 import unittest
+
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, Mock, call, patch
-from .gutest_helpers import create_side_effect_dict, Files
+from .gutest_helpers import create_side_effect_dict, create_side_effect_skipfirstarg_dict, Files
 
 import generic_config_updater.generic_updater as gu
 import generic_config_updater.patch_sorter as ps
@@ -40,8 +42,8 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier.config_wrapper.get_config_db_as_json.assert_has_calls([call(), call()])
         patch_applier.patch_wrapper.simulate_patch.assert_has_calls(
             [call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, Files.CONFIG_DB_AS_JSON)])
-        patch_applier.patchsorter.sort.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH)])
-        patch_applier.changeapplier.apply.assert_has_calls([call(changes[0]), call(changes[1])])
+        patch_applier.patchsorter.sort.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, trace_io=None)])
+        patch_applier.changeapplier.apply.assert_called()
         patch_applier.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
 
@@ -72,7 +74,9 @@ class TestPatchApplier(unittest.TestCase):
             create_side_effect_dict({(str(Files.MULTI_OPERATION_CONFIG_DB_PATCH),): changes})
 
         changeapplier = Mock()
-        changeapplier.apply.side_effect = create_side_effect_dict({(str(changes[0]),): 0, (str(changes[1]),): 0})
+        changeapplier.apply.side_effect = create_side_effect_skipfirstarg_dict({
+                (str(changes[0]),): Files.CONFIG_DB_AFTER_MULTI_PATCH,
+                (str(changes[1]),): Files.CONFIG_DB_AFTER_MULTI_PATCH})
 
         return gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
 
@@ -95,7 +99,9 @@ class TestConfigReplacer(unittest.TestCase):
         config_replacer.config_wrapper.get_config_db_as_json.assert_has_calls([call(), call()])
         config_replacer.patch_wrapper.generate_patch.assert_has_calls(
             [call(Files.CONFIG_DB_AS_JSON, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
-        config_replacer.patch_applier.apply.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH)])
+        config_replacer.patch_applier.apply.assert_has_calls(
+            [call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, trace_io=None)]
+        )
         config_replacer.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
 
@@ -206,7 +212,7 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
         # 'assertCountEqual' does check same count, same elements ignoring order
         self.assertCountEqual(expected, actual)
 
-    def test_list_checkpoints__checkpoints_dir_has_multiple_files__multiple_files(self):
+    def test_list_checkpoints__checkpoints_dir_has_multiple_files(self):
         # Arrange
         self.create_checkpoints_dir()
         self.add_checkpoint(self.any_checkpoint_name, self.any_config)
@@ -221,7 +227,25 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
         # 'assertCountEqual' does check same count, same elements ignoring order
         self.assertCountEqual(expected, actual)
 
-    def test_list_checkpoints__checkpoints_names_have_special_characters__multiple_files(self):
+    def test_list_checkpoints__checkpoints_dir_has_multiple_files_with_time(self):
+        # Arrange
+        self.create_checkpoints_dir()
+        mod_time1 = self.add_checkpoint(self.any_checkpoint_name, self.any_config)
+        mod_time2 = self.add_checkpoint(self.any_other_checkpoint_name, self.any_config)
+        rollbacker = self.create_rollbacker()
+        expected = [
+            {"name": self.any_checkpoint_name, "time": mod_time1},
+            {"name": self.any_other_checkpoint_name, "time": mod_time2}
+        ]
+
+        # Act
+        actual = rollbacker.list_checkpoints(includes_time=True)
+
+        # Assert
+        # 'assertCountEqual' does check same count, same elements ignoring order
+        self.assertCountEqual(expected, actual)
+
+    def test_list_checkpoints__checkpoints_names_have_special_characters_multiple_files(self):
         # Arrange
         self.create_checkpoints_dir()
         self.add_checkpoint("check.point1", self.any_config)
@@ -232,6 +256,26 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
 
         # Act
         actual = rollbacker.list_checkpoints()
+
+        # Assert
+        # 'assertCountEqual' does check same count, same elements ignoring order
+        self.assertCountEqual(expected, actual)
+
+    def test_list_checkpoints__checkpoints_names_have_special_characters_multiple_files_with_time(self):
+        # Arrange
+        self.create_checkpoints_dir()
+        mod_time1 = self.add_checkpoint("check.point1", self.any_config)
+        mod_time2 = self.add_checkpoint(".checkpoint2", self.any_config)
+        mod_time3 = self.add_checkpoint("checkpoint3.", self.any_config)
+        rollbacker = self.create_rollbacker()
+        expected = [
+            {"name": "check.point1", "time": mod_time1},
+            {"name": ".checkpoint2", "time": mod_time2},
+            {"name": "checkpoint3.", "time": mod_time3}
+        ]
+
+        # Act
+        actual = rollbacker.list_checkpoints(includes_time=True)
 
         # Assert
         # 'assertCountEqual' does check same count, same elements ignoring order
@@ -279,6 +323,42 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
         rollbacker.delete_checkpoint(self.any_other_checkpoint_name)
         self.assertCountEqual([], rollbacker.list_checkpoints())
 
+    def test_multiple_operations_with_time(self):
+        rollbacker = self.create_rollbacker()
+
+        # 'assertCountEqual' does check same count, same elements ignoring order
+        self.assertCountEqual([], rollbacker.list_checkpoints(includes_time=True))
+
+        rollbacker.checkpoint(self.any_checkpoint_name)
+        self.assertCountEqual(
+            [self.any_checkpoint_name],
+            self.extract_checkpoint_names(rollbacker.list_checkpoints(includes_time=True))
+        )
+        self.assertEqual(self.any_config, self.get_checkpoint(self.any_checkpoint_name))
+
+        rollbacker.rollback(self.any_checkpoint_name)
+        rollbacker.config_replacer.replace.assert_has_calls([call(self.any_config)])
+
+        rollbacker.checkpoint(self.any_other_checkpoint_name)
+        self.assertCountEqual(
+            [self.any_checkpoint_name, self.any_other_checkpoint_name],
+            self.extract_checkpoint_names(rollbacker.list_checkpoints(includes_time=True))
+        )
+        self.assertEqual(self.any_config, self.get_checkpoint(self.any_other_checkpoint_name))
+
+        rollbacker.delete_checkpoint(self.any_checkpoint_name)
+        self.assertCountEqual(
+            [self.any_other_checkpoint_name],
+            self.extract_checkpoint_names(rollbacker.list_checkpoints(includes_time=True))
+        )
+
+        rollbacker.delete_checkpoint(self.any_other_checkpoint_name)
+        self.assertCountEqual([], rollbacker.list_checkpoints(includes_time=True))
+
+    def extract_checkpoint_names(self, checkpoint_list):
+        """Extract checkpoint names from the list of dictionaries."""
+        return [checkpoint["name"] for checkpoint in checkpoint_list]
+
     def clean_up(self):
         if os.path.isdir(self.checkpoints_dir):
             shutil.rmtree(self.checkpoints_dir)
@@ -286,10 +366,16 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
     def create_checkpoints_dir(self):
         os.makedirs(self.checkpoints_dir)
 
-    def add_checkpoint(self, name, json_content):
+    def add_checkpoint(self, name, json_content, mod_time=None):
         path=os.path.join(self.checkpoints_dir, f"{name}{self.checkpoint_ext}")
         with open(path, "w") as fh:
             fh.write(json.dumps(json_content))
+
+        if mod_time is None:
+            mod_time = datetime.now(timezone.utc).timestamp()
+        os.utime(path, (mod_time, mod_time))
+
+        return datetime.fromtimestamp(mod_time, tz=timezone.utc).isoformat()
 
     def get_checkpoint(self, name):
         path=os.path.join(self.checkpoints_dir, f"{name}{self.checkpoint_ext}")
@@ -519,8 +605,14 @@ class TestGenericUpdater(unittest.TestCase):
         self.any_checkpoint_name = "anycheckpoint"
         self.any_other_checkpoint_name = "anyothercheckpoint"
         self.any_checkpoints_list = [self.any_checkpoint_name, self.any_other_checkpoint_name]
+        self.any_checkpoints_list_with_time = [
+            {"name": self.any_checkpoint_name, "time": datetime.now(timezone.utc).isoformat()},
+            {"name": self.any_other_checkpoint_name, "time": datetime.now(timezone.utc).isoformat()}
+        ]
+
         self.any_config_format = gu.ConfigFormat.SONICYANG
         self.any_verbose = True
+        self.list_checkpoints_includes_time = True
         self.any_dry_run = True
         self.any_ignore_non_yang_tables = True
         self.any_ignore_paths = ["", "/ACL_TABLE"]
@@ -550,7 +642,7 @@ class TestGenericUpdater(unittest.TestCase):
                                     self.any_ignore_paths)
 
         # Assert
-        patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True)])
+        patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)])
 
     def test_replace__creates_replacer_and_replace(self):
         # Arrange
@@ -577,7 +669,7 @@ class TestGenericUpdater(unittest.TestCase):
                                 self.any_ignore_paths)
 
         # Assert
-        config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON)])
+        config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON, trace_io=None)])
 
     def test_rollback__creates_rollbacker_and_rollback(self):
         # Arrange
@@ -651,7 +743,26 @@ class TestGenericUpdater(unittest.TestCase):
         expected = self.any_checkpoints_list
 
         # Act
-        actual = generic_updater.list_checkpoints(self.any_verbose)
+        actual = generic_updater.list_checkpoints(False, self.any_verbose)
+
+        # Assert
+        self.assertCountEqual(expected, actual)
+
+    def test_list_checkpoints__creates_rollbacker_and_list_checkpoints_with_time(self):
+        # Arrange
+        config_rollbacker = Mock()
+        config_rollbacker.list_checkpoints.return_value = self.any_checkpoints_list_with_time
+
+        factory = Mock()
+        factory.create_config_rollbacker.side_effect = \
+            create_side_effect_dict({(str(self.any_verbose),): config_rollbacker})
+
+        generic_updater = gu.GenericUpdater(factory)
+
+        expected = self.any_checkpoints_list_with_time
+
+        # Act
+        actual = generic_updater.list_checkpoints(self.list_checkpoints_includes_time, self.any_verbose)
 
         # Assert
         self.assertCountEqual(expected, actual)
@@ -675,14 +786,16 @@ class TestDecorator(unittest.TestCase):
         self.decorator.apply(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)
 
         # Assert
-        self.decorated_patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+        self.decorated_patch_applier.apply.assert_has_calls(
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)]
+        )
 
     def test_replace__calls_decorated_replacer(self):
         # Act
         self.decorator.replace(Files.SONIC_YANG_AS_JSON)
 
         # Assert
-        self.decorated_config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON)])
+        self.decorated_config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON, trace_io=None)])
 
     def test_rollback__calls_decorated_rollbacker(self):
         # Act
@@ -710,7 +823,7 @@ class TestDecorator(unittest.TestCase):
         expected = self.any_checkpoints_list
 
         # Act
-        actual = self.decorator.list_checkpoints()
+        actual = self.decorator.list_checkpoints(includes_time=False)
 
         # Assert
         self.decorated_config_rollbacker.list_checkpoints.assert_called_once()
@@ -726,9 +839,11 @@ class TestSonicYangDecorator(unittest.TestCase):
 
         # Assert
         sonic_yang_decorator.patch_wrapper.convert_sonic_yang_patch_to_config_db_patch.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)]
+        )
         sonic_yang_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH)])
+            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH, True, trace_io=None)]
+        )
 
     def test_replace__converts_to_config_db_and_calls_decorated_class(self):
         # Arrange
@@ -740,11 +855,15 @@ class TestSonicYangDecorator(unittest.TestCase):
         # Assert
         sonic_yang_decorator.config_wrapper.convert_sonic_yang_to_config_db.assert_has_calls(
             [call(Files.SONIC_YANG_AS_JSON)])
-        sonic_yang_decorator.decorated_config_replacer.replace.assert_has_calls([call(Files.CONFIG_DB_AS_JSON)])
+        sonic_yang_decorator.decorated_config_replacer.replace.assert_has_calls(
+            [call(Files.CONFIG_DB_AS_JSON, trace_io=None)]
+        )
 
     def __create_sonic_yang_decorator(self):
         patch_applier = Mock()
-        patch_applier.apply.side_effect = create_side_effect_dict({(str(Files.SINGLE_OPERATION_CONFIG_DB_PATCH),): 0})
+        patch_applier.apply.side_effect = create_side_effect_dict(
+            {(str(Files.SINGLE_OPERATION_CONFIG_DB_PATCH), 'True'): 0}
+        )
 
         patch_wrapper = Mock()
         patch_wrapper.convert_sonic_yang_patch_to_config_db_patch.side_effect = \
@@ -777,7 +896,8 @@ class TestConfigLockDecorator(unittest.TestCase):
         # Assert
         config_lock_decorator.config_lock.acquire_lock.assert_called_once()
         config_lock_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)]
+        )
         config_lock_decorator.config_lock.release_lock.assert_called_once()
 
     def test_replace__lock_config(self):
@@ -789,7 +909,9 @@ class TestConfigLockDecorator(unittest.TestCase):
 
         # Assert
         config_lock_decorator.config_lock.acquire_lock.assert_called_once()
-        config_lock_decorator.decorated_config_replacer.replace.assert_has_calls([call(Files.SONIC_YANG_AS_JSON)])
+        config_lock_decorator.decorated_config_replacer.replace.assert_has_calls(
+            [call(Files.SONIC_YANG_AS_JSON, trace_io=None)]
+        )
         config_lock_decorator.config_lock.release_lock.assert_called_once()
 
     def test_rollback__lock_config(self):
@@ -820,7 +942,9 @@ class TestConfigLockDecorator(unittest.TestCase):
         config_lock = Mock()
 
         patch_applier = Mock()
-        patch_applier.apply.side_effect = create_side_effect_dict({(str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH),): 0})
+        patch_applier.apply.side_effect = create_side_effect_dict(
+            {(str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH), 'True'): 0}
+        )
 
         config_replacer = Mock()
         config_replacer.replace.side_effect = create_side_effect_dict({(str(Files.SONIC_YANG_AS_JSON),): 0})

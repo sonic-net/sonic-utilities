@@ -6,13 +6,15 @@ from unittest.mock import MagicMock, Mock
 from mock import patch
 
 import generic_config_updater.change_applier
+import generic_config_updater.gu_common
 import generic_config_updater.patch_sorter as ps
 import generic_config_updater.generic_updater as gu
 from .gutest_helpers import Files
 from generic_config_updater.gu_common import ConfigWrapper, PatchWrapper
 
 running_config = {}
-    
+
+
 def set_entry(config_db, tbl, key, data):
     global running_config
     if data != None:
@@ -26,8 +28,10 @@ def set_entry(config_db, tbl, key, data):
         if not running_config[tbl]:
             running_config.pop(tbl)
 
-def get_running_config():
+
+def get_running_config(scope="localhost"):
     return running_config
+
 
 class TestFeaturePatchApplication(unittest.TestCase):
     def setUp(self):
@@ -87,7 +91,6 @@ class TestFeaturePatchApplication(unittest.TestCase):
         config_wrapper = self.config_wrapper
         config_wrapper.get_config_db_as_json = MagicMock(side_effect=get_running_config)
         change_applier = generic_config_updater.change_applier.ChangeApplier()
-        change_applier._get_running_config = MagicMock(side_effect=get_running_config)
         patch_wrapper = PatchWrapper(config_wrapper)
         return gu.PatchApplier(config_wrapper=config_wrapper, patch_wrapper=patch_wrapper, changeapplier=change_applier)
     

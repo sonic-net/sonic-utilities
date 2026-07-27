@@ -52,7 +52,7 @@ def add_entry_validated(db, table, key, data):
     """ Add new entry in table and validate configuration.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to add new entry to.
         key (Union[str, Tuple]): Key name in the table.
         data (Dict): Entry data.
@@ -76,7 +76,7 @@ def update_entry_validated(db, table, key, data, create_if_not_exists=False):
     If attribute value in data is None, the attribute is deleted.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to add new entry to.
         key (Union[str, Tuple]): Key name in the table.
         data (Dict): Entry data.
@@ -121,7 +121,7 @@ def del_entry_validated(db, table, key):
     """ Delete entry in table and validate configuration.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to add new entry to.
         key (Union[str, Tuple]): Key name in the table.
     Raises:
@@ -143,7 +143,7 @@ def add_list_entry_validated(db, table, key, attr, data):
     """ Add new entry into list in table and validate configuration.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to add data to.
         key (Union[str, Tuple]): Key name in the table.
         attr (str): Attribute name which represents a list the data needs to be added to.
@@ -170,7 +170,7 @@ def del_list_entry_validated(db, table, key, attr, data):
     """ Delete entry from list in table and validate configuration.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to remove data from.
         key (Union[str, Tuple]): Key name in the table.
         attr (str): Attribute name which represents a list the data needs to be removed from.
@@ -199,7 +199,7 @@ def clear_list_entry_validated(db, table, key, attr):
     """ Clear list in object and validate configuration.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to remove the list attribute from.
         key (Union[str, Tuple]): Key name in the table.
         attr (str): Attribute name which represents a list that needs to be removed.

@@ -15,6 +15,10 @@ dist/
 coverage.xml
 htmlcov/
 
+# Dev tools
+.vscode/
+.idea/
+
 # Ignores for sonic-utilities-data
 sonic-utilities-data/debian/*
 !sonic-utilities-data/debian/changelog

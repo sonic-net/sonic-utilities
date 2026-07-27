@@ -27,5 +27,13 @@
         "pfc_to_queue_map": "AZURE",
         "tc_to_pg_map": "AZURE",
         "tc_to_queue_map": "AZURE"
-    }
+    },
+    "TC_TO_QUEUE_MAP|AZURE": {"0": "0"},
+    "TC_TO_PRIORITY_GROUP_MAP|AZURE": {"0": "0"},
+    "MAP_PFC_PRIORITY_TO_QUEUE|AZURE": {"0": "0"},
+    "DSCP_TO_TC_MAP|AZURE": {"0": "0"},
+    "PORT|Ethernet0": {"lanes": "0", "speed": "1000"},
+    "PORT|Ethernet92": {"lanes": "92", "speed": "1000"},
+    "PORT|Ethernet96": {"lanes": "96", "speed": "1000"},
+    "PORT|Ethernet100": {"lanes": "100", "speed": "1000"}
 }

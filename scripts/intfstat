@@ -27,7 +27,7 @@ except KeyError:
 from collections import namedtuple, OrderedDict
 from natsort import natsorted
 from tabulate import tabulate
-from utilities_common.netstat import ns_diff, table_as_json, STATUS_NA, format_brate, format_prate
+from utilities_common.netstat import ns_diff, table_as_json, STATUS_NA, format_brate, format_prate, format_number_with_comma
 from utilities_common.cli import json_serial, UserCache
 from swsscommon.swsscommon import SonicV2Connector
 
@@ -153,18 +153,17 @@ class Intfstat(object):
             rates = ratestat_dict.get(key, RateStats._make([STATUS_NA] * len(rates_key_list)))
 
             table.append((key,
-                          data['rx_p_ok'],
+                          format_number_with_comma(data['rx_p_ok']),
                           format_brate(rates.rx_bps),
                           format_prate(rates.rx_pps),
-                          data['rx_p_err'],
-                          data['tx_p_ok'],
+                          format_number_with_comma(data['rx_p_err']),
+                          format_number_with_comma(data['tx_p_ok']),
                           format_brate(rates.tx_bps),
                           format_prate(rates.tx_pps),
-                          data['tx_p_err']))
+                          format_number_with_comma(data['tx_p_err'])))
 
         if use_json:
             print(table_as_json(table, header))
-
         else:
             print(tabulate(table, header, tablefmt='simple', stralign='right'))
 
@@ -196,14 +195,14 @@ class Intfstat(object):
                             ns_diff(cntr['tx_p_err'], old_cntr['tx_p_err'])))
             else:
                 table.append((key,
-                            cntr['rx_p_ok'],
+                            format_number_with_comma(cntr['rx_p_ok']),
                             format_brate(rates.rx_bps),
                             format_prate(rates.rx_pps),
-                            cntr['rx_p_err'],
-                            cntr['tx_p_ok'],
+                            format_number_with_comma(cntr['rx_p_err']),
+                            format_number_with_comma(cntr['tx_p_ok']),
                             format_brate(rates.tx_bps),
                             format_prate(rates.tx_pps),
-                            cntr['tx_p_err']))
+                            format_number_with_comma(cntr['tx_p_err'])))
 
         if use_json:
             print(table_as_json(table, header))
@@ -238,8 +237,14 @@ class Intfstat(object):
                         ns_diff(cntr['tx_p_err'], old_cntr['tx_p_err']),
                         ns_diff(cntr['tx_b_err'], old_cntr['tx_b_err']))
         else:
-            body = body % (cntr['rx_p_ok'], cntr['rx_b_ok'], cntr['rx_p_err'],cntr['rx_b_err'],
-                           cntr['tx_p_ok'], cntr['tx_b_ok'], cntr['tx_p_err'], cntr['tx_b_err'])
+            body = body % (format_number_with_comma(cntr['rx_p_ok']),
+                        format_number_with_comma(cntr['rx_b_ok']),
+                        format_number_with_comma(cntr['rx_p_err']),
+                        format_number_with_comma(cntr['rx_b_err']),
+                        format_number_with_comma(cntr['tx_p_ok']),
+                        format_number_with_comma(cntr['tx_b_ok']),
+                        format_number_with_comma(cntr['tx_p_err']),
+                        format_number_with_comma(cntr['tx_b_err']))
 
         print(header)
         print(body)

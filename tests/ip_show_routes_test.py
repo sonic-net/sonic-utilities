@@ -1,3 +1,4 @@
+import json
 import os
 import pytest
 
@@ -17,10 +18,7 @@ class TestShowIpRouteCommands(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        #in case someone did not clean up properly so undo the multi-asic mock here
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         import mock_tables.dbconnector
 
     def test_show_ip_route_err(
@@ -141,3 +139,30 @@ class TestShowIpRouteCommands(object):
         assert result.exit_code == 0
         assert result.output == show_ip_route_common.show_ipv6_route_err_expected_output + "\n"
 
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['ip_route'], indirect=['setup_single_bgp_instance'])
+    def test_show_ip_route_bgp_json(
+            self,
+            setup_ip_route_commands,
+            setup_single_bgp_instance):
+        show = setup_ip_route_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["route"], ["bgp", "json"])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+
+        try:
+            parsed = json.loads(result.output)
+            assert isinstance(parsed, dict)
+        except json.JSONDecodeError as e:
+            pytest.fail(f"Output is not valid JSON: {e}")
+
+        bgp_routes_found = False
+        for route_data in parsed.values():
+            if isinstance(route_data, list):
+                for entry in route_data:
+                    if entry.get("protocol") == "bgp":
+                        bgp_routes_found = True
+                        break
+        assert bgp_routes_found, "BGP routes should be present in filtered output"

@@ -79,8 +79,14 @@ def mock_single_asic_get_ip_intf_addr_from_ns(namespace, iface):
     return ipaddresses
 
 
+def mock_get_all_namespaces():
+    return {'front_ns': [], 'back_ns': [], 'fabric_ns': []}
+
+
 multi_asic.is_multi_asic = mock_is_multi_asic
 multi_asic.get_num_asics = mock_get_num_asics
 multi_asic.get_namespace_list = mock_get_namespace_list
+multi_asic.get_all_namespaces = mock_get_all_namespaces
+multi_asic.get_namespaces_from_linux = mock_get_namespace_list
 multi_asic_util.multi_asic_get_ip_intf_from_ns = mock_single_asic_get_ip_intf_from_ns
 multi_asic_util.multi_asic_get_ip_intf_addr_from_ns = mock_single_asic_get_ip_intf_addr_from_ns

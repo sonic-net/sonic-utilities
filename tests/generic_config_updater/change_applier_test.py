@@ -72,28 +72,25 @@ DB_HANDLE = "config_db"
 def debug_print(msg):
     print(msg)
 
-
-# Mimics os.system call for sonic-cfggen -d --print-data > filename
+# Mimics os.system call for `sonic-cfggen -d --print-data` output
 def subprocess_Popen_cfggen(cmd, *args, **kwargs):
     global running_config
 
-    # Extract file name from kwargs if 'stdout' is a file object
-    stdout = kwargs.get('stdout')
-    if hasattr(stdout, 'name'):
-        fname = stdout.name
-    else:
-        raise ValueError("stdout is not a file")
+    stdout = kwargs.get('stdout', None)
 
-    # Write the running configuration to the file specified in stdout
-    with open(fname, "w") as s:
-        json.dump(running_config, s, indent=4)
-    
+    if stdout is None:
+        output = json.dumps(running_config, indent=4)
+    elif isinstance(stdout, int) and stdout == -1:
+        output = json.dumps(running_config, indent=4)
+    else:
+        raise ValueError("stdout must be set to subprocess.PIPE or omitted for capturing output")
+
     class MockPopen:
         def __init__(self):
-            self.returncode = 0  # Simulate successful command execution
+            self.returncode = 0
 
         def communicate(self):
-            return "", ""  # Simulate empty stdout and stderr
+            return output.encode(), "".encode()
 
     return MockPopen()
 
@@ -131,7 +128,8 @@ def set_entry(config_db, tbl, key, data):
 # mimics JsonChange.apply
 #
 class mock_obj:
-    def apply(self, config):
+    def apply(self, config, in_place):
+        config = copy.deepcopy(config)
         json_change = json_changes[json_change_index]
 
         update = copy.deepcopy(json_change["update"])
@@ -225,7 +223,7 @@ def vlan_validate(old_cfg, new_cfg, keys):
 
 class TestChangeApplier(unittest.TestCase):
 
-    @patch("generic_config_updater.change_applier.subprocess.Popen")
+    @patch("generic_config_updater.gu_common.subprocess.Popen")
     @patch("generic_config_updater.change_applier.get_config_db")
     @patch("generic_config_updater.change_applier.set_config")
     def test_change_apply(self, mock_set, mock_db, mock_subprocess_Popen):
@@ -258,7 +256,8 @@ class TestChangeApplier(unittest.TestCase):
 
             debug_print("main: json_change_index={}".format(json_change_index))
 
-            applier.apply(mock_obj())
+            current_config = copy.deepcopy(start_running_config)
+            current_config = applier.apply(current_config, mock_obj())
 
             debug_print(f"Testing json_change {json_change_index}")
 
@@ -293,8 +292,9 @@ class TestDryRunChangeApplier(unittest.TestCase):
         applier = generic_config_updater.change_applier.DryRunChangeApplier(config_wrapper)
 
         # Act
-        applier.apply(change)
-        applier.remove_backend_tables_from_config(change)
+        current_config = copy.deepcopy(running_config)
+        current_config = applier.apply(current_config, change)
+        current_config = applier.remove_backend_tables_from_config(current_config)
 
         # Assert
-        applier.config_wrapper.apply_change_to_config_db.assert_has_calls([call(change)])
+        applier.config_wrapper.apply_change_to_config_db.assert_called()

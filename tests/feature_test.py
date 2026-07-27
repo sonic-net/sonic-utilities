@@ -1,4 +1,5 @@
 import importlib
+import os
 import pytest
 
 from unittest import mock
@@ -495,6 +496,11 @@ class TestFeatureMultiAsic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        from .mock_tables import mock_multi_asic_3_asics
+        importlib.reload(mock_multi_asic_3_asics)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
 
     def test_config_bgp_feature_inconsistent_state(self, get_cmd_module):
         from .mock_tables import dbconnector
@@ -587,5 +593,3 @@ class TestFeatureMultiAsic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)

@@ -1,6 +1,6 @@
 #! /bin/bash
 
-timeout --foreground 30 smartctl -a /dev/sda > /tmp/smartctl
+timeout --foreground 30 smartctl -xa /dev/sda > /tmp/smartctl
 if [ -f /tmp/smartctl ];then
     logger -f /tmp/smartctl
 fi

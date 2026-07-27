@@ -9,7 +9,7 @@ def test_get_registry_for():
     resolver = RegistryResolver()
     registry = resolver.get_registry_for('debian')
     assert registry is resolver.DockerHubRegistry
-    registry = resolver.get_registry_for('Azure/sonic')
+    registry = resolver.get_registry_for('azure/sonic')
     assert registry is resolver.DockerHubRegistry
     registry = resolver.get_registry_for('registry-server:5000/docker')
     assert registry.url == 'https://registry-server:5000'

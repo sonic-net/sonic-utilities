@@ -39,59 +39,59 @@ Ethernet8      0      0      0      0      0      0      0      0
 class TestPgDropstat(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         print("SETUP")
 
     def replace_file(self, file_name_src, file_name_dst):
+        from .mock_tables import dbconnector
         sample_config_db_file = os.path.join(test_path, file_name_src)
-        mock_config_db_file = os.path.join(test_path, "mock_tables", file_name_dst)
+        mock_config_db_file = os.path.join(dbconnector.INPUT_DIR, file_name_dst)
 
         #Backup origin config_db and replace it with config_db file with disabled PG_DROP counters
-        copyfile(mock_config_db_file, "/tmp/" + file_name_dst)
+        backup_path = mock_config_db_file + ".bak"
+        copyfile(mock_config_db_file, backup_path)
         copyfile(sample_config_db_file, mock_config_db_file)
 
-        return mock_config_db_file
+        return mock_config_db_file, backup_path
 
     @pytest.fixture(scope='function')
     def replace_counter_db_file(self):
-        mock_file = self.replace_file("pgdrop_input/counters_db.json", "counters_db.json")
+        mock_file, backup = self.replace_file("pgdrop_input/counters_db.json", "counters_db.json")
 
         yield
 
-        copyfile("/tmp/counters_db.json", mock_file)
+        copyfile(backup, mock_file)
 
     @pytest.fixture(scope='function')
     def replace_config_db_file(self):
-        mock_file = self.replace_file("pgdrop_input/config_db.json", "config_db.json")
+        mock_file, backup = self.replace_file("pgdrop_input/config_db.json", "config_db.json")
 
         yield
 
-        copyfile("/tmp/config_db.json", mock_file)
+        copyfile(backup, mock_file)
 
     @pytest.fixture(scope='function')
     def replace_counter_db2_file(self):
-        mock_file = self.replace_file("pgdrop_input/counters_db2.json", "counters_db.json")
+        mock_file, backup = self.replace_file("pgdrop_input/counters_db2.json", "counters_db.json")
 
         yield
 
-        copyfile("/tmp/counters_db.json", mock_file)
+        copyfile(backup, mock_file)
 
     @pytest.fixture(scope='function')
     def replace_counter_db3_file(self):
-        mock_file = self.replace_file("pgdrop_input/counters_db3.json", "counters_db.json")
+        mock_file, backup = self.replace_file("pgdrop_input/counters_db3.json", "counters_db.json")
 
         yield
 
-        copyfile("/tmp/counters_db.json", mock_file)
+        copyfile(backup, mock_file)
 
     @pytest.fixture(scope='function')
     def replace_counter_db4_file(self):
-        mock_file = self.replace_file("pgdrop_input/counters_db4.json", "counters_db.json")
+        mock_file, backup = self.replace_file("pgdrop_input/counters_db4.json", "counters_db.json")
 
         yield
 
-        copyfile("/tmp/counters_db.json", mock_file)
+        copyfile(backup, mock_file)
 
     def test_show_pg_drop_pg_port_map(self, replace_counter_db3_file):
         runner = CliRunner()
@@ -169,7 +169,5 @@ class TestPgDropstat(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         UserCache('pg-drop').remove_all()
         print("TEARDOWN")

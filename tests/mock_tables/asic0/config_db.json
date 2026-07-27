@@ -99,22 +99,26 @@
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet4": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet-BP0": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet-BP4": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|GLOBAL": {
         "BIG_RED_SWITCH": "enable",
@@ -225,10 +229,34 @@
     "VLAN|Vlan1000": {
         "vlanid": "1000"
     },
+    "VLAN|Vlan2000": {
+        "vlanid": "2000"
+    },
+    "VLAN_INTERFACE|Vlan1000": {
+        "NULL": "NULL"
+    },
+    "VLAN_INTERFACE|Vlan2000": {
+        "proxy_arp": "enabled"
+    },
+    "VLAN_INTERFACE|Vlan1000|192.168.0.1/21": {
+        "NULL": "NULL"
+    },
+    "VLAN_INTERFACE|Vlan2000|192.168.0.10/21": {
+        "NULL": "NULL"
+    },
+    "VLAN_MEMBER|Vlan1000|Ethernet4": {
+        "tagging_mode": "untagged"
+    },
+    "VLAN_MEMBER|Vlan1000|Ethernet16": {
+        "tagging_mode": "untagged"
+    },
     "VLAN_MEMBER|Vlan1000|PortChannel1002": {
         "tagging_mode": "tagged"
     },
-    "BGP_NEIGHBOR|10.0.0.1": {
+    "VLAN_MEMBER|Vlan2000|Ethernet0": {
+        "tagging_mode": "tagged"
+    },
+    "BGP_NEIGHBOR|default|10.0.0.1": {
         "rrclient": "0",
         "name": "ARISTA01T2",
         "local_addr": "10.0.0.0",
@@ -238,7 +266,7 @@
         "asn": "65200",
         "keepalive": "3"
     },
-    "BGP_NEIGHBOR|fc00::2": {
+    "BGP_NEIGHBOR|default|fc00::2": {
         "rrclient": "0",
         "name": "ARISTA01T2",
         "local_addr": "fc00::1",
@@ -303,5 +331,157 @@
     "SYSLOG_CONFIG_FEATURE|database": {
         "rate_limit_interval": "222",
         "rate_limit_burst": "22222"
+    },
+    "WRED_PROFILE|AZURE_LOSSLESS": {
+        "red_max_threshold": "2097152",
+        "ecn": "ecn_all",
+        "green_min_threshold": "1048576",
+        "red_min_threshold": "1048576",
+        "yellow_min_threshold": "1048576",
+        "green_max_threshold": "2097152",
+        "green_drop_probability": "5",
+        "yellow_max_threshold": "2097152",
+        "yellow_drop_probability": "5",
+        "red_drop_probability": "5"
+    },
+    "DEVICE_NEIGHBOR|Ethernet4": {
+        "name": "Serverss0",
+        "port": "eth0"
+    },
+    "QUEUE|Ethernet4|0": {
+        "scheduler": "[SCHEDULAR|scheduler.0]"
+    },
+    "QUEUE|Ethernet4|1": {
+        "scheduler": "[SCHEDULAR|scheduler.0]",
+        "wred_profile": "AZURE_LOSSLESS"
+    },
+    "BUFFER_POOL|ingress_lossy_pool": {
+        "mode": "dynamic",
+        "type": "ingress"
+    },
+    "BUFFER_POOL|ingress_lossless_pool_hbm": {
+        "mode": "static",
+        "size": "139458240",
+         "type": "ingress"
+    },
+    "BUFFER_PROFILE|ingress_lossy_profile": {
+        "dynamic_th": "3",
+        "pool": "ingress_lossy_pool",
+        "size": "0"
+    },
+    "BUFFER_PROFILE|ingress_lossless_profile_hbm": {
+        "static_th": "12121212",
+        "pool": "ingress_lossless_pool_hbm",
+        "size": "0"
+    },
+    "DEBUG_DROP_MONITOR|CONFIG": {
+        "status": "enabled"
+    },
+    "DEBUG_COUNTER|DEBUG_0": {
+        "type": "PORT_INGRESS_DROPS",
+        "drop_monitor_status": "enabled",
+        "window": "300",
+        "drop_count_threshold": "5",
+        "incident_count_threshold": "2"
+    },
+    "DEBUG_COUNTER|DEBUG_1": {
+        "type": "SWITCH_EGRESS_DROPS",
+        "alias": "SWITCH_DROPS",
+        "group": "PACKET_DROPS",
+        "desc": "Outgoing packet drops, tracked at the switch level"
+    },
+    "DEBUG_COUNTER|DEBUG_2": {
+        "type": "PORT_INGRESS_DROPS",
+        "desc": ""
+    },
+    "DEBUG_COUNTER|lowercase_counter": {
+        "type": "SWITCH_EGRESS_DROPS"
+    },
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_0|IP_HEADER_ERROR": {},
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_1|ACL_ANY": {},
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_2|IP_HEADER_ERROR": {},
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_2|NO_L3_HEADER": {},
+    "DEBUG_COUNTER_DROP_REASON|lowercase_counter|L2_ANY": {},
+    "VXLAN_TUNNEL|vtep1": {
+        "src_ip": "10.10.10.1"
+    },
+    "VXLAN_EVPN_NVO|nvo1": {
+        "source_vtep": "vtep1"
+    },
+    "VXLAN_TUNNEL_MAP|vtep1|map_1000_Vlan100": {
+        "vni": "1000",
+        "vlan": "Vlan100"
+    },
+    "VXLAN_TUNNEL_MAP|vtep1|map_2000_Vlan200": {
+        "vni": "2000",
+        "vlan": "Vlan200"
+    },
+    "VRF|Vrf1": {
+        "fallback": "false",
+        "vni": "3000"
+    },
+    "VLAN|Vlan100": {
+        "vlanid": "100"
+    },
+    "VLAN|Vlan200": {
+        "vlanid": "200"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+        "NULL": "NULL"
+    },
+    "LOOPBACK_INTERFACE|Loopback0|10.10.10.1/32": {
+        "NULL": "NULL"
+    },
+    "VNET|Vnet_2000": {
+        "peer_list": "",
+        "vni": "5000",
+        "vxlan_tunnel": "vtep1",
+        "guid": "guid-2000-asic0"
+    },
+    "VNET|Vnet_3000": {
+        "vni": "6000",
+        "vxlan_tunnel": "vtep1",
+        "guid": "guid-3000-asic0"
+    },
+    "PORT|Ethernet20": {
+        "lanes": "21,22,23,24",
+        "description": "ARISTA01T2:Ethernet3/4/1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet1/6",
+        "admin_status": "up",
+        "role": "Ext",
+        "speed": "40000",
+        "asic_port_name": "Eth2-ASIC0"
+    },
+    "INTERFACE|Ethernet16": {
+        "vnet_name": "Vnet_2000"
+    },
+    "INTERFACE|Ethernet20": {
+        "vnet_name": "Vnet_3000"
+    },
+    "VLAN_SUB_INTERFACE|PortChannel1002.10": {
+        "admin_status": "up",
+        "vlan": "10"
+    },
+    "VLAN_SUB_INTERFACE|PortChannel4001.20": {
+        "admin_status": "up",
+        "vlan": "20"
+    },
+    "SWITCH_HASH|GLOBAL": {
+        "ecmp_hash@": "DST_MAC,SRC_MAC,ETHERTYPE,IP_PROTOCOL,DST_IP,SRC_IP,L4_DST_PORT,L4_SRC_PORT,INNER_DST_MAC,INNER_SRC_MAC,INNER_ETHERTYPE,INNER_IP_PROTOCOL,INNER_DST_IP,INNER_SRC_IP,INNER_L4_DST_PORT,INNER_L4_SRC_PORT,IPV6_FLOW_LABEL",
+        "lag_hash@": "DST_MAC,SRC_MAC,ETHERTYPE,IP_PROTOCOL,DST_IP,SRC_IP,L4_DST_PORT,L4_SRC_PORT,INNER_DST_MAC,INNER_SRC_MAC,INNER_ETHERTYPE,INNER_IP_PROTOCOL,INNER_DST_IP,INNER_SRC_IP,INNER_L4_DST_PORT,INNER_L4_SRC_PORT,IPV6_FLOW_LABEL",
+        "ecmp_hash_algorithm": "CRC",
+        "lag_hash_algorithm": "XOR"
+    },
+    "FLEX_COUNTER_TABLE|LLR": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "LLR_PORT|Ethernet0": {
+        "llr_mode": "static",
+        "llr_local": "enabled",
+        "llr_remote": "enabled",
+        "llr_profile": "llr_800000_40m_profile"
     }
 }

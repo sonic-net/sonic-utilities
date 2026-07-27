@@ -16,7 +16,7 @@ sys.path.insert(0, modules_path)
 show_interfaces_counters_rif_output="""\
           IFACE    RX_OK       RX_BPS    RX_PPS    RX_ERR    TX_OK      TX_BPS    TX_PPS    TX_ERR
 ---------------  -------  -----------  --------  --------  -------  ----------  --------  --------
-     Ethernet20        4     3.00 B/s    4.00/s         2        8  754.00 B/s    8.00/s         6
+     Ethernet20    2,000     3.00 B/s    4.00/s     1,000    4,000  754.00 B/s    8.00/s     3,000
 PortChannel0001      883  608.99 KB/s    0.00/s         0        0  883.00 B/s    0.00/s         0
 PortChannel0002      883  608.99 KB/s    0.00/s         0        0  883.00 B/s    0.00/s         0
 PortChannel0003        0     0.00 B/s    0.00/s         0        0    0.00 B/s    0.00/s         0
@@ -28,7 +28,7 @@ show_interfaces_counters_rif_output_verbose="""\
 Running command: intfstat
           IFACE    RX_OK       RX_BPS    RX_PPS    RX_ERR    TX_OK      TX_BPS    TX_PPS    TX_ERR
 ---------------  -------  -----------  --------  --------  -------  ----------  --------  --------
-     Ethernet20        4     3.00 B/s    4.00/s         2        8  754.00 B/s    8.00/s         6
+     Ethernet20    2,000     3.00 B/s    4.00/s     1,000    4,000  754.00 B/s    8.00/s     3,000
 PortChannel0001      883  608.99 KB/s    0.00/s         0        0  883.00 B/s    0.00/s         0
 PortChannel0002      883  608.99 KB/s    0.00/s         0        0  883.00 B/s    0.00/s         0
 PortChannel0003        0     0.00 B/s    0.00/s         0        0    0.00 B/s    0.00/s         0
@@ -70,14 +70,14 @@ Ethernet20
 ----------
 
         RX:
-                 4 packets
+             2,000 packets
                  3 bytes
-                 2 error packets
-              1128 error bytes
+             1,000 error packets
+             1,128 error bytes
         TX:
-                 8 packets
+             4,000 packets
                754 bytes
-                 6 error packets
+             3,000 error packets
                  5 error bytes
 """
 
@@ -123,8 +123,6 @@ class TestIntfstat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     def test_no_param(self):
         runner = CliRunner()
@@ -214,6 +212,3 @@ class TestIntfstat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-

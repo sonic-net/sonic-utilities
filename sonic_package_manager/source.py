@@ -43,7 +43,7 @@ class PackageSource(object):
 
     def install(self, package: Package):
         """ Install image based on package source,
-        record installation infromation in PackageEntry..
+        record installation information in PackageEntry..
 
         Args:
             package: SONiC Package
@@ -51,6 +51,11 @@ class PackageSource(object):
 
         image = self.install_image(package)
         package.entry.image_id = image.id
+        if hasattr(image, 'tags') and image.tags:
+            package.entry.docker_image_reference = image.tags[0]
+        else:
+            package.entry.docker_image_reference = image.id
+
         # if no repository is defined for this package
         # get repository from image
         if not package.repository:

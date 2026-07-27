@@ -35,11 +35,6 @@ class TestPBH:
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        dbconnector.dedicated_dbs['CONFIG_DB'] = None
-        dbconnector.dedicated_dbs['STATE_DB'] = None
-        dbconnector.dedicated_dbs['COUNTERS_DB'] = None
 
 
     ########## CONFIG PBH HASH-FIELD ##########

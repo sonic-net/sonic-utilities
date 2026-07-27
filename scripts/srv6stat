@@ -1,0 +1,33 @@
+#!/usr/bin/python3
+
+import argparse
+import sys
+
+from utilities_common.srv6stat import SRv6Stat
+
+def main():
+    parser = argparse.ArgumentParser(description='Display SONiC SRv6 MySID counters',
+                                     formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-c', '--clear', action='store_true', help='Clear SRv6 MySID counters statistics')
+    parser.add_argument('-d', '--delete', action='store_true', help='Delete saved SRv6 MySID counters statistics')
+    parser.add_argument('-s', '--sid', type=str, help='Show a specific SID', default=None)
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+    args = parser.parse_args()
+
+    try:
+        stats = SRv6Stat()
+        if args.clear:
+            stats.clear()
+            return
+        if args.delete:
+            stats.remove_cache()
+            return
+        stats.show(args.sid)
+
+    except Exception as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

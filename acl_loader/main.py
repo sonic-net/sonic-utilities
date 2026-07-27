@@ -72,9 +72,12 @@ class AclLoader(object):
 
     ACL_TABLE = "ACL_TABLE"
     ACL_RULE = "ACL_RULE"
+    ACL_TABLE_TYPE = "ACL_TABLE_TYPE"
     CFG_ACL_TABLE = "ACL_TABLE"
+    APPL_ACL_TABLE = "ACL_TABLE_TABLE"
     STATE_ACL_TABLE = "ACL_TABLE_TABLE"
     CFG_ACL_RULE = "ACL_RULE"
+    APPL_ACL_RULE = "ACL_RULE_TABLE"
     STATE_ACL_RULE = "ACL_RULE_TABLE"
     ACL_TABLE_TYPE_MIRROR = "MIRROR"
     ACL_TABLE_TYPE_CTRLPLANE = "CTRLPLANE"
@@ -119,6 +122,7 @@ class AclLoader(object):
         self.mirror_stage = None
         self.current_table = None
         self.tables_db_info = {}
+        self.tables_type_info = {}
         self.rules_db_info = {}
         self.rules_info = {}
         self.tables_state_info = None
@@ -135,6 +139,8 @@ class AclLoader(object):
         self.configdb.connect()
         self.statedb = SonicV2Connector(host="127.0.0.1")
         self.statedb.connect(self.statedb.STATE_DB)
+        self.appldb = SonicV2Connector(host="127.0.0.1")
+        self.appldb.connect(self.statedb.APPL_DB)
 
         # For multi-npu architecture we will have both global and per front asic namespace.
         # Global namespace will be used for Control plane ACL which are via IPTables.
@@ -165,8 +171,8 @@ class AclLoader(object):
         self.read_rules_info()
         self.read_sessions_info()
         self.read_policers_info()
-        self.acl_table_status = self.read_acl_object_status_info(self.CFG_ACL_TABLE, self.STATE_ACL_TABLE)
-        self.acl_rule_status = self.read_acl_object_status_info(self.CFG_ACL_RULE, self.STATE_ACL_RULE)
+        self.acl_table_status = self.read_acl_object_status_info(self.tables_db_info.keys(), self.STATE_ACL_TABLE)
+        self.acl_rule_status = self.read_acl_object_status_info(self.rules_db_info.keys(), self.STATE_ACL_RULE)
 
     def read_tables_info(self):
         """
@@ -199,15 +205,63 @@ class AclLoader(object):
                         self.tables_db_info[table]['ports'] += entry.get(
                             'ports', [])
 
+        # Update user defined acl table types
+        if self.per_npu_configdb:
+            # On multi-asic the acl table type should be defined in both the global namespace
+            # and the asic namespaces but using the asic namespace definition to be consistent
+            # with the way tables_db_info is populated.
+            for ns, config_db in self.per_npu_configdb.items():
+                acl_table_type = config_db.get_table(self.ACL_TABLE_TYPE)
+                for table_type, entry in acl_table_type.items():
+                    if table_type not in self.tables_type_info:
+                        self.tables_type_info[table_type] = entry
+        else:
+            self.tables_type_info.update(self.configdb.get_table(self.ACL_TABLE_TYPE))
+
+        if self.per_npu_configdb:
+            # Note: Ability to read table information from APPL_DB is not yet supported for masic devices
+            return
+
+        appl_db_keys = self.appldb.keys(self.appldb.APPL_DB, "{}:*".format(self.APPL_ACL_TABLE))
+        if not appl_db_keys:
+            return
+
+        for app_acl_tbl in appl_db_keys:
+            key = app_acl_tbl.split(":")[-1]
+            if key in self.tables_db_info:
+                # Shouldn't be hit, table is either programmed to APPL or CONFIG DB
+                continue
+            self.tables_db_info[key] = dict()
+            for f, v in self.appldb.get_all(self.appldb.APPL_DB, app_acl_tbl).items():
+                if f.lower() == "ports":
+                    v = v.split(",")
+                self.tables_db_info[key][f.lower()] = v
+
     def get_tables_db_info(self):
         return self.tables_db_info
 
     def read_rules_info(self):
         """
-        Read ACL_RULE table from configuration database
+        Read ACL_RULE table from CFG_DB and APPL_DB database
         :return:
         """
         self.rules_db_info = self.configdb.get_table(self.ACL_RULE)
+
+        if self.per_npu_configdb:
+            # Note: Ability to read table information from APPL_DB is not yet supported for masic devices
+            return
+
+        # Read rule information from APPL_DB
+        appl_db_keys = self.appldb.keys(self.appldb.APPL_DB, "{}:*".format(self.APPL_ACL_RULE))
+        if not appl_db_keys:
+            return
+
+        for app_acl_rule in appl_db_keys:
+            _, tid, rid = app_acl_rule.split(":")
+            if (tid, rid) in self.rules_db_info:
+                # Shouldn't be hit, table is either programmed to APPL or CONFIG DB
+                continue
+            self.rules_db_info[(tid, rid)] = self.appldb.get_all(self.appldb.APPL_DB, app_acl_rule)
 
     def get_rules_db_info(self):
         return self.rules_db_info
@@ -235,22 +289,43 @@ class AclLoader(object):
         :return:
         """
 
-        # For multi-npu platforms we will read from any one of front asic namespace
-        # config db as the information should be same across all config db
+        # For multi-npu platforms, merge sessions from all front asic
+        # namespace config dbs and track per-session namespaces so that
+        # state_db queries only target relevant namespaces.
         if self.per_npu_configdb:
-            namespace_configdb = list(self.per_npu_configdb.values())[0]
-            self.sessions_db_info = namespace_configdb.get_table(self.CFG_MIRROR_SESSION_TABLE)
+            self.sessions_db_info = {}
+            session_namespaces = {}
+            for namespace, namespace_configdb in self.per_npu_configdb.items():
+                ns_sessions = namespace_configdb.get_table(self.CFG_MIRROR_SESSION_TABLE)
+                for key, val in ns_sessions.items():
+                    if key not in self.sessions_db_info:
+                        self.sessions_db_info[key] = val
+                        session_namespaces[key] = []
+                    else:
+                        # For ERSPAN with src_port in some namespaces:
+                        # merge src_port from all namespaces that have it.
+                        if 'src_port' in val:
+                            existing = self.sessions_db_info[key]
+                            if 'src_port' in existing:
+                                existing['src_port'] += ',' + val['src_port']
+                            else:
+                                existing['src_port'] = val['src_port']
+                                if 'direction' in val:
+                                    existing['direction'] = val['direction']
+                    session_namespaces[key].append(namespace)
         else:
             self.sessions_db_info = self.configdb.get_table(self.CFG_MIRROR_SESSION_TABLE)
         for key in self.sessions_db_info:
             if self.per_npu_statedb:
-                # For multi-npu platforms we will read from all front asic name space
-                # statedb as the monitor port will be different for each asic
-                # and it's status also might be different (ideally should not happen)
-                # We will store them as dict of 'asic' : value
+                # For multi-npu platforms we read state_db only from namespaces
+                # where the session exists in config_db. ERSPAN sessions exist
+                # in all namespaces so we query all; SPAN sessions exist in only
+                # one namespace (destination port's ASIC).
                 self.sessions_db_info[key]["status"] = {}
                 self.sessions_db_info[key]["monitor_port"] = {}
-                for namespace_key, namespace_statedb in self.per_npu_statedb.items():
+                relevant_namespaces = session_namespaces.get(key, self.per_npu_statedb.keys())
+                for namespace_key in relevant_namespaces:
+                    namespace_statedb = self.per_npu_statedb[namespace_key]
                     state_db_info = namespace_statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(self.STATE_MIRROR_SESSION_TABLE, key))
                     self.sessions_db_info[key]["status"][namespace_key] = state_db_info.get("status", "inactive") if state_db_info else "error"
                     self.sessions_db_info[key]["monitor_port"][namespace_key] = state_db_info.get("monitor_port", "") if state_db_info else ""
@@ -259,16 +334,10 @@ class AclLoader(object):
                 self.sessions_db_info[key]["status"] = state_db_info.get("status", "inactive") if state_db_info else "error"
                 self.sessions_db_info[key]["monitor_port"] = state_db_info.get("monitor_port", "") if state_db_info else ""
 
-    def read_acl_object_status_info(self, cfg_db_table_name, state_db_table_name):
+    def read_acl_object_status_info(self, keys, state_db_table_name):
         """
         Read ACL_TABLE status or ACL_RULE status from STATE_DB
         """
-        if self.per_npu_configdb:
-            namespace_configdb = list(self.per_npu_configdb.values())[0]
-            keys = namespace_configdb.get_table(cfg_db_table_name).keys()
-        else:
-            keys = self.configdb.get_table(cfg_db_table_name).keys()
-
         status = {}
         for key in keys:
             # For ACL_RULE, the key is (acl_table_name, acl_rule_name)
@@ -401,6 +470,22 @@ class AclLoader(object):
         :return: True if table type is ACL_TABLE_TYPE_CTRLPLANE else False
         """
         return self.tables_db_info[tname]['type'].upper() == self.ACL_TABLE_TYPE_CTRLPLANE
+
+    def acl_table_has_match(self, tname, match):
+        """
+        Check if the ACL table supports matching on a given qualifier.
+        Non-user defined ACL table types will always return true here as we assume they
+        support all qualifiers
+        :param tname: ACL table name
+        :param match: ACL qualifier to query support for
+        :return: True if qualifier is supported or table type is not user defined
+        """
+        table_type = self.tables_db_info[tname]["type"]
+        # Predefined table types aren't defined in the tables_type_info
+        if table_type not in self.tables_type_info:
+            return True
+        else:
+            return match in self.tables_type_info[table_type]["MATCHES"]
 
     @staticmethod
     def parse_acl_json(filename):
@@ -717,7 +802,7 @@ class AclLoader(object):
 
         rule_props["PRIORITY"] = str(self.max_priority - rule_idx)
 
-        # setup default ip type match to dataplane acl (could be overriden by rule later)
+        # setup default ip type match to dataplane acl (could be overridden by rule later)
         if self.is_table_l3v4v6(table_name):
             # ETHERTYPE must be passed and it should be one of IPv4 or IPv6
             try:
@@ -740,6 +825,13 @@ class AclLoader(object):
         deep_update(rule_props, self.convert_icmp(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_transport(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_input_interface(table_name, rule_idx, rule))
+
+        if ("IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props
+                and self.acl_table_has_match(table_name, "IP_TYPE")):
+            # If we don't include IP_TYPE as a qualifier in the IP_PROTOCOL rule
+            # we could match on non-IP packets if the bits at the same offset match
+            # https://github.com/sonic-net/sonic-mgmt/issues/23960
+            rule_props["IP_TYPE"] = "IP"
 
         self.validate_rule_fields(rule_props)
 
@@ -922,19 +1014,19 @@ class AclLoader(object):
                 status = self.acl_table_status[key]['status']
             else:
                 status = 'N/A'
-            if val["type"] == AclLoader.ACL_TABLE_TYPE_CTRLPLANE:
+            if val.get("type", "N/A") == AclLoader.ACL_TABLE_TYPE_CTRLPLANE:
                 services = natsorted(val["services"])
-                data.append([key, val["type"], services[0], val["policy_desc"], stage, status])
+                data.append([key, val.get("type", "N/A"), services[0], val.get("policy_desc", ""), stage, status])
 
                 if len(services) > 1:
                     for service in services[1:]:
                         data.append(["", "", service, "", "", ""])
             else:
-                if not val["ports"]:
-                    data.append([key, val["type"], "", val["policy_desc"], stage, status])
+                if not val.get("ports", []):
+                    data.append([key, val["type"], "", val.get("policy_desc", ""), stage, status])
                 else:
                     ports = natsorted(val["ports"])
-                    data.append([key, val["type"], ports[0], val["policy_desc"], stage, status])
+                    data.append([key, val["type"], ports[0], val.get("policy_desc", ""), stage, status])
 
                     if len(ports) > 1:
                         for port in ports[1:]:
@@ -948,8 +1040,10 @@ class AclLoader(object):
         :param session_name: Optional. Mirror session name. Filter sessions by specified name.
         :return:
         """
-        erspan_header = ("Name", "Status", "SRC IP", "DST IP", "GRE", "DSCP", "TTL", "Queue",
-                            "Policer", "Monitor Port", "SRC Port", "Direction")
+        erspan_header = ("Name", "Status", "SRC IP", "DST IP", "GRE", "DSCP",
+                         "TTL", "Queue", "Policer", "Monitor Port",
+                         "SRC Port", "Direction",
+                         "Sample Rate", "Truncate Size")
         span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction", "Queue", "Policer")
 
         erspan_data = []
@@ -966,7 +1060,8 @@ class AclLoader(object):
                 erspan_data.append([key, val.get("status", ""), val.get("src_ip", ""),
                                          val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
                                          val.get("ttl", ""), val.get("queue", ""), val.get("policer", ""),
-                                         val.get("monitor_port", ""), val.get("src_port", ""), val.get("direction", "").lower()])
+                                         val.get("monitor_port", ""), val.get("src_port", ""), val.get("direction", "").lower(),  # noqa: E127, E501
+                                         val.get("sample_rate", ""), val.get("truncate_size", "")])  # noqa: E127
 
         print("ERSPAN Sessions")
         erspan_data = natsorted(erspan_data)

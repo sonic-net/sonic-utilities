@@ -8,6 +8,7 @@ import shutil
 
 # Constants
 image_dir = f'{aboot.IMAGE_DIR_PREFIX}expeliarmus-{aboot.IMAGE_DIR_PREFIX}abcde'
+image_chainloader = f'{image_dir}/.sonic-boot.swi'
 exp_image = f'{aboot.IMAGE_PREFIX}expeliarmus-{aboot.IMAGE_DIR_PREFIX}abcde'
 image_dirs = [image_dir]
 
@@ -45,14 +46,26 @@ def test_get_installed_images():
     assert bootloader.get_installed_images() == [exp_image]
 
 
-@patch("sonic_installer.bootloader.aboot.re.search")
-def test_get_next_image(re_search_patch):
+def test_get_next_image():
     bootloader = aboot.AbootBootloader()
-    bootloader._boot_config_read = Mock(return_value={'SWI': None})
+
+    # Test missing boot-config
+    bootloader._boot_config_read()
+
+    # Test missing SWI value
+    bootloader._boot_config_read = Mock(return_value={})
+    assert bootloader.get_next_image() == ''
 
     # Test convertion image dir to image name
-    re_search_patch().group = Mock(return_value=image_dir)
+    swi = f'flash:{image_chainloader}'
+    bootloader._boot_config_read = Mock(return_value={'SWI': swi})
     assert bootloader.get_next_image() == exp_image
+
+    # Test some other image
+    next_image = 'EOS.swi'
+    bootloader._boot_config_read = Mock(return_value={'SWI': f'flash:{next_image}'})
+    assert bootloader.get_next_image() == next_image
+
 
 def test_install_image():
     image_path = 'sonic'

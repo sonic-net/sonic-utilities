@@ -56,11 +56,11 @@ class PgDropStat(object):
         dropstat_dir = get_dropstat_dir()
         self.port_drop_stats_file = os.path.join(dropstat_dir, 'pg_drop_stats')
 
-        def get_port_id(oid):
+        def get_port_id(oid, namespace):
             """
-                Get port ID using object ID
+                Get port ID using pg object ID
             """
-            port_id = self.get_counters_mapdata(COUNTERS_PG_PORT_MAP, oid)
+            port_id = self.get_counters_mapdata(COUNTERS_PG_PORT_MAP, oid, namespace)
             if not port_id:
                 print("Port is not available for oid '{}'".format(oid))
                 sys.exit(1)
@@ -75,9 +75,11 @@ class PgDropStat(object):
         self.port_pg_map = {}
         self.port_name_map = {}
 
-        for port in self.counter_port_name_map:
-            self.port_pg_map[port] = {}
-            self.port_name_map[self.counter_port_name_map[port]] = port
+        for ns in self.ns_list:
+            self.port_name_map[ns] = {}
+            for port in self.counter_port_name_map[ns]:
+                self.port_pg_map[port] = {}
+                self.port_name_map[ns][self.counter_port_name_map[ns][port]] = port
 
         # Get PGs for each port
         counter_pg_name_map = self.get_counters_mapall(COUNTERS_PG_NAME_MAP)
@@ -85,9 +87,10 @@ class PgDropStat(object):
             print("COUNTERS_PG_NAME_MAP is empty!")
             sys.exit(1)
 
-        for pg in counter_pg_name_map:
-            port = self.port_name_map[get_port_id(counter_pg_name_map[pg])]
-            self.port_pg_map[port][pg] = counter_pg_name_map[pg]
+        for ns in self.ns_list:
+            for pg in counter_pg_name_map[ns]:
+                port = self.port_name_map[ns][get_port_id(counter_pg_name_map[ns][pg], ns)]
+                self.port_pg_map[port][pg] = counter_pg_name_map[ns][pg]
 
         self.pg_drop_types = {
             "pg_drop"       : {"message" : "Ingress PG dropped packets:",
@@ -97,14 +100,11 @@ class PgDropStat(object):
                                "header_prefix": "PG"},
         }
 
-    def get_counters_mapdata(self, tablemap, index):
-        for ns in self.ns_list:
-            counters_db = SonicV2Connector(namespace=ns)
-            counters_db.connect(counters_db.COUNTERS_DB)
-            data = counters_db.get(counters_db.COUNTERS_DB, tablemap, index)
-            if data:
-                return data
-        return None
+    def get_counters_mapdata(self, tablemap, index, namespace):
+        counters_db = SonicV2Connector(namespace=namespace)
+        counters_db.connect(counters_db.COUNTERS_DB)
+        data = counters_db.get(counters_db.COUNTERS_DB, tablemap, index)
+        return data
 
     def get_counters_mapall(self, tablemap):
         mapdata = {}
@@ -113,16 +113,16 @@ class PgDropStat(object):
             counters_db.connect(counters_db.COUNTERS_DB)
             map_result = counters_db.get_all(counters_db.COUNTERS_DB, tablemap)
             if map_result:
-                mapdata.update(map_result)
+                mapdata[ns] = map_result
         return mapdata
 
-    def get_pg_index(self, oid):
+    def get_pg_index(self, oid, namespace):
         """
             return PG index (0-7)
 
             oid - object ID for entry in redis
         """
-        pg_index = self.get_counters_mapdata(COUNTERS_PG_INDEX_MAP, oid)
+        pg_index = self.get_counters_mapdata(COUNTERS_PG_INDEX_MAP, oid, namespace)
         if not pg_index:
             print("Priority group index is not available for oid '{}'".format(oid))
             sys.exit(1)
@@ -159,7 +159,7 @@ class PgDropStat(object):
         self.min_idx = header_idx_list[0]
         self.header_list += ["{}{}".format(pg_drop_type["header_prefix"], idx) for idx in header_idx_list]
 
-    def get_counters(self, table_prefix, port_obj, idx_func, counter_name):
+    def get_counters(self, table_prefix, port_obj, idx_func, counter_name, namespace):
         """
             Get the counters of a specific table.
         """
@@ -174,9 +174,9 @@ class PgDropStat(object):
         for name, obj_id in port_obj.items():
             full_table_id = table_prefix + obj_id
             old_collected_data = port_drop_ckpt.get(name,{})[full_table_id] if len(port_drop_ckpt) > 0 else 0
-            idx = int(idx_func(obj_id))
+            idx = int(idx_func(obj_id, namespace))
             pos = self.header_idx_to_pos[idx]
-            counter_data = self.get_counters_mapdata(full_table_id, counter_name)
+            counter_data = self.get_counters_mapdata(full_table_id, counter_name, namespace)
             if counter_data is None:
                 fields[pos] = STATUS_NA
             elif fields[pos] != STATUS_NA:
@@ -191,24 +191,25 @@ class PgDropStat(object):
         type = self.pg_drop_types[key]
         self.build_header(type)
         # Get stat for each port
-        for port in natsorted(self.counter_port_name_map):
-            row_data = list()
-            data = self.get_counters(table_prefix, type["obj_map"][port], type["idx_func"], type["counter_name"])
-            row_data.append(port)
-            row_data.extend(data)
-            table.append(tuple(row_data))
+        for ns in self.ns_list:
+            for port in natsorted(self.counter_port_name_map[ns]):
+                row_data = list()
+                data = self.get_counters(table_prefix, type["obj_map"][port], type["idx_func"], type["counter_name"], ns)
+                row_data.append(port)
+                row_data.extend(data)
+                table.append(tuple(row_data))
 
         print(type["message"])
         print(tabulate(table, self.header_list, tablefmt='simple', stralign='right'))
 
-    def get_counts(self, counters, oid):
+    def get_counts(self, counters, oid, namespace):
         """
             Get the PG drop counts for an individual counter.
         """
         counts = {}
         table_id = COUNTER_TABLE_PREFIX + oid
         for counter in counters:
-            counter_data = self.get_counters_mapdata(table_id, counter)
+            counter_data = self.get_counters_mapdata(table_id, counter, namespace)
             if counter_data is None:
                 counts[table_id] = 0
             else:
@@ -227,8 +228,9 @@ class PgDropStat(object):
         if not counter_object_name_map:
             return current_stat_dict
 
-        for obj in natsorted(counter_object_name_map):
-            current_stat_dict[obj] = self.get_counts(counters, counter_object_name_map[obj])
+        for ns in self.ns_list:
+            for obj in natsorted(counter_object_name_map[ns]):
+                current_stat_dict[obj] = self.get_counts(counters, counter_object_name_map[ns][obj], ns)
         return current_stat_dict
 
     def clear_drop_counts(self):

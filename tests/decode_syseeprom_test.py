@@ -1,5 +1,6 @@
 import os
 import sys
+import errno
 from unittest import mock
 
 import pytest
@@ -12,8 +13,6 @@ test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, 'scripts')
 sys.path.insert(0, modules_path)
-
-sys.modules['sonic_platform'] = mock.MagicMock()
 
 
 decode_syseeprom_path = os.path.join(scripts_path, 'decode-syseeprom')
@@ -202,3 +201,18 @@ CRC-32               0xFE        4  0xAC518FB3
         decode_syseeprom.main()
         assert mockNotDbBased.called
         assert not mockDbBased.called
+
+    @mock.patch('os.geteuid', lambda: 0)
+    @mock.patch('sonic_py_common.device_info.get_platform', lambda: 'kvm')
+    @mock.patch.object(sys, 'argv', ["decode-syseeprom"])
+    @mock.patch('decode_syseeprom.read_and_print_eeprom')
+    @mock.patch('decode_syseeprom.read_eeprom_from_db')
+    def test_support_platforms_no_eeprom(self, mockDbBased, mockNotDbBased):
+        ret = decode_syseeprom.main()
+        assert ret == errno.ENODEV
+
+    def test_instantiate_eeprom_object(self):
+        """Test instantiate_eeprom_object to cover lazy import of sonic_platform"""
+        eeprom = decode_syseeprom.instantiate_eeprom_object()
+        # Since sonic_platform is mocked, this should return the mocked eeprom object
+        assert eeprom is not None

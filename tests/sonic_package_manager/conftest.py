@@ -26,16 +26,21 @@ def mock_docker_api():
     @dataclass
     class Image:
         id: str
+        image_tags: list[str]
 
         @property
         def attrs(self):
             return {'RepoTags': [self.id]}
 
+        @property
+        def tags(self):
+            return self.image_tags
+
     def pull(repo, ref):
-        return Image(f'{repo}:{ref}')
+        return Image(f'{repo}:{ref}', [ref])
 
     def load(filename):
-        return Image(filename)
+        return Image(filename, ["latest"])
 
     docker.pull = MagicMock(side_effect=pull)
     docker.load = MagicMock(side_effect=load)
@@ -412,7 +417,6 @@ def sonic_fs(fs):
     fs.create_dir(SERVICE_MGMT_SCRIPT_LOCATION)
     fs.create_file(GENERATED_SERVICES_CONF_FILE)
     fs.create_file(os.path.join(TEMPLATES_PATH, SERVICE_FILE_TEMPLATE))
-    fs.create_file(os.path.join(TEMPLATES_PATH, TIMER_UNIT_TEMPLATE))
     fs.create_file(os.path.join(TEMPLATES_PATH, SERVICE_MGMT_SCRIPT_TEMPLATE))
     fs.create_file(os.path.join(TEMPLATES_PATH, DOCKER_CTL_SCRIPT_TEMPLATE))
     fs.create_file(os.path.join(TEMPLATES_PATH, DEBUG_DUMP_SCRIPT_TEMPLATE))

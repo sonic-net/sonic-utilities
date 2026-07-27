@@ -4,6 +4,13 @@ from click.testing import CliRunner
 from .mock_tables import dbconnector
 from unittest.mock import patch, MagicMock
 
+from utilities_common.platform_sfputil_helper import (
+    load_platform_sfputil, logical_port_to_physical_port_index,
+    logical_port_name_to_physical_port_list, is_sfp_present,
+    get_first_subport, get_subport, get_sfp_object, get_value_from_db_by_field
+)
+from .utils import load_source
+
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")
@@ -11,6 +18,11 @@ sys.path.insert(0, modules_path)
 
 import show.main as show
 import show as show_module
+sfpshow = load_source("sfpshow", os.path.join(scripts_path, "sfpshow"))
+
+ERROR_INVALID_PORT = 1
+EXIT_FAIL = -1
+ERROR_NOT_IMPLEMENTED = 2
 
 test_sfp_eeprom_with_dom_output = """\
 Ethernet0: SFP EEPROM detected
@@ -64,15 +76,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_with_dom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
@@ -120,7 +150,10 @@ Ethernet8: SFP EEPROM detected
                 TxPowerLowAlarm   : -10.5012dBm
                 TxPowerLowWarning : -7.5007dBm
         ModuleMonitorValues:
+                Requested Laser Frequency: 193100GHz
+                Tx Frequency: 193100.0GHz
                 Temperature: 44.9883C
+                Requested Tx Power: -8.5dBm
                 Vcc: 3.2999Volts
         ModuleThresholdValues:
                 TempHighAlarm  : 80.0000C
@@ -170,6 +203,8 @@ Ethernet72: SFP EEPROM detected
         Vendor PN: some-model    
         Vendor Rev: A3
         Vendor SN: serial1   
+        dom_capability: N/A
+        is_replaceable: True
         ChannelMonitorValues:
                 RX1Power: 0.5dBm
                 RX2Power: 0.3dBm
@@ -224,15 +259,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
@@ -280,7 +333,8 @@ Ethernet44:
     DGD              ps      5.37      5.56      5.81      7.0          7.0          False         0.0          0.0          False
     SOPMD            ps^2    0.0       0.0       0.0       655.35       655.35       False         0.0          0.0          False
     SOP ROC          krad/s  1.0       1.0       2.0       N/A          N/A          N/A           N/A          N/A          N/A
-    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     0.0           0.0          0.0          0.0
+    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     False         0.0          0.0\
+          False
     Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False         0.0          0.0          False
     EVM              %       100.0     100.0     100.0     N/A          N/A          N/A           N/A          N/A          N/A
 """
@@ -846,12 +900,54 @@ Ethernet4: Transceiver status info not applicable
 Ethernet64: Transceiver status info not applicable
 """
 
+test_els_dom_info_dict = {
+    'els_temperature': '16.16',
+    'els_voltage': '3.396',
+    'els_temphighalarm': '80.0',
+    'els_templowalarm': '-5.0',
+    'els_temphighwarning': '70.0',
+    'els_templowwarning': '0.0',
+    'els_vcchighalarm': '3.63',
+    'els_vcclowalarm': '2.97',
+    'els_vcchighwarning': '3.465',
+    'els_vcclowwarning': '3.135',
+    'els_txpowerhighalarm': '7.0',
+    'els_txpowerlowalarm': '-6.9',
+    'els_txpowerhighwarning': '4.0',
+    'els_txpowerlowwarning': '-2.9',
+    'els_txbiashighalarm': '162.5',
+    'els_txbiashighwarning': '156.248',
+}
+
+test_els_dom_output = """\
+        ChannelMonitorValues:
+        ChannelThresholdValues:
+        ModuleMonitorValues:
+        ModuleThresholdValues:
+        ELSMonitorValues:
+                ELS Temperature: 16.16C
+                ELS Vcc: 3.396Volts
+        ELSThresholdValues:
+                ELS TempHighAlarm: 80.0C
+                ELS TempHighWarning: 70.0C
+                ELS TempLowAlarm: -5.0C
+                ELS TempLowWarning: 0.0C
+                ELS TxBiasHighAlarm: 162.5mA
+                ELS TxBiasHighWarning: 156.248mA
+                ELS TxPowerHighAlarm: 7.0mW
+                ELS TxPowerHighWarning: 4.0mW
+                ELS TxPowerLowAlarm: -6.9mW
+                ELS TxPowerLowWarning: -2.9mW
+                ELS VccHighAlarm: 3.63Volts
+                ELS VccHighWarning: 3.465Volts
+                ELS VccLowAlarm: 2.97Volts
+                ELS VccLowWarning: 3.135Volts
+"""
+
 class TestSFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     def test_sfp_presence(self):
         runner = CliRunner()
@@ -925,6 +1021,11 @@ Ethernet36  Present
         assert result.exit_code == 0
         assert "Ethernet24" not in result.output
 
+    def test_sfpshow_convert_dom_to_output_string_with_els(self):
+        sfp_show = sfpshow.SFPShow(None, None, dump_dom=True)
+        output = sfp_show.convert_dom_to_output_string("CPO", True, test_els_dom_info_dict)
+        assert output == test_els_dom_output
+
     def test_sfp_eeprom_with_dom(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet0", "-d"])
@@ -936,7 +1037,7 @@ Ethernet36  Present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet8", "-d"])
         assert result.exit_code == 0
         assert result.output == test_qsfp_dd_eeprom_with_dom_output
-        
+
     def test_osfp_eeprom_with_dom(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet72", "-d"])
@@ -1011,7 +1112,6 @@ Ethernet36  Present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -1019,9 +1119,37 @@ class Test_multiAsic_SFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+
+    def test_sfp_presence_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet0'])
+        expected = """Port       Presence
+---------  ----------
+Ethernet0  Present
+"""
+        assert result.exit_code == 0
+        assert result.output == expected
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet4'])
+        expected = """Port       Presence
+---------  -----------
+Ethernet4  Not present
+"""
+        assert result.exit_code == 0
+        assert result.output == expected
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet200'])
+        expected = """Port         Presence
+-----------  -----------
+Ethernet200  Not present
+"""
+        assert result.exit_code == 1
+        assert result.output == expected
 
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_sfp_presence_with_ns(self):
@@ -1067,10 +1195,31 @@ Ethernet200  Not present
         expected = "Ethernet200: SFP EEPROM Not detected"
         assert result_lines == expected
 
+    def test_sfp_eeprom_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ['Ethernet0'])
+        assert result.exit_code == 0
+        assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == test_sfp_eeprom_output
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ['Ethernet4'])
+        result_lines = result.output.strip('\n')
+        expected = "Ethernet4: SFP EEPROM Not detected"
+        assert result_lines == expected
+
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_qsfp_dd_pm_with_ns(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["pm"], ['Ethernet0', '-n', 'asic0'])
+        result_lines = result.output.strip('\n')
+        expected = "Ethernet0: Transceiver performance monitoring not applicable"
+        assert result_lines == expected
+
+    def test_qsfp_dd_pm_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["pm"], ['Ethernet0'])
         result_lines = result.output.strip('\n')
         expected = "Ethernet0: Transceiver performance monitoring not applicable"
         assert result_lines == expected
@@ -1083,12 +1232,27 @@ Ethernet200  Not present
         expected = "Ethernet0: Transceiver status info not applicable"
         assert result_lines == expected
 
+    def test_qsfp_dd_status_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["status"], ['Ethernet0'])
+        result_lines = result.output.strip('\n')
+        expected = "Ethernet0: Transceiver status info not applicable"
+        assert result_lines == expected
+
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic1'))
     def test_cmis_sfp_info_with_ns(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["info"], ['Ethernet64', '-n', 'asic1'])
         assert result.exit_code == 0
         assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_cmis_eeprom_output
+
+    def test_cmis_sfp_info_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["info"], ['Ethernet64'])
+        assert result.exit_code == 0
+        assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == test_cmis_eeprom_output
 
     def test_sfp_eeprom_all(self):
         runner = CliRunner()
@@ -1111,9 +1275,14 @@ Ethernet200  Not present
     def test_is_rj45_port(self):
         import utilities_common.platform_sfputil_helper as platform_sfputil_helper
         platform_sfputil_helper.platform_chassis = None
-        if 'sonic_platform' in sys.modules:
-            sys.modules.pop('sonic_platform')
-        assert platform_sfputil_helper.is_rj45_port("Ethernet0") == False
+        # Force `import sonic_platform` to raise ImportError regardless of whether
+        # the package is installed (it is, in per-platform sonic-buildimage CI) and
+        # regardless of whether other tests in this xdist worker pre-loaded it.
+        mods_to_hide = {k: None for k in list(sys.modules)
+                        if k == 'sonic_platform' or k.startswith('sonic_platform.')}
+        mods_to_hide.setdefault('sonic_platform', None)
+        with patch.dict(sys.modules, mods_to_hide):
+            assert platform_sfputil_helper.is_rj45_port("Ethernet0") is False
 
     def test_qsfp_dd_pm_all(self):
         runner = CliRunner()
@@ -1130,6 +1299,154 @@ Ethernet200  Not present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
+
+class TestMultiAsicSFP(object):
+
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis', None)
+    def test_load_platform_sfputil(self):
+        # Test that the function returns 0 as expected
+        assert load_platform_sfputil() == 0
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list',
+           MagicMock(return_value=[1]))
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_logical_port_to_physical_port_index(self, mock_is_rj45_port, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        port_name = "Ethernet0"
+        result = logical_port_to_physical_port_index(port_name)
+        assert result == 1
+
+    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index',
+           MagicMock(return_value=1))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_logical_port_name_to_physical_port_list(self, mock_is_rj45_port, mock_chassis):
+        # Set up mocks
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        port_name = "Ethernet0"
+        result = logical_port_name_to_physical_port_list(port_name)
+        assert result is not None
+        mock_is_rj45_port.return_value = False
+
+    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_is_sfp_present(self, mock_is_rj45_port, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        result = is_sfp_present("Ethernet0")
+        assert result is True  # or whatever the expected result is
+
+    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('utilities_common.platform_sfputil_helper.is_sfp_present')
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_get_sfp_object(self, mock_is_rj45_port, mock_chassis, sfp_present):
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        result = get_sfp_object(1)
+        assert result == mock_sfp
+        mock_is_rj45_port.return_value = True
+        sfp_present.return_value = True
+
+        try:
+            get_sfp_object(1)
+            assert False, "Expected SystemExit but it did not occur"
+        except SystemExit as e:
+            assert e.code == EXIT_FAIL
+        mock_is_rj45_port.return_value = False
+        sfp_present.return_value = False
+        try:
+            get_sfp_object(1)
+            assert False, "Expected SystemExit but it did not occur"
+        except SystemExit as e:
+            assert e.code == EXIT_FAIL
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(return_value=["Ethernet0", "Ethernet4"])))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport(self):
+        assert get_first_subport("Ethernet0") == "Ethernet0"
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=None)))
+    def test_get_first_subport_invalid_physical_port(self):
+        assert get_first_subport("Ethernet0") is None
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(side_effect=KeyError)))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport_keyerror(self):
+        assert get_first_subport("Ethernet0") is None
+
+    @patch('utilities_common.platform_sfputil_helper.get_value_from_db_by_field')
+    def test_get_subport(self, mock_get_value_from_db_by_field):
+        mock_get_value_from_db_by_field.return_value = '2'
+
+        # assuming config_db is passed or mocked elsewhere
+        result = get_subport("Ethernet0")
+        assert result == 2
+
+        # A missing (None) or empty subport defaults to subport 0 instead of crashing
+        mock_get_value_from_db_by_field.return_value = None
+        assert get_subport("Ethernet0") == 0
+
+        mock_get_value_from_db_by_field.return_value = ''
+        assert get_subport("Ethernet0") == 0
+
+    @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
+    @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
+    @patch('utilities_common.platform_sfputil_helper.multi_asic.get_namespace_for_port', return_value='asic0')
+    def test_get_value_from_db_by_field(self, mock_get_namespace, mock_config_db, mock_sonic_db):
+        # Mock CONFIG_DB case
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = "test_value"
+        mock_config_instance.connect.return_value = None  # No actual connection
+        mock_config_db.return_value = mock_config_instance
+
+        # Mock for SonicV2Connector case
+        mock_sonic_instance = MagicMock()
+        mock_sonic_instance.get.return_value = "test_value"
+        mock_sonic_instance.connect.return_value = None  # Mock connect to not do anything
+        mock_sonic_db.return_value = mock_sonic_instance
+
+        # Now call function
+        result = get_value_from_db_by_field("CONFIG_DB", "TEST_TABLE", "test_field", "Ethernet0")
+        assert result == "test_value"
+        mock_config_instance.connect.assert_called_once()
+        mock_config_instance.get.assert_called_once_with("CONFIG_DB", "TEST_TABLE|Ethernet0", "test_field")
+        # Mock STATE_DB case
+
+        mock_sonic_instance.get.return_value = "state_value"
+        result = get_value_from_db_by_field("STATE_DB", "TEST_TABLE", "test_field", "Ethernet0")
+        assert result == "state_value"
+        mock_sonic_instance.get.assert_called_once_with("STATE_DB", "TEST_TABLE|Ethernet0", "test_field")
+        mock_sonic_instance.close.assert_called_once()
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")

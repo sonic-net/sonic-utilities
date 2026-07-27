@@ -105,8 +105,7 @@ class FeatureRegistry:
                old_manifest: Manifest,
                new_manifest: Manifest):
         """ Migrate feature configuration. It can be that non-configurable
-        feature entries have to be updated. e.g: "delayed" for example if
-        the new feature introduces a service timer or name of the service has
+        feature entries have to be updated. e.g: name of the service has
         changed, but user configurable entries are not changed).
 
         Args:

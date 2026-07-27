@@ -71,6 +71,30 @@
                 "stage": "ingress",
                 "type": "CTRLPLANE"
             }
+        },
+        "PORT": {
+            "Ethernet4": {
+                "admin_status": "up",
+                "alias": "fortyGigE0/4",
+                "description": "Servers0:eth0",
+                "index": "1",
+                "lanes": "29,30,31,32",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000",
+                "tpid": "0x8100"
+            },
+            "Ethernet8": {
+                "admin_status": "up",
+                "alias": "fortyGigE0/8",
+                "description": "Servers1:eth0",
+                "index": "2",
+                "lanes": "33,34,35,36",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000",
+                "tpid": "0x8100"
+            }
         }
     },
     "expected_config": {

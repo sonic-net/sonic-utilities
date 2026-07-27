@@ -13,7 +13,7 @@ from sonic_package_manager.version import Version
 
 def translate_plain_to_tree(plain: Dict[str, str], sep='.') -> Dict:
     """ Convert plain key/value dictionary into
-    a tree by spliting the key with '.'
+    a tree by splitting the key with '.'
 
     Args:
         plain: Dictionary to convert into tree-like structure.
@@ -28,7 +28,7 @@ def translate_plain_to_tree(plain: Dict[str, str], sep='.') -> Dict:
                         }
                     }
                 }
-        sep: Seperator string
+        sep: Separator string
 
     Returns:
         Tree like structure

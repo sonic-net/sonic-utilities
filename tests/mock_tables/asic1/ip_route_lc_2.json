@@ -1,0 +1,56 @@
+{
+    "0.0.0.0/0": [
+        {
+            "prefix": "0.0.0.0/0",
+            "prefixLen": 0,
+            "protocol": "bgp",
+            "vrfId": 0,
+            "vrfName": "default",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "table": 254,
+            "internalStatus": 16,
+            "internalFlags": 9,
+            "internalNextHopNum": 3,
+            "internalNextHopActiveNum": 3,
+            "nexthopGroupId": 2173,
+            "installedNexthopGroupId": 2173,
+            "uptime": "01:01:57",
+            "nexthops": [
+                {
+                    "flags": 5,
+                    "ip": "10.0.0.1",
+                    "afi": "ipv4",
+                    "active": true,
+                    "recursive": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 11,
+                    "fib": true,
+                    "ip": "10.0.0.1",
+                    "afi": "ipv4",
+                    "interfaceIndex": 52,
+                    "interfaceName": "Ethernet-IB1",
+                    "resolver": true,
+                    "active": true,
+                    "onLink": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 3,
+                    "fib": true,
+                    "ip": "10.0.0.7",
+                    "afi": "ipv4",
+                    "interfaceIndex": 29,
+                    "interfaceName": "PortChannel106",
+                    "active": true,
+                    "weight": 1
+                }
+            ]
+        }
+    ]
+}

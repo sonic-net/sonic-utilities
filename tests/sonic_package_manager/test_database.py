@@ -2,7 +2,7 @@
 
 import pytest
 
-from sonic_package_manager.database import PackageEntry
+from sonic_package_manager.database import PackageEntry, package_from_dict
 from sonic_package_manager.errors import (
     PackageNotFoundError,
     PackageAlreadyExistsError,
@@ -87,3 +87,48 @@ def test_database_remove_package_built_in(fake_db):
                        match='Package swss is built-in, '
                              'cannot remove it'):
         fake_db.remove_package('swss')
+
+
+def test_package_from_dict():
+    """Test converting dictionary to PackageEntry object."""
+    package_info = {
+        'repository': 'test-repo',
+        'description': 'Test package description',
+        'default-reference': '1.0.0',
+        'installed-version': '1.0.0',
+        'installed': True,
+        'built-in': False,
+        'image-id': 'abc123',
+        'docker-image-reference': 'latest'
+    }
+
+    package = package_from_dict('test-package', package_info)
+
+    assert package.name == 'test-package'
+    assert package.repository == 'test-repo'
+    assert package.description == 'Test package description'
+    assert package.default_reference == '1.0.0'
+    assert package.version == Version.parse('1.0.0')
+    assert package.installed is True
+    assert package.built_in is False
+    assert package.image_id == 'abc123'
+    assert package.docker_image_reference == 'latest'
+
+
+def test_package_from_dict_minimal():
+    """Test converting minimal dictionary to PackageEntry object."""
+    package_info = {
+        'repository': 'test-repo'
+    }
+
+    package = package_from_dict('test-package', package_info)
+
+    assert package.name == 'test-package'
+    assert package.repository == 'test-repo'
+    assert package.description is None
+    assert package.default_reference is None
+    assert package.version is None
+    assert package.installed is False
+    assert package.built_in is False
+    assert package.image_id is None
+    assert package.docker_image_reference is None

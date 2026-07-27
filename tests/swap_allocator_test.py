@@ -10,7 +10,7 @@ from sonic_installer.main import SWAPAllocator
 class TestSWAPAllocator(object):
 
     @classmethod
-    def setup(cls):
+    def setup_class(cls):
         print("SETUP")
 
     def test_read_from_meminfo(self):

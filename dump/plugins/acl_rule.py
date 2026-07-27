@@ -8,6 +8,8 @@ from .executor import Executor
 
 CFG_DB_SEPARATOR = SonicDBConfig.getSeparator("CONFIG_DB")
 ASIC_DB_SEPARATOR = SonicDBConfig.getSeparator("ASIC_DB")
+APP_DB_SEPARATOR = SonicDBConfig.getSeparator("APPL_DB")
+APP_RULE_NAME = "ACL_RULE_TABLE"
 
 
 class Acl_Rule(Executor):
@@ -22,19 +24,28 @@ class Acl_Rule(Executor):
     def get_all_args(self, ns=""):
         req = MatchRequest(db="CONFIG_DB", table="ACL_RULE", key_pattern="*", ns=ns)
         ret = self.match_engine.fetch(req)
-        acl_rules = ret["keys"]
-        return [key.split(CFG_DB_SEPARATOR, 1)[-1] for key in acl_rules]
+        req_app = MatchRequest(db="APPL_DB", table=APP_RULE_NAME, key_pattern="*", ns=ns)
+        ret_app = self.match_engine.fetch(req_app)
+        return [f"{CFG_DB_SEPARATOR}".join(key.split(CFG_DB_SEPARATOR)[1:]) for key in ret.get("keys")] + \
+               [f"{APP_DB_SEPARATOR}".join(key.split(APP_DB_SEPARATOR)[1:]) for key in ret_app.get("keys")]
 
     def execute(self, params):
-        self.ret_temp = create_template_dict(dbs=["CONFIG_DB", "ASIC_DB"])
-
+        self.ret_temp = create_template_dict(dbs=["CONFIG_DB", "APPL_DB", "ASIC_DB"])
+        invalid = False
         try:
             acl_table_name, acl_rule_name = params[self.ARG_NAME].split(CFG_DB_SEPARATOR, 1)
         except ValueError:
-            raise ValueError(f"Invalid rule name passed {params[self.ARG_NAME]}")
+            invalid = True
+
+        if invalid:
+            try:
+                acl_table_name, acl_rule_name = params[self.ARG_NAME].split(APP_DB_SEPARATOR, 1)
+            except ValueError:
+                raise ValueError(f"Invalid rule name passed {params[self.ARG_NAME]}")
 
         self.ns = params["namespace"]
         self.init_acl_rule_config_info(acl_table_name, acl_rule_name)
+        self.init_acl_rule_appl_info(acl_table_name, acl_rule_name)
         self.init_acl_rule_asic_info(acl_table_name, acl_rule_name)
         return self.ret_temp
 
@@ -42,7 +53,15 @@ class Acl_Rule(Executor):
         req = MatchRequest(db="CONFIG_DB", table="ACL_RULE",
                            key_pattern=CFG_DB_SEPARATOR.join([acl_table_name, acl_rule_name]), ns=self.ns)
         ret = self.match_engine.fetch(req)
-        self.add_to_ret_template(req.table, req.db, ret["keys"], ret["error"])
+        if ret["keys"]:
+            self.add_to_ret_template(req.table, req.db, ret["keys"], ret["error"])
+
+    def init_acl_rule_appl_info(self, acl_table_name, acl_rule_name):
+        req = MatchRequest(db="APPL_DB", table=APP_RULE_NAME,
+                           key_pattern=APP_DB_SEPARATOR.join([acl_table_name, acl_rule_name]), ns=self.ns)
+        ret = self.match_engine.fetch(req)
+        if ret["keys"]:
+            self.add_to_ret_template(req.table, req.db, ret["keys"], ret["error"])
 
     def init_acl_rule_asic_info(self, acl_table_name, acl_rule_name):
         counter_oid = fetch_acl_counter_oid(self.match_engine, acl_table_name, acl_rule_name, self.ns)

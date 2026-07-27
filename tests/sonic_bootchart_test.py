@@ -1,12 +1,12 @@
 import os
-import subprocess
 import pytest
 from click.testing import CliRunner
 from unittest.mock import patch, Mock
 import utilities_common
-import imp
+from .utils import load_source
 
-sonic_bootchart = imp.load_source('sonic-bootchart', 'scripts/sonic-bootchart')
+
+sonic_bootchart = load_source('sonic-bootchart', 'scripts/sonic-bootchart', cache_module=True)
 
 BOOTCHART_OUTPUT_FILES = [
     os.path.join(sonic_bootchart.BOOTCHART_DEFAULT_OUTPUT_DIR, "bootchart-20220504-1040.svg"),

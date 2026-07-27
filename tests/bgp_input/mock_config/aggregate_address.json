@@ -1,0 +1,30 @@
+{
+    "BGP_AGGREGATE_ADDRESS|192.168.0.0/24": {
+        "bbr-required": "true",
+        "summary-only": "false",
+        "as-set": "false",
+        "aggregate-address-prefix-list": "AGG_ROUTES_V4",
+        "contributing-address-prefix-list": "AGG_CONTRIBUTING_ROUTES_V4"
+    },
+    "BGP_AGGREGATE_ADDRESS|10.0.0.0/24": {
+        "bbr-required": "true",
+        "summary-only": "true",
+        "as-set": "true",
+        "aggregate-address-prefix-list": "",
+        "contributing-address-prefix-list": ""
+    },
+    "BGP_AGGREGATE_ADDRESS|fc00:1::/64": {
+        "bbr-required": "false",
+        "summary-only": "false",
+        "as-set": "true",
+        "aggregate-address-prefix-list": "AGG_ROUTES_V6",
+        "contributing-address-prefix-list": "AGG_CONTRIBUTING_ROUTES_V6"
+    },
+    "BGP_AGGREGATE_ADDRESS|fc00:3::/64": {
+        "bbr-required": "true",
+        "summary-only": "true",
+        "as-set": "false",
+        "aggregate-address-prefix-list": "",
+        "contributing-address-prefix-list": ""
+    }
+}

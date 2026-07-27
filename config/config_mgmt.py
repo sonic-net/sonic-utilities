@@ -8,7 +8,6 @@ import re
 import shutil
 import syslog
 import tempfile
-import yang as ly
 from json import load
 from sys import flags
 from time import sleep as tsleep
@@ -31,12 +30,11 @@ DEFAULT_CONFIG_DB_JSON_FILE = '/etc/sonic/port_breakout_config_db.json'
 
 class ConfigMgmt():
     '''
-    Class to handle config managment for SONIC, this class will use sonic_yang
+    Class to handle config management for SONIC, this class will use sonic_yang
     to verify config for the commands which are capable of change in config DB.
     '''
 
-    def __init__(self, source="configDB", debug=False, allowTablesWithoutYang=True,
-                 sonicYangOptions=0, configdb=None):
+    def __init__(self, source="configDB", debug=False, allowTablesWithoutYang=True, configdb=None):
         '''
         Initialise the class, --read the config, --load in data tree.
 
@@ -55,7 +53,6 @@ class ConfigMgmt():
             self.configdbJsonOut = None
             self.source = source
             self.allowTablesWithoutYang = allowTablesWithoutYang
-            self.sonicYangOptions = sonicYangOptions
             self.configdb = configdb
 
             # logging vars
@@ -71,7 +68,7 @@ class ConfigMgmt():
         return
 
     def __init_sonic_yang(self):
-        self.sy = sonic_yang.SonicYang(YANG_DIR, debug=self.DEBUG, sonic_yang_options=self.sonicYangOptions)
+        self.sy = sonic_yang.SonicYang(YANG_DIR, debug=self.DEBUG)
         # load yang models
         self.sy.loadYangModel()
         # load jIn from config DB or from config DB json file.
@@ -291,8 +288,7 @@ class ConfigMgmt():
 
         # Instantiate new context since parse_module_mem() loads the module into context.
         sy = sonic_yang.SonicYang(YANG_DIR)
-        module = sy.ctx.parse_module_mem(yang_module_str, ly.LYS_IN_YANG)
-        return module.name()
+        return sy.load_module_str_name(yang_module_str)
 
 
 # End of Class ConfigMgmt
@@ -336,7 +332,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
         Parameters:
             db (SonicV2Connector): database.
-            key (str): key in ASIC DB, with table Seperator if applicable.
+            key (str): key in ASIC DB, with table Separator if applicable.
 
         Returns:
             (bool): True, if given key is present.
@@ -424,11 +420,11 @@ class ConfigMgmtDPB(ConfigMgmt):
             delPorts (list): ports to be deleted.
             portJson (dict): Config DB json Part of all Ports, generated from
                 platform.json.
-            force (bool): if false return dependecies, else delete dependencies.
+            force (bool): if false return dependencies, else delete dependencies.
             loadDefConfig: If loadDefConfig, add default config for ports as well.
 
         Returns:
-            (deps, ret) (tuple)[list, bool]: dependecies and success/failure.
+            (deps, ret) (tuple)[list, bool]: dependencies and success/failure.
         '''
         MAX_WAIT = 60
         try:
@@ -471,15 +467,15 @@ class ConfigMgmtDPB(ConfigMgmt):
 
     def _deletePorts(self, ports=list(), force=False):
         '''
-        Delete ports and dependecies from data tree, validate and return resultant
+        Delete ports and dependencies from data tree, validate and return resultant
         config.
 
         Parameters:
             ports (list): list of ports
-            force (bool): if false return dependecies, else delete dependencies.
+            force (bool): if false return dependencies, else delete dependencies.
 
         Returns:
-            (configToLoad, deps, ret) (tuple)[dict, list, bool]: config, dependecies
+            (configToLoad, deps, ret) (tuple)[dict, list, bool]: config, dependencies
             and success/fail.
         '''
         configToLoad = None; deps = None
@@ -489,11 +485,11 @@ class ConfigMgmtDPB(ConfigMgmt):
             self.sysLog(doPrint=True, msg='Start Port Deletion')
             deps = list()
 
-            # Get all dependecies for ports
+            # Get all dependencies for ports
             for port in ports:
                 xPathPort = self.sy.findXpathPortLeaf(port)
-                self.sysLog(doPrint=True, msg='Find dependecies for port {}'.\
-                    format(port))
+                self.sysLog(doPrint=True,
+                           msg='Find dependencies for port {}'.format(port))
                 dep = self.sy.find_data_dependencies(str(xPathPort))
                 if dep:
                     deps.extend(dep)
@@ -502,7 +498,7 @@ class ConfigMgmtDPB(ConfigMgmt):
             if not force and deps:
                 return configToLoad, deps, False
 
-            # delets all deps, No topological sort is needed as of now, if deletion
+            # deletes all deps, No topological sort is needed as of now, if deletion
             # of deps fails, return immediately
             elif deps:
                 for dep in deps:
@@ -576,7 +572,7 @@ class ConfigMgmtDPB(ConfigMgmt):
                 self._mergeConfigs(self.configdbJsonOut, defConfig, True)
 
             # create a tree with merged config and validate, if validation is
-            # sucessful, then configdbJsonOut contains final and valid config.
+            # successful, then configdbJsonOut contains final and valid config.
             self.sy.loadData(self.configdbJsonOut)
             if self.validateConfigData()==False:
                 return configToLoad, False
@@ -711,7 +707,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
     def configWithKeys(self, configIn=dict(), keys=list()):
         '''
-        This function returns the config with relavant keys in Input Config.
+        This function returns the config with relevant keys in Input Config.
         It calls _searchKeysInConfig.
 
         Parameters:
@@ -784,7 +780,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
     def _createConfigToLoad(self, diff, inp, outp):
         '''
-        Create the config to write in Config DB, i.e. compitible with mod_config()
+        Create the config to write in Config DB, i.e. compatible with mod_config()
         This functions has 3 inner functions:
         -- _deleteHandler: to handle delete in diff. See example below.
         -- _insertHandler: to handle insert in diff. See example below.
@@ -802,7 +798,7 @@ class ConfigMgmtDPB(ConfigMgmt):
                 is applied.
 
         Returns:
-            configToLoad (dict): config in a format compitible with mod_Config().
+            configToLoad (dict): config in a format compatible with mod_Config().
         '''
 
         ### Internal Functions ###
