@@ -241,6 +241,7 @@ def update_stp_vlan_parameter(ctx, db, param_type, new_value):
         if current_global_value == current_vlan_value:
             db.mod_entry('STP_VLAN', vlan, {param_type: new_value})
 
+
 def check_if_vlan_exist_in_db(db, ctx, vid):
     vlan_name = 'Vlan{}'.format(vid)
     vlan = db.get_entry('VLAN', vlan_name)
@@ -561,7 +562,6 @@ def stp_disable(_db, mode):
         disable_global_pvst(db)
     elif mode == "mst" and current_mode == "mst":
         disable_global_mst(db)
-
 
 
 # cmd: STP global root guard timeout
@@ -996,9 +996,7 @@ def check_if_interface_is_valid(ctx, db, interface_name):
     if interface_name_is_valid(db, interface_name) is False:
         ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
     for key in db.get_table('INTERFACE'):
-        if type(key) != tuple:
-            continue
-        if key[0] == interface_name:
+        if isinstance(key, tuple) and key[0] == interface_name:
             ctx.fail(" {} has ip address {} configured - It's not a L2 interface".format(interface_name, key[1]))
     if is_portchannel_member_port(db, interface_name):
         ctx.fail(" {} is a portchannel member port - STP can't be configured".format(interface_name))
@@ -1281,6 +1279,7 @@ def is_valid_vlan_interface_priority(ctx, priority):
     if priority not in range(STP_INTERFACE_MIN_PRIORITY, STP_INTERFACE_MAX_PRIORITY + 1):
         ctx.fail("STP per vlan port priority must be in range 0-240")
 
+
 # config spanning_tree vlan interface priority <Vlan> <interface_name> <value: 0-240>
 @spanning_tree_vlan_interface.command('priority')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
@@ -1403,7 +1402,7 @@ def stp_interface_disable(_db, interface_name):
         if interface_name in stp_port_tbl:
             db.set_entry('STP_PORT', interface_name, {'enabled': 'false'})
             click.echo(f"STP disabled for {interface_name}")
-        else :
+        else:
             click.echo(f"No STP_PORT entry for {interface_name}")
 
 
