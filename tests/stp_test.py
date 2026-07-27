@@ -1222,7 +1222,7 @@ class TestStpInterfaceDisable:
     @patch('config.stp.check_if_global_stp_enabled')
     @patch('config.stp.check_if_interface_is_valid')
     def test_disable_interface_mstp(self, mock_check_valid, mock_check_global):
-        self.cfgdb.get_entry.return_value = {'mode': 'mstp'}
+        self.cfgdb.get_entry.return_value = {'mode': 'mst'}
 
         result = self.runner.invoke(
             config.config.commands["spanning-tree"]
@@ -1234,8 +1234,8 @@ class TestStpInterfaceDisable:
 
         assert result.exit_code == 0
         self.cfgdb.set_entry.assert_called_with("STP_PORT", "Ethernet0", {"enabled": "false"})
-        assert "Current STP mode: mstp" in result.output
-        assert "STP mode mstp is disabled for Ethernet0" in result.output
+        assert "Current STP mode: mst" in result.output
+        assert "STP mode mst is disabled for Ethernet0" in result.output
 
     @patch('config.stp.check_if_global_stp_enabled')
     @patch('config.stp.check_if_interface_is_valid')
