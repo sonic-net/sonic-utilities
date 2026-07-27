@@ -90,50 +90,51 @@ Either trapid or group must be provided.
 
 # show copp stats output
 show_copp_stats_expected_output = """\
-Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes  Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
 -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
-default                   5            438             5            438              0               0           0            0
-queue4_group1           470         515344           470         515344              0               0           0            0
-queue4_group2            32           2464            16           1232              0               0          16         1232
+default                   5            438             5            438  0              0               0           0
+queue4_group1           470         515344           470         515344  0              0               0           0
+queue4_group2            32           2464            16           1232  0              0               16          1232
+queue4_group3            64           4928            64           4928  N/A            N/A             N/A         N/A
 """  # noqa: E501
 
 # Multi-ASIC expected outputs for show copp stats
 show_copp_stats_multi_asic_expected_output = """\
-ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes  Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
 ---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
-asic0      default                  10            876            10            876              0               0           0            0
-asic0      queue4_group1           235         257672           235         257672              0               0           0            0
-asic0      queue4_group2            16           1232             8            616              0               0           8          616
-asic1      default                  15           1314            15           1314              0               0           0            0
-asic1      queue4_group1           300         328800           300         328800              0               0           0            0
-asic1      queue4_group2            20           1540            10            770              0               0          10          770
+asic0      default                  10            876            10            876  N/A            N/A             N/A         N/A
+asic0      queue4_group1           235         257672           235         257672  N/A            N/A             N/A         N/A
+asic0      queue4_group2            16           1232             8            616  N/A            N/A             N/A         N/A
+asic1      default                  15           1314            15           1314  N/A            N/A             N/A         N/A
+asic1      queue4_group1           300         328800           300         328800  N/A            N/A             N/A         N/A
+asic1      queue4_group2            20           1540            10            770  N/A            N/A             N/A         N/A
 """  # noqa: E501
 
 show_copp_stats_asic0_expected_output = """\
-ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes  Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
 ---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
-asic0      default                  10            876            10            876              0               0           0            0
-asic0      queue4_group1           235         257672           235         257672              0               0           0            0
-asic0      queue4_group2            16           1232             8            616              0               0           8          616
+asic0      default                  10            876            10            876  N/A            N/A             N/A         N/A
+asic0      queue4_group1           235         257672           235         257672  N/A            N/A             N/A         N/A
+asic0      queue4_group2            16           1232             8            616  N/A            N/A             N/A         N/A
 """  # noqa: E501
 
 show_copp_stats_asic1_expected_output = """\
-ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes  Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
 ---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
-asic1      default                  15           1314            15           1314              0               0           0            0
-asic1      queue4_group1           300         328800           300         328800              0               0           0            0
-asic1      queue4_group2            20           1540            10            770              0               0          10          770
+asic1      default                  15           1314            15           1314  N/A            N/A             N/A         N/A
+asic1      queue4_group1           300         328800           300         328800  N/A            N/A             N/A         N/A
+asic1      queue4_group2            20           1540            10            770  N/A            N/A             N/A         N/A
 """  # noqa: E501
 
 show_copp_stats_expected_output_after_clear = """\
-ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes    Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
+ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes  Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
 ---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
-asic0      default                   0              0             0              0              0               0           0            0
-asic0      queue4_group1             0              0             0              0              0               0           0            0
-asic0      queue4_group2             0              0             0              0              0               0           0            0
-asic1      default                   0              0             0              0              0               0           0            0
-asic1      queue4_group1             0              0             0              0              0               0           0            0
-asic1      queue4_group2             0              0             0              0              0               0           0            0
+asic0      default                   0              0             0              0  N/A            N/A             N/A         N/A
+asic0      queue4_group1             0              0             0              0  N/A            N/A             N/A         N/A
+asic0      queue4_group2             0              0             0              0  N/A            N/A             N/A         N/A
+asic1      default                   0              0             0              0  N/A            N/A             N/A         N/A
+asic1      queue4_group1             0              0             0              0  N/A            N/A             N/A         N/A
+asic1      queue4_group2             0              0             0              0  N/A            N/A             N/A         N/A
 """  # noqa: E501
 
 
