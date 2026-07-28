@@ -148,10 +148,9 @@ class TestStormControl(object):
     @patch("show.main.multi_asic_util.multi_asic_get_ip_intf_from_ns",
            mock.Mock(return_value=['Ethernet0']))
     def test_show_storm_namespace(self):
-        # Force a multi-ASIC context so the -n/--namespace validation callback
-        # does not abort. This actually exercises the namespace code path and
-        # keeps the test correct even if multi_asic_namespace_validation_callback
-        # is later fixed to call is_multi_asic().
+        # Future-proof: if multi_asic_namespace_validation_callback is fixed to call
+        # multi_asic.is_multi_asic(), keep the test in a multi-ASIC context so the
+        # -n/--namespace option is accepted and we exercise the namespace code path.
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["storm-control"], ["-n", "asic0"])
         print(result.exit_code)
