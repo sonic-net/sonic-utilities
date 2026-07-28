@@ -63,6 +63,25 @@ MIN_HD_SPACE_NEEDED=$((100000 * $NUM_ASIC)) # 100M * NUM_ASIC
 # List of ASICs that perform the reboot
 ASIC_LIST=($(seq 0 $(( NUM_ASIC - 1))))
 
+function reboot_record_marker()
+{
+    # Persist a best-effort marker recording the reboot we are about to perform. Stored
+    # under /host so it survives the reboot; postupgrade_actions may read it to correlate
+    # a hardware-induced fault with a user-issued warm/fast reboot.
+    #
+    # NOTE: This file persists across reboots, so readers MUST treat it as potentially stale
+    # unless it is explicitly cleared after processing (or cleared by non-warm reboot paths).
+    # Best-effort: never block the reboot if writing the flag fails (script runs with -e).
+    local REBOOT_FLAG_FILE="/host/reboot-cause/warm-reboot-flag.txt"
+    rm -f "${REBOOT_FLAG_FILE}" || true
+    mkdir -p "$(dirname "${REBOOT_FLAG_FILE}")" || true
+    {
+        echo "reboot_script=\"${REBOOT_SCRIPT_NAME}\""
+        echo "reboot_type=\"${REBOOT_TYPE}\""
+        echo "reboot_time=\"${REBOOT_TIME}\""
+    } > "${REBOOT_FLAG_FILE}" || true
+}
+
 function error()
 {
     local message="$@"
@@ -1243,6 +1262,10 @@ fi
 # Upon next boot, the contents of this file will be used to determine the
 # cause of the previous reboot
 echo "User issued '${REBOOT_SCRIPT_NAME}' command [User: ${REBOOT_USER}, Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+
+# Record the reboot type so postupgrade_actions can detect a hardware fault that
+# occurred during this warm/fast reboot.
+reboot_record_marker
 
 # Wait until all buffers synced with disk
 sync
