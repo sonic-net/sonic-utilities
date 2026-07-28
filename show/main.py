@@ -212,11 +212,17 @@ def display_storm_all():
 #
 # Get storm-control configurations per interface append to body
 #
-def get_storm_interface(intf, body):
+def get_storm_interface(intf, body, namespace=None):
     storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
 
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    if namespace is None:
+        config_db = ConfigDBConnector()
+        config_db.connect()
+    else:
+        # On multi-ASIC platforms storm-control config lives in the per-ASIC
+        # CONFIG_DB, so read it from the requested namespace instead of the
+        # default (host) database.
+        config_db = multi_asic.connect_config_db_for_ns(namespace)
 
     table = config_db.get_table('PORT_STORM_CONTROL')
 
@@ -527,7 +533,7 @@ def storm_control(ctx, namespace, display):
         else:
             interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
             for intf in interfaces:
-                get_storm_interface(intf, body)
+                get_storm_interface(intf, body, namespace)
             click.echo(tabulate(body, header, tablefmt="grid"))
 
 @storm_control.command('interface')
