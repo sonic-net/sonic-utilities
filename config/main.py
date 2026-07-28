@@ -2254,6 +2254,24 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
     #Stop services before config push
     if not no_service_restart:
+        try:
+            _db = swsscommon.DBConnector('STATE_DB', 0)
+            boot_type = None
+            # fast-reboot sets both FAST_RESTART_ENABLE_TABLE and WARM_RESTART_ENABLE_TABLE;
+            # check fast first so the label is correct when both flags are set.
+            if swsscommon.RestartWaiter.isFastBootInProgress(_db):
+                boot_type = 'fast-reboot'
+            elif swsscommon.RestartWaiter.isWarmBootInProgress(_db):
+                boot_type = 'warm-boot'
+            if boot_type:
+                click.echo(f"A {boot_type} is still in progress. Please wait for finalization to complete.")
+                sys.exit(CONFIG_RELOAD_NOT_READY)
+        except SystemExit:
+            raise
+        except Exception:
+            pass
+
+    if not no_service_restart:
         log.log_notice("'reload' stopping services...")
         _stop_services()
 
