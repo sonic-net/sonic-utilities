@@ -164,10 +164,26 @@ class TestStormControl(object):
         # asic0 mock DB has distinctive rates (111000/222000/333000) that differ from
         # the host DB, so asserting this output proves the namespace path reads the
         # correct per-ASIC database. is_multi_asic is patched True so the
-        # -n/--namespace option is accepted even once
+        # -n/--namespace option is accepted even when
         # multi_asic_namespace_validation_callback is fixed to call is_multi_asic().
         runner = CliRunner()
         result = runner.invoke(show.cli, ["storm-control", "-n", "asic0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_storm_namespace_output
+
+    @patch("show.main.multi_asic.is_multi_asic", mock.Mock(return_value=True))
+    @patch("show.main.multi_asic.get_namespace_list",
+           mock.Mock(return_value=['asic0', 'asic1']))
+    def test_show_storm_interface_namespace(self):
+        # On multi-ASIC, 'show storm-control -n <ns> interface <intf>' must read the
+        # per-ASIC CONFIG_DB. The asic0 mock DB uses distinctive rates
+        # (111000/222000/333000), so asserting this output proves the interface
+        # subcommand honors the selected namespace instead of the host database.
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli, ["storm-control", "-n", "asic0", "interface", "Ethernet0"])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0

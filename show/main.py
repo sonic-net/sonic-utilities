@@ -209,20 +209,28 @@ def display_storm_all():
 
     click.echo(tabulate(body, header, tablefmt="grid"))
 
-#
-# Get storm-control configurations per interface append to body
-#
-def get_storm_interface(intf, body, namespace=None):
-    storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
 
+#
+# Connect to the CONFIG_DB that holds storm-control configuration. On
+# multi-ASIC platforms storm-control config lives in the per-ASIC CONFIG_DB,
+# so connect to the requested namespace instead of the default (host) database.
+#
+def connect_storm_control_config_db(namespace=None):
     if namespace is None:
         config_db = ConfigDBConnector()
         config_db.connect()
     else:
-        # On multi-ASIC platforms storm-control config lives in the per-ASIC
-        # CONFIG_DB, so read it from the requested namespace instead of the
-        # default (host) database.
         config_db = multi_asic.connect_config_db_for_ns(namespace)
+    return config_db
+
+
+#
+# Get storm-control configurations per interface append to body
+#
+def get_storm_interface(intf, body, namespace=None):
+    storm_type_list = ['broadcast', 'unknown-unicast', 'unknown-multicast']
+
+    config_db = connect_storm_control_config_db(namespace)
 
     table = config_db.get_table('PORT_STORM_CONTROL')
 
@@ -238,10 +246,11 @@ def get_storm_interface(intf, body, namespace=None):
             kbps = data['kbps']
             body.append([intf, storm_type, kbps])
 
+
 #
 # Display storm-control data of given interface
 #
-def display_storm_interface(intf):
+def display_storm_interface(intf, namespace=None):
     """ Show storm-control """
 
     storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
@@ -249,8 +258,7 @@ def display_storm_interface(intf):
     header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
     body = []
 
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = connect_storm_control_config_db(namespace)
 
     table = config_db.get_table('PORT_STORM_CONTROL')
 
@@ -546,7 +554,7 @@ def interface(ctx, interface):
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
         ctx.fail('-n/--namespace option required. provide namespace from list {}'.format(multi_asic.get_namespace_list()))
     if interface:
-        display_storm_interface(interface)
+        display_storm_interface(interface, namespace)
 
 #
 # 'mgmt-vrf' group ("show mgmt-vrf ...")
