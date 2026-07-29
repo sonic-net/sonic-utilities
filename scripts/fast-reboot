@@ -76,8 +76,10 @@ function record_reboot_marker()
     rm -f "${REBOOT_FLAG_FILE}" || true
     mkdir -p "$(dirname "${REBOOT_FLAG_FILE}")" || true
     {
-        echo "reboot_script=\"${REBOOT_SCRIPT_NAME}\""
-        echo "reboot_type=\"${REBOOT_TYPE}\""
+        # reboot_type = user-invoked command (warm-/fast-/express-reboot); reboot_type_effective
+        # = the internal type actually run (may differ, e.g. fastfast-reboot on Mellanox warm).
+        echo "reboot_type=\"${REBOOT_SCRIPT_NAME}\""
+        echo "reboot_type_effective=\"${REBOOT_TYPE}\""
         echo "reboot_time=\"${REBOOT_TIME}\""
     } > "${REBOOT_FLAG_FILE}" || true
 }
