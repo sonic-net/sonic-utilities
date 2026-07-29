@@ -616,7 +616,8 @@ class RemoveCreateOnlyDependencyMoveValidator:
 
             simulated_config = move.apply(current_config) # Config after applying just this move
 
-            for member_name in current_members:
+            for member_name in self.path_addressing.configdb_sorted_keys_by_backlinks(
+                    f"/{table_to_check}", current_members, reverse=False, configdb_relative=True):
                 if member_name not in target_members:
                     continue
 
@@ -850,12 +851,12 @@ class NoDependencyMoveValidator:
         simulated_config = move.apply(diff.current_config)
         deleted_paths, added_paths = self._get_paths(diff.current_config, simulated_config, [])
 
-        # For deleted paths, we check the current config has no dependencies between nodes under the removed path
-        if not self._validate_paths_config(deleted_paths, diff.current_config):
-            return False
-
         # For added paths, we check the simulated config has no dependencies between nodes under the added path
         if not self._validate_paths_config(added_paths, simulated_config):
+            return False
+
+        # For deleted paths, we check the current config has no dependencies between nodes under the removed path
+        if not self._validate_paths_config(deleted_paths, diff.current_config):
             return False
 
         return True
@@ -935,10 +936,7 @@ class NoDependencyMoveValidator:
         return True
 
     def _find_ref_paths(self, paths, config):
-        refs = []
-        for path in paths:
-            refs.extend(self.path_addressing.find_ref_paths(path, config))
-        return refs
+        return self.path_addressing.find_ref_paths(paths, config)
 
 class NoEmptyTableMoveValidator:
     """
@@ -1041,19 +1039,59 @@ class TableLevelMoveGenerator:
     if they are in target but not current configs.
     """
 
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+
     def generate(self, diff):
         # Removing tables in current but not target
-        for tokens in self._get_non_existing_tables_tokens(diff.current_config, diff.target_config):
+        for tokens in self._get_non_existing_tables_tokens(diff.current_config, diff.target_config, reverse=False):
             yield JsonMove(diff, OperationType.REMOVE, tokens)
 
         # Adding tables in target but not current
-        for tokens in self._get_non_existing_tables_tokens(diff.target_config, diff.current_config):
+        for tokens in self._get_non_existing_tables_tokens(diff.target_config, diff.current_config, reverse=True):
             yield JsonMove(diff, OperationType.ADD, tokens, tokens)
 
-    def _get_non_existing_tables_tokens(self, config1, config2):
-        for table in config1:
+    def _get_non_existing_tables_tokens(self, config1, config2, reverse):
+        for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
             if not(table in config2):
                 yield [table]
+
+class BulkLeafListMoveGenerator:
+    """
+    A class that generates bulk REPLACE moves for leaf-lists (lists of primitive
+    values) that differ between current and target configs.
+    """
+    def generate(self, diff):
+        for move in self._traverse(diff, diff.current_config, diff.target_config, []):
+            yield move
+
+    def _traverse(self, diff, current_ptr, target_ptr, tokens):
+        if not isinstance(current_ptr, dict) or not isinstance(target_ptr, dict):
+            return
+
+        for key in current_ptr:
+            if key not in target_ptr:
+                continue
+
+            current_val = current_ptr[key]
+            target_val = target_ptr[key]
+            tokens.append(key)
+
+            if isinstance(current_val, list) and isinstance(target_val, list):
+                if (current_val != target_val and
+                        target_val and
+                        self._is_leaf_list(current_val) and
+                        self._is_leaf_list(target_val)):
+                    yield JsonMove(diff, OperationType.REPLACE, list(tokens), list(tokens))
+            elif isinstance(current_val, dict) and isinstance(target_val, dict):
+                for move in self._traverse(diff, current_val, target_val, tokens):
+                    yield move
+
+            tokens.pop()
+
+    @staticmethod
+    def _is_leaf_list(lst):
+        return all(isinstance(item, (str, int, float, bool)) for item in lst)
 
 class KeyLevelMoveGenerator:
     """
@@ -1070,9 +1108,12 @@ class KeyLevelMoveGenerator:
     This class will generate moves to remove keys if they are in current, but not target. It also add keys
     if they are in target but not current configs.
     """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+
     def generate(self, diff):
         # Removing keys in current but not target
-        for tokens in self._get_non_existing_keys_tokens(diff.current_config, diff.target_config):
+        for tokens in self._get_non_existing_keys_tokens(diff.current_config, diff.target_config, reverse=False):
             table = tokens[0]
             # if table has a single key, delete the whole table because empty tables are not allowed in ConfigDB
             if len(diff.current_config[table]) == 1:
@@ -1081,12 +1122,12 @@ class KeyLevelMoveGenerator:
                 yield JsonMove(diff, OperationType.REMOVE, tokens)
 
         # Adding keys in target but not current
-        for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config):
+        for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config, reverse=True):
             yield JsonMove(diff, OperationType.ADD, tokens, tokens)
 
-    def _get_non_existing_keys_tokens(self, config1, config2):
-        for table in config1:
-            for key in config1[table]:
+    def _get_non_existing_keys_tokens(self, config1, config2, reverse):
+        for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
+            for key in self.path_addressing.configdb_sorted_keys_by_backlinks("/" + table, config1, reverse=reverse):
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
 
@@ -1194,7 +1235,10 @@ class SingleRunLowLevelMoveGenerator:
             return
 
         if isinstance(current_ptr, dict) or isinstance(target_ptr, dict):
-            for key in current_ptr:
+            current_path = self.path_addressing.create_path(current_tokens)
+            target_path = self.path_addressing.create_path(target_tokens)
+
+            for key in self._sorted_keys(current_path, current_ptr, reverse=False):
                 current_tokens.append(key)
                 if key in target_ptr:
                     target_tokens.append(key)
@@ -1207,7 +1251,7 @@ class SingleRunLowLevelMoveGenerator:
 
                 current_tokens.pop()
 
-            for key in target_ptr:
+            for key in self._sorted_keys(target_path, target_ptr, reverse=True):
                 if key in current_ptr:
                     continue # Already tried in the previous loop
 
@@ -1289,7 +1333,7 @@ class SingleRunLowLevelMoveGenerator:
                 yield JsonMove(self.diff, OperationType.REMOVE, current_tokens)
                 return
 
-            for key in ptr:
+            for key in self._sorted_keys(self.path_addressing.create_path(current_tokens), ptr, reverse=False):
                 current_tokens.append(key)
                 for move in self._traverse_current(ptr[key], current_tokens):
                     yield move
@@ -1326,7 +1370,7 @@ class SingleRunLowLevelMoveGenerator:
                 yield JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens)
                 return
 
-            for key in ptr:
+            for key in self._sorted_keys(self.path_addressing.create_path(target_tokens), ptr, reverse=True):
                 current_tokens.append(key)
                 target_tokens.append(key)
                 for move in self._traverse_target(ptr[key], current_tokens, target_tokens):
@@ -1368,6 +1412,14 @@ class SingleRunLowLevelMoveGenerator:
             counts[item] = counts.get(item, 0) + 1
 
         return counts
+
+    def _sorted_keys(self, path, ptr, reverse):
+        try:
+            return self.path_addressing.configdb_sorted_keys_by_backlinks(
+                path, ptr, reverse=reverse, configdb_relative=True
+            )
+        except Exception:
+            return list(ptr.keys())
 
 class RequiredValueMoveExtender:
     """
@@ -1639,7 +1691,8 @@ class SortAlgorithmFactory:
         move_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
                            LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
-        move_non_extendable_generators = [KeyLevelMoveGenerator()]
+        move_non_extendable_generators = [BulkLeafListMoveGenerator(),
+                                          KeyLevelMoveGenerator(self.path_addressing)]
         move_extenders = [RequiredValueMoveExtender(self.path_addressing, self.operation_wrapper),
                           UpperLevelMoveExtender(),
                           DeleteInsteadOfReplaceMoveExtender(),
