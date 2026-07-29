@@ -1055,6 +1055,42 @@ class TableLevelMoveGenerator:
             if not(table in config2):
                 yield [table]
 
+class BulkLeafListMoveGenerator:
+    """
+    Generate a single bulk replace for leaf-lists when the target list is not empty.
+    Empty target leaf-lists are left to the existing granular path so they are
+    removed rather than rewritten as [].
+    """
+    def generate(self, diff):
+        for move in self._traverse(diff.current_config, diff.target_config, diff, []):
+            yield move
+
+    def _traverse(self, current_ptr, target_ptr, diff, tokens):
+        if not isinstance(current_ptr, dict) or not isinstance(target_ptr, dict):
+            return
+
+        for key in current_ptr:
+            if key not in target_ptr:
+                continue
+
+            current_val = current_ptr[key]
+            target_val = target_ptr[key]
+            tokens.append(key)
+
+            if isinstance(current_val, list) and isinstance(target_val, list):
+                if (current_val != target_val and target_val and
+                        self._is_leaf_list(current_val) and self._is_leaf_list(target_val)):
+                    yield JsonMove(diff, OperationType.REPLACE, list(tokens), list(tokens))
+            elif isinstance(current_val, dict) and isinstance(target_val, dict):
+                for move in self._traverse(current_val, target_val, diff, tokens):
+                    yield move
+
+            tokens.pop()
+
+    @staticmethod
+    def _is_leaf_list(lst):
+        return all(isinstance(item, (str, int, float, bool)) for item in lst)
+
 class KeyLevelMoveGenerator:
     """
     A class that key level moves. The item name at the root level of ConfigDB is called 'Table', the item
@@ -1639,7 +1675,8 @@ class SortAlgorithmFactory:
         move_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
                            LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
-        move_non_extendable_generators = [KeyLevelMoveGenerator()]
+        move_non_extendable_generators = [BulkLeafListMoveGenerator(),
+                                          KeyLevelMoveGenerator()]
         move_extenders = [RequiredValueMoveExtender(self.path_addressing, self.operation_wrapper),
                           UpperLevelMoveExtender(),
                           DeleteInsteadOfReplaceMoveExtender(),
