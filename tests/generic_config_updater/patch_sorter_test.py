@@ -2351,6 +2351,33 @@ class TestTableLevelMoveGenerator(unittest.TestCase):
             moves_ops.extend(move.get_jsonpatch())
         self.assertCountEqual(ops, moves_ops)
 
+class TestBulkLeafListMoveGenerator(unittest.TestCase):
+    def setUp(self):
+        self.generator = ps.BulkLeafListMoveGenerator(PathAddressing())
+
+    def test_generate__empty_target_leaf_list__no_bulk_move(self):
+        diff = ps.Diff(
+            current_config={"VLAN": {"Vlan1000": {"dhcp_servers": ["192.0.0.1"]}}},
+            target_config={"VLAN": {"Vlan1000": {"dhcp_servers": []}}},
+        )
+
+        moves = list(self.generator.generate(diff))
+
+        self.assertEqual([], moves)
+
+    def test_generate__different_non_empty_leaf_list__bulk_replace_move(self):
+        diff = ps.Diff(
+            current_config={"VLAN": {"Vlan1000": {"dhcp_servers": ["192.0.0.1"]}}},
+            target_config={"VLAN": {"Vlan1000": {"dhcp_servers": ["192.0.0.2"]}}},
+        )
+
+        moves = list(self.generator.generate(diff))
+
+        self.assertEqual(
+            [{"op": "replace", "path": "/VLAN/Vlan1000/dhcp_servers", "value": ["192.0.0.2"]}],
+            [list(move.patch)[0] for move in moves],
+        )
+
 class TestKeyLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
         path_addressing = PathAddressing()
@@ -3728,6 +3755,39 @@ class TestPatchSorter(unittest.TestCase):
 
             if notfound_substrings:
                 self.fail(f"Did not find the substrings {notfound_substrings} in the error: '{error}'")
+
+    def test_patch_sorter__remove_last_bgp_allowed_prefix__does_not_replace_with_empty_list(self):
+        current_config = {
+            "BGP_ALLOWED_PREFIXES": {
+                "DEPLOYMENT_ID|0": {
+                    "deployment": "DEPLOYMENT_ID",
+                    "id": 0,
+                    "prefixes_v4": ["10.20.0.0/16"],
+                    "prefixes_v6": ["fc00:f0::/64"],
+                }
+            }
+        }
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}
+        ])
+        sorter = self.create_patch_sorter(current_config)
+
+        actual_changes = sorter.sort(patch)
+        expected_changes = [
+            JsonChange(jsonpatch.JsonPatch([
+                {"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}
+            ]))
+        ]
+
+        self.assertEqual(expected_changes, actual_changes)
+
+        target_config = patch.apply(current_config)
+        simulated_config = current_config
+        for change in actual_changes:
+            simulated_config = change.apply(simulated_config)
+            is_valid, error = self.config_wrapper.validate_config_db_config(simulated_config)
+            self.assertTrue(is_valid, f"Change will produce invalid config. Error: {error}")
+        self.assertEqual(target_config, simulated_config)
 
     def test_sort__does_not_remove_tables_without_yang_unintentionally_if_generated_change_replaces_whole_config(self):
         # Arrange

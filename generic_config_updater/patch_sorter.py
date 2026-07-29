@@ -1355,6 +1355,7 @@ class BulkLeafListMoveGenerator:
             if isinstance(current_val, list) and isinstance(target_val, list):
                 # Only handle leaf-lists (lists of scalars)
                 if (current_val != target_val and
+                        target_val and
                         self._is_leaf_list(current_val) and
                         self._is_leaf_list(target_val)):
                     yield JsonMoveGroup(
