@@ -67,7 +67,7 @@ function record_reboot_marker()
 {
     # Persist a best-effort marker recording the reboot we are about to perform. Stored
     # under /host so it survives the reboot; postupgrade_actions may read it to correlate
-    # a hardware-induced fault with a user-issued warm/fast reboot.
+    # a hardware-induced fault with a user-issued warm/fast/express reboot.
     #
     # NOTE: This file persists across reboots, so readers MUST treat it as potentially stale
     # unless it is explicitly cleared after processing (or cleared by non-warm reboot paths).
@@ -1264,7 +1264,7 @@ fi
 echo "User issued '${REBOOT_SCRIPT_NAME}' command [User: ${REBOOT_USER}, Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
 
 # Record the reboot type so postupgrade_actions can detect a hardware fault that
-# occurred during this warm/fast reboot.
+# occurred during this warm/fast/express reboot.
 record_reboot_marker
 
 # Wait until all buffers synced with disk
