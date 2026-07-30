@@ -40,7 +40,7 @@ class TestPatchApplier(unittest.TestCase):
 
         # Assert
         patch_applier.config_wrapper.get_config_db_as_json.assert_has_calls([call(), call()])
-        patch_applier.patch_wrapper.simulate_patch.assert_has_calls(
+        patch_applier.patch_wrapper.simulate_config_db_patch.assert_has_calls(
             [call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, Files.CONFIG_DB_AS_JSON)])
         patch_applier.patchsorter.sort.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, trace_io=None)])
         patch_applier.changeapplier.apply.assert_called()
@@ -59,7 +59,7 @@ class TestPatchApplier(unittest.TestCase):
             create_side_effect_dict({(str(Files.CONFIG_DB_AFTER_MULTI_PATCH),): empty_tables})
 
         patch_wrapper = Mock()
-        patch_wrapper.simulate_patch.side_effect = \
+        patch_wrapper.simulate_config_db_patch.side_effect = \
             create_side_effect_dict(
                 {(str(Files.MULTI_OPERATION_CONFIG_DB_PATCH), str(Files.CONFIG_DB_AS_JSON)):
                     Files.CONFIG_DB_AFTER_MULTI_PATCH})
