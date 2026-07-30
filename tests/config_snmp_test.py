@@ -868,6 +868,121 @@ class TestSNMPConfigCommands(object):
         assert ('10.1.0.32', '', '') in db.cfgdb.get_keys('SNMP_AGENT_ADDRESS_CONFIG')
         assert db.cfgdb.get_entry("SNMP_AGENT_ADDRESS_CONFIG", "10.1.0.32||") == {}
 
+    # ---------------------------------------------------------------------------
+    # Tests for --prompt-* options (hide secrets from CLI history)
+    # ---------------------------------------------------------------------------
+
+    def test_config_snmp_community_add_prompt_community(self):
+        """community add --prompt-community reads from stdin instead of positional arg."""
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command'):
+            result = runner.invoke(
+                config.config.commands["snmp"].commands["community"].commands["add"],
+                ["--prompt-community", "RO"],
+                input="PromptedCommunity\n",
+                obj=db,
+            )
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry("SNMP_COMMUNITY", "PromptedCommunity") == {"TYPE": "RO"}
+
+    def test_config_snmp_community_add_prompt_and_arg_conflict(self):
+        """community add with both positional arg and --prompt-community is an error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["snmp"].commands["community"].commands["add"],
+            ["Everest", "--prompt-community", "RO"],
+            input="PromptedCommunity\n",
+        )
+        assert result.exit_code != 0
+        assert "Cannot use both" in result.output
+
+    def test_config_snmp_community_add_missing_arg_and_no_prompt(self):
+        """community add with no arg and no --prompt-community is an error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["snmp"].commands["community"].commands["add"],
+            ["RO"],
+        )
+        assert result.exit_code != 0
+
+    def test_config_snmp_community_replace_prompt_new(self):
+        """community replace --prompt-new reads new community from stdin."""
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command'):
+            result = runner.invoke(
+                config.config.commands["snmp"].commands["community"].commands["replace"],
+                ["Rainer", "--prompt-new"],
+                input="PromptedNew\n",
+                obj=db,
+            )
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry("SNMP_COMMUNITY", "PromptedNew") == {"TYPE": "RW"}
+
+    def test_config_snmp_community_replace_prompt_and_arg_conflict(self):
+        """community replace with both positional new_community and --prompt-new is an error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["snmp"].commands["community"].commands["replace"],
+            ["Rainer", "NewCom", "--prompt-new"],
+            input="PromptedNew\n",
+        )
+        assert result.exit_code != 0
+        assert "Cannot use both" in result.output
+
+    def test_config_snmp_user_add_prompt_auth_password(self):
+        """user add --prompt-auth-password reads auth password from stdin."""
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command'):
+            result = runner.invoke(
+                config.config.commands["snmp"].commands["user"].commands["add"],
+                ["testuser", "Priv", "RO", "MD5", "--prompt-auth-password", "DES", "user_encrypt_pass"],
+                input="promptedAuthPass\n",
+                obj=db,
+            )
+        assert result.exit_code == 0, result.output
+        entry = db.cfgdb.get_entry("SNMP_USER", "testuser")
+        assert entry.get("SNMP_USER_AUTH_PASSWORD") == "promptedAuthPass"
+
+    def test_config_snmp_user_add_prompt_encrypt_password(self):
+        """user add --prompt-encrypt-password reads encrypt password from stdin."""
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command'):
+            result = runner.invoke(
+                config.config.commands["snmp"].commands["user"].commands["add"],
+                ["testuser2", "Priv", "RO", "MD5", "user_auth_pass", "DES", "--prompt-encrypt-password"],
+                input="promptedEncPass\n",
+                obj=db,
+            )
+        assert result.exit_code == 0, result.output
+        entry = db.cfgdb.get_entry("SNMP_USER", "testuser2")
+        assert entry.get("SNMP_USER_ENCRYPTION_PASSWORD") == "promptedEncPass"
+
+    def test_config_snmp_user_add_prompt_auth_and_arg_conflict(self):
+        """user add with both auth password arg and --prompt-auth-password is an error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["snmp"].commands["user"].commands["add"],
+            ["testuser", "Priv", "RO", "MD5", "user_auth_pass", "--prompt-auth-password", "DES", "enc_pass"],
+            input="promptedAuthPass\n",
+        )
+        assert result.exit_code != 0
+        assert "Cannot use both" in result.output
+
+    def test_config_snmp_user_add_prompt_encrypt_and_arg_conflict(self):
+        """user add with both encrypt password arg and --prompt-encrypt-password is an error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["snmp"].commands["user"].commands["add"],
+            ["testuser", "Priv", "RO", "MD5", "auth_pass", "DES", "enc_pass", "--prompt-encrypt-password"],
+            input="promptedEncPass\n",
+        )
+        assert result.exit_code != 0
+        assert "Cannot use both" in result.output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
