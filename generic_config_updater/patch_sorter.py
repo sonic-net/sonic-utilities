@@ -8,8 +8,6 @@ from typing import Any, IO, List, Optional, Tuple
 from .gu_common import OperationWrapper, OperationType, GenericConfigUpdaterError, \
                        JsonChange, PathAddressing, genericUpdaterLogging
 
-<<<<<<< HEAD
-=======
 # Floor of create-only patterns used during the transition to YANG annotations.
 # Exit condition: delete this list (and the union below) once every branch this
 # consumer ships to carries annotated models that discover at least these
@@ -46,10 +44,6 @@ _CREATE_ONLY_FIELDS_FALLBACK = [
     ["SCHEDULER", "*", "pbs"],
 ]
 
-GCU_FIELD_OP_CONF_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                      "gcu_field_operation_validators.conf.json")
-
->>>>>>> 905604f7 (NOS-12728: Moved create-only to YANG (#801))
 class Diff:
     """
     A class that contains the diff info between current and target configs.
@@ -755,29 +749,6 @@ class CreateOnlyFilter:
     """
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
-<<<<<<< HEAD
-        self.patterns = [
-            ["PORT", "*", "lanes"],
-            ["LOOPBACK_INTERFACE", "*", "vrf_name"],
-            ["BGP_NEIGHBOR", "*", "holdtime"],
-            ["BGP_NEIGHBOR", "*", "keepalive"],
-            ["BGP_NEIGHBOR", "*", "name"],
-            ["BGP_NEIGHBOR", "*", "asn"],
-            ["BGP_NEIGHBOR", "*", "local_addr"],
-            ["BGP_NEIGHBOR", "*", "nhopself"],
-            ["BGP_NEIGHBOR", "*", "rrclient"],
-            ["BGP_PEER_RANGE", "*", "*"],
-            ["BGP_SENTINELS", "*", "*"],
-            ["BGP_MONITORS", "*", "holdtime"],
-            ["BGP_MONITORS", "*", "keepalive"],
-            ["BGP_MONITORS", "*", "name"],
-            ["BGP_MONITORS", "*", "asn"],
-            ["BGP_MONITORS", "*", "local_addr"],
-            ["BGP_MONITORS", "*", "nhopself"],
-            ["BGP_MONITORS", "*", "rrclient"],
-            ["MIRROR_SESSION", "*", "*"],
-        ]
-=======
         self.logger = genericUpdaterLogging.get_logger(title="Patch Sorter - CreateOnlyFilter")
         self.patterns = self._discover_create_only_fields()
 
@@ -826,7 +797,6 @@ class CreateOnlyFilter:
             for pattern in missing:
                 deduped.append(list(pattern))
         return deduped
->>>>>>> 905604f7 (NOS-12728: Moved create-only to YANG (#801))
 
     def get_filter(self):
         return JsonPointerFilter(self.patterns,
