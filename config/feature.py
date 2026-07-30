@@ -16,6 +16,8 @@ def set_feature_state(cfgdb_clients, name, state, block):
         entry_data = cfgdb.get_entry('FEATURE', name)
         if not entry_data:
             raise Exception("Feature '{}' doesn't exist".format(name))
+        # Entries missing 'state' are deliberately excluded from the
+        # consistency check; they are backfilled by the write below.
         entry_state = entry_data.get('state')
         if entry_state is not None:
             entry_data_set.add(entry_state)
@@ -142,6 +144,8 @@ def feature_autorestart(db, name, autorestart):
         if not entry_data:
             click.echo("Feature '{}' doesn't exist".format(name))
             sys.exit(1)
+        # Entries missing 'auto_restart' are deliberately excluded from the
+        # consistency check; they are backfilled by the write below.
         entry_auto_restart = entry_data.get('auto_restart')
         if entry_auto_restart is not None:
             entry_data_set.add(entry_auto_restart)
