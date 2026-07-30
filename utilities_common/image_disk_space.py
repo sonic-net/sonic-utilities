@@ -28,7 +28,7 @@ IMAGE_TYPE_DPU = "dpu"
 DEFAULT_SSH_OPTIONS = [
     "-o", "BatchMode=yes",
     "-o", "ConnectTimeout=10",
-    "-o", "StrictHostKeyChecking=no",
+    "-o", "StrictHostKeyChecking=accept-new",
 ]
 
 
