@@ -4407,6 +4407,11 @@ def community(db):
     pass
 
 
+def _prompt_secret(prompt_text):
+    """Read a secret interactively with echo suppressed so it never appears on the command line."""
+    return click.prompt(prompt_text, hide_input=True)
+
+
 def is_valid_community_type(commstr_type):
     commstr_types = ['RO', 'RW']
     if commstr_type not in commstr_types:
@@ -4505,11 +4510,21 @@ def snmp_user_secret_check(snmp_secret):
 
 
 @community.command('add')
-@click.argument('community', metavar='<snmp_community>', required=True)
+@click.argument('community', metavar='<snmp_community>', required=False)
 @click.argument('string_type', metavar='<RO|RW>', required=True)
+@click.option('--prompt-community', is_flag=True,
+              help='Enter the community string interactively (hidden) instead of on the command line')
 @clicommon.pass_db
-def add_community(db, community, string_type):
+def add_community(db, community, string_type, prompt_community):
     """ Add snmp community string"""
+    if prompt_community:
+        if community:
+            click.echo('Cannot use both <snmp_community> argument and --prompt-community')
+            sys.exit(1)
+        community = _prompt_secret('SNMP community string')
+    elif not community:
+        click.echo('Error: Missing argument \'<snmp_community>\'')
+        sys.exit(1)
     string_type = string_type.upper()
     if ADHOC_VALIDATION:
         if not is_valid_community_type(string_type):
@@ -4568,10 +4583,20 @@ def del_community(db, community):
 
 @community.command('replace')
 @click.argument('current_community', metavar='<current_community_string>', required=True)
-@click.argument('new_community', metavar='<new_community_string>', required=True)
+@click.argument('new_community', metavar='<new_community_string>', required=False)
+@click.option('--prompt-new', is_flag=True,
+              help='Enter the new community string interactively (hidden) instead of on the command line')
 @clicommon.pass_db
-def replace_community(db, current_community, new_community):
+def replace_community(db, current_community, new_community, prompt_new):
     """ Replace snmp community string"""
+    if prompt_new:
+        if new_community:
+            click.echo('Cannot use both <new_community_string> argument and --prompt-new')
+            sys.exit(1)
+        new_community = _prompt_secret('New SNMP community string')
+    elif not new_community:
+        click.echo('Error: Missing argument \'<new_community_string>\'')
+        sys.exit(1)
     snmp_communities = db.cfgdb.get_table("SNMP_COMMUNITY")
     if not current_community in snmp_communities:
         click.echo("Current SNMP community {} is not configured".format(current_community))
@@ -4848,9 +4873,13 @@ def user(db):
 @click.argument('user_auth_password', metavar='<auth_password>', required=False)
 @click.argument('user_encrypt_type', metavar='<DES|AES>', required=False)
 @click.argument('user_encrypt_password', metavar='<encrypt_password>', required=False)
+@click.option('--prompt-auth-password', is_flag=True,
+              help='Enter the auth password interactively (hidden) instead of on the command line')
+@click.option('--prompt-encrypt-password', is_flag=True,
+              help='Enter the encrypt password interactively (hidden) instead of on the command line')
 @clicommon.pass_db
 def add_user(db, user, user_type, user_permission_type, user_auth_type, user_auth_password, user_encrypt_type,
-             user_encrypt_password):
+             user_encrypt_password, prompt_auth_password, prompt_encrypt_password):
     """ Add snmp user"""
     if not snmp_username_check(user):
         sys.exit(SnmpUserError.NameCheckFailure)
@@ -4862,6 +4891,16 @@ def add_user(db, user, user_type, user_permission_type, user_auth_type, user_aut
     user_permission_type = user_permission_type.upper()
     if not is_valid_community_type(user_permission_type):
         sys.exit(SnmpUserError.RoRwCheckFailure)
+    if prompt_auth_password:
+        if user_auth_password:
+            click.echo('Cannot use both <auth_password> argument and --prompt-auth-password')
+            sys.exit(SnmpUserError.AuthPasswordMissing)
+        user_auth_password = _prompt_secret('Auth password')
+    if prompt_encrypt_password:
+        if user_encrypt_password:
+            click.echo('Cannot use both <encrypt_password> argument and --prompt-encrypt-password')
+            sys.exit(SnmpUserError.EncryptPasswordMissingFailure)
+        user_encrypt_password = _prompt_secret('Encrypt password')
     if user_type == "noAuthNoPriv":
         if user_auth_type:
             click.echo("User auth type not used with 'noAuthNoPriv'.  Please use 'AuthNoPriv' or 'Priv' instead")
