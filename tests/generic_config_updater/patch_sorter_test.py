@@ -3,6 +3,7 @@ import io
 import jsonpatch
 import sys
 import unittest
+from unittest import mock
 from unittest.mock import MagicMock, Mock
 import generic_config_updater.patch_sorter as ps
 from .gutest_helpers import Files, create_side_effect_dict, create_side_effect_jsonmovegroup_dict, \
