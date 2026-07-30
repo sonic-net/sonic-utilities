@@ -16,6 +16,11 @@ def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
 
 
+def prompt_secret(text='Enter passkey', confirm=True):
+    """Read a secret from a hidden interactive prompt so it never appears on the command line."""
+    return click.prompt(text, hide_input=True, confirmation_prompt=confirm)
+
+
 def add_table_kv(db, table, entry, key, val):
     config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
@@ -243,13 +248,23 @@ default.add_command(authtype)
 
 @click.command()
 @click.argument('secret', metavar='<secret_string>', required=False)
+@click.option('-p', '--prompt', is_flag=True,
+              help='Enter the passkey interactively (hidden) instead of on the command line')
+@click.option('--confirm/--no-confirm', default=True, show_default=True,
+              help='Ask for the passkey a second time to confirm when using --prompt')
 @click.pass_context
 @clicommon.pass_db
-def passkey(db, ctx, secret):
+def passkey(db, ctx, secret, prompt, confirm):
     """Specify TACACS+ server global passkey <STRING>"""
     if ctx.obj == 'default':
         del_table_key(db, 'TACPLUS', 'global', 'passkey')
-    elif secret:
+        return
+    if prompt:
+        if secret:
+            click.echo('Cannot use both <secret_string> argument and --prompt')
+            return
+        secret = prompt_secret('Enter passkey', confirm)
+    if secret:
         add_table_kv(db, 'TACPLUS', 'global', 'passkey', secret)
     else:
         click.echo('Argument "secret" is required')
@@ -262,17 +277,26 @@ default.add_command(passkey)
 @click.argument('address', metavar='<ip_address>')
 @click.option('-t', '--timeout', help='Transmission timeout interval, default 5', type=int)
 @click.option('-k', '--key', help='Shared secret')
+@click.option('--prompt-key', is_flag=True, help='Enter the shared secret interactively (hidden) instead of on the command line')
+@click.option('--confirm/--no-confirm', default=True, show_default=True,
+              help='Ask for the shared secret a second time to confirm when using --prompt-key')
 @click.option('-a', '--auth_type', help='Authentication type, default pap', type=click.Choice(["chap", "pap", "mschap", "login"]))
 @click.option('-o', '--port', help='TCP port range is 1 to 65535, default 49', type=click.IntRange(1, 65535), default=49)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
 @clicommon.pass_db
-def add(db, address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
+def add(db, address, timeout, key, prompt_key, confirm, auth_type, port, pri, use_mgmt_vrf):
     """Specify a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
             click.echo('Invalid ip address') # TODO: MISSING CONSTRAINT IN YANG MODEL
             return
+
+    if prompt_key:
+        if key:
+            click.echo('Cannot use both --key and --prompt-key')
+            return
+        key = prompt_secret('Enter shared secret', confirm)
 
     config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
@@ -386,13 +410,23 @@ default.add_command(authtype)
 
 @click.command()
 @click.argument('secret', metavar='<secret_string>', required=False)
+@click.option('-p', '--prompt', is_flag=True,
+              help='Enter the passkey interactively (hidden) instead of on the command line')
+@click.option('--confirm/--no-confirm', default=True, show_default=True,
+              help='Ask for the passkey a second time to confirm when using --prompt')
 @click.pass_context
 @clicommon.pass_db
-def passkey(db, ctx, secret):
+def passkey(db, ctx, secret, prompt, confirm):
     """Specify RADIUS server global passkey <STRING>"""
     if ctx.obj == 'default':
         del_table_key(db, 'RADIUS', 'global', 'passkey')
-    elif secret:
+        return
+    if prompt:
+        if secret:
+            click.echo('Cannot use both <secret_string> argument and --prompt')
+            return
+        secret = prompt_secret('Enter passkey', confirm)
+    if secret:
         if len(secret) > RADIUS_PASSKEY_MAX_LEN:
             click.echo('Maximum of %d chars can be configured' % RADIUS_PASSKEY_MAX_LEN)
             return
@@ -510,14 +544,23 @@ radius.add_command(statistics)
 @click.option('-r', '--retransmit', help='Retransmit attempts, default 3', type=click.IntRange(1, 10))
 @click.option('-t', '--timeout', help='Transmission timeout interval, default 5', type=click.IntRange(1, 60))
 @click.option('-k', '--key', help='Shared secret')
+@click.option('--prompt-key', is_flag=True, help='Enter the shared secret interactively (hidden) instead of on the command line')
+@click.option('--confirm/--no-confirm', default=True, show_default=True,
+              help='Ask for the shared secret a second time to confirm when using --prompt-key')
 @click.option('-a', '--auth_type', help='Authentication type, default pap', type=click.Choice(["chap", "pap", "mschapv2"]))
 @click.option('-o', '--auth-port', help='UDP port range is 1 to 65535, default 1812', type=click.IntRange(1, 65535), default=1812)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
 @click.option('-s', '--source-interface', help='Source Interface')
 @clicommon.pass_db
-def add(db, address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_vrf, source_interface):
+def add(db, address, retransmit, timeout, key, prompt_key, confirm, auth_type, auth_port, pri, use_mgmt_vrf, source_interface):
     """Specify a RADIUS server"""
+
+    if prompt_key:
+        if key:
+            click.echo('Cannot use both --key and --prompt-key')
+            return
+        key = prompt_secret('Enter shared secret', confirm)
 
     if ADHOC_VALIDATION:
         if key:
