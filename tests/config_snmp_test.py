@@ -873,13 +873,19 @@ class TestSNMPConfigCommands(object):
     # ---------------------------------------------------------------------------
 
     def test_config_snmp_community_add_prompt_community(self):
-        """community add --prompt-community reads from stdin instead of positional arg."""
+        """community add --prompt-community reads community string from stdin.
+
+        Because click assigns positional args left-to-right and <snmp_community>
+        is the first (optional) positional, callers must pass an empty string as
+        a placeholder so that <RO|RW> (second, required) is still supplied while
+        the community value itself comes from the interactive prompt.
+        """
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command'):
             result = runner.invoke(
                 config.config.commands["snmp"].commands["community"].commands["add"],
-                ["--prompt-community", "RO"],
+                ["", "RO", "--prompt-community"],
                 input="PromptedCommunity\n",
                 obj=db,
             )
@@ -932,13 +938,18 @@ class TestSNMPConfigCommands(object):
         assert "Cannot use both" in result.output
 
     def test_config_snmp_user_add_prompt_auth_password(self):
-        """user add --prompt-auth-password reads auth password from stdin."""
+        """user add --prompt-auth-password reads auth password from stdin.
+
+        Pass an empty string in the <auth_password> positional slot so that
+        click satisfies the subsequent optional arguments while the code sees
+        auth_password as falsy and reads from the interactive prompt instead.
+        """
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command'):
             result = runner.invoke(
                 config.config.commands["snmp"].commands["user"].commands["add"],
-                ["testuser", "Priv", "RO", "MD5", "--prompt-auth-password", "DES", "user_encrypt_pass"],
+                ["testuser", "Priv", "RO", "MD5", "", "--prompt-auth-password", "DES", "user_encrypt_pass"],
                 input="promptedAuthPass\n",
                 obj=db,
             )
