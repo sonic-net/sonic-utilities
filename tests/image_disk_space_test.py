@@ -33,8 +33,6 @@ def write_platform_json(tmp_path, data):
         ),
     ],
 )
-
-
 def test_get_min_free_disk_from_platform_json(
     tmp_path, image_type, key, value
 ):
@@ -56,8 +54,6 @@ def test_get_min_free_disk_from_platform_json(
         image_disk_space.IMAGE_TYPE_DPU,
     ],
 )
-
-
 def test_get_min_free_disk_missing_key_returns_none(
     tmp_path, image_type
 ):
@@ -73,8 +69,6 @@ def test_get_min_free_disk_missing_key_returns_none(
 
 
 @pytest.mark.parametrize("bad_value", [0, -1, "bad", None])
-
-
 @pytest.mark.parametrize(
     "image_type,key",
     [
@@ -88,8 +82,6 @@ def test_get_min_free_disk_missing_key_returns_none(
         ),
     ],
 )
-
-
 def test_invalid_platform_json_value_returns_none(
     tmp_path,
     bad_value,
@@ -227,8 +219,6 @@ def test_is_running_on_dpu_exception(monkeypatch):
         (True, image_disk_space.IMAGE_TYPE_DPU),
     ],
 )
-
-
 def test_get_local_image_type(
     monkeypatch, running_on_dpu, expected_type
 ):
@@ -251,8 +241,6 @@ def test_get_local_image_type(
         (image_disk_space.IMAGE_TYPE_DPU, None, False),
     ],
 )
-
-
 def test_check_local_image_install_free_disk_space(
     monkeypatch,
     tmp_path,
@@ -405,8 +393,6 @@ def test_run_cmd_os_error(monkeypatch):
         ("Filesystem\n/dev/sda1\nAvail\n32212254720", 30 * GB),
     ],
 )
-
-
 def test_parse_df_available_bytes_success(output, expected):
     assert image_disk_space._parse_df_available_bytes(output) == expected
 
@@ -415,8 +401,6 @@ def test_parse_df_available_bytes_success(output, expected):
     "output",
     ["", "Avail", "Avail\nbad", "Avail\n-1", "Avail\n18.5"],
 )
-
-
 def test_parse_df_available_bytes_failure(output):
     assert image_disk_space._parse_df_available_bytes(output) is None
 
@@ -910,7 +894,10 @@ def test_list_remote_dir_files_parses_output(monkeypatch):
         assert cmd[0] == "ssh"
         assert cmd[1] == "DPU0"
         assert "find" in cmd[-1]
-        return 0, "1000.5 1073741824 /var/dump/a\n2000.0 2147483648 /var/dump/b"
+        return 0, (
+            "1000.5 1073741824 /var/dump/a\n"
+            "2000.0 2147483648 /var/dump/b"
+        )
 
     monkeypatch.setattr(image_disk_space, "_run_cmd", fake_run_cmd)
 
