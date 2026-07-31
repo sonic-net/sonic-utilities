@@ -13,11 +13,20 @@ def test_run_command():
         output = sonic_installer_common.run_command([sys.executable, "-c", "import sys; sys.exit(6)"])
     assert e.value.code == 6
 
+
+@patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
 @patch("sonic_installer.main.SWAPAllocator")
 @patch("sonic_installer.main.get_bootloader")
 @patch("sonic_installer.main.run_command_or_raise")
 @patch("sonic_installer.main.run_command")
-def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
+def test_install(
+    run_command,
+    run_command_or_raise,
+    get_bootloader,
+    swap,
+    _,
+    fs,
+):
     """ This test covers the execution of "sonic-installer install" command. """
 
     sonic_image_filename = "sonic.bin"
@@ -159,12 +168,21 @@ def test_runtime_exception(mock_popen):
     assert all(v in str(sre.value) for v in ['test.sh', 'Running', 'Failed']), "Invalid message"
 
 
+@patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
 @patch("sonic_installer.main.SWAPAllocator")
 @patch("sonic_installer.main.get_bootloader")
 @patch("sonic_installer.main.run_command_or_raise")
 @patch("sonic_installer.main.run_command")
 @patch('shutil.rmtree')
-def test_install_failed(rmtree, run_command, run_command_or_raise, get_bootloader, swap, fs):
+def test_install_failed(
+    rmtree,
+    run_command,
+    run_command_or_raise,
+    get_bootloader,
+    swap,
+    _,
+    fs,
+):
     """ This test covers the "sonic-installer" install image failed handling. """
 
     sonic_image_filename = "sonic.bin"
