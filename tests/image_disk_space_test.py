@@ -33,6 +33,8 @@ def write_platform_json(tmp_path, data):
         ),
     ],
 )
+
+
 def test_get_min_free_disk_from_platform_json(
     tmp_path, image_type, key, value
 ):
@@ -54,6 +56,8 @@ def test_get_min_free_disk_from_platform_json(
         image_disk_space.IMAGE_TYPE_DPU,
     ],
 )
+
+
 def test_get_min_free_disk_missing_key_returns_none(
     tmp_path, image_type
 ):
@@ -69,6 +73,8 @@ def test_get_min_free_disk_missing_key_returns_none(
 
 
 @pytest.mark.parametrize("bad_value", [0, -1, "bad", None])
+
+
 @pytest.mark.parametrize(
     "image_type,key",
     [
@@ -82,6 +88,8 @@ def test_get_min_free_disk_missing_key_returns_none(
         ),
     ],
 )
+
+
 def test_invalid_platform_json_value_returns_none(
     tmp_path,
     bad_value,
@@ -219,6 +227,8 @@ def test_is_running_on_dpu_exception(monkeypatch):
         (True, image_disk_space.IMAGE_TYPE_DPU),
     ],
 )
+
+
 def test_get_local_image_type(
     monkeypatch, running_on_dpu, expected_type
 ):
@@ -241,6 +251,8 @@ def test_get_local_image_type(
         (image_disk_space.IMAGE_TYPE_DPU, None, False),
     ],
 )
+
+
 def test_check_local_image_install_free_disk_space(
     monkeypatch,
     tmp_path,
@@ -388,106 +400,81 @@ def test_run_cmd_os_error(monkeypatch):
 @pytest.mark.parametrize(
     "output,expected",
     [
-        ("Avail\n18G", 18),
-        ("Avail\n18", 18),
-        ("Available\n  25G\n", 25),
-        ("Filesystem\n/dev/sda1\nAvail\n30G", 30),
+        ("Avail\n19327352832", 18 * GB),
+        ("Available\n  26843545600\n", 25 * GB),
+        ("Filesystem\n/dev/sda1\nAvail\n32212254720", 30 * GB),
     ],
 )
-def test_parse_df_available_gb_success(output, expected):
-    assert image_disk_space._parse_df_available_gb(output) == expected
+
+
+def test_parse_df_available_bytes_success(output, expected):
+    assert image_disk_space._parse_df_available_bytes(output) == expected
 
 
 @pytest.mark.parametrize(
     "output",
-    [
-        "",
-        "Avail",
-        "Avail\nbad",
-        "Avail\n18GB",
-        "Avail\n18.5G",
-    ],
+    ["", "Avail", "Avail\nbad", "Avail\n-1", "Avail\n18.5"],
 )
-def test_parse_df_available_gb_failure(output):
-    assert image_disk_space._parse_df_available_gb(output) is None
+
+
+def test_parse_df_available_bytes_failure(output):
+    assert image_disk_space._parse_df_available_bytes(output) is None
 
 
 def test_get_remote_dpu_free_disk_in_gb_success(monkeypatch):
     monkeypatch.setattr(
         image_disk_space,
         "_run_cmd",
-        lambda cmd: (0, "Avail\n18G"),
+        lambda cmd: (0, "Avail\n19327352832"),
     )
+    assert image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0") == 18
 
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0")
-        == 18
+
+def test_get_remote_dpu_free_disk_in_gb_floors_partial_gib(monkeypatch):
+    monkeypatch.setattr(
+        image_disk_space,
+        "_run_cmd",
+        lambda cmd: (0, "Avail\n4294967295"),
     )
+    assert image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0") == 3
 
 
-def test_get_remote_dpu_free_disk_in_gb_custom_ssh_options(
-    monkeypatch,
-):
+def test_get_remote_dpu_free_disk_in_gb_custom_ssh_options(monkeypatch):
     captured = {}
 
     def fake_run_cmd(cmd):
         captured["cmd"] = cmd
-        return 0, "Avail\n18G"
+        return 0, "Avail\n19327352832"
 
-    monkeypatch.setattr(
-        image_disk_space,
-        "_run_cmd",
-        fake_run_cmd,
-    )
-
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb(
-            "DPU0",
-            ssh_options=["-o", "ConnectTimeout=3"],
-        )
-        == 18
-    )
+    monkeypatch.setattr(image_disk_space, "_run_cmd", fake_run_cmd)
+    assert image_disk_space.get_remote_dpu_free_disk_in_gb(
+        "DPU0", ssh_options=["-o", "ConnectTimeout=3"]
+    ) == 18
     assert captured["cmd"] == [
         "ssh",
         "-o",
         "ConnectTimeout=3",
         "DPU0",
         "df",
-        "-BG",
+        "-B1",
         "--output=avail",
         "/host",
     ]
 
 
-def test_get_remote_dpu_free_disk_in_gb_command_failure(
-    monkeypatch,
-):
+def test_get_remote_dpu_free_disk_in_gb_command_failure(monkeypatch):
     monkeypatch.setattr(
-        image_disk_space,
-        "_run_cmd",
-        lambda cmd: (1, "ssh failed"),
+        image_disk_space, "_run_cmd", lambda cmd: (1, "ssh failed")
     )
-
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0")
-        is None
-    )
+    assert image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0") is None
 
 
 @pytest.mark.parametrize("output", ["", "Avail\nbad"])
-def test_get_remote_dpu_free_disk_in_gb_parse_failure(
-    monkeypatch, output
-):
+def test_get_remote_dpu_free_disk_in_gb_parse_failure(monkeypatch, output):
     monkeypatch.setattr(
-        image_disk_space,
-        "_run_cmd",
-        lambda cmd: (0, output),
+        image_disk_space, "_run_cmd", lambda cmd: (0, output)
     )
-
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0")
-        is None
-    )
+    assert image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0") is None
 
 
 def test_remote_dpu_check_rejected_when_running_on_dpu(
@@ -1136,22 +1123,51 @@ def test_ensure_reboot_disk_space_undeterminable_fails(
     )
 
 
-def test_ensure_operation_delegates_to_reboot_check(monkeypatch):
+@pytest.mark.parametrize("bad_value", [0, -1, "4GB", None])
+def test_ensure_reboot_disk_space_invalid_threshold_fails(tmp_path, bad_value):
+    path = write_platform_json(
+        tmp_path,
+        {
+            image_disk_space.DPU_STORAGE_POLICY_KEY: {
+                "reboot": {"min_free_disk_in_gb": bad_value}
+            }
+        },
+    )
+    assert not image_disk_space.ensure_remote_dpu_reboot_disk_space(
+        "DPU0", platform_json_path=path
+    )
+
+
+def test_ensure_operation_uses_requested_policy(monkeypatch, tmp_path):
+    path = write_platform_json(
+        tmp_path,
+        {
+            image_disk_space.DPU_STORAGE_POLICY_KEY: {
+                "reboot": {"disk_path": "/reboot", "min_free_disk_in_gb": 4},
+                "upgrade": {"disk_path": "/upgrade", "min_free_disk_in_gb": 9},
+            }
+        },
+    )
     captured = {}
 
-    def fake_reboot_check(dpu_name, platform_json_path=None, ssh_options=None):
-        captured["dpu_name"] = dpu_name
-        captured["platform_json_path"] = platform_json_path
-        return True
+    def fake_free(dpu_name, disk_path, ssh_options):
+        captured["disk_path"] = disk_path
+        return 10
 
     monkeypatch.setattr(
-        image_disk_space,
-        "ensure_remote_dpu_reboot_disk_space",
-        fake_reboot_check,
+        image_disk_space, "get_remote_dpu_free_disk_in_gb", fake_free
     )
-
     assert image_disk_space.ensure_remote_dpu_disk_space_for_operation(
-        "DPU0", "reboot", platform_json_path="/tmp/platform.json"
+        "DPU0", "upgrade", platform_json_path=path
     )
-    assert captured["dpu_name"] == "DPU0"
-    assert captured["platform_json_path"] == "/tmp/platform.json"
+    assert captured["disk_path"] == "/upgrade"
+
+
+def test_ensure_operation_invalid_section_fails(tmp_path):
+    path = write_platform_json(
+        tmp_path,
+        {image_disk_space.DPU_STORAGE_POLICY_KEY: {"reboot": "invalid"}},
+    )
+    assert not image_disk_space.ensure_remote_dpu_disk_space_for_operation(
+        "DPU0", "reboot", platform_json_path=path
+    )

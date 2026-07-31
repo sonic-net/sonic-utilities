@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -249,31 +248,18 @@ def _run_cmd(cmd: List[str]) -> Tuple[int, str]:
         return 1, str(error)
 
 
-def _parse_df_available_gb(output: str) -> Optional[int]:
-    """
-    Parse output from:
-
-        df -BG --output=avail <path>
-
-    Expected output resembles:
-
-        Avail
-          18G
-    """
-    lines = [
-        line.strip()
-        for line in output.splitlines()
-        if line.strip()
-    ]
-
+def _parse_df_available_bytes(output: str) -> Optional[int]:
+    """Parse the available-byte value from ``df -B1 --output=avail``."""
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
     if len(lines) < 2:
         return None
 
-    match = re.fullmatch(r"(\d+)G?", lines[-1])
-    if not match:
+    try:
+        available_bytes = int(lines[-1])
+    except ValueError:
         return None
 
-    return int(match.group(1))
+    return available_bytes if available_bytes >= 0 else None
 
 
 def get_remote_dpu_free_disk_in_gb(
@@ -281,21 +267,16 @@ def get_remote_dpu_free_disk_in_gb(
     disk_path: str = DEFAULT_DISK_PATH,
     ssh_options: Optional[List[str]] = None,
 ) -> Optional[int]:
-    """
-    Get free disk space from a DPU reachable over SSH.
-    """
+    """Get remote DPU free space, flooring exact bytes to whole GiB."""
     resolved_ssh_options = (
-        ssh_options
-        if ssh_options is not None
-        else DEFAULT_SSH_OPTIONS
+        ssh_options if ssh_options is not None else DEFAULT_SSH_OPTIONS
     )
-
     command = [
         "ssh",
         *resolved_ssh_options,
         dpu_name,
         "df",
-        "-BG",
+        "-B1",
         "--output=avail",
         disk_path,
     ]
@@ -309,15 +290,16 @@ def get_remote_dpu_free_disk_in_gb(
         )
         return None
 
-    available_gb = _parse_df_available_gb(output)
-    if available_gb is None:
+    available_bytes = _parse_df_available_bytes(output)
+    if available_bytes is None:
         logging.warning(
             "Failed to parse disk space from %s: %s",
             dpu_name,
             output,
         )
+        return None
 
-    return available_gb
+    return available_bytes // (1024 ** 3)
 
 
 def check_remote_dpu_image_install_free_disk_space(
@@ -435,6 +417,7 @@ def check_image_install_free_disk_space(
         disk_path=disk_path,
         platform_json_path=platform_json_path,
     )
+
 
 def get_dpu_storage_policy(
     platform_json_path: Optional[str] = None,
@@ -622,73 +605,77 @@ def recover_remote_dpu_disk_space(
         _delete_remote_files(dpu_name, to_delete, ssh_options)
 
 
-def ensure_remote_dpu_reboot_disk_space(
+def ensure_remote_dpu_disk_space_for_operation(
     dpu_name: str,
+    operation: str,
     platform_json_path: Optional[str] = None,
     ssh_options: Optional[List[str]] = None,
 ) -> bool:
-    """
-    Validate that a remote DPU has enough free disk space before a reboot, and
-    attempt to recover space using the retention policy when it is short.
-
-    Governed by the optional "dpu_storage_policy" in platform.json:
-
-        "dpu_storage_policy": {
-            "reboot": {"disk_path": "/", "min_free_disk_in_gb": 4},
-            "retention": {"paths": {"/var/dump": {...}, "/var/core": {...}}}
-        }
-
-    Returns True when the policy is not configured (no-op) or when there is
-    sufficient free space (possibly after retention). Returns False when the
-    space remains insufficient or cannot be determined.
-    """
+    """Validate and, when configured, recover DPU space for an operation."""
     policy = get_dpu_storage_policy(platform_json_path)
     if not policy:
         logging.info(
-            "dpu_storage_policy is not configured; skipping reboot "
-            "disk-space check for %s",
+            "dpu_storage_policy is not configured; skipping %s disk-space "
+            "check for %s",
+            operation,
             dpu_name,
         )
         return True
 
-    reboot_policy = policy.get("reboot")
-    if not isinstance(reboot_policy, dict):
+    operation_policy = policy.get(operation)
+    if operation_policy is None:
         logging.info(
-            "dpu_storage_policy.reboot is not configured; skipping reboot "
-            "disk-space check for %s",
+            "dpu_storage_policy.%s is not configured; skipping disk-space "
+            "check for %s",
+            operation,
+            dpu_name,
+        )
+        return True
+    if not isinstance(operation_policy, dict):
+        logging.error("dpu_storage_policy.%s must be an object", operation)
+        return False
+
+    threshold_key = "min_free_disk_in_gb"
+    if threshold_key not in operation_policy:
+        logging.info(
+            "dpu_storage_policy.%s.%s is not configured; skipping disk-space "
+            "check for %s",
+            operation,
+            threshold_key,
             dpu_name,
         )
         return True
 
-    required_gb = _get_optional_positive_int(
-        reboot_policy, "min_free_disk_in_gb"
-    )
+    required_gb = _get_optional_positive_int(operation_policy, threshold_key)
     if required_gb is None:
-        logging.info(
-            "dpu_storage_policy.reboot.min_free_disk_in_gb is not configured; "
-            "skipping reboot disk-space check for %s",
-            dpu_name,
+        logging.error(
+            "Invalid dpu_storage_policy.%s.%s",
+            operation,
+            threshold_key,
         )
-        return True
+        return False
 
-    disk_path = reboot_policy.get("disk_path", DEFAULT_DISK_PATH)
+    disk_path = operation_policy.get("disk_path", DEFAULT_DISK_PATH)
+    if not isinstance(disk_path, str) or not disk_path:
+        logging.error("Invalid dpu_storage_policy.%s.disk_path", operation)
+        return False
+
     resolved_ssh_options = (
         ssh_options if ssh_options is not None else DEFAULT_SSH_OPTIONS
     )
-
     available_gb = get_remote_dpu_free_disk_in_gb(
         dpu_name, disk_path, resolved_ssh_options
     )
-
     if available_gb is not None and available_gb >= required_gb:
         return True
 
     retention_policy = policy.get("retention")
     if isinstance(retention_policy, dict):
         logging.info(
-            "Insufficient free disk on %s (available=%sGB required=%sGB); "
-            "applying retention policy",
+            "Insufficient free disk on %s before %s "
+            "(available=%sGB required=%sGB); applying retention policy",
             dpu_name,
+            operation,
             available_gb,
             required_gb,
         )
@@ -700,47 +687,32 @@ def ensure_remote_dpu_reboot_disk_space(
         )
 
     if available_gb is None:
-        logging.error(
-            "Unable to determine free disk space on %s",
-            dpu_name,
-        )
+        logging.error("Unable to determine free disk space on %s", dpu_name)
         return False
-
     if available_gb < required_gb:
         logging.error(
             "Insufficient free disk on %s after retention: "
-            "available=%sGB required=%sGB path=%s",
+            "available=%sGB required=%sGB path=%s operation=%s",
             dpu_name,
             available_gb,
             required_gb,
             disk_path,
+            operation,
         )
         return False
 
     return True
 
 
-def ensure_remote_dpu_disk_space_for_operation(
-        dpu_name,
-        operation,
-        platform_json_path=None,
-        ssh_options=None):
-    """
-    Validate (and, when configured, recover) free disk space on a remote DPU
-    before an operation such as a reboot is performed against it.
-
-    Uses the platform "dpu_storage_policy" and returns True when there is
-    sufficient free space (or the policy is not configured), and False when the
-    space is insufficient or cannot be determined.
-    """
-    logging.info(
-        "Validating free disk space on %s before %s",
-        dpu_name,
-        operation,
-    )
-
-    return ensure_remote_dpu_reboot_disk_space(
+def ensure_remote_dpu_reboot_disk_space(
+    dpu_name: str,
+    platform_json_path: Optional[str] = None,
+    ssh_options: Optional[List[str]] = None,
+) -> bool:
+    """Compatibility wrapper for the reboot disk-space policy."""
+    return ensure_remote_dpu_disk_space_for_operation(
         dpu_name=dpu_name,
+        operation="reboot",
         platform_json_path=platform_json_path,
         ssh_options=ssh_options,
     )
