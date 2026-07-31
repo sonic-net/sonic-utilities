@@ -10437,9 +10437,11 @@ def igmp_snooping_static_del(ctx, vid, interface_name, ip_addr):
             ctx.fail("'interface_name' is None!")
     static_group_key = vlan_name+'|'+ip_addr
     l2mc_name = db.get_entry('L2MC_STATIC_GROUP', static_group_key)
+    if not l2mc_name:
+        ctx.fail("Static IGMP group entry for IP {} under {} does not exist".format(ip_addr, vlan_name))
     members = l2mc_name.get('static-members', [])
     if interface_name not in members:
-        ctx.fail("{} is not a member of {}".format(interface_name, vlan_name))
+        ctx.fail("Interface {} is not a static member of group {} in {}".format(interface_name, ip_addr, vlan_name))
     members.remove(interface_name)
     if len(members) == 0:
         del l2mc_name['static-members']
@@ -10919,9 +10921,11 @@ def mld_snooping_static_del(ctx, vid, interface_name, ip_addr):
             ctx.fail("'interface_name' is None!")
     static_group_key = vlan_name+'|'+ip_addr
     l2mc_name = db.get_entry('MLD_L2MC_STATIC_GROUP', static_group_key)
+    if not l2mc_name:
+        ctx.fail("Static MLD group entry for IP {} under {} does not exist".format(ip_addr, vlan_name))
     members = l2mc_name.get('static-members', [])
     if interface_name not in members:
-        ctx.fail("{} is not a member of {}".format(interface_name, vlan_name))
+        ctx.fail("Interface {} is not a static member of group {} in {}".format(interface_name, ip_addr, vlan_name))
     members.remove(interface_name)
     if len(members) == 0:
         del l2mc_name['static-members']
