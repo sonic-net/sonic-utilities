@@ -4,6 +4,7 @@ import pytest
 import filecmp
 import importlib
 import os
+import subprocess
 import traceback
 import json
 import jsonpatch
@@ -5563,3 +5564,35 @@ class TestSwssReady(object):
                 mock.patch('config.main.clicommon.run_command',
                            mock.MagicMock(return_value=("not-found", 0))):
             assert config._swss_ready() is True
+
+
+class TestGetMonitServicesByPrefix(object):
+    """Tests for _get_monit_services_by_prefix()."""
+
+    @mock.patch('config.main.subprocess.check_output')
+    def test_finds_container_memory_services(self, mock_check_output):
+        mock_check_output.return_value = (
+            "Monit 5.33.0 uptime: 1h 2m\n"
+            " routeCheck                       OK                          Program\n"
+            " container_checker                OK                          Program\n"
+            " container_memory_snmp            OK                          Program\n"
+            " container_memory_gnmi            OK                          Program\n"
+            " container_memory_bmp             OK                          Program\n"
+        )
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == ['container_memory_snmp', 'container_memory_gnmi', 'container_memory_bmp']
+
+    @mock.patch('config.main.subprocess.check_output')
+    def test_no_matching_services(self, mock_check_output):
+        mock_check_output.return_value = (
+            " routeCheck                       OK                          Program\n"
+            " container_checker                OK                          Program\n"
+        )
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == []
+
+    @mock.patch('config.main.subprocess.check_output',
+                side_effect=subprocess.CalledProcessError(1, 'monit'))
+    def test_monit_not_running(self, mock_check_output):
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == []
