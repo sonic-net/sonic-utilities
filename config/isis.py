@@ -425,3 +425,36 @@ def interface_isis_circuit_type(ctx, interface_name, circuit_type):
     except Exception as e:
         log.log_error("Failed to configure IS-IS circuit type on interface {}: {}".format(interface_name, str(e)))
         ctx.fail(str(e))
+
+
+@INTERFACE_ISIS.command(name="passive")
+@click.argument("interface_name")
+@click.argument("mode", type=click.Choice(['enable', 'disable']))
+@click.pass_context
+def interface_isis_passive(ctx, interface_name, mode):
+    """Configure IS-IS passive mode for an interface"""
+    db = ctx.obj['config_db']
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = _alias_to_name(db, interface_name)
+        if not interface_name:
+            ctx.fail("Invalid interface alias")
+
+    table = CFG_ISIS_INTERFACE
+    key = interface_name
+
+    cfg = db.get_config()
+    if table not in cfg or key not in cfg[table]:
+        ctx.fail("IS-IS routing is not enabled on interface {}. Please enable it first using 'config interface isis enable {}'".format(interface_name, interface_name))
+
+    data = cfg[table][key]
+    data["passive"] = "true" if mode == "enable" else "false"
+
+    try:
+        db.set_entry(table, key, data)
+        click.echo("Configured IS-IS passive mode to '{}' on interface {}".format(mode, interface_name))
+        log.log_notice("Configured IS-IS passive mode to '{}' on interface {}".format(mode, interface_name))
+    except Exception as e:
+        log.log_error("Failed to configure IS-IS passive mode on interface {}: {}".format(interface_name, str(e)))
+        ctx.fail(str(e))
+

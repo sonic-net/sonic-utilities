@@ -39,6 +39,9 @@
   * [BMC config commands](#bmc-config-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
+* [IS-IS](#is-is)
+  * [IS-IS show commands](#is-is-show-commands)
+  * [IS-IS config commands](#is-is-config-commands)
 * [BGP](#bgp)
   * [BGP show commands](#bgp-show-commands)
   * [BGP config commands](#bgp-config-commands)
@@ -2676,6 +2679,153 @@ This command displays the state and key parameters of all BFD sessions that matc
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
+
+## IS-IS
+
+This section explains all the IS-IS show commands and IS-IS configuration commands supported in SONiC.
+
+### IS-IS show commands
+
+**show isis neighbor**
+
+This command displays the IS-IS neighbor adjacencies and their current states.
+
+- Usage:
+  ```
+  show isis neighbor [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show isis neighbor
+  Area default:
+   System Id           Interface   L  State         Holdtime SNPA
+   sonic               Ethernet0   3  Up            29       2020.2020.2020
+   sonic               Ethernet4   3  Up            28       2020.2020.2020
+  ```
+
+**show isis database**
+
+This command displays the IS-IS Link-State Database (LSDB).
+
+- Usage:
+  ```
+  show isis database [detail] [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show isis database
+  IS-IS Level-1 link-state database:
+  LSP ID                  PduLen  SeqNumber   Chksum  Holdtime  ATT/P/OL
+  sonic.00-00          *     73   0x00000002  0x34a4    1217    0/0/0
+  ```
+
+**show isis summary**
+
+This command displays the IS-IS process summary.
+
+- Usage:
+  ```
+  show isis summary [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show isis summary
+  vrf             : default
+  Process Id      : 42
+  System Id       : 1921.6800.0001
+  Up time         : 00:03:50 ago
+  Number of areas : 1
+  ```
+
+### IS-IS config commands
+
+**config isis net**
+
+This command configures the Network Entity Title (NET) for IS-IS.
+
+- Usage:
+  ```
+  config isis net <net_title>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config isis net 49.0001.0000.0000.0001.00
+  ```
+
+**config isis level**
+
+This command configures the router level for IS-IS.
+
+- Usage:
+  ```
+  config isis level <level-1|level-2|level-1-2>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config isis level level-1
+  ```
+
+**config interface isis enable / disable**
+
+This command enables or disables IS-IS on an interface.
+
+- Usage:
+  ```
+  config interface isis enable <interface_name>
+  config interface isis disable <interface_name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface isis enable Ethernet0
+  ```
+
+**config interface isis passive**
+
+This command enables or disables passive mode for an interface in IS-IS.
+
+- Usage:
+  ```
+  config interface isis passive <interface_name> <enable|disable>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface isis passive Loopback0 enable
+  ```
+
+**config interface isis circuit-type**
+
+This command configures the circuit type (p2p or lan) for an interface in IS-IS.
+
+- Usage:
+  ```
+  config interface isis circuit-type <interface_name> <p2p|lan>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface isis circuit-type Ethernet0 p2p
+  ```
+
+**config interface isis metric**
+
+This command configures the IS-IS metric cost for an interface.
+
+- Usage:
+  ```
+  config interface isis metric <interface_name> <metric_val>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface isis metric Ethernet0 20
+  ```
 
 ## BGP
 

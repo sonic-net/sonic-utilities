@@ -23,6 +23,7 @@ class TestIsis(object):
     config_interface_isis_disable = config.interface.commands["isis"].commands["disable"]
     config_interface_isis_metric = config.interface.commands["isis"].commands["metric"]
     config_interface_isis_circuit_type = config.interface.commands["isis"].commands["circuit-type"]
+    config_interface_isis_passive = config.interface.commands["isis"].commands["passive"]
 
     show_isis_summary = show.cli.commands["isis"].commands["summary"]
     show_isis_neighbor = show.cli.commands["isis"].commands["neighbor"]
@@ -144,6 +145,11 @@ class TestIsis(object):
         result = runner.invoke(self.config_interface_isis_circuit_type, ["Ethernet0", "p2p"], obj=obj)
         assert result.exit_code == 0
         assert db.cfgdb.get_table("ISIS_INTERFACE")["Ethernet0"]["circuit_type"] == "p2p"
+
+        # Configure Passive Mode
+        result = runner.invoke(self.config_interface_isis_passive, ["Ethernet0", "enable"], obj=obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table("ISIS_INTERFACE")["Ethernet0"]["passive"] == "true"
 
         # Disable ISIS on Ethernet0
         result = runner.invoke(self.config_interface_isis_disable, ["Ethernet0"], obj=obj)
