@@ -212,8 +212,6 @@ def buffer_profile_config_update_validator(scope, patch_element):
     return rdma_config_update_validator_common(scope, patch_element)
 
 
-<<<<<<< HEAD
-=======
 def buffer_pool_config_update_validator(scope, patch_element):
     """
     Buffer pool validator that handles table-level, object-level, and field-level operations.
@@ -243,7 +241,6 @@ def buffer_pool_config_update_validator(scope, patch_element):
     return rdma_config_update_validator_common(scope, patch_element, exact_field_match=False, remove_port=True)
 
 
->>>>>>> 5666cb3c (NOS-7662: Add GCU patches with paths of length 1 (#814))
 def read_statedb_entry(scope, table, key, field):
     state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, True, scope)
     tbl = swsscommon.Table(state_db, table)
