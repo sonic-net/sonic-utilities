@@ -658,6 +658,64 @@ class TestPatchWrapper(unittest.TestCase):
         # Assert
         self.assertDictEqual(expected, actual)
 
+    def test_simulate_config_db_patch__empties_leaf_list__field_is_dropped(self):
+        # Arrange
+        patch_wrapper = gu_common.PatchWrapper()
+        config = {
+            "BGP_ALLOWED_PREFIXES": {
+                "DEPLOYMENT_ID|0": {
+                    "prefixes_v4": ["10.20.0.0/16"],
+                    "prefixes_v6": ["fc01:20::/64"],
+                }
+            }
+        }
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}])
+        # ConfigDB cannot store an empty leaf-list, the field has to be absent
+        expected = {"BGP_ALLOWED_PREFIXES": {"DEPLOYMENT_ID|0": {"prefixes_v6": ["fc01:20::/64"]}}}
+
+        # Act
+        actual = patch_wrapper.simulate_config_db_patch(patch, config)
+
+        # Assert
+        self.assertDictEqual(expected, actual)
+
+    def test_simulate_config_db_patch__leaf_list_still_has_items__field_is_kept(self):
+        # Arrange
+        patch_wrapper = gu_common.PatchWrapper()
+        config = {
+            "BGP_ALLOWED_PREFIXES": {
+                "DEPLOYMENT_ID|0": {
+                    "prefixes_v4": ["10.20.0.0/16", "10.30.0.0/16"],
+                }
+            }
+        }
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}])
+        expected = {"BGP_ALLOWED_PREFIXES": {"DEPLOYMENT_ID|0": {"prefixes_v4": ["10.30.0.0/16"]}}}
+
+        # Act
+        actual = patch_wrapper.simulate_config_db_patch(patch, config)
+
+        # Assert
+        self.assertDictEqual(expected, actual)
+
+    def test_simulate_patch__sonic_yang_config__empty_yang_list_is_kept(self):
+        # Arrange
+        # simulate_patch must stay shape agnostic. In SonicYang json a list holds yang list
+        # entries, not leaf-list items, so it must not be treated as an empty leaf-list.
+        patch_wrapper = gu_common.PatchWrapper()
+        config = {"sonic-vlan:sonic-vlan": {"VLAN": {"VLAN_LIST": [{"name": "Vlan1000"}]}}}
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/sonic-vlan:sonic-vlan/VLAN/VLAN_LIST/0"}])
+        expected = {"sonic-vlan:sonic-vlan": {"VLAN": {"VLAN_LIST": []}}}
+
+        # Act
+        actual = patch_wrapper.simulate_patch(patch, config)
+
+        # Assert
+        self.assertDictEqual(expected, actual)
+
     def test_generate_patch__diff__non_empty_patch(self):
         # Arrange
         patch_wrapper = gu_common.PatchWrapper()

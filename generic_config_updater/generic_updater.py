@@ -114,7 +114,7 @@ class PatchApplier:
 
         # Generate target config
         self.logger.log_notice(f"{scope}: simulating the target full config after applying the patch.")
-        target_config = self.patch_wrapper.simulate_patch(patch, old_config)
+        target_config = self.patch_wrapper.simulate_config_db_patch(patch, old_config)
 
         # Validate all JsonPatch operations on specified fields
         self.logger.log_notice(f"{scope}: validating all JsonPatch operations are permitted on the specified fields")
