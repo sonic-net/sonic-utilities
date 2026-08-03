@@ -6,11 +6,17 @@ from .validated_config_db_connector import ValidatedConfigDBConnector
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 import utilities_common.cli as clicommon
+from sonic_py_common.security_cipher import master_key_mgr
+import getpass
 
 ADHOC_VALIDATION = True
 RADIUS_MAXSERVERS = 8
 RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
+TACACS_PASSKEY_MAX_LEN = 65
+
+secure_cipher = master_key_mgr(security_cipher_clbk_lookup)
+
 
 def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
@@ -122,7 +128,7 @@ authentication.add_command(trace)
 @clicommon.pass_db
 def login(db, auth_protocol):
     """Switch login authentication [ {ldap, radius, tacacs+, local} | default ]"""
-    if len(auth_protocol) is 0:
+    if len(auth_protocol) == 0:
         click.echo('Argument "auth_protocol" is required')
         return
     elif len(auth_protocol) > 2:
@@ -243,16 +249,66 @@ default.add_command(authtype)
 
 @click.command()
 @click.argument('secret', metavar='<secret_string>', required=False)
+@click.option('-e', '--encrypt', help='Enable secret encryption', is_flag=True)
+@click.option('-r', '--rotate', help='Rotate encryption secret', is_flag=True)
 @click.pass_context
 @clicommon.pass_db
-def passkey(db, ctx, secret):
+def passkey(db, ctx, secret, encrypt, rotate):
     """Specify TACACS+ server global passkey <STRING>"""
     if ctx.obj == 'default':
         del_table_key(db, 'TACPLUS', 'global', 'passkey')
     elif secret:
-        add_table_kv(db, 'TACPLUS', 'global', 'passkey', secret)
+        if len(secret) > TACACS_PASSKEY_MAX_LEN:
+            click.echo('Maximum of %d chars can be configured' % TACACS_PASSKEY_MAX_LEN)
+            return
+        elif not is_secret(secret):
+            click.echo(VALID_CHARS_MSG)
+            return
+
+    if encrypt:
+        try:
+            # Set new passwd if not set already
+            if secure_cipher.is_key_encrypt_enabled("TACPLUS", "global") is False:
+                # Register feature with Security Cipher module for the 1st time
+                secure_cipher.register("TACPLUS", "TACPLUS|global")
+                passwd = getpass.getpass()
+                # Set new password for encryption
+                secure_cipher.set_feature_password("TACPLUS", passwd)
+            else:
+                # Check if password rotation is enabled
+                if rotate:
+                    passwd = getpass.getpass()
+                    # Rotate password for TACPLUS feature and re-encrypt the secret
+                    secure_cipher.rotate_feature_passwd("TACPLUS", passwd)
+                    return
+            b64_encoded = secure_cipher.encrypt_passkey("TACPLUS", secret)
+            if b64_encoded is not None:
+                # Update key_encrypt flag
+                add_table_kv('TACPLUS', 'global', 'key_encrypt', True)
+                add_table_kv('TACPLUS', 'global', 'passkey', b64_encoded)
+            else:
+                # Deregister feature with Security Cipher module
+                secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
+                click.echo('Passkey encryption failed')
+                return
+        except (EOFError, KeyboardInterrupt):
+            # Deregister feature with Security Cipher module
+            secure_cipher.deregister("TACPLUS", "TACPLUS|global")
+            add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
+            click.echo('Input cancelled')
+            return
+        except Exception as e:
+            # Deregister feature with Security Cipher module
+            secure_cipher.deregister("TACPLUS", "TACPLUS|global")
+            add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
+            click.echo('Unexpected error: %s' % e)
+            return
     else:
-        click.echo('Argument "secret" is required')
+        if secure_cipher.is_key_encrypt_enabled("TACPLUS", "global"):
+            secure_cipher.deregister("TACPLUS", "TACPLUS|global")
+        # Update key_encrypt flag to false
+        add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
+        add_table_kv('TACPLUS', 'global', 'passkey', secret)
 tacacs.add_command(passkey)
 default.add_command(passkey)
 
@@ -261,13 +317,15 @@ default.add_command(passkey)
 @click.command()
 @click.argument('address', metavar='<ip_address>')
 @click.option('-t', '--timeout', help='Transmission timeout interval, default 5', type=int)
-@click.option('-k', '--key', help='Shared secret')
+@click.option('-k', '--key', help='Shared secret, stored in plaintext')
+@click.option('-K', '--encrypted_key', help='Shared secret, stored in encrypted format')
+@click.option('-r', '--rotate', help='Rotate encryption secret', is_flag=True)
 @click.option('-a', '--auth_type', help='Authentication type, default pap', type=click.Choice(["chap", "pap", "mschap", "login"]))
 @click.option('-o', '--port', help='TCP port range is 1 to 65535, default 49', type=click.IntRange(1, 65535), default=49)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
 @clicommon.pass_db
-def add(db, address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
+def add(address, timeout, key, encrypted_key, rotate, auth_type, port, pri, use_mgmt_vrf, encrypt):
     """Specify a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
@@ -288,8 +346,56 @@ def add(db, address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
             data['auth_type'] = auth_type
         if timeout is not None:
             data['timeout'] = str(timeout)
-        if key is not None:
-            data['passkey'] = key
+
+        if key and encrypted_key:
+            raise click.UsageError("You must provide either --key or --encrypted_key")
+
+        if encrypted_key is not None:
+            try:
+                # Set new passwd if not set already
+                if secure_cipher.is_key_encrypt_enabled("TACPLUS_SERVER", address) is False:
+                    # Register feature with Security Cipher module for the 1st time
+                    secure_cipher.register("TACPLUS", f"TACPLUS_SERVER|{address}")
+                    passwd = getpass.getpass()
+                    # Set new password for encryption
+                    secure_cipher.set_feature_password("TACPLUS", passwd)
+                else:
+                    # Check if password rotation is enabled
+                    if rotate:
+                        passwd = getpass.getpass()
+                        # Rotate password for TACPLUS feature and re-encrypt the secret
+                        secure_cipher.rotate_feature_passwd("TACPLUS", passwd)
+                        return
+                b64_encoded = secure_cipher.encrypt_passkey("TACPLUS", encrypted_key)
+                if b64_encoded is not None:
+                    # Update key_encrypt flag
+                    add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', True)
+                    add_table_kv('TACPLUS_SERVER', address, 'passkey', b64_encoded)
+                else:
+                    # Deregister feature with Security Cipher module
+                    secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
+                    click.echo('Passkey encryption failed')
+                    return
+            except (EOFError, KeyboardInterrupt):
+                # Deregister feature with Security Cipher module
+                secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
+                add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', False)
+                click.echo('Input cancelled')
+                return
+            except Exception as e:
+                # Deregister feature with Security Cipher module
+                secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
+                add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', False)
+                click.echo('Unexpected error: %s' % e)
+                return
+        else:
+            if secure_cipher.is_key_encrypt_enabled("TACPLUS_SERVER", address):
+                secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
+            if key is not None:
+                # Update key_encrypt flag to false
+                add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', False)
+                data['passkey'] = key
+
         if use_mgmt_vrf :
             data['vrf'] = "mgmt"
         try:
