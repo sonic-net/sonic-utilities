@@ -78,6 +78,17 @@ def test_wire_value_helpers_preserve_scalars_and_normalize_fault_fields():
         "source_stale": True,
     }
 
+    document = _fault_document(
+        "FAULT_INFO|UNKNOWN|SYMPTOM_ABNORMAL",
+        {
+            "local_action_state": json.dumps({
+                "state": "IDLE",
+                "correlation_key": "internal-only-key",
+            }),
+        },
+    )
+    assert document["local_action_state"] == {"state": "IDLE"}
+
 
 @pytest.mark.parametrize(
     "arguments,field,value",
@@ -220,8 +231,11 @@ def test_show_status_displays_service_and_broken_rules():
         "local_action_default_timeout": "45",
         "broken_rules": json.dumps([
             {
+                "rule_instance_id": "1000001@PSU0",
                 "rule": "PSU_OV_FAULT",
+                "rule_id": 1000001,
                 "version": "1.0.0",
+                "component_name": "PSU0",
                 "correlation_key": "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu",
                 "state": "DEGRADED",
                 "failure_count": 3,
@@ -245,11 +259,13 @@ def test_show_status_displays_service_and_broken_rules():
         ]),
         "inflight_fault_evidence": json.dumps([
             {
-                "correlation_key": "inflight-key-that-must-not-be-rendered",
+                "rule_instance_id": "1000001@PSU0",
                 "rule_id": 1000001,
                 "rule": "PSU_OV_FAULT",
                 "event_id": 1,
-                "component": "PSU0",
+                "component_type": "PSU",
+                "component_name": "PSU0",
+                "correlation_key": "inflight-key-that-must-not-be-rendered",
                 "state": "HELD_BY_PRIMARY",
                 "owning_monitor": "redis",
                 "hold_deadline": 1745614300.0,
@@ -266,7 +282,10 @@ def test_show_status_displays_service_and_broken_rules():
         ]),
         "service_diagnostics": json.dumps([
             {
+                "rule_instance_id": "1000001@PSU0",
                 "monitor": "redis",
+                "rule_id": 1000001,
+                "component_name": "PSU0",
                 "correlation_key": "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu",
                 "state": "IN_FLIGHT",
                 "observed_at": 1745614400.0,
@@ -295,7 +314,8 @@ def test_show_status_displays_service_and_broken_rules():
     assert "45" in result.output
     assert "Broken rules" in result.output
     assert "PSU_OV_FAULT" in result.output
-    assert "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu" in result.output
+    assert "Correlation key" not in result.output
+    assert "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu" not in result.output
     assert "query_error: source unavailable" in result.output
     assert "Source status" in result.output
     assert "redis:STATE_DB:PSU_INFO" in result.output
@@ -303,6 +323,8 @@ def test_show_status_displays_service_and_broken_rules():
     assert "FAULT_INFO|PSU0|SYMPTOM_OVER_THRESHOLD" in result.output
     assert "Affected rules" in result.output
     assert "Primary-owned fault work" in result.output
+    assert "Rule instance" in result.output
+    assert "1000001@PSU0" in result.output
     assert "inflight-key-that-must-not-be-rendered" not in result.output
     assert "WAITING_FOR_RECHECK" in result.output
     assert "action-1" in result.output
@@ -420,6 +442,38 @@ def test_show_status_handles_empty_optional_diagnostics():
     assert "Source status" not in result.output
     assert "Primary-owned fault work" not in result.output
     assert "Service diagnostics" not in result.output
+    assert "Async collection pool" not in result.output
+
+
+def test_show_status_displays_compact_async_pool_metrics():
+    db = _db()
+    db.db.get_redis_client.return_value.ttl.return_value = 120
+    db.db.get_all.return_value = {
+        "state": "RUNNING",
+        "async_pool_workers": "8",
+        "async_pool_busy": "2",
+        "async_pool_queued": "3",
+        "async_pool_avg_queue_latency_ms": "0.25",
+        "async_pool_avg_execution_time_ms": "1.75",
+        "async_pool_avg_utilization_percent": "12.5",
+    }
+
+    result = CliRunner().invoke(show_dldd, ("status",), obj=db)
+
+    assert result.exit_code == 0, result.output
+    assert "Async collection pool" in result.output
+    assert "Workers" in result.output
+    assert "Busy" in result.output
+    assert "Queued" in result.output
+    assert "Avg queue latency (ms)" in result.output
+    assert "Avg execution time (ms)" in result.output
+    assert "Avg utilization (%)" in result.output
+    assert "8" in result.output
+    assert "2" in result.output
+    assert "3" in result.output
+    assert "0.25" in result.output
+    assert "1.75" in result.output
+    assert "12.5" in result.output
 
 
 def test_show_status_ignores_malformed_inflight_entries_without_actions():
@@ -430,8 +484,10 @@ def test_show_status_ignores_malformed_inflight_entries_without_actions():
         "inflight_fault_evidence": json.dumps([
             "not-an-evidence-object",
             {
+                "rule_instance_id": "1000001@PSU0",
                 "rule_id": 1000001,
-                "component": "PSU0",
+                "component_type": "PSU",
+                "component_name": "PSU0",
                 "state": "IN_FLIGHT",
                 "local_action_state": "[]",
             },
@@ -464,8 +520,9 @@ def _rule_status_rows():
             "reason": "",
             "work_items": [
                 {
+                    "rule_instance_id": "1000001@PSU0",
                     "event_id": 1,
-                    "component": "PSU0",
+                    "component_name": "PSU0",
                     "source_type": "redis",
                     "monitor": "redis",
                     "async": True,
@@ -499,8 +556,9 @@ def _rule_status_rows():
             "reason": "source unavailable",
             "work_items": [
                 {
+                    "rule_instance_id": "1000002@FAN0",
                     "event_id": 2,
-                    "component": "FAN0",
+                    "component_name": "FAN0",
                     "source_type": "i2c",
                     "monitor": "common",
                     "state": "DEGRADED",
@@ -628,7 +686,9 @@ def test_show_rules_filters_active_fault_and_displays_detail():
     assert "PSU0" in result.output
     assert "async" in result.output
     assert "60.0 (monitor_default)" in result.output
-    assert "1000001:1:PSU0:redis" in result.output
+    assert "1000001@PSU0" in result.output
+    assert "Correlation key" not in result.output
+    assert "1000001:1:PSU0:redis" not in result.output
     assert "detail was truncated" in result.output
     assert "1745614266.0" not in result.output
 
@@ -853,6 +913,7 @@ def _detailed_fault_row():
         "rule_version": "1.0.0",
         "schema_version": "0.0.1",
         "active_rules_checksum": "sha256:test",
+        "correlation_key": "legacy-top-level-internal-key",
         "component_type": "CURRENT_SENSOR",
         "component_name": "SENSOR0",
         "component_serial_number": "SERIAL0",
@@ -866,7 +927,10 @@ def _detailed_fault_row():
         ]),
         "repair_actions": json.dumps([{"action": "ACTION_REPLACE"}]),
         "actions_taken": "[]",
-        "local_action_state": json.dumps({"state": "IDLE"}),
+        "local_action_state": json.dumps({
+            "state": "IDLE",
+            "correlation_key": "legacy-action-internal-key",
+        }),
         "healthz_artifact": json.dumps({"state": "COMPLETED"}),
         "remote_action_time_window": "3600",
         "severity": "WARNING",
@@ -943,7 +1007,12 @@ def test_show_faults_json_emits_structured_documents():
     assert fault["last_detection_time"] == 1745614266
     assert fault["reason"] == ""
     assert fault["events"][0]["value_read"] == "30000"
-    assert fault["local_action_state"] == {"state": "IDLE"}
+    assert fault["local_action_state"] == {
+        "state": "IDLE",
+        "rule_instance_id": "1000001@SENSOR0",
+    }
+    assert "correlation_key" not in fault
+    assert "correlation_key" not in fault["local_action_state"]
     assert "component_info" not in fault
 
 

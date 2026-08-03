@@ -43,6 +43,15 @@ STATUS_FIELDS = (
     ("Local action default timeout", "local_action_default_timeout"),
 )
 
+ASYNC_POOL_FIELDS = (
+    ("Workers", "async_pool_workers"),
+    ("Busy", "async_pool_busy"),
+    ("Queued", "async_pool_queued"),
+    ("Avg queue latency (ms)", "async_pool_avg_queue_latency_ms"),
+    ("Avg execution time (ms)", "async_pool_avg_execution_time_ms"),
+    ("Avg utilization (%)", "async_pool_avg_utilization_percent"),
+)
+
 
 def _json_value(value, default):
     expected_type = type(default)
@@ -61,6 +70,19 @@ def _compact(value):
     if isinstance(value, (dict, list, tuple)):
         return json.dumps(value, sort_keys=True, separators=(",", ":"))
     return value
+
+
+def _rule_instance(record, rule_id=""):
+    value = record.get("rule_instance_id", "")
+    if value:
+        return value
+    resolved_rule_id = record.get("rule_id", rule_id)
+    component_name = record.get(
+        "component_name", record.get("component", "")
+    )
+    if resolved_rule_id in (None, "") or not component_name:
+        return ""
+    return "{}@{}".format(resolved_rule_id, component_name)
 
 
 def _bool_value(value):
@@ -95,6 +117,7 @@ def _decode_key(value):
 
 def _fault_document(key, fault):
     document = dict(fault)
+    document.pop("correlation_key", None)
     document["redis_key"] = key
     for field, default in FAULT_JSON_FIELDS.items():
         if field in document:
@@ -114,6 +137,14 @@ def _fault_document(key, fault):
             document[field] = _int_value(document[field])
     if "source_stale" in document:
         document["source_stale"] = _bool_value(document["source_stale"])
+    action_state = document.get("local_action_state")
+    if isinstance(action_state, dict):
+        action_state = dict(action_state)
+        action_state.pop("correlation_key", None)
+        rule_instance_id = _rule_instance(document)
+        if rule_instance_id:
+            action_state.setdefault("rule_instance_id", rule_instance_id)
+        document["local_action_state"] = action_state
     return document
 
 
@@ -214,14 +245,24 @@ def status(db):
     rows.insert(1, ("Heartbeat age", _heartbeat_age(db)))
     _print_table(rows, ("Field", "Value"))
 
+    if any(field in process_state for unused_label, field in ASYNC_POOL_FIELDS):
+        click.echo("\nAsync collection pool")
+        _print_table(
+            [[
+                process_state.get(field, "")
+                for unused_label, field in ASYNC_POOL_FIELDS
+            ]],
+            [label for label, unused_field in ASYNC_POOL_FIELDS],
+        )
+
     broken_rules = _json_value(process_state.get("broken_rules"), [])
     if broken_rules:
         click.echo("\nBroken rules")
         rule_rows = [
             (
+                _rule_instance(rule),
                 rule.get("rule", ""),
                 rule.get("version", ""),
-                rule.get("correlation_key", ""),
                 rule.get("state", ""),
                 rule.get("failure_count", ""),
                 _timestamp_value(rule.get("last_attempt", "")),
@@ -233,9 +274,9 @@ def status(db):
         _print_table(
             rule_rows,
             (
+                "Rule instance",
                 "Rule",
                 "Version",
-                "Correlation key",
                 "State",
                 "Failures",
                 "Last attempt",
@@ -288,10 +329,10 @@ def status(db):
                 continue
             action_state = _json_value(evidence.get("local_action_state"), {})
             inflight_rows.append((
-                evidence.get("rule_id", ""),
+                _rule_instance(evidence),
                 evidence.get("rule", ""),
                 evidence.get("event_id", ""),
-                evidence.get("component", ""),
+                evidence.get("component_type", ""),
                 evidence.get("state", ""),
                 evidence.get("owning_monitor", ""),
                 _timestamp_value(evidence.get("since", "")),
@@ -300,8 +341,8 @@ def status(db):
             ))
             if isinstance(action_state, dict) and action_state.get("state"):
                 action_rows.append((
-                    evidence.get("rule", "") or evidence.get("rule_id", ""),
-                    evidence.get("component", ""),
+                    _rule_instance(evidence),
+                    evidence.get("rule", ""),
                     action_state.get("state", ""),
                     action_state.get("worker_id", ""),
                     _timestamp_value(action_state.get("started_at", "")),
@@ -312,10 +353,10 @@ def status(db):
         _print_table(
             inflight_rows,
             (
-                "Rule ID",
+                "Rule instance",
                 "Rule",
                 "Event",
-                "Component",
+                "Component type",
                 "State",
                 "Monitor",
                 "Since",
@@ -328,8 +369,8 @@ def status(db):
             _print_table(
                 action_rows,
                 (
+                    "Rule instance",
                     "Rule",
-                    "Component",
                     "State",
                     "Worker",
                     "Started",
@@ -344,10 +385,12 @@ def status(db):
         click.echo("\nService diagnostics")
         diagnostic_rows = [
             (
+                _rule_instance(diagnostic),
                 diagnostic.get("monitor", ""),
-                diagnostic.get("correlation_key", ""),
                 diagnostic.get("rule_id", ""),
-                diagnostic.get("component", ""),
+                diagnostic.get(
+                    "component_name", diagnostic.get("component", "")
+                ),
                 diagnostic.get("state", ""),
                 _timestamp_value(diagnostic.get("observed_at", "")),
                 diagnostic.get("reason", ""),
@@ -358,8 +401,8 @@ def status(db):
         _print_table(
             diagnostic_rows,
             (
+                "Rule instance",
                 "Monitor",
-                "Correlation key",
                 "Rule ID",
                 "Component",
                 "State",
@@ -487,7 +530,11 @@ def rules(
                     )
                     return
                 components = {
-                    str(item.get("component", ""))
+                    str(
+                        item.get(
+                            "component_name", item.get("component", "")
+                        )
+                    )
                     for item in items
                     if isinstance(item, dict)
                 }
@@ -560,8 +607,9 @@ def rules(
             return
         detail_rows = [
             (
+                _rule_instance(item, rule.get("rule_id", "")),
                 item.get("event_id", ""),
-                item.get("component", ""),
+                item.get("component_name", item.get("component", "")),
                 item.get("source_type", ""),
                 item.get("monitor", ""),
                 "async" if _bool_value(item.get("async", False)) else "inline",
@@ -576,7 +624,6 @@ def rules(
                 _timestamp_value(item.get("next_due", "")),
                 item.get("failure_count", 0),
                 item.get("source_id", ""),
-                item.get("correlation_key", ""),
                 item.get("reason", ""),
             )
             for item in rule_work_items
@@ -585,6 +632,7 @@ def rules(
         _print_table(
             detail_rows,
             (
+                "Rule instance",
                 "Event",
                 "Component",
                 "Source type",
@@ -598,7 +646,6 @@ def rules(
                 "Next due",
                 "Failures",
                 "Source ID",
-                "Correlation key",
                 "Reason",
             ),
         )
