@@ -22,13 +22,13 @@ def write_platform_json(tmp_path, data):
     "image_type,key,value",
     [
         (
-            image_disk_space.IMAGE_TYPE_NPU,
-            image_disk_space.NPU_MIN_FREE_DISK_KEY,
+            image_disk_space.IMAGE_TYPE_SWITCH,
+            image_disk_space.SWITCH_MIN_FREE_DISK_IMAGE_KEY,
             16,
         ),
         (
             image_disk_space.IMAGE_TYPE_DPU,
-            image_disk_space.DPU_MIN_FREE_DISK_KEY,
+            image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY,
             14,
         ),
     ],
@@ -48,20 +48,14 @@ def test_get_min_free_disk_from_platform_json(
 
 
 @pytest.mark.parametrize(
-    "image_type,default_value",
+    "image_type",
     [
-        (
-            image_disk_space.IMAGE_TYPE_NPU,
-            image_disk_space.MIN_FREE_DISK_IN_GB_FOR_NPU_IMAGE,
-        ),
-        (
-            image_disk_space.IMAGE_TYPE_DPU,
-            image_disk_space.MIN_FREE_DISK_IN_GB_FOR_DPU_IMAGE,
-        ),
+        image_disk_space.IMAGE_TYPE_SWITCH,
+        image_disk_space.IMAGE_TYPE_DPU,
     ],
 )
-def test_get_min_free_disk_missing_key_uses_default(
-    tmp_path, image_type, default_value
+def test_get_min_free_disk_missing_key_returns_none(
+    tmp_path, image_type
 ):
     path = write_platform_json(tmp_path, {})
 
@@ -70,32 +64,29 @@ def test_get_min_free_disk_missing_key_uses_default(
             image_type,
             platform_json_path=path,
         )
-        == default_value
+        is None
     )
 
 
 @pytest.mark.parametrize("bad_value", [0, -1, "bad", None])
 @pytest.mark.parametrize(
-    "image_type,key,default_value",
+    "image_type,key",
     [
         (
-            image_disk_space.IMAGE_TYPE_NPU,
-            image_disk_space.NPU_MIN_FREE_DISK_KEY,
-            image_disk_space.MIN_FREE_DISK_IN_GB_FOR_NPU_IMAGE,
+            image_disk_space.IMAGE_TYPE_SWITCH,
+            image_disk_space.SWITCH_MIN_FREE_DISK_IMAGE_KEY,
         ),
         (
             image_disk_space.IMAGE_TYPE_DPU,
-            image_disk_space.DPU_MIN_FREE_DISK_KEY,
-            image_disk_space.MIN_FREE_DISK_IN_GB_FOR_DPU_IMAGE,
+            image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY,
         ),
     ],
 )
-def test_invalid_platform_json_value_uses_default(
+def test_invalid_platform_json_value_returns_none(
     tmp_path,
     bad_value,
     image_type,
     key,
-    default_value,
 ):
     path = write_platform_json(tmp_path, {key: bad_value})
 
@@ -104,21 +95,21 @@ def test_invalid_platform_json_value_uses_default(
             image_type,
             platform_json_path=path,
         )
-        == default_value
+        is None
     )
 
 
-def test_missing_platform_json_uses_default():
+def test_missing_platform_json_returns_none():
     assert (
         image_disk_space.get_min_free_disk_in_gb_for_image(
-            image_disk_space.IMAGE_TYPE_NPU,
+            image_disk_space.IMAGE_TYPE_SWITCH,
             platform_json_path="/bad/path/platform.json",
         )
-        == image_disk_space.MIN_FREE_DISK_IN_GB_FOR_NPU_IMAGE
+        is None
     )
 
 
-def test_invalid_platform_json_uses_default(tmp_path):
+def test_invalid_platform_json_returns_none(tmp_path):
     path = tmp_path / "platform.json"
     path.write_text("{invalid-json")
 
@@ -127,7 +118,7 @@ def test_invalid_platform_json_uses_default(tmp_path):
             image_disk_space.IMAGE_TYPE_DPU,
             platform_json_path=str(path),
         )
-        == image_disk_space.MIN_FREE_DISK_IN_GB_FOR_DPU_IMAGE
+        is None
     )
 
 
@@ -224,7 +215,7 @@ def test_is_running_on_dpu_exception(monkeypatch):
 @pytest.mark.parametrize(
     "running_on_dpu,expected_type",
     [
-        (False, image_disk_space.IMAGE_TYPE_NPU),
+        (False, image_disk_space.IMAGE_TYPE_SWITCH),
         (True, image_disk_space.IMAGE_TYPE_DPU),
     ],
 )
@@ -243,8 +234,8 @@ def test_get_local_image_type(
 @pytest.mark.parametrize(
     "image_type,available_gb,expected",
     [
-        (image_disk_space.IMAGE_TYPE_NPU, 20, True),
-        (image_disk_space.IMAGE_TYPE_NPU, 8, False),
+        (image_disk_space.IMAGE_TYPE_SWITCH, 20, True),
+        (image_disk_space.IMAGE_TYPE_SWITCH, 8, False),
         (image_disk_space.IMAGE_TYPE_DPU, 20, True),
         (image_disk_space.IMAGE_TYPE_DPU, 8, False),
         (image_disk_space.IMAGE_TYPE_DPU, None, False),
@@ -260,8 +251,8 @@ def test_check_local_image_install_free_disk_space(
     path = write_platform_json(
         tmp_path,
         {
-            image_disk_space.NPU_MIN_FREE_DISK_KEY: 12,
-            image_disk_space.DPU_MIN_FREE_DISK_KEY: 12,
+            image_disk_space.SWITCH_MIN_FREE_DISK_IMAGE_KEY: 12,
+            image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12,
         },
     )
     monkeypatch.setattr(
@@ -279,7 +270,7 @@ def test_check_local_image_install_free_disk_space(
     assert result is expected
 
 
-def test_check_local_image_install_free_disk_space_auto_detects_npu(
+def test_check_local_image_install_free_disk_space_auto_detects_switch(
     monkeypatch,
 ):
     captured = {}
@@ -287,7 +278,7 @@ def test_check_local_image_install_free_disk_space_auto_detects_npu(
     monkeypatch.setattr(
         image_disk_space,
         "get_local_image_type",
-        lambda: image_disk_space.IMAGE_TYPE_NPU,
+        lambda: image_disk_space.IMAGE_TYPE_SWITCH,
     )
 
     def fake_get_threshold(image_type, platform_json_path):
@@ -306,7 +297,7 @@ def test_check_local_image_install_free_disk_space_auto_detects_npu(
     )
 
     assert image_disk_space.check_local_image_install_free_disk_space()
-    assert captured["image_type"] == image_disk_space.IMAGE_TYPE_NPU
+    assert captured["image_type"] == image_disk_space.IMAGE_TYPE_SWITCH
 
 
 def test_check_local_image_install_free_disk_space_auto_detects_dpu(
@@ -530,7 +521,7 @@ def test_remote_dpu_check_requires_name(monkeypatch):
 def test_remote_dpu_check_single_success(monkeypatch, tmp_path):
     path = write_platform_json(
         tmp_path,
-        {image_disk_space.DPU_MIN_FREE_DISK_KEY: 12},
+        {image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12},
     )
     monkeypatch.setattr(
         image_disk_space,
@@ -556,7 +547,7 @@ def test_remote_dpu_check_single_success(monkeypatch, tmp_path):
 def test_remote_dpu_check_multi_success(monkeypatch, tmp_path):
     path = write_platform_json(
         tmp_path,
-        {image_disk_space.DPU_MIN_FREE_DISK_KEY: 12},
+        {image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12},
     )
     free_space = {
         "DPU0": 20,
@@ -592,7 +583,7 @@ def test_remote_dpu_check_failure(
 ):
     path = write_platform_json(
         tmp_path,
-        {image_disk_space.DPU_MIN_FREE_DISK_KEY: 12},
+        {image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12},
     )
     monkeypatch.setattr(
         image_disk_space,
@@ -620,7 +611,7 @@ def test_remote_dpu_check_mixed_results_fail(
 ):
     path = write_platform_json(
         tmp_path,
-        {image_disk_space.DPU_MIN_FREE_DISK_KEY: 12},
+        {image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12},
     )
     free_space = {
         "DPU0": 20,
@@ -655,7 +646,7 @@ def test_remote_dpu_check_stops_on_first_failure(
 ):
     path = write_platform_json(
         tmp_path,
-        {image_disk_space.DPU_MIN_FREE_DISK_KEY: 12},
+        {image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12},
     )
     checked_dpus = []
 
@@ -693,7 +684,7 @@ def test_remote_dpu_check_stops_on_first_failure(
     assert checked_dpus == ["DPU0", "DPU1"]
 
 
-def test_smart_check_local_npu(monkeypatch):
+def test_smart_check_local_switch(monkeypatch):
     captured = {}
 
     monkeypatch.setattr(
@@ -717,7 +708,7 @@ def test_smart_check_local_npu(monkeypatch):
     )
 
     assert image_disk_space.check_image_install_free_disk_space()
-    assert captured["image_type"] == image_disk_space.IMAGE_TYPE_NPU
+    assert captured["image_type"] == image_disk_space.IMAGE_TYPE_SWITCH
 
 
 def test_smart_check_local_dpu(monkeypatch):
@@ -747,7 +738,7 @@ def test_smart_check_local_dpu(monkeypatch):
     assert captured["image_type"] == image_disk_space.IMAGE_TYPE_DPU
 
 
-def test_smart_check_remote_dpus_from_npu(monkeypatch):
+def test_smart_check_remote_dpus_from_switch(monkeypatch):
     captured = {}
 
     monkeypatch.setattr(

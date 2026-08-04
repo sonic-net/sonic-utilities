@@ -14,9 +14,6 @@ except ImportError:
     device_info = None
 
 
-MIN_FREE_DISK_IN_GB_FOR_SWITCH_IMAGE = 12
-MIN_FREE_DISK_IN_GB_FOR_DPU_IMAGE = 12
-
 SWITCH_MIN_FREE_DISK_IMAGE_KEY = "min_free_disk_in_gb_for_switch_image"
 DPU_MIN_FREE_DISK_IMAGE_KEY = "min_free_disk_in_gb_for_dpu_image"
 SWITCH_MIN_FREE_DISK_REBOOT_KEY = "min_free_disk_in_gb_for_switch_reboot"
@@ -26,12 +23,6 @@ DEFAULT_DISK_PATH = "/host"
 
 IMAGE_TYPE_SWITCH = "switch"
 IMAGE_TYPE_DPU = "dpu"
-
-# Backward-compatible aliases for the current PR tests and callers.
-MIN_FREE_DISK_IN_GB_FOR_NPU_IMAGE = MIN_FREE_DISK_IN_GB_FOR_SWITCH_IMAGE
-NPU_MIN_FREE_DISK_KEY = SWITCH_MIN_FREE_DISK_IMAGE_KEY
-DPU_MIN_FREE_DISK_KEY = DPU_MIN_FREE_DISK_IMAGE_KEY
-IMAGE_TYPE_NPU = IMAGE_TYPE_SWITCH
 
 DEFAULT_SSH_OPTIONS = [
     "-o", "BatchMode=yes",
@@ -79,42 +70,10 @@ def _load_platform_json(
         return {}
 
 
-def _get_positive_int(
-    data: Dict,
-    key: str,
-    default_value: int,
-) -> int:
-    try:
-        value = data.get(key)
-        if value is None:
-            return default_value
-
-        value = int(value)
-        if value <= 0:
-            logging.warning(
-                "Invalid %s=%s, using default %s",
-                key,
-                value,
-                default_value,
-            )
-            return default_value
-
-        return value
-    except (TypeError, ValueError) as error:
-        logging.warning(
-            "Failed to parse %s, using default %s: %s",
-            key,
-            default_value,
-            error,
-        )
-        return default_value
-
-
 def _get_optional_positive_int(data: Dict, key: str) -> Optional[int]:
     """Return an optional positive integer.
 
-    A missing key disables the optional check. A configured invalid value
-    raises ValueError so an enabled safety check fails closed.
+    A missing or invalid key disables the corresponding disk-space check.
     """
     if key not in data:
         return None
@@ -122,10 +81,21 @@ def _get_optional_positive_int(data: Dict, key: str) -> Optional[int]:
     try:
         value = int(data[key])
     except (TypeError, ValueError) as error:
-        raise ValueError("Invalid {}: {}".format(key, error))
+        logging.error(
+            "Invalid %s=%s; skipping the disk-space check: %s",
+            key,
+            data.get(key),
+            error,
+        )
+        return None
 
     if value <= 0:
-        raise ValueError("{} must be a positive integer".format(key))
+        logging.error(
+            "Invalid %s=%s; skipping the disk-space check",
+            key,
+            value,
+        )
+        return None
 
     return value
 
@@ -133,22 +103,20 @@ def _get_optional_positive_int(data: Dict, key: str) -> Optional[int]:
 def get_min_free_disk_in_gb_for_image(
     image_type: str,
     platform_json_path: Optional[str] = None,
-) -> int:
-    """Return the configured image-install free-space threshold."""
+) -> Optional[int]:
+    """Return the optional image-install free-space threshold."""
     platform_data = _load_platform_json(platform_json_path)
 
     if image_type == IMAGE_TYPE_SWITCH:
-        return _get_positive_int(
+        return _get_optional_positive_int(
             platform_data,
             SWITCH_MIN_FREE_DISK_IMAGE_KEY,
-            MIN_FREE_DISK_IN_GB_FOR_SWITCH_IMAGE,
         )
 
     if image_type == IMAGE_TYPE_DPU:
-        return _get_positive_int(
+        return _get_optional_positive_int(
             platform_data,
             DPU_MIN_FREE_DISK_IMAGE_KEY,
-            MIN_FREE_DISK_IN_GB_FOR_DPU_IMAGE,
         )
 
     raise ValueError("Unsupported image type: {}".format(image_type))
@@ -226,6 +194,14 @@ def check_local_image_install_free_disk_space(
     except ValueError as error:
         logging.error("%s", error)
         return False
+
+    if required_gb is None:
+        logging.info(
+            "No valid image-install disk-space threshold configured for %s; "
+            "skipping the check",
+            resolved_image_type,
+        )
+        return True
 
     available_gb = get_free_disk_in_gb(disk_path)
     if available_gb is None:
@@ -458,6 +434,12 @@ def check_remote_dpu_image_install_free_disk_space(
         IMAGE_TYPE_DPU,
         platform_json_path,
     )
+    if required_gb is None:
+        logging.info(
+            "No valid DPU image-install disk-space threshold configured; "
+            "skipping the check"
+        )
+        return True
 
     for dpu_name in resolved_dpu_names:
         available_gb = get_remote_dpu_free_disk_in_gb(
