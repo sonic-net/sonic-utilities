@@ -2183,8 +2183,12 @@ echo CT_TABLE_DUMP_ENABLE=true >> "$profile"
             sdk_techsupport_saisdkdump_profile=$(docker exec syncd mktemp /tmp/techsupport-saisdkdump.XXXXXX)
         fi
 
-        ${CMD_PREFIX}docker exec syncd sh -c "$prepare_ct_dump_profile_script" _ "$sdk_techsupport_saisdkdump_profile"
-        ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename -p $sdk_techsupport_saisdkdump_profile
+        if ${CMD_PREFIX}docker exec syncd sh -c "$prepare_ct_dump_profile_script" _ "$sdk_techsupport_saisdkdump_profile"; then
+            ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename -p $sdk_techsupport_saisdkdump_profile
+        else
+            echo "Failed to prepare profile to enable CT dump; collecting saisdkdump without it."
+            ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+        fi
     else
         ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
     fi
