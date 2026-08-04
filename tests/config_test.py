@@ -4,6 +4,7 @@ import pytest
 import filecmp
 import importlib
 import os
+import subprocess
 import traceback
 import json
 import jsonpatch
@@ -52,14 +53,14 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
 
 load_minigraph_command_output="""\
 Acquired lock on {0}
-Disabling container and routeCheck monitoring ...
+Disabling container, routeCheck and memory monitoring ...
 Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
 Running command: pfcwd start_default
 Restarting SONiC target ...
-Enabling container and routeCheck monitoring ...
+Enabling container, routeCheck and memory monitoring ...
 Reloading Monit configuration ...
 Please note setting loaded from minigraph will be lost after system reboot. To preserve setting, run `config save`.
 Released lock on {0}
@@ -5374,3 +5375,97 @@ class TestConfigBanner(object):
     @classmethod
     def teardown_class(cls):
         print('TEARDOWN')
+
+
+class TestSwssReady(object):
+    """Tests for the 'config reload' swss readiness gate on platforms without
+    swss (e.g. BMC), plus regression guards for normal switches."""
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        import config.main
+        importlib.reload(config.main)
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+
+    def test_swss_ready_when_service_not_found(self):
+        # BMC: swss not built in -> not-found -> ready, only LoadState queried.
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(return_value=("not-found", 0))) as mock_run:
+            assert config._per_namespace_swss_ready("swss.service") is True
+            assert mock_run.call_count == 1
+
+    def test_swss_ready_when_service_masked(self):
+        # Masked service -> ready, same as not-found.
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(return_value=("masked", 0))) as mock_run:
+            assert config._per_namespace_swss_ready("swss.service") is True
+            assert mock_run.call_count == 1
+
+    def test_swss_not_ready_when_loaded_but_inactive(self):
+        # Switch still booting: loaded but inactive -> not ready.
+        side_effect = [("loaded", 0), ("inactive", 0)]
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)):
+            assert config._per_namespace_swss_ready("swss.service") is False
+
+    def test_swss_not_ready_when_active_but_not_settled(self):
+        # Active for < 120s -> not ready.
+        side_effect = [("loaded", 0), ("active", 0), ("1000000000", 0)]  # up = 1000s
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)), \
+                mock.patch('config.main.time.monotonic',
+                           mock.MagicMock(return_value=1050.0)):  # 50s < 120s
+            assert config._per_namespace_swss_ready("swss.service") is False
+
+    def test_swss_ready_when_active_and_settled(self):
+        # Active for > 120s -> ready.
+        side_effect = [("loaded", 0), ("active", 0), ("1000000000", 0)]  # up = 1000s
+        with mock.patch('config.main.clicommon.run_command',
+                        mock.MagicMock(side_effect=side_effect)), \
+                mock.patch('config.main.time.monotonic',
+                           mock.MagicMock(return_value=2000.0)):  # 1000s > 120s
+            assert config._per_namespace_swss_ready("swss.service") is True
+
+    def test_swss_ready_single_asic_not_found(self):
+        # _swss_ready() end-to-end, single-ASIC, swss not-found.
+        with mock.patch('config.main.multi_asic.get_num_asics',
+                        mock.MagicMock(return_value=1)), \
+                mock.patch('config.main.clicommon.run_command',
+                           mock.MagicMock(return_value=("not-found", 0))):
+            assert config._swss_ready() is True
+
+
+class TestGetMonitServicesByPrefix(object):
+    """Tests for _get_monit_services_by_prefix()."""
+
+    @mock.patch('config.main.subprocess.check_output')
+    def test_finds_container_memory_services(self, mock_check_output):
+        mock_check_output.return_value = (
+            "Monit 5.33.0 uptime: 1h 2m\n"
+            " routeCheck                       OK                          Program\n"
+            " container_checker                OK                          Program\n"
+            " container_memory_snmp            OK                          Program\n"
+            " container_memory_gnmi            OK                          Program\n"
+            " container_memory_bmp             OK                          Program\n"
+        )
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == ['container_memory_snmp', 'container_memory_gnmi', 'container_memory_bmp']
+
+    @mock.patch('config.main.subprocess.check_output')
+    def test_no_matching_services(self, mock_check_output):
+        mock_check_output.return_value = (
+            " routeCheck                       OK                          Program\n"
+            " container_checker                OK                          Program\n"
+        )
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == []
+
+    @mock.patch('config.main.subprocess.check_output',
+                side_effect=subprocess.CalledProcessError(1, 'monit'))
+    def test_monit_not_running(self, mock_check_output):
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == []
