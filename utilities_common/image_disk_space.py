@@ -14,16 +14,24 @@ except ImportError:
     device_info = None
 
 
-MIN_FREE_DISK_IN_GB_FOR_NPU_IMAGE = 12
+MIN_FREE_DISK_IN_GB_FOR_SWITCH_IMAGE = 12
 MIN_FREE_DISK_IN_GB_FOR_DPU_IMAGE = 12
 
-NPU_MIN_FREE_DISK_KEY = "min_free_disk_in_gb_for_npu_image"
-DPU_MIN_FREE_DISK_KEY = "min_free_disk_in_gb_for_dpu_image"
+SWITCH_MIN_FREE_DISK_IMAGE_KEY = "min_free_disk_in_gb_for_switch_image"
+DPU_MIN_FREE_DISK_IMAGE_KEY = "min_free_disk_in_gb_for_dpu_image"
+SWITCH_MIN_FREE_DISK_REBOOT_KEY = "min_free_disk_in_gb_for_switch_reboot"
+DPU_MIN_FREE_DISK_REBOOT_KEY = "min_free_disk_in_gb_for_dpu_reboot"
 
 DEFAULT_DISK_PATH = "/host"
 
-IMAGE_TYPE_NPU = "npu"
+IMAGE_TYPE_SWITCH = "switch"
 IMAGE_TYPE_DPU = "dpu"
+
+# Backward-compatible aliases for the current PR tests and callers.
+MIN_FREE_DISK_IN_GB_FOR_NPU_IMAGE = MIN_FREE_DISK_IN_GB_FOR_SWITCH_IMAGE
+NPU_MIN_FREE_DISK_KEY = SWITCH_MIN_FREE_DISK_IMAGE_KEY
+DPU_MIN_FREE_DISK_KEY = DPU_MIN_FREE_DISK_IMAGE_KEY
+IMAGE_TYPE_NPU = IMAGE_TYPE_SWITCH
 
 DEFAULT_SSH_OPTIONS = [
     "-o", "BatchMode=yes",
@@ -40,10 +48,7 @@ def get_default_platform_json_path() -> Optional[str]:
     try:
         platform = device_info.get_platform()
     except Exception as error:
-        logging.warning(
-            "Failed to determine platform: %s",
-            error,
-        )
+        logging.warning("Failed to determine platform: %s", error)
         return None
 
     if not platform:
@@ -105,34 +110,68 @@ def _get_positive_int(
         return default_value
 
 
+def _get_optional_positive_int(data: Dict, key: str) -> Optional[int]:
+    """Return an optional positive integer.
+
+    A missing key disables the optional check. A configured invalid value
+    raises ValueError so an enabled safety check fails closed.
+    """
+    if key not in data:
+        return None
+
+    try:
+        value = int(data[key])
+    except (TypeError, ValueError) as error:
+        raise ValueError("Invalid {}: {}".format(key, error))
+
+    if value <= 0:
+        raise ValueError("{} must be a positive integer".format(key))
+
+    return value
+
+
 def get_min_free_disk_in_gb_for_image(
     image_type: str,
     platform_json_path: Optional[str] = None,
 ) -> int:
-    """
-    Return the configured minimum free disk space for an image type.
-
-    image_type:
-        "npu" - NPU or regular switch image
-        "dpu" - DPU image
-    """
+    """Return the configured image-install free-space threshold."""
     platform_data = _load_platform_json(platform_json_path)
 
-    if image_type == IMAGE_TYPE_NPU:
+    if image_type == IMAGE_TYPE_SWITCH:
         return _get_positive_int(
             platform_data,
-            NPU_MIN_FREE_DISK_KEY,
-            MIN_FREE_DISK_IN_GB_FOR_NPU_IMAGE,
+            SWITCH_MIN_FREE_DISK_IMAGE_KEY,
+            MIN_FREE_DISK_IN_GB_FOR_SWITCH_IMAGE,
         )
 
     if image_type == IMAGE_TYPE_DPU:
         return _get_positive_int(
             platform_data,
-            DPU_MIN_FREE_DISK_KEY,
+            DPU_MIN_FREE_DISK_IMAGE_KEY,
             MIN_FREE_DISK_IN_GB_FOR_DPU_IMAGE,
         )
 
     raise ValueError("Unsupported image type: {}".format(image_type))
+
+
+def get_min_free_disk_in_gb_for_reboot(
+    device_type: str,
+    platform_json_path: Optional[str] = None,
+) -> Optional[int]:
+    """Return the optional reboot free-space threshold.
+
+    A missing threshold preserves the existing reboot behavior.
+    """
+    platform_data = _load_platform_json(platform_json_path)
+
+    if device_type == IMAGE_TYPE_SWITCH:
+        key = SWITCH_MIN_FREE_DISK_REBOOT_KEY
+    elif device_type == IMAGE_TYPE_DPU:
+        key = DPU_MIN_FREE_DISK_REBOOT_KEY
+    else:
+        raise ValueError("Unsupported device type: {}".format(device_type))
+
+    return _get_optional_positive_int(platform_data, key)
 
 
 def get_free_disk_in_gb(
@@ -145,20 +184,14 @@ def get_free_disk_in_gb(
     try:
         usage = shutil.disk_usage(path)
     except OSError as error:
-        logging.warning(
-            "Failed to get disk usage for %s: %s",
-            path,
-            error,
-        )
+        logging.warning("Failed to get disk usage for %s: %s", path, error)
         return None
 
     return usage.free // (1024 * 1024 * 1024)
 
 
 def is_running_on_dpu() -> bool:
-    """
-    Return True when this utility is running on a DPU.
-    """
+    """Return True when this utility is running on a DPU."""
     try:
         return bool(device_info and device_info.is_dpu())
     except Exception as error:
@@ -170,13 +203,11 @@ def is_running_on_dpu() -> bool:
 
 
 def get_local_image_type() -> str:
-    """
-    Determine which image threshold applies to the local system.
-    """
+    """Determine which image threshold applies to the local system."""
     if is_running_on_dpu():
         return IMAGE_TYPE_DPU
 
-    return IMAGE_TYPE_NPU
+    return IMAGE_TYPE_SWITCH
 
 
 def check_local_image_install_free_disk_space(
@@ -184,12 +215,7 @@ def check_local_image_install_free_disk_space(
     disk_path: str = DEFAULT_DISK_PATH,
     platform_json_path: Optional[str] = None,
 ) -> bool:
-    """
-    Check free disk space on the system where this function is running.
-
-    When image_type is omitted, the function automatically determines
-    whether it is running on an NPU/regular switch or on a DPU.
-    """
+    """Check local free space before image installation."""
     resolved_image_type = image_type or get_local_image_type()
 
     try:
@@ -202,7 +228,6 @@ def check_local_image_install_free_disk_space(
         return False
 
     available_gb = get_free_disk_in_gb(disk_path)
-
     if available_gb is None:
         logging.error(
             "Unable to determine local free disk space: "
@@ -217,6 +242,54 @@ def check_local_image_install_free_disk_space(
             "Insufficient local disk space: "
             "image_type=%s available=%sGB required=%sGB path=%s",
             resolved_image_type,
+            available_gb,
+            required_gb,
+            disk_path,
+        )
+        return False
+
+    return True
+
+
+def check_local_reboot_free_disk_space(
+    device_type: Optional[str] = None,
+    disk_path: str = DEFAULT_DISK_PATH,
+    platform_json_path: Optional[str] = None,
+) -> bool:
+    """Check local free space before reboot.
+
+    If the platform does not configure a reboot threshold, this check is a
+    no-op to preserve existing behavior.
+    """
+    resolved_device_type = device_type or get_local_image_type()
+
+    try:
+        required_gb = get_min_free_disk_in_gb_for_reboot(
+            resolved_device_type,
+            platform_json_path,
+        )
+    except ValueError as error:
+        logging.error("%s", error)
+        return False
+
+    if required_gb is None:
+        return True
+
+    available_gb = get_free_disk_in_gb(disk_path)
+    if available_gb is None:
+        logging.error(
+            "Unable to determine local free disk space before reboot: "
+            "device_type=%s path=%s",
+            resolved_device_type,
+            disk_path,
+        )
+        return False
+
+    if available_gb < required_gb:
+        logging.error(
+            "Insufficient local disk space for reboot: "
+            "device_type=%s available=%sGB required=%sGB path=%s",
+            resolved_device_type,
             available_gb,
             required_gb,
             disk_path,
@@ -242,16 +315,7 @@ def _run_cmd(cmd: List[str]) -> Tuple[int, str]:
 
 
 def _parse_df_available_gb(output: str) -> Optional[int]:
-    """
-    Parse output from:
-
-        df -BG --output=avail <path>
-
-    Expected output resembles:
-
-        Avail
-          18G
-    """
+    """Parse output from ``df -BG --output=avail``."""
     lines = [
         line.strip()
         for line in output.splitlines()
@@ -268,14 +332,26 @@ def _parse_df_available_gb(output: str) -> Optional[int]:
     return int(match.group(1))
 
 
+def _parse_df_available_bytes(output: str) -> Optional[int]:
+    """Parse output from ``df -B1 --output=avail``."""
+    lines = [
+        line.strip()
+        for line in output.splitlines()
+        if line.strip()
+    ]
+
+    if len(lines) < 2 or not re.fullmatch(r"\d+", lines[-1]):
+        return None
+
+    return int(lines[-1])
+
+
 def get_remote_dpu_free_disk_in_gb(
     dpu_name: str,
     disk_path: str = DEFAULT_DISK_PATH,
     ssh_options: Optional[List[str]] = None,
 ) -> Optional[int]:
-    """
-    Get free disk space from a DPU reachable over SSH.
-    """
+    """Get free disk space from a DPU reachable over SSH."""
     resolved_ssh_options = (
         ssh_options
         if ssh_options is not None
@@ -312,21 +388,58 @@ def get_remote_dpu_free_disk_in_gb(
     return available_gb
 
 
+def get_remote_dpu_free_disk_in_bytes(
+    dpu_name: str,
+    disk_path: str = DEFAULT_DISK_PATH,
+    ssh_options: Optional[List[str]] = None,
+) -> Optional[int]:
+    """Get exact free bytes from a remote DPU."""
+    resolved_ssh_options = (
+        ssh_options
+        if ssh_options is not None
+        else DEFAULT_SSH_OPTIONS
+    )
+
+    command = [
+        "ssh",
+        *resolved_ssh_options,
+        dpu_name,
+        "df",
+        "-B1",
+        "--output=avail",
+        disk_path,
+    ]
+
+    return_code, output = _run_cmd(command)
+    if return_code != 0:
+        logging.warning(
+            "Failed to get free disk space from %s: %s",
+            dpu_name,
+            output,
+        )
+        return None
+
+    available_bytes = _parse_df_available_bytes(output)
+    if available_bytes is None:
+        logging.warning(
+            "Failed to parse disk space from %s: %s",
+            dpu_name,
+            output,
+        )
+
+    return available_bytes
+
+
 def check_remote_dpu_image_install_free_disk_space(
     dpu_names: Union[str, List[str]],
     disk_path: str = DEFAULT_DISK_PATH,
     platform_json_path: Optional[str] = None,
     ssh_options: Optional[List[str]] = None,
 ) -> bool:
-    """
-    Check one or more remote DPUs from an NPU.
-
-    The complete check fails if any DPU has insufficient disk space or
-    if the free disk space cannot be determined for any DPU.
-    """
+    """Check one or more remote DPUs before image installation."""
     if is_running_on_dpu():
         logging.error(
-            "Remote DPU disk-space checks must be initiated from an NPU"
+            "Remote DPU disk-space checks must be initiated from a switch"
         )
         return False
 
@@ -352,7 +465,6 @@ def check_remote_dpu_image_install_free_disk_space(
             disk_path,
             ssh_options,
         )
-
         if available_gb is None:
             logging.error(
                 "Unable to determine free disk space for %s",
@@ -374,26 +486,70 @@ def check_remote_dpu_image_install_free_disk_space(
     return True
 
 
+def check_remote_dpu_reboot_free_disk_space(
+    dpu_name: str,
+    disk_path: str = DEFAULT_DISK_PATH,
+    platform_json_path: Optional[str] = None,
+    ssh_options: Optional[List[str]] = None,
+) -> bool:
+    """Check remote DPU free space before ``reboot -d``.
+
+    If the platform does not configure the DPU reboot threshold, this check is
+    a no-op to preserve existing behavior.
+    """
+    if is_running_on_dpu():
+        logging.error(
+            "Remote DPU reboot disk-space checks must be initiated "
+            "from a switch"
+        )
+        return False
+
+    try:
+        required_gb = get_min_free_disk_in_gb_for_reboot(
+            IMAGE_TYPE_DPU,
+            platform_json_path,
+        )
+    except ValueError as error:
+        logging.error("%s", error)
+        return False
+
+    if required_gb is None:
+        return True
+
+    available_bytes = get_remote_dpu_free_disk_in_bytes(
+        dpu_name,
+        disk_path,
+        ssh_options,
+    )
+    if available_bytes is None:
+        logging.error(
+            "Unable to determine free disk space for %s before reboot",
+            dpu_name,
+        )
+        return False
+
+    required_bytes = required_gb * 1024 * 1024 * 1024
+    if available_bytes < required_bytes:
+        logging.error(
+            "Insufficient remote DPU disk space for reboot: "
+            "dpu=%s available=%s bytes required=%s bytes path=%s",
+            dpu_name,
+            available_bytes,
+            required_bytes,
+            disk_path,
+        )
+        return False
+
+    return True
+
+
 def check_image_install_free_disk_space(
     dpu_names: Optional[Union[str, List[str]]] = None,
     disk_path: str = DEFAULT_DISK_PATH,
     platform_json_path: Optional[str] = None,
     ssh_options: Optional[List[str]] = None,
 ) -> bool:
-    """
-    Smart image-installation disk-space validation entry point.
-
-    Behavior:
-
-    Running on a DPU:
-        Checks the local DPU using the DPU image threshold.
-
-    Running on an NPU or regular switch without dpu_names:
-        Checks the local system using the NPU image threshold.
-
-    Running on an NPU with dpu_names:
-        Checks the specified remote DPUs using the DPU image threshold.
-    """
+    """Smart image-installation disk-space validation entry point."""
     if is_running_on_dpu():
         if dpu_names:
             logging.error(
@@ -416,7 +572,7 @@ def check_image_install_free_disk_space(
         )
 
     return check_local_image_install_free_disk_space(
-        image_type=IMAGE_TYPE_NPU,
+        image_type=IMAGE_TYPE_SWITCH,
         disk_path=disk_path,
         platform_json_path=platform_json_path,
     )
