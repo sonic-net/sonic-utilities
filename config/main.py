@@ -4519,12 +4519,10 @@ def add_community(db, community, string_type, prompt_community):
     """ Add snmp community string"""
     if prompt_community:
         if community:
-            click.echo('Cannot use both <snmp_community> argument and --prompt-community')
-            sys.exit(1)
+            raise click.UsageError('Cannot use both <snmp_community> argument and --prompt-community')
         community = _prompt_secret('SNMP community string')
     elif not community:
-        click.echo('Error: Missing argument \'<snmp_community>\'')
-        sys.exit(1)
+        raise click.UsageError('Missing argument \'<snmp_community>\'')
     string_type = string_type.upper()
     if ADHOC_VALIDATION:
         if not is_valid_community_type(string_type):
@@ -4591,12 +4589,10 @@ def replace_community(db, current_community, new_community, prompt_new):
     """ Replace snmp community string"""
     if prompt_new:
         if new_community:
-            click.echo('Cannot use both <new_community_string> argument and --prompt-new')
-            sys.exit(1)
+            raise click.UsageError('Cannot use both <new_community_string> argument and --prompt-new')
         new_community = _prompt_secret('New SNMP community string')
     elif not new_community:
-        click.echo('Error: Missing argument \'<new_community_string>\'')
-        sys.exit(1)
+        raise click.UsageError('Missing argument \'<new_community_string>\'')
     snmp_communities = db.cfgdb.get_table("SNMP_COMMUNITY")
     if not current_community in snmp_communities:
         click.echo("Current SNMP community {} is not configured".format(current_community))
@@ -4893,13 +4889,11 @@ def add_user(db, user, user_type, user_permission_type, user_auth_type, user_aut
         sys.exit(SnmpUserError.RoRwCheckFailure)
     if prompt_auth_password:
         if user_auth_password:
-            click.echo('Cannot use both <auth_password> argument and --prompt-auth-password')
-            sys.exit(SnmpUserError.AuthPasswordMissing)
+            raise click.UsageError('Cannot use both <auth_password> argument and --prompt-auth-password')
         user_auth_password = _prompt_secret('Auth password')
     if prompt_encrypt_password:
         if user_encrypt_password:
-            click.echo('Cannot use both <encrypt_password> argument and --prompt-encrypt-password')
-            sys.exit(SnmpUserError.EncryptPasswordMissingFailure)
+            raise click.UsageError('Cannot use both <encrypt_password> argument and --prompt-encrypt-password')
         user_encrypt_password = _prompt_secret('Encrypt password')
     if user_type == "noAuthNoPriv":
         if user_auth_type:
