@@ -63,7 +63,11 @@ def test_missing_reboot_threshold_disables_check(tmp_path, device_type):
 
 
 @pytest.mark.parametrize("value", [0, -1, "bad", None])
-def test_invalid_reboot_threshold_fails_closed(tmp_path, value):
+def test_invalid_reboot_threshold_skips_check(
+    tmp_path,
+    caplog,
+    value,
+):
     path = write_platform_json(
         tmp_path,
         {
@@ -71,11 +75,14 @@ def test_invalid_reboot_threshold_fails_closed(tmp_path, value):
         },
     )
 
-    with pytest.raises(ValueError):
+    assert (
         image_disk_space.get_min_free_disk_in_gb_for_reboot(
             image_disk_space.IMAGE_TYPE_SWITCH,
             path,
         )
+        is None
+    )
+    assert "skipping the disk-space check" in caplog.text
 
 
 @pytest.mark.parametrize(
