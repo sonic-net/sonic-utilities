@@ -2175,7 +2175,13 @@ sed -i "/^CT_TABLE_DUMP_ENABLE=/d" "$profile"
 echo CT_TABLE_DUMP_ENABLE=true >> "$profile"
 '
 
-    if docker exec syncd test -f $sdk_techsupport_ct_dump_sentinel; then
+    # Sentinel check: 0 = present, 66 (EX_NOINPUT) = absent, other = docker/syncd failure.
+    # Use || so a non-zero status does not trip the ERR trap before we branch.
+    local sdk_techsupport_ct_dump_sentinel_rc=0
+    docker exec syncd sh -c 'if [ -f "$1" ]; then exit 0; else exit 66; fi' \
+        _ "$sdk_techsupport_ct_dump_sentinel" || sdk_techsupport_ct_dump_sentinel_rc=$?
+
+    if [ "$sdk_techsupport_ct_dump_sentinel_rc" -eq 0 ]; then
         if $NOOP; then
             echo "docker exec syncd mktemp /tmp/techsupport-saisdkdump.XXXXXX"
             sdk_techsupport_saisdkdump_profile="/tmp/techsupport-saisdkdump.XXXXXX"
@@ -2190,6 +2196,9 @@ echo CT_TABLE_DUMP_ENABLE=true >> "$profile"
             ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
         fi
     else
+        if [ "$sdk_techsupport_ct_dump_sentinel_rc" -ne 66 ]; then
+            echo "Failed to check CT dump sentinel in syncd (rc=$sdk_techsupport_ct_dump_sentinel_rc); collecting saisdkdump without CT dump."
+        fi
         ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
     fi
 
