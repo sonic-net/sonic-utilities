@@ -18,10 +18,7 @@ class TestShowIpRouteCommands(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        #in case someone did not clean up properly so undo the multi-asic mock here
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         import mock_tables.dbconnector
 
     def test_show_ip_route_err(

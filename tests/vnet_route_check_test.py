@@ -730,7 +730,7 @@ def set_mock(mock_table, mock_conn):
 
 
 class TestVnetRouteCheck(object):
-    def setup(self):
+    def setup_method(self):
         pass
 
     def init(self):

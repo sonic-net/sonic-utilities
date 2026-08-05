@@ -74,8 +74,6 @@ class TestTpid(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         import mock_tables.dbconnector
 
     def test_tpid_config_bad_tpid(self):
@@ -189,4 +187,3 @@ class TestTpid(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

@@ -125,7 +125,6 @@ class TestPfcMultiAsic(TestPfcBase):
 
     @classmethod
     def teardown_class(cls):
-        # Reset the database to mock single-asic state
         import mock_tables.mock_single_asic
         mock_tables.dbconnector.load_database_config()
 

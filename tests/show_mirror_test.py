@@ -1,3 +1,4 @@
+# flake8: noqa: E501
 import os
 import sys
 from swsscommon.swsscommon import SonicV2Connector
@@ -6,7 +7,7 @@ from utilities_common.db import Db
 
 import acl_loader.main as acl_loader_show
 from acl_loader import *
-from acl_loader.main import *
+from acl_loader.main import *  # noqa: F403, F401
 
 class TestShowMirror(object):
     def test_mirror_show(self):
@@ -22,9 +23,10 @@ class TestShowMirror(object):
         }
         expected_output = """\
 ERSPAN Sessions
-Name              Status    SRC IP    DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port               Direction
-----------------  --------  --------  --------  -----  ------  -----  -------  ---------  --------------  ---------------------  -----------
-test_session_db1  active                                                                                   Ethernet40,Ethernet48  rx
+Name                  Status    SRC IP    DST IP    GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port               Direction    Sample Rate    Truncate Size
+--------------------  --------  --------  --------  ------  ------  -----  -------  ---------  --------------  ---------------------  -----------  -------------  ---------------
+test_session_db1      active                                                                                    Ethernet40,Ethernet48  rx
+test_session_sampled  active     10.0.0.1  10.0.0.2  0x8949  8       64                                         Ethernet0              rx           50000          128
 
 SPAN Sessions
 Name       Status    DST Port    SRC Port    Direction    Queue    Policer
@@ -41,3 +43,4 @@ session15  active     Ethernet2   Ethernet3   tx
         result_output = result.output.replace('error', 'active')
         result_output = result_output.replace('inactive', 'active')
         assert result_output == expected_output
+

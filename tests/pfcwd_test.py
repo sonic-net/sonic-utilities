@@ -20,7 +20,6 @@ class TestPfcwd(object):
     @classmethod
     def setup_class(cls):
         os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         print("SETUP")
 
     def test_pfcwd_show_config(self):
@@ -245,6 +244,68 @@ class TestPfcwd(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == test_vectors.pfcwd_show_start_default
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_32_ports(self, mock_os):
+        """Test start_default on 32-port system: multiply=1, detection/restoration=200, poll=200ms"""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # Patch PORT table to have exactly 32 ports so multiply = (32-1)//32+1 = 1
+        original_get_table = db.cfgdb.get_table
+
+        def mock_get_table_32_ports(table):
+            if table == 'PORT':
+                return {'Ethernet%d' % i: {} for i in range(0, 32 * 4, 4)}  # 32 ports
+            return original_get_table(table)
+
+        mock_os.geteuid.return_value = 0
+        with patch.object(db.cfgdb, 'get_table', side_effect=mock_get_table_32_ports):
+            result = runner.invoke(
+                pfcwd.cli.commands["start_default"],
+                [],
+                obj=db
+            )
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_start_default_32_ports
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_512_ports(self, mock_os):
+        """Test start_default on 512-port system: multiply=16, detection/restoration=3200, poll=1000ms"""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # Patch PORT table to have 512 ports so multiply = (512-1)//32+1 = 16
+        original_get_table = db.cfgdb.get_table
+
+        def mock_get_table_512_ports(table):
+            if table == 'PORT':
+                return {'Ethernet%d' % i: {} for i in range(512)}
+            return original_get_table(table)
+
+        mock_os.geteuid.return_value = 0
+        with patch.object(db.cfgdb, 'get_table', side_effect=mock_get_table_512_ports):
+            result = runner.invoke(
+                pfcwd.cli.commands["start_default"],
+                [],
+                obj=db
+            )
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_start_default_512_ports
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_history(self, mock_os):
@@ -528,6 +589,10 @@ class TestMultiAsicPfcwdShow(object):
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
         import pfcwd.main
         importlib.reload(pfcwd.main)
 
@@ -958,11 +1023,6 @@ class TestMultiAsicPfcwdShow(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         import mock_tables.mock_single_asic
         importlib.reload(mock_tables.mock_single_asic)
         import pfcwd.main

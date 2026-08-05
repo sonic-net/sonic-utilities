@@ -63,9 +63,7 @@ show_queue_counters_voq_json = {
 class TestAggVoq(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         print("SETUP")
 
     def test_queue_voq_counters_aggregate(self):
@@ -118,7 +116,5 @@ class TestAggVoq(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
         print("TEARDOWN")

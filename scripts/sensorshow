@@ -37,7 +37,7 @@ CURRENT_INFO_TABLE_NAME = 'CURRENT_INFO'
 
 class SensorShow(object):
     def __init__(self, type):
-        self.db = SonicV2Connector(use_unix_socket_path=True)
+        self.db = SonicV2Connector(use_unix_socket_path=False)
         self.db.connect(self.db.STATE_DB)
         self.field_name = type
         header[1] = type.capitalize()

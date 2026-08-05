@@ -67,6 +67,11 @@
             "separator": "|",
             "instance" : "redis"
         },
+        "GB_COUNTERS_DB" : {
+            "id" : 8,
+            "separator": ":",
+            "instance" : "redis"
+        },
         "BMP_STATE_DB" : {
             "id" : 20,
             "separator": "|",

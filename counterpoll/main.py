@@ -1,6 +1,8 @@
 import click
 import os
 from sonic_py_common import device_info, multi_asic
+import utilities_common.multi_asic as multi_asic_util
+from utilities_common.llr import is_llr_capable
 from tabulate import tabulate
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
@@ -12,6 +14,7 @@ PORT_PHY_ATTR = "PORT_PHY_ATTR"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
+HA_SET = "HA_SET"
 DISABLE = "disable"
 ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
@@ -30,7 +33,7 @@ def is_dpu(db):
 
 
 def connect_to_db(namespace):
-    if namespace is None:
+    if not namespace:
         namespace = DEFAULT_NAMESPACE
     else:
         if not SonicDBConfig.isGlobalInit():
@@ -38,6 +41,14 @@ def connect_to_db(namespace):
     configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     configdb.connect()
     return configdb
+
+
+def get_valid_namespace_choices():
+    current_ns = multi_asic.get_current_namespace()
+    if current_ns:
+        return [current_ns]
+
+    return multi_asic.get_namespace_list() + [DEFAULT_NAMESPACE]
 
 
 @click.group()
@@ -49,7 +60,8 @@ def cli():
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def queue(ctx, namespace):
     """ Queue counter commands """
@@ -89,7 +101,8 @@ def queue_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def port(ctx, namespace):
     """ Port counter commands """
@@ -129,7 +142,8 @@ def port_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def port_buffer_drop(ctx, namespace):
     """ Port buffer drop  counter commands """
@@ -173,11 +187,14 @@ def port_buffer_drop_disable(ctx):
 
 # PHY counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
-def phy(ctx):
+def phy(ctx, namespace):
     """ PHY counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
 
 @phy.command()
@@ -185,37 +202,35 @@ def phy(ctx):
 @click.pass_context
 def interval(ctx, poll_interval):  # noqa: F811
     """ Set PHY counter query interval """
-    configdb = ctx.obj
     port_info = {}
     port_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
 
 @phy.command()
 @click.pass_context
 def enable(ctx):  # noqa: F811
     """ Enable PHY counter query """
-    configdb = ctx.obj
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = ENABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
 
 @phy.command()
 @click.pass_context
 def disable(ctx):  # noqa: F811
     """ Disable PHY counter query """
-    configdb = ctx.obj
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
 
 # Ingress PG drop packet stat
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def pg_drop(ctx, namespace):
     """  Ingress PG drop counter commands """
@@ -257,7 +272,8 @@ def pg_drop_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def rif(ctx, namespace):
     """ RIF counter commands """
@@ -297,7 +313,8 @@ def rif_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def watermark(ctx, namespace):
     """ Watermark counter commands """
@@ -347,7 +364,8 @@ def watermark_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def acl(ctx, namespace):
     """  ACL counter commands """
@@ -389,7 +407,8 @@ def acl_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def tunnel(ctx, namespace):
     """ Tunnel counter commands """
@@ -428,7 +447,8 @@ def tunnel_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def flowcnt_trap(ctx, namespace):
     """ Trap flow counter commands """
@@ -467,7 +487,8 @@ def flowcnt_trap_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def flowcnt_route(ctx, namespace):
     """ Route flow counter commands """
@@ -507,7 +528,8 @@ def flowcnt_route_disable(ctx):
 @click.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def eni(ctx, namespace):
     """ ENI counter commands """
@@ -542,11 +564,49 @@ def eni_disable(ctx):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
 
 
+# HA set counter commands
+@click.group()
+@click.pass_context
+def ha_set(ctx):
+    """ HA set counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@ha_set.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def ha_set_interval(ctx, poll_interval):
+    """ Set HA set counter query interval """
+    ha_set_info = {}
+    ha_set_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
+@ha_set.command(name='enable')
+@click.pass_context
+def ha_set_enable(ctx):
+    """ Enable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
+@ha_set.command(name='disable')
+@click.pass_context
+def ha_set_disable(ctx):
+    """ Disable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
 # WRED queue counter commands
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def wredqueue(ctx, namespace):
     """ WRED queue counter commands """
@@ -585,7 +645,8 @@ def wredqueue_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def wredport(ctx, namespace):
     """ WRED port counter commands """
@@ -624,7 +685,8 @@ def wredport_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def srv6(ctx, namespace):
     """ SRv6 counter commands """
@@ -656,11 +718,52 @@ def srv6_disable(ctx):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
 
 
+# ICMP echo session counter commands. Drives the ICMP_SESSION row of
+# FLEX_COUNTER_TABLE which orchagent's flexcounterorch watches to toggle
+# ICMP echo session stat collection (selective or native back-end,
+# chosen per platform).
+@cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
+@click.pass_context
+def icmp(ctx, namespace):
+    """ ICMP echo session counter commands """
+    ctx.obj = connect_to_db(namespace)
+
+
+@icmp.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def icmp_interval(ctx, poll_interval):
+    """ Set ICMP echo session counter query interval """
+    icmp_info = {'POLL_INTERVAL': poll_interval}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
+@icmp.command(name='enable')
+@click.pass_context
+def icmp_enable(ctx):
+    """ Enable ICMP echo session counter query """
+    icmp_info = {'FLEX_COUNTER_STATUS': ENABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
+@icmp.command(name='disable')
+@click.pass_context
+def icmp_disable(ctx):
+    """ Disable ICMP echo session counter query """
+    icmp_info = {'FLEX_COUNTER_STATUS': DISABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
 # Switch counter commands
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def switch(ctx, namespace):
     """ Switch counter commands """
@@ -711,10 +814,48 @@ def switch_disable(ctx):
     ctx.obj.mod_entry(table, key, data)
 
 
+# LLR counter commands
+@cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=multi_asic_util.LazyChoice(get_valid_namespace_choices),
+              default=multi_asic.get_current_namespace())
+@click.pass_context
+def llr(ctx, namespace):
+    """ LLR port counter commands """
+    if not is_llr_capable(namespace):
+        click.echo("Error: LLR is not supported on this platform.")
+        raise SystemExit(1)
+    ctx.obj = connect_to_db(namespace)
+
+
+@llr.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(100, 30000))
+@click.pass_context
+def llr_interval(ctx, poll_interval):
+    """ Set LLR port counter query interval """
+    ctx.obj.mod_entry(CFG_FLEX_COUNTER_TABLE, "LLR", {"POLL_INTERVAL": poll_interval})
+
+
+@llr.command(name='enable')
+@click.pass_context
+def llr_enable(ctx):
+    """ Enable LLR port counter query """
+    ctx.obj.mod_entry(CFG_FLEX_COUNTER_TABLE, "LLR", {"FLEX_COUNTER_STATUS": ENABLE})
+
+
+@llr.command(name='disable')
+@click.pass_context
+def llr_disable(ctx):
+    """ Disable LLR port counter query """
+    ctx.obj.mod_entry(CFG_FLEX_COUNTER_TABLE, "LLR", {"FLEX_COUNTER_STATUS": DISABLE})
+
+
 @cli.command()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 def show(namespace):
     """ Show the counter configuration """
     configdb = connect_to_db(namespace)
@@ -732,10 +873,13 @@ def show(namespace):
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
+    ha_set_info = configdb.get_entry('FLEX_COUNTER_TABLE', HA_SET)
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
+    icmp_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'ICMP_SESSION')
     switch_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SWITCH')
+    llr_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'LLR')
 
     header = ("Type", "Interval (in ms)", "Status")
     data = []
@@ -776,16 +920,26 @@ def show(namespace):
     if srv6_info:
         data.append(["SRV6_STAT", srv6_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     srv6_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if icmp_info:
+        data.append(["ICMP_SESSION_STAT", icmp_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    icmp_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if switch_info:
         data.append([
             "SWITCH_STAT",
             switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
             switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
         ])
-
-    if is_dpu(configdb) and eni_info:
+    if llr_info:
+        data.append(["LLR_STAT",
+                     llr_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                     llr_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    dpu = is_dpu(configdb)
+    if dpu and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if dpu and ha_set_info:
+        data.append(["HA_SET_STAT", ha_set_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    ha_set_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
@@ -795,7 +949,8 @@ Format:
     (click group/command, callback function)
 """
 dynamic_commands = [
-    (eni, is_dpu)
+    (eni, is_dpu),
+    (ha_set, is_dpu)
 ]
 
 

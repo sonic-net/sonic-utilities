@@ -5,10 +5,10 @@ from jsonpointer import JsonPointer
 import sonic_yang
 import sonic_yang_ext
 import subprocess
-import yang as ly
 import copy
 import re
 import os
+import hashlib
 from sonic_py_common import logger, multi_asic
 from enum import Enum
 from functools import cmp_to_key
@@ -81,6 +81,8 @@ class ConfigWrapper:
         self.scope = scope
         self.yang_dir = YANG_DIR
         self.sonic_yang_with_loaded_models = None
+        self._validate_config_cache = {}
+        self._currently_loaded_hash = None
 
     def get_config_db_as_json(self):
         return get_config_db_as_json(self.scope)
@@ -138,6 +140,16 @@ class ConfigWrapper:
             return False, ex
 
     def validate_config_db_config(self, config_db_as_json):
+        # Cache validation results by config content hash.
+        # validate_config_db_config is a pure function: same config always produces
+        # the same result. Caching avoids redundant loadData() calls when the DFS
+        # revisits the same config state during backtracking.
+        _cache_key = hashlib.md5(
+            json.dumps(config_db_as_json, sort_keys=True).encode()
+        ).hexdigest()
+        if _cache_key in self._validate_config_cache:
+            return self._validate_config_cache[_cache_key]
+
         sy = self.create_sonic_yang_with_loaded_models()
 
         # TODO: Move these validators to YANG models
@@ -145,16 +157,29 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
-            # Loading data automatically does full validation
-            sy.loadData(config_db_as_json)
+            # Loading data automatically does full validation.
+            # quiet=True suppresses sonic_yang.loadData's LOG_ERR
+            # "Data Loading Failed" line on every exception (log-and-throw
+            # antipattern). Real failures still surface via the returned
+            # tuple / SonicYangException, so callers retain full error
+            # signal -- only the duplicate syslog spam is silenced.
+            sy.loadData(config_db_as_json, quiet=True)
+            self._currently_loaded_hash = _cache_key
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
-                    return success, error
+                    result = (success, error)
+                    self._validate_config_cache[_cache_key] = result
+                    return result
         except sonic_yang.SonicYangException as ex:
-            return False, ex
+            self._currently_loaded_hash = None
+            result = (False, str(ex))
+            self._validate_config_cache[_cache_key] = result
+            return result
 
-        return True, None
+        result = (True, None)
+        self._validate_config_cache[_cache_key] = result
+        return result
 
     def validate_field_operation(self, old_config, target_config):
         """
@@ -380,6 +405,36 @@ class DryRunConfigWrapper(ConfigWrapper):
             self.imitated_config_db = super().get_config_db_as_json()
 
 
+def remove_empty_leaf_lists(config):
+    """Drop leaf-list fields whose value is an empty list.
+
+    Expects ConfigDB shaped json, i.e. table -> key -> field. At that shape a
+    list valued field is always a leaf-list, so every empty list found here is
+    an empty leaf-list. Do not call this with SonicYang shaped json, where a
+    list is a yang list of entries rather than a leaf-list.
+
+    ConfigDB has no representation for an empty leaf-list. set_entry serializes
+    [] to an empty string, which is then read back as [''], so a config that asks
+    for [] can never be satisfied. The canonical way to express "this leaf-list
+    has no items" is for the field to be absent.
+
+    Normalizing the simulated target keeps the patch sorter, the change applier
+    and the final verification in agreement: the sorter emits a field-level
+    remove instead of a replace-with-empty-list that ConfigDB cannot store.
+    """
+    for entries in config.values():
+        if not isinstance(entries, dict):
+            continue
+        for fields in entries.values():
+            if not isinstance(fields, dict):
+                continue
+            empty_leaf_lists = [field for field, value in fields.items()
+                                if isinstance(value, list) and len(value) == 0]
+            for field in empty_leaf_lists:
+                del fields[field]
+    return config
+
+
 class PatchWrapper:
     def __init__(self, config_wrapper=None, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
@@ -413,12 +468,21 @@ class PatchWrapper:
     def simulate_patch(self, patch, jsonconfig):
         return patch.apply(jsonconfig)
 
+    def simulate_config_db_patch(self, patch, config_db):
+        """Simulate a patch against ConfigDB shaped json.
+
+        Use this instead of simulate_patch whenever the result is meant to be a
+        ConfigDB target, so that empty leaf-lists are normalized to absent
+        fields, which is the only way ConfigDB can express them.
+        """
+        return remove_empty_leaf_lists(self.simulate_patch(patch, config_db))
+
     def convert_config_db_patch_to_sonic_yang_patch(self, patch):
         if not(self.validate_config_db_patch_has_yang_models(patch)):
             raise ValueError(f"Given patch is not valid")
 
         current_config_db = self.config_wrapper.get_config_db_as_json()
-        target_config_db = self.simulate_patch(patch, current_config_db)
+        target_config_db = self.simulate_config_db_patch(patch, current_config_db)
 
         current_yang = self.config_wrapper.convert_config_db_to_sonic_yang(current_config_db)
         target_yang = self.config_wrapper.convert_config_db_to_sonic_yang(target_config_db)
@@ -459,8 +523,8 @@ class PathAddressing:
     Path refers to the 'path' in JsonPatch operations: https://tools.ietf.org/html/rfc6902
     The path corresponds to JsonPointer: https://tools.ietf.org/html/rfc6901
 
-    All xpath operations in this class are only relevent to ConfigDb and the conversion to YANG xpath.
-    It is not meant to support all the xpath functionalities, just the ones relevent to ConfigDb/YANG.
+    All xpath operations in this class are only relevant to ConfigDb and the conversion to YANG xpath.
+    It is not meant to support all the xpath functionalities, just the ones relevant to ConfigDb/YANG.
     """
     PATH_SEPARATOR = "/"
     XPATH_SEPARATOR = "/"
@@ -533,7 +597,17 @@ class PathAddressing:
         sy = self._create_sonic_yang_with_loaded_models()
 
         if reload_config:
-            sy.loadData(config)
+            _config_hash = hashlib.md5(
+                json.dumps(config, sort_keys=True).encode()
+            ).hexdigest()
+            already_loaded = (
+                self.config_wrapper is not None and
+                self.config_wrapper._currently_loaded_hash == _config_hash
+            )
+            if not already_loaded:
+                sy.loadData(config)
+                if self.config_wrapper is not None:
+                    self.config_wrapper._currently_loaded_hash = _config_hash
 
         # Force to be a list
         if not isinstance(paths, list):
@@ -546,10 +620,8 @@ class PathAddressing:
         # Iterate across all paths fetching references
         for path in paths:
             xpath = self.convert_path_to_xpath(path, config, sy)
-
-            leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
-            for xpath in leaf_xpaths:
-                ref_xpaths.extend(sy.find_data_dependencies(xpath))
+            # NOTE: This will recursively find dependencies for all decendents
+            ref_xpaths.extend(sy.find_data_dependencies(xpath))
 
         # For each xpath, convert to configdb path
         for ref_xpath in ref_xpaths:
@@ -560,22 +632,6 @@ class PathAddressing:
 
         ref_paths.sort()
         return ref_paths
-
-    def _get_inner_leaf_xpaths(self, xpath, sy):
-        if xpath == "/": # Point to Root element which contains all xpaths
-            nodes = sy.root.tree_for()
-        else: # Otherwise get all nodes that match xpath
-            nodes = sy.root.find_path(xpath).data()
-
-        for node in nodes:
-            for inner_node in node.tree_dfs():
-                # TODO: leaflist also can be used as the 'path' argument in 'leafref' so add support to leaflist
-                if self._is_leaf_node(inner_node):
-                    yield inner_node.path()
-
-    def _is_leaf_node(self, node):
-        schema = node.schema()
-        return ly.LYS_LEAF == schema.nodetype()
 
     def convert_path_to_xpath(self, path, config=None, sy=None):
         """
@@ -621,7 +677,7 @@ class PathAddressing:
         """
         Given a path and a config, iterates across all keys at the path location
         to look up the number of backlinks per key, then returns the keys sorted
-        by backlinks in acending order by default (set reverse=True to use descending order)
+        by backlinks in ascending order by default (set reverse=True to use descending order)
 
         The configdb is only used to look up the keys at the given path, it is not
         loaded into the context.  The sort is not performed by actual references

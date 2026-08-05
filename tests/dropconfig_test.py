@@ -11,7 +11,7 @@ dropconfig_path = os.path.join(scripts_path, 'dropconfig')
 dropconfig = load_module_from_source('dropconfig', dropconfig_path)
 
 class TestDropConfig(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('builtins.print')
@@ -169,5 +169,5 @@ class TestDropConfig(object):
         mock_print.assert_called_once_with(err_msg)
         assert e.value.code == 1
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')

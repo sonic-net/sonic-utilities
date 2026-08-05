@@ -431,8 +431,6 @@ class TestBgpCommandsSingleAsic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
         from .mock_tables import dbconnector
         dbconnector.load_namespace_config()
 
@@ -449,6 +447,42 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['v4_dynamic'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_v4_dynamic_neighbor(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        # 10.0.0.65 has no static BGP_NEIGHBOR entry; it should be resolved
+        # via the BGP_PEER_RANGE|BGPSLBPassive entry covering 10.0.0.64/30
+        assert '10.0.0.65' in result.output
+        assert 'BGPSLBPassive' in result.output
+        assert 'Total number of neighbors 25' in result.output
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['v6_dynamic'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_v6_dynamic_neighbor(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        # fc00::82 has no static BGP_NEIGHBOR entry; it should be resolved
+        # via the BGP_PEER_RANGE|BGPSLBPassiveV6 entry covering fc00::80/126
+        assert 'fc00::82' in result.output
+        assert 'BGPSLBPassiveV6' in result.output
+        assert 'Total number of neighbors 25' in result.output
 
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['v4'], indirect=['setup_single_bgp_instance'])
@@ -558,7 +592,7 @@ class TestBgpCommandsSingleAsic(object):
         'setup_single_bgp_instance_chassis', ['v4'],
         indirect=['setup_single_bgp_instance_chassis']
     )
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option', display_external)
     @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_summary_v4_chassis(
         self, setup_bgp_commands,
@@ -576,7 +610,7 @@ class TestBgpCommandsSingleAsic(object):
         'setup_single_bgp_instance_chassis', ['v4'],
         indirect=['setup_single_bgp_instance_chassis']
     )
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option', display_external)
     @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_vrf_summary_v4_chassis(
         self, setup_bgp_commands,
@@ -594,7 +628,7 @@ class TestBgpCommandsSingleAsic(object):
         'setup_single_bgp_instance_chassis', ['v6'],
         indirect=['setup_single_bgp_instance_chassis']
     )
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option', display_external)
     @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_summary_v6_chassis(
         self, setup_bgp_commands,
@@ -612,7 +646,7 @@ class TestBgpCommandsSingleAsic(object):
         'setup_single_bgp_instance_chassis', ['v6'],
         indirect=['setup_single_bgp_instance_chassis']
     )
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option', display_external)
     @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_vrf_summary_v6_chassis(
         self, setup_bgp_commands,
@@ -630,7 +664,7 @@ class TestBgpCommandsSingleAsic(object):
         'setup_single_bgp_instance_chassis', ['v4'],
         indirect=['setup_single_bgp_instance_chassis']
     )
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_all)
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option', display_all)
     @patch('sonic_py_common.device_info.get_platform_info')
     def test_bgp_summary_v4_all_chassis(
         self, mock_is_chassis, setup_bgp_commands,
@@ -649,7 +683,7 @@ class TestBgpCommandsSingleAsic(object):
         'setup_single_bgp_instance_chassis', ['v4'],
         indirect=['setup_single_bgp_instance_chassis']
     )
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_all)
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option', display_all)
     @patch('sonic_py_common.device_info.get_platform_info')
     def test_bgp_vrf_summary_v4_all_chassis(
         self, mock_is_chassis, setup_bgp_commands,
@@ -931,11 +965,6 @@ class TestBgpCommandsSingleAsic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config()
 
 
 
@@ -943,6 +972,7 @@ class TestBgpCommandsMultiAsic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         from .mock_tables import mock_multi_asic
         importlib.reload(mock_multi_asic)
         from .mock_tables import dbconnector
@@ -1009,8 +1039,10 @@ class TestBgpCommandsMultiAsic(object):
 
 
     @patch.object(bgp_util, 'get_external_bgp_neighbors_dict', mock.MagicMock(return_value={}))
-    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
+    @patch('utilities_common.multi_asic.MultiAsic.get_ns_list_based_on_options',
+           mock.Mock(return_value=['asic0', 'asic1']))
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option',
+           mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_all_asic'],
                              indirect=['setup_multi_asic_bgp_instance'])
@@ -1028,8 +1060,10 @@ class TestBgpCommandsMultiAsic(object):
         assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC
 
     @patch.object(bgp_util, 'get_external_bgp_neighbors_dict', mock.MagicMock(return_value={}))
-    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
+    @patch('utilities_common.multi_asic.MultiAsic.get_ns_list_based_on_options',
+           mock.Mock(return_value=['asic0', 'asic1']))
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option',
+           mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_all_asic'],
                              indirect=['setup_multi_asic_bgp_instance'])
@@ -1046,9 +1080,10 @@ class TestBgpCommandsMultiAsic(object):
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC
 
-
-    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
+    @patch('utilities_common.multi_asic.MultiAsic.get_ns_list_based_on_options',
+           mock.Mock(return_value=['asic0', 'asic1']))
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option',
+           mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_asic1'],
                              indirect=['setup_multi_asic_bgp_instance'])
@@ -1065,8 +1100,10 @@ class TestBgpCommandsMultiAsic(object):
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ASIC1
     
-    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
-    @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
+    @patch('utilities_common.multi_asic.MultiAsic.get_ns_list_based_on_options',
+           mock.Mock(return_value=['asic0', 'asic1']))
+    @patch('utilities_common.multi_asic.MultiAsic.get_display_option',
+           mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_asic1'],
                              indirect=['setup_multi_asic_bgp_instance'])
@@ -1112,10 +1149,6 @@ class TestBgpCommandsMultiAsic(object):
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_ALL_V4_NO_EXT_NEIGHBORS
 
-
+    @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config

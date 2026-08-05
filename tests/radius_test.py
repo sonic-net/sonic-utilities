@@ -101,7 +101,6 @@ class TestRadius(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")
 
     def test_show_radius_default(self):

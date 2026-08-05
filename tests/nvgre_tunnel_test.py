@@ -24,15 +24,11 @@ class TestNvgreTunnel:
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
 
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        dbconnector.dedicated_dbs['CONFIG_DB'] = None
 
 
     def verify_output(self, db, runner, cmd, output):
@@ -235,4 +231,3 @@ class TestNvgreTunnel:
 
         # verify
         self.verify_output(db, runner, "nvgre-tunnel-map", assert_show_output.show_nvgre_tunnel_map_empty)
-

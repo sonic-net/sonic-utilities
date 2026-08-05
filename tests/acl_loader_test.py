@@ -22,7 +22,7 @@ class TestAclLoader(object):
 
     def test_valid(self):
         yang_acl = AclLoader.parse_acl_json(os.path.join(test_path, 'acl_input/acl1.json'))
-        assert len(yang_acl.acl.acl_sets.acl_set) == 9
+        assert len(yang_acl.acl.acl_sets.acl_set) == 10
 
     def test_invalid(self):
         with pytest.raises(AclLoaderException):
@@ -76,6 +76,7 @@ class TestAclLoader(object):
                 "VLAN_ID": 369,
                 "ETHER_TYPE": "2048",
                 "IP_PROTOCOL": 6,
+                'IP_TYPE': 'IP',
                 "SRC_IP": "20.0.0.2/32",
                 "DST_IP": "30.0.0.3/32",
                 "PACKET_ACTION": "FORWARD",
@@ -94,6 +95,7 @@ class TestAclLoader(object):
             "VLAN_ID": 369,
             "ETHER_TYPE": "2048",
             "IP_PROTOCOL": 6,
+            'IP_TYPE': 'IP',
             "SRC_IP": "20.0.0.2/32",
             "DST_IP": "30.0.0.3/32",
             "PACKET_ACTION": "FORWARD",
@@ -134,6 +136,7 @@ class TestAclLoader(object):
             "VLAN_ID": 369,
             "ETHER_TYPE": 2048,
             "IP_PROTOCOL": 6,
+            'IP_TYPE': 'IP',
             "SRC_IP": "20.0.0.2/32",
             "DST_IP": "30.0.0.3/32",
             "PACKET_ACTION": "FORWARD",
@@ -147,6 +150,7 @@ class TestAclLoader(object):
         assert acl_loader.rules_info[("DATAACLV4V6", "RULE_2")] == {
             "ETHER_TYPE": 34525,
             "IP_PROTOCOL": 58,
+            'IP_TYPE': 'IP',
             "SRC_IPV6": "::1/128",
             "DST_IPV6": "::1/128",
             "PACKET_ACTION": "FORWARD",
@@ -170,6 +174,7 @@ class TestAclLoader(object):
             "ICMP_TYPE": 3,
             "ICMP_CODE": 0,
             "IP_PROTOCOL": 1,
+            'IP_TYPE': 'IP',
             "SRC_IP": "20.0.0.2/32",
             "DST_IP": "30.0.0.3/32",
             "ETHER_TYPE": "2048",
@@ -208,6 +213,7 @@ class TestAclLoader(object):
             "ICMP_TYPE": 136,
             "ICMP_CODE": 0,
             "IP_PROTOCOL": 1,
+            'IP_TYPE': 'IP',
             "PACKET_ACTION": "FORWARD",
             "PRIORITY": "9998"
         }
@@ -220,8 +226,19 @@ class TestAclLoader(object):
             "ICMPV6_TYPE": 136,
             "ICMPV6_CODE": 0,
             "IP_PROTOCOL": 58,
+            'IP_TYPE': 'IP',
             "PACKET_ACTION": "FORWARD",
             "PRIORITY": "9998"
+        }
+
+    def test_noiptype_custom_acl_table_type(self, acl_loader):
+        acl_loader.rules_info = {}
+        acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))
+        assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")]
+        assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")] == {
+            "IP_PROTOCOL": 1,
+            "PACKET_ACTION": "FORWARD",
+            "PRIORITY": "9999"
         }
 
     def test_ingress_default_deny_rule(self, acl_loader):

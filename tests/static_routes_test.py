@@ -1,5 +1,7 @@
 import os
 import traceback
+import importlib
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
@@ -19,7 +21,7 @@ ERROR_STR_MISS_NEXTHOP = '''
 Error: argument is incomplete, nexthop not found!
 '''
 ERROR_STR_DEL_NONEXIST_KEY = '''
-Error: Route {} doesnt exist
+Error: Route {} doesn't exist
 '''
 ERROR_STR_DEL_NONEXIST_ENTRY = '''
 Error: Not found {} in {}
@@ -42,6 +44,7 @@ Error: interface {} does not exist.
 ERROR_STR_NO_DEL_MULTI_NH = '''
 Error: Only one nexthop can be deleted at a time
 '''
+ERROR_STR_DUPLICATE_NEXTHOP = "already exists for route"
 
 
 class TestStaticRoutes(object):
@@ -677,8 +680,174 @@ class TestStaticRoutes(object):
         print(result.exit_code, result.output)
         assert '1.2.3.5/32' not in db.cfgdb.get_table('STATIC_ROUTE')
 
+    def test_route_callback_with_default_namespace(self):
+        db = Db()
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["route"],
+                               ["add", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        assert result.exit_code == 0
+        assert ('default', '1.2.3.4/32') in db.cfgdb.get_table('STATIC_ROUTE')
+        result = runner.invoke(config.config.commands["route"],
+                               ["del", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        assert result.exit_code == 0
+
+    @patch('config.main.ConfigDBConnector')
+    def test_route_callback_without_cfgdb_clients(self, mock_config_db_connector):
+        db = Db()
+        cfgdb = db.cfgdb
+        db.cfgdb_clients = {}
+        mock_config_db_connector.return_value = cfgdb
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["route"],
+                               ["add", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        assert result.exit_code == 0
+        mock_config_db_connector.assert_called_once_with(use_unix_socket_path=True, namespace='')
+        assert ('default', '1.2.3.4/32') in cfgdb.get_table('STATIC_ROUTE')
+
+    def test_add_duplicate_nexthop_static_route(self):
+        """Adding the same nexthop twice for the same prefix must be rejected (default and named VRF)."""
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # --- default VRF ---
+        result = runner.invoke(config.config.commands["route"].commands["add"],
+                               ["prefix", "20.0.0.0/24", "nexthop", "10.10.10.2"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('default', '20.0.0.0/24') in db.cfgdb.get_table('STATIC_ROUTE')
+
+        # Add with identical nexthop - must be rejected
+        result = runner.invoke(config.config.commands["route"].commands["add"],
+                               ["prefix", "20.0.0.0/24", "nexthop", "10.10.10.2"], obj=obj)
+        print(result.exit_code, result.output)
+        assert ERROR_STR_DUPLICATE_NEXTHOP in result.output
+
+        # DB must still contain exactly one nexthop entry
+        entry = db.cfgdb.get_entry('STATIC_ROUTE', 'default|20.0.0.0/24')
+        assert entry['nexthop'] == '10.10.10.2'
+        assert entry['blackhole'] == 'false'
+        assert entry['nexthop-vrf'] == 'default'
+
+        # --- VRF ---
+        result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf-RED"], obj=obj)
+        print(result.exit_code, result.output)
+
+        # First add
+        result = runner.invoke(config.config.commands["route"].commands["add"],
+                               ["prefix", "vrf", "Vrf-RED", "30.30.30.0/24", "nexthop", "10.10.10.2"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Vrf-RED', '30.30.30.0/24') in db.cfgdb.get_table('STATIC_ROUTE')
+
+        # Second add with the same nexthop - must be rejected
+        result = runner.invoke(config.config.commands["route"].commands["add"],
+                               ["prefix", "vrf", "Vrf-RED", "30.30.30.0/24", "nexthop", "10.10.10.2"], obj=obj)
+        print(result.exit_code, result.output)
+        assert ERROR_STR_DUPLICATE_NEXTHOP in result.output
+
+        # DB must still contain exactly one nexthop entry in the VRF
+        entry = db.cfgdb.get_entry('STATIC_ROUTE', 'Vrf-RED|30.30.30.0/24')
+        assert entry['nexthop'] == '10.10.10.2'
+        assert ',' not in entry['nexthop']
+        assert ',' not in entry['blackhole']
+
+        # --- IPv6 ---
+        # First add — should succeed
+        result = runner.invoke(config.config.commands["route"].commands["add"],
+                               ["prefix", "2001:db8::/32", "nexthop", "fc00::1"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('default', '2001:db8::/32') in db.cfgdb.get_table('STATIC_ROUTE')
+
+        # Second add with identical IPv6 nexthop - must be rejected
+        result = runner.invoke(config.config.commands["route"].commands["add"],
+                               ["prefix", "2001:db8::/32", "nexthop", "fc00::1"], obj=obj)
+        print(result.exit_code, result.output)
+        assert ERROR_STR_DUPLICATE_NEXTHOP in result.output
+
+        # DB must still contain exactly one nexthop entry
+        entry = db.cfgdb.get_entry('STATIC_ROUTE', 'default|2001:db8::/32')
+        assert entry['nexthop'] == 'fc00::1'
+        assert ',' not in entry['nexthop']
+        assert ',' not in entry['blackhole']
+
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")
 
+
+class TestStaticRoutesMultiAsic(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        print("SETUP")
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
+
+        import utilities_common.multi_asic
+        importlib.reload(utilities_common.multi_asic)
+        # Reload config.main to pick up the reloaded multi_asic module
+        importlib.reload(config)
+
+    def test_static_route_with_namespace(self):
+        import config.main as config
+        runner = CliRunner()
+        db = Db()
+        cfgdb0 = db.cfgdb_clients['asic0']
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "add", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('default', '1.2.3.4/32') in cfgdb0.get_table('STATIC_ROUTE')
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "del", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('default', '1.2.3.4/32') not in cfgdb0.get_table('STATIC_ROUTE')
+
+    def test_namespace_isolation(self):
+        import config.main as config
+        runner = CliRunner()
+        db = Db()
+        cfgdb0 = db.cfgdb_clients['asic0']
+        cfgdb1 = db.cfgdb_clients['asic1']
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "add", "prefix", "10.1.1.0/24", "nexthop", "192.168.1.1"], obj=db)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic1", "add", "prefix", "10.2.2.0/24", "nexthop", "192.168.2.1"], obj=db)
+        assert result.exit_code == 0
+
+        assert ('default', '10.1.1.0/24') in cfgdb0.get_table('STATIC_ROUTE')
+        assert ('default', '10.2.2.0/24') not in cfgdb0.get_table('STATIC_ROUTE')
+        assert ('default', '10.2.2.0/24') in cfgdb1.get_table('STATIC_ROUTE')
+        assert ('default', '10.1.1.0/24') not in cfgdb1.get_table('STATIC_ROUTE')
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "del", "prefix", "10.1.1.0/24", "nexthop", "192.168.1.1"], obj=db)
+        assert result.exit_code == 0
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic1", "del", "prefix", "10.2.2.0/24", "nexthop", "192.168.2.1"], obj=db)
+        assert result.exit_code == 0
+
+    @classmethod
+    def teardown_class(cls):
+
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_database_config()
+
+        import utilities_common.multi_asic
+        importlib.reload(utilities_common.multi_asic)
+        importlib.reload(config)
+
+        print("TEARDOWN")

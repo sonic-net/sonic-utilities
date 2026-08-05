@@ -186,7 +186,7 @@ def get_container_image_name(container_name):
 
 
 def get_container_image_id(image_tag):
-    # TODO: extract commond docker info fetching functions
+    # TODO: extract command docker info fetching functions
     # this is image_id for image with tag, like 'docker-teamd:latest'
     cmd = ["docker", "images", "--format", '{{.ID}}', image_tag]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
@@ -312,7 +312,10 @@ def get_docker_opts():
         pid = int(pid_file.read())
 
     with open("/proc/{}/cmdline".format(pid)) as cmdline_file:
-        return cmdline_file.read().strip().split("\x00")[1:]
+        opts = cmdline_file.read().strip().split("\x00")[1:]
+        # Replace fd:// with unix:// to ensure dockerd can start properly
+        # inside a chroot environment without systemd socket activation
+        return [opt if opt != "fd://" else "unix://" for opt in opts]
 
 
 def migrate_sonic_packages(bootloader, binary_image_version):
@@ -325,7 +328,6 @@ def migrate_sonic_packages(bootloader, binary_image_version):
     DOCKERD_SOCK = "docker.sock"
     VAR_RUN_PATH = "/var/run/"
     RESOLV_CONF_FILE = os.path.join("etc", "resolv.conf")
-    RESOLV_CONF_BACKUP_FILE = os.path.join("/", TMP_DIR, "resolv.conf.backup")
 
     packages_file = "packages.json"
     packages_path = os.path.join(PACKAGE_MANAGER_DIR, packages_file)
@@ -382,8 +384,19 @@ def migrate_sonic_packages(bootloader, binary_image_version):
                                 os.path.join(VAR_RUN_PATH, DOCKERD_SOCK),
                                 os.path.join(new_image_mount, "tmp", DOCKERD_SOCK)])
 
-            run_command_or_raise(["cp", os.path.join(new_image_mount, RESOLV_CONF_FILE), RESOLV_CONF_BACKUP_FILE])
-            run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE), os.path.join(new_image_mount, RESOLV_CONF_FILE)])
+            # Inject host DNS into chroot for sonic-package-manager to resolve hostnames.
+            chroot_resolv = os.path.join(new_image_mount, RESOLV_CONF_FILE)
+            if os.path.islink(chroot_resolv):
+                # Symlink: populate the target inside the chroot so the symlink resolves.
+                # Cannot cp over the symlink because the absolute target path escapes
+                # the overlay mount to the host filesystem ("are the same file" error).
+                resolv_target = os.readlink(chroot_resolv)
+                chroot_target = os.path.join(new_image_mount, resolv_target.lstrip("/"))
+                run_command_or_raise(["mkdir", "-p", os.path.dirname(chroot_target)])
+                run_command_or_raise(["cp", "-L", os.path.join("/", RESOLV_CONF_FILE), chroot_target])
+            else:
+                # Regular file: overwrite with host DNS content.
+                run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE), chroot_resolv])
 
             run_command_or_raise(["chroot", new_image_mount, "sh", "-c", "command -v {}".format(SONIC_PACKAGE_MANAGER)])
             run_command_or_raise(["chroot", new_image_mount, SONIC_PACKAGE_MANAGER, "migrate",
@@ -395,7 +408,6 @@ def migrate_sonic_packages(bootloader, binary_image_version):
                 run_command_or_raise(["chroot", new_image_mount, DOCKER_CTL_SCRIPT, "stop"], raise_exception=False)
             if os.path.exists(docker_default_config_backup):
                 run_command_or_raise(["mv", docker_default_config_backup, docker_default_config], raise_exception=False);
-            run_command_or_raise(["cp", RESOLV_CONF_BACKUP_FILE, os.path.join(new_image_mount, RESOLV_CONF_FILE)], raise_exception=False)
             umount(new_image_mount, recursive=True, read_only=False, remove_dir=False, raise_exception=False)
             umount(new_image_mount, raise_exception=False)
 
@@ -419,9 +431,9 @@ class SWAPAllocator(object):
             - disk has enough space(> DISK_MEM_THRESHOLD)
             - either system total memory < total_mem_threshold or system available memory < available_mem_threshold
 
-        @param allocate: True to allocate SWAP memory if necessarry
+        @param allocate: True to allocate SWAP memory if necessary
         @param swap_mem_size: the size of SWAP memory to allocate(in MiB)
-        @param total_mem_threshold: the system totla memory threshold(in MiB)
+        @param total_mem_threshold: the system total memory threshold(in MiB)
         @param available_mem_threshold: the system available memory threshold(in MiB)
         """
         self.allocate = allocate
@@ -534,7 +546,7 @@ def sonic_installer():
               cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
 @click.option('--available-mem-threshold', default=1200, type=int, show_default='1200 MiB',
-              help='If system available memory is lower than threhold, setup SWAP memory',
+              help='If system available memory is lower than threshold, setup SWAP memory',
               cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
 @click.argument('url')
@@ -583,7 +595,7 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             raise click.Abort()
 
         if bootloader.is_secure_upgrade_image_verification_supported():
-            echo_and_log("Verifing image {} signature...".format(binary_image_version))
+            echo_and_log("Verifying image {} signature...".format(binary_image_version))
             if not bootloader.verify_image_sign(image_path):
                 echo_and_log('Error: Failed verify image signature', LOG_ERR)
                 raise click.Abort()
@@ -851,7 +863,7 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
             if proc.returncode != 0:
                 if not skip_check:
                     echo_and_log("Orchagent is not in clean state, RESTARTCHECK failed", LOG_ERR)
-                    # Restore orignal config before exit
+                    # Restore original config before exit
                     if warm_configured is False and warm:
                         run_command(["config", "warm_restart", "disable", "%s" % container_name])
                     # Clean the image loaded earlier
@@ -884,7 +896,7 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
             warm_app_names = ["teamsyncd"]
             echo_and_log("Stopped  teamd ...")
 
-        # clean app reconcilation state from last warm start if exists
+        # clean app reconciliation state from last warm start if exists
         for warm_app_name in warm_app_names:
             hdel_warm_restart_table("STATE_DB", "WARM_RESTART_TABLE", warm_app_name, "state")
 

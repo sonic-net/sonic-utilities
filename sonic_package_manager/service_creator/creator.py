@@ -169,7 +169,7 @@ class ServiceCreator:
 
         Args:
             package: Package object to install.
-            register_feature: Wether to register this package in FEATURE table.
+            register_feature: Whether to register this package in FEATURE table.
             state: Default feature state.
             owner: Default feature owner.
 
@@ -204,7 +204,7 @@ class ServiceCreator:
 
         Args:
             package: Package object to uninstall.
-            deregister_feature: Wether to deregister this package from FEATURE table.
+            deregister_feature: Whether to deregister this package from FEATURE table.
             keep_config: Whether to remove package configuration.
 
         Returns:
@@ -252,6 +252,7 @@ class ServiceCreator:
 
         image_id = package.image_id
         name = package.manifest['service']['name']
+        stop_time = package.manifest['service']['stop-time']
         container_spec = package.manifest['container']
         script_path = os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh')
         script_template = get_tmpl_path(DOCKER_CTL_SCRIPT_TEMPLATE)
@@ -285,7 +286,8 @@ class ServiceCreator:
             'docker_image_name': package.entry.repository,
             'docker_image_reference': package.entry.docker_image_reference,
             'docker_image_run_opt': run_opt,
-            'sonic_asic_platform': sonic_asic_platform
+            'sonic_asic_platform': sonic_asic_platform,
+            'stop_time': stop_time
         }
         render_template(script_template, script_path, render_ctx, executable=True)
         log.info(f'generated {script_path}')

@@ -6,6 +6,7 @@ from dump.helper import verbose_print
 from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from sonic_py_common import multi_asic
 from utilities_common.constants import DEFAULT_NAMESPACE
+from utilities_common.general import load_db_config
 import redis
 
 
@@ -47,7 +48,7 @@ class MatchRequest:
                           Only one of the db/file fields should have a non-empty string.
     "just_keys"         : If true, Only Returns the keys matched. Does not return field-value pairs. Defaults to True
     "ns"                : namespace argument, if nothing is provided, default namespace is used
-    "match_entire_list" : When this arg is set to true, entire list is matched incluing the ",".
+    "match_entire_list" : When this arg is set to true, entire list is matched including the ",".
                           When False, the values are split based on "," and individual items are matched with
     """
 
@@ -290,11 +291,7 @@ class ConnectionPool:
         self.cache = dict()  # Pool of SonicV2Connector objects
 
     def initialize_connector(self, ns):
-        if not SonicDBConfig.isInit():
-            if multi_asic.is_multi_asic():
-                SonicDBConfig.load_sonic_global_db_config()
-            else:
-                SonicDBConfig.load_sonic_db_config()
+        load_db_config()
         return SonicV2Connector(namespace=ns, use_unix_socket_path=True)
 
     def initialize_redis_conn(self, ns):
@@ -467,7 +464,7 @@ class MatchRequestOptimizer():
 
     def __mutate_request(self, req):
         """
-        Mutate the Request to fetch all the fv pairs, regardless of the orignal request
+        Mutate the Request to fetch all the fv pairs, regardless of the original request
         Save the return_fields and just_keys args of original request
         """
         fv_requested = []

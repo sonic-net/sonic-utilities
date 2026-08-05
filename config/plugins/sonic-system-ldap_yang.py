@@ -46,7 +46,7 @@ def add_entry_validated(db, table, key, data):
     """ Add new entry in table and validate configuration.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to add new entry to.
         key (Union[str, Tuple]): Key name in the table.
         data (Dict): Entry data.
@@ -70,7 +70,7 @@ def update_entry_validated(db, table, key, data, create_if_not_exists=False):
     If attribute value in data is None, the attribute is deleted.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to add new entry to.
         key (Union[str, Tuple]): Key name in the table.
         data (Dict): Entry data.
@@ -115,7 +115,7 @@ def del_entry_validated(db, table, key):
     """ Delete entry in table and validate configuration.
 
     Args:
-        db (swsscommon.ConfigDBConnector): Config DB connector obect.
+        db (swsscommon.ConfigDBConnector): Config DB connector object.
         table (str): Table name to add new entry to.
         key (Union[str, Tuple]): Key name in the table.
     Raises:

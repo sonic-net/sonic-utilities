@@ -7,7 +7,7 @@ import show.main as show_main
 import config.plugins as config_plugins
 import config.main as config_main
 from .cli_autogen_input.autogen_test import show_cmd_output
-from .cli_autogen_input.cli_autogen_common import backup_yang_models, restore_backup_yang_models, move_yang_models, remove_yang_models
+from .cli_autogen_input.cli_autogen_common import setup_temp_yang_dir, cleanup_temp_yang_dir
 
 from utilities_common import util_base
 from sonic_cli_gen.generator import CliGenerator
@@ -37,10 +37,11 @@ class TestCliAutogen:
     @classmethod
     def setup_class(cls):
         logger.info('SETUP')
-        os.environ['UTILITIES_UNIT_TESTING'] = '2'
 
-        backup_yang_models()
-        move_yang_models(test_path, 'autogen_test', test_yang_models)
+        import config.config_mgmt as config_mgmt
+        cls._orig_yang_dir = config_mgmt.YANG_DIR
+        temp_dir = setup_temp_yang_dir(test_path, 'autogen_test', test_yang_models)
+        config_mgmt.YANG_DIR = temp_dir
 
         for yang_model in test_yang_models:
             gen.generate_cli_plugin(
@@ -69,11 +70,12 @@ class TestCliAutogen:
             gen.remove_cli_plugin('show', yang_model.split('.')[0])
             gen.remove_cli_plugin('config', yang_model.split('.')[0])
 
-        restore_backup_yang_models()
+        import config.config_mgmt as config_mgmt
+        config_mgmt.YANG_DIR = cls._orig_yang_dir
+        cleanup_temp_yang_dir()
 
         dbconnector.dedicated_dbs['CONFIG_DB'] = None
 
-        os.environ['UTILITIES_UNIT_TESTING'] = '0'
 
 
     def test_show_device_metadata(self):

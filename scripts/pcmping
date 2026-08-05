@@ -13,6 +13,10 @@ import sys
 import time
 
 from swsscommon.swsscommon import ConfigDBConnector
+from scapy.config import conf
+# Avoid long startup delays when route tables are large.
+conf.route_autoload = False
+conf.route6_autoload = False
 from scapy.all import *
 
 
@@ -159,7 +163,7 @@ def main():
     sockets, exp_socket = create_socket(interface, portchannel)
     pkt, exp_pkt = find_probe_packet(interface, decap_ip, portchannel_ip, sockets, exp_socket, max_trial)
     print("Preparation done! Start probing ............")
-    print("PORTCHANNEL Member PING %d btyes of data. PORTCHANNEL: %s, INTERFACE: %s" % (PROBE_PACKET_LEN, portchannel_name, interface))
+    print("PORTCHANNEL Member PING %d bytes of data. PORTCHANNEL: %s, INTERFACE: %s" % (PROBE_PACKET_LEN, portchannel_name, interface))
     recv_count = 0
     total_count = 0
     try:

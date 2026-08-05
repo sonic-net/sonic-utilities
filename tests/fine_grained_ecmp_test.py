@@ -24,13 +24,7 @@ class TestFineGrainedEcmp:
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
 
-    @classmethod
-    def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        dbconnector.dedicated_dbs['CONFIG_DB'] = None
 
     def verify_output(self, db, runner, cmd, output):
         result = runner.invoke(show.cli.commands[cmd], [], obj=db)

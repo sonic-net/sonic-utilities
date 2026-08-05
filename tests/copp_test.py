@@ -118,7 +118,6 @@ class TestCoPP:
     @classmethod
     def teardown_class(cls):
         logger.info("Teardown class: {}".format(cls.__name__))
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         dbconnector.dedicated_dbs.clear()
         cls.patcher.stop()
 

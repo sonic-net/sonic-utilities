@@ -89,6 +89,9 @@ setup(
         'watchdogutil',
         'sonic_cli_gen',
     ],
+    data_files=[
+        ("bin", ["ssd-dump/vtFA_RTK_5766_v2"]),
+    ],
     package_data={
         'generic_config_updater': ['gcu_services_validator.conf.json', 'gcu_field_operation_validators.conf.json'],
         'show': ['aliases.ini'],
@@ -139,12 +142,14 @@ setup(
         'scripts/flow_counters_stat',
         'scripts/gearboxutil',
         'scripts/generate_dump',
+        'scripts/generate_ssd_dump',
         'scripts/generate_shutdown_order.py',
         'scripts/intfutil',
         'scripts/intfstat',
         'scripts/ipintutil',
         'scripts/lag_keepalive.py',
         'scripts/leakageshow',
+        'scripts/llrstat',
         'scripts/lldpshow',
         'scripts/log_ssd_health',
         'scripts/mellanox_buffer_migrator.py',
@@ -198,7 +203,8 @@ setup(
         'scripts/sysreadyshow',
         'scripts/wredstat',
         'scripts/sonic-error-report',
-        'scripts/chassis_db_consistency_checker.py'
+        'scripts/chassis_db_consistency_checker.py',
+        'scripts/sonic-dpu-flow-dump.py'
     ],
     entry_points={
         'console_scripts': [
@@ -288,6 +294,7 @@ setup(
             'pyfakefs',
             'responses',
             'pytest',
+            'pytest-xdist',
             'mockredispy>=2.9.3',
             'deepdiff>=6.2.2'
         ],

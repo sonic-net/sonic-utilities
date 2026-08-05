@@ -11,6 +11,8 @@ from utilities_common.db import Db
 from utilities_common.general import load_module_from_source
 from minigraph import minigraph_encoder
 
+from .utils import worker_tmp_path
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "config_override_input")
 EMPTY_INPUT = os.path.join(DATA_DIR, "empty_input.json")
@@ -24,6 +26,7 @@ FINAL_CONFIG_YANG_FAILURE = os.path.join(DATA_DIR, "final_config_yang_failure.js
 MULTI_ASIC_MACSEC_OV = os.path.join(DATA_DIR, "multi_asic_macsec_ov.json")
 MULTI_ASIC_FEATURE_RM = os.path.join(DATA_DIR, "multi_asic_feature_rm.json")
 MULTI_ASIC_DEVICE_METADATA_GEN_SYSINFO = os.path.join(DATA_DIR, "multi_asic_dm_gen_sysinfo.json")
+MULTI_ASIC_DEVICE_METADATA_EXPLICIT_SYSINFO = os.path.join(DATA_DIR, "multi_asic_dm_explicit_sysinfo.json")
 MULTI_ASIC_MISSING_LOCALHOST_OV = os.path.join(DATA_DIR, "multi_asic_missing_localhost.json")
 MULTI_ASIC_MISSING_ASIC_OV = os.path.join(DATA_DIR, "multi_asic_missing_asic.json")
 
@@ -201,7 +204,7 @@ class TestConfigOverride(object):
         # ConfigMgmt will call ConfigDBConnector to load default config_db.json.
         # Here I modify the ConfigMgmt initialization and make it initiated with
         # a source file which share the same as what we write to cfgdb.
-        CONFIG_DB_JSON_FILE = "startConfigDb.json"
+        CONFIG_DB_JSON_FILE = worker_tmp_path('startConfigDb.json')
         write_config_to_file(read_data['running_config'], CONFIG_DB_JSON_FILE)
         with mock.patch('config.main.device_info.is_yang_config_validation_enabled',
                         mock.MagicMock(side_effect=is_yang_config_validation_enabled_side_effect)), \
@@ -245,7 +248,7 @@ class TestConfigOverride(object):
         # ConfigMgmt will call ConfigDBConnector to load default config_db.json.
         # Here I modify the ConfigMgmt initialization and make it initiated with
         # a source file which share the same as what we write to cfgdb.
-        CONFIG_DB_JSON_FILE = "startConfigDb.json"
+        CONFIG_DB_JSON_FILE = worker_tmp_path('startConfigDb.json')
         write_config_to_file(running_config, CONFIG_DB_JSON_FILE)
         with mock.patch('config.main.read_json_file',
                         mock.MagicMock(side_effect=read_json_file_side_effect)), \
@@ -262,8 +265,6 @@ class TestConfigOverride(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        return
 
 
 class TestConfigOverrideMultiasic(object):
@@ -444,6 +445,41 @@ class TestConfigOverrideMultiasic(object):
                 asic_id = config_db.get_config()['DEVICE_METADATA']['localhost'].get('asic_id')
                 assert asic_id is None
 
+    def test_device_metadata_explicit_sysinfo_override(self):
+        """Test that explicit mac/platform/asic_id in golden config are preserved."""
+        def read_json_file_side_effect(filename):
+            with open(MULTI_ASIC_DEVICE_METADATA_EXPLICIT_SYSINFO, "r") as f:
+                device_metadata = json.load(f)
+            return device_metadata
+        db = Db()
+        cfgdb_clients = db.cfgdb_clients
+
+        with mock.patch('config.main.read_json_file',
+                        mock.MagicMock(side_effect=read_json_file_side_effect)),\
+             mock.patch('sonic_py_common.device_info.get_platform',
+                        return_value="multi_asic"),\
+             mock.patch('sonic_py_common.device_info.get_system_mac',
+                        return_value="11:22:33:44:55:66\n"),\
+             mock.patch('sonic_py_common.multi_asic.get_asic_device_id',
+                        return_value="06:00:00\n"):
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["override-config-table"],
+                                   ['golden_config_db.json'], obj=db)
+            assert result.exit_code == 0
+
+        for ns, config_db in cfgdb_clients.items():
+            mac = config_db.get_config()['DEVICE_METADATA']['localhost'].get('mac')
+            platform = config_db.get_config()['DEVICE_METADATA']['localhost'].get('platform')
+            # Golden config explicit values should be preserved, not overwritten
+            assert mac == "aa:bb:cc:dd:ee:ff", \
+                f"Expected golden config mac 'aa:bb:cc:dd:ee:ff' but got '{mac}' for namespace '{ns}'"
+            assert platform == "custom-platform", \
+                f"Expected golden config platform 'custom-platform' but got '{platform}' for namespace '{ns}'"
+            if ns != config.DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+                asic_id = config_db.get_config()['DEVICE_METADATA']['localhost'].get('asic_id')
+                assert asic_id == "ff:00:00", \
+                    f"Expected golden config asic_id 'ff:00:00' but got '{asic_id}' for namespace '{ns}'"
+
     def test_masic_missig_localhost_override(self):
         def read_json_file_side_effect(filename):
             with open(MULTI_ASIC_MISSING_LOCALHOST_OV, "r") as f:
@@ -481,11 +517,3 @@ class TestConfigOverrideMultiasic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        # change back to single asic config
-        from .mock_tables import dbconnector
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        dbconnector.load_namespace_config()
-        return

@@ -32,8 +32,6 @@ class TestTrimming:
     @classmethod
     def teardown_class(cls):
         logger.info("Teardown class: {}".format(cls.__name__))
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        dbconnector.dedicated_dbs.clear()
 
     # ---------- CONFIG CONFIG SWITCH-TRIMMING GLOBAL ---------- #
 

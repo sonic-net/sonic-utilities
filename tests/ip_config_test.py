@@ -38,6 +38,7 @@ Error: VNET Vnet_2000 does not exist!
 
 class TestConfigIP(object):
     _old_run_bgp_command = None
+
     @classmethod
     def setup_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
@@ -498,7 +499,7 @@ class TestConfigIP(object):
         db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
 
         # Create vnet
-        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=obj)
+        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=db)
         print(db.cfgdb.get_table('VNET'))
         assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
@@ -588,6 +589,5 @@ class TestConfigIP(object):
     
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         bgp_util.run_bgp_command = cls._old_run_bgp_command
         print("TEARDOWN")

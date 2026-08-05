@@ -2,14 +2,21 @@ import sys
 import os
 from click.testing import CliRunner
 from datetime import datetime, timedelta, timezone
+from unittest import mock
+
+import pytest
 
 import show.main as show
 import config.main as config
 import tests.mock_tables.dbconnector
 from utilities_common.db import Db
 from .utils import get_result_and_return_code
-from unittest import mock
 sys.modules['clicommon'] = mock.Mock()
+
+
+test_path = os.path.dirname(os.path.abspath(__file__))
+modules_path = os.path.dirname(test_path)
+scripts_path = os.path.join(modules_path, "scripts")
 
 show_linecard0_shutdown_output="""\
 LINE-CARD0 line-card 1 Empty down LC1000101
@@ -562,6 +569,618 @@ class TestChassisModules(object):
             print(result.output)
             assert result.exit_code == 0
             assert "Module DPU0 is already set to up state" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestChassisModuleTimingConfig(object):
+    """Tests for 'config chassis modules power-on-delay' and 'shutdown-timeout'"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        import importlib
+        import config.chassis_modules as cm
+        with mock.patch('utilities_common.chassis.is_bmc', new=lambda: True):
+            importlib.reload(cm)
+        cls.modules = cm.modules
+
+    def test_power_on_delay_switch_host(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "300"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "300" in result.output
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "300"
+
+    def test_power_on_delay_zero(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "0"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "0"
+
+    def test_power_on_delay_negative_rejected(self):
+        """Verify negative values are invalid; default is 0 per HLD (admin_status=down keeps Switch-Host off)."""
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "-1"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+
+    def test_power_on_delay_non_switch_host_rejected(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["LINE-CARD0", "300"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+        assert "SWITCH-HOST" in result.output
+
+    def test_shutdown_timeout_switch_host(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "120"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "120" in result.output
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "120"
+
+    def test_shutdown_timeout_zero_immediate_poweroff(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "0"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "0"
+
+    def test_shutdown_timeout_negative_rejected(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "-5"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+
+    def test_shutdown_timeout_non_switch_host_rejected(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["FABRIC-CARD0", "120"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code != 0
+        assert "SWITCH-HOST" in result.output
+
+    def test_both_fields_preserved_in_db(self):
+        """Setting one field does not overwrite the other."""
+        runner = CliRunner()
+        db = Db()
+        runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "60"],
+            obj=db
+        )
+        runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "30"],
+            obj=db
+        )
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "60"
+        assert entry.get("graceful_shutdown_timeout") == "30"
+
+    def test_power_on_delay_seeds_admin_status_when_missing(self):
+        """First-time 'power-on-delay' on a fresh DB must seed admin_status='down'
+        so the entry stays valid for downstream consumers (startup/shutdown)."""
+        runner = CliRunner()
+        db = Db()
+        # Sanity: no entry exists
+        assert db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST") == {}
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "300"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "300"
+        assert entry.get("admin_status") == "down"
+
+    def test_power_on_delay_does_not_overwrite_existing_admin_status(self):
+        """If admin_status is already configured (e.g. 'up'), 'power-on-delay'
+        must NOT downgrade it back to 'down'."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
+        result = runner.invoke(
+            self.modules.commands["power-on-delay"],
+            ["SWITCH-HOST", "300"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("power_on_delay") == "300"
+        assert entry.get("admin_status") == "up", "existing admin_status must be preserved"
+
+    def test_shutdown_timeout_seeds_admin_status_when_missing(self):
+        """First-time 'shutdown-timeout' on a fresh DB must seed admin_status='down'."""
+        runner = CliRunner()
+        db = Db()
+        assert db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST") == {}
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "120"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "120"
+        assert entry.get("admin_status") == "down"
+
+    def test_shutdown_timeout_does_not_overwrite_existing_admin_status(self):
+        """If admin_status='up' already, 'shutdown-timeout' must not downgrade it."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
+        result = runner.invoke(
+            self.modules.commands["shutdown-timeout"],
+            ["SWITCH-HOST", "120"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("graceful_shutdown_timeout") == "120"
+        assert entry.get("admin_status") == "up", "existing admin_status must be preserved"
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestChassisModuleBMCStartupShutdown(object):
+    """Tests for startup/shutdown of SWITCH-HOST on BMC:
+    - default admin_status is 'down' when no entry exists
+    - startup/shutdown use mod_entry to preserve power_on_delay and graceful_shutdown_timeout
+    """
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    def test_default_state_is_down_on_bmc(self):
+        """SWITCH-HOST has no entry in CONFIG_DB; on BMC the default must be 'down'."""
+        from config.chassis_modules import get_config_module_state
+        db = Db()
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            state = get_config_module_state(db, "SWITCH-HOST")
+        assert state == 'down'
+
+    def test_startup_switch_host_preserves_timing_fields(self):
+        """startup SWITCH-HOST on BMC must not erase power_on_delay or graceful_shutdown_timeout."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {
+            'admin_status': 'down',
+            'power_on_delay': '300',
+            'graceful_shutdown_timeout': '120',
+        })
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("admin_status") == "up"
+        assert entry.get("power_on_delay") == "300", "power_on_delay must be preserved"
+        assert entry.get("graceful_shutdown_timeout") == "120", "graceful_shutdown_timeout must be preserved"
+
+    def test_shutdown_switch_host_preserves_timing_fields(self):
+        """shutdown SWITCH-HOST on BMC must not erase power_on_delay or graceful_shutdown_timeout."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {
+            'admin_status': 'up',
+            'power_on_delay': '60',
+            'graceful_shutdown_timeout': '30',
+        })
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
+        assert entry.get("admin_status") == "down"
+        assert entry.get("power_on_delay") == "60", "power_on_delay must be preserved"
+        assert entry.get("graceful_shutdown_timeout") == "30", "graceful_shutdown_timeout must be preserved"
+
+    def test_startup_switch_host_already_up_is_noop(self):
+        """startup SWITCH-HOST when already up should print a message and return."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "already" in result.output
+
+    def test_shutdown_switch_host_already_down_is_noop(self):
+        """shutdown SWITCH-HOST when already down (no entry) should print a message and return."""
+        runner = CliRunner()
+        db = Db()
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "already" in result.output
+
+    def test_show_status_bmc_uses_platform_oper_status(self):
+        """On BMC, oper_status should come from platform API when available."""
+        runner = CliRunner()
+        mock_module_helper = mock.MagicMock()
+        mock_module_helper.get_module_oper_status.return_value = "Online"
+
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Online" in result.output
+
+    def test_show_status_bmc_falls_back_to_db_when_platform_unavailable(self):
+        """On BMC, if platform API returns N/A, fall back to STATE_DB oper_status."""
+        runner = CliRunner()
+        mock_module_helper = mock.MagicMock()
+        mock_module_helper.get_module_oper_status.return_value = "N/A"
+
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        # DB value for LINE-CARD0 is "Empty"; should be preserved when platform returns N/A
+        assert "Empty" in result.output
+
+    def test_show_status_non_bmc_uses_db_oper_status(self):
+        """On non-BMC, oper_status should always come from STATE_DB."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Empty" in result.output
+
+    def test_show_status_bmc_module_helper_init_failure_falls_back_to_db(self):
+        """On BMC, if ModuleHelper init raises, gracefully fall back to STATE_DB."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("init failed")):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Empty" in result.output
+
+    def test_show_status_bmc_header_drops_physical_slot_adds_timing_columns(self):
+        """On BMC, Physical-Slot column is removed and Power-On-Delay /
+        Shutdown-Timeout columns are appended."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("no chassis")):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Physical-Slot" not in result.output
+        assert "Power-On-Delay" in result.output
+        assert "Shutdown-Timeout" in result.output
+
+    def test_show_status_bmc_non_switch_host_shows_na_for_timing(self):
+        """On BMC, non-SWITCH-HOST rows display N/A for the timing columns."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("no chassis")):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "N/A" in result.output
+
+    def test_show_status_non_bmc_output_unchanged(self):
+        """Regression: non-BMC output must still contain Physical-Slot and
+        must NOT contain the new BMC-only timing columns."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_bmc', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                []
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Physical-Slot" in result.output
+        assert "Power-On-Delay" not in result.output
+        assert "Shutdown-Timeout" not in result.output
+
+    def test_show_status_bmc_switch_host_shows_configured_timing_values(self):
+        """On BMC, SWITCH-HOST row shows the configured power-on-delay and
+        graceful-shutdown-timeout values from CONFIG_DB."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {
+            'admin_status': 'up',
+            'power_on_delay': '300',
+            'graceful_shutdown_timeout': '90',
+        })
+
+        # Mock state_db to return a SWITCH-HOST entry (mock_tables doesn't have one)
+        switch_host_state = {
+            'desc': 'Switch Host',
+            'slot': '1',
+            'oper_status': 'Online',
+            'serial': 'SH1000101',
+        }
+
+        def fake_keys(_db_id, pattern):
+            if 'SWITCH-HOST' in pattern:
+                return ['CHASSIS_MODULE_TABLE|SWITCH-HOST']
+            return []
+
+        def fake_get_all(_db_id, key):
+            if key.endswith('|SWITCH-HOST'):
+                return switch_host_state
+            return {}
+
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("no chassis")), \
+             mock.patch('show.chassis_modules.SonicV2Connector') as mock_conn_cls:
+            mock_conn = mock.MagicMock()
+            mock_conn.STATE_DB = 'STATE_DB'
+            mock_conn.keys.side_effect = fake_keys
+            mock_conn.get_all.side_effect = fake_get_all
+            mock_conn_cls.return_value = mock_conn
+
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["SWITCH-HOST"],
+                obj=db
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "SWITCH-HOST" in result.output
+        assert "300" in result.output
+        assert "90" in result.output
+        assert "Physical-Slot" not in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestChassisModulesRecovery(object):
+    """Tests for 'show chassis modules recovery' and Ready-Status in status command"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    def _setup_dpu_state_db(self):
+        """Create a mock SonicV2Connector with DPU_STATE data in CHASSIS_STATE_DB."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # DPU0 - healthy
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "true")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "recovery_status", "recoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "reset_count", "2")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "last_down_time", "2026-05-28 10:15:30 UTC")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "last_ready_time", "2026-05-28 10:18:45 UTC")
+        # DPU1 - healthy with no failures
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "ready_status", "true")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "recovery_status", "recoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "reset_count", "0")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU1', "last_ready_time", "2026-05-28 09:00:12 UTC")
+        # DPU2 - unrecoverable
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "ready_status", "false")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "recovery_status", "unrecoverable")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "reset_count", "2")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU2', "last_down_time", "2026-05-28 11:02:00 UTC")
+        return conn
+
+    def test_show_recovery_all(self):
+        """Test show chassis modules recovery shows all DPUs."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "DPU1" in result.output
+        assert "DPU2" in result.output
+        assert "recoverable" in result.output
+        assert "unrecoverable" in result.output
+
+    def test_show_recovery_single_module(self):
+        """Test show chassis modules recovery for a specific DPU."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU0"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "true" in result.output
+        assert "recoverable" in result.output
+        assert "2026-05-28 10:15:30 UTC" in result.output
+        assert "2026-05-28 10:18:45 UTC" in result.output
+
+    def test_show_recovery_non_smartswitch(self):
+        """Test recovery command on non-SmartSwitch platform."""
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "only supported on SmartSwitch" in result.output
+
+    def test_show_recovery_no_data(self):
+        """Test recovery command when no DPU_STATE data is available."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "No DPU recovery data available" in result.output
+
+    def test_show_recovery_module_not_found(self):
+        """Test recovery command with specific module name that doesn't exist in DPU_STATE."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # Add some DPU data but not the one we'll query
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "true")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU5"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU recovery data not found for module DPU5" in result.output
+
+    def test_show_status_with_ready_status_smartswitch(self):
+        """Test show chassis modules status includes Ready-Status on SmartSwitch."""
+        conn = self._setup_dpu_state_db()
+        # status command also reads STATE_DB CHASSIS_MODULE_TABLE
+        conn.connect(conn.STATE_DB)
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "desc", "DPU Module")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "slot", "N/A")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "oper_status", "Online")
+        conn.set(conn.STATE_DB, 'CHASSIS_MODULE_TABLE|DPU0', "serial", "SN001")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.is_bmc', return_value=False), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Ready-Status" in result.output
+        assert "true" in result.output
+
+    def test_show_recovery_unrecoverable_dpu(self):
+        """Test that unrecoverable DPU shows correct status."""
+        conn = self._setup_dpu_state_db()
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], ["DPU2"])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU2" in result.output
+        assert "false" in result.output
+        assert "unrecoverable" in result.output
+        assert "2026-05-28 11:02:00 UTC" in result.output
+
+    def test_show_recovery_missing_fields(self):
+        """Test recovery command gracefully handles missing fields."""
+        from swsssdk import SonicV2Connector as MockSonicV2Connector
+        conn = MockSonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        # DPU with only ready_status set
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "ready_status", "false")
+        runner = CliRunner()
+        with mock.patch('show.chassis_modules.is_smartswitch', return_value=True), \
+             mock.patch('show.chassis_modules.SonicV2Connector', return_value=conn):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["recovery"], [])
+        print(result.output)
+        assert result.exit_code == 0
+        assert "DPU0" in result.output
+        assert "false" in result.output
 
     @classmethod
     def teardown_class(cls):

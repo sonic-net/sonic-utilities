@@ -2,9 +2,10 @@
 
 """ Logger for sonic-package-manager. """
 
-import logging.handlers
-
+import logging
 import click_log
+
+from logging.handlers import SysLogHandler
 
 
 class Formatter(click_log.ColorFormatter):
@@ -25,5 +26,8 @@ log.setLevel(logging.INFO)
 click_handler = click_log.ClickHandler()
 click_handler.formatter = Formatter()
 
+syslog_handler = SysLogHandler()
+syslog_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
+
 log.addHandler(click_handler)
-log.addHandler(logging.handlers.SysLogHandler())
+log.addHandler(syslog_handler)

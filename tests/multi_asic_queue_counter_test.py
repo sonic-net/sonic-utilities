@@ -252,8 +252,6 @@ Ethernet-BP4  ALL15             131               93            7            11
 class TestQueueMultiAsic(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ['UTILITIES_UNIT_TESTING_IS_SUP'] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         print("SETUP")
@@ -278,7 +276,4 @@ class TestQueueMultiAsic(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         print("TEARDOWN")

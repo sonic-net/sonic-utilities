@@ -5,7 +5,7 @@ import pytest
 
 from sonic_cli_gen.yang_parser import YangParser
 from .cli_autogen_input.yang_parser_test import assert_dictionaries
-from .cli_autogen_input.cli_autogen_common import move_yang_models, remove_yang_models
+from .cli_autogen_input.cli_autogen_common import setup_temp_yang_dir, cleanup_temp_yang_dir
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +33,17 @@ class TestYangParser:
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
-        move_yang_models(test_path, 'yang_parser_test', test_yang_models)
+        import config.config_mgmt as config_mgmt
+        cls._orig_yang_dir = config_mgmt.YANG_DIR
+        temp_dir = setup_temp_yang_dir(test_path, 'yang_parser_test', test_yang_models)
+        config_mgmt.YANG_DIR = temp_dir
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        remove_yang_models(test_yang_models)
+        import config.config_mgmt as config_mgmt
+        config_mgmt.YANG_DIR = cls._orig_yang_dir
+        cleanup_temp_yang_dir()
 
     def test_1_table_container(self):
         """ Test for 1 'table' container

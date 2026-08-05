@@ -202,6 +202,36 @@ class TestValidateFieldOperation:
             assert generic_config_updater.field_operation_validators.\
                 port_config_update_validator(scope, patch_element) is False
 
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_invalid_fec_for_chassis(self):
+        # "rsf" is not in supported fecs, but for chassis, skip fec validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rsf"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_valid_fec_for_nonchassis(self):
+        # "rs" is in supported fecs; on non-chassis the normal validation should pass it
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rs"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_invalid_fec_for_nonchassis(self):
+        # "rsf" is not in supported fecs; on non-chassis the normal validation must reject it
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rsf"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is False
+
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
            mock.Mock(return_value="unknown"))
     def test_rdma_config_update_validator_unknown_asic(self):
@@ -785,6 +815,15 @@ class TestGetAsicName(unittest.TestCase):
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
+    def test_get_asic_spc6(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'mellanox'}
+        mock_popen.return_value = mock.Mock()
+        mock_popen.return_value.communicate.return_value = ["Mellanox-SN6600_LD-P64O128C2", 0]
+        for scope in ["localhost", "asic0"]:
+            self.assertEqual(fov.get_asic_name(), "spc6")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
     def test_get_asic_th(self, mock_popen, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
         mock_popen.return_value = mock.Mock()
@@ -827,6 +866,15 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value.communicate.return_value = ["Nokia-IXR7220-H5-64D", 0]
         for scope in ["localhost", "asic0"]:
             self.assertEqual(fov.get_asic_name(), "th5")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
+    def test_get_asic_th6(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
+        mock_popen.return_value = mock.Mock()
+        mock_popen.return_value.communicate.return_value = ["Nokia-IXR7220-H6-64", 0]
+        for scope in ["localhost", "asic0"]:
+            self.assertEqual(fov.get_asic_name(), "th6")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')

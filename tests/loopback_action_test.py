@@ -135,4 +135,3 @@ class TestLoopbackAction(object):
     @classmethod
     def teardown_class(cls):
         print("\nTEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"

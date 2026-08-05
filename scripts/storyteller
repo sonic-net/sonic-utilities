@@ -104,7 +104,7 @@ def main():
                         type=int, required=False, default=0)
     parser.add_argument('-s', '--since', help='Filter logs since the given date',
                         type=str, required=False, default="@0")
-    parser.add_argument('-f', '--sortfield', help='Use Nth field separted by "." in file name to sort. e.g. syslog.1.gz: -f 2, swss.rec.2.gz: -f 3, default 0: sort by timestamp',
+    parser.add_argument('-f', '--sortfield', help='Use Nth field separated by "." in file name to sort. e.g. syslog.1.gz: -f 2, swss.rec.2.gz: -f 3, default 0: sort by timestamp',
                         type=int, required=False, default=0)
 
     args = parser.parse_args()

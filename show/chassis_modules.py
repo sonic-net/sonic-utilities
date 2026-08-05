@@ -2,7 +2,8 @@ import click
 from natsort import natsorted
 from tabulate import tabulate
 from swsscommon.swsscommon import SonicV2Connector
-from utilities_common.chassis import is_smartswitch
+from utilities_common.chassis import is_smartswitch, is_bmc
+from utilities_common.module import ModuleHelper, NOT_AVAILABLE
 from sonic_platform_base.module_base import ModuleBase
 
 import utilities_common.cli as clicommon
@@ -20,6 +21,16 @@ CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
 CHASSIS_MIDPLANE_INFO_IP_FIELD = 'ip_address'
 CHASSIS_MIDPLANE_INFO_ACCESS_FIELD = 'access'
 
+DPU_STATE_TABLE = 'DPU_STATE'
+DPU_STATE_READY_STATUS_FIELD = 'ready_status'
+DPU_STATE_RECOVERY_STATUS_FIELD = 'recovery_status'
+DPU_STATE_RESET_COUNT_FIELD = 'reset_count'
+DPU_STATE_LAST_DOWN_TIME_FIELD = 'last_down_time'
+DPU_STATE_LAST_READY_TIME_FIELD = 'last_ready_time'
+
+CHASSIS_SERVER = 'redis_chassis.server'
+CHASSIS_SERVER_PORT = 6380
+
 @click.group(cls=clicommon.AliasedGroup)
 def chassis():
     """Chassis commands group"""
@@ -36,7 +47,18 @@ def modules():
 def status(db, chassis_module_name):
     """Show chassis-modules status"""
 
+    smartswitch = is_smartswitch()
+    bmc = is_bmc()
     header = ['Name', 'Description', 'Physical-Slot', 'Oper-Status', 'Admin-Status', 'Serial']
+    if smartswitch:
+        header.append('Ready-Status')
+    if bmc:
+        # Physical-Slot is not meaningful on BMC; drop it and add the
+        # BMC-only timing fields configured via 'config chassis modules
+        # power-on-delay' / 'shutdown-timeout' for SWITCH-HOST modules.
+        header.remove('Physical-Slot')
+        header.extend(['Power-On-Delay (sec)', 'Shutdown-Timeout (sec)'])
+
     chassis_cfg_table = db.cfgdb.get_table('CHASSIS_MODULE')
 
     state_db = SonicV2Connector(host="127.0.0.1")
@@ -50,6 +72,40 @@ def status(db, chassis_module_name):
     if not keys:
         print('Key {} not found in {} table'.format(key_pattern, CHASSIS_MODULE_INFO_TABLE))
         return
+
+    # On BMC, oper_status is read directly from the platform API.
+    # ModuleHelper.__init__ does not raise on chassis load failure; it logs and keeps
+    # platform_chassis=None. Treat that as unavailable so we don't emit per-module
+    # errors in the loop — just fall back to STATE_DB silently.
+    module_helper = None
+    if is_bmc():
+        try:
+            helper = ModuleHelper()
+            if helper.platform_chassis:
+                module_helper = helper
+        except Exception:
+            pass
+
+    # For SmartSwitch, connect to CHASSIS_STATE_DB to read DPU_STATE
+    dpu_state_data = {}
+    chassis_state_db = None
+    if smartswitch:
+        try:
+            chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
+            chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+            if chassis_module_name:
+                dpu_key_pattern = DPU_STATE_TABLE + '|' + chassis_module_name
+            else:
+                dpu_key_pattern = DPU_STATE_TABLE + '|*'
+            dpu_keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, dpu_key_pattern)
+            if dpu_keys:
+                for dpu_key in dpu_keys:
+                    dpu_name = dpu_key.split('|')[1]
+                    dpu_state_data[dpu_name] = chassis_state_db.get_all(
+                        chassis_state_db.CHASSIS_STATE_DB, dpu_key)
+        except Exception:
+            chassis_state_db = None
+            dpu_state_data = {}
 
     table = []
     for key in natsorted(keys):
@@ -66,8 +122,17 @@ def status(db, chassis_module_name):
         oper_status = data_dict.get(CHASSIS_MODULE_INFO_OPERSTATUS_FIELD, ModuleBase.MODULE_STATUS_EMPTY)
         serial = data_dict.get(CHASSIS_MODULE_INFO_SERIAL_FIELD, 'N/A')
 
+        # On BMC, prefer oper_status from platform API; fall back to STATE_DB if unavailable
+        if module_helper is not None:
+            platform_oper_status = module_helper.get_module_oper_status(key_list[1])
+            if platform_oper_status != NOT_AVAILABLE:
+                oper_status = platform_oper_status
+
         # Determine admin_status
-        if is_smartswitch():
+        if smartswitch:
+            admin_status = 'down'
+        elif is_bmc() and key_list[1].startswith("SWITCH-HOST"):
+            # On BMC, SWITCH-HOST default is 'down' (kept powered off on boot)
             admin_status = 'down'
         else:
             admin_status = 'up'
@@ -75,12 +140,93 @@ def status(db, chassis_module_name):
         if config_data is not None:
             admin_status = config_data.get(CHASSIS_MODULE_INFO_ADMINSTATUS_FIELD, admin_status)
 
-        table.append((key_list[1], desc, slot, oper_status, admin_status, serial))
+        row = [key_list[1], desc, slot, oper_status, admin_status, serial]
+        if bmc:
+            # Physical-Slot column omitted from header on BMC; drop matching value
+            row.pop(2)
+
+        if smartswitch:
+            dpu_info = dpu_state_data.get(key_list[1], {})
+            ready_status = dpu_info.get(DPU_STATE_READY_STATUS_FIELD, 'N/A')
+            row.append(ready_status)
+
+        if bmc:
+            # Only meaningful for SWITCH-HOST modules; other module types show N/A.
+            if key_list[1].startswith("SWITCH-HOST"):
+                cfg = config_data or {}
+                power_on_delay = cfg.get('power_on_delay', '0')
+                shutdown_timeout = cfg.get('graceful_shutdown_timeout', '120')
+            else:
+                power_on_delay = 'N/A'
+                shutdown_timeout = 'N/A'
+            row.extend([power_on_delay, shutdown_timeout])
+
+        table.append(tuple(row))
+
+    if chassis_state_db:
+        chassis_state_db.close(chassis_state_db.CHASSIS_STATE_DB)
 
     if table:
         click.echo(tabulate(table, header, tablefmt='simple', stralign='right'))
     else:
         click.echo('No data available in CHASSIS_MODULE_TABLE\n')
+
+
+@modules.command()
+@click.argument('chassis_module_name', metavar='<module_name>', required=False)
+def recovery(chassis_module_name):
+    """Show chassis-modules recovery information"""
+
+    if not is_smartswitch():
+        click.echo('This command is only supported on SmartSwitch platforms')
+        return
+
+    header = ['Name', 'Ready-Status', 'Recovery-Status', 'Reset-Count',
+              'Last-Down-Time', 'Last-Ready-Time']
+
+    try:
+        chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
+        chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+    except Exception:
+        click.echo('Unable to connect to CHASSIS_STATE_DB')
+        return
+
+    key_pattern = DPU_STATE_TABLE + '|*'
+    if chassis_module_name:
+        key_pattern = DPU_STATE_TABLE + '|' + chassis_module_name
+
+    keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, key_pattern)
+    if not keys:
+        chassis_state_db.close(chassis_state_db.CHASSIS_STATE_DB)
+        if chassis_module_name:
+            click.echo('DPU recovery data not found for module {}'.format(chassis_module_name))
+        else:
+            click.echo('No DPU recovery data available')
+        return
+
+    table = []
+    for key in natsorted(keys):
+        key_list = key.split('|')
+        if len(key_list) != 2:
+            continue
+
+        data_dict = chassis_state_db.get_all(chassis_state_db.CHASSIS_STATE_DB, key)
+
+        ready_status = data_dict.get(DPU_STATE_READY_STATUS_FIELD, 'N/A')
+        recovery_status = data_dict.get(DPU_STATE_RECOVERY_STATUS_FIELD, 'N/A')
+        reset_count = data_dict.get(DPU_STATE_RESET_COUNT_FIELD, 'N/A')
+        last_down_time = data_dict.get(DPU_STATE_LAST_DOWN_TIME_FIELD, 'N/A')
+        last_ready_time = data_dict.get(DPU_STATE_LAST_READY_TIME_FIELD, 'N/A')
+
+        table.append((key_list[1], ready_status, recovery_status, reset_count,
+                      last_down_time, last_ready_time))
+
+    chassis_state_db.close(chassis_state_db.CHASSIS_STATE_DB)
+
+    if table:
+        click.echo(tabulate(table, header, tablefmt='simple', stralign='right'))
+    else:
+        click.echo('No DPU recovery data available')
 
 @modules.command()
 @click.argument('chassis_module_name', metavar='<module_name>', required=False)
@@ -123,7 +269,7 @@ def midplane_status(chassis_module_name):
 
 @chassis.command()
 @click.argument('systemportname', required=False)
-@click.option('--namespace', '-n', 'namespace', required=True if multi_asic.is_multi_asic() else False, 
+@click.option('--namespace', '-n', 'namespace', required=True if multi_asic.is_multi_asic() else False,
                 default=None, type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def system_ports(systemportname, namespace, verbose):
@@ -133,7 +279,7 @@ def system_ports(systemportname, namespace, verbose):
 
     if systemportname is not None:
         cmd += ['-i', str(systemportname)]
-    
+
     if namespace is not None:
         cmd += ['-n', str(namespace)]
 
