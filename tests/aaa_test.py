@@ -168,6 +168,30 @@ AAA accounting login disable (default)
 
 """
 
+show_tacacs_default_output="""\
+TACPLUS global auth_type pap (default)
+TACPLUS global timeout 5 (default)
+TACPLUS global passkey <EMPTY_STRING> (default)
+TACPLUS global traceid_authorization false (default)
+
+"""
+
+show_tacacs_traceid_enable_output="""\
+TACPLUS global auth_type pap (default)
+TACPLUS global timeout 5 (default)
+TACPLUS global passkey <EMPTY_STRING> (default)
+TACPLUS global traceid_authorization True
+
+"""
+
+show_tacacs_traceid_disable_output="""\
+TACPLUS global auth_type pap (default)
+TACPLUS global timeout 5 (default)
+TACPLUS global passkey <EMPTY_STRING> (default)
+TACPLUS global traceid_authorization False
+
+"""
+
 class TestAaa(object):
     @classmethod
     def setup_class(cls):
@@ -481,6 +505,42 @@ class TestAaa(object):
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
+
+    def test_config_tacacs_traceid_authorization(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_default_output
+
+        result = runner.invoke(config.config.commands["tacacs"],
+                               ["traceid-authorization", "enable"], obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_traceid_enable_output
+
+        result = runner.invoke(config.config.commands["tacacs"],
+                               ["traceid-authorization", "disable"], obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_traceid_disable_output
+
+        result = runner.invoke(config.config.commands["tacacs"],
+                               ["traceid-authorization", "default"], obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_default_output
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
