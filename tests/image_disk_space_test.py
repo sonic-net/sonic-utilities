@@ -385,111 +385,6 @@ def test_run_cmd_os_error(monkeypatch):
     assert output == "command unavailable"
 
 
-@pytest.mark.parametrize(
-    "output,expected",
-    [
-        ("Avail\n18G", 18),
-        ("Avail\n18", 18),
-        ("Available\n  25G\n", 25),
-        ("Filesystem\n/dev/sda1\nAvail\n30G", 30),
-    ],
-)
-def test_parse_df_available_gb_success(output, expected):
-    assert image_disk_space._parse_df_available_gb(output) == expected
-
-
-@pytest.mark.parametrize(
-    "output",
-    [
-        "",
-        "Avail",
-        "Avail\nbad",
-        "Avail\n18GB",
-        "Avail\n18.5G",
-    ],
-)
-def test_parse_df_available_gb_failure(output):
-    assert image_disk_space._parse_df_available_gb(output) is None
-
-
-def test_get_remote_dpu_free_disk_in_gb_success(monkeypatch):
-    monkeypatch.setattr(
-        image_disk_space,
-        "_run_cmd",
-        lambda cmd: (0, "Avail\n18G"),
-    )
-
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0")
-        == 18
-    )
-
-
-def test_get_remote_dpu_free_disk_in_gb_custom_ssh_options(
-    monkeypatch,
-):
-    captured = {}
-
-    def fake_run_cmd(cmd):
-        captured["cmd"] = cmd
-        return 0, "Avail\n18G"
-
-    monkeypatch.setattr(
-        image_disk_space,
-        "_run_cmd",
-        fake_run_cmd,
-    )
-
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb(
-            "DPU0",
-            ssh_options=["-o", "ConnectTimeout=3"],
-        )
-        == 18
-    )
-    assert captured["cmd"] == [
-        "ssh",
-        "-o",
-        "ConnectTimeout=3",
-        "DPU0",
-        "df",
-        "-BG",
-        "--output=avail",
-        "/host",
-    ]
-
-
-def test_get_remote_dpu_free_disk_in_gb_command_failure(
-    monkeypatch,
-):
-    monkeypatch.setattr(
-        image_disk_space,
-        "_run_cmd",
-        lambda cmd: (1, "ssh failed"),
-    )
-
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0")
-        is None
-    )
-
-
-@pytest.mark.parametrize("output", ["", "Avail\nbad"])
-def test_get_remote_dpu_free_disk_in_gb_parse_failure(
-    monkeypatch, output
-):
-    monkeypatch.setattr(
-        image_disk_space,
-        "_run_cmd",
-        lambda cmd: (0, output),
-    )
-
-    assert (
-        image_disk_space.get_remote_dpu_free_disk_in_gb("DPU0")
-        is None
-    )
-
-
 def test_remote_dpu_check_rejected_when_running_on_dpu(
     monkeypatch,
 ):
@@ -530,8 +425,8 @@ def test_remote_dpu_check_single_success(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         image_disk_space,
-        "get_remote_dpu_free_disk_in_gb",
-        lambda dpu_name, disk_path, ssh_options=None: 20,
+        "get_remote_dpu_free_disk_in_bytes",
+        lambda dpu_name, disk_path, ssh_options=None: 20 * GB,
     )
 
     assert (
@@ -550,9 +445,9 @@ def test_remote_dpu_check_multi_success(monkeypatch, tmp_path):
         {image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12},
     )
     free_space = {
-        "DPU0": 20,
-        "DPU1": 18,
-        "DPU2": 16,
+        "DPU0": 20 * GB,
+        "DPU1": 18 * GB,
+        "DPU2": 16 * GB,
     }
     monkeypatch.setattr(
         image_disk_space,
@@ -561,7 +456,7 @@ def test_remote_dpu_check_multi_success(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         image_disk_space,
-        "get_remote_dpu_free_disk_in_gb",
+        "get_remote_dpu_free_disk_in_bytes",
         lambda dpu_name, disk_path, ssh_options=None: (
             free_space[dpu_name]
         ),
@@ -577,9 +472,16 @@ def test_remote_dpu_check_multi_success(monkeypatch, tmp_path):
     )
 
 
-@pytest.mark.parametrize("available_gb", [8, None])
-def test_remote_dpu_check_failure(
-    monkeypatch, tmp_path, available_gb
+@pytest.mark.parametrize(
+    "available_bytes,expected",
+    [
+        (12 * GB, True),
+        (12 * GB - 1, False),
+        (None, False),
+    ],
+)
+def test_remote_dpu_check_boundary(
+    monkeypatch, tmp_path, available_bytes, expected
 ):
     path = write_platform_json(
         tmp_path,
@@ -592,17 +494,18 @@ def test_remote_dpu_check_failure(
     )
     monkeypatch.setattr(
         image_disk_space,
-        "get_remote_dpu_free_disk_in_gb",
-        lambda dpu_name, disk_path, ssh_options=None: available_gb,
+        "get_remote_dpu_free_disk_in_bytes",
+        lambda dpu_name, disk_path, ssh_options=None: available_bytes,
     )
 
-    assert not (
+    assert (
         image_disk_space
         .check_remote_dpu_image_install_free_disk_space(
             ["DPU0"],
             disk_path="/host",
             platform_json_path=path,
         )
+        is expected
     )
 
 
@@ -614,9 +517,9 @@ def test_remote_dpu_check_mixed_results_fail(
         {image_disk_space.DPU_MIN_FREE_DISK_IMAGE_KEY: 12},
     )
     free_space = {
-        "DPU0": 20,
-        "DPU1": 8,
-        "DPU2": 18,
+        "DPU0": 20 * GB,
+        "DPU1": 8 * GB,
+        "DPU2": 18 * GB,
     }
     monkeypatch.setattr(
         image_disk_space,
@@ -625,7 +528,7 @@ def test_remote_dpu_check_mixed_results_fail(
     )
     monkeypatch.setattr(
         image_disk_space,
-        "get_remote_dpu_free_disk_in_gb",
+        "get_remote_dpu_free_disk_in_bytes",
         lambda dpu_name, disk_path, ssh_options=None: (
             free_space[dpu_name]
         ),
@@ -657,9 +560,9 @@ def test_remote_dpu_check_stops_on_first_failure(
     ):
         checked_dpus.append(dpu_name)
         return {
-            "DPU0": 20,
-            "DPU1": 8,
-            "DPU2": 20,
+            "DPU0": 20 * GB,
+            "DPU1": 8 * GB,
+            "DPU2": 20 * GB,
         }[dpu_name]
 
     monkeypatch.setattr(
@@ -669,7 +572,7 @@ def test_remote_dpu_check_stops_on_first_failure(
     )
     monkeypatch.setattr(
         image_disk_space,
-        "get_remote_dpu_free_disk_in_gb",
+        "get_remote_dpu_free_disk_in_bytes",
         fake_get_remote_disk,
     )
 

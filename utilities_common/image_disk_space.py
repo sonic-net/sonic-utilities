@@ -290,24 +290,6 @@ def _run_cmd(cmd: List[str]) -> Tuple[int, str]:
         return 1, str(error)
 
 
-def _parse_df_available_gb(output: str) -> Optional[int]:
-    """Parse output from ``df -BG --output=avail``."""
-    lines = [
-        line.strip()
-        for line in output.splitlines()
-        if line.strip()
-    ]
-
-    if len(lines) < 2:
-        return None
-
-    match = re.fullmatch(r"(\d+)G?", lines[-1])
-    if not match:
-        return None
-
-    return int(match.group(1))
-
-
 def _parse_df_available_bytes(output: str) -> Optional[int]:
     """Parse output from ``df -B1 --output=avail``."""
     lines = [
@@ -320,48 +302,6 @@ def _parse_df_available_bytes(output: str) -> Optional[int]:
         return None
 
     return int(lines[-1])
-
-
-def get_remote_dpu_free_disk_in_gb(
-    dpu_name: str,
-    disk_path: str = DEFAULT_DISK_PATH,
-    ssh_options: Optional[List[str]] = None,
-) -> Optional[int]:
-    """Get free disk space from a DPU reachable over SSH."""
-    resolved_ssh_options = (
-        ssh_options
-        if ssh_options is not None
-        else DEFAULT_SSH_OPTIONS
-    )
-
-    command = [
-        "ssh",
-        *resolved_ssh_options,
-        dpu_name,
-        "df",
-        "-BG",
-        "--output=avail",
-        disk_path,
-    ]
-
-    return_code, output = _run_cmd(command)
-    if return_code != 0:
-        logging.warning(
-            "Failed to get free disk space from %s: %s",
-            dpu_name,
-            output,
-        )
-        return None
-
-    available_gb = _parse_df_available_gb(output)
-    if available_gb is None:
-        logging.warning(
-            "Failed to parse disk space from %s: %s",
-            dpu_name,
-            output,
-        )
-
-    return available_gb
 
 
 def get_remote_dpu_free_disk_in_bytes(
@@ -441,26 +381,28 @@ def check_remote_dpu_image_install_free_disk_space(
         )
         return True
 
+    required_bytes = required_gb * 1024 * 1024 * 1024
+
     for dpu_name in resolved_dpu_names:
-        available_gb = get_remote_dpu_free_disk_in_gb(
+        available_bytes = get_remote_dpu_free_disk_in_bytes(
             dpu_name,
             disk_path,
             ssh_options,
         )
-        if available_gb is None:
+        if available_bytes is None:
             logging.error(
                 "Unable to determine free disk space for %s",
                 dpu_name,
             )
             return False
 
-        if available_gb < required_gb:
+        if available_bytes < required_bytes:
             logging.error(
                 "Insufficient remote DPU disk space: "
-                "dpu=%s available=%sGB required=%sGB path=%s",
+                "dpu=%s available=%s bytes required=%s bytes path=%s",
                 dpu_name,
-                available_gb,
-                required_gb,
+                available_bytes,
+                required_bytes,
                 disk_path,
             )
             return False
