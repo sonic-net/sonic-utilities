@@ -84,6 +84,11 @@ def get_lacpdu_per_lag_member(namespace):
         if oper_status == "up":
             # only apply the workaround for active lags
             lag_member = str(lag_entry[1])
+            # Skip admin-down members — L2socket raises ENETDOWN on them
+            port_admin = appDB.get(appDB.APPL_DB, "PORT_TABLE:{}".format(lag_member), "admin_status")
+            if port_admin != "up":
+                log_info("lag member {} is admin-down, skipping".format(lag_member))
+                continue
             active_lag_members.append(lag_member)
             # craft lacpdu packets for each lag member based on config
             port_channel_config = get_port_channel_config(lag_name, namespace)
