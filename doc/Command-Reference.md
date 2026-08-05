@@ -2300,6 +2300,7 @@ This command displays the global configuration fields and the list of all tacacs
   TACPLUS global auth_type pap (default)
   TACPLUS global timeout 99
   TACPLUS global passkey <EMPTY_STRING> (default)
+  TACPLUS global traceid_authorization false (default)
 
   TACPLUS_SERVER address 10.11.12.14
                          priority 9
@@ -2323,6 +2324,7 @@ Some of the parameters like authtype, passkey and timeout can be either configur
 3) default - reset the authtype or passkey or timeout to the default values.
 4) passkey - global configuration that is applied to all servers if there is no server specific configuration.
 5) timeout - global configuration that is applied to all servers if there is no server specific configuration.
+6) traceid-authorization - control whether validated SSH_CLIENT_TRACEID values are sent in TACACS+ command authorization requests.
 
 **config tacacs add**
 
@@ -2443,6 +2445,25 @@ When user has not configured server specific timeout, this global value shall be
 - Example: To configure non-default timeout value
   ```
   admin@sonic:~$ sudo config tacacs timeout 60
+  ```
+
+**config tacacs traceid-authorization**
+
+This command controls whether validated `SSH_CLIENT_TRACEID` values are sent as the `traceid` attribute in TACACS+ command authorization requests. The feature is disabled by default.
+
+- Usage:
+  ```
+  config tacacs traceid-authorization (enable | disable | default)
+  ```
+
+  - Options:
+    - `enable`: Send valid `SSH_CLIENT_TRACEID` values in TACACS+ command authorization requests.
+    - `disable`: Explicitly disable sending `SSH_CLIENT_TRACEID` values.
+    - `default`: Remove the explicit configuration and use the default value, which is disabled.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config tacacs traceid-authorization enable
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#tacacs)
