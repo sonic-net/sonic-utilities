@@ -12,14 +12,15 @@ from swsscommon.swsscommon import SonicDBConfig, SonicV2Connector
 from natsort import natsorted
 
 try:
-    from sonic_py_common import multi_asic
+    from sonic_py_common import multi_asic, device_info
 except ImportError:
     multi_asic = None
+    device_info = None
 
 try:
-    from utilities_common import platform_sfputil_helper
+    from portconfig import get_port_config
 except ImportError:
-    platform_sfputil_helper = None
+    get_port_config = None
 
 
 header = ['Sensor', 'Temperature', 'High TH', 'Low TH', 'Crit High TH', 'Crit Low TH', 'Warning', 'Timestamp']
@@ -75,25 +76,59 @@ class TemperShow(object):
                 SonicDBConfig.load_sonic_db_config()
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
-        self._sfp_helper_ready = self._init_sfp_util_helper()
+        self._port_index_map = self._build_port_index_map()
 
     @staticmethod
-    def _init_sfp_util_helper():
-        """Initialize the shared SfpUtilHelper for port-name mapping.
+    def _build_port_index_map():
+        """Build a {logical_port_name: front-panel index} map from port config.
 
-        Uses utilities_common.platform_sfputil_helper so multi-ASIC
-        port-config handling stays consistent with other CLIs (sfpshow,
-        sfputil). Returns False if the helper is unavailable; SFP rows
-        will then fall back to displaying the logical port name.
+        Reads the platform port configuration (CONFIG_DB PORT table, or the
+        port_config.ini / platform.json file) directly via
+        portconfig.get_port_config, instead of loading the full platform
+        SFP/transceiver API stack through platform_sfputil_helper. The map is
+        used only to translate a logical port name (e.g. 'Ethernet0') into the
+        legacy 'xSFP module <N> Temp' display label; the index value matches
+        SfpUtilHelper.read_porttab_mappings (int of the port's 'index' field),
+        so the labels are unchanged while the heavy
+        sonic_platform_base/sonic_xcvr import chain is avoided.
+
+        Returns an empty dict if the port config is unavailable; SFP rows then
+        fall back to displaying the logical port name.
         """
-        if platform_sfputil_helper is None:
-            return False
+        port_index_map = {}
+        if get_port_config is None or device_info is None:
+            return port_index_map
+
         try:
-            platform_sfputil_helper.load_platform_sfputil()
-            platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
-            return True
-        except (Exception, SystemExit):
-            return False
+            platform, hwsku = device_info.get_platform_and_hwsku()
+        except Exception:
+            return port_index_map
+
+        # One entry per ASIC namespace on multi-ASIC platforms (asic0, asic1,
+        # ...), matching SfpUtilHelper.read_all_porttab_mappings; a single
+        # None namespace on single-ASIC platforms.
+        asic_names = [None]
+        if multi_asic is not None and multi_asic.is_multi_asic():
+            try:
+                asic_names = ['asic{}'.format(i) for i in range(multi_asic.get_num_asics())]
+            except Exception:
+                asic_names = [None]
+
+        for asic_name in asic_names:
+            try:
+                ports, _, _ = get_port_config(hwsku, platform, asic_name=asic_name)
+            except (Exception, SystemExit):
+                continue
+            if not ports:
+                continue
+            for port_name, attrs in ports.items():
+                if not isinstance(attrs, dict) or 'index' not in attrs:
+                    continue
+                try:
+                    port_index_map[port_name] = int(attrs['index'])
+                except (ValueError, TypeError):
+                    continue
+        return port_index_map
 
     def _sfp_display_name(self, port_name):
         """Map a logical port name (e.g. 'Ethernet0') to 'xSFP module <N> Temp'.
@@ -102,16 +137,11 @@ class TemperShow(object):
         This matches the legacy thermalctld naming convention so existing
         consumers/operators see the same sensor labels.
         """
-        if not self._sfp_helper_ready:
+        # front-panel index from port config is already 1-based
+        index = self._port_index_map.get(port_name)
+        if index is None:
             return port_name
-        try:
-            physical = platform_sfputil_helper.logical_port_name_to_physical_port_list(port_name)
-            if physical and len(physical) > 0 and physical[0] is not None:
-                # physical port index from SfpUtilHelper is already 1-based
-                return 'xSFP module {} Temp'.format(physical[0])
-        except Exception:
-            pass
-        return port_name
+        return 'xSFP module {} Temp'.format(index)
 
     @staticmethod
     def _get_sfp_db_connections():
