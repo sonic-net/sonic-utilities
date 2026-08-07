@@ -2233,13 +2233,7 @@ save_log_files() {
 #  0 if BMC is supported, 1 otherwise
 ###############################################################################
 is_bmc_supported() {
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
-    # Check if the required file exists
-    if [ ! -f /usr/share/sonic/device/$platform/bmc.json ]; then
-        return 1
-    else
-        return 0
-    fi
+    python3 -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
 }
 
 ###############################################################################
