@@ -1,6 +1,7 @@
 #!/bin/bash
 
-declare -r GNMI_PORT=8080 # Default GNMI port
+declare -ra COMMON_GNMI_PORTS=(8080 50052)
+declare -r GNMI_PROBE_TIMEOUT=10
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
@@ -37,13 +38,32 @@ function get_dpu_ip()
     sonic-db-cli CONFIG_DB HGET "DHCP_SERVER_IPV4_PORT|bridge-midplane|${DPU_NAME}" "ips@"
 }
 
-# Function to retrieve GNMI port from CONFIG_DB
-function get_gnmi_port()
+# Function to retrieve configured and common GNMI ports in preference order
+function get_gnmi_ports()
 {
     local DPU_NAME=${1:-dpu0}
+    local configured_port
     for k in $(sonic-db-cli CONFIG_DB keys "DPU|*$DPU_NAME"); do
-        sonic-db-cli CONFIG_DB hget "$k" 'gnmi_port'
+        configured_port=$(sonic-db-cli CONFIG_DB hget "$k" 'gnmi_port')
+        if [ -n "$configured_port" ]; then
+            break
+        fi
     done
+    printf '%s\n' "$configured_port" "${COMMON_GNMI_PORTS[@]}" | awk 'NF && !seen[$0]++'
+}
+
+function find_working_gnmi_port()
+{
+    local dpu_ip=$1
+    shift
+    local port
+    for port in "$@"; do
+        if timeout "$GNMI_PROBE_TIMEOUT" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc Time &>/dev/null; then
+            printf '%s\n' "$port"
+            return ${EXIT_SUCCESS}
+        fi
+    done
+    return ${EXIT_ERROR}
 }
 
 # Function to get reboot status from DPU
@@ -178,19 +198,21 @@ function gnmi_reboot_dpu()
 
     # Retrieve DPU IP and GNMI port
     dpu_ip=$(get_dpu_ip "${DPU_NAME}")
-    port=$(get_gnmi_port "${DPU_NAME}")
-    if [ -z "$port" ]; then
-        port=$GNMI_PORT # Default GNMI port
-    fi
-    log_message "INFO: Rebooting ${DPU_NAME}, ip:$dpu_ip gnmi_port:$port"
+    local ports
+    mapfile -t ports < <(get_gnmi_ports "${DPU_NAME}")
+    log_message "INFO: Rebooting ${DPU_NAME}, ip:$dpu_ip gnmi_ports:${ports[*]}"
 
     if [ -z "$dpu_ip" ]; then
         log_message "ERROR: Failed to retrieve DPU IP for ${DPU_NAME}"
         return ${EXIT_ERROR}
     fi
 
-    docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc Reboot -jsonin '{"method":3, "message":"User initiated reboot"}' &>/dev/null
-    if [ $? -ne 0 ]; then
+    local port
+    port=$(find_working_gnmi_port "$dpu_ip" "${ports[@]}")
+    if [ -z "$port" ]; then
+        log_message "ERROR: Failed to find a reachable gNMI port on ${DPU_NAME}"
+        log_message "ERROR: proceeding without halting the services"
+    elif ! docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc Reboot -jsonin '{"method":3, "message":"User initiated reboot"}' &>/dev/null; then
         log_message "ERROR: Failed to send gnoi command to halt services on ${DPU_NAME}"
         log_message "ERROR: proceeding without halting the services"
     else
