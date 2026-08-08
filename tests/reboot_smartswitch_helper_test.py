@@ -244,12 +244,13 @@ set_module_state_transition_flag() {{ return 0; }}
 clear_module_state_transition_flag() {{ return 1; }}
 gnmi_reboot_dpu() {{ return 0; }}
 module_pre_shutdown() {{ return 0; }}
-module_post_startup() {{ return 0; }}
+    module_post_startup() {{ touch "{tmp_path / 'post-startup'}"; return 0; }}
 reboot_dpu_platform() {{ return 0; }}
 reboot_dpu dpu0 DPU
 '''
     result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
     assert result.returncode != 0
+    assert (tmp_path / "post-startup").exists()
 
 
 def test_reboot_dpu_fails_when_chassis_status_fails(tmp_path):
