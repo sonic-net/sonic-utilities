@@ -82,3 +82,25 @@ def test_gnmi_reboot_dpu_falls_back_to_native_port(tmp_path):
     assert "-rpc Time" in command_lines[1]
     assert "-rpc Reboot" in command_lines[2]
     assert sum("-rpc Reboot" in line for line in command_lines) == 1
+
+
+def test_get_gnmi_ports_orders_and_deduplicates(tmp_path):
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+source "{SCRIPT}"
+sonic-db-cli() {{
+    if [ "$2" = "keys" ]; then
+        printf 'DPU|dpu0\n'
+    else
+        printf '%s\n' "$CONFIGURED_PORT"
+    fi
+}}
+get_gnmi_ports dpu0
+'''
+    env = os.environ.copy()
+    env["CONFIGURED_PORT"] = "50052"
+    result = subprocess.run(
+        ["bash", "-c", script], env=env, capture_output=True, text=True, check=True
+    )
+    assert result.stdout.splitlines() == ["50052", "8080"]
