@@ -2,6 +2,8 @@
 
 declare -ra COMMON_GNMI_PORTS=(8080 50052)
 declare -r GNMI_PROBE_TIMEOUT=10
+declare -r GNMI_REBOOT_TIMEOUT=60
+declare -r GNMI_STATUS_TIMEOUT=10
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
@@ -73,15 +75,19 @@ function get_reboot_status()
     local port=$2
     local reboot_output_file="reboot_status_${dpu_ip}.txt"
 
-    docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null
+    timeout "$GNMI_STATUS_TIMEOUT" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null
     local gnoi_rc=${PIPESTATUS[0]}
     if [ $gnoi_rc -ne 0 ]; then
         rm -f "$reboot_output_file"
         return ${EXIT_ERROR}
     fi
-    local is_reboot_active
-    is_reboot_active=$(cat "$reboot_output_file" | awk '/^{.*}$/' | jq -r '.active')
+    local status_json
+    status_json=$(awk '/^{.*}$/{json=$0} END{print json}' "$reboot_output_file")
     rm -f "$reboot_output_file"
+    local is_reboot_active
+    if [ -z "$status_json" ] || ! is_reboot_active=$(jq -r 'if has("active") then .active elif has("status") then false else error("invalid RebootStatus response") end' <<< "$status_json"); then
+        return ${EXIT_ERROR}
+    fi
     if [ "$is_reboot_active" != "true" ]; then
         return ${EXIT_SUCCESS}
     fi
@@ -185,7 +191,7 @@ function wait_for_dpu_reboot_status()
         waited_time=$((waited_time + poll_interval))
         if [ $waited_time -ge $dpu_halt_services_timeout ]; then
             log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
-            return
+            return ${EXIT_ERROR}
         fi
     done
     return
@@ -212,12 +218,15 @@ function gnmi_reboot_dpu()
     if [ -z "$port" ]; then
         log_message "ERROR: Failed to find a reachable gNMI port on ${DPU_NAME}"
         log_message "ERROR: proceeding without halting the services"
-    elif ! docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc Reboot -jsonin '{"method":3, "message":"User initiated reboot"}' &>/dev/null; then
+        return ${EXIT_ERROR}
+    elif ! timeout "$GNMI_REBOOT_TIMEOUT" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc Reboot -jsonin '{"method":3, "message":"User initiated reboot"}' &>/dev/null; then
         log_message "ERROR: Failed to send gnoi command to halt services on ${DPU_NAME}"
         log_message "ERROR: proceeding without halting the services"
+        return ${EXIT_ERROR}
     else
         # Wait for DPU to halt services, if reboot command is successful
         wait_for_dpu_reboot_status "${dpu_ip}" "${port}" "${DPU_NAME}"
+        return $?
     fi
 }
 
