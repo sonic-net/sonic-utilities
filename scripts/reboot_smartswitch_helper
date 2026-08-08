@@ -99,7 +99,7 @@ function get_reboot_status()
 function module_pre_shutdown()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_pre_shutdown('${DPU_NAME}')"
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_pre_shutdown('${DPU_NAME}') else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module pre-shutdown vendor API failed"
@@ -111,7 +111,7 @@ function module_pre_shutdown()
 function module_post_startup()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_post_startup('${DPU_NAME}')"
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_post_startup('${DPU_NAME}') else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module post-startup vendor API failed"
@@ -124,7 +124,7 @@ function set_module_state_transition_flag()
 {
     local DPU_NAME=$1
     local FLAG_VALUE=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE})"
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE}) else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Setting module state transition flag failed"
@@ -136,7 +136,7 @@ function set_module_state_transition_flag()
 function clear_module_state_transition_flag()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.clear_module_state_transition('${DPU_NAME}')"
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().clear_module_state_transition('${DPU_NAME}') else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Clearing module state transition flag failed"
@@ -162,7 +162,7 @@ function reboot_dpu_platform()
 {
     local DPU_NAME=$1
     local REBOOT_TYPE=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.reboot_module('${DPU_NAME}', '${REBOOT_TYPE}')"
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().reboot_module('${DPU_NAME}', '${REBOOT_TYPE}') else 1)"
     local rc=$?
     log_message "INFO: Rebooting ${DPU_NAME} with reboot_type:${REBOOT_TYPE}..."
     return "$rc"
@@ -330,7 +330,9 @@ function reboot_dpu()
             clear_module_state_transition_flag "${DPU_NAME}"
             return ${EXIT_ERROR}
         fi
-        clear_module_state_transition_flag "${DPU_NAME}"
+        if ! clear_module_state_transition_flag "${DPU_NAME}"; then
+            return ${EXIT_ERROR}
+        fi
     fi
     return "$gnoi_reboot_rc"
 }
