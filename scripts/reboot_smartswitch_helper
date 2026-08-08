@@ -100,9 +100,11 @@ function module_pre_shutdown()
 {
     local DPU_NAME=$1
     python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_pre_shutdown('${DPU_NAME}')"
-    if [ $? -ne 0 ]; then
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module pre-shutdown vendor API failed"
     fi
+    return "$rc"
 }
 
 # Function to rescan PCI module
@@ -110,9 +112,11 @@ function module_post_startup()
 {
     local DPU_NAME=$1
     python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_post_startup('${DPU_NAME}')"
-    if [ $? -ne 0 ]; then
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module post-startup vendor API failed"
     fi
+    return "$rc"
 }
 
 # Function to set state_transition_in_progress flag
@@ -121,9 +125,11 @@ function set_module_state_transition_flag()
     local DPU_NAME=$1
     local FLAG_VALUE=$2
     python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE})"
-    if [ $? -ne 0 ]; then
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Setting module state transition flag failed"
     fi
+    return "$rc"
 }
 
 # Function to clear state_transition_in_progress flag
@@ -131,9 +137,11 @@ function clear_module_state_transition_flag()
 {
     local DPU_NAME=$1
     python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.clear_module_state_transition('${DPU_NAME}')"
-    if [ $? -ne 0 ]; then
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Clearing module state transition flag failed"
     fi
+    return "$rc"
 }
 
 # Function to get state_transition_in_progress flag
@@ -155,7 +163,9 @@ function reboot_dpu_platform()
     local DPU_NAME=$1
     local REBOOT_TYPE=$2
     python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.reboot_module('${DPU_NAME}', '${REBOOT_TYPE}')"
+    local rc=$?
     log_message "INFO: Rebooting ${DPU_NAME} with reboot_type:${REBOOT_TYPE}..."
+    return "$rc"
 }
 
 # Function to wait for DPU reboot status
@@ -253,23 +263,26 @@ function reboot_dpu()
     log_message "User requested rebooting device ${DPU_NAME} ..."
 
     # Check if the DPU operation status is online before rebooting
-    local oper_status
-    oper_status=$(show chassis modules status "${DPU_NAME^^}" | sed -n '/^ *DPU/ s/.*\s\+\(Online\|Offline\)\s\+.*/\1/p')
-    if [ $? -ne 0 ]; then
+    local module_status
+    if ! module_status=$(show chassis modules status "${DPU_NAME^^}"); then
         log_message "ERROR: Failed to retrieve DPU status."
-    else
-        log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
-        oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
-        if [ "$oper_status" != "online" ]; then
-            log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
-            return ${EXIT_DPU_DOWN}
-        fi
+        return ${EXIT_ERROR}
+    fi
+    local oper_status
+    oper_status=$(sed -n '/^ *DPU/ s/.*\s\+\(Online\|Offline\)\s\+.*/\1/p' <<< "$module_status")
+    log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
+    oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
+    if [ "$oper_status" != "online" ]; then
+        log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
+        return ${EXIT_DPU_DOWN}
     fi
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         # get and set the state_transition_in_progress flag before reboot
         if ! get_module_state_transition_flag "${DPU_NAME}"; then
-            set_module_state_transition_flag "${DPU_NAME}" True
+            if ! set_module_state_transition_flag "${DPU_NAME}" True; then
+                return ${EXIT_ERROR}
+            fi
         else
             log_message "ERROR: state_transition_in_progress flag is already set for ${DPU_NAME}"
             return ${EXIT_ERROR}
@@ -286,6 +299,9 @@ function reboot_dpu()
     local DPU_BUS_INFO=$(jq -r --arg DPU_NAME "$DPU_NAME" '.DPUS[$DPU_NAME].bus_info' "$PLATFORM_JSON_PATH")
     if [ -z "$DPU_BUS_INFO" ] || [ "$DPU_BUS_INFO" = "null" ]; then
         log_message "ERROR: Failed to retrieve bus info for ${DPU_NAME}"
+        if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+            clear_module_state_transition_flag "${DPU_NAME}"
+        fi
         return ${EXIT_ERROR}
     fi
 

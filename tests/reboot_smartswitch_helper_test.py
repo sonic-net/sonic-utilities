@@ -186,3 +186,57 @@ handle_smart_switch no no ""
     result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
     assert result.returncode == 0
     assert "continuing SmartSwitch reboot" in result.stderr
+
+
+def test_reboot_dpu_propagates_platform_reboot_failure(tmp_path):
+    platform_json = tmp_path / "platform.json"
+    platform_json.write_text('{"DPUS":{"dpu0":{"bus_info":"0000:00:00.0"}}}')
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+PLATFORM_JSON_PATH="{platform_json}"
+source "{SCRIPT}"
+show() {{ printf '  DPU0 test Online up\n'; }}
+get_module_state_transition_flag() {{ return 1; }}
+set_module_state_transition_flag() {{ return 0; }}
+clear_module_state_transition_flag() {{ return 0; }}
+gnmi_reboot_dpu() {{ return 0; }}
+module_pre_shutdown() {{ return 0; }}
+reboot_dpu_platform() {{ return 1; }}
+reboot_dpu dpu0 DPU
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode != 0
+
+
+def test_reboot_dpu_clears_transition_flag_when_bus_info_missing(tmp_path):
+    platform_json = tmp_path / "platform.json"
+    platform_json.write_text('{"DPUS":{"dpu0":{}}}')
+    marker = tmp_path / "cleared"
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+PLATFORM_JSON_PATH="{platform_json}"
+source "{SCRIPT}"
+show() {{ printf '  DPU0 test Online up\n'; }}
+get_module_state_transition_flag() {{ return 1; }}
+set_module_state_transition_flag() {{ return 0; }}
+clear_module_state_transition_flag() {{ touch "{marker}"; return 0; }}
+gnmi_reboot_dpu() {{ return 0; }}
+reboot_dpu dpu0 DPU
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert marker.exists()
+
+
+def test_reboot_dpu_fails_when_chassis_status_fails(tmp_path):
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+source "{SCRIPT}"
+show() {{ return 1; }}
+reboot_dpu dpu0 DPU
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode != 0
