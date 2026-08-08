@@ -309,6 +309,7 @@ function reboot_dpu()
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to pre-shutdown the module for ${DPU_NAME}"
         if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+            module_post_startup "${DPU_NAME}"
             clear_module_state_transition_flag "${DPU_NAME}"
         fi
         return ${EXIT_ERROR}
