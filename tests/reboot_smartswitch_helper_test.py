@@ -89,7 +89,6 @@ def test_gnmi_reboot_dpu_falls_back_to_native_port(tmp_path):
 
 
 def test_get_reboot_status_rejects_malformed_output(tmp_path):
-    command_log = tmp_path / "command.log"
     script = f'''
 EXIT_SUCCESS=0
 EXIT_ERROR=1
@@ -171,3 +170,19 @@ reboot_all_dpus 3
 '''
     result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
     assert result.returncode == 1
+
+
+def test_whole_smartswitch_reboot_continues_after_dpu_failure():
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+source "{SCRIPT}"
+get_num_dpus() {{ printf '2\n'; }}
+is_dpu() {{ return 1; }}
+is_smartswitch() {{ return 0; }}
+reboot_all_dpus() {{ return 1; }}
+handle_smart_switch no no ""
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert "continuing SmartSwitch reboot" in result.stderr

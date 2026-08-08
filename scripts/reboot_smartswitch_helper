@@ -410,7 +410,9 @@ function handle_smart_switch() {
     # If the system is a smart switch, reboot all DPUs in parallel
     if is_smartswitch; then
         reboot_all_dpus "$NUM_DPU" "$MODULE_REBOOT_SMARTSWITCH"
-        result=$?
-        return $result
+        if [ $? -ne 0 ]; then
+            log_message "ERROR: One or more DPU reboot preparations failed; continuing SmartSwitch reboot"
+        fi
+        return ${EXIT_SUCCESS}
     fi
 }
