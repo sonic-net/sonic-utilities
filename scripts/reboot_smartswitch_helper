@@ -73,9 +73,10 @@ function get_reboot_status()
 {
     local dpu_ip=$1
     local port=$2
+    local timeout_sec=${3:-$GNMI_STATUS_TIMEOUT}
     local reboot_output_file="reboot_status_${dpu_ip}.txt"
 
-    timeout "$GNMI_STATUS_TIMEOUT" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null
+    timeout "$timeout_sec" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null
     local gnoi_rc=${PIPESTATUS[0]}
     if [ $gnoi_rc -ne 0 ]; then
         rm -f "$reboot_output_file"
@@ -177,11 +178,28 @@ function wait_for_dpu_reboot_status()
 
     local poll_interval=5
     local deadline=$((SECONDS + dpu_halt_services_timeout))
-    while [ "$SECONDS" -lt "$deadline" ]; do
-        sleep "$poll_interval"
+    while true; do
+        local remaining=$((deadline - SECONDS))
+        if [ "$remaining" -le 0 ]; then
+            break
+        fi
+        local sleep_time=$poll_interval
+        if [ "$remaining" -lt "$sleep_time" ]; then
+            sleep_time=$remaining
+        fi
+        sleep "$sleep_time"
+
+        remaining=$((deadline - SECONDS))
+        if [ "$remaining" -le 0 ]; then
+            break
+        fi
+        local status_timeout=$GNMI_STATUS_TIMEOUT
+        if [ "$remaining" -lt "$status_timeout" ]; then
+            status_timeout=$remaining
+        fi
 
         local reboot_status
-        get_reboot_status "${dpu_ip}" "${port}"
+        get_reboot_status "${dpu_ip}" "${port}" "$status_timeout"
         reboot_status=$?
         if [ $reboot_status -eq ${EXIT_SUCCESS} ]; then
             log_message "INFO: ${DPU_NAME} halted the services successfully"
@@ -311,13 +329,17 @@ function reboot_all_dpus() {
     fi
 
     local failures=0
+    local pids=()
     for (( i=0; i<"$NUM_DPU"; i++ )); do
         reboot_dpu "dpu$i" "$MODULE_REBOOT_SMARTSWITCH" &
-        if [ $? -ne 0 ]; then
+        pids+=("$!")
+    done
+    local pid
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
             ((failures++))
         fi
     done
-    wait
     return $failures
 }
 

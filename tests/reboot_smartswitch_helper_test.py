@@ -9,7 +9,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "reboot_smartswitch_helper"
 def run_helper_function(tmp_path, function_call, docker_rc=0, fail_port=""):
     command_log = tmp_path / "command.log"
     platform_json = tmp_path / "platform.json"
-    platform_json.write_text('{"dpu_halt_services_timeout": 1}')
+    platform_json.write_text('{"dpu_halt_services_timeout": 6}')
     env = os.environ.copy()
     env["COMMAND_LOG"] = str(command_log)
     env["PLATFORM_JSON_PATH"] = str(platform_json)
@@ -135,3 +135,39 @@ get_gnmi_ports dpu0
         ["bash", "-c", script], env=env, capture_output=True, text=True, check=True
     )
     assert result.stdout.splitlines() == ["50052", "8080"]
+
+
+def test_reboot_dpu_continues_hardware_reboot_and_returns_gnoi_failure(tmp_path):
+    platform_json = tmp_path / "platform.json"
+    platform_json.write_text('{"DPUS":{"dpu0":{"bus_info":"0000:00:00.0"}}}')
+    marker = tmp_path / "platform-rebooted"
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+PLATFORM_JSON_PATH="{platform_json}"
+source "{SCRIPT}"
+show() {{ printf '  DPU0 test Online up\n'; }}
+get_module_state_transition_flag() {{ return 1; }}
+set_module_state_transition_flag() {{ return 0; }}
+clear_module_state_transition_flag() {{ return 0; }}
+gnmi_reboot_dpu() {{ return 1; }}
+module_pre_shutdown() {{ return 0; }}
+module_post_startup() {{ return 0; }}
+reboot_dpu_platform() {{ touch "{marker}"; return 0; }}
+reboot_dpu dpu0 DPU
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert marker.exists()
+
+
+def test_reboot_all_dpus_collects_background_failures():
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+source "{SCRIPT}"
+reboot_dpu() {{ [ "$1" != "dpu1" ]; }}
+reboot_all_dpus 3
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode == 1
