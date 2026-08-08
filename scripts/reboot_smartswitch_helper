@@ -85,7 +85,7 @@ function get_reboot_status()
     status_json=$(awk '/^{.*}$/{json=$0} END{print json}' "$reboot_output_file")
     rm -f "$reboot_output_file"
     local is_reboot_active
-    if [ -z "$status_json" ] || ! is_reboot_active=$(jq -r 'if has("active") then .active elif has("status") then false else error("invalid RebootStatus response") end' <<< "$status_json"); then
+    if [ -z "$status_json" ] || ! is_reboot_active=$(jq -r 'if .active == true then true elif (.status.status // 0) == 1 then false else error("reboot not complete") end' <<< "$status_json"); then
         return ${EXIT_ERROR}
     fi
     if [ "$is_reboot_active" != "true" ]; then
@@ -176,8 +176,8 @@ function wait_for_dpu_reboot_status()
     fi
 
     local poll_interval=5
-    local waited_time=0
-    while true; do
+    local deadline=$((SECONDS + dpu_halt_services_timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
         sleep "$poll_interval"
 
         local reboot_status
@@ -185,16 +185,12 @@ function wait_for_dpu_reboot_status()
         reboot_status=$?
         if [ $reboot_status -eq ${EXIT_SUCCESS} ]; then
             log_message "INFO: ${DPU_NAME} halted the services successfully"
-            break
+            return ${EXIT_SUCCESS}
         fi
 
-        waited_time=$((waited_time + poll_interval))
-        if [ $waited_time -ge $dpu_halt_services_timeout ]; then
-            log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
-            return ${EXIT_ERROR}
-        fi
     done
-    return
+    log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
+    return ${EXIT_ERROR}
 }
 
 # Function to send reboot command to DPU
@@ -264,7 +260,8 @@ function reboot_dpu()
 
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
-    if [ $? -ne 0 ]; then
+    local gnoi_reboot_rc=$?
+    if [ "$gnoi_reboot_rc" -ne 0 ]; then
         log_message "ERROR: Failed to send gnoi command to reboot ${DPU_NAME}"
     fi
 
@@ -301,6 +298,7 @@ function reboot_dpu()
         fi
         clear_module_state_transition_flag "${DPU_NAME}"
     fi
+    return "$gnoi_reboot_rc"
 }
 
 # Function to reboot all DPUs in parallel
