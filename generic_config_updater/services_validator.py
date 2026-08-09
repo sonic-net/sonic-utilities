@@ -1,8 +1,13 @@
+import ipaddress
 import os
+import re
 import subprocess
 import shlex
 import time
 from .gu_common import genericUpdaterLogging
+
+# Kernel interface names are 1..15 chars from [A-Za-z0-9._-].
+IFNAME_RE = re.compile(r'^[A-Za-z0-9_.-]{1,15}$')
 
 logger = genericUpdaterLogging.get_logger(title="Service Validator")
 
@@ -200,7 +205,23 @@ def vlanintf_validator(old_config, upd_config, keys):
     deleted_keys = list(set(old_keys) - set(upd_keys))
     for key in deleted_keys:
         iface, iface_ip = key
-        rc = command_wrapper(f"ip neigh flush dev {iface} {iface_ip}")
+        # iface/iface_ip come straight from a VLAN_INTERFACE table key, which
+        # untrusted local processes can write to CONFIG_DB. Validate both
+        # before use and run the command as an argv list (never a shell) so
+        # a crafted key cannot inject commands (CWE-78).
+        if not IFNAME_RE.fullmatch(iface):
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                    f"vlanintf_validator: skipping neigh flush for invalid interface name {iface!r}",
+                    print_to_console)
+            continue
+        try:
+            ipaddress.ip_interface(iface_ip)
+        except ValueError:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                    f"vlanintf_validator: skipping neigh flush for invalid IP {iface_ip!r}",
+                    print_to_console)
+            continue
+        rc = subprocess.run(["ip", "neigh", "flush", "dev", iface, iface_ip]).returncode
         if rc:
             logger.log(logger.LOG_PRIORITY_ERROR,
                        f"vlanintf_validator: Failed to flush neighbors for {iface} {iface_ip}, returncode={rc}",
