@@ -1,8 +1,10 @@
+import importlib
+
 import pytest
 
 pytest.importorskip("dash_api.types_pb2")
 
-from dump.dash_util import find_known_types_sec
+dash_util = importlib.import_module("dump.dash_util")
 
 
 class LegacyRepeatedField:
@@ -23,4 +25,6 @@ class LegacyProto:
 def test_find_known_types_supports_legacy_repeated_descriptor():
     proto_dict = {"children": []}
 
-    assert find_known_types_sec(LegacyProto(), proto_dict) == proto_dict
+    result = dash_util.find_known_types_sec(LegacyProto(), proto_dict)
+
+    assert result == proto_dict
