@@ -2582,11 +2582,34 @@ save_counter_snapshot() {
     save_cmd "show interface counters" "interface.counters_$idx"
     save_cmd "show interface counters fec-stats" "interface.counters.fec-stats_$idx"
 
-    for netdev in /sys/class/net/Ethernet* ; do
+    # Batch size selected to 8 to not overload CPU
+    local fec_histogram_batch_size=8
+    local -a fec_histogram_pids=()
+    local netdev iface pid
+
+    for netdev in /sys/class/net/Ethernet*; do
         # Skip the literal "Ethernet*" when the glob matches nothing.
         [ -e "$netdev" ] || continue
+
         iface=$(basename "$netdev")
-        save_cmd "show interface counters fec-histogram $iface" "interface.counters.fec-histogram.$iface.$idx"
+
+        save_cmd \
+            "show interface counters fec-histogram $iface" \
+            "interface.counters.fec-histogram.$iface.$idx" &
+
+        fec_histogram_pids+=("$!")
+
+        if [ "${#fec_histogram_pids[@]}" -ge "$fec_histogram_batch_size" ]; then
+            for pid in "${fec_histogram_pids[@]}"; do
+                wait "$pid"
+            done
+            fec_histogram_pids=()
+        fi
+    done
+
+    # Wait for the final batch, which may contain fewer than eight commands.
+    for pid in "${fec_histogram_pids[@]}"; do
+        wait "$pid"
     done
 
     if ! $IS_SUPERVISOR; then
