@@ -1,3 +1,9 @@
+import json
+import os
+import shutil
+import subprocess
+import sys
+
 import click
 from natsort import natsorted
 from tabulate import tabulate
@@ -8,6 +14,199 @@ from sonic_platform_base.module_base import ModuleBase
 
 import utilities_common.cli as clicommon
 from sonic_py_common import multi_asic
+
+STATUS_OK = "ok"
+STATUS_ERROR = "error"
+STATUS_NOT_APPLICABLE = "not_applicable"
+
+_CONSISTENCY_CHECKER_SCRIPT = "chassis_db_consistency_checker.py"
+_CONSISTENCY_CHECKER_TIMEOUT_SEC = 120
+
+def _consistency_checker_script_path():
+    script = shutil.which(_CONSISTENCY_CHECKER_SCRIPT)
+    if script is not None:
+        return script
+    return os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "scripts", _CONSISTENCY_CHECKER_SCRIPT)
+    )
+
+
+def _run_system_lag_consistency_checker(lag_id_only=False):
+    """Run chassis_db_consistency_checker --json and return parsed result."""
+    script = _consistency_checker_script_path()
+    cmd = [sys.executable, script, "--json"]
+    if lag_id_only:
+        cmd.append("--lag-id-only")
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_CONSISTENCY_CHECKER_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        raise click.ClickException(
+            f"{_CONSISTENCY_CHECKER_SCRIPT} timed out after "
+            f"{_CONSISTENCY_CHECKER_TIMEOUT_SEC}s"
+        )
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
+        raise click.ClickException(
+            f"{_CONSISTENCY_CHECKER_SCRIPT} failed (rc={proc.returncode}): {detail}"
+        )
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(
+            f"{_CONSISTENCY_CHECKER_SCRIPT} returned invalid JSON: {exc}"
+        )
+
+
+def _echo_indented_lines(lines, indent="    "):
+    for line in lines:
+        click.echo(f"{indent}{line}")
+
+
+def _echo_indented_block(title, lines):
+    if not lines:
+        return
+    click.echo(f"  {title}:")
+    _echo_indented_lines(lines)
+
+
+def _format_lag_member_key(member_key):
+    if ":" in member_key:
+        lag_alias, port_alias = member_key.rsplit(":", 1)
+        return f"{lag_alias} : {port_alias}"
+    return member_key
+
+
+def _format_unresolved_lag_member(item):
+    aggregate_id = item.get("system_port_aggregate_id")
+    aggregate_label = aggregate_id if aggregate_id is not None else "unknown"
+    return (
+        f"lag_oid={item['lag_oid']}, "
+        f"SAI_LAG_ATTR_SYSTEM_PORT_AGGREGATE_ID={aggregate_label}, "
+        f"port_oid={item['port_oid']}"
+    )
+
+
+def _lag_member_issue_count(lag_members):
+    return (
+        len(lag_members["missing_in_asic_db"])
+        + len(lag_members["extra_in_asic_db"])
+        + len(lag_members["status_mismatch"])
+        + len(lag_members["invalid_port_id"])
+        + len(lag_members["unresolved"])
+        + len(lag_members["incomplete_attrs"])
+    )
+
+
+def _print_system_lag_consistency_text(result, lag_id_only_mode):
+    status = result["status"]
+    status_label = "OK" if status == STATUS_OK else "FAILED"
+    click.echo(f"System LAG consistency: {status_label}")
+    click.echo("")
+    if lag_id_only_mode:
+        click.echo("Mode: LAG ID only (lag members not checked)")
+        click.echo("")
+    click.echo("Chassis summary:")
+    click.echo(f"  SYSTEM_LAG_ID_TABLE:      {result['chassis_lag_id_count']} lag IDs")
+    if not lag_id_only_mode:
+        click.echo(
+            f"  SYSTEM_LAG_MEMBER_TABLE:  {result['chassis_lag_member_count']} lag members"
+        )
+    click.echo("")
+
+    asic_names = sorted(result["asics"].keys())
+    for index, asic_name in enumerate(asic_names):
+        asic_info = result["asics"][asic_name]
+        lag_ids = asic_info["lag_ids"]
+        lag_members = asic_info.get("lag_members", {})
+        lag_id_mismatch_count = (
+            len(lag_ids["missing_in_asic_db"]) + len(lag_ids["extra_in_asic_db"])
+        )
+        lag_id_mismatch_label = "mismatch" if lag_id_mismatch_count == 1 else "mismatches"
+
+        click.echo(f"ASIC namespace: {asic_name}")
+        click.echo(
+            f"  Lag IDs in ASIC_DB:      {lag_ids['lag_id_count']} "
+            f"({lag_id_mismatch_count} {lag_id_mismatch_label})"
+        )
+        if not lag_id_only_mode:
+            member_issue_count = _lag_member_issue_count(lag_members)
+            issue_label = "issue" if member_issue_count == 1 else "issues"
+            click.echo(
+                f"  Lag members in ASIC_DB:  {lag_members['member_count']} "
+                f"({member_issue_count} {issue_label})"
+            )
+
+        # LAG IDs configured in chassis_db but missing from this ASIC_DB's SAI LAG objects
+        _echo_indented_block(
+            "Lag IDs missing in ASIC_DB (in CHASSIS_DB - SYSTEM_LAG_ID_TABLE)",
+            lag_ids["missing_in_asic_db"],
+        )
+        # LAG IDs present on ASIC_DB but not listed in chassis_db SYSTEM_LAG_ID_TABLE
+        _echo_indented_block(
+            "Lag IDs extra in ASIC_DB (not in CHASSIS_DB - SYSTEM_LAG_ID_TABLE)",
+            lag_ids["extra_in_asic_db"],
+        )
+
+        if not lag_id_only_mode:
+            # Chassis SYSTEM_LAG_MEMBER_TABLE entries with no matching ASIC_DB LAG member
+            _echo_indented_block(
+                "Lag members missing in ASIC_DB (in CHASSIS_DB - SYSTEM_LAG_MEMBER_TABLE)",
+                [_format_lag_member_key(m) for m in lag_members["missing_in_asic_db"]],
+            )
+            # ASIC_DB LAG members not defined in chassis_db SYSTEM_LAG_MEMBER_TABLE
+            _echo_indented_block(
+                "Lag members extra in ASIC_DB (not in CHASSIS_DB - SYSTEM_LAG_MEMBER_TABLE)",
+                [_format_lag_member_key(m) for m in lag_members["extra_in_asic_db"]],
+            )
+            # Member exists on both sides but chassis status vs ingress/egress_disable disagree
+            _echo_indented_block(
+                "Lag member status mismatch",
+                [
+                    f"{item['member']} (chassis={item['chassis_status']}, "
+                    f"ingress_disable={item['ingress_disable']}, "
+                    f"egress_disable={item['egress_disable']})"
+                    for item in lag_members["status_mismatch"]
+                ],
+            )
+            # Member key resolved but PORT_ID OID is not a valid PORT/SYSTEM_PORT object
+            _echo_indented_block(
+                "Lag member invalid PORT_ID",
+                [
+                    f"{item['member']} (port_id={item['port_id']})"
+                    for item in lag_members["invalid_port_id"]
+                ],
+            )
+            # LAG member has LAG_ID and PORT_ID but OID-to-alias mapping failed
+            _echo_indented_block(
+                "Lag member unresolved OID mapping",
+                [_format_unresolved_lag_member(item) for item in lag_members["unresolved"]],
+            )
+            # SAI LAG member object missing SAI_LAG_MEMBER_ATTR_LAG_ID or PORT_ID
+            _echo_indented_block(
+                "Lag member incomplete attributes",
+                [
+                    f"lag_member_oid={item['lag_member_oid']}, lag_oid={item['lag_oid']}, "
+                    f"port_oid={item['port_oid']}"
+                    for item in lag_members["incomplete_attrs"]
+                ],
+            )
+
+        if index < len(asic_names) - 1:
+            click.echo("")
+
+    if status == STATUS_OK:
+        click.echo("")
+        click.echo("All ASIC namespaces are in sync with chassis_db.")
+    else:
+        click.echo("")
+        click.echo("One or more ASIC namespaces are out of sync with chassis_db.")
+
 
 CHASSIS_MODULE_INFO_TABLE = 'CHASSIS_MODULE_TABLE'
 CHASSIS_MODULE_INFO_KEY_TEMPLATE = 'CHASSIS_MODULE {}'
@@ -322,3 +521,38 @@ def system_lags(systemlagname, asicname, linecardname, verbose):
         cmd += ['-l', str(linecardname)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
+
+@chassis.command(name="system-lag-consistency")
+@click.option(
+    "--lag-id-only",
+    is_flag=True,
+    help="Check SYSTEM_LAG_ID_TABLE only; skip lag member checks",
+)
+@click.option("-j", "--json", "json_output", is_flag=True, help="Output in JSON format")
+def system_lag_consistency(json_output, lag_id_only):
+    """Verify system LAG consistency between CHASSIS_APP_DB and ASIC_DB.
+
+    Default: SYSTEM_LAG_ID_TABLE and SYSTEM_LAG_MEMBER_TABLE. With --lag-id-only,
+    SYSTEM_LAG_ID_TABLE only (VOQ chassis linecards).
+    """
+
+    result = _run_system_lag_consistency_checker(lag_id_only=lag_id_only)
+
+    if json_output:
+        click.echo(clicommon.json_dump(result))
+        return
+
+    lag_id_only_mode = result.get("lag_id_only", lag_id_only)
+    status = result["status"]
+    if status == STATUS_NOT_APPLICABLE:
+        click.echo("System LAG consistency: not applicable")
+        click.echo(f"Reason: {result['reason']}")
+        return
+
+    if status == STATUS_ERROR:
+        click.echo("System LAG consistency: error")
+        click.echo(f"Reason: {result['reason']}")
+        return
+
+    _print_system_lag_consistency_text(result, lag_id_only_mode)
