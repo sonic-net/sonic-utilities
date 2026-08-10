@@ -22,6 +22,7 @@ STATUS_NOT_APPLICABLE = "not_applicable"
 _CONSISTENCY_CHECKER_SCRIPT = "chassis_db_consistency_checker.py"
 _CONSISTENCY_CHECKER_TIMEOUT_SEC = 120
 
+
 def _consistency_checker_script_path():
     script = shutil.which(_CONSISTENCY_CHECKER_SCRIPT)
     if script is not None:
