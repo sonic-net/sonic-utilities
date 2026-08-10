@@ -10664,6 +10664,31 @@ def motd(message):
 
 
 #
+# 'fdb' group ('config fdb ...')
+#
+
+@config.group()
+def fdb():
+    """FDB (MAC) configuration tasks"""
+    pass
+
+
+@fdb.command('mac-sync-mode')
+@click.argument('mode', metavar='<kernel|fpm>', required=True, type=click.Choice(['kernel', 'fpm']))
+@clicommon.pass_db
+@click.pass_context
+def mac_sync_mode(ctx, db, mode):
+    """Select how MAC (FDB) state is synchronized with FRR"""
+
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+    try:
+        config_db.mod_entry(swsscommon.CFG_FDB_SYNC_TABLE_NAME, 'global',
+                            {'mac_sync_mode': mode})
+    except (ValueError, JsonPatchConflict) as e:
+        ctx.fail("Failed to save to ConfigDB. Error: {}".format(e))
+
+
+#
 # 'vnet' group ('config vnet ...')
 #
 

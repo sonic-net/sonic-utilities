@@ -510,6 +510,7 @@ function backup_database()
                                           and not string.match(k, 'VXLAN_TUNNEL_TABLE|') \
                                           and not string.match(k, 'BUFFER_MAX_PARAM_TABLE|') \
                                           and not string.match(k, 'STORAGE_INFO|') \
+                                          and not string.match(k, 'FDB_SYNC_TABLE|') \
                                           and not string.match(k, 'FAST_RESTART_ENABLE_TABLE|') then
                 redis.call('del', k)
             end
