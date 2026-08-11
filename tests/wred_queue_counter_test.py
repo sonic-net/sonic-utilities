@@ -1762,6 +1762,15 @@ class TestWredQueue(object):
         assert result.exit_code == 0
         assert (wredstat_clear_str in result.output)
 
+    def test_clear_voq_wredstats(self):
+        wredstat_clear_str = "Clear and update saved counters"
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands["queue"].commands["wredcounters"], ["--voq"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert (wredstat_clear_str in result.output)
+
     def test_queue_counters_after_clear(self):
         runner = CliRunner()
         result = runner.invoke(

@@ -1068,7 +1068,23 @@
         "MIRRORV6": "true",
         "PORT_TPID_CAPABLE": "true",
         "LAG_TPID_CAPABLE": "true",
-        "ACL_ACTION|PACKET_ACTION": "FORWARD"
+        "ACL_ACTION|PACKET_ACTION": "FORWARD",
+        "LLR_CAPABLE": "true",
+        "LLR_SUPPORTED_PROFILE_ATTRIBUTES": "OUTSTANDING_BYTES_MAX,OUTSTANDING_FRAMES_MAX,REPLAY_TIMER_MAX,REPLAY_COUNT_MAX,PCS_LOST_TIMEOUT,DATA_AGE_TIMEOUT,CTLOS_TARGET_SPACING"
+    },
+    "PORT_COUNTER_CAPABILITIES|LLR": {
+        "LLR_TX_INIT_CTL_OS": "true",
+        "LLR_TX_INIT_ECHO_CTL_OS": "true",
+        "LLR_TX_ACK_CTL_OS": "true",
+        "LLR_TX_NACK_CTL_OS": "true",
+        "LLR_TX_OK": "true",
+        "LLR_TX_DISCARD": "true",
+        "LLR_TX_POISONED": "true",
+        "LLR_TX_REPLAY": "true",
+        "LLR_RX_INIT_CTL_OS": "true",
+        "LLR_RX_INIT_ECHO_CTL_OS": "true",
+        "LLR_RX_ACK_CTL_OS": "true",
+        "LLR_RX_NACK_CTL_OS": "true"
     },
     "ACL_STAGE_CAPABILITY_TABLE|INGRESS": {
         "action_list": "PACKET_ACTION,REDIRECT_ACTION,MIRROR_INGRESS_ACTION"
@@ -1279,6 +1295,16 @@
         "13": "200.200.200.5@Vlan1000",
         "14": "200.200.200.5@Vlan1000",
         "15": "200.200.200.5@Vlan1000"
+    },
+    "FG_ROUTE_TABLE|Vnet1|10.0.0.1/32": {
+        "0": "100.100.100.4@Vlan2000",
+        "1": "100.100.100.4@Vlan2000",
+        "2": "100.100.100.4@Vlan2000",
+        "3": "100.100.100.4@Vlan2000",
+        "4": "100.100.100.5@Vlan2000",
+        "5": "100.100.100.5@Vlan2000",
+        "6": "100.100.100.5@Vlan2000",
+        "7": "100.100.100.5@Vlan2000"
     },
     "REBOOT_CAUSE|2020_10_09_04_53_58": {
         "cause": "warm-reboot",
@@ -1784,6 +1810,7 @@
         "fabric_capacity": "88632",
         "missing_capacity": "265896",
         "operating_links": "2",
+        "isolated_links": "1",
         "number_of_links": "8",
         "warning_threshold": "100"
     },

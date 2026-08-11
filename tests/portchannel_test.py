@@ -105,7 +105,6 @@ class TestPortChannel(object):
 
         db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", None)
 
-
     def test_add_existing_portchannel_again(self):
         runner = CliRunner()
         db = Db()

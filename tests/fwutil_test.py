@@ -5,6 +5,9 @@ import sys
 import pytest
 from unittest.mock import call, patch, MagicMock
 
+# fwutil/__init__.py imports sonic_platform at module level;
+# inject before importing fwutil.lib so collection succeeds.
+sys.modules['sonic_platform'] = MagicMock()
 sys.modules['sonic_platform.platform'] = MagicMock()
 import fwutil.lib as fwutil_lib
 

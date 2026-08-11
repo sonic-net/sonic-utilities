@@ -472,5 +472,39 @@
         "INNER_SRC_MAC": "f4:93:9f:ef:c4:7e",
         "REDIRECT_ACTION": "10.0.0.75",
         "TUNNEL_VNI": "4321"
+    },
+    "LLR_PORT_TABLE:Ethernet0": {
+        "llr_mode": "static",
+        "llr_local": "enabled",
+        "llr_remote": "enabled",
+        "llr_profile": "llr_800000_40m_profile"
+    },
+    "LLR_PORT_TABLE:Ethernet4": {
+        "llr_mode": "static",
+        "llr_local": "enabled",
+        "llr_remote": "disabled",
+        "llr_profile": "llr_400000_5m_profile"
+    },
+    "LLR_PROFILE_TABLE:llr_800000_40m_profile": {
+        "max_outstanding_frames": "264",
+        "max_outstanding_bytes": "135000",
+        "max_replay_count": "3",
+        "max_replay_timer": "5000",
+        "pcs_lost_timeout": "50000",
+        "data_age_timeout": "20000",
+        "ctlos_spacing_bytes": "2048",
+        "init_action": "best_effort",
+        "flush_action": "best_effort"
+    },
+    "LLR_PROFILE_TABLE:llr_400000_5m_profile": {
+        "max_outstanding_frames": "115",
+        "max_outstanding_bytes": "58768",
+        "max_replay_count": "3",
+        "max_replay_timer": "5000",
+        "pcs_lost_timeout": "50000",
+        "data_age_timeout": "20000",
+        "ctlos_spacing_bytes": "2048",
+        "init_action": "best_effort",
+        "flush_action": "best_effort"
     }
 }

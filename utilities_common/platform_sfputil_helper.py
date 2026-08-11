@@ -279,10 +279,10 @@ def get_first_subport(logical_port):
 def get_subport(port_name):
     subport = get_value_from_db_by_field("CONFIG_DB", "PORT", "subport", port_name)
 
-    if subport is None:
-        click.echo(f"{port_name}: subport is not present in CONFIG_DB")
-        sys.exit(EXIT_FAIL)
-    elif subport == '':
+    # An absent or empty subport means the port is not breakout/split, so it
+    # occupies all lanes as subport 0. Default to 0 instead of bailing out so a
+    # missing subport does not crash loopback/output diagnostics.
+    if subport is None or subport == '':
         subport = 0
 
     return int(subport)

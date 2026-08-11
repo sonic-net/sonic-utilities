@@ -15,7 +15,7 @@ import tests.mock_tables.dbconnector
 from click.testing import CliRunner
 from utilities_common.db import Db
 from consutil.lib import ConsolePortProvider, ConsolePortInfo, ConsoleSession, SysInfoProvider, DbUtils, \
-    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError
+    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError, console_connect
 from sonic_py_common import device_info
 from jsonpatch import JsonPatchConflict
 
@@ -980,40 +980,41 @@ class TestConsutilLib(object):
 
     def test_console_port_info_connect_device_busy(self):
         db = Db()
-        port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "idle"}})
+        port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "busy"}})
 
         port.refresh = mock.MagicMock(return_value=None)
-        mock_proc = mock.MagicMock(spec=subprocess.Popen)
-        mock_proc.send = mock.MagicMock(return_value=None)
-        mock_proc.expect = mock.MagicMock(return_value=1)
-        with mock.patch('pexpect.spawn', mock.MagicMock(return_value=mock_proc)):
-            with pytest.raises(LineBusyError):
-                port.connect()
+        with pytest.raises(LineBusyError):
+            port.connect()
 
+    @mock.patch('os.execvp', mock.MagicMock(side_effect=OSError("bash missing")))
     def test_console_port_info_connect_connection_fail(self):
         db = Db()
         port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "idle"}})
 
         port.refresh = mock.MagicMock(return_value=None)
-        mock_proc = mock.MagicMock(spec=subprocess.Popen)
-        mock_proc.send = mock.MagicMock(return_value=None)
-        mock_proc.expect = mock.MagicMock(return_value=2)
-        with mock.patch('pexpect.spawn', mock.MagicMock(return_value=mock_proc)):
-            with pytest.raises(ConnectionFailedError):
-                port.connect()
+        with pytest.raises(OSError):
+            port.connect()
 
+    @mock.patch('os.execvp', mock.MagicMock(side_effect=SystemExit(0)))
     def test_console_port_info_connect_success(self):
         db = Db()
         port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "idle"}})
 
         port.refresh = mock.MagicMock(return_value=None)
-        mock_proc = mock.MagicMock(spec=subprocess.Popen, pid="223")
-        mock_proc.send = mock.MagicMock(return_value=None)
-        mock_proc.expect = mock.MagicMock(return_value=0)
-        with mock.patch('pexpect.spawn', mock.MagicMock(return_value=mock_proc)):
-            session = port.connect()
-            assert session.proc.pid == "223"
-            assert session.port.line_num == "1"
+        with pytest.raises(SystemExit):
+            port.connect()
+
+        call_args, _ = os.execvp.call_args
+        assert call_args[0] == "/bin/bash"
+        argv = call_args[1]
+        assert argv[0] == "/bin/bash"
+        assert argv[1] == "-c"
+        assert argv[3] == "console_connect"
+        assert argv[4] == "1"
+        assert argv[5] == "A"
+        assert "picocom --quiet" in argv[6]
+        assert "-b 9600" in argv[6]
+        assert "/dev/ttyUSB1" in argv[6]
 
     def test_console_port_info_clear_session_line_not_busy(self):
         db = Db()
@@ -1420,6 +1421,19 @@ class TestConsutilConnect(object):
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         assert result.output == "Successful connection to line [1]\nPress ^A ^X to disconnect\n"
+
+    @mock.patch('consutil.lib.SysInfoProvider.list_console_ttys', mock.MagicMock(return_value=["/dev/ttyUSB1"]))
+    @mock.patch('consutil.lib.SysInfoProvider.init_device_prefix', mock.MagicMock(return_value=None))
+    @mock.patch('consutil.lib.ConsolePortInfo.connect',
+                mock.MagicMock(return_value=mock.MagicMock(interact=mock.MagicMock(return_value=None))))
+    def test_console_connect_without_db(self):
+        prepared_db = Db()
+        prepared_db.cfgdb.set_entry("CONSOLE_SWITCH", "console_mgmt", {"enabled": "yes"})
+        prepared_db.cfgdb.set_entry("CONSOLE_PORT", 1, {"remote_device": "switch1", "baud_rate": "9600"})
+
+        with mock.patch('utilities_common.db.Db', return_value=prepared_db) as mock_db_cls:
+            console_connect('1')
+            mock_db_cls.assert_called_once()
 
 
 class TestConsutilClear(object):

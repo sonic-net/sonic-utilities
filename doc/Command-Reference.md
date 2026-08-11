@@ -56,6 +56,8 @@
   * [CMIS firmware target mode commands](#cmis-firmware-target-mode-commands)
 * [CMIS debug](#cmis-debug)
 * [CMIS debug loopback](#cmis-debug-loopback)
+* [CMIS debug loopback-capability](#cmis-debug-loopback-capability)
+* [CMIS debug loopback-status](#cmis-debug-loopback-status)
 * [CMIS debug rx-output](#cmis-debug-rx-output)
 * [CMIS debug tx-output](#cmis-debug-tx-output)
 * [DHCP Relay](#dhcp-relay)
@@ -75,11 +77,16 @@
 * [ECN](#ecn)
   * [ECN show commands](#ecn-show-commands)
   * [ECN config commands](#ecn-config-commands)
+* [EVPN-MH](#evpn-mh)
+  * [EVPN-MH config commands](#evpn-mh-config-commands)
+  * [EVPN-MH show commands](#evpn-mh-show-commands)
 * [Fabric](#fabric)
   * [Fabric config commands](#fabric-config-commands)
 * [Feature](#feature)
   * [Feature show commands](#feature-show-commands)
   * [Feature config commands](#feature-config-commands)
+* [Fine Grained Next Hop Group (FGNHG)](#fine-grained-next-hop-group-fgnhg)
+  * [FGNHG show commands](#fgnhg-show-commands)
 * [Flow Counters](#flow-counters)
   * [Flow Counters show commands](#flow-counters-show-commands)
   * [Flow Counters clear commands](#flow-counters-clear-commands)
@@ -89,6 +96,9 @@
 * [Hash](#hash)
   * [Hash show commands](#hash-show-commands)
   * [Hash config commands](#hash-config-commands)
+* [ICMP](#icmp)
+  * [ICMP show commands](#icmp-show-commands)
+  * [ICMP clear commands](#icmp-clear-commands)
 * [Interfaces](#interfaces)
   * [Interface Show Commands](#interface-show-commands)
   * [Interface Config Commands](#interface-config-commands)
@@ -115,6 +125,10 @@
   * [LDAP global config commands](#LDAP-global-config-commands)
   * [show LDAP server commands](#LDAP-server-show-commands)
   * [LDAP server config commands](#LDAP-server-config-commands)
+* [LLR](#llr)
+  * [LLR show commands](#llr-show-commands)
+  * [LLR config commands](#llr-config-commands)
+  * [LLR clear commands](#llr-clear-commands)
 * [LLDP](#lldp)
   * [LLDP show commands](#lldp-show-commands)
 * [Loading, Reloading And Saving Configuration](#loading-reloading-and-saving-configuration)
@@ -151,6 +165,9 @@
 * [NVGRE](#nvgre)
   * [NVGRE show commands](#nvgre-show-commands)
   * [NVGRE config commands](#nvgre-config-commands)
+* [Orchagent](#orchagent)
+  * [Orchagent show commands](#orchagent-show-commands)
+  * [Orchagent clear commands](#orchagent-clear-commands)
 * [PBH](#pbh)
   * [PBH show commands](#pbh-show-commands)
   * [PBH config commands](#pbh-config-commands)
@@ -178,12 +195,17 @@
 * [Radius](#radius)
   * [Radius show commands](#show-radius-commands)
   * [Radius config commands](#Radius-config-commands)
+* [SAG MAC](#sag-mac)
+  * [SAG MAC config commands](#SAG-MAC-config-commands)
+  * [SAG MAC show commands](#SAG-MAC-show-commands)
 * [Switch](#switch)
   * [Switch Show commands](#switch-show-commands)
   * [Switch Clear commands](#switch-clear-commands)
 * [sFlow](#sflow)
   * [sFlow Show commands](#sflow-show-commands)
   * [sFlow Config commands](#sflow-config-commands)
+* [SED](#sed)
+  * [SED Config commands](#sed-config-commands)
 * [SNMP](#snmp)
   * [SNMP Show commands](#snmp-show-commands)
   * [SNMP Config commands](#snmp-config-commands)
@@ -270,6 +292,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
@@ -472,6 +495,7 @@ This command displays the full list of show commands available in the software; 
     ecn                   Show ECN configuration
     environment           Show environmentals (voltages, fans, temps)
     feature               Show feature status
+    icmp                  Show icmp-offload information
     interfaces            Show details of the network interfaces
     ip                    Show IP (IPv4) commands
     ipv6                  Show IPv6 commands
@@ -510,6 +534,11 @@ This command displays the full list of show commands available in the software; 
   ```
 
 The same syntax applies to all subgroups of `show` which themselves contain subcommands, and subcommands which accept options/arguments.
+
+Some `show` commands that wrap FRR's CLI (currently `show ip route` and
+`show ipv6 route`) provide enhanced help and TAB completion sourced live
+from FRR. Their `-h`/`--help` output lists the subcommands FRR actually
+supports, and shell TAB completion offers the same set as you type.
 
 - Example:
   ```
@@ -1369,6 +1398,138 @@ Ethernet0: SFP EEPROM detected
                 VccLowWarning  : 3.15Volts
 ```
 
+- Example (Decode and display information stored on the EEPROM of CPO connected to Ethernet0):
+```
+admin@sonic:~$ show interfaces transceiver eeprom -d Ethernet0
+Ethernet0: SFP EEPROM detected
+        Active Firmware: N/A
+        Active application selected code assigned to host lane 1: 6
+        Active application selected code assigned to host lane 2: 6
+        Active application selected code assigned to host lane 3: 6
+        Active application selected code assigned to host lane 4: 6
+        Active application selected code assigned to host lane 5: 6
+        Active application selected code assigned to host lane 6: 6
+        Active application selected code assigned to host lane 7: 6
+        Active application selected code assigned to host lane 8: 6
+        Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
+                                   200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
+                                   Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
+                                   CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
+                                   Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
+                                   800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
+        CMIS Rev: 5.2
+        Connector: LC
+        ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        ELS Laser Count: 8
+        ELS Maximum Power Consumption: 12.0
+        ELS Revision: 0.1
+        ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
+        ELS Vendor Name: BROADCOM
+        ELS Vendor OUI: ec-01-e2
+        ELS Vendor PN: ARLM-96F8DMZ
+        ELS Vendor Rev: A0
+        ELS Vendor SN: FD2424VG006
+        Encoding: N/A
+        Extended Identifier: Power Class 8 (20.0W Max)
+        Extended RateSelect Compliance: N/A
+        Host Lane Count: 8
+        Identifier: CPO Bailly
+        Inactive Firmware: N/A
+        Length Cable Assembly(m): 0.0
+        Media Interface Technology: Others
+        Media Lane Count: 8
+        Module Hardware Rev: 0.0
+        Nominal Bit Rate(100Mbs): N/A
+        RLM Laser Lpower Mode Control: 0
+        RLM Laser Wavelength Grid: CWDM4
+        Specification compliance: sm_media_interface
+        Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
+        Vendor Name: BROADCOM
+        Vendor OUI: 38-ba-b0
+        Vendor PN: BCM789096FBB0KLG
+        Vendor Rev: A0
+        Vendor SN: SB243500200
+        is_replaceable: False
+        type_abbrv_name: QSFP-DD
+        vdm_supported: False
+        ChannelMonitorValues:
+                RX1Power: 1.757dBm
+                RX2Power: 1.898dBm
+                RX3Power: 2.279dBm
+                RX4Power: 2.458dBm
+                RX5Power: 0.9dBm
+                RX6Power: 1.475dBm
+                RX7Power: 1.678dBm
+                RX8Power: 1.159dBm
+                TX1Bias: 79.6mA
+                TX1Power: 1.952dBm
+                TX2Bias: 57.22mA
+                TX2Power: 1.994dBm
+                TX3Bias: 68.8mA
+                TX3Power: 1.879dBm
+                TX4Bias: 63.024mA
+                TX4Power: 2.101dBm
+                TX5Bias: 79.6mA
+                TX5Power: 1.939dBm
+                TX6Bias: 57.22mA
+                TX6Power: 1.927dBm
+                TX7Bias: 68.8mA
+                TX7Power: 1.874dBm
+                TX8Bias: 63.024mA
+                TX8Power: 2.037dBm
+        ChannelThresholdValues:
+                RxPowerHighAlarm  : 6.0dBm
+                RxPowerHighWarning: 4.003dBm
+                RxPowerLowAlarm   : -11.203dBm
+                RxPowerLowWarning : -8.202dBm
+                TxBiasHighAlarm   : 137.5mA
+                TxBiasHighWarning : 132.5mA
+                TxBiasLowAlarm    : 5.0mA
+                TxBiasLowWarning  : 7.5mA
+                TxPowerHighAlarm  : 6.0dBm
+                TxPowerHighWarning: 4.0dBm
+                TxPowerLowAlarm   : -7.201dBm
+                TxPowerLowWarning : -4.201dBm
+        ModuleMonitorValues:
+                Temperature: 81.363C
+                Vcc: 3.311Volts
+        ModuleThresholdValues:
+                TempHighAlarm  : 90.0C
+                TempHighWarning: 85.0C
+                TempLowAlarm   : 15.0C
+                TempLowWarning : 20.0C
+                VccHighAlarm   : 3.465Volts
+                VccHighWarning : 3.399Volts
+                VccLowAlarm    : 3.135Volts
+                VccLowWarning  : 3.201Volts
+        ELSMonitorValues:
+                RLM0_Laser4_current: 252.38 mA
+                RLM0_Laser4_power: 72.290 mW 18.591 dBm
+                RLM0_Laser5_current: 275.49 mA
+                RLM0_Laser5_power: 76.700 mW 18.848 dBm
+                RLM0_Laser6_current: 228.96 mA
+                RLM0_Laser6_power: 66.600 mW 18.235 dBm
+                RLM0_Laser7_current: 318.41 mA
+                RLM0_Laser7_power: 88.060 mW 19.448 dBm
+                ELS Temperature: 25.027C
+                ELS Vcc: 3.365Volts
+        ELSThresholdValues:
+                ELS TempHighAlarm: 0.0C
+                ELS TempHighWarning: 0.0C
+                ELS TempLowAlarm: 0.0C
+                ELS TempLowWarning: 0.0C
+                ELS TxBiasHighAlarm: 0.0mA
+                ELS TxBiasHighWarning: 0.0mA
+                ELS TxPowerHighAlarm: 0.0mW
+                ELS TxPowerHighWarning: 0.0mW
+                ELS TxPowerLowAlarm: 0.0mW
+                ELS TxPowerLowWarning: 0.0mW
+                ELS VccHighAlarm: 0.0Volts
+                ELS VccHighWarning: 0.0Volts
+                ELS VccLowAlarm: 0.0Volts
+                ELS VccLowWarning: 0.0Volts
+```
+
 - Example (Decode and display information stored on the EEPROM of SFP transceiver connected to Ethernet16):
   ```
   admin@sonic:~$ show interfaces transceiver info Ethernet16
@@ -1409,6 +1570,62 @@ Ethernet0: SFP EEPROM detected
           Vendor PN: DP04QSDD-E20-00E
           Vendor Rev: 01
           Vendor SN: 210753986
+  ```
+
+- Example (Decode and display information stored on the EEPROM of CPO connected to Ethernet0):
+  ```
+admin@sonic:~$ show interfaces transceiver info Ethernet0
+Ethernet0: SFP EEPROM detected
+        Active Firmware: N/A
+        Active application selected code assigned to host lane 1: 6
+        Active application selected code assigned to host lane 2: 6
+        Active application selected code assigned to host lane 3: 6
+        Active application selected code assigned to host lane 4: 6
+        Active application selected code assigned to host lane 5: 6
+        Active application selected code assigned to host lane 6: 6
+        Active application selected code assigned to host lane 7: 6
+        Active application selected code assigned to host lane 8: 6
+        Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
+                                   200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
+                                   Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
+                                   CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
+                                   Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
+                                   800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
+        CMIS Rev: 5.2
+        Connector: LC
+        ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        ELS Laser Count: 8
+        ELS Maximum Power Consumption: 12.0
+        ELS Revision: 0.1
+        ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
+        ELS Vendor Name: BROADCOM
+        ELS Vendor OUI: ec-01-e2
+        ELS Vendor PN: ARLM-96F8DMZ
+        ELS Vendor Rev: A0
+        ELS Vendor SN: FD2424VG006
+        Encoding: N/A
+        Extended Identifier: Power Class 8 (20.0W Max)
+        Extended RateSelect Compliance: N/A
+        Host Lane Count: 8
+        Identifier: CPO Bailly
+        Inactive Firmware: N/A
+        Length Cable Assembly(m): 0.0
+        Media Interface Technology: Others
+        Media Lane Count: 8
+        Module Hardware Rev: 0.0
+        Nominal Bit Rate(100Mbs): N/A
+        RLM Laser Lpower Mode Control: 0
+        RLM Laser Wavelength Grid: CWDM4
+        Specification compliance: sm_media_interface
+        Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
+        Vendor Name: BROADCOM
+        Vendor OUI: 38-ba-b0
+        Vendor PN: BCM789096FBB0KLG
+        Vendor Rev: A0
+        Vendor SN: SB243500200
+        is_replaceable: False
+        type_abbrv_name: QSFP-DD
+        vdm_supported: False
   ```
 
 - Example (Display status of low-power mode of SFP transceiver connected to Ethernet100):
@@ -1741,6 +1958,221 @@ Ethernet0: SFP EEPROM detected
           Rxtotpower high warning flag: False
           Rxtotpower low warning flag: False
           Rxtotpower low alarm flag: False
+  ```
+
+- Example (Display status info of CPO connected to Ethernet0):
+  ```
+admin@sonic:~$ show interfaces transceiver status Ethernet0
+Ethernet0: 
+        CMIS State (SW): READY
+        Tx fault flag on media lane 1: False
+        Tx fault flag on media lane 2: False
+        Tx fault flag on media lane 3: False
+        Tx fault flag on media lane 4: False
+        Tx fault flag on media lane 5: False
+        Tx fault flag on media lane 6: False
+        Tx fault flag on media lane 7: False
+        Tx fault flag on media lane 8: False
+        Rx loss of signal flag on media lane 1: False
+        Rx loss of signal flag on media lane 2: False
+        Rx loss of signal flag on media lane 3: False
+        Rx loss of signal flag on media lane 4: False
+        Rx loss of signal flag on media lane 5: False
+        Rx loss of signal flag on media lane 6: False
+        Rx loss of signal flag on media lane 7: False
+        Rx loss of signal flag on media lane 8: False
+        TX disable status on lane 1: False
+        TX disable status on lane 2: False
+        TX disable status on lane 3: False
+        TX disable status on lane 4: False
+        TX disable status on lane 5: False
+        TX disable status on lane 6: False
+        TX disable status on lane 7: False
+        TX disable status on lane 8: False
+        Disabled TX channels: 0
+        Current module state: ModuleReady
+        Reason of entering the module fault state: No Fault detected
+        Datapath firmware fault: False
+        Module firmware fault: False
+        Module state changed: False
+        Data path state indicator on host lane 1: DataPathActivated
+        Data path state indicator on host lane 2: DataPathActivated
+        Data path state indicator on host lane 3: DataPathActivated
+        Data path state indicator on host lane 4: DataPathActivated
+        Data path state indicator on host lane 5: DataPathActivated
+        Data path state indicator on host lane 6: DataPathActivated
+        Data path state indicator on host lane 7: DataPathActivated
+        Data path state indicator on host lane 8: DataPathActivated
+        Tx output status on media lane 1: True
+        Tx output status on media lane 2: True
+        Tx output status on media lane 3: True
+        Tx output status on media lane 4: True
+        Tx output status on media lane 5: True
+        Tx output status on media lane 6: True
+        Tx output status on media lane 7: True
+        Tx output status on media lane 8: True
+        Rx output status on host lane 1: True
+        Rx output status on host lane 2: True
+        Rx output status on host lane 3: True
+        Rx output status on host lane 4: True
+        Rx output status on host lane 5: True
+        Rx output status on host lane 6: True
+        Rx output status on host lane 7: True
+        Rx output status on host lane 8: True
+        Tx loss of signal flag on host lane 1: False
+        Tx loss of signal flag on host lane 2: False
+        Tx loss of signal flag on host lane 3: False
+        Tx loss of signal flag on host lane 4: False
+        Tx loss of signal flag on host lane 5: False
+        Tx loss of signal flag on host lane 6: False
+        Tx loss of signal flag on host lane 7: False
+        Tx loss of signal flag on host lane 8: False
+        Tx clock and data recovery loss of lock on host lane 1: N/A
+        Tx clock and data recovery loss of lock on host lane 2: N/A
+        Tx clock and data recovery loss of lock on host lane 3: N/A
+        Tx clock and data recovery loss of lock on host lane 4: N/A
+        Tx clock and data recovery loss of lock on host lane 5: N/A
+        Tx clock and data recovery loss of lock on host lane 6: N/A
+        Tx clock and data recovery loss of lock on host lane 7: N/A
+        Tx clock and data recovery loss of lock on host lane 8: N/A
+        Rx clock and data recovery loss of lock on media lane 1: N/A
+        Rx clock and data recovery loss of lock on media lane 2: N/A
+        Rx clock and data recovery loss of lock on media lane 3: N/A
+        Rx clock and data recovery loss of lock on media lane 4: N/A
+        Rx clock and data recovery loss of lock on media lane 5: N/A
+        Rx clock and data recovery loss of lock on media lane 6: N/A
+        Rx clock and data recovery loss of lock on media lane 7: N/A
+        Rx clock and data recovery loss of lock on media lane 8: N/A
+        Configuration status for the data path of host line 1: ConfigSuccess
+        Configuration status for the data path of host line 2: ConfigSuccess
+        Configuration status for the data path of host line 3: ConfigSuccess
+        Configuration status for the data path of host line 4: ConfigSuccess
+        Configuration status for the data path of host line 5: ConfigSuccess
+        Configuration status for the data path of host line 6: ConfigSuccess
+        Configuration status for the data path of host line 7: ConfigSuccess
+        Configuration status for the data path of host line 8: ConfigSuccess
+        Data path configuration updated on host lane 1: True
+        Data path configuration updated on host lane 2: True
+        Data path configuration updated on host lane 3: True
+        Data path configuration updated on host lane 4: True
+        Data path configuration updated on host lane 5: True
+        Data path configuration updated on host lane 6: True
+        Data path configuration updated on host lane 7: True
+        Data path configuration updated on host lane 8: True
+        Temperature high alarm flag: False
+        Temperature high warning flag: False
+        Temperature low warning flag: False
+        Temperature low alarm flag: False
+        Vcc high alarm flag: False
+        Vcc high warning flag: False
+        Vcc low warning flag: False
+        Vcc low alarm flag: False
+        Tx power high alarm flag on lane 1: False
+        Tx power high alarm flag on lane 2: False
+        Tx power high alarm flag on lane 3: False
+        Tx power high alarm flag on lane 4: False
+        Tx power high alarm flag on lane 5: False
+        Tx power high alarm flag on lane 6: False
+        Tx power high alarm flag on lane 7: False
+        Tx power high alarm flag on lane 8: False
+        Tx power high warning flag on lane 1: False
+        Tx power high warning flag on lane 2: False
+        Tx power high warning flag on lane 3: False
+        Tx power high warning flag on lane 4: False
+        Tx power high warning flag on lane 5: False
+        Tx power high warning flag on lane 6: False
+        Tx power high warning flag on lane 7: False
+        Tx power high warning flag on lane 8: False
+        Tx power low warning flag on lane 1: False
+        Tx power low warning flag on lane 2: False
+        Tx power low warning flag on lane 3: False
+        Tx power low warning flag on lane 4: False
+        Tx power low warning flag on lane 5: False
+        Tx power low warning flag on lane 6: False
+        Tx power low warning flag on lane 7: False
+        Tx power low warning flag on lane 8: False
+        Tx power low alarm flag on lane 1: False
+        Tx power low alarm flag on lane 2: False
+        Tx power low alarm flag on lane 3: False
+        Tx power low alarm flag on lane 4: False
+        Tx power low alarm flag on lane 5: False
+        Tx power low alarm flag on lane 6: False
+        Tx power low alarm flag on lane 7: False
+        Tx power low alarm flag on lane 8: False
+        Rx power high alarm flag on lane 1: False
+        Rx power high alarm flag on lane 2: False
+        Rx power high alarm flag on lane 3: False
+        Rx power high alarm flag on lane 4: False
+        Rx power high alarm flag on lane 5: False
+        Rx power high alarm flag on lane 6: False
+        Rx power high alarm flag on lane 7: False
+        Rx power high alarm flag on lane 8: False
+        Rx power high warning flag on lane 1: False
+        Rx power high warning flag on lane 2: False
+        Rx power high warning flag on lane 3: False
+        Rx power high warning flag on lane 4: False
+        Rx power high warning flag on lane 5: False
+        Rx power high warning flag on lane 6: False
+        Rx power high warning flag on lane 7: False
+        Rx power high warning flag on lane 8: False
+        Rx power low warning flag on lane 1: False
+        Rx power low warning flag on lane 2: False
+        Rx power low warning flag on lane 3: False
+        Rx power low warning flag on lane 4: False
+        Rx power low warning flag on lane 5: False
+        Rx power low warning flag on lane 6: False
+        Rx power low warning flag on lane 7: False
+        Rx power low warning flag on lane 8: False
+        Rx power low alarm flag on lane 1: False
+        Rx power low alarm flag on lane 2: False
+        Rx power low alarm flag on lane 3: False
+        Rx power low alarm flag on lane 4: False
+        Rx power low alarm flag on lane 5: False
+        Rx power low alarm flag on lane 6: False
+        Rx power low alarm flag on lane 7: False
+        Rx power low alarm flag on lane 8: False
+        Tx bias high alarm flag on lane 1: False
+        Tx bias high alarm flag on lane 2: False
+        Tx bias high alarm flag on lane 3: False
+        Tx bias high alarm flag on lane 4: False
+        Tx bias high alarm flag on lane 5: False
+        Tx bias high alarm flag on lane 6: False
+        Tx bias high alarm flag on lane 7: False
+        Tx bias high alarm flag on lane 8: False
+        Tx bias high warning flag on lane 1: False
+        Tx bias high warning flag on lane 2: False
+        Tx bias high warning flag on lane 3: False
+        Tx bias high warning flag on lane 4: False
+        Tx bias high warning flag on lane 5: False
+        Tx bias high warning flag on lane 6: False
+        Tx bias high warning flag on lane 7: False
+        Tx bias high warning flag on lane 8: False
+        Tx bias low warning flag on lane 1: False
+        Tx bias low warning flag on lane 2: False
+        Tx bias low warning flag on lane 3: False
+        Tx bias low warning flag on lane 4: False
+        Tx bias low warning flag on lane 5: False
+        Tx bias low warning flag on lane 6: False
+        Tx bias low warning flag on lane 7: False
+        Tx bias low warning flag on lane 8: False
+        Tx bias low alarm flag on lane 1: False
+        Tx bias low alarm flag on lane 2: False
+        Tx bias low alarm flag on lane 3: False
+        Tx bias low alarm flag on lane 4: False
+        Tx bias low alarm flag on lane 5: False
+        Tx bias low alarm flag on lane 6: False
+        Tx bias low alarm flag on lane 7: False
+        Tx bias low alarm flag on lane 8: False
+        ELS temperature high alarm flag: False
+        ELS temperature low alarm flag: False
+        ELS temperature high warning flag: False
+        ELS temperature low warning flag: False
+        ELS Vcc high alarm flag: False
+        ELS Vcc low alarm flag: False
+        ELS Vcc high warning flag: False
+        ELS Vcc low warning flag: False
+        ELS module state: High power mode
+        ELS interrupt status: Interrupt event cleared
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#basic-show-commands)
@@ -3701,9 +4133,18 @@ The sfputil command shows the current major and minor versions of active/inactiv
   Inactive Firmware: 0.3.5
   ```
 
+**sfputil firmware show**
+
+Alias of `sfputil show fwversion`. Usage and output are identical to `sfputil show fwversion` above.
+
+- Usage:
+  ```
+  sfputil firmware show PORT_NAME
+  ```
+
 ### CMIS firmware upgrade commands
 
-The sfputil commands are used to download/upgrade firmware on transciver modules. The download/upgrade actually happens using set of CMIS CDB commands. The module may replace the exisiting image or copy into the inactive bank of the module. The host issues a download complete CDB command when the entire firmware image has been written to LPL or EPL pages. Each steps can be verified using the 'sfputil show fwversion PORT_NAME'
+The sfputil commands are used to download/upgrade firmware on transciver modules. The download/upgrade actually happens using set of CMIS CDB commands. The module may replace the exisiting image or copy into the inactive bank of the module. The host issues a download complete CDB command when the entire firmware image has been written to LPL or EPL pages. Each steps can be verified using `sfputil show fwversion PORT_NAME` (or its alias `sfputil firmware show PORT_NAME`).
 
 **sfputil firmware download**
 
@@ -3832,6 +4273,66 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
   ```
   admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input enable
   admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
+  ```
+
+### CMIS debug loopback-capability
+
+This command displays the loopback modes advertised as supported by the CMIS module. If no port is specified, it prints capability for all ports that support loopback.
+
+**sfputil debug loopback-capability**
+
+- Usage:
+  ```
+  sfputil debug loopback-capability [PORT_NAME]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug loopback-capability Ethernet88
+  Ethernet88: loopback capability:
+    host_side_input_loopback_supported: True
+    host_side_output_loopback_supported: True
+    media_side_input_loopback_supported: False
+    media_side_output_loopback_supported: False
+
+  admin@sonic:~$ sfputil debug loopback-capability
+  Ethernet0: loopback capability:
+    host_side_input_loopback_supported: True
+    host_side_output_loopback_supported: True
+    media_side_input_loopback_supported: False
+    media_side_output_loopback_supported: False
+  Ethernet4: loopback capability:
+    ...
+  ```
+
+### CMIS debug loopback-status
+
+This command displays the current loopback enablement state for each loopback mode on the CMIS module. If no port is specified, it prints status for all ports that support loopback. For host-side it prints per lane.
+
+**sfputil debug loopback-status**
+
+- Usage:
+  ```
+  sfputil debug loopback-status [PORT_NAME]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug loopback-status Ethernet88
+  Ethernet88: loopback status:
+    host-side-input:   [True, False, False, False, False, False, False, False]
+    host-side-output:  [False, False, False, False, False, False, False, False]
+    media-side-input:  False
+    media-side-output: False
+
+  admin@sonic:~$ sfputil debug loopback-status
+  Ethernet0: loopback status:
+    host-side-input:   [False, False, False, False, False, False, False, False]
+    host-side-output:  [False, False, False, False, False, False, False, False]
+    media-side-input:  False
+    media-side-output: False
+  Ethernet4: loopback status:
+    ...
   ```
 
 ### CMIS debug rx-output
@@ -5095,6 +5596,173 @@ The list of the WRED profile fields that are configurable is listed in the below
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#ecn)
 
+## EVPN-MH
+
+This section explains all the Ethernet VPN Multi-Homing (EVPN-MH) commands that are supported in SONiC.
+
+### EVPN-MH config commands
+
+**config evpn-mh startup-delay <startup_delay>**
+
+This command configures the EVPN-MH startup delay in seconds.
+
+- Usage:
+  ```
+  config evpn-mh startup-delay <startup_delay>
+  ```
+
+- Parameters:
+  - _startup_delay_: delay in seconds. Valid values are 0-3600.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh startup-delay 300
+  ```
+
+**config evpn-mh mac-holdtime <mac_holdtime>**
+
+This command configures the EVPN-MH MAC hold time in seconds.
+
+- Usage:
+  ```
+  config evpn-mh mac-holdtime <mac_holdtime>
+  ```
+
+- Parameters:
+  - _mac_holdtime_: hold time in seconds. Valid values are 0-86400.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh mac-holdtime 1080
+  ```
+
+**config evpn-mh neigh-holdtime <neigh_holdtime>**
+
+This command configures the EVPN-MH neighbor hold time in seconds.
+
+- Usage:
+  ```
+  config evpn-mh neigh-holdtime <neigh_holdtime>
+  ```
+
+- Parameters:
+  - _neigh_holdtime_: hold time in seconds. Valid values are 0-86400.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config evpn-mh neigh-holdtime 1080
+  ```
+
+**config interface evpn-esi add <interface_name> <esi_type>**
+**config interface evpn-esi del <interface_name>**
+
+These commands configure or remove an EVPN Ethernet Segment on an interface.
+
+- Usage:
+  ```
+  config interface evpn-esi add <interface_name> <esi_type>
+  config interface evpn-esi del <interface_name>
+  ```
+
+- Parameters:
+  - _interface_name_: PortChannel interface name.
+  - _esi_type_: `auto-system-mac` or a type-0 operator-configured ESI in `XX:XX:XX:XX:XX:XX:XX:XX:XX:XX` format.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface evpn-esi add PortChannel01 auto-system-mac
+  admin@sonic:~$ sudo config interface evpn-esi add PortChannel02 00:01:02:03:04:05:06:07:08:09
+  admin@sonic:~$ sudo config interface evpn-esi del PortChannel01
+  ```
+
+**config interface evpn-df-pref <interface_name> <df_pref>**
+
+This command configures the EVPN Ethernet Segment designated-forwarder preference for an interface.
+
+- Usage:
+  ```
+  config interface evpn-df-pref <interface_name> <df_pref>
+  ```
+
+- Parameters:
+  - _interface_name_: PortChannel interface name.
+  - _df_pref_: designated-forwarder preference. Valid values are 1-65535.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface evpn-df-pref PortChannel01 32767
+  ```
+
+### EVPN-MH show commands
+
+**show evpn**
+
+This command displays EVPN information from BGP.
+
+- Usage:
+  ```
+  show evpn
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn
+  ```
+
+**show evpn es [<esi>]**
+
+This command displays EVPN Ethernet Segment information. An optional ESI filters the output to one Ethernet Segment.
+
+- Usage:
+  ```
+  show evpn es [<esi>]
+  ```
+
+- Parameters:
+  - _esi_: optional ESI in `XX:XX:XX:XX:XX:XX:XX:XX:XX:XX` format.
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn es
+  admin@sonic:~$ show evpn es 00:01:02:03:04:05:06:07:08:09
+  ```
+
+**show evpn es-evi [<vni>|detail]**
+
+This command displays Ethernet Segment per-EVI information.
+
+- Usage:
+  ```
+  show evpn es-evi [<vni>|detail]
+  ```
+
+- Parameters:
+  - _vni_: optional VXLAN Network Identifier. Valid values are 1-16777215.
+  - _detail_: display detailed Ethernet Segment per-EVI information.
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn es-evi
+  admin@sonic:~$ show evpn es-evi 100
+  admin@sonic:~$ show evpn es-evi detail
+  ```
+
+**show evpn l2-nh**
+
+This command displays EVPN Layer 2 nexthops.
+
+- Usage:
+  ```
+  show evpn l2-nh
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show evpn l2-nh
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#evpn-mh)
+
 ## Fabric
 
 This section explains all Fabric commands that are supported in SONiC.
@@ -5336,6 +6004,92 @@ commands are don't care and will not update state/auto-restart value.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#feature)
 
+## Fine Grained Next Hop Group (FGNHG)
+
+This section explains the show commands for Fine Grained Next Hop Groups (FGNHG). FGNHG provides consistent hashing by maintaining a stable mapping between hash buckets and next hops, including for prefixes installed in user-defined VRFs/VNETs.
+
+### FGNHG show commands
+
+**show fgnhg active-hops**
+
+This command displays the currently active next hops for each FGNHG-managed prefix. Without arguments, all entries are shown. Optional positional arguments allow filtering by NHG name, or by VRF/VNET and prefix.
+
+- Usage:
+  ```
+  show fgnhg active-hops [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, all active next hops for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the next hops belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg active-hops
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ------------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+  default     fc:5::/128       200:200:200:200::4
+                               200:200:200:200::5
+
+  admin@sonic:~$ show fgnhg active-hops fgnhg_v4
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  Vnet1       10.0.0.1/32      200.200.200.4
+                               200.200.200.5
+
+  admin@sonic:~$ show fgnhg active-hops default 100.50.25.12/32
+  VNET/VRF    FG NHG Prefix    Active Next Hops
+  ----------  ---------------  ----------------
+  default     100.50.25.12/32  200.200.200.4
+                               200.200.200.5
+  ```
+
+**show fgnhg hash-view**
+
+This command displays the per-next-hop hash bucket assignment for each FGNHG-managed prefix. The same filtering options as `active-hops` are supported.
+
+- Usage:
+  ```
+  show fgnhg hash-view [<nhg> | <vrf> <prefix>]
+  ```
+
+  - With no arguments, hash bucket assignments for every FGNHG prefix are listed.
+  - With one argument (`<nhg>`), output is filtered to the buckets belonging to the specified FG NHG alias.
+  - With two arguments (`<vrf> <prefix>`), output is filtered to the entry for the given VRF/VNET and prefix. Use `default` for the default VRF.
+
+- Examples:
+
+  ```
+  admin@sonic:~$ show fgnhg hash-view
+  VNET/VRF    FG NHG Prefix    Next Hop            Hash buckets
+  ----------  ---------------  ------------------  ------------------------------
+  default     100.50.25.12/32  200.200.200.4       0   1   2   3   4   5   6   7
+  default     100.50.25.12/32  200.200.200.5       8   9   10  11  12  13  14  15
+  Vnet1       10.0.0.1/32      200.200.200.4       0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5       4   5   6   7
+  default     fc:5::/128       200:200:200:200::4  0   1   2   3   4   5   6   7
+  default     fc:5::/128       200:200:200:200::5  8   9   10  11  12  13  14  15
+
+  admin@sonic:~$ show fgnhg hash-view Vnet1 10.0.0.1/32
+  VNET/VRF    FG NHG Prefix    Next Hop       Hash buckets
+  ----------  ---------------  -------------  --------------
+  Vnet1       10.0.0.1/32      200.200.200.4  0   1   2   3
+  Vnet1       10.0.0.1/32      200.200.200.5  4   5   6   7
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#fine-grained-next-hop-group-fgnhg)
+
 ## Flow Counters
 
 This section explains all the Flow Counters show commands, clear commands and config commands that are supported in SONiC. Flow counters are usually used for debugging, troubleshooting and performance enhancement processes. Flow counters supports case like:
@@ -5419,16 +6173,25 @@ The "route" subcommand is used to display the route flow counter statistics by r
 
 **sonic-clear flowcnt-trap**
 
-This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis.
+This command is used to clear the current statistics for the registered host interface traps. This is done on a per-user basis. On multi-ASIC platforms, an optional namespace can be supplied to clear counters for a specific ASIC; when omitted, counters are cleared across all ASIC namespaces.
 
 - Usage:
   ```
-  sonic-clear flowcnt-trap
+  sonic-clear flowcnt-trap [-n|--namespace <namespace>]
   ```
+
+- Details:
+  - -n, --namespace: Namespace name (e.g. asic0). On multi-ASIC platforms, omit this option to target all ASIC namespaces; on single-ASIC platforms, the default namespace is used.
 
 - Example:
   ```
   admin@sonic:~$ sonic-clear flowcnt-trap
+  Trap Flow Counters were successfully cleared
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sonic-clear flowcnt-trap -n asic0
   Trap Flow Counters were successfully cleared
   ```
 
@@ -6003,6 +6766,94 @@ Enable/disable Fast Link-Up per interface.
   admin@sonic:~$ config interface fast-linkup Ethernet0 enabled
   admin@sonic:~$ config interface fast-linkup Ethernet4 disabled
   ```
+
+## ICMP
+
+This section explains the show commands available for ICMP offload sessions and counters.
+
+### ICMP show commands
+
+**show icmp sessions**
+
+This command displays ICMP echo session information from `STATE_DB`.
+
+- Usage:
+  ```bash
+  show icmp sessions [<key>]
+  ```
+
+  - `<key>` format: `scope:port:guid:mode` (for example, `default:Ethernet0:0x4eb39592:RX`).
+  - `|` separators are accepted as input for compatibility.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp sessions
+  Key                                    Dst IP          Tx Interval    Rx Interval  HW lookup    Cookie      State
+  -------------------------------------  ------------  -------------  -------------  -----------  ----------  -------
+  default|Ethernet0|0x4eb39592|RX        192.168.0.3               0            300  false        0x58767e7a  Up
+  default|Ethernet8|0x69f578f5|NORMAL    192.168.0.5             100            300  false        0x58767e7a  Up
+  ```
+
+**show icmp summary**
+
+This command displays aggregate ICMP echo session counts.
+
+- Usage:
+  ```bash
+  show icmp summary
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp summary
+  Total Sessions: 4
+  Up sessions: 3
+  RX sessions: 1
+  ```
+
+**show icmp stats**
+
+This command displays per-session ICMP echo counters from `COUNTERS_DB`.
+The output includes receive/transmit packet and byte counters. In native mode, byte counters are shown as `N/A`.
+
+- Usage:
+  ```bash
+  show icmp stats [<key>] [-c|--clear]
+  ```
+
+  - Without `<key>`, all sessions with counters are displayed.
+  - With `<key>`, only the selected session is displayed.
+  - `-c`/`--clear` snapshots current counters as a local baseline. Subsequent `show icmp stats` output is shown as deltas from that baseline.
+  - `show icmp stats -c` is equivalent to `sonic-clear icmp counters`.
+
+- Example:
+  ```bash
+  admin@sonic:~$ show icmp stats default:Ethernet0:0x4eb39592:RX
+  Key                              State      RX Pkts    RX Bytes    TX Pkts    TX Bytes
+  -------------------------------  -------  ---------  ----------  ---------  ----------
+  default:Ethernet0:0x4eb39592:RX  Up            1234      188802          0           0
+  ```
+
+### ICMP clear commands
+
+**sonic-clear icmp counters**
+
+This command snapshots current ICMP echo session counters as the new baseline.
+Subsequent `show icmp stats` output is displayed as deltas from this baseline.
+Hardware counters in `COUNTERS_DB` are not reset.
+
+- Usage:
+  ```bash
+  sonic-clear icmp counters
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ sonic-clear icmp counters
+  Cleared ICMP echo session counter baseline at 2026-06-16 10:00:00
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#icmp)
 
 ## Interfaces
 
@@ -7665,6 +8516,11 @@ This sub-section explains the various IP protocol specific show commands that ar
 
 This command displays either all the route entries from the routing table or a specific route.
 
+`show ip route --help` (or `show ip route -?`) lists the available
+subcommands sourced live from FRR (e.g. `bgp`, `connected`, `static`,
+`summary`, `vrf`, etc.). Shell TAB completion offers the same set as
+you type, including for nested subcommands like `show ip route vrf <TAB>`.
+
 - Usage:
   ```
   show ip route [<vrf-name>] [<ip_address>]
@@ -7794,6 +8650,11 @@ This sub-section explains the various IPv6 protocol specific show commands that 
 **show ipv6 route**
 
 This command displays either all the IPv6 route entries from the routing table or a specific IPv6 route.
+
+`show ipv6 route --help` (or `show ipv6 route -?`) lists the available
+subcommands sourced live from FRR. Shell TAB completion offers the same
+set as you type, including for nested subcommands like
+`show ipv6 route vrf <TAB>`.
 
 - Usage:
   ```
@@ -8267,6 +9128,224 @@ Since this command might require changing the kernel parameters to specify the a
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#linux-kernel-dump)
 
+## LLR
+
+This section explains the show, configuration and clear commands for LLR (Link Layer Retry). LLR enables local retransmission of lost frames at the data link layer to reduce reliance on higher-layer recovery.
+
+All LLR configuration commands check LLR capability in STATE_DB. If the switch does not support LLR, commands are rejected with an error message.
+
+### LLR show commands
+
+**show llr interface**
+
+This command displays LLR interface configuration from APPL_DB. Optionally specify an interface name to filter.
+
+- Usage:
+  ```
+  show llr interface [<interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr interface
+
+  LLR Interface Configuration
+  ----------------------------
+
+  PORT          LLR Mode    LLR Local    LLR Remote    LLR Profile
+  ----------    --------    ----------   -----------   ------------------------------
+  Ethernet0     static      enabled      enabled       llr_800000_40m_profile
+  Ethernet4     static      enabled      disabled      llr_400000_5m_profile
+  ```
+
+**show llr profile**
+
+This command displays LLR profile configuration from APPL_DB. Optionally specify a profile name to filter.
+
+- Usage:
+  ```
+  show llr profile [<profile-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr profile llr_800000_40m_profile
+  +---------------------------------------+--------------+
+  | LLR Profile: llr_800000_40m_profile                  |
+  +=======================================+==============+
+  | Maximum Outstanding Frames            | 264          |
+  +---------------------------------------+--------------+
+  | Maximum Outstanding Bytes             | 135000       |
+  +---------------------------------------+--------------+
+  | Maximum Replay Count                  | 3            |
+  +---------------------------------------+--------------+
+  | Maximum Replay Timer(ns)              | 5000         |
+  +---------------------------------------+--------------+
+  | PCS Lost Status Timeout(ns)           | 50000        |
+  +---------------------------------------+--------------+
+  | Data Age Timeout(ns)                  | 20000        |
+  +---------------------------------------+--------------+
+  | CTLOS Spacing Bytes                   | 2048         |
+  +---------------------------------------+--------------+
+  | Init Action                           | best_effort  |
+  +---------------------------------------+--------------+
+  | Flush Action                          | best_effort  |
+  +---------------------------------------+--------------+
+  ```
+
+**show llr counters**
+
+This command displays LLR counter statistics (summary view). Use `-i` to filter by interface.
+
+- Usage:
+  ```
+  show llr counters [-i <interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr counters -i Ethernet0
+
+  Port Rx    STATUS   RX_INIT  RX_INIT_ECHO    RX_ACK     RX_NACK      RX_OK      RX_BAD        RX_POISONED    RX_REPLAY
+  ---------  -------  -------  ------------    ------     -------      -----      ------        -----------    ---------
+  Ethernet0  Enable         1             1     15000           0      35000         0                  0            0
+
+  Port Tx    STATUS   TX_INIT  TX_INIT_ECHO    TX_ACK     TX_NACK      TX_OK      TX_DISCARD    TX_POISONED    TX_REPLAY
+  ---------  -------  -------  ------------    ------     -------      -----      ----------    -----------    ---------
+  Ethernet0  Enable         1             1     15000           0      35000           0              0            0
+  ```
+
+**show llr counters detailed**
+
+This command displays detailed LLR counter statistics per port, including all RX/TX counters. Optionally specify an interface name.
+
+- Usage:
+  ```
+  show llr counters detailed [<interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr counters detailed Ethernet0
+
+  LLR Counters - Ethernet0
+  -----------------------
+  LLR_INIT      CtrlOS Transmitted ............................. 1
+  LLR_INIT_ECHO CtrlOS Transmitted ............................. 1
+  LLR_ACK       CtrlOS Transmitted ............................. 35000
+  LLR_NACK      CtrlOS Transmitted ............................. 0
+
+  LLR Frames Transmitted OK .................................... 35000
+  LLR Frames Transmitted as poisoned ........................... 0
+  LLR Frames Discarded at Transmit ............................. 0
+  LLR Tx Replay Triggered Count ................................ 0
+
+  LLR_INIT      CtrlOS Received ................................ 1
+  LLR_INIT_ECHO CtrlOS Received ................................ 1
+  LLR_ACK       CtrlOS Received ................................ 15000
+  LLR_NACK      CtrlOS Received ................................ 0
+  LLR_ACK/NACK  CtrlOS Received with SeqNum error .............. 0
+
+  LLR Frames Received OK ....................................... 35000
+  LLR Frames Received as Poisoned .............................. 0
+  LLR Frames Received as Bad ................................... 0
+  LLR Rx Replay Detect Count ................................... 0
+
+  LLR Frames Received OK with expected seq num ................. 0
+  LLR Frames Received Poisoned with expected seq num ........... 0
+  LLR Frames Received Bad with expected seq num ................ 0
+
+  LLR Frames Received with Unexpected seq num .................. 0
+  LLR Frames Received with Duplicate seq num ................... 0
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
+### LLR config commands
+
+**config llr interface mode**
+
+This command configures the LLR mode on a per-port basis.
+
+- Usage:
+  ```
+  config llr interface mode <interface-name> <static>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface mode Ethernet0 static
+  ```
+
+**config llr interface local**
+
+This command enables or disables LLR local (reception) on an interface. Only applicable when the port's LLR mode is `static`.
+
+- Usage:
+  ```
+  config llr interface local <interface-name> {enabled|disabled}
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface local Ethernet0 enabled
+  ```
+
+**config llr interface remote**
+
+This command enables or disables LLR remote (transmission) on an interface. Only applicable when the port's LLR mode is `static`.
+
+- Usage:
+  ```
+  config llr interface remote <interface-name> {enabled|disabled}
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface remote Ethernet0 enabled
+  ```
+
+**counterpoll llr**
+
+These commands enable, disable, or set the polling interval for LLR counters.
+
+- Usage:
+  ```
+  counterpoll llr enable
+  counterpoll llr disable
+  counterpoll llr interval <milliseconds>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo counterpoll llr enable
+  admin@sonic:~$ sudo counterpoll llr interval 1000
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
+### LLR clear commands
+
+**sonic-clear llr counters**
+
+This command clears LLR counter statistics for all ports or a specific interface.
+
+- Usage:
+  ```
+  sonic-clear llr counters
+  sonic-clear llr counters interface <interface-name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sonic-clear llr counters
+  LLR counters cleared.
+  admin@sonic:~$ sonic-clear llr counters interface Ethernet0
+  LLR counters cleared for Ethernet0.
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
 ## LLDP
 
 ### LLDP show commands
@@ -8578,7 +9657,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#loopba
 **show vrf**
 
 This command displays all vrfs configured on the system along with interface binding to the vrf.
-If vrf-name is also provided as part of the command, if the vrf is created it will display all interfaces binding to the vrf, if vrf is not created nothing will be displayed.
+If vrf-name is also provided as part of the command, if the vrf is created it will display all interfaces binding to the vrf, if vrf is not created, the command will exit with a failure code and an error message.
 
 - Usage:
   ```
@@ -8602,15 +9681,30 @@ If vrf-name is also provided as part of the command, if the vrf is created it wi
 
 ### VRF config commands
 
+The `config vrf` command group accepts an optional `-n|--namespace` option that targets a specific ASIC's CONFIG_DB on multi-ASIC platforms. For data-VRF subcommands (`add <Vrf-*>`, `del <Vrf-*>`, `add_vrf_vni_map`, `del_vrf_vni_map`) the option is required on multi-ASIC platforms. The management-VRF subcommands (`add mgmt`/`del mgmt`) operate on the host/global CONFIG_DB and reject `-n` with an error.
+
+- Usage:
+  ```
+  config vrf [-n|--namespace <namespace>] <subcommand> ...
+  ```
+
+- Details:
+  - -n, --namespace: (Multi-ASIC) Namespace name (e.g. asic0). Required for data-VRF subcommands on multi-ASIC platforms; not applicable to `add mgmt`/`del mgmt`.
+
 **config vrf add**
 
 This command creates vrf in SONiC system with provided vrf-name.
 
 - Usage:
   ```
-  config vrf add <vrf-name>
+  config vrf [-n|--namespace <namespace>] add <vrf-name>
   ```
 Note: vrf-name should always start with keyword "Vrf"
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 add Vrf-red
+  ```
 
 **config vrf del <vrf-name>**
 
@@ -8618,7 +9712,12 @@ This command deletes vrf with name vrf-name.
 
 - Usage:
   ```
-  config vrf del <vrf-name>
+  config vrf [-n|--namespace <namespace>] del <vrf-name>
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sudo config vrf -n asic0 del Vrf-red
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vrf-configuration)
@@ -8736,6 +9835,8 @@ This command displays the configured SNMP Trap server IP addresses.
 
 This command enables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This creates a new interface and l3mdev CGROUP with the name as "mgmt" and enslaves the management interface "eth0" into this master interface "mgmt". Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
 
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
+
 - Usage:
   ```
   config vrf add mgmt
@@ -8749,6 +9850,8 @@ This command enables the management VRF in the system. This command restarts the
 **config vrf del mgmt**
 
 This command disables the management VRF in the system. This command restarts the "interfaces-config" service which in turn regenerates the /etc/network/interfaces file and restarts the "networking" service. This deletes the interface "mgmt" and deletes the l3mdev CGROUP named "mgmt" and puts back the management interface "eth0" into the default VRF. Note that the VRFName "mgmt" (or "management") is reserved for management VRF. i.e. Data VRFs should not use these reserved VRF names.
+
+The management VRF is host-level state stored in the global CONFIG_DB, so the `-n|--namespace` option is not applicable; supplying it returns an error.
 
 - Usage:
   ```
@@ -9325,10 +10428,12 @@ While adding a new ERSPAN session, users need to configure the following fields 
 7) optional - Policer which will be used to control the rate at which frames are mirrored.
 8) optional - List of source ports which can have both Ethernet and LAG ports.
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
+10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
+11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>]
   ```
 
   The following command is also supported to be backward compatible.
@@ -9927,6 +11032,94 @@ This command is used to delete a configured NTP server IP address.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#NTP)
+
+## Orchagent
+
+This section explains the orchagent runtime introspection commands.
+
+`orchagent` is the SONiC orchestration agent that processes APPL_DB updates and drives the hardware via SAI. Each Executor in orchagent represents a self-scheduled task (per-table consumers, periodic timers, etc.); the commands below surface how long each task is taking and how long it waits between invocations so operators can identify select-loop starvation without rebuilding orchagent.
+
+### Orchagent show commands
+
+**show orchagent tasks**
+
+This command displays the per-Executor execution-time statistics that orchagent maintains internally. Each row corresponds to one orchagent task (an `Orch` subclass or named periodic). Rows are sorted by total run time descending; ties break by task name.
+
+Columns:
+
+- `TASK` — Executor name.
+- `RUN TIME` — `median/q1/q3/max` of per-invocation wall-clock duration, in milliseconds. Median is the headline, Q1/Q3 give spread, max exposes the worst tail.
+- `RUNS` — total number of completed invocations.
+- `OUTLIERS` — Tukey 1.5×IQR sum (high + low) — invocations whose duration fell outside the bulk of the distribution.
+- `SCHED LATENCY` — `median/q1/q3/max` of the gap between when the task finished and when it was next scheduled, in milliseconds. Exposes select-loop starvation.
+- `TOTAL` — cumulative `<run>/<sched>` wall-clock spent inside the task vs waiting before it, in milliseconds.
+
+Slots that have never run print `-` in place of the quartet/total values; `RUNS` / `OUTLIERS` remain integers.
+
+The CLI talks to orchagent over two APPL_DB notification channels (`ORCH_TASK_STATS_QUERY` / `ORCH_TASK_STATS_REPLY`); the command exits non-zero with an error message if orchagent does not reply within 10 seconds.
+
+On multi-ASIC platforms orchagent runs per-ASIC, each instance inside its own `asicN` namespace with a separate APPL_DB. By default the command queries every ASIC namespace and aggregates the results into a single table with a leading `ASIC` column identifying the owning namespace. Use `-n/--namespace asicN` to restrict the output to one ASIC. On a single-ASIC platform the `ASIC` column is omitted and the output is unchanged. On a fabric-only supervisor (no route-processing orchagent) the command is a graceful no-op.
+
+- Usage:
+  ```
+  show orchagent tasks [-n|--namespace <asic_namespace>]
+  ```
+
+- Example (single-ASIC):
+  ```
+  admin@sonic:~$ show orchagent tasks
+  TASK         RUN TIME                          RUNS  OUTLIERS  SCHED LATENCY                    TOTAL
+               median/q1/q3/max                                  median/q1/q3/max                 run/sched
+               (in msec)                                         (in msec)                        (in msec)
+  ROUTE_TABLE  1745.53/1391.34/2242.07/3913.36     43         5  1.06/0.41/48.40/1436.01          77619.63/5.04
+  ```
+
+- Example (multi-ASIC — all namespaces aggregated, note the leading `ASIC` column):
+  ```
+  admin@sonic:~$ show orchagent tasks
+  ASIC   TASK         RUN TIME                          RUNS  OUTLIERS  SCHED LATENCY                    TOTAL
+                      median/q1/q3/max                                  median/q1/q3/max                 run/sched
+                      (in msec)                                         (in msec)                        (in msec)
+  asic0  ROUTE_TABLE  1745.53/1391.34/2242.07/3913.36     43         5  1.06/0.41/48.40/1436.01          77619.63/5.04
+  asic1  ROUTE_TABLE  1502.11/1200.02/1980.55/3401.20     41         3  0.98/0.39/44.10/1201.55          61586.51/4.87
+  ```
+
+- Example (multi-ASIC — single namespace):
+  ```
+  admin@sonic:~$ show orchagent tasks -n asic0
+  ASIC   TASK         RUN TIME                          RUNS  OUTLIERS  SCHED LATENCY                    TOTAL
+                      median/q1/q3/max                                  median/q1/q3/max                 run/sched
+                      (in msec)                                         (in msec)                        (in msec)
+  asic0  ROUTE_TABLE  1745.53/1391.34/2242.07/3913.36     43         5  1.06/0.41/48.40/1436.01          77619.63/5.04
+  ```
+
+### Orchagent clear commands
+
+**sonic-clear orchagent tasks**
+
+This command resets orchagent's per-Executor execution-time counters in place. Subsequent `show orchagent tasks` output starts accumulating from zero.
+
+On multi-ASIC platforms the counters are reset for every ASIC's orchagent by default (one `OK (asicN)` line per namespace); pass `-n/--namespace asicN` to reset a single ASIC. On a single-ASIC platform the output is a plain `OK`.
+
+- Usage:
+  ```
+  sonic-clear orchagent tasks [-n|--namespace <asic_namespace>]
+  ```
+
+- Example (single-ASIC):
+  ```
+  admin@sonic:~$ sonic-clear orchagent tasks
+  OK
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ sonic-clear orchagent tasks
+  OK (asic0)
+  OK (asic1)
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#orchagent)
 
 # PFC Watchdog Commands
 Detailed description of the PFC Watchdog can be found on [this wiki page](https://github.com/sonic-net/SONiC/wiki/PFC-Watchdog)
@@ -11398,6 +12591,11 @@ Optionally, you can specify an interface name in order to display only that part
   admin@sonic:~$ sonic-clear queue wredcounters
   ```
 
+  To clear VOQ wred counters, use the `--voq` option:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters --voq
+  ```
+
 
 #### Buffer Pool
 
@@ -11442,6 +12640,14 @@ This command displays the user persistent-watermark for all the buffer pools
   ---------------------  -------
   ingress_lossless_pool        0
              lossy_pool     2464
+  ```
+
+- NOTE: "user watermark" and "persistent watermark" can be cleared by user:
+
+  ```
+  admin@sonic:~$ sonic-clear buffer_pool watermark
+
+  admin@sonic:~$ sonic-clear buffer_pool persistent-watermark
   ```
 
 
@@ -11605,6 +12811,60 @@ This command is to config the radius server for various parameter listed.
 
   ```
 
+## SAG MAC
+
+### SAG MAC config commands
+
+This section explains all the commands that are supported in SONiC to configure static-anycast-gateway MAC address.
+
+**config static-anycast-gateway mac_address add <mac_address>**
+
+This command enables use to add a static-anycast-gateway MAC address
+- Usage:
+  ```
+  config static-anycast-gateway mac_address add <mac_address>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config static-anycast-gateway mac_address add 00:11:22:33:44:55
+  ```
+
+**config static-anycast-gateway mac_address del**
+
+This command enables user to delete the static-anycast-gateway MAC address.
+
+- Usage:
+  ```
+  config static-anycast-gateway mac_address del
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config static-anycast-gateway mac_address del
+  ```
+
+### SAG MAC Show commands
+**show static-anycast-gateway**
+This command displays all the interfaces which have enabled the SAG MAC address.
+- Usage:
+  ```
+  show static-anycast-gateway
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show static-anycast-gateway
+  Static Anycast Gateway Information
+  MacAddress         Interfaces
+  -----------------  ------------
+  00:11:22:33:44:55  Vlan3
+                     Vlan4
+
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#sag)
+
 # Switch
 
 This section explains the various show, configuration and clear commands available for users.
@@ -11680,6 +12940,7 @@ This command is used to clear switch counters.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#switch)
+
 
 ## sFlow
 
@@ -11901,6 +13162,47 @@ This command is used to set the counter polling interval. Default is 20 seconds.
 
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#sflow)
+
+## SED
+
+SED (Self-Encrypting Drive) commands are used to manage password changes for self-encrypting drives in the system.
+
+### SED Config commands
+
+**config sed change-password**
+
+This command changes the SED password. The new password is entered at interactive prompts (hidden input).
+
+- Usage:
+  ```
+  config sed change-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config sed change-password
+  New SED password:
+  Handling SED password change started...
+  SED password change process completed successfully
+  ```
+
+**config sed reset-password**
+
+This command resets the SED password to the default value.
+
+- Usage:
+  ```
+  config sed reset-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config sed reset-password
+  Handling SED password reset started...
+  SED password reset process completed successfully
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#sed)
 
 ## SNMP
 
@@ -13349,7 +14651,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#System
 
 **show vlan brief**
 
-This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, and the proxy ARP status. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
+This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, the proxy ARP status, and the Static Anycast Gateway status. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
@@ -13359,15 +14661,15 @@ This command displays brief information about all the vlans configured in the de
 - Example:
   ```
   admin@sonic:~$ show vlan brief
-
-  +-----------+--------------+-----------+----------------+-----------------------+-------------+
-  |   VLAN ID | IP Address   | Ports     | Port Tagging   | DHCP Helper Address   | Proxy ARP   |
-  +===========+==============+===========+================+=======================+=============+
-  |       100 | 1.1.2.2/16   | Ethernet0 | tagged         | 192.0.0.1             | disabled    |
-  |           |              | Ethernet4 | tagged         | 192.0.0.2             |             |
-  |           |              |           |                | 192.0.0.3             |             |
-  +-----------+--------------+-----------+----------------+-----------------------+-------------+
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  |   VLAN ID | IP Address       | Ports     | Port Tagging   | Proxy ARP   | Static Anycast Gateway   | DHCP Helper Address   |
+  +===========+==================+===========+================+=============+==========================+=======================+
+  |         3 | 200.200.200.1/24 | Ethernet8 | untagged       | disabled    | enabled                  |                       |
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  |         4 | 100.200.200.1/24 | Ethernet4 | untagged       | disabled    | enabled                  |                       |
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
   ```
+
 
 **show vlan config**
 
@@ -13442,6 +14744,22 @@ This command is to add or delete a member port into the already created vlan.
   admin@sonic:~$ sudo config vlan member add 100 Ethernet4
   This command will add Ethernet4 as member of the vlan 100.
   ```
+**config sag enable/disable**
+
+This command is used to enable or disable static-anycast-gateway for a VLAN interface
+
+- Usage:
+  ```
+  config vlan static-anycast-gateway enable/disable <vlan_id>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config vlan static-anycast-gateway enable 3
+  static-anycast-gateway setting saved to ConfigDB
+  admin@sonic:~$ sudo config vlan static-anycast-gateway disable 3
+  static-anycast-gateway setting saved to ConfigDB
+  ```
 
 **config vlan member add/del -m -e**
 This command is to add or delete a member port into multiple already created vlans.
@@ -13455,23 +14773,18 @@ This command is to add or delete a member port into multiple already created vla
   ```
   admin@sonic:~$ sudo config vlan member add -m 100-103 Ethernet0
   This command will add Ethernet0 as member of the vlan 100, vlan 101, vlan 102, vlan 103
-   ```
-   ```
+
   admin@sonic:~$ sudo config vlan member add -m 100,101,102 Ethernet4
   This command will add Ethernet4 as member of the vlan 100, vlan 101, vlan 102
-   ```
-   ```
+
   admin@sonic:~$ sudo config vlan member add -e -m 104,105 Ethernet8
-  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet8 as member of  vlan 100, vlan 101, vlan 102, vlan 103
-  ```
-  ```
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are existing vlans. This command will add Ethernet8 as member of  vlan 100, vlan 101, vlan 102, vlan 103
+
   admin@sonic:~$ sudo config vlan member add -e 100 Ethernet12
-  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet12 as member of vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
-  ```
-   ```
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are existing vlans. This command will add Ethernet12 as member of vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
+
   admin@sonic:~$ sudo config vlan member add all Ethernet20
-  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet20 as member of vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 1
-05
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are existing vlans. This command will add Ethernet20 as member of vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
   ```
 
 **config proxy_arp enabled/disabled**
@@ -14739,7 +16052,7 @@ Installing a new image using the sonic-installer will keep using the packages in
 
 **sonic-installer set_default**
 
-This command is be used to change the image which can be loaded by default in all the subsequent reboots.
+This command is be used to change the image which can be loaded by default in all the subsequent reboots. It also clears any pending `set_next_boot` selection, so the next reboot uses this default image.
 
 - Usage:
   ```
@@ -14753,7 +16066,7 @@ This command is be used to change the image which can be loaded by default in al
 
 **sonic-installer set_next_boot**
 
-This command is used to change the image that can be loaded in the *next* reboot only. Note that it will fallback to current image in all other subsequent reboots after the next reboot.
+This command is used to change the image that can be loaded in the *next* reboot only; subsequent reboots fall back to the `set_default` image. Note that a later `set_default` overrides this one-time selection.
 
 - Usage:
   ```
@@ -15763,8 +17076,9 @@ Usage: sfputil show eeprom-hexdump [OPTIONS]
   Display EEPROM hexdump of SFP transceiver(s)
 Options:
   -p, --port <port_name>    Display SFP EEPROM hexdump for port <port_name>
-  -n, --page <page_number>  Display SFP EEEPROM hexdump for
-                            <page_number_in_hex>
+  -n, --page <page_number>  Display SFP EEPROM hexdump for <page_number>
+                            (decimal, hex (with 0x prefix) or octal (with 0o
+                            prefix))
   --help                    Show this message and exit.
 ```
 
@@ -15856,6 +17170,87 @@ EEPROM hexdump for port Ethernet8
         000000e0 33 30 33 33 30 4b 34 33  34 31 30 44 00 00 00 00 |30330K43410D....|
         000000f0 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 |................|
 ```
+
+- Show SFP low-power mode status
+
+  By default the status is read from the module EEPROM. Passing `--use-lpmode-pin` reads it from the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `get_lpmode_via_pin`
+  from `SfpBase`".
+
+```
+admin@sonic:~$ sfputil show lpmode --help
+Usage: sfputil show lpmode [OPTIONS]
+
+  Display low-power mode status of SFP transceiver(s)
+
+Options:
+  -p, --port <port_name>  Display SFP low-power mode status for port
+                          <port_name> only
+  --use-lpmode-pin        Use Xcvr LPMode pin instead of EEPROM
+  --help                  Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  Off
+
+admin@sonic:~$ sudo sfputil show lpmode -p Ethernet0 --use-lpmode-pin
+Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+```
+
+- Enable / disable SFP low-power mode
+
+  By default the request is written to the module EEPROM. Passing `--use-lpmode-pin` writes the platform's
+  hardware LPMode pin instead. The hardware pin path requires the platform to implement `set_lpmode_via_pin`
+  from `SfpBase`.
+
+```
+admin@sonic:~$ sfputil lpmode on --help
+Usage: sfputil lpmode on [OPTIONS] <port_name>
+
+  Enable low-power mode for SFP transceiver
+
+Options:
+  --use-lpmode-pin  Use Xcvr LPMode pin instead of EEPROM
+  --help            Show this message and exit.
+```
+
+```
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0
+Disabling low-power mode for port Ethernet0 ... OK
+
+admin@sonic:~$ sudo sfputil lpmode on Ethernet0 --use-lpmode-pin
+Enabling low-power mode for port Ethernet0 ... OK
+admin@sonic:~$ sudo sfputil lpmode off Ethernet0 --use-lpmode-pin
+Disabling low-power mode for port Ethernet0 ... OK
+```
+
+# SFP Utilities lpmode commands
+
+These commands control and inspect the low-power mode of SFP transceivers.
+
+**sfputil lpmode show**
+
+Display the low-power mode status of one or all SFP transceivers. Equivalent to `sfputil show lpmode`.
+
+- Usage:
+  ```
+  sfputil lpmode show [-p <port_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil lpmode show -p Ethernet0
+  Port       Low-power Mode
+  ---------  ----------------
+  Ethernet0  On
+  ```
 
 # SFP Utilities read command
 

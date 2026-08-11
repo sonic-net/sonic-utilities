@@ -561,7 +561,7 @@ TEST_DATA = {
             },
         },
         RESULT: {
-            DEFAULTNS: {"missed_FRR_routes": ['10.10.196.12/31']}
+            DEFAULTNS: {"missed_FRR_routes": [{"prefix": "10.10.196.12/31", "protocol": "bgp"}]}
         },
         RET: -1,
     },
@@ -971,7 +971,7 @@ TEST_DATA = {
             },
         },
         RESULT: {
-            ASIC1: {"missed_FRR_routes": ['10.10.196.12/31']},
+            ASIC1: {"missed_FRR_routes": [{"prefix": "10.10.196.12/31", "protocol": "bgp"}]},
         },
         RET: -1,
     },
@@ -1497,7 +1497,7 @@ TEST_DATA = {
         RESULT: {
             ASIC0: {
                 "missed_FRR_routes": [
-                    "10.10.196.20/31"
+                    {"prefix": "10.10.196.20/31", "protocol": "bgp"}
                 ],
                 "failed_FRR_routes": [
                     "10.10.196.12/31",
@@ -1590,8 +1590,8 @@ TEST_DATA = {
         RESULT: {
             DEFAULTNS: {
                 "missed_FRR_routes": [
-                    "10.10.196.12/31",
-                    "192.168.1.0/24"
+                    {"prefix": "10.10.196.12/31", "protocol": "bgp"},
+                    {"prefix": "192.168.1.0/24", "protocol": "bgp"}
                 ],
                 "failed_FRR_routes": [
                     "10.10.196.20/31",

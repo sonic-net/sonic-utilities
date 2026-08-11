@@ -162,19 +162,19 @@ def test_mirror_session_erspan_add():
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, None, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, None, None, 0, 0)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0x1234", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None, None, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None, None, None, 0, 0)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0", "0"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None, None, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None, None, None, 0, 0)
 
 
 @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
@@ -799,3 +799,123 @@ def test_mirror_session_capability_function():
         assert config.is_port_mirror_capability_supported("tx") is True
         assert config.is_port_mirror_capability_supported("both") is True
         assert config.is_port_mirror_capability_supported(None) is True
+
+
+def test_mirror_session_erspan_add_with_invalid_sample_rate():
+    runner = CliRunner()
+
+    # Verify invalid sample_rate (negative)
+    result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+             "--sample_rate", "-1"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 2..4294967295' in result.output
+
+    # Verify invalid truncate_size (negative)
+    result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+             "--truncate_size", "-1"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 64..9216' in result.output
+
+
+def test_mirror_session_erspan_add_sample_rate_boundary():
+    runner = CliRunner()
+
+    # sample_rate=1 (below minimum of 2, should fail)
+    result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+             "--sample_rate", "1"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 2..4294967295' in result.output
+
+    # sample_rate=2 (minimum valid, should pass)
+    with mock.patch('config.main.add_erspan') as _:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+                 "--sample_rate", "2"])
+        assert result.exit_code == 0
+
+    # sample_rate=100 (in the valid range, should pass)
+    with mock.patch('config.main.add_erspan') as _:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+                 "--sample_rate", "100"])
+        assert result.exit_code == 0
+
+    # sample_rate=4294967295 (maximum valid, should pass)
+    with mock.patch('config.main.add_erspan') as _:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+                 "--sample_rate", "4294967295"])
+        assert result.exit_code == 0
+
+    # sample_rate=4294967296 (above maximum, should fail)
+    result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+             "--sample_rate", "4294967296"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 2..4294967295' in result.output
+
+
+def test_mirror_session_erspan_add_truncate_size_boundary():
+    runner = CliRunner()
+
+    # truncate_size=1 (in the 1-63 hole, should fail)
+    result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+             "--truncate_size", "1"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 64..9216' in result.output
+
+    # truncate_size=63 (upper boundary of hole, should fail)
+    result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+             "--truncate_size", "63"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 64..9216' in result.output
+
+    # truncate_size=64 (minimum valid, should pass)
+    with mock.patch('config.main.add_erspan') as _:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+                 "--truncate_size", "64"])
+        assert result.exit_code == 0
+
+    # truncate_size=9216 (maximum valid, should pass)
+    with mock.patch('config.main.add_erspan') as _:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+                 "--truncate_size", "9216"])
+        assert result.exit_code == 0
+
+    # truncate_size=9217 (above maximum, should fail)
+    result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+             "--truncate_size", "9217"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 64..9216' in result.output
+
+
+def test_mirror_session_erspan_add_with_valid_sample_rate_and_truncate():
+    runner = CliRunner()
+    with mock.patch('config.main.add_erspan') as mocked:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "100.1.1.1", "2.2.2.2", "8", "64",
+                 "--sample_rate", "50000", "--truncate_size", "128"])
+        assert result.exit_code == 0
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2",
+                                  8, 64, None, None, None, None, None, 50000, 128)

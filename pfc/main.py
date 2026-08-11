@@ -84,7 +84,7 @@ class Pfc(object):
 
         """Current lossless priorities on the interface"""
         entry = self.config_db.get_entry('PORT_QOS_MAP', interface)
-        enable_prio = entry.get('pfc_enable').split(',')
+        enable_prio = entry.get('pfc_enable', '').split(',')
 
         """Avoid '' in enable_prio"""
         enable_prio = [x.strip() for x in enable_prio if x.strip()]

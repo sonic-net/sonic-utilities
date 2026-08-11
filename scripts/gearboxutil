@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-import sys
-from tabulate import tabulate
-from natsort import natsorted
-
 import os
+import sys
+from datetime import datetime
+
+from natsort import natsorted
+from tabulate import tabulate
 
 # mock the redis for unit test purposes #
 try:
@@ -240,6 +241,9 @@ RATES_TABLE_PREFIX = "RATES:"
 # FEC Histogram bins (S0-S15)
 FEC_HISTOGRAM_BINS = [f"SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{i}" for i in range(16)]
 
+# FEC Histogram timestamp format
+FEC_HISTOGRAM_TS_FORMAT = "%Y-%m-%d %H:%M:%S"
+
 class InterfaceFecStats(object):
 
     def __init__(self, port_name=None, display_type='stats'):
@@ -360,10 +364,22 @@ class InterfaceFecStats(object):
         histogram_data = []
         for i, bin_name in enumerate(FEC_HISTOGRAM_BINS):
             value = counters.get(bin_name, '0')
-            histogram_data.append([f'BIN{i}', value])
+
+            timestamp_ms = counters.get(f'{bin_name}_TIMESTAMP')
+            try:
+                ts_ms = int(timestamp_ms)
+                if ts_ms > 0:
+                    ts_sec = ts_ms / 1000.0
+                    timestamp_str = datetime.fromtimestamp(ts_sec).strftime(FEC_HISTOGRAM_TS_FORMAT)
+                else:
+                    timestamp_str = 'N/A'
+            except (TypeError, ValueError, OSError, OverflowError):
+                timestamp_str = 'N/A'
+
+            histogram_data.append([f'BIN{i}', value, timestamp_str])
         
         if histogram_data:
-            print(tabulate(histogram_data, headers=['Symbol Errors Per Codeword', 'Codewords'], tablefmt='simple'))
+            print(tabulate(histogram_data, headers=['Symbol Errors Per Codeword', 'Codewords', 'Last Updated'], tablefmt='simple'))
 
     def display_fec_histogram(self):
         """

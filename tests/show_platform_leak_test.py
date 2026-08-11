@@ -130,17 +130,13 @@ class TestShowPlatformLeakProfiles(object):
 
     def test_leak_profiles_with_data(self):
         runner = CliRunner()
-        mock_cfgdb = MagicMock()
-        mock_cfgdb.get_keys.return_value = ['rope', 'spot', 'flex_pcb']
-        mock_cfgdb.get_entry.side_effect = lambda t, k: {
-            'rope':     {'max_minor_duration_sec': '300'},
-            'spot':     {'max_minor_duration_sec': '600'},
-            'flex_pcb': {'max_minor_duration_sec': '180'},
-        }[k]
-        mock_db = MagicMock()
-        mock_db.cfgdb = mock_cfgdb
+        state_db = _make_state_db({
+            'LEAK_PROFILE|rope':     {'type': 'rope', 'max_minor_duration_sec': '300'},
+            'LEAK_PROFILE|spot':     {'type': 'spot', 'max_minor_duration_sec': '600'},
+            'LEAK_PROFILE|flex_pcb': {'type': 'flex_pcb', 'max_minor_duration_sec': '180'},
+        })
 
-        with patch('utilities_common.db.Db', return_value=mock_db):
+        with patch('show.platform._get_state_db', return_value=state_db):
             result = runner.invoke(
                 show_platform.platform.commands['leak'].commands['profiles']
             )
@@ -153,12 +149,9 @@ class TestShowPlatformLeakProfiles(object):
 
     def test_leak_profiles_empty(self):
         runner = CliRunner()
-        mock_cfgdb = MagicMock()
-        mock_cfgdb.get_keys.return_value = []
-        mock_db = MagicMock()
-        mock_db.cfgdb = mock_cfgdb
+        state_db = _make_state_db({})
 
-        with patch('utilities_common.db.Db', return_value=mock_db):
+        with patch('show.platform._get_state_db', return_value=state_db):
             result = runner.invoke(
                 show_platform.platform.commands['leak'].commands['profiles']
             )

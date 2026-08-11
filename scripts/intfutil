@@ -509,7 +509,11 @@ class IntfStatus(object):
         table = []
         key = []
 
-        intf_fs = parse_interface_in_filter(self.intf_name)
+        try:
+            intf_fs = parse_interface_in_filter(self.intf_name)
+        except ValueError as e:
+            print("Error: {}".format(e), file=sys.stderr)
+            sys.exit(1)
         #
         # Iterate through all the keys and append port's associated state to
         # the result table.
@@ -756,7 +760,11 @@ class IntfTpid(object):
         table = []
         key = []
 
-        intf_fs = parse_interface_in_filter(self.intf_name)
+        try:
+            intf_fs = parse_interface_in_filter(self.intf_name)
+        except ValueError as e:
+            print("Error: {}".format(e), file=sys.stderr)
+            sys.exit(1)
         #
         # Iterate through all the keys and append port's associated state to
         # the result table.

@@ -8,6 +8,18 @@ from utilities_common.db import Db
 
 
 class TestSuppressFibPending:
+    def test_show_suppress_fib_pending_default_disabled(self):
+        runner = CliRunner()
+        db = Db()
+        entry = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
+        if 'suppress-fib-pending' in entry:
+            del entry['suppress-fib-pending']
+            db.cfgdb.set_entry('DEVICE_METADATA', 'localhost', entry)
+
+        result = runner.invoke(show.cli.commands['suppress-fib-pending'], obj=db)
+        assert result.exit_code == 0
+        assert result.output == 'Disabled\n'
+
     def test_synchronous_mode(self):
         runner = CliRunner()
 
@@ -35,6 +47,23 @@ class TestSuppressFibPending:
         print(result.output)
         assert result.exit_code != 0
 
+    def test_config_suppress_fib_pending_no_change(self):
+        runner = CliRunner()
+
+        db = Db()
+
+        # An actual config change should notify that a config reload is required
+        result = runner.invoke(config.config.commands['suppress-fib-pending'], ['disabled'], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert 'This does NOT take effect until a config reload' in result.output
+
+        # Re-applying the same state should not prompt for a reload
+        result = runner.invoke(config.config.commands['suppress-fib-pending'], ['disabled'], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == "suppress-fib-pending is already 'disabled'; no change made.\n"
+
 
 class TestSuppressFibPendingMultiAsic(object):
     @classmethod
@@ -49,6 +78,20 @@ class TestSuppressFibPendingMultiAsic(object):
         from .mock_tables import mock_multi_asic
         importlib.reload(mock_multi_asic)
         dbconnector.load_namespace_config()
+
+    def test_show_suppress_fib_pending_default_disabled_all_asics(self):
+        runner = CliRunner()
+        db = Db()
+        for ns in ['asic0', 'asic1']:
+            cfgdb = db.cfgdb_clients[ns]
+            entry = cfgdb.get_entry('DEVICE_METADATA', 'localhost')
+            if 'suppress-fib-pending' in entry:
+                del entry['suppress-fib-pending']
+                cfgdb.set_entry('DEVICE_METADATA', 'localhost', entry)
+
+        result = runner.invoke(show.cli.commands['suppress-fib-pending'], obj=db)
+        assert result.exit_code == 0
+        assert result.output == 'asic0: Disabled\nasic1: Disabled\n'
 
     def test_config_suppress_fib_pending_all_asics(self):
         runner = CliRunner()

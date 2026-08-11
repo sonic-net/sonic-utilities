@@ -14,6 +14,8 @@ test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
+# sfputil.main imports sonic_platform at module level;
+# inject before importing so collection succeeds.
 sys.modules['sonic_platform'] = mock.MagicMock()
 import sfputil.main as sfputil
 
@@ -410,6 +412,52 @@ class TestSfputil(object):
                 Vcc: 3.2577Volts
         ModuleThresholdValues:
 '''
+        ),
+        (
+            'CPO',
+            True,
+            {
+                'els_temperature': '16.16',
+                'els_voltage': '3.396',
+                'els_temphighalarm': '80.0',
+                'els_templowalarm': '-5.0',
+                'els_temphighwarning': '70.0',
+                'els_templowwarning': '0.0',
+                'els_vcchighalarm': '3.63',
+                'els_vcclowalarm': '2.97',
+                'els_vcchighwarning': '3.465',
+                'els_vcclowwarning': '3.135',
+                'els_txpowerhighalarm': '7.0',
+                'els_txpowerlowalarm': '-6.9',
+                'els_txpowerhighwarning': '4.0',
+                'els_txpowerlowwarning': '-2.9',
+                'els_txbiashighalarm': '162.5',
+                'els_txbiashighwarning': '156.248',
+            },
+            '''\
+        ChannelMonitorValues:
+        ChannelThresholdValues:
+        ModuleMonitorValues:
+        ModuleThresholdValues:
+        ELSMonitorValues:
+                ELS Temperature: 16.16C
+                ELS Vcc: 3.396Volts
+        ELSThresholdValues:
+                ELS TempHighAlarm: 80.0C
+                ELS TempHighWarning: 70.0C
+                ELS TempLowAlarm: -5.0C
+                ELS TempLowWarning: 0.0C
+                ELS TxBiasHighAlarm: 162.5mA
+                ELS TxBiasHighWarning: 156.248mA
+                ELS TxPowerHighAlarm: 7.0mW
+                ELS TxPowerHighWarning: 4.0mW
+                ELS TxPowerLowAlarm: -6.9mW
+                ELS TxPowerLowWarning: -2.9mW
+                ELS VccHighAlarm: 3.63Volts
+                ELS VccHighWarning: 3.465Volts
+                ELS VccLowAlarm: 2.97Volts
+                ELS VccLowWarning: 3.135Volts
+'''
         )])
     def test_convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict, expected_output):
         output = sfputil.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
@@ -519,6 +567,19 @@ class TestSfputil(object):
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    def test_firmware_show(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_sfp.get_presence.return_value = True
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        mock_api.get_module_fw_info.return_value = {'info': ""}
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['firmware'].commands['show'], ["Ethernet0"])
+        assert result.exit_code == 0
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     def test_show_presence(self, mock_chassis):
@@ -622,6 +683,92 @@ Ethernet0  Not Present
         mock_sfp.get_transceiver_info = MagicMock(return_value={'type': sfputil.RJ45_PORT_TYPE})
         mock_chassis.get_port_or_cage_type = MagicMock(return_value=sfputil.SfpBase.SFP_PORT_TYPE_BIT_RJ45)
         result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  N/A
+"""
+        assert result.output == expected_output
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    def test_show_lpmode_use_lpmode_pin(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence = MagicMock(return_value=True)
+        mock_sfp.get_lpmode_via_pin = MagicMock(return_value=True)
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        runner = CliRunner()
+
+        result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == 0
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        mock_sfp.get_lpmode.assert_not_called()
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_lpmode_via_pin.reset_mock()
+        mock_sfp.get_lpmode_via_pin.side_effect = NotImplementedError
+        result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+        mock_sfp.get_lpmode_via_pin.reset_mock()
+        mock_sfp.get_lpmode_via_pin.side_effect = AttributeError
+        result = runner.invoke(sfputil.cli.commands['show'].commands['lpmode'],
+                               ["-p", "Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.get_lpmode_via_pin.assert_called_once_with()
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    def test_lpmode_show(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_sfp.get_lpmode.return_value = True
+        mock_sfp.get_presence = MagicMock(return_value=True)
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  On
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_lpmode.return_value = False
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  Off
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_presence.return_value = False
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
+        assert result.exit_code == 0
+        expected_output = """Port       Low-power Mode
+---------  ----------------
+Ethernet0  Not Present
+"""
+        assert result.output == expected_output
+
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_lpmode.return_value = False
+        mock_sfp.get_transceiver_info = MagicMock(return_value={'type': sfputil.RJ45_PORT_TYPE})
+        mock_chassis.get_port_or_cage_type = MagicMock(return_value=sfputil.SfpBase.SFP_PORT_TYPE_BIT_RJ45)
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['show'], ["-p", "Ethernet0"])
         assert result.exit_code == 0
         expected_output = """Port       Low-power Mode
 ---------  ----------------
@@ -912,10 +1059,12 @@ Ethernet0  N/A
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_sfp.read_eeprom = MagicMock(side_effect=side_effect)
         runner = CliRunner()
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "10"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x10"])
         assert result.exit_code == 0
         assert result.output == page10_expected_output
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "11"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x11"])
         assert result.exit_code == 0
         assert result.output == page11_expected_output
 
@@ -1068,7 +1217,7 @@ Ethernet0  N/A
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'])
         assert result.exit_code == 0
-        expected_output = """EEPROM hexdump for port Ethernet0
+        expected_output = r"""EEPROM hexdump for port Ethernet0
         Lower page 0h
         00000000 00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f |................|
         00000010 10 11 12 13 14 15 16 17  18 19 1a 1b 1c 1d 1e 1f |................|
@@ -1113,6 +1262,59 @@ EEPROM hexdump for port Ethernet4
 
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', 'invalid_number'])
         assert result.exit_code != 0
+
+    def test_validate_eeprom_page_decimal(self):
+        assert sfputil.validate_eeprom_page('0') == 0
+        assert sfputil.validate_eeprom_page('16') == 16
+        assert sfputil.validate_eeprom_page('255') == 255
+
+    def test_validate_eeprom_page_hex(self):
+        assert sfputil.validate_eeprom_page('0x0') == 0
+        assert sfputil.validate_eeprom_page('0x10') == 16
+        assert sfputil.validate_eeprom_page('0xff') == 255
+        assert sfputil.validate_eeprom_page('0xFF') == 255
+
+    def test_validate_eeprom_page_octal(self):
+        assert sfputil.validate_eeprom_page('0o0') == 0
+        assert sfputil.validate_eeprom_page('0o20') == 16
+        assert sfputil.validate_eeprom_page('0o377') == 255
+
+    def test_validate_eeprom_page_invalid_string(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('not_a_number')
+        assert exc_info.value.code == sfputil.ERROR_NOT_IMPLEMENTED
+
+    def test_validate_eeprom_page_out_of_range(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('256')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('-1')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+    def test_validate_eeprom_page_cli_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x10'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0xff'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_octal(self):
+        runner = CliRunner()
+        # octal input that maps to a valid page should be accepted
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0o20'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_out_of_range_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x100'])
+        assert result.exit_code == sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' in result.output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
@@ -1237,6 +1439,48 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.is_port_type_rj45')
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    def test_lpmode_set_use_lpmode_pin(self, mock_is_rj45, mock_chassis):
+        runner = CliRunner()
+        mock_is_rj45.return_value = False
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.set_lpmode_via_pin = MagicMock(return_value=True)
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == 0
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        mock_sfp.set_lpmode.assert_not_called()
+        assert result.output == "Enabling low-power mode for port Ethernet0 ... OK\n"
+
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['off'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == 0
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(False)
+        assert result.output == "Disabling low-power mode for port Ethernet0 ... OK\n"
+
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        mock_sfp.set_lpmode_via_pin.side_effect = NotImplementedError
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+        mock_sfp.set_lpmode_via_pin.reset_mock()
+        mock_sfp.set_lpmode_via_pin.side_effect = AttributeError
+        result = runner.invoke(sfputil.cli.commands['lpmode'].commands['on'],
+                               ["Ethernet0", "--use-lpmode-pin"])
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_sfp.set_lpmode_via_pin.assert_called_once_with(True)
+        assert "This functionality is currently not implemented for this platform" in result.output
+
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.is_port_type_rj45')
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     def test_reset_RJ45(self, mock_is_rj45, mock_chassis):
         mock_is_rj45.return_value = False
         mock_sfp = MagicMock()
@@ -1284,6 +1528,20 @@ EEPROM hexdump for port Ethernet4
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['show'].commands['fwversion'], ["Ethernet0"])
+        assert result.output == 'Show firmware version is not applicable for RJ45 port Ethernet0.\n'
+        assert result.exit_code == EXIT_FAIL
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
+    def test_firmware_show_Rj45(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_sfp.get_presence.return_value = True
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['firmware'].commands['show'], ["Ethernet0"])
         assert result.output == 'Show firmware version is not applicable for RJ45 port Ethernet0.\n'
         assert result.exit_code == EXIT_FAIL
 
@@ -1930,20 +2188,271 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Ethernet0: Set loopback mode failed. Parameter is not supported\n'
         assert result.exit_code == EXIT_FAIL
 
+        # When the subport field cannot be read from CONFIG_DB, loopback should
+        # assume subport 0 and proceed instead of crashing.
+        mock_api.set_loopback_mode.side_effect = None
+        mock_api.set_loopback_mode.return_value = True
         mock_config_db = MagicMock()
         mock_config_db.get.side_effect = TypeError
         mock_config_db_connector.return_value = mock_config_db
         result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
                                ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
-        assert result.exit_code == EXIT_FAIL
+        assert result.output == 'Error: \nEthernet0: enable media-side-input loopback\n'
+        assert result.exit_code == 0
 
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_capability(self, mock_get_sfp_object):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api.return_value = mock_api
+        mock_get_sfp_object.return_value = mock_sfp
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
 
-        mock_sonic_v2_connector.return_value = None
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
-                               ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
-        assert result.exit_code == EXIT_FAIL
+        # NotImplementedError from get_xcvr_api: print and continue so multi-port runs aren't aborted
+        mock_sfp.get_xcvr_api.side_effect = NotImplementedError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert result.output == 'Ethernet0: This functionality is not implemented\n'
+        assert result.exit_code == 0
+
+        mock_sfp.get_xcvr_api.side_effect = None
+        mock_sfp.get_xcvr_api.return_value = mock_api
+
+        # Diagnostic pages not supported: per-module, no exit so other ports keep iterating
+        mock_api.get_diag_page_support.return_value = False
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not support diagnostic pages required for loopback' in result.output
+        assert result.exit_code == 0
+
+        # SFF-8636 / non-CMIS module: AttributeError on get_loopback_capability
+        mock_api.get_diag_page_support.return_value = True
+        mock_api.get_loopback_capability.side_effect = AttributeError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert result.output == 'Ethernet0: Loopback capability is not applicable for this module\n'
+        assert result.exit_code == 0
+
+        # CCmisApi: get_diag_page_support absent but get_loopback_capability present
+        mock_api.get_diag_page_support.side_effect = AttributeError
+        mock_api.get_loopback_capability.side_effect = None
+        mock_api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback capability:' in result.output
+        assert result.exit_code == 0
+
+        mock_api.get_diag_page_support.side_effect = None
+        mock_api.get_diag_page_support.return_value = True
+
+        # No capability advertised
+        mock_api.get_loopback_capability.side_effect = None
+        mock_api.get_loopback_capability.return_value = None
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not advertise any loopback capability' in result.output
+        assert result.exit_code == 0
+
+        # Capability advertised
+        mock_api.get_loopback_capability.return_value = {
+            'simultaneous_host_media_loopback_supported': True,
+            'per_lane_media_loopback_supported': False,
+            'per_lane_host_loopback_supported': True,
+            'host_side_input_loopback_supported': True,
+            'host_side_output_loopback_supported': False,
+            'media_side_input_loopback_supported': True,
+            'media_side_output_loopback_supported': False,
+        }
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback capability:' in result.output
+        assert 'host_side_input_loopback_supported: True' in result.output
+        assert 'media_side_output_loopback_supported: False' in result.output
+        assert result.exit_code == 0
+
+    @patch('sfputil.debug.get_logical_list')
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_capability_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+        mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
+
+        def make_sfp(diag_support=True, attr_error=False, cap=None):
+            sfp = MagicMock()
+            api = MagicMock()
+            sfp.get_xcvr_api.return_value = api
+            api.get_diag_page_support.return_value = diag_support
+            if attr_error:
+                api.get_loopback_capability.side_effect = AttributeError
+            else:
+                api.get_loopback_capability.return_value = cap
+            return sfp
+
+        # RJ45 and absent ports: get_sfp_object raises SystemExit (and prints diagnostic).
+        # The helper catches SystemExit so iteration continues past them.
+        mock_get_sfp_object.side_effect = [
+            SystemExit(EXIT_FAIL),  # Ethernet0: simulated RJ45
+            SystemExit(EXIT_FAIL),  # Ethernet4: simulated no transceiver
+            make_sfp(cap={'host_side_input_loopback_supported': True}),
+            make_sfp(cap={'host_side_input_loopback_supported': False}),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet8: loopback capability:' in result.output
+        assert 'Ethernet12: loopback capability:' in result.output
+        # All four ports are visited; iteration is not aborted by the SystemExits.
+        assert mock_get_sfp_object.call_count == 4
+
+        # Mixed: CMIS with cap, no diag support, non-CMIS, no cap advertised.
+        # Every skipped port emits a diagnostic message so the operator sees why.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [
+            make_sfp(cap={'host_side_input_loopback_supported': True}),
+            make_sfp(diag_support=False),
+            make_sfp(attr_error=True),
+            make_sfp(cap=None),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: loopback capability:' in result.output
+        assert 'Ethernet4: The module does not support diagnostic pages required for loopback' in result.output
+        assert 'Ethernet8: Loopback capability is not applicable for this module' in result.output
+        assert 'Ethernet12: The module does not advertise any loopback capability' in result.output
+
+        # No ports support loopback (all non-CMIS): per-port diagnostics + the summary line.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [make_sfp(attr_error=True)] * 4
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: Loopback capability is not applicable for this module' in result.output
+        assert 'Ethernet12: Loopback capability is not applicable for this module' in result.output
+        assert 'No ports found that support loopback capability' in result.output
+
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_status(self, mock_get_sfp_object):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api.return_value = mock_api
+        mock_get_sfp_object.return_value = mock_sfp
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-status']
+
+        # NotImplementedError from get_xcvr_api: print and continue so multi-port runs aren't aborted
+        mock_sfp.get_xcvr_api.side_effect = NotImplementedError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert result.output == 'Ethernet0: This functionality is not implemented\n'
+        assert result.exit_code == 0
+
+        mock_sfp.get_xcvr_api.side_effect = None
+        mock_sfp.get_xcvr_api.return_value = mock_api
+
+        # Diagnostic pages not supported: per-module, no exit
+        mock_api.get_diag_page_support.return_value = False
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not support diagnostic pages required for loopback' in result.output
+        assert result.exit_code == 0
+
+        # Loopback capability not advertised: skip without reading status
+        mock_api.get_diag_page_support.return_value = True
+        mock_api.get_loopback_capability.return_value = None
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'does not advertise any loopback capability' in result.output
+        assert result.exit_code == 0
+
+        # SFF-8636 / non-CMIS module: AttributeError on a getter
+        mock_api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+        mock_api.get_host_input_loopback.side_effect = AttributeError
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: Loopback status is not applicable for this module' in result.output
+        assert result.exit_code == 0
+
+        # CCmisApi: get_diag_page_support absent but loopback getters present
+        mock_api.get_diag_page_support.side_effect = AttributeError
+        mock_api.get_host_input_loopback.side_effect = None
+        mock_api.get_host_input_loopback.return_value = [False] * 8
+        mock_api.get_host_output_loopback.return_value = [False] * 8
+        mock_api.get_media_input_loopback.return_value = False
+        mock_api.get_media_output_loopback.return_value = False
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback status:' in result.output
+        assert result.exit_code == 0
+
+        mock_api.get_diag_page_support.side_effect = None
+        mock_api.get_diag_page_support.return_value = True
+
+        # CMIS module: per-lane host lists, scalar media flags
+        mock_api.get_host_input_loopback.side_effect = None
+        mock_api.get_host_input_loopback.return_value = [True, False, False, False, False, False, False, False]
+        mock_api.get_host_output_loopback.return_value = [False] * 8
+        mock_api.get_media_input_loopback.return_value = False
+        mock_api.get_media_output_loopback.return_value = True
+        result = runner.invoke(cmd, ["Ethernet0"])
+        assert 'Ethernet0: loopback status:' in result.output
+        assert 'host-side-input:   [True, False, False, False, False, False, False, False]' in result.output
+        assert 'host-side-output:  [False, False, False, False, False, False, False, False]' in result.output
+        assert 'media-side-input:  False' in result.output
+        assert 'media-side-output: True' in result.output
+        assert result.exit_code == 0
+
+    @patch('sfputil.debug.get_logical_list')
+    @patch('sfputil.debug.get_sfp_object')
+    def test_debug_loopback_status_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+        mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
+        runner = CliRunner()
+        cmd = sfputil.cli.commands['debug'].commands['loopback-status']
+
+        def make_cmis_sfp(diag_support=True, attr_error=False):
+            sfp = MagicMock()
+            api = MagicMock()
+            sfp.get_xcvr_api.return_value = api
+            if attr_error:
+                api.get_diag_page_support.return_value = True
+                api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+                api.get_host_input_loopback.side_effect = AttributeError
+            else:
+                api.get_diag_page_support.return_value = diag_support
+                api.get_loopback_capability.return_value = {'host_side_input_loopback_supported': True}
+                api.get_host_input_loopback.return_value = [False] * 8
+                api.get_host_output_loopback.return_value = [False] * 8
+                api.get_media_input_loopback.return_value = False
+                api.get_media_output_loopback.return_value = False
+            return sfp
+
+        # RJ45 and absent ports: get_sfp_object raises SystemExit (and prints diagnostic).
+        # The helper catches SystemExit so iteration continues past them.
+        # Ethernet0: RJ45, Ethernet4: no transceiver, Ethernet8: CMIS, Ethernet12: CMIS
+        mock_get_sfp_object.side_effect = [
+            SystemExit(EXIT_FAIL),
+            SystemExit(EXIT_FAIL),
+            make_cmis_sfp(),
+            make_cmis_sfp(),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet8: loopback status:' in result.output
+        assert 'Ethernet12: loopback status:' in result.output
+        # All four ports are visited; iteration is not aborted by the SystemExits.
+        assert mock_get_sfp_object.call_count == 4
+
+        # Mixed CMIS: diag support, no diag support, non-CMIS (AttributeError).
+        # Skipped ports each emit a diagnostic.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [
+            make_cmis_sfp(diag_support=True),
+            make_cmis_sfp(diag_support=False),
+            make_cmis_sfp(attr_error=True),
+            make_cmis_sfp(diag_support=True),
+        ]
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: loopback status:' in result.output
+        assert 'Ethernet4: The module does not support diagnostic pages required for loopback' in result.output
+        assert 'Ethernet8: Loopback status is not applicable for this module' in result.output
+        assert 'Ethernet12: loopback status:' in result.output
+
+        # No ports support loopback (all non-CMIS): per-port diagnostics + the summary line.
+        mock_get_sfp_object.reset_mock()
+        mock_get_sfp_object.side_effect = [make_cmis_sfp(attr_error=True)] * 4
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert 'Ethernet0: Loopback status is not applicable for this module' in result.output
+        assert 'Ethernet12: Loopback status is not applicable for this module' in result.output
+        assert 'No ports found that support loopback status' in result.output
 
     @pytest.mark.parametrize(
         "direction, lane_count, enable, disable_func_result, cmis_version, output_dict, expected_echo, expected_exit",
