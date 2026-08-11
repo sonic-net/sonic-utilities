@@ -508,3 +508,19 @@ def disable_vlan_sag(db, vid):
 
     db.cfgdb.mod_entry('VLAN_INTERFACE', vlan, {"static_anycast_gateway": "false"})
     click.echo('static-anycast-gateway setting saved to ConfigDB')
+
+@vlan.command('mac_learning')
+@click.argument('vid', metavar='<vid>', required=True, type=int)
+@click.argument('mode', metavar='<mode>', required=True, type=click.Choice(['enable', 'disable']))
+@click.pass_context
+@clicommon.pass_db
+def vlan_mac_learning(db, ctx, vid, mode):
+    """Enable or disable MAC learning on a VLAN"""
+    log.log_info("setting MAC learning to {} for Vlan{}".format(mode, vid))
+    config_db = get_config_db_from_context(ctx)
+    vlan = 'Vlan{}'.format(vid)
+    if clicommon.check_if_vlanid_exist(config_db, vlan) is False:
+        ctx.fail("{} does not exist".format(vlan))
+    learn_disable = "true" if mode == "disable" else "false"
+    config_db.mod_entry('VLAN', vlan, {'learn_disable': learn_disable})
+    click.echo("MAC learning {}d on {}".format(mode, vlan))

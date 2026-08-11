@@ -240,3 +240,19 @@ def config(namespace):
         db = ConfigDbWrapper(config_db, ns_db)
         _config_helper(db)
 
+
+@vlan.command('learning')
+def learning():
+    """Show MAC learning status per VLAN"""
+    from swsscommon.swsscommon import ConfigDBConnector
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    vlan_data = config_db.get_table('VLAN')
+    header = ['VLAN ID', 'MAC Learning']
+    body = []
+    for vlan_name in natsorted(vlan_data):
+        vid = vlan_name.replace('Vlan', '')
+        learn_disable = vlan_data[vlan_name].get('learn_disable', 'false')
+        status = 'disabled' if learn_disable == 'true' else 'enabled'
+        body.append([vid, status])
+    click.echo(tabulate(body, header, tablefmt="grid"))
