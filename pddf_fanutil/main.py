@@ -129,7 +129,7 @@ def direction(index):
 @cli.command()
 @click.option('-i', '--index', default=-1, type=int, help="Index of FAN (1-based)")
 def getspeed(index):
-    """Display FAN speed in RPM"""
+    """Display FAN speed in RPM and duty cycle percentage"""
     fan_list = []
     if (index < 0):
         fan_list = platform_chassis.get_all_fans()
@@ -138,13 +138,14 @@ def getspeed(index):
         fan_list = platform_chassis.get_fan(index-1)
         default_index = index-1
 
-    header = ['FAN', 'SPEED (RPM)']
+    header = ['FAN', 'SPEED (RPM)', 'DUTY CYCLE (%)']
     speed_table = []
 
     for idx, fan in enumerate(fan_list, default_index):
         fan_name = helper.try_get(fan.get_name, "Fan {}".format(idx+1))
         rpm = helper.try_get(fan.get_speed_rpm, 'N/A')
-        speed_table.append([fan_name, rpm])
+        pct = helper.try_get(fan.get_speed, 'N/A')
+        speed_table.append([fan_name, rpm, pct])
 
     if speed_table:
         click.echo(tabulate(speed_table, header, tablefmt="simple"))
@@ -160,7 +161,10 @@ def setspeed(speed):
         raise click.Abort()
 
     fan_list = platform_chassis.get_all_fans()
+    any_present = False
     for idx, fan in enumerate(fan_list):
+        if fan.get_presence():
+            any_present = True
         try:
             status = fan.set_speed(speed)
         except NotImplementedError:
@@ -171,7 +175,9 @@ def setspeed(speed):
             click.echo("Failed")
             sys.exit(1)
 
-    click.echo("Successful")
+    click.echo("Set fan speed to {}%".format(speed))
+    if not any_present:
+        click.echo("Warning: No fans detected.")
 
 
 @cli.group()
