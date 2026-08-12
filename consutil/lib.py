@@ -55,6 +55,7 @@ PICOCOM_BUSY = "Resource temporarily unavailable"
 # mirror Constants
 MIRROR_RUNTIME_DIR = "/run/console-monitor/mirror"
 MIRROR_CONTROL_MAX_MESSAGE = 1024 * 1024
+MIRROR_CONTROL_TIMEOUT_SEC = 10
 MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC = 600
 MIRROR_DIRECTIONS = ("rx", "tx", "both")
 MIRROR_DURATION_SUFFIXES = ("s", "m", "h", "d")
@@ -542,7 +543,7 @@ def _recv_mirror_message(sock, timeout=None):
             try:
                 chunk = sock.recv(size - len(data))
             except socket.timeout:
-                raise RuntimeError("timed out waiting for mirror response")
+                raise MirrorRequestTimeout("timed out waiting for mirror response")
             if not chunk:
                 raise RuntimeError("unexpected EOF")
             data += chunk
@@ -562,14 +563,19 @@ def _recv_mirror_message(sock, timeout=None):
     return response
 
 
-def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_first_reply=None):
+def send_mirror_message(
+    line, message, wait_for_final=False, quiet=False, on_first_reply=None
+):
     path = os.path.join(MIRROR_RUNTIME_DIR, f"line{line}.sock")
     payload = json.dumps(message, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    send_started = False
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(MIRROR_CONTROL_TIMEOUT_SEC)
             sock.connect(path)
+            send_started = True
             sock.sendall(struct.pack("!I", len(payload)) + payload)
-            first = _recv_mirror_message(sock, timeout=10)
+            first = _recv_mirror_message(sock, timeout=MIRROR_CONTROL_TIMEOUT_SEC)
             if wait_for_final:
                 if first.get("status") != "packaging":
                     raise RuntimeError(_mirror_error_message(first))
@@ -588,6 +594,11 @@ def send_mirror_message(line, message, wait_for_final=False, quiet=False, on_fir
         if quiet:
             raise
         click.echo(f"Mirror request failed on line [{line}]: {e}")
+        if send_started and isinstance(e, (socket.timeout, MirrorRequestTimeout)):
+            click.echo(
+                "The command outcome may be unknown; check with "
+                f"'consutil mirror show {line}'."
+            )
         sys.exit(ERR_CMD)
 
 
@@ -603,4 +614,7 @@ class LineNotFoundError(Exception):
     pass
 
 class ConnectionFailedError(Exception):
+    pass
+
+class MirrorRequestTimeout(RuntimeError):
     pass

@@ -1761,6 +1761,7 @@ class TestConsoleMirrorProtocol(object):
         def __init__(self, replies):
             self.replies = replies
             self.connected_path = None
+            self.connected_timeout = None
             self.sent_data = b""
             self.timeout = None
 
@@ -1772,6 +1773,7 @@ class TestConsoleMirrorProtocol(object):
 
         def connect(self, path):
             self.connected_path = path
+            self.connected_timeout = self.timeout
 
         def sendall(self, data):
             self.sent_data += data
@@ -1794,6 +1796,10 @@ class TestConsoleMirrorProtocol(object):
                 raise consutil_lib.socket.timeout()
             return super().recv(size)
 
+    class SendTimeoutSocket(FakeSocket):
+        def sendall(self, data):
+            raise consutil_lib.socket.timeout("send timed out")
+
     @staticmethod
     def _frame(message):
         payload = json.dumps(message).encode("utf-8")
@@ -1810,8 +1816,25 @@ class TestConsoleMirrorProtocol(object):
         sent_payload = json.loads(
             fake_socket.sent_data[4:4 + sent_size].decode("utf-8"))
         assert fake_socket.connected_path == "/run/console-monitor/mirror/line1.sock"
+        assert fake_socket.connected_timeout == \
+            consutil_lib.MIRROR_CONTROL_TIMEOUT_SEC
         assert sent_payload == {"op": "status", "line": "1"}
         assert response == {"status": "ok", "file_path": MIRROR_LINE1_FILE}
+
+    def test_send_mirror_message_send_timeout_recommends_status_check(self, capsys):
+        fake_socket = self.SendTimeoutSocket([])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message("1", {"op": "start", "line": "1"})
+
+        assert exc.value.code == consutil_lib.ERR_CMD
+        assert fake_socket.connected_timeout == \
+            consutil_lib.MIRROR_CONTROL_TIMEOUT_SEC
+        output = capsys.readouterr().out
+        assert "send timed out" in output
+        assert "The command outcome may be unknown" in output
+        assert "consutil mirror show 1" in output
 
     def test_send_mirror_message_final_response(self):
         fake_socket = self.FakeSocket([
