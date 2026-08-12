@@ -46,6 +46,47 @@ SAI_KEY_DUMP_STORE_COUNT = 'SAI_DUMP_STORE_AMOUNT'
 CFG_REC_DIR = "config-record"
 PKT_REC_DIR = "packet-drop"
 
+# SDK techsupport CT dump sentinel path. Keep in sync across:
+#   sonic-utilities/config/plugins/nvidia_bluefield.py (SDK_TECHSUPPORT_CT_DUMP_SENTINEL)
+#   sonic-utilities/scripts/generate_dump (sdk_techsupport_ct_dump_sentinel)
+#   sonic-sairedis/syncd/scripts/syncd_init_common.sh (config_syncd_nvidia_bluefield)
+SDK_TECHSUPPORT_CT_DUMP_RUN_DIR = '/var/run/sonic-platform-nvidia-bluefield'
+SDK_TECHSUPPORT_CT_DUMP_SENTINEL = f'{SDK_TECHSUPPORT_CT_DUMP_RUN_DIR}/sdk-techsupport-ct-dump.enabled'
+
+
+def is_sdk_techsupport_ct_dump_enabled(docker_client):
+    """Probe whether SDK CT dumps are enabled for techsupport.
+
+    The probe command succeeds (rc == 0) whenever it runs in syncd, and prints
+    the current state, so a missing sentinel (disabled) is distinguished from a
+    failed probe (syncd unreachable / exec error).
+
+    Returns:
+        tuple: (rc, enabled) where rc is the probe return code. ``enabled`` is a
+        bool that is only meaningful when rc == 0; it is None on probe failure.
+    """
+    rc, stdout = run_in_syncd(
+        f"sh -c 'if [ -f {SDK_TECHSUPPORT_CT_DUMP_SENTINEL} ]; then echo enabled; else echo disabled; fi'",
+        docker_client)
+
+    if rc != 0:
+        return rc, None
+
+    return rc, stdout.strip() == 'enabled'
+
+
+def set_sdk_techsupport_ct_dump_state(state, docker_client):
+    """Enable or disable SDK CT dumps in techsupport via sentinel file."""
+    if state == 'enabled':
+        cmd = (
+            f"sh -c 'mkdir -p {SDK_TECHSUPPORT_CT_DUMP_RUN_DIR} && "
+            f"touch {SDK_TECHSUPPORT_CT_DUMP_SENTINEL}'"
+        )
+    else:
+        cmd = f"sh -c 'rm -f {SDK_TECHSUPPORT_CT_DUMP_SENTINEL}'"
+
+    return run_in_syncd(cmd, docker_client)
+
 
 def run_in_syncd(cmd, docker_client):
     """Run a command in the syncd container using Docker Python SDK.
@@ -326,6 +367,35 @@ def config_record(state):
         click.echo(f"Config recording {state} on {bin_path}.")
 
     sys.exit(rc)
+
+
+@sdk.command('techsupport-ct-dump')
+@click.argument('state', type=click.Choice(['enabled', 'disabled']))
+def techsupport_ct_dump(state):
+    """Enable or disable SDK Connection Table dumps in techsupport"""
+    import docker
+    docker_client = docker.from_env()
+
+    rc, ct_dump_enabled = is_sdk_techsupport_ct_dump_enabled(docker_client)
+    if rc != 0:
+        click.echo(
+            "Could not probe SDK Connection Table dump state in techsupport "
+            f"(syncd error, rc={rc})", err=True)
+        sys.exit(rc)
+
+    if ct_dump_enabled and state == 'enabled':
+        click.echo("SDK Connection Table dump in techsupport is already enabled")
+        sys.exit(0)
+    elif not ct_dump_enabled and state == 'disabled':
+        click.echo("SDK Connection Table dump in techsupport is already disabled")
+        sys.exit(0)
+
+    rc, stdout = set_sdk_techsupport_ct_dump_state(state, docker_client)
+    if rc != 0:
+        click.echo(f"Could not set SDK Connection Table dump in techsupport to {state}: {stdout}", err=True)
+        sys.exit(rc)
+
+    click.echo(f"SDK Connection Table dump in techsupport {state}.")
 
 
 def register(cli):
