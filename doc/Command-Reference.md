@@ -15965,8 +15965,16 @@ This command is used to install a new image on the alternate image partition.  T
 
 - Usage:
   ```
-  sonic-installer install <image_file_path>
+  sonic-installer install [--remove-pk=<directory>] <image_file_path>
   ```
+
+The `--remove-pk` option removes the UEFI Secure Boot KEK and PK after the image
+is installed. The specified directory must contain the signed empty updates
+`remove-all-kek.auth` and `remove-all-pk.auth`. KEK is removed first and PK is
+removed last, which transitions the device to Setup Mode.
+
+When the device has an enrolled PK, installation is rejected if the incoming
+image does not contain `boot/DB.auth`, unless `--remove-pk` is specified.
 
 - Example:
 

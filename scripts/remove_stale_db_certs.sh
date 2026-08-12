@@ -472,7 +472,7 @@ echo "Auth directory       : $AUTH_DIR"
 echo "Remove-all .auth      : $REMOVE_ALL_AUTH"
 [ -n "$CURRENT_IMG" ] && echo "Current image        : $CURRENT_IMG"
 [ -n "$NEXT_IMG" ]    && echo "Next image           : $NEXT_IMG"
-[ -n "$CRIT_DIR" ]    && echo "Boot-critical dir    : $CRIT_DIR ($CRIT_TOTAL binary/ies)"
+[ -n "$CRIT_DIR" ]    && echo "Boot-critical dir    : $CRIT_DIR ($CRIT_TOTAL binaries)"
 echo
 
 echo "db certificates that SIGN an installed image and will be REINSTALLED ($USED_COUNT):"

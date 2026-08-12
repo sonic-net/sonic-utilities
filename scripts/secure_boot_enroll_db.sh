@@ -15,8 +15,19 @@
 # the db is left unchanged, and the subsequent CMS verification still fails. This therefore
 # does not bypass the secure-upgrade trust model; it implements KEK-authorized db key rotation.
 #
-# Best-effort: every failure is logged and the script exits 0 so it never blocks an install.
+# Usage:
+#   secure_boot_enroll_db.sh <image_file>
+#   secure_boot_enroll_db.sh --check <image_file>
+#
+# Enrollment is best-effort: every failure is logged and the script exits 0 so it never blocks
+# an install. Check mode only inspects the image and exits 0 when boot/DB.auth is present or 1
+# when it is absent or unreadable.
 
+mode="enroll"
+if [ "${1}" = "--check" ]; then
+    mode="check"
+    shift
+fi
 image_file="${1}"
 DB_GUID="d719b2cb-3d3a-4596-a3bc-dad00e67656f"
 EFIVARS_DIR="/sys/firmware/efi/efivars"
@@ -27,19 +38,16 @@ log() {
 }
 
 if [ -z "$image_file" ] || [ ! -f "$image_file" ]; then
-    log "image file '${image_file}' not found, skipping db enrollment"
+    log "image file '${image_file}' not found"
+    [ "$mode" = "check" ] && exit 1
     exit 0
 fi
 
-if [ ! -d "$EFIVARS_DIR" ]; then
-    log "efivars not available, skipping db enrollment"
+TMP_DIR=$(mktemp -d) || {
+    log "failed to create temporary directory"
+    [ "$mode" = "check" ] && exit 1
     exit 0
-fi
-if ! mountpoint -q "$EFIVARS_DIR" 2>/dev/null; then
-    mount -t efivarfs efivarfs "$EFIVARS_DIR" 2>/dev/null || true
-fi
-
-TMP_DIR=$(mktemp -d)
+}
 trap 'rm -rf "$TMP_DIR"' EXIT
 FS_ZIP="${TMP_DIR}/fs.zip"
 DB_AUTH="${TMP_DIR}/DB.auth"
@@ -51,14 +59,29 @@ DB_AUTH="${TMP_DIR}/DB.auth"
 SHARCH_SIZE=$(sed '/^exit_marker$/q' "$image_file" | wc -c)
 tail -c +$((SHARCH_SIZE + 1)) "$image_file" | tar --occurrence=1 -xO installer/fs.zip 2>/dev/null > "$FS_ZIP" || true
 if [ ! -s "$FS_ZIP" ]; then
-    log "image does not contain installer/fs.zip, skipping db enrollment"
+    log "image does not contain installer/fs.zip"
+    [ "$mode" = "check" ] && exit 1
     exit 0
 fi
 
 unzip -p "$FS_ZIP" boot/DB.auth 2>/dev/null > "$DB_AUTH" || true
 if [ ! -s "$DB_AUTH" ]; then
-    log "image does not bundle boot/DB.auth, skipping db enrollment"
+    log "image does not bundle boot/DB.auth"
+    [ "$mode" = "check" ] && exit 1
     exit 0
+fi
+
+if [ "$mode" = "check" ]; then
+    log "image bundles boot/DB.auth"
+    exit 0
+fi
+
+if [ ! -d "$EFIVARS_DIR" ]; then
+    log "efivars not available, skipping db enrollment"
+    exit 0
+fi
+if ! mountpoint -q "$EFIVARS_DIR" 2>/dev/null; then
+    mount -t efivarfs efivarfs "$EFIVARS_DIR" 2>/dev/null || true
 fi
 
 # Persist the db certificate shipped with the image under /host/db-auth using a unique,

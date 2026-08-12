@@ -47,10 +47,14 @@ sig-list-to-certs $EFI_CERTS_DIR/db_efi $EFI_CERTS_DIR/db >/dev/null||
 # what made verification of an unsigned/untrusted image scale with the size of db.
 : > $EFI_CERTS_DIR/cert.pem
 for file in $(ls $EFI_CERTS_DIR | grep "db-"); do
-    LOG=$(openssl x509 -in $EFI_CERTS_DIR/$file -inform der 2>&1 >> $EFI_CERTS_DIR/cert.pem)
-    if [ $? -ne 0 ]; then
+    cert_file="$TMP_DIR/db-cert.pem"
+    LOG=$(openssl x509 -in "$EFI_CERTS_DIR/$file" -inform der -out "$cert_file" 2>&1)
+    status=$?
+    if [ "$status" -ne 0 ]; then
         logger "cms_validation: $LOG"
+        continue
     fi
+    cat "$cert_file" >> "$EFI_CERTS_DIR/cert.pem"
 done
 
 # Verify the detached signature against the combined db trust store.
