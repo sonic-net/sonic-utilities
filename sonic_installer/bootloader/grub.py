@@ -216,6 +216,19 @@ class GrubBootloader(OnieInstallerBootloader):
         click.echo(enroll_result.stdout.decode())
         return enroll_result.returncode == 0
 
+    def image_has_secure_boot_db_auth(self, image_path):
+        check_script_name = 'secure_boot_enroll_db.sh'
+        script_path = os.path.join('/usr', 'local', 'bin', check_script_name)
+        if not os.path.exists(script_path):
+            click.echo("Unable to find Secure Boot image inspection script in path " + script_path)
+            return False
+        check_result = subprocess.run(
+            [script_path, '--check', image_path],
+            capture_output=True,
+        )
+        click.echo(check_result.stdout.decode())
+        return check_result.returncode == 0
+
     @classmethod
     def detect(cls):
         return os.path.isfile(os.path.join(HOST_PATH, 'grub/grub.cfg'))

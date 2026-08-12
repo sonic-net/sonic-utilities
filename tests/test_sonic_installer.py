@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 from contextlib import contextmanager
-from sonic_installer.main import sonic_installer
+from sonic_installer.main import SECURE_BOOT_KEY_UPDATE_SCRIPT, sonic_installer
 from click.testing import CliRunner
 from unittest.mock import patch, Mock, call
 import sonic_installer.common as sonic_installer_common
@@ -112,6 +112,109 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
         call(["rm", "-rf", mounted_image_folder], raise_exception=False),
     ]
     assert run_command_or_raise.call_args_list == expected_call_list
+
+
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.run_command_or_raise")
+@patch("sonic_installer.main.run_command")
+@patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=True)
+def test_install_remove_pk(pk_enrolled, run_command, run_command_or_raise, get_bootloader, fs):
+    sonic_image_filename = "sonic.bin"
+    image_version = "image_1"
+    auth_dir = "/secure-boot-empty-keys"
+    kek_auth = os.path.join(auth_dir, "remove-all-kek.auth")
+    pk_auth = os.path.join(auth_dir, "remove-all-pk.auth")
+
+    fs.create_file(sonic_image_filename)
+    fs.create_file(kek_auth)
+    fs.create_file(pk_auth)
+
+    mock_bootloader = Mock()
+    mock_bootloader.get_binary_image_version.return_value = image_version
+    mock_bootloader.get_installed_images.return_value = [image_version]
+    mock_bootloader.set_default_image.return_value = True
+    mock_bootloader.image_has_secure_boot_db_auth.return_value = False
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(
+        sonic_installer.commands["install"],
+        [sonic_image_filename, "-y", f"--remove-pk={auth_dir}"],
+    )
+
+    assert result.exit_code == 0
+    assert run_command_or_raise.call_args_list == [
+        call([SECURE_BOOT_KEY_UPDATE_SCRIPT, "KEK", kek_auth], capture=False),
+        call([SECURE_BOOT_KEY_UPDATE_SCRIPT, "PK", pk_auth], capture=False),
+    ]
+
+
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=True)
+def test_install_rejects_image_without_db_auth_when_pk_enrolled(pk_enrolled, get_bootloader, fs):
+    sonic_image_filename = "sonic.bin"
+    image_version = "image_1"
+    fs.create_file(sonic_image_filename)
+
+    mock_bootloader = Mock()
+    mock_bootloader.get_binary_image_version.return_value = image_version
+    mock_bootloader.image_has_secure_boot_db_auth.return_value = False
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(
+        sonic_installer.commands["install"],
+        [sonic_image_filename, "-y"],
+    )
+
+    assert result.exit_code != 0
+    assert "device has an enrolled UEFI Secure Boot PK" in result.output
+    assert "image does not contain boot/DB.auth" in result.output
+    mock_bootloader.install_image.assert_not_called()
+
+
+@patch("sonic_installer.main.run_command")
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=True)
+def test_install_accepts_image_with_db_auth_when_pk_enrolled(
+        pk_enrolled, get_bootloader, run_command, fs):
+    sonic_image_filename = "sonic.bin"
+    image_version = "image_1"
+    fs.create_file(sonic_image_filename)
+
+    mock_bootloader = Mock()
+    mock_bootloader.get_binary_image_version.return_value = image_version
+    mock_bootloader.image_has_secure_boot_db_auth.return_value = True
+    mock_bootloader.get_installed_images.return_value = [image_version]
+    mock_bootloader.set_default_image.return_value = True
+    get_bootloader.return_value = mock_bootloader
+
+    runner = CliRunner()
+    result = runner.invoke(
+        sonic_installer.commands["install"],
+        [sonic_image_filename, "-y"],
+    )
+
+    assert result.exit_code == 0
+    mock_bootloader.set_default_image.assert_called_once_with(image_version)
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_install_remove_pk_requires_both_auth_files(get_bootloader, fs):
+    auth_dir = "/secure-boot-empty-keys"
+    fs.create_dir(auth_dir)
+    fs.create_file(os.path.join(auth_dir, "remove-all-kek.auth"))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        sonic_installer.commands["install"],
+        ["sonic.bin", "-y", f"--remove-pk={auth_dir}"],
+    )
+
+    assert result.exit_code != 0
+    assert "directory must contain remove-all-kek.auth and remove-all-pk.auth" in result.output
+    get_bootloader.assert_not_called()
+
 
 @patch("sonic_installer.main.get_bootloader")
 def test_set_fips(get_bootloader):
