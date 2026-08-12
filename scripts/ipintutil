@@ -6,6 +6,8 @@ import sys
 
 import netaddr
 import netifaces
+import ipaddress
+
 from natsort import natsorted
 from tabulate import tabulate
 
@@ -160,43 +162,75 @@ def get_ip_intfs_in_namespace(af, namespace, display):
             ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
         except ValueError:
             continue
-        if af in ipaddresses:
-            ifaddresses = []
-            bgp_neighs = {}
-            ip_intf_attr = []
-            for ipaddr in ipaddresses[af]:
-                neighbor_name = 'N/A'
-                neighbor_ip = 'N/A'
-                local_ip = str(ipaddr['addr'])
-                if af == netifaces.AF_INET:
-                    netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
+        
+        ifaddresses = []
+        bgp_neighs = {}
+        
+        # Get addresses for the specified address family
+        af_addresses = ipaddresses.get(af, [])
+        for addr_info in af_addresses:
+            neighbor_name = 'N/A'
+            neighbor_ip = 'N/A'
+            local_ip = addr_info['addr']
+            
+            # Handle IPv6 link-local addresses with scope
+            if '%' in local_ip:
+                ip_parts = local_ip.split('%')
+                local_ip_no_scope = ip_parts[0]
+                netmask = addr_info['netmask'].split('/')[0] if '/' in addr_info['netmask'] else addr_info['netmask']
+                # Extract prefix length from netmask
+                if '/' in addr_info['netmask']:
+                    prefixlen = addr_info['netmask'].split('/')[-1]
                 else:
-                    netmask = ipaddr['netmask'].split('/', 1)[-1]
-                local_ip_with_mask = "{}/{}".format(local_ip, str(netmask))
-                ifaddresses.append(["", local_ip_with_mask])
-                try:
-                    neighbor_name = bgp_peer[local_ip][0]
-                    neighbor_ip = bgp_peer[local_ip][1]
-                except KeyError:
-                    pass
+                    # Calculate prefix length from netmask
+                    if ':' in netmask:
+                        prefixlen = str(ipaddress.IPv6Network(f'::{netmask}', strict=False).prefixlen)
+                    else:
+                        prefixlen = str(ipaddress.IPv4Network(f'0.0.0.0/{netmask}', strict=False).prefixlen)
+                local_ip_with_mask = f"{local_ip}/{prefixlen}"
+            else:
+                # Handle regular addresses
+                netmask = addr_info['netmask']
+                # Extract prefix length from netmask
+                if '/' in netmask:
+                    prefixlen = netmask.split('/')[-1]
+                else:
+                    # Calculate prefix length from netmask
+                    if ':' in netmask:
+                        prefixlen = str(ipaddress.IPv6Network(f'::{netmask}', strict=False).prefixlen)
+                    else:
+                        prefixlen = str(ipaddress.IPv4Network(f'0.0.0.0/{netmask}', strict=False).prefixlen)
+                local_ip_with_mask = f"{local_ip}/{prefixlen}"
+            
+            ifaddresses.append(["", local_ip_with_mask])
+            
+            # Look up BGP peer by IP without scope
+            lookup_ip = local_ip.split('%')[0] if '%' in local_ip else local_ip
+            try:
+                neighbor_name = bgp_peer[lookup_ip][0]
+                neighbor_ip = bgp_peer[lookup_ip][1]
+            except KeyError:
+                pass
 
-                bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
+            bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
 
-            if len(ifaddresses) > 0:
-                admin = get_if_admin_state(iface, namespace)
-                oper = get_if_oper_state(iface, namespace)
-                master = get_if_master(iface)
+        if len(ifaddresses) > 0:
+            admin = get_if_admin_state(iface, namespace)
+            oper = get_if_oper_state(iface, namespace)
+            master = get_if_master(iface)
+        else:
+            continue
 
-            ip_intf_attr = {
-                "vrf": master,
-                "ipaddr": natsorted(ifaddresses),
-                "admin": admin,
-                "oper": oper,
-                "bgp_neighs": bgp_neighs,
-                "ns": namespace
-            }
+        ip_intf_attr = {
+            "vrf": master,
+            "ipaddr": natsorted(ifaddresses),
+            "admin": admin,
+            "oper": oper,
+            "bgp_neighs": bgp_neighs,
+            "ns": namespace
+        }
 
-            ip_intfs[iface] = ip_intf_attr
+        ip_intfs[iface] = ip_intf_attr
     return ip_intfs
 
 
