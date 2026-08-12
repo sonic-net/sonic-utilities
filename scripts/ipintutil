@@ -147,47 +147,99 @@ def get_if_master(iface):
 
 def get_ip_intfs_in_namespace(af, namespace, display):
     """
-    Get all the ip intefaces from the kernel for the given namespace
+    Get all the ip interfaces from the kernel for the given namespace.
+
+    Uses two bulk netlink calls (get_links + get_addr) via pyroute2 instead of
+    calling netifaces.ifaddresses() once per interface.  netifaces.ifaddresses()
+    internally calls getifaddrs() which walks every kernel interface on each
+    invocation, producing O(N^2) behaviour on systems with many interfaces
+    (e.g. 128 VRFs with sub-interfaces, loopbacks, and VLANs).
     """
-    ip_intfs = {}
-    interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
+    import ipaddress
+    import socket as _socket
+    import struct
+
     bgp_peer = get_bgp_peer()
-    for iface in interfaces:
-        ip_intf_attr = []
+    af_family = _socket.AF_INET if af == netifaces.AF_INET else _socket.AF_INET6
+
+    # Two bulk netlink round-trips, factored into a helper so unit tests
+    # can monkey-patch it.
+    links, addrs = multi_asic_util.multi_asic_get_kernel_intf_state(namespace, af)
+
+    # Index -> link-info map.  admin/oper/master come straight from
+    # RTNETLINK so no per-interface sysfs reads are needed.
+    idx_to_link = {l['index']: l for l in links}
+    idx_to_name = {l['index']: l['name'] for l in links}
+    name_to_link = {l['name']: l for l in links}
+
+    # Group addresses by interface name; restore the %iface zone-id on
+    # IPv6 link-local addresses so the rendered output matches the
+    # historical netifaces-based format (e.g. fe80::1%Vlan2).
+    iface_to_addrs = {}
+    for a in addrs:
+        link_info = idx_to_link.get(a['index'])
+        if not link_info:
+            continue
+        iface = link_info['name']
+        ip_str = a['addr']
+        prefixlen = a['prefixlen']
+        if af_family == _socket.AF_INET6 and '%' not in ip_str \
+                and ipaddress.ip_address(ip_str).is_link_local:
+            ip_str = '{}%{}'.format(ip_str, iface)
+        if af_family == _socket.AF_INET:
+            # Convert prefix length to dotted-decimal netmask so the
+            # downstream netaddr.IPAddress(netmask).netmask_bits() call works.
+            packed = struct.pack('>I',
+                                 (0xFFFFFFFF << (32 - prefixlen)) & 0xFFFFFFFF)
+            netmask_str = _socket.inet_ntoa(packed)
+        else:
+            netmask_str = '/{}'.format(prefixlen)
+        iface_to_addrs.setdefault(iface, []).append(
+            {'addr': ip_str, 'netmask': netmask_str}
+        )
+
+    # Build output dict -- pure in-memory work, no more per-iface syscalls
+    ip_intfs = {}
+    for iface, ipaddr_list in iface_to_addrs.items():
         if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
             continue
-        try:
-            ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
-        except ValueError:
+
+        link_info = name_to_link.get(iface)
+        if not link_info:
             continue
-        if af in ipaddresses:
-            ifaddresses = []
-            bgp_neighs = {}
-            ip_intf_attr = []
-            for ipaddr in ipaddresses[af]:
-                neighbor_name = 'N/A'
-                neighbor_ip = 'N/A'
-                local_ip = str(ipaddr['addr'])
-                if af == netifaces.AF_INET:
-                    netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
-                else:
-                    netmask = ipaddr['netmask'].split('/', 1)[-1]
-                local_ip_with_mask = "{}/{}".format(local_ip, str(netmask))
-                ifaddresses.append(["", local_ip_with_mask])
-                try:
-                    neighbor_name = bgp_peer[local_ip][0]
-                    neighbor_ip = bgp_peer[local_ip][1]
-                except KeyError:
-                    pass
 
-                bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
+        # IFF_UP is bit 0 of the kernel ifinfomsg flags.
+        admin = 'up' if (link_info['flags'] & 0x1) else 'down'
+        # UNKNOWN oper-state means the interface has no carrier concept
+        # (loopback, VRF device, bridge, etc.) and is considered up --
+        # matching the behaviour of reading /sys/class/net/*/carrier.
+        oper = 'up' if link_info['operstate'] in ('UP', 'UNKNOWN') else 'down'
 
-            if len(ifaddresses) > 0:
-                admin = get_if_admin_state(iface, namespace)
-                oper = get_if_oper_state(iface, namespace)
-                master = get_if_master(iface)
+        master_idx = link_info['master_idx']
+        master = idx_to_name.get(master_idx, '') if master_idx else ''
 
-            ip_intf_attr = {
+        ifaddresses = []
+        bgp_neighs = {}
+        for ipaddr in ipaddr_list:
+            local_ip = ipaddr['addr']
+            if af_family == _socket.AF_INET:
+                netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
+            else:
+                netmask = ipaddr['netmask'].split('/', 1)[-1]
+            local_ip_with_mask = "{}/{}".format(local_ip, str(netmask))
+            ifaddresses.append(["", local_ip_with_mask])
+
+            neighbor_name = 'N/A'
+            neighbor_ip = 'N/A'
+            try:
+                neighbor_name = bgp_peer[local_ip][0]
+                neighbor_ip = bgp_peer[local_ip][1]
+            except KeyError:
+                pass
+            bgp_neighs[local_ip_with_mask] = [neighbor_name, neighbor_ip]
+
+        if ifaddresses:
+            ip_intfs[iface] = {
                 "vrf": master,
                 "ipaddr": natsorted(ifaddresses),
                 "admin": admin,
@@ -196,7 +248,6 @@ def get_ip_intfs_in_namespace(af, namespace, display):
                 "ns": namespace
             }
 
-            ip_intfs[iface] = ip_intf_attr
     return ip_intfs
 
 
