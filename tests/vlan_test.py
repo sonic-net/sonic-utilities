@@ -1763,3 +1763,342 @@ class TestVlan(object):
             assert result.exit_code != 0
 
         config.vlan.clicommon.run_command = origin_run_command_func
+
+
+class TestVlanBriefCache:
+    """Unit and integration tests for the per-invocation index cache
+    introduced in show/vlan.py (_get_brief_cache / _clear_brief_cache).
+    """
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _make_ctx(self, vlan_ip_data=None, vlan_ports_data=None):
+        """Return a (vlan_cfg, FakeDb) tuple usable by _get_brief_cache
+        without touching ConfigDb or the filesystem."""
+
+        class FakeDb:
+            pass
+
+        vlan_ip_data = vlan_ip_data or {}
+        vlan_ports_data = vlan_ports_data or {}
+        vlan_cfg = ({}, vlan_ip_data, vlan_ports_data)
+        return (vlan_cfg, FakeDb()), FakeDb.__new__(FakeDb)
+
+    def _make_ctx_shared_db(self, vlan_ip_data=None, vlan_ports_data=None):
+        """Like _make_ctx but returns (ctx, the_db_object) where the db
+        object IS the one embedded in ctx (so callers can inspect attrs)."""
+
+        class FakeDb:
+            pass
+
+        db = FakeDb()
+        vlan_ip_data = vlan_ip_data or {}
+        vlan_ports_data = vlan_ports_data or {}
+        vlan_cfg = ({}, vlan_ip_data, vlan_ports_data)
+        ctx = (vlan_cfg, db)
+        return ctx, db
+
+    # ------------------------------------------------------------------
+    # Unit tests: _get_brief_cache indexing
+    # ------------------------------------------------------------------
+
+    def test_cache_returns_same_object_on_repeated_calls(self):
+        """Within the same ctx the cache dict must be reused, not rebuilt."""
+        from show.vlan import _get_brief_cache
+
+        ctx, db = self._make_ctx_shared_db(
+            vlan_ip_data={
+                ("Vlan1000", "192.168.0.1/21"): {},
+                "Vlan2000": {"proxy_arp": "enabled"},
+            },
+            vlan_ports_data={
+                ("Vlan1000", "Ethernet4"): {"tagging_mode": "untagged"},
+            },
+        )
+
+        cache1 = _get_brief_cache(ctx)
+        cache2 = _get_brief_cache(ctx)
+        assert cache1 is cache2
+
+    def test_cache_ip_by_vlan_contains_only_prefix_keys(self):
+        """ip_by_vlan must include only (vlan, prefix) entries, not plain
+        vlan-name entries."""
+        from show.vlan import _get_brief_cache
+
+        ctx, _ = self._make_ctx_shared_db(
+            vlan_ip_data={
+                ("Vlan1000", "10.0.0.1/24"): {},
+                ("Vlan1000", "10.0.1.1/24"): {},
+                ("Vlan2000", "10.0.2.1/24"): {},
+                "Vlan1000": {"proxy_arp": "enabled"},   # plain key → proxy_arp
+            },
+        )
+
+        cache = _get_brief_cache(ctx)
+        assert set(cache["ip_by_vlan"].keys()) == {"Vlan1000", "Vlan2000"}
+        assert "10.0.0.1/24" in cache["ip_by_vlan"]["Vlan1000"]
+        assert "10.0.1.1/24" in cache["ip_by_vlan"]["Vlan1000"]
+        assert cache["ip_by_vlan"]["Vlan2000"] == ["10.0.2.1/24"]
+
+    def test_cache_proxy_arp_defaults_to_disabled(self):
+        """Vlan entries without a proxy_arp field must default to 'disabled'."""
+        from show.vlan import _get_brief_cache
+
+        ctx, _ = self._make_ctx_shared_db(
+            vlan_ip_data={
+                "Vlan1000": {"proxy_arp": "enabled"},
+                "Vlan2000": {},                          # no proxy_arp key
+            },
+        )
+
+        cache = _get_brief_cache(ctx)
+        assert cache["proxy_arp_by_vlan"]["Vlan1000"] == "enabled"
+        assert cache["proxy_arp_by_vlan"]["Vlan2000"] == "disabled"
+
+    def test_cache_ports_in_natsorted_order(self):
+        """ports_by_vlan must list ports in natsorted order."""
+        from show.vlan import _get_brief_cache
+        from natsort import natsorted
+
+        ports = ["Ethernet12", "Ethernet4", "Ethernet100", "Ethernet8"]
+        ctx, _ = self._make_ctx_shared_db(
+            vlan_ports_data={("Vlan1000", p): {"tagging_mode": "untagged"} for p in ports},
+        )
+
+        cache = _get_brief_cache(ctx)
+        assert cache["ports_by_vlan"]["Vlan1000"] == natsorted(ports)
+
+    def test_cache_tagging_aligned_with_ports(self):
+        """tagging_by_vlan must have the same order as ports_by_vlan so the
+        two columns line up row-for-row in the table."""
+        from show.vlan import _get_brief_cache
+
+        members = {
+            ("Vlan1000", "Ethernet12"): {"tagging_mode": "untagged"},
+            ("Vlan1000", "Ethernet4"): {"tagging_mode": "tagged"},
+            ("Vlan1000", "Ethernet8"): {"tagging_mode": "untagged"},
+        }
+        ctx, _ = self._make_ctx_shared_db(vlan_ports_data=members)
+
+        cache = _get_brief_cache(ctx)
+        ports = cache["ports_by_vlan"]["Vlan1000"]
+        tags = cache["tagging_by_vlan"]["Vlan1000"]
+        assert len(ports) == len(tags)
+        # Verify alignment: each port maps to the right tagging mode
+        for port, tag in zip(ports, tags):
+            expected = members[("Vlan1000", port)]["tagging_mode"]
+            assert tag == expected, f"Tagging mismatch for {port}: got {tag!r}, expected {expected!r}"
+
+    def test_cache_no_alias_converter_in_default_mode(self):
+        """In 'default' naming mode the alias converter must be None
+        (no PORT-table read needed)."""
+        from show.vlan import _get_brief_cache
+        import os
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = 'default'
+        try:
+            ctx, _ = self._make_ctx_shared_db()
+            cache = _get_brief_cache(ctx)
+            assert cache['iface_alias_converter'] is None
+            assert cache['naming_mode'] == 'default'
+        finally:
+            os.environ['SONIC_CLI_IFACE_MODE'] = 'default'
+
+    # ------------------------------------------------------------------
+    # Unit tests: _clear_brief_cache
+    # ------------------------------------------------------------------
+
+    def test_clear_removes_cache_attribute(self):
+        """_clear_brief_cache must delete the stashed attribute."""
+        from show.vlan import _get_brief_cache, _clear_brief_cache, _BRIEF_CACHE_ATTR
+
+        ctx, db = self._make_ctx_shared_db()
+        _get_brief_cache(ctx)
+
+        assert hasattr(db, _BRIEF_CACHE_ATTR)
+        _clear_brief_cache(db)
+        assert not hasattr(db, _BRIEF_CACHE_ATTR)
+
+    def test_clear_is_idempotent_when_no_cache(self):
+        """_clear_brief_cache must not raise when called on an object
+        that has no cache attribute."""
+        from show.vlan import _clear_brief_cache
+
+        class FakeDb:
+            pass
+
+        _clear_brief_cache(FakeDb())   # must not raise
+
+    def test_clear_allows_rebuild_with_fresh_data(self):
+        """After _clear_brief_cache the next _get_brief_cache call must
+        rebuild indexes from the current vlan_ip_data in ctx."""
+        from show.vlan import _get_brief_cache, _clear_brief_cache
+
+        ctx, db = self._make_ctx_shared_db(
+            vlan_ip_data={("Vlan1000", "10.0.0.1/24"): {}},
+        )
+
+        cache_before = _get_brief_cache(ctx)
+        assert "Vlan1000" in cache_before["ip_by_vlan"]
+
+        _clear_brief_cache(db)
+
+        # Replace vlan_ip_data in ctx with different data
+        new_ip_data = {("Vlan2000", "10.0.2.1/24"): {}}
+        new_cfg = ({}, new_ip_data, {})
+        ctx2 = (new_cfg, db)
+
+        cache_after = _get_brief_cache(ctx2)
+        assert "Vlan2000" in cache_after["ip_by_vlan"]
+        assert "Vlan1000" not in cache_after["ip_by_vlan"]
+        assert cache_before is not cache_after
+
+    def test_cache_rebuilds_when_vlan_ip_data_identity_changes(self):
+        """Identity guard: reusing the same db (cache still attached) with a
+        *different* vlan_ip_data object -- without an explicit
+        _clear_brief_cache -- must rebuild rather than return stale indexes.
+        Covers the ``_source[0] is vlan_ip_data`` arm of the guard."""
+        from show.vlan import _get_brief_cache
+
+        ctx, db = self._make_ctx_shared_db(
+            vlan_ip_data={("Vlan1000", "10.0.0.1/24"): {}},
+            vlan_ports_data={("Vlan1000", "Ethernet4"): {"tagging_mode": "untagged"}},
+        )
+        cache_before = _get_brief_cache(ctx)
+        assert "Vlan1000" in cache_before["ip_by_vlan"]
+
+        # Same db, new vlan_ip_data object -> _source[0] mismatch -> rebuild.
+        new_ip_data = {("Vlan2000", "10.0.2.1/24"): {}}
+        _, _, old_ports = ctx[0]
+        ctx2 = (({}, new_ip_data, old_ports), db)
+
+        cache_after = _get_brief_cache(ctx2)
+        assert cache_after is not cache_before
+        assert "Vlan2000" in cache_after["ip_by_vlan"]
+        assert "Vlan1000" not in cache_after["ip_by_vlan"]
+        assert cache_after["_source"][0] is new_ip_data
+
+    def test_cache_rebuilds_when_vlan_ports_data_identity_changes(self):
+        """Identity guard: a matching vlan_ip_data but a *different*
+        vlan_ports_data object must still trigger a rebuild. Covers the
+        second (short-circuited) ``_source[1] is vlan_ports_data`` arm."""
+        from show.vlan import _get_brief_cache
+
+        shared_ip_data = {("Vlan1000", "10.0.0.1/24"): {}}
+        ctx, db = self._make_ctx_shared_db(
+            vlan_ip_data=shared_ip_data,
+            vlan_ports_data={("Vlan1000", "Ethernet4"): {"tagging_mode": "untagged"}},
+        )
+        cache_before = _get_brief_cache(ctx)
+        assert "Vlan1000" in cache_before["ports_by_vlan"]
+
+        # Same vlan_ip_data object, new vlan_ports_data object ->
+        # _source[0] matches but _source[1] mismatches -> rebuild.
+        new_ports_data = {("Vlan3000", "Ethernet8"): {"tagging_mode": "tagged"}}
+        ctx2 = (({}, shared_ip_data, new_ports_data), db)
+
+        cache_after = _get_brief_cache(ctx2)
+        assert cache_after is not cache_before
+        assert "Vlan3000" in cache_after["ports_by_vlan"]
+        assert "Vlan1000" not in cache_after["ports_by_vlan"]
+        assert cache_after["_source"][0] is shared_ip_data
+        assert cache_after["_source"][1] is new_ports_data
+
+    # ------------------------------------------------------------------
+    # Integration tests: brief() command
+    # ------------------------------------------------------------------
+
+    def test_brief_calls_clear_cache_in_finally_on_exception(self):
+        """If a column getter raises, brief()'s finally block must still
+        invoke _clear_brief_cache so the cache is not left dangling."""
+        import show.vlan as vlan_show
+
+        runner = CliRunner()
+        db = Db()
+
+        original_cols = vlan_show.VlanBrief.COLUMNS[:]
+
+        def _failing_getter(ctx, vlan):
+            raise RuntimeError("simulated getter failure")
+
+        vlan_show.VlanBrief.COLUMNS = [
+            ("VLAN ID", vlan_show.get_vlan_id),
+            ("Bad", _failing_getter),
+        ]
+        try:
+            with mock.patch.object(
+                vlan_show, '_clear_brief_cache',
+                wraps=vlan_show._clear_brief_cache,
+            ) as mock_clear:
+                result = runner.invoke(
+                    show.cli.commands["vlan"].commands["brief"], [], obj=db
+                )
+            # The exception must propagate (exit_code != 0)
+            assert result.exit_code != 0
+            # _clear_brief_cache must have been called at least once (the
+            # finally-block call is guaranteed regardless of exceptions).
+            assert mock_clear.call_count >= 1
+        finally:
+            vlan_show.VlanBrief.COLUMNS = original_cols
+
+    def test_brief_second_invocation_reflects_added_vlan(self, mock_restart_dhcp_relay_service):
+        """Mutating the DB between two brief() calls on the same Db object
+        must be visible in the second call -- stale cache must not bleed
+        across invocations."""
+        from sonic_py_common import multi_asic as _sonic_multi_asic
+
+        runner = CliRunner()
+        db = Db()
+
+        # Patch DB connections so brief() uses db.cfgdb throughout.
+        with mock.patch.object(_sonic_multi_asic, 'connect_config_db_for_ns',
+                               return_value=db.cfgdb), \
+             mock.patch.object(_sonic_multi_asic, 'connect_to_all_dbs_for_ns',
+                               return_value=db.db):
+
+            # First call: baseline -- Vlan1001 must not exist yet.
+            # Use '|      1001 |' (the tabulate cell format) to avoid matching
+            # 'PortChannel1001' which also contains the substring '1001'.
+            result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [])
+            assert result.exit_code == 0
+            assert "|      1001 |" not in result.output
+
+            # Mutate: add a new VLAN
+            result = runner.invoke(
+                config.config.commands["vlan"].commands["add"], ["1001"], obj=db
+            )
+            assert result.exit_code == 0
+
+            # Second call: new VLAN must appear
+            result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [])
+            assert result.exit_code == 0
+            assert "|      1001 |" in result.output
+
+    def test_brief_second_invocation_reflects_removed_member(self):
+        """Removing a VLAN member between two brief() calls must be
+        visible in the second call -- no stale ports from the first call."""
+        from sonic_py_common import multi_asic as _sonic_multi_asic
+
+        runner = CliRunner()
+        db = Db()
+
+        # Patch DB connections so brief() uses db.cfgdb throughout.
+        with mock.patch.object(_sonic_multi_asic, 'connect_config_db_for_ns',
+                               return_value=db.cfgdb), \
+             mock.patch.object(_sonic_multi_asic, 'connect_to_all_dbs_for_ns',
+                               return_value=db.db):
+
+            # First call: Ethernet4 is a member of Vlan1000
+            result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [])
+            assert result.exit_code == 0
+            assert "Ethernet4" in result.output
+
+            # Mutate: remove Ethernet4 from Vlan1000 directly in the DB
+            db.cfgdb.set_entry("VLAN_MEMBER", ("Vlan1000", "Ethernet4"), None)
+
+            # Second call: output must differ from baseline (Ethernet4 removed)
+            result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [])
+            assert result.exit_code == 0
+            assert result.output != show_vlan_brief_output
