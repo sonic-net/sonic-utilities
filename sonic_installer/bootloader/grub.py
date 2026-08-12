@@ -5,6 +5,7 @@ Bootloader implementation for grub based platforms
 import os
 import re
 import subprocess
+import shutil
 
 import click
 
@@ -66,6 +67,17 @@ class GrubBootloader(OnieInstallerBootloader):
         return True
 
     def install_image(self, image_path):
+        old_config_dir = "/etc/sonic"
+        backup_dir = "/host/old_config"
+        os.makedirs(backup_dir, exist_ok=True)
+
+        for cfg_file in ["config_db.json"]:
+            src = os.path.join(old_config_dir, cfg_file)
+            dst = os.path.join(backup_dir, cfg_file)
+            if os.path.isfile(src):
+                shutil.copy2(src, dst)
+                click.echo(f"[installer] Backed up {src} -> {dst}")
+
         run_command(["bash", image_path])
         run_command(['grub-set-default', '--boot-directory=' + HOST_PATH, '0'])
 
