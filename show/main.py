@@ -387,6 +387,9 @@ def vrf(ctx, vrf_name):
             vrfs = list(vrf_dict.keys())
         elif vrf_name in vrf_dict:
             vrfs = [vrf_name]
+        else:
+            click.echo("Error: VRF {} is not configured".format(vrf_name))
+            raise SystemExit(1)
         for vrf in vrfs:
             intfs = get_interface_bind_to_vrf(config_db, vrf)
             intfs = natsorted(intfs)
@@ -396,6 +399,9 @@ def vrf(ctx, vrf_name):
                 body.append([vrf, intfs[0]])
                 for intf in intfs[1:]:
                     body.append(["", intf])
+    elif vrf_name is not None:
+        click.echo("Error: VRF {} is not configured".format(vrf_name))
+        raise SystemExit(1)
     click.echo(tabulate(body, header))
 
 #
