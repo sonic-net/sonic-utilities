@@ -101,6 +101,14 @@ def get_static_anycast_gateway(ctx, vlan):
 
     return "disabled"
 
+
+def get_admin_status(ctx, vlan):
+    cfg, _ = ctx
+    vlan_data, _, _ = cfg
+
+    return vlan_data[vlan].get("admin_status", "up")
+
+
 class VlanBrief:
     """ This class is used as a namespace to
     define columns for "show vlan brief" command.
@@ -133,7 +141,11 @@ class VlanBrief:
 def brief(verbose, namespace):
     def _brief_helper(db):
         """Show all bridge information"""
-        header = [colname for colname, getter in VlanBrief.COLUMNS]
+        columns = VlanBrief.COLUMNS
+        if verbose:
+            columns = columns + [("Admin Status", get_admin_status)]
+
+        header = [colname for colname, getter in columns]
         body = []
 
         # Fetching data from config db for VLAN, VLAN_INTERFACE and VLAN_MEMBER
@@ -144,7 +156,7 @@ def brief(verbose, namespace):
 
         for vlan in natsorted(vlan_data):
             row = []
-            for column in VlanBrief.COLUMNS:
+            for column in columns:
                 column_name, getter = column
                 row.append(getter((vlan_cfg, db), vlan))
             body.append(row)
