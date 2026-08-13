@@ -71,16 +71,6 @@ Ethernet4      drop               200                 200    disable
 Ethernet8      drop               600                 600    disable
 """
 
-# 512-port system: multiply=16, detection/restoration=3200, poll capped at 1000ms
-pfcwd_show_start_default_512_ports = """\
-Changed polling interval to 1000ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
----------  --------  ----------------  ------------------  ---------
-Ethernet0      drop              3200                3200    disable
-Ethernet4      drop              3200                3200    disable
-Ethernet8      drop               600                 600    disable
-"""
-
 pfcwd_show_start_history_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY

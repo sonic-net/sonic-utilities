@@ -276,36 +276,87 @@ class TestPfcwd(object):
         assert result.exit_code == 0
         assert result.output == test_vectors.pfcwd_show_start_default_32_ports
 
+    @staticmethod
+    def _run_start_default_with_ports(db, pfc_ports, extra_ports=()):
+        """Run start_default with a synthetic port layout.
+
+        start_default scales its timers off the ports it actually configures, which are the
+        DEVICE_NEIGHBOR ports carrying a PORT_QOS_MAP 'pfc_enable'. extra_ports are present only
+        in PORT, standing in for ports that are not PFC-capable.
+
+        Args:
+            db (obj): Db instance to run against.
+            pfc_ports (list): Ports in DEVICE_NEIGHBOR with pfc_enable set.
+            extra_ports (list): Ports present only in PORT, without pfc_enable.
+        """
+        import pfcwd.main as pfcwd
+
+        original_get_table = db.cfgdb.get_table
+        original_get_entry = db.cfgdb.get_entry
+
+        def mock_get_table(table):
+            if table == 'PORT':
+                return {port: {} for port in list(pfc_ports) + list(extra_ports)}
+            if table == 'DEVICE_NEIGHBOR':
+                return {port: {} for port in pfc_ports}
+            return original_get_table(table)
+
+        def mock_get_entry(table, key):
+            if table == 'PORT_QOS_MAP':
+                if key in pfc_ports:
+                    return {'pfc_enable': '3,4'}
+                if key in extra_ports:
+                    return {}
+            return original_get_entry(table, key)
+
+        with patch.object(db.cfgdb, 'get_table', side_effect=mock_get_table), \
+                patch.object(db.cfgdb, 'get_entry', side_effect=mock_get_entry):
+            return CliRunner().invoke(pfcwd.cli.commands["start_default"], [], obj=db)
+
     @patch('pfcwd.main.os')
     def test_pfcwd_start_default_512_ports(self, mock_os):
         """Test start_default on 512-port system: multiply=16, detection/restoration=3200, poll=1000ms"""
-        import pfcwd.main as pfcwd
-        runner = CliRunner()
         db = Db()
-
-        # Patch PORT table to have 512 ports so multiply = (512-1)//32+1 = 16
-        original_get_table = db.cfgdb.get_table
-
-        def mock_get_table_512_ports(table):
-            if table == 'PORT':
-                return {'Ethernet%d' % i: {} for i in range(512)}
-            return original_get_table(table)
-
         mock_os.geteuid.return_value = 0
-        with patch.object(db.cfgdb, 'get_table', side_effect=mock_get_table_512_ports):
-            result = runner.invoke(
-                pfcwd.cli.commands["start_default"],
-                [],
-                obj=db
-            )
+
+        # 512 PFC-enabled ports so multiply = (512-1)//32+1 = 16. Asserted on CONFIG_DB rather
+        # than rendered output, which would be 512 rows.
+        ports = ['Ethernet%d' % i for i in range(512)]
+        result = self._run_start_default_with_ports(db, ports)
         assert result.exit_code == 0
 
-        result = runner.invoke(
-            pfcwd.cli.commands["show"].commands["config"],
-            obj=db
-        )
+        entry = db.cfgdb.get_entry("PFC_WD", "Ethernet0")
+        assert entry.get("detection_time") == '3200'
+        assert entry.get("restoration_time") == '3200'
+        # 200 * 16 = 3200 exceeds MAX_POLL_INTERVAL_TIME, so poll interval clamps to 1000.
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == '1000'
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_ignores_pfc_ineligible_ports(self, mock_os):
+        """Ports without pfc_enable must not inflate the timer scaling.
+
+        They are skipped by verify_pfc_enable_status_per_port, so counting them makes the
+        timers larger on behalf of ports that never receive a watchdog: 64 PFC-enabled ports
+        alongside 3 ineligible ones scaled off all 67 PORT entries, giving multiply=3 (600ms)
+        instead of the correct multiply=2 (400ms).
+        """
+        db = Db()
+        mock_os.geteuid.return_value = 0
+
+        pfc_ports = ['Ethernet%d' % (i * 4) for i in range(64)]
+        ineligible = ['Ethernet256', 'Ethernet260', 'Ethernet-Rec0']
+        result = self._run_start_default_with_ports(db, pfc_ports, ineligible)
         assert result.exit_code == 0
-        assert result.output == test_vectors.pfcwd_show_start_default_512_ports
+
+        # (64-1)//32+1 = 2 -> 400ms. Counting all 67 PORT entries would give 3 -> 600ms.
+        entry = db.cfgdb.get_entry("PFC_WD", "Ethernet0")
+        assert entry.get("detection_time") == '400'
+        assert entry.get("restoration_time") == '400'
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == '400'
+
+        # The ineligible ports get no watchdog at all.
+        for port in ineligible:
+            assert db.cfgdb.get_entry("PFC_WD", port) == {}
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_history(self, mock_os):

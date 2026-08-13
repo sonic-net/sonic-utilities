@@ -418,7 +418,14 @@ class PfcwdCli(object):
         if not enable or enable.lower() != "enable":
             return
 
-        port_num = len(list(self.config_db.get_table('PORT').keys()))
+        # Count only the ports that will actually be configured below. Ports without a
+        # PORT_QOS_MAP 'pfc_enable' are skipped by verify_pfc_enable_status_per_port, so
+        # counting every PORT entry inflates the timers on behalf of ports that never get
+        # a watchdog.
+        port_num = sum(
+            1 for port in active_ports
+            if self.config_db.get_entry(PORT_QOS_MAP, port).get('pfc_enable') is not None
+        )
 
         # Parameter values positively correlate to the number of ports.
         multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
