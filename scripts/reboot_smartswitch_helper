@@ -86,7 +86,7 @@ function get_reboot_status()
     status_json=$(awk '/^{.*}$/{json=$0} END{print json}' "$reboot_output_file")
     rm -f "$reboot_output_file"
     local is_reboot_active
-    if [ -z "$status_json" ] || ! is_reboot_active=$(jq -r 'if .active == true then true elif (.status.status // 0) == 1 then false else error("reboot not complete") end' <<< "$status_json"); then
+    if [ -z "$status_json" ] || ! is_reboot_active=$(jq -r 'if .active == true then true elif .active == false and ((has("status") | not) or .status.status == 1) then false else error("reboot not complete") end' <<< "$status_json"); then
         return ${EXIT_ERROR}
     fi
     if [ "$is_reboot_active" != "true" ]; then

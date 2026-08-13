@@ -101,6 +101,32 @@ get_reboot_status 169.254.200.1 50052
     assert result.returncode != 0
 
 
+def test_get_reboot_status_accepts_inactive_without_status(tmp_path):
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+source "{SCRIPT}"
+timeout() {{ shift; docker "$@"; }}
+docker() {{ printf '{{"active":false}}\n'; }}
+get_reboot_status 169.254.200.1 50052
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode == 0
+
+
+def test_get_reboot_status_rejects_unknown_status(tmp_path):
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+source "{SCRIPT}"
+timeout() {{ shift; docker "$@"; }}
+docker() {{ printf '{{"active":false,"status":{{"status":0}}}}\n'; }}
+get_reboot_status 169.254.200.1 50052
+'''
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode != 0
+
+
 def test_get_reboot_status_rejects_failure_status(tmp_path):
     script = f'''
 EXIT_SUCCESS=0
