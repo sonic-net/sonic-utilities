@@ -647,7 +647,7 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 
 
 # List installed images
-def normalize_image_version_for_display(image):
+def normalize_image_name_for_display(image):
     manufacturing_prefix = IMAGE_PREFIX + "M."
     if image.startswith(manufacturing_prefix):
         return IMAGE_PREFIX + image[len(manufacturing_prefix):]
@@ -661,8 +661,8 @@ def list_command():
     images = bootloader.get_installed_images()
     curimage = bootloader.get_current_image()
     nextimage = bootloader.get_next_image()
-    click.echo("Current: " + normalize_image_version_for_display(curimage))
-    click.echo("Next: " + normalize_image_version_for_display(nextimage))
+    click.echo("Current: " + normalize_image_name_for_display(curimage))
+    click.echo("Next: " + normalize_image_name_for_display(nextimage))
     # Available entries remain exact bootloader identifiers for image commands.
     click.echo("Available: ")
     for image in images:
