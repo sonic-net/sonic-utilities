@@ -180,6 +180,29 @@ def test_runtime_exception(mock_popen):
     assert all(v in str(sre.value) for v in ['test.sh', 'Running', 'Failed']), "Invalid message"
 
 
+@pytest.mark.parametrize(
+    "stored_image, displayed_image",
+    [
+        ("SONiC-OS-M.20201231.08", "SONiC-OS-20201231.08"),
+        ("SONiC-OS-20201231.08", "SONiC-OS-20201231.08"),
+    ]
+)
+@patch("sonic_installer.main.get_bootloader")
+def test_list_normalizes_manufacturing_image_name_for_display(get_bootloader, stored_image, displayed_image):
+    mock_bootloader = Mock()
+    mock_bootloader.get_current_image.return_value = stored_image
+    mock_bootloader.get_next_image.return_value = stored_image
+    mock_bootloader.get_installed_images.return_value = [stored_image]
+    get_bootloader.return_value = mock_bootloader
+
+    result = CliRunner().invoke(sonic_installer.commands["list"])
+
+    assert result.exit_code == 0
+    assert "Current: {}".format(displayed_image) in result.output
+    assert "Next: {}".format(displayed_image) in result.output
+    assert "Available: \n{}".format(stored_image) in result.output
+
+
 @patch("sonic_installer.main.SWAPAllocator")
 @patch("sonic_installer.main.get_bootloader")
 @patch("sonic_installer.main.run_command_or_raise")
