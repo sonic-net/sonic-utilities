@@ -2493,12 +2493,12 @@ class TestBulkLeafListMoveGenerator(unittest.TestCase):
             target={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR", "ports": ["Ethernet0"]}}},
             ex_ops=[])
 
-    def test_generate__leaf_list_all_items_removed__single_replace_move(self):
-        """Removing all items from a leaf-list should produce one REPLACE with empty list."""
+    def test_generate__leaf_list_all_items_removed__no_bulk_replace_move(self):
+        """Removing all items from a leaf-list should not bulk-replace with an empty list."""
         self.verify(
             current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
             target={"ACL_TABLE": {"EVERFLOW": {"ports": [], "type": "MIRROR"}}},
-            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports", "value": []}])
+            ex_ops=[])
 
     def test_generate__multiple_tables_with_leaf_lists__multiple_moves(self):
         """Multiple differing leaf-lists should each get a REPLACE move."""
@@ -3729,6 +3729,42 @@ class TestPatchSorter(unittest.TestCase):
             if notfound_substrings:
                 self.fail(f"Did not find the substrings {notfound_substrings} in the error: '{error}'")
 
+    def test_patch_sorter__remove_last_bgp_allowed_prefix__removes_field_instead_of_emptying_it(self):
+        current_config = {
+            "BGP_ALLOWED_PREFIXES": {
+                "DEPLOYMENT_ID|0": {
+                    "deployment": "DEPLOYMENT_ID",
+                    "id": 0,
+                    "prefixes_v4": ["10.20.0.0/16"],
+                    "prefixes_v6": ["fc00:f0::/64"],
+                }
+            }
+        }
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}
+        ])
+        sorter = self.create_patch_sorter(current_config)
+
+        actual_changes = sorter.sort(patch)
+        # Removing the only item has to drop the whole field. ConfigDB cannot store an
+        # empty leaf-list, it would be written as "" and read back as [""].
+        expected_changes = [
+            JsonChange(jsonpatch.JsonPatch([
+                {"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4"}
+            ]))
+        ]
+
+        self.assertEqual(expected_changes, actual_changes)
+
+        target_config = PatchWrapper().simulate_config_db_patch(patch, current_config)
+        self.assertNotIn("prefixes_v4", target_config["BGP_ALLOWED_PREFIXES"]["DEPLOYMENT_ID|0"])
+        simulated_config = current_config
+        for change in actual_changes:
+            simulated_config = change.apply(simulated_config)
+            is_valid, error = self.config_wrapper.validate_config_db_config(simulated_config)
+            self.assertTrue(is_valid, f"Change will produce invalid config. Error: {error}")
+        self.assertEqual(target_config, simulated_config)
+
     def test_sort__does_not_remove_tables_without_yang_unintentionally_if_generated_change_replaces_whole_config(self):
         # Arrange
         current_config = Files.CONFIG_DB_AS_JSON # has a table without yang named 'TABLE_WITHOUT_YANG'
@@ -4002,7 +4038,7 @@ class TestNonStrictPatchSorter(unittest.TestCase):
         config_wrapper.get_config_db_as_json.side_effect = \
             [any_current_config]
 
-        patch_wrapper.simulate_patch.side_effect = \
+        patch_wrapper.simulate_config_db_patch.side_effect = \
             create_side_effect_dict(
                 {(str(patch), str(any_current_config)):
                     any_target_config})
@@ -4095,7 +4131,7 @@ class TestStrictPatchSorter(unittest.TestCase):
         config_wrapper.get_config_db_as_json.side_effect = \
             [any_current_config, any_target_config]
 
-        patch_wrapper.simulate_patch.side_effect = \
+        patch_wrapper.simulate_config_db_patch.side_effect = \
             create_side_effect_dict(
                 {(str(patch), str(any_current_config)):
                     any_target_config})
