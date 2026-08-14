@@ -22,9 +22,31 @@ class LegacyProto:
         return [(LegacyRepeatedField(), self.children)]
 
 
+class ModernRepeatedField:
+    name = "children"
+    type = 11
+    TYPE_MESSAGE = 11
+    is_repeated = True
+
+
+class ModernProto:
+    children = []
+
+    def ListFields(self):
+        return [(ModernRepeatedField(), self.children)]
+
+
 def test_find_known_types_supports_legacy_repeated_descriptor():
     proto_dict = {"children": []}
 
     result = dash_util.find_known_types_sec(LegacyProto(), proto_dict)
+
+    assert result == proto_dict
+
+
+def test_find_known_types_supports_modern_repeated_descriptor():
+    proto_dict = {"children": []}
+
+    result = dash_util.find_known_types_sec(ModernProto(), proto_dict)
 
     assert result == proto_dict
