@@ -1,9 +1,14 @@
 import copy
-from io import StringIO
+from io import BytesIO, StringIO
 import json
 import logging
+import os
+import shlex
+import signal
+import subprocess
 import syslog
 import sys
+import threading
 import time
 from sonic_py_common import device_info
 from unittest.mock import MagicMock, patch
@@ -208,14 +213,6 @@ def set_mock(mock_table, mock_conn, mock_sel, mock_subs, mock_config_db):
 
 
 class TestRouteCheck(object):
-    @staticmethod
-    def extract_namespace_from_args(args):
-        # args: ['show', 'ip', 'route', '-n', 'asic0', 'json'],
-        for i, arg in enumerate(args):
-            if arg == "-n" and i + 1 < len(args):
-                return args[i + 1]
-        return DEFAULTNS
-
     def setup_method(self):
         pass
 
@@ -258,7 +255,6 @@ class TestRouteCheck(object):
         with patch('sys.argv', ct_data[ARGS].split()), \
             patch('sonic_py_common.multi_asic.get_namespace_list', return_value=ct_data[NAMESPACE]), \
             patch('sonic_py_common.multi_asic.is_multi_asic', return_value=ct_data[MULTI_ASIC]), \
-            patch('route_check.subprocess.check_output', side_effect=lambda *args, **kwargs: self.mock_check_output(ct_data, *args, **kwargs)), \
             patch('route_check.check_frr_pending_routes',
                   side_effect=lambda *args, **kwargs:
                   self.mock_fetch_routes(ct_data, *args, **kwargs)), \
@@ -269,11 +265,6 @@ class TestRouteCheck(object):
 
             ret, res = route_check.main()
             self.assert_results(ct_data, ret, res)
-
-    def mock_check_output(self, ct_data, *args, **kwargs):
-        ns = self.extract_namespace_from_args(args[0])
-        routes = ct_data.get(FRR_ROUTES, {}).get(ns, {})
-        return json.dumps(routes)
 
     def mock_fetch_routes(self, ct_data, *args, **kwargs):
         ns = args[0]
@@ -367,3 +358,354 @@ class TestRouteCheck(object):
             route_check.mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl)
         # Verify that the stdout are suppressed in this function
         assert not mock_stdout.getvalue()
+
+
+# fetch_routes runs "sudo vtysh", and /usr/bin/vtysh is a wrapper that runs
+# "docker exec -i bgp vtysh ...". Killing only the direct child leaves that
+# docker exec client behind, holding an exec session the bgp container can
+# never be stopped with. The fakes below reproduce that shape without docker:
+# the process that floods the pipe is a grandchild, not the direct child.
+GOOD_ROUTES = {
+    "10.0.0.0/24": [{"protocol": "bgp", "vrfName": "default", "selected": True, "offloaded": False}],
+    "10.0.1.0/24": [{"protocol": "bgp", "vrfName": "default", "selected": True,
+                     "offloaded": True, "failed": True}],
+    "10.0.2.0/24": [{"protocol": "connected", "vrfName": "default", "selected": True}],
+}
+
+# Emits a truncated JSON object so ijson raises, then floods stdout from a
+# grandchild so it blocks in write() once the 64KB pipe fills up.
+FLOOD_MARKER = "ROUTE_CHECK_TEST_FLOOD"
+
+# fetch_routes must not take anywhere near this long; it is only here so a
+# regression shows up as a failure instead of hanging the test run forever.
+FETCH_TIMEOUT_SECONDS = 60
+
+
+def _proc_readable():
+    """/proc must be usable or the liveness checks below silently pass."""
+    try:
+        with open('/proc/self/stat'):
+            return True
+    except OSError:
+        return False
+
+
+def _pid_running(pid):
+    """True only while pid exists and has not become a zombie."""
+    try:
+        with open('/proc/{}/stat'.format(pid)) as f:
+            state = f.read().rsplit(')', 1)[1].split()[0]
+    except OSError:
+        return False
+    return state != 'Z'
+
+
+def _wait_until(predicate, timeout=10):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.1)
+    return predicate()
+
+
+def _wait_until_gone(pid, timeout=10):
+    return _wait_until(lambda: not _pid_running(pid), timeout)
+
+
+@pytest.mark.skipif(not _proc_readable(),
+                    reason="needs a readable /proc to prove the group is gone")
+class TestFetchRoutesProcessGroup(object):
+    """fetch_routes must never leave the vtysh / docker exec chain behind."""
+
+    @staticmethod
+    def _fake_popen(fake_cmd, captured):
+        """Run fake_cmd instead of vtysh, keeping real process-group semantics."""
+        real_popen = subprocess.Popen
+
+        def _popen(cmd, **kwargs):
+            proc = real_popen(fake_cmd, **kwargs)
+            captured['pid'] = proc.pid
+            captured['kwargs'] = kwargs
+            return proc
+        return _popen
+
+    @staticmethod
+    def _flooding_cmd(pidfile):
+        """A three level chain whose deepest process floods the pipe.
+
+        The grandchild records its own pid before emitting anything, so the
+        file is always in place by the time the parse fails and cleanup runs.
+        Writing it from the parent after the fork loses that race: the parse
+        can fail and the group be signalled before the parent gets to write.
+        exec keeps the pid, so it identifies the flooding process too.
+        """
+        tmp = shlex.quote(str(pidfile) + '.tmp')
+        final = shlex.quote(str(pidfile))
+        inner = ("echo $$ > " + tmp + "; mv " + tmp + " " + final
+                 + "; printf '%s' '{\"10.0.0.0/24\": zzz'; exec yes " + FLOOD_MARKER)
+        return ['sh', '-c', 'sh -c ' + shlex.quote(inner) + ' & wait']
+
+    @staticmethod
+    def _live_cmd():
+        """Emits a JSON object then stays alive, so cleanup has something to kill.
+
+        A command that exits immediately makes proc.poll() non-None by the time
+        the finally runs, and the cleanup assertions become scheduling-dependent.
+        """
+        return ['sh', '-c', "printf '%s' '{}'; exec sleep 30"]
+
+    @staticmethod
+    def _reap_group(pid):
+        """Best effort cleanup so a failing assertion does not leak the chain."""
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+    def _run_fetch_routes(self):
+        """Call fetch_routes off the main thread so a deadlock fails the test."""
+        outcome = {}
+
+        def run():
+            try:
+                outcome['result'] = route_check.fetch_routes()
+            except BaseException as e:  # noqa: B036, BLE001 - the point is to capture anything
+                outcome['exc'] = e
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(timeout=FETCH_TIMEOUT_SECONDS)
+        assert not thread.is_alive(), \
+            "fetch_routes deadlocked: the vtysh process group was not terminated"
+        return outcome
+
+    def test_terminates_whole_process_group_on_parse_error(self, tmp_path):
+        """The regression guard: without the group kill this deadlocks."""
+        pidfile = tmp_path / 'grandchild.pid'
+        captured = {}
+        cmd = self._flooding_cmd(pidfile)
+        try:
+            with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)):
+                outcome = self._run_fetch_routes()
+
+            # The parse error itself stays swallowed, as it always was.
+            assert 'exc' not in outcome, outcome.get('exc')
+            assert outcome['result'] == ([], [])
+
+            # The grandchild is the stand-in for the docker exec client: it is
+            # what proc.kill() would have missed, so it is what has to be gone.
+            assert _wait_until(pidfile.exists), "the fake chain never recorded its grandchild"
+            grandchild = int(pidfile.read_text().strip())
+            assert _wait_until_gone(grandchild), \
+                "grandchild {} survived: only the direct child was killed".format(grandchild)
+        finally:
+            if 'pid' in captured:
+                self._reap_group(captured['pid'])
+
+    @pytest.mark.parametrize("error", [
+        UnicodeDecodeError('utf-8', b'\xff', 0, 1, 'invalid start byte'),
+        ValueError('something unexpected'),
+    ])
+    def test_other_parse_errors_take_the_same_cleanup_path(self, error):
+        """Every branch that abandons the read has to terminate the group."""
+        captured = {}
+        try:
+            with patch('route_check.subprocess.Popen',
+                       side_effect=self._fake_popen(self._live_cmd(), captured)), \
+                    patch('route_check.ijson.kvitems', side_effect=error), \
+                    patch('route_check.KILL_WAIT_SECONDS', 0.3), \
+                    patch('route_check.os.killpg') as mock_killpg:
+                outcome = self._run_fetch_routes()
+
+            assert 'exc' not in outcome, outcome.get('exc')
+            assert outcome['result'] == ([], [])
+            mock_killpg.assert_called_once_with(captured['pid'], signal.SIGKILL)
+        finally:
+            if 'pid' in captured:
+                self._reap_group(captured['pid'])
+
+    def test_cleanup_runs_for_non_exception_interrupts(self):
+        """KeyboardInterrupt is not an Exception, so a flag would miss it.
+
+        start_new_session also means a terminal SIGINT no longer reaches the
+        chain on its own, so this is the only thing releasing the exec session.
+        """
+        captured = {}
+        try:
+            with patch('route_check.subprocess.Popen',
+                       side_effect=self._fake_popen(self._live_cmd(), captured)), \
+                    patch('route_check.ijson.kvitems', side_effect=KeyboardInterrupt), \
+                    patch('route_check.KILL_WAIT_SECONDS', 0.3), \
+                    patch('route_check.os.killpg') as mock_killpg:
+                outcome = self._run_fetch_routes()
+
+            assert isinstance(outcome.get('exc'), KeyboardInterrupt), \
+                "KeyboardInterrupt must still propagate"
+            mock_killpg.assert_called_once_with(captured['pid'], signal.SIGKILL)
+        finally:
+            if 'pid' in captured:
+                self._reap_group(captured['pid'])
+
+    def test_clean_parse_does_not_kill_a_healthy_group(self):
+        """A finished read must not SIGKILL vtysh on its way out.
+
+        On a clean parse poll() has often not reaped vtysh yet, so a cleanup
+        gated on liveness alone would kill a healthy group and mask its exit
+        code.
+        """
+        captured = {}
+        cmd = ['sh', '-c', "printf '%s' " + shlex.quote(json.dumps(GOOD_ROUTES))]
+        with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)), \
+                patch('route_check.os.killpg') as mock_killpg:
+            outcome = self._run_fetch_routes()
+
+        assert 'exc' not in outcome, outcome.get('exc')
+        missing, failing = outcome['result']
+        assert missing == [{'prefix': '10.0.0.0/24', 'protocol': 'bgp'}]
+        assert failing == ['10.0.1.0/24']
+        mock_killpg.assert_not_called()
+
+    def test_non_zero_exit_is_reported_when_we_did_not_kill(self):
+        """A real vtysh failure must survive the SIGKILL suppression."""
+        captured = {}
+        cmd = ['sh', '-c', "printf '%s' " + shlex.quote(json.dumps(GOOD_ROUTES)) + "; exit 3"]
+        with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)), \
+                patch('route_check.print_message') as mock_msg:
+            outcome = self._run_fetch_routes()
+
+        assert 'exc' not in outcome, outcome.get('exc')
+        missing, failing = outcome['result']
+        assert missing == [{'prefix': '10.0.0.0/24', 'protocol': 'bgp'}]
+        assert any('non-zero return code: 3' in str(c) for c in mock_msg.call_args_list)
+
+    def test_self_sent_sigkill_is_not_reported_as_a_crash(self):
+        """-9 from our own cleanup must not read as a vtysh crash."""
+        captured = {}
+        try:
+            with patch('route_check.subprocess.Popen',
+                       side_effect=self._fake_popen(self._live_cmd(), captured)), \
+                    patch('route_check.ijson.kvitems', side_effect=ValueError('boom')), \
+                    patch('route_check.print_message') as mock_msg:
+                outcome = self._run_fetch_routes()
+
+            assert 'exc' not in outcome, outcome.get('exc')
+            assert not any('non-zero return code' in str(c) for c in mock_msg.call_args_list)
+        finally:
+            if 'pid' in captured:
+                self._reap_group(captured['pid'])
+
+    def test_lingering_process_after_clean_parse_is_abandoned(self):
+        """A clean parse whose process never exits must not block forever.
+
+        Nothing killed it, so the group cleanup does not run and the only
+        thing standing between fetch_routes and a permanent hang is the
+        bounded wait plus its early return.
+        """
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.poll.return_value = 0
+        proc.stdout = BytesIO(json.dumps(GOOD_ROUTES).encode())
+        proc.wait.side_effect = subprocess.TimeoutExpired(
+            cmd='vtysh', timeout=route_check.KILL_WAIT_SECONDS)
+
+        with patch('route_check.subprocess.Popen', return_value=proc), \
+                patch('route_check.print_message') as mock_msg:
+            missing, failing = route_check.fetch_routes()
+
+        # Whatever was parsed before the hang still comes back.
+        assert missing == [{'prefix': '10.0.0.0/24', 'protocol': 'bgp'}]
+        assert failing == ['10.0.1.0/24']
+        assert any('did not exit; abandoning' in str(c) for c in mock_msg.call_args_list)
+
+    def test_unexpected_route_entry_format_is_reported(self):
+        """FRR should never emit this, but the guard must still be exercised."""
+        captured = {}
+        payload = json.dumps({"10.0.0.0/24": "not-a-list"})
+        cmd = ['sh', '-c', "printf '%s' " + shlex.quote(payload)]
+        with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)), \
+                patch('route_check.print_message') as mock_msg:
+            outcome = self._run_fetch_routes()
+
+        assert 'exc' not in outcome, outcome.get('exc')
+        assert outcome['result'] == ([], [])
+        assert any('Unexpected route entry format' in str(c) for c in mock_msg.call_args_list)
+
+    def test_starts_new_session(self):
+        """killpg(proc.pid) is only safe because the child leads its own group."""
+        captured = {}
+        cmd = ['sh', '-c', "printf '%s' " + shlex.quote(json.dumps(GOOD_ROUTES))]
+        with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)):
+            self._run_fetch_routes()
+
+        assert captured['kwargs'].get('start_new_session') is True
+
+    def test_terminate_signals_child_pid_not_our_own_group(self):
+        """Guard against 'simplifying' proc.pid into os.getpgid(proc.pid)."""
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.wait.return_value = 0
+
+        with patch('route_check.os.killpg') as mock_killpg:
+            assert route_check.terminate_vtysh_process_group(proc) is True
+
+        mock_killpg.assert_called_once_with(proc.pid, signal.SIGKILL)
+        proc.wait.assert_called_once_with(timeout=route_check.KILL_WAIT_SECONDS)
+
+    def test_terminate_tolerates_already_dead_group(self):
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.wait.return_value = 0
+
+        with patch('route_check.os.killpg', side_effect=ProcessLookupError), \
+                patch('route_check.print_message') as mock_msg:
+            assert route_check.terminate_vtysh_process_group(proc) is True
+
+        proc.wait.assert_called_once_with(timeout=route_check.KILL_WAIT_SECONDS)
+        # A failed killpg is the only early signal that this fix did not take
+        # effect, so it has to clear the default report level. Keep it visible.
+        assert any(c.args[0] == syslog.LOG_WARNING and 'Could not signal process group' in str(c)
+                   for c in mock_msg.call_args_list)
+
+    def test_terminate_does_not_swallow_programming_errors(self):
+        """A bad pid is a bug, not a cleanup failure - it must not be hidden.
+
+        A catch-all here silently turns os.killpg(<Mock>) into a no-op, which
+        makes callers that pass a mocked proc look like they exercise this path
+        when they do not.
+        """
+        proc = MagicMock()
+        proc.pid = object()
+
+        with pytest.raises(TypeError):
+            route_check.terminate_vtysh_process_group(proc)
+
+    def test_terminate_reports_survivor_instead_of_raising(self):
+        """A process stuck in D state must not mask the parse error."""
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.wait.side_effect = subprocess.TimeoutExpired(
+            cmd='vtysh', timeout=route_check.KILL_WAIT_SECONDS)
+
+        with patch('route_check.os.killpg'), \
+                patch('route_check.print_message') as mock_msg:
+            assert route_check.terminate_vtysh_process_group(proc) is False
+
+        assert any('still alive after SIGKILL' in str(c) for c in mock_msg.call_args_list)
+
+    def test_unreapable_group_is_abandoned_not_waited_on(self):
+        """The bounded wait is pointless if the next line waits unbounded.
+
+        fetch_routes runs on a worker thread the SIGALRM watchdog cannot
+        interrupt, so an unreapable group has to be abandoned, not waited on.
+        """
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.poll.return_value = None
+        proc.stdout = BytesIO(b'{"10.0.0.0/24": zzz')
+
+        with patch('route_check.subprocess.Popen', return_value=proc), \
+                patch('route_check.terminate_vtysh_process_group', return_value=False):
+            assert route_check.fetch_routes() == ([], [])
+
+        proc.wait.assert_not_called()

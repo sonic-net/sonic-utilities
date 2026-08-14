@@ -81,6 +81,9 @@ PRINT_MSG_TRUNCATION_SUFFIX = " ... (truncated)"
 FRR_CHECK_RETRIES = 3
 FRR_WAIT_TIME = 15
 
+# How long to wait for the vtysh process group to be reaped after SIGKILL
+KILL_WAIT_SECONDS = 10
+
 REDIS_TIMEOUT_MSECS = 0
 
 
@@ -398,6 +401,48 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
+def terminate_vtysh_process_group(proc):
+    """
+    SIGKILL the whole process group started for the vtysh command and reap it.
+
+    fetch_routes runs "sudo vtysh", and on a SONiC host /usr/bin/vtysh is a
+    wrapper script that runs "docker exec -i bgp vtysh ...". proc.kill() only
+    signals sudo: the wrapper and the docker exec client survive it, the vtysh
+    inside the container stays blocked writing into a pipe nobody reads any
+    more, and from then on the bgp container cannot be stopped - every later
+    docker exec into it hangs. Signalling the whole group is what actually
+    releases the exec session.
+
+    This relies on Popen(start_new_session=True) making the child a process
+    group leader, so its pgid equals its pid. Do not derive the group with
+    os.getpgid(): if the new session was not created that returns route_check's
+    own group and we would kill ourselves.
+
+    It also assumes sudo leaves the command in that group. That holds for the
+    sudo we ship, but not under "Defaults use_pty" (the default from sudo
+    1.9.14), where sudo runs the command in its own session behind a pty and
+    only the sudo front-end would be signalled.
+
+    :return True if the process was reaped, False if it outlived the SIGKILL.
+    """
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError) as e:
+        # Best effort: a cleanup failure must never mask the error that got us here.
+        # Reported at WARNING because this is the only early signal that the
+        # cleanup did not take effect; the default report level hides DEBUG.
+        # Deliberately not "except Exception": a bad pid is a bug, not a
+        # cleanup failure, and must not be swallowed.
+        print_message(syslog.LOG_WARNING, f"Could not signal process group {proc.pid}: {e}")
+
+    try:
+        proc.wait(timeout=KILL_WAIT_SECONDS)
+        return True
+    except subprocess.TimeoutExpired:
+        print_message(syslog.LOG_ERR, f"vtysh (pid {proc.pid}) still alive after SIGKILL")
+        return False
+
+
 def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
     Fetch routes using the given command.
@@ -431,34 +476,61 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
             failing_routes.append(prefix)
 
     try:
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
-            try:
-                # Use ijson to parse the JSON stream incrementally
-                # kvitems('') iterates over key-value pairs at the root level
-                # This gives us each prefix and its route entries as they become available
-                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
-                    # Process each route entry for this prefix
-                    if isinstance(route_entries, list):
-                        for route_entry in route_entries:
-                            process_route_entry(prefix, route_entry)
-                    else:
-                        # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
-                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+        # start_new_session puts sudo, the /usr/bin/vtysh wrapper and the
+        # docker exec client it spawns into one process group we can signal.
+        # Deliberately not used as a context manager: Popen.__exit__ ends in an
+        # unbounded wait(), which is the hang this whole change removes.
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0,
+                                start_new_session=True)
+        completed = False
+        killed = False
+        abandoned = False
+        try:
+            # Use ijson to parse the JSON stream incrementally
+            # kvitems('') iterates over key-value pairs at the root level
+            # This gives us each prefix and its route entries as they become available
+            for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
+                # Process each route entry for this prefix
+                if isinstance(route_entries, list):
+                    for route_entry in route_entries:
+                        process_route_entry(prefix, route_entry)
+                else:
+                    # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
+                    print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+            completed = True
 
-            except ijson.JSONError as e:
-                # Handle JSON parsing errors
-                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
-            except UnicodeDecodeError as e:
-                # Handle UTF-8 decoding errors
-                print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
-            except Exception as e:
-                # Handle any other unexpected errors during parsing
-                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
+        except Exception as e:
+            # Parse errors are logged and swallowed, exactly as before: this
+            # returns whatever it managed to parse.
+            print_message(syslog.LOG_WARNING, f"Error while parsing vtysh JSON stream: {e}")
+        finally:
+            # Only an abandoned read needs the kill. On a clean parse vtysh has
+            # closed stdout and is exiting on its own, and poll() often has not
+            # reaped it yet - killing there would SIGKILL a healthy group and
+            # mask its exit code. A finally (not a flag) so KeyboardInterrupt
+            # takes this path too: start_new_session means a terminal SIGINT no
+            # longer reaches the chain by itself.
+            if not completed and proc.poll() is None:
+                killed = True
+                # Never return from here: a return inside finally would swallow
+                # an in-flight KeyboardInterrupt.
+                abandoned = not terminate_vtysh_process_group(proc)
+            if proc.stdout:
+                proc.stdout.close()
 
-            # Wait for the process to terminate and get the return code
-            return_code = proc.wait()
-            if return_code != 0:
-                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
+        if abandoned:
+            # Unreapable: waiting on it would hang forever, and fetch_routes
+            # runs on a worker thread the SIGALRM watchdog cannot interrupt.
+            return missing_routes, failing_routes
+
+        try:
+            return_code = proc.wait(timeout=KILL_WAIT_SECONDS)
+        except subprocess.TimeoutExpired:
+            print_message(syslog.LOG_ERR, f"vtysh (pid {proc.pid}) did not exit; abandoning")
+            return missing_routes, failing_routes
+        # Not for a SIGKILL we sent ourselves - that would read as a vtysh crash.
+        if not killed and return_code != 0:
+            print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
 
     except FileNotFoundError:
         print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
