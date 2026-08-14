@@ -35,7 +35,7 @@
                          "Arista-7060X6-64PE-B-C512S2", "Arista-7060X6-64PE-B-C448O16", "Arista-7060X6-64PE-B-O128", "Arista-7060X6-64PE-B-O128S2", "Arista-7060X6-16PE-384C-B-O128S2",
                          "Arista-7060X6-64PE-B-P32O64", "Arista-7060X6-64PE-B-P64", "Arista-7060X6-64PE-B-P32V128",
                          "Arista-7060X6-64PE-O128", "Arista-7060X6-64PE-O128S2", "Arista-7060X6-64PE-P32O64", "Arista-7060X6-64PE-P64", "Arista-7060X6-64PE-P32V128" ],
-                "th6": [ "Nokia-IXR7220-H6-64", "Nokia-IXR7220-H6-P128", "Nokia-IXR7220-H6-O256" ],
+                "th6": [ "Nokia-IXR7220-H6-64", "Nokia-IXR7220-H6-P128", "Nokia-IXR7220-H6-O256", "NH-4220", "NH-4210-F-P128", "NH-4210-F-O256" ],
                 "td2": [ "Force10-S6000", "Force10-S6000-Q24S32", "Arista-7050-QX32", "Arista-7050-QX-32S", "Nexus-3164", "Arista-7050QX32S-Q32" ],
                 "td3": [ "Arista-7050CX3-32C-C32", "Arista-7050CX3-32S-C32", "Arista-7050CX3-32S-D48C8", "Arista-7050CX3-32S-C28S4", "Arista-7050CX3-32C-C28S4" ],
                 "td4": [ "Nokia-IXR7220-D4-36D" ],
