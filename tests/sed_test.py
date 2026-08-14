@@ -1,6 +1,19 @@
+import sys
+
+import pytest
 from click.testing import CliRunner
 from mock import patch, MagicMock
 import config.main as config
+
+sys.modules['sonic_platform'] = MagicMock()
+
+
+@pytest.fixture(autouse=True)
+def _inject_sonic_platform():
+    # conftest._reset_between_files() clears sys.modules['sonic_platform']
+    # before the first test of each file; Need to re-inject before every test
+    sys.modules['sonic_platform'] = MagicMock()
+    yield
 
 
 class TestSed(object):
