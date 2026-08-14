@@ -10,7 +10,7 @@ try:
     import click
 
     from .lib import PlatformDataProvider, ComponentStatusProvider, ComponentUpdateProvider
-    from .lib import URL, SquashFs, FWPackage
+    from .lib import URL, SquashFs, FWPackage, supports_force_update
     from .log import LogHelper
 except ImportError as e:
     raise ImportError("Required module not found: {}".format(str(e)))
@@ -171,6 +171,23 @@ def component_handler(ctx, component_name):
     ctx.obj[COMPONENT_PATH_CTX_KEY].append(component_name)
 
 
+def _invoke_install_firmware(component, fw_path, *, force_update=False) -> bool:
+    """Call install_firmware, passing force_update only when it is supported.
+
+    Support is detected from install_firmware's signature before invocation. A
+    TypeError raised from inside install_firmware is therefore never masked or
+    retried (which could re-run a firmware install that already started) - it
+    propagates to the caller.
+    """
+    if force_update and supports_force_update(component.install_firmware):
+        return component.install_firmware(fw_path, force_update=True)
+    if force_update:
+        log_helper.print_warning(
+            "Component does not support --force-update; continuing without it"
+        )
+    return component.install_firmware(fw_path)
+
+
 def validate_component(ctx, param, value):
     pdp = get_pdp()
     if value == HELP:
@@ -209,7 +226,7 @@ def component_update(ctx, component_name):
     component_handler(ctx, component_name)
 
 
-def install_fw(ctx, fw_path):
+def install_fw(ctx, fw_path, *, force_update=False):
     component = ctx.obj[COMPONENT_CTX_KEY]
     component_path = PATH_SEPARATOR.join(ctx.obj[COMPONENT_PATH_CTX_KEY])
 
@@ -219,7 +236,7 @@ def install_fw(ctx, fw_path):
         click.echo("Installing firmware:")
         click.echo(TAB + fw_path)
         log_helper.log_fw_install_start(component_path, fw_path)
-        status = component.install_firmware(fw_path)
+        status = _invoke_install_firmware(component, fw_path, force_update=force_update)
         log_helper.log_fw_install_end(component_path, fw_path, status)
     except KeyboardInterrupt:
         log_helper.log_fw_install_end(component_path, fw_path, False, "Keyboard interrupt")
@@ -271,9 +288,10 @@ def validate_fw(ctx, param, value):
 # 'fw' subcommand
 @component_install.command(name='fw')
 @click.option('-y', '--yes', 'yes', is_flag=True, show_default=True, help="Assume \"yes\" as answer to all prompts and run non-interactively")
+@click.option('--force-update', 'force_update', is_flag=True, show_default=True, help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
 @click.argument('fw_path', metavar='<fw_path>', callback=validate_fw)
 @click.pass_context
-def fw_install(ctx, yes, fw_path):
+def fw_install(ctx, yes, force_update, fw_path):
     """Install firmware from local path or URL"""
     url = None
 
@@ -291,7 +309,7 @@ def fw_install(ctx, yes, fw_path):
         if not yes:
             click.confirm("New firmware will be installed, continue?", abort=True)
 
-        install_fw(ctx, fw_path)
+        install_fw(ctx, fw_path, force_update=force_update)
     finally:
         if url is not None and os.path.exists(fw_path):
             os.remove(fw_path)
@@ -301,9 +319,10 @@ def fw_install(ctx, yes, fw_path):
 @component_update.command(name='fw')
 @click.option('-y', '--yes', 'yes', is_flag=True, show_default=True, help="Assume \"yes\" as answer to all prompts and run non-interactively")
 @click.option('-f', '--force', 'force', is_flag=True, show_default=True, help="Update firmware regardless the current version")
+@click.option('--force-update', 'force_update', is_flag=True, show_default=True, help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
 @click.option('-i', '--image', 'image', type=click.Choice(["current", "next"]), default="current", show_default=True, help="Update firmware using current/next SONiC image")
 @click.pass_context
-def fw_update(ctx, yes, force, image):
+def fw_update(ctx, yes, force, force_update, image):
     """Update firmware from SONiC image"""
     if CHASSIS_NAME_CTX_KEY in ctx.obj:
         chassis_name = ctx.obj[CHASSIS_NAME_CTX_KEY]
@@ -344,7 +363,7 @@ def fw_update(ctx, yes, force, image):
             if not yes:
                 click.confirm("New firmware will be installed, continue?", abort=True)
 
-            cup.update_firmware(chassis_name, module_name, component_name)
+            cup.update_firmware(chassis_name, module_name, component_name, force_update=force_update)
         finally:
             if squashfs is not None:
                 squashfs.umount_next_image_fs()

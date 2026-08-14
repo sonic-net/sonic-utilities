@@ -6,6 +6,7 @@
 
 try:
     import glob
+    import inspect
     import os
     import json
     import shutil
@@ -152,6 +153,30 @@ class URL(object):
     url = property(fget=get_url)
 
 
+def supports_force_update(update_callable):
+    """Return True if ``update_callable`` accepts a ``force_update`` argument.
+
+    Support is determined from the callable's signature *before* invocation, so
+    a ``TypeError`` raised from inside a firmware install/update (a genuine bug,
+    or an error after the transfer has already started) is never misread as
+    "force-update unsupported" and silently retried without it. The keyword is
+    omitted only when it is definitively unsupported; otherwise the caller
+    invokes with ``force_update`` and lets any exception propagate.
+    """
+    try:
+        sig = inspect.signature(update_callable)
+    except (TypeError, ValueError):
+        # C-implemented / builtin callables may not expose a signature;
+        # treat as not supporting the explicit force_update kwarg.
+        return False
+    for param in sig.parameters.values():
+        if param.name == "force_update":
+            return True
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 class PlatformDataProvider(object):
     """
     PlatformDataProvider
@@ -201,7 +226,13 @@ class PlatformDataProvider(object):
         return self.__chassis.is_smartswitch()
 
     def is_modular_chassis(self):
-        return len(self.module_component_map) > 0
+        # A chassis is modular (for firmware purposes) only if at least one
+        # module actually exposes firmware components. Merely having modules in
+        # the map is not enough: platforms may expose non-firmware modules
+        # (e.g. the NVIDIA AST2700 BMC exposes a component-less SWITCH-HOST
+        # module), and those must not force a "module" section in
+        # platform_components.json on an otherwise non-modular device.
+        return any(self.module_component_map.values())
 
     def is_chassis_has_components(self):
         return self.__chassis.get_num_components() > 0
@@ -593,11 +624,19 @@ class ComponentUpdateProvider(PlatformDataProvider):
             pcp.chassis_component_map
         )
 
-        self.__validate_component_map(
-            self.SECTION_MODULE,
-            self.module_component_map,
-            pcp.module_component_map
-        )
+        # For a non-modular chassis the parser does not read a "module" section
+        # (see parse_platform_components), so pcp.module_component_map is empty,
+        # while the data provider may still report component-less modules (e.g.
+        # the NVIDIA AST2700 BMC's SWITCH-HOST). Comparing the two would raise a
+        # spurious "module names mismatch", so only validate the module map when
+        # the chassis is actually modular. SmartSwitch keeps its existing
+        # per-mismatch handling inside __validate_component_map.
+        if self.is_modular_chassis():
+            self.__validate_component_map(
+                self.SECTION_MODULE,
+                self.module_component_map,
+                pcp.module_component_map
+            )
 
     def get_updates_status(self):
         status_table = [ ]
@@ -772,7 +811,7 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
         return component.get_firmware_update_notification(firmware_path)
 
-    def update_firmware(self, chassis_name, module_name, component_name):
+    def update_firmware(self, chassis_name, module_name, component_name, *, force_update=False):
         if module_name is not None:
             component = self.module_component_map[module_name][component_name]
             parser = self.__pcp.module_component_map[module_name][component_name]
@@ -796,7 +835,14 @@ class ComponentUpdateProvider(PlatformDataProvider):
             click.echo("Updating firmware:")
             click.echo(TAB + firmware_path)
             log_helper.log_fw_update_start(component_path, firmware_path)
-            component.update_firmware(firmware_path)
+            if force_update and supports_force_update(component.update_firmware):
+                component.update_firmware(firmware_path, force_update=True)
+            else:
+                if force_update:
+                    log_helper.print_warning(
+                        "Component does not support --force-update; continuing without it"
+                    )
+                component.update_firmware(firmware_path)
             log_helper.log_fw_update_end(component_path, firmware_path, True)
         except KeyboardInterrupt:
             log_helper.log_fw_update_end(component_path, firmware_path, False, "Keyboard interrupt")
