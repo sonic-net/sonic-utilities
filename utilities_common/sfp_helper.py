@@ -422,6 +422,43 @@ CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP = {
     'evm1': 'evm'
 }
 
+# Maps the VDM observable DB prefix (as written to STATE_DB by xcvrd) to the
+# human-readable observable name.
+VDM_OBSERVABLE_NAME_MAP = {
+    'laser_temperature_media':           'Laser Temperature [C]',
+    'esnr_media_input':                  'eSNR Media Input [dB]',
+    'esnr_host_input':                   'eSNR Host Input [dB]',
+    'pam4_level_transition_media_input': 'PAM4 Level Transition Parameter Media Input [dB]',
+    'pam4_level_transition_host_input':  'PAM4 Level Transition Parameter Host Input [dB]',
+    'prefec_ber_curr_media_input':       'Pre-FEC BER Current Value Media Input',
+    'prefec_ber_curr_host_input':        'Pre-FEC BER Current Value Host Input',
+    'errored_frames_curr_media_input':   'Errored Frames Current Value Media Input',
+    'errored_frames_curr_host_input':    'Errored Frames Current Value Host Input',
+    'biasxi':                            'Modulator Bias XI [%]',
+    'biasxp':                            'Modulator Bias XP [%]',
+    'biasxq':                            'Modulator Bias XQ [%]',
+    'biasyi':                            'Modulator Bias YI [%]',
+    'biasyp':                            'Modulator Bias YP [%]',
+    'biasyq':                            'Modulator Bias YQ [%]',
+    'cdlong':                            'CD Long [ps/nm]',
+    'clkreloop':                         'Clock Recovery Loop [%]',
+    'sopmdshort':                        'SOPMD low granularity [ps^2]',
+    'snrmargin':                         'SNR Margin [dB]',
+    'qfactor':                           'Q-Factor [dB]',
+    'qmargin':                           'Q-Margin [dB]',
+    'cfoshort':                          'CFO low granularity [MHz]'
+}
+
+# Ordered list of (db_suffix, column_label) pairs used to render the four VDM
+# threshold/flag columns.
+VDM_THRESHOLD_SUFFIXES = (
+    ('halarm', 'High Alarm'),
+    ('hwarn',  'High Warning'),
+    ('lwarn',  'Low Warning'),
+    ('lalarm', 'Low Alarm'),
+)
+
+
 def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
     key = 'application_advertisement'
     field_name = '{}{}: '.format(indent, QSFP_DATA_MAP[key])
