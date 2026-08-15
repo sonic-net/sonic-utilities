@@ -5680,3 +5680,71 @@ class TestGetMonitServicesByPrefix(object):
     def test_monit_not_running(self, mock_check_output):
         result = config._get_monit_services_by_prefix('container_memory_')
         assert result == []
+
+
+class TestRestartServicesMonitOrdering(object):
+    """Regression test for sonic-net/sonic-utilities#4774.
+
+    `monit monitor <service>` is asynchronous. If `monit reload` runs before
+    the monitor action for a container_memory_* service has completed, that
+    service can be left "Not monitored" permanently. This test verifies that
+    every container_memory_* service discovered by
+    _get_monit_services_by_prefix() is both monitored and waited on (via
+    _wait_for_monit_service_monitored()) strictly before `monit reload`.
+    """
+
+    @mock.patch('config.main.reset_mgmt_interface_if_usb_not_running')
+    @mock.patch('config.main.get_device_name', return_value=None)
+    @mock.patch('config.main._monit_service_exists', return_value=False)
+    @mock.patch('config.main.subprocess.check_call')
+    @mock.patch('config.main.wait_service_restart_finish')
+    @mock.patch('config.main.get_service_finish_timestamp', return_value="0")
+    @mock.patch('config.main._get_monit_services_by_prefix',
+                return_value=['container_memory_snmp', 'container_memory_gnmi'])
+    @mock.patch('config.main._wait_for_monit_service_monitored')
+    @mock.patch('config.main.clicommon.run_command')
+    def test_memory_services_monitored_and_waited_before_reload(
+        self, run_cmd, wait_mock, get_svcs, _gst, _wsrf, _check_call,
+        _monit_exists, _get_dev, _reset_usb,
+    ):
+        # Shared event recorder so ordering across the two independent mocks
+        # (clicommon.run_command and _wait_for_monit_service_monitored) can
+        # actually be compared on a single timeline.
+        events = []
+
+        def run_command_side_effect(cmd, *args, **kwargs):
+            if cmd[:3] == ['sudo', 'monit', 'monitor']:
+                events.append(('monitor', cmd[3]))
+            elif cmd == ['sudo', 'monit', 'reload']:
+                events.append(('reload', None))
+            return ("", 0)
+
+        def wait_side_effect(service, timeout=10):
+            events.append(('wait', service))
+
+        run_cmd.side_effect = run_command_side_effect
+        wait_mock.side_effect = wait_side_effect
+
+        config._restart_services()
+
+        memory_services = {'container_memory_snmp', 'container_memory_gnmi'}
+        monitored = [svc for kind, svc in events if kind == 'monitor']
+        waited = [svc for kind, svc in events if kind == 'wait']
+
+        # sudo monit monitor container_checker / container_memory_snmp / container_memory_gnmi
+        assert 'container_checker' in monitored
+        assert memory_services <= set(monitored)
+
+        # _wait_for_monit_service_monitored() called for container_checker and
+        # both container_memory_* services.
+        assert 'container_checker' in waited
+        assert memory_services <= set(waited)
+
+        # All memory-service waits must occur strictly before monit reload.
+        reload_idx = next(i for i, e in enumerate(events) if e[0] == 'reload')
+        memory_wait_idxs = [
+            i for i, (kind, svc) in enumerate(events)
+            if kind == 'wait' and svc in memory_services
+        ]
+        assert memory_wait_idxs, "no wait recorded for container_memory_* services"
+        assert all(i < reload_idx for i in memory_wait_idxs)
