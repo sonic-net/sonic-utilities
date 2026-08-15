@@ -745,13 +745,18 @@ class DBMigrator():
             return
         device_metadata_old = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
         device_metadata_new = self.config_src_data['DEVICE_METADATA']['localhost']
+        new_routing_mode = device_metadata_new.get('docker_routing_config_mode')
+        # Skip migration if the new value is None or empty - this prevents overwriting
+        # a valid config with an invalid value when minigraph doesn't have this field
+        if not new_routing_mode:
+            return
         # overwrite the routing-config-mode as per minigraph parser
         # Criteria for update:
         # if config mode is missing in base OS or if base and target modes are not same
         #  Eg. in 201811 mode is "unified", and in newer branches mode is "separated"
-        if ('docker_routing_config_mode' not in device_metadata_old and 'docker_routing_config_mode' in device_metadata_new) or \
-        (device_metadata_old.get('docker_routing_config_mode') != device_metadata_new.get('docker_routing_config_mode')):
-            device_metadata_old['docker_routing_config_mode'] = device_metadata_new.get('docker_routing_config_mode')
+        if ('docker_routing_config_mode' not in device_metadata_old) or \
+                (device_metadata_old.get('docker_routing_config_mode') != new_routing_mode):
+            device_metadata_old['docker_routing_config_mode'] = new_routing_mode
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', device_metadata_old)
 
     def update_edgezone_aggregator_config(self):
