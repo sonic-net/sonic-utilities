@@ -66,3 +66,21 @@ class TestNeighborAdvertiser(object):
         for key in expected_mapping.keys():
             assert(key in tunnel_mapping.keys())
             assert(expected_mapping[key] == tunnel_mapping[key])
+
+    @mock.patch.object(neighbor_advertiser, 'remove_vxlan_tunnel')
+    @mock.patch.object(neighbor_advertiser.time, 'sleep')
+    @mock.patch.object(neighbor_advertiser, 'remove_vxlan_tunnel_map')
+    def test_reset_vxlan_tunnel_teardown_order(
+            self, remove_vxlan_tunnel_map, sleep, remove_vxlan_tunnel):
+        teardown_calls = mock.Mock()
+        teardown_calls.attach_mock(remove_vxlan_tunnel_map, 'remove_map')
+        teardown_calls.attach_mock(sleep, 'sleep')
+        teardown_calls.attach_mock(remove_vxlan_tunnel, 'remove_tunnel')
+
+        neighbor_advertiser.reset_vxlan_tunnel()
+
+        assert teardown_calls.mock_calls == [
+            mock.call.remove_map(),
+            mock.call.sleep(neighbor_advertiser.DEFAULT_VXLAN_CONFIG_DB_WAIT_TIME),
+            mock.call.remove_tunnel()
+        ]
