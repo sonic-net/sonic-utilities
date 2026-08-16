@@ -454,6 +454,33 @@
         "param/vrf_id": "p4rt-vrf-80",
         "controller_metadata": "my metadata"
     },
+    "P4RT_TABLE:FIXED_L3_ADMIT_TABLE:{\"match/dst_mac\":\"02:1b:00:00:00:00&ff:ff:00:00:00:00\",\"match/in_port\":\"Ethernet1/3/1\",\"priority\":2030}": {
+        "expireat": 1668127572.390038,
+        "ttl": -0.001,
+        "type": "hash",
+        "value": {
+            "action": "admit_to_l3",
+            "controller_metadata": "orion_type: VARIOUS_L3ADMIT_PUNTFLOW"
+        }
+    },
+    "P4RT_TABLE:FIXED_L3_ADMIT_TABLE:{\"match/dst_mac\":\"02:1a:0a:05:17:01&ff:ff:ff:ff:ff:ff\",\"priority\":998}": {
+        "expireat": 1668127572.390038,
+        "ttl": -0.001,
+        "type": "hash",
+        "value": {
+            "action": "admit_to_l3",
+            "controller_metadata": "orion_type: VARIOUS_L3ADMIT_PUNTFLOW"
+        }
+    },
+    "P4RT_TABLE:FIXED_L3_ADMIT_TABLE:{\"match/dst_mac\":\"02:1a:0a:05:17:03&ff:ff:ff:ff:ff:ff\",\"match/in_port\":\"Ethernet1/4/5\",\"priority\":998}": {
+        "expireat": 1668127572.390038,
+        "ttl": -0.001,
+        "type": "hash",
+        "value": {
+            "action": "admit_to_l3",
+            "controller_metadata": "orion_type: VARIOUS_L3ADMIT_PUNTFLOW"
+        }
+    },
     "ACL_TABLE_TABLE:ENI": {
           "PORTS": "Ethernet104,PortChannel108",
           "STAGE": "INGRESS",
