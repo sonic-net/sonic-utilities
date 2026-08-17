@@ -1638,8 +1638,6 @@ collect_mellanox() {
 
     save_sdk_sysfs "$sdk_sysfs_src_path" "$sdk_sysfs_dest_path" "${excludes_sysfs_files[@]}" &
 
-    save_cmd "show interfaces autoneg status" "autoneg.status"
-
     save_cmd "/usr/local/bin/generate_ssd_dump" "ssd.dump"
     # generate_ssd_dump saved the output of vtFA_RTK_5766_v2 if exists in $ssd_dump_generated_files
     ssd_dump_generated_files=/tmp/ssd_dump_generated_files
@@ -2852,9 +2850,18 @@ main() {
         # Front-panel interface/transceiver collectors - none on a Switch-BMC.
         save_cmd "show interface status -d all" "interface.status" &
         save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
+        save_cmd "show interface link-training status" "interface.link_training.status" &
+        save_cmd "show interface transceiver pm" "interface.xcvrs.pm" &
+        save_cmd "show interfaces fec status" "interface.fec.status" &
+        # Keep the same output path naming convention as the previous Mellanox-only codepath that called this.
+        save_cmd "show interfaces autoneg status" "autoneg.status" &
+        save_cmd "show interfaces flap" "interface.flap" &
+        save_cmd "show interfaces transceiver vdm" "interface.xcvrs.vdm" &
+        save_cmd "show interfaces transceiver vdm flag -d" "interface.xcvrs.vdm_flag" &
+        save_cmd "show interfaces transceiver error-status" "interface.xcvrs.error_status" &
+        save_cmd "sfputil show fwversion -t" "interface.xcvrs.fwversion" &
         save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
         save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
-        save_cmd "show interface link-training status" "interface.link_training.status" &
     fi
     save_gearbox_data &
     wait
