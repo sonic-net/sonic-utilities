@@ -13,7 +13,7 @@ import sys
 import time
 
 import click
-import pexpect
+import pexpect  # noqa: F401
 from sonic_py_common import device_info
 from sonic_py_common.general import getstatusoutput_noshell_pipe
 
