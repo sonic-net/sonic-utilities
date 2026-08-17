@@ -607,14 +607,18 @@ class InvalidConfigurationError(Exception):
         self.config_key = config_key
         self.message = message
 
+
 class LineBusyError(Exception):
     pass
+
 
 class LineNotFoundError(Exception):
     pass
 
+
 class ConnectionFailedError(Exception):
     pass
+
 
 class MirrorRequestTimeout(RuntimeError):
     pass

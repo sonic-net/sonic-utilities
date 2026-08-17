@@ -14,8 +14,19 @@ try:
     import utilities_common.cli as clicommon
 
     from tabulate import tabulate
-    from .lib import *
-    from .lib import initialize_console_runtime, console_connect, require_root, get_target_line, validate_mirror_timeout_duration, send_mirror_message
+    from .lib import (
+        ConsolePortProvider,
+        ERR_CMD,
+        ERR_DEV,
+        LineNotFoundError,
+        MIRROR_DIRECTIONS,
+        console_connect,
+        get_target_line,
+        initialize_console_runtime,
+        require_root,
+        send_mirror_message,
+        validate_mirror_timeout_duration,
+    )
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
 
@@ -33,7 +44,7 @@ def consutil(db):
 @click.option('--brief', '-b', is_flag=True)
 def show(db, brief):
     """Show all ports and their info include available ttyUSB devices unless specified brief mode"""
-    port_provider = ConsolePortProvider(db, brief, refresh=True)  # noqa: F405
+    port_provider = ConsolePortProvider(db, brief, refresh=True)
     ports = list(port_provider.get_all())
 
     # sort ports for table rendering
@@ -71,7 +82,7 @@ def show(db, brief):
 @click.option('--brief', '-b', is_flag=True)
 def show_escape(db, brief):
     """Show all default and line escape char info include available ttyUSB devices unless specified brief mode"""
-    port_provider = ConsolePortProvider(db, brief, refresh=True)  # noqa: F405
+    port_provider = ConsolePortProvider(db, brief, refresh=True)
     ports = list(port_provider.get_all())
 
     # sort ports for table rendering
@@ -141,7 +152,12 @@ def mirror():
 @click.argument("target")
 @click.option("--devicename", "-d", is_flag=True,
               help="interpret target as device name instead of line number")
-@click.option("--direction", type=click.Choice(MIRROR_DIRECTIONS), default="both", show_default=True)
+@click.option(
+    "--direction",
+    type=click.Choice(MIRROR_DIRECTIONS),
+    default="both",
+    show_default=True,
+)
 @click.option("--timeout", callback=validate_mirror_timeout_duration,
               help="auto-stop timeout, for example 30m, 2h, or 1d")
 @click.option("--max-file-size", type=click.IntRange(min=1, max=16777215),
@@ -200,7 +216,7 @@ def mirror_stop(db, target, devicename, archive):
                 first_msg.get("archive_path", "-")))
             click.echo("Waiting for packaging to complete...")
             click.echo("")
-        first, final = send_mirror_message(
+        _, final = send_mirror_message(
             line, request, wait_for_final=True, on_first_reply=show_progress)
         click.echo("Recording archive: {}".format(
             final.get("archive_path", "-")))
@@ -216,7 +232,8 @@ def mirror_stop(db, target, devicename, archive):
 @clicommon.pass_db
 @click.argument("target")
 @click.argument("duration", callback=validate_mirror_timeout_duration)
-@click.option("--devicename", "-d", is_flag=True, help="interpret target as device name instead of line number")
+@click.option("--devicename", "-d", is_flag=True,
+              help="interpret target as device name instead of line number")
 def mirror_timeout(db, target, duration, devicename):
     """Update a console mirror timeout"""
     require_root()

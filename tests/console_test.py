@@ -17,8 +17,19 @@ import tests.mock_tables.dbconnector
 
 from click.testing import CliRunner
 from utilities_common.db import Db
-from consutil.lib import ConsolePortProvider, ConsolePortInfo, ConsoleSession, SysInfoProvider, DbUtils, \
-    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError, console_connect, send_mirror_message
+from consutil.lib import (
+    ConnectionFailedError,
+    ConsolePortInfo,
+    ConsolePortProvider,
+    ConsoleSession,
+    DbUtils,
+    InvalidConfigurationError,
+    LineBusyError,
+    LineNotFoundError,
+    SysInfoProvider,
+    console_connect,
+    send_mirror_message,
+)
 from sonic_py_common import device_info
 from jsonpatch import JsonPatchConflict
 
