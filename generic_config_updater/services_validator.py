@@ -211,15 +211,15 @@ def vlanintf_validator(old_config, upd_config, keys):
         # a crafted key cannot inject commands (CWE-78).
         if not IFNAME_RE.fullmatch(iface):
             logger.log(logger.LOG_PRIORITY_ERROR,
-                    f"vlanintf_validator: skipping neigh flush for invalid interface name {iface!r}",
-                    print_to_console)
+                       f"vlanintf_validator: skipping neigh flush for invalid interface name {iface!r}",
+                       print_to_console)
             continue
         try:
             ipaddress.ip_interface(iface_ip)
         except ValueError:
             logger.log(logger.LOG_PRIORITY_ERROR,
-                    f"vlanintf_validator: skipping neigh flush for invalid IP {iface_ip!r}",
-                    print_to_console)
+                       f"vlanintf_validator: skipping neigh flush for invalid IP {iface_ip!r}",
+                       print_to_console)
             continue
         rc = subprocess.run(["ip", "neigh", "flush", "dev", iface, iface_ip]).returncode
         if rc:
