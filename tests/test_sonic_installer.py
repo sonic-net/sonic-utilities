@@ -13,11 +13,18 @@ def test_run_command():
         output = sonic_installer_common.run_command([sys.executable, "-c", "import sys; sys.exit(6)"])
     assert e.value.code == 6
 
+
+@pytest.mark.parametrize("resolv_conf_symlink_target", [
+    "/run/resolvconf/resolv.conf",       # absolute symlink
+    "../run/resolvconf/resolv.conf",     # relative symlink (resolvconf package default)
+    "../../run/resolvconf/resolv.conf",  # excess ".." clamps at the chroot root
+    None,                                # regular file
+])
 @patch("sonic_installer.main.SWAPAllocator")
 @patch("sonic_installer.main.get_bootloader")
 @patch("sonic_installer.main.run_command_or_raise")
 @patch("sonic_installer.main.run_command")
-def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
+def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs, resolv_conf_symlink_target):
     """ This test covers the execution of "sonic-installer install" command. """
 
     sonic_image_filename = "sonic.bin"
@@ -34,8 +41,11 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
     fs.create_dir(os.path.join(mounted_image_folder, "usr/lib/docker/docker.sh"))
     fs.create_file("/var/run/docker.pid", contents="15")
     fs.create_file("/proc/15/cmdline", contents="\x00".join(["dockerd"] + dockerd_opts))
-    # Simulate new image: /etc/resolv.conf is a dangling symlink (target doesn't exist in squashfs)
-    fs.create_symlink(f"{mounted_image_folder}/etc/resolv.conf", "/run/resolvconf/resolv.conf")
+    # New image /etc/resolv.conf: dangling symlink or regular file
+    if resolv_conf_symlink_target:
+        fs.create_symlink(f"{mounted_image_folder}/etc/resolv.conf", resolv_conf_symlink_target)
+    else:
+        fs.create_file(f"{mounted_image_folder}/etc/resolv.conf")
 
     # Expect fd:// to be replaced by unix://
     expected_dockerd_opts = [opt if opt != "fd://" else "unix://" for opt in dockerd_opts]
@@ -101,9 +111,20 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
              f"{mounted_image_folder}/var/lib/sonic-package-manager"]),
         call(["touch", f"{mounted_image_folder}/tmp/docker.sock"]),
         call(["mount", "--bind", "/var/run/docker.sock", f"{mounted_image_folder}/tmp/docker.sock"]),
-        # /etc/resolv.conf is a dangling symlink -> /run/resolvconf/resolv.conf, populate its target
-        call(["mkdir", "-p", f"{mounted_image_folder}/run/resolvconf"]),
-        call(["cp", "-L", "/etc/resolv.conf", f"{mounted_image_folder}/run/resolvconf/resolv.conf"]),
+    ]
+    if resolv_conf_symlink_target:
+        # Symlink target resolves to /run/resolvconf/resolv.conf inside the chroot
+        expected_call_list += [
+            call(["mkdir", "-p", f"{mounted_image_folder}/run/resolvconf"]),
+            call(["cp", "-L", "--remove-destination", "/etc/resolv.conf",
+                  f"{mounted_image_folder}/run/resolvconf/resolv.conf"]),
+        ]
+    else:
+        # Regular file overwritten in place
+        expected_call_list += [
+            call(["cp", "/etc/resolv.conf", f"{mounted_image_folder}/etc/resolv.conf"]),
+        ]
+    expected_call_list += [
         call(["chroot", mounted_image_folder, "sh", "-c", "command -v sonic-package-manager"]),
         call(["chroot", mounted_image_folder, "sonic-package-manager", "migrate", "/tmp/packages.json", "--dockerd-socket", "/tmp/docker.sock", "-y"], capture=False),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "stop"], raise_exception=False),
