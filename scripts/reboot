@@ -263,7 +263,7 @@ function parse_config_file
                     [ "${value}" = "true" ] && BLOCKING_MODE="yes"
                     ;;
                 blocking_mode_timeout)
-                    [[ "${value}" =~ ^[0-9]+$ ]] && BLOCKING_MODE_TIMEOUT_IN_SECOND=$(value)
+                    [[ "${value}" =~ ^[0-9]+$ ]] && BLOCKING_MODE_TIMEOUT_IN_SECOND=${value}
                     ;;
                 show_timer)
                     [ "${value}" = "true" ] && SHOW_TIMER="yes"
@@ -414,7 +414,7 @@ else
             CURRENT_TIME=$(date +%s)
             ELAPSED=$((CURRENT_TIME - REBOOT_START_TIME))
             if (( ELAPSED >= BLOCKING_MODE_TIMEOUT_IN_SECOND )); then
-                echo "[REBOOT FAILED] The reboot used $(ELAPSED)seconds while the timeout is configured as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
+                echo "[REBOOT FAILED] The reboot used ${ELAPSED} seconds while the timeout is configured as ${BLOCKING_MODE_TIMEOUT_IN_SECOND} seconds"
                 exit ${EXIT_TIMEOUT}
             fi
 
