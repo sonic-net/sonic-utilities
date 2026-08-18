@@ -54,12 +54,17 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
         if vrf_name in ('all', constants.DEFAULT_VRF) and config_db.get_entry(table, neighbor_ip):
             return True
 
+        # Fetch the key list once and reuse it for both the canonical-IP
+        # fallback scan and the unified-mode tuple scan below, to avoid a
+        # duplicate Redis get_keys() call per table (and per namespace).
+        keys = config_db.get_keys(table)
+
         # Fallback (only when the exact match missed): scan keys comparing the
         # canonical IP form, so an IPv6 case/compression mismatch between the
         # query and the stored key (e.g. uppercase 'FC00::71' vs 'fc00::71')
         # is still resolved.
         if vrf_name in ('all', constants.DEFAULT_VRF):
-            for key in config_db.get_keys(table):
+            for key in keys:
                 if isinstance(key, tuple):
                     continue
                 if _canonical_neigh_ip(key) == neighbor_ip_canon and config_db.get_entry(table, key):
@@ -68,7 +73,6 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
         # Check for any string|neighbor_ip format. This is needed
         # when unified routing config mode is enabled, as in that case
         # vrfname|neighbor_ip is the key instead of just neighbor_ip
-        keys = config_db.get_keys(table)
         for key in keys:
             if (
                     isinstance(key, tuple) and len(key) == 2 and
