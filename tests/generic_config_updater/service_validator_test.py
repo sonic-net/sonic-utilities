@@ -292,6 +292,32 @@ test_vlanintf_failure_data = [
    ]
 
 
+test_vlanintf_invalid_input_data = [
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "bad iface": {},
+                    "bad iface|192.168.0.1/24": {}
+                }
+            },
+            "upd": {},
+            "expected_result": True,
+            "description": "Invalid interface name skips neigh flush"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|not-an-ip": {}
+                }
+            },
+            "upd": {},
+            "expected_result": True,
+            "description": "Invalid IP skips neigh flush"
+        },
+   ]
+
+
 test_gnmi_data = [
         {"old": {}, "upd": {}, "cmd": ""},
         {
@@ -521,6 +547,26 @@ class TestServiceValidator(unittest.TestCase):
 
             assert result == entry["expected_result"], \
                 f"{msg} - Expected {entry['expected_result']} but got {result}"
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_vlanintf_validator_skips_invalid_input(self, mock_subprocess):
+        """Test vlanintf_validator skips flush for invalid iface or IP"""
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+
+        for entry in test_vlanintf_invalid_input_data:
+            subprocess_calls = []
+            subprocess_call_index = 0
+
+            msg = "case failed: {} - {}".format(entry["description"], str(entry))
+
+            result = vlanintf_validator(entry["old"], entry["upd"], None)
+
+            assert result == entry["expected_result"], \
+                f"{msg} - Expected {entry['expected_result']} but got {result}"
+            assert subprocess_call_index == 0, \
+                f"{msg} - subprocess.run should not be called"
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_gnmi_validator(self, mock_subprocess):
