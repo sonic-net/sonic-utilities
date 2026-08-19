@@ -36,7 +36,7 @@ from swsscommon import swsscommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector, \
                                 isInterfaceNameValid, IFACE_NAME_MAX_LEN
 from utilities_common.db import Db
-from utilities_common.intf_filter import parse_interface_in_filter
+from utilities_common.intf_filter import expand_single_intf_filter
 from utilities_common import bgp_util
 import utilities_common.cli as clicommon
 from utilities_common.helper import get_port_pbh_binding, get_port_acl_binding, update_config
@@ -588,6 +588,109 @@ def get_port_namespace(port):
                 return namespace
 
     return None
+
+
+def _load_other_namespace_ports(namespace):
+    """Build a port-to-namespace map for all namespaces other than provided namespace."""
+    other_ns_ports = {}
+    if not multi_asic.is_multi_asic():
+        return other_ns_ports
+    ns_list = multi_asic.get_all_namespaces()
+    for ns in ns_list['front_ns'] + ns_list['back_ns']:
+        if ns == namespace:
+            continue
+        ns_db = ConfigDBConnector(use_unix_socket_path=True, namespace=ns)
+        ns_db.connect()
+        for port in ns_db.get_table('PORT'):
+            other_ns_ports[port] = ns
+        for pc in ns_db.get_table('PORTCHANNEL'):
+            other_ns_ports[pc] = ns
+    return other_ns_ports
+
+
+def get_interface_names_in_namespace(ctx, interface_name):
+    """Return existing interfaces selected by filter in the provided namespace."""
+    config_db = ctx.obj.get('config_db')
+    namespace = ctx.obj.get('namespace', DEFAULT_NAMESPACE)
+    cross_ns_intfs = []
+    invalid_intfs = []
+    valid_intfs = []
+    seen_intfs = set()
+    other_ns_ports = None
+
+    # Expand all possible comma seperated input interface(s).
+    for intf_filter in interface_name.split(','):
+        intf_filter = intf_filter.strip()
+        try:
+            intf_fs, is_range = expand_single_intf_filter(intf_filter)
+        except ValueError as e:
+            log.log_warning("Invalid interface filter '{}' in namespace '{}': {}".format(
+                intf_filter, namespace, str(e)))
+            ctx.fail(str(e))
+
+        missing_intfs = []
+        valid_in_filter = []
+        cross_ns_in_filter = []
+        for intf in intf_fs:
+            if intf in seen_intfs:
+                continue
+            seen_intfs.add(intf)
+            # Check if interface is in target namespace.
+            if interface_name_is_valid(config_db, intf):
+                valid_in_filter.append(intf)
+            else:
+                if other_ns_ports is None:
+                    # Lazy init on first miss to skip uneccessary config_db connections
+                    # when all input interfaces are valid.
+                    other_ns_ports = _load_other_namespace_ports(namespace)
+                # Case when interface is present in other namespace.
+                if intf in other_ns_ports:
+                    cross_ns_in_filter.append((intf, other_ns_ports[intf]))
+                # Sparse gap in range which is not present in any namespace.
+                # This interfaces are tolerated if range has other valid hits.
+                elif is_range:
+                    missing_intfs.append(intf)
+                else:
+                    invalid_intfs.append(intf)
+
+        cross_ns_intfs.extend(cross_ns_in_filter)
+
+        # Range that matched nothing — promote missing to invalid for proper error reporting.
+        if is_range and not valid_in_filter and not cross_ns_in_filter:
+            invalid_intfs.extend(missing_intfs)
+            missing_intfs = []
+
+        valid_intfs.extend(valid_in_filter)
+
+        if missing_intfs:
+            log.log_info("Interface range '{}' in namespace '{}' skipped missing interface(s): {}".format(
+                intf_filter, namespace, ', '.join(missing_intfs)))
+
+        if valid_in_filter:
+            log.log_info("Interface filter '{}' in namespace '{}' resolved to existing interface(s): {}".format(
+                intf_filter, namespace, ', '.join(valid_in_filter)))
+
+    # Fail with clear error if valid interfaces existed on different namespace.
+    if cross_ns_intfs:
+        by_ns = {}
+        for intf, ns in cross_ns_intfs:
+            by_ns.setdefault(ns, []).append(intf)
+        parts = []
+        for ns, intfs in by_ns.items():
+            parts.append("Interface(s) {} exist(s) on namespace '{}'".format(', '.join(intfs), ns))
+        msg = "Interface(s) not in provided namespace '{}'. {}".format(namespace, '. '.join(parts))
+        log.log_warning(msg)
+        ctx.fail(msg)
+
+    # Fail when input includes interface(s) that don't exist on any namespace.
+    if invalid_intfs:
+        log.log_warning("Invalid interface(s) in namespace '{}': {}".format(
+            namespace, ', '.join(invalid_intfs)))
+        ctx.fail("Provided interface(s) : '{}' are invalid in namespace '{}'".format(
+            ', '.join(invalid_intfs), namespace))
+
+    return valid_intfs
+
 
 def del_interface_bind_to_vrf(config_db, vrf_name):
     """del interface bind to vrf
@@ -5337,6 +5440,8 @@ def fast_linkup(ctx, interface_name, mode, verbose):
     if verbose:
         command += ['-vv']
     clicommon.run_command(command, display_cmd=verbose)
+
+
 #
 # 'startup' subcommand
 #
@@ -5354,37 +5459,13 @@ def startup(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    try:
-        intf_fs = parse_interface_in_filter(interface_name)
-    except ValueError as e:
-        ctx.fail(str(e))
-
-    if len(intf_fs) > 1 and multi_asic.is_multi_asic():
-        ctx.fail("Interface range not supported in multi-asic platforms !!")
-
-    if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
-        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
-
+    intf_fs = get_interface_names_in_namespace(ctx, interface_name)
     log.log_info("'interface startup {}' executing...".format(interface_name))
-    port_dict = config_db.get_table('PORT')
-    for port_name in port_dict:
-        if port_name in intf_fs:
-            config_db.mod_entry("PORT", port_name, {"admin_status": "up"})
-
-    portchannel_list = config_db.get_table("PORTCHANNEL")
-    for po_name in portchannel_list:
-        if po_name in intf_fs:
-            config_db.mod_entry("PORTCHANNEL", po_name, {"admin_status": "up"})
-
-    subport_list = config_db.get_table("VLAN_SUB_INTERFACE")
-    for sp_name in subport_list:
-        if sp_name in intf_fs:
-            config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "up"})
-
-    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
-    for lo in lo_list:
-        if lo in intf_fs:
-            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "up"})
+    for intf in intf_fs:
+        table_name = get_port_table_name(intf)
+        if not table_name:
+            continue
+        config_db.mod_entry(table_name, intf, {"admin_status": "up"})
 
 #
 # 'shutdown' subcommand
@@ -5395,7 +5476,6 @@ def startup(ctx, interface_name):
 @click.pass_context
 def shutdown(ctx, interface_name):
     """Shut down interface"""
-    log.log_info("'interface shutdown {}' executing...".format(interface_name))
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
@@ -5404,36 +5484,13 @@ def shutdown(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    try:
-        intf_fs = parse_interface_in_filter(interface_name)
-    except ValueError as e:
-        ctx.fail(str(e))
-
-    if len(intf_fs) > 1 and multi_asic.is_multi_asic():
-        ctx.fail("Interface range not supported in multi-asic platforms !!")
-
-    if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
-        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
-
-    port_dict = config_db.get_table('PORT')
-    for port_name in port_dict:
-        if port_name in intf_fs:
-            config_db.mod_entry("PORT", port_name, {"admin_status": "down"})
-
-    portchannel_list = config_db.get_table("PORTCHANNEL")
-    for po_name in portchannel_list:
-        if po_name in intf_fs:
-            config_db.mod_entry("PORTCHANNEL", po_name, {"admin_status": "down"})
-
-    subport_list = config_db.get_table("VLAN_SUB_INTERFACE")
-    for sp_name in subport_list:
-        if sp_name in intf_fs:
-            config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "down"})
-
-    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
-    for lo in lo_list:
-        if lo in intf_fs:
-            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
+    intf_fs = get_interface_names_in_namespace(ctx, interface_name)
+    log.log_info("'interface shutdown {}' executing...".format(interface_name))
+    for intf in intf_fs:
+        table_name = get_port_table_name(intf)
+        if not table_name:
+            continue
+        config_db.mod_entry(table_name, intf, {"admin_status": "down"})
 
 #
 # 'sys-mac' group ('config interface sys-mac ...')
