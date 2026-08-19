@@ -1,6 +1,9 @@
 #!/bin/bash
 
-declare -r GNMI_PORT=8080 # Default GNMI port
+declare -ra COMMON_GNMI_PORTS=(8080 50052)
+declare -r GNMI_PROBE_TIMEOUT=10
+declare -r GNMI_REBOOT_TIMEOUT=60
+declare -r GNMI_STATUS_TIMEOUT=10
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
@@ -37,13 +40,32 @@ function get_dpu_ip()
     sonic-db-cli CONFIG_DB HGET "DHCP_SERVER_IPV4_PORT|bridge-midplane|${DPU_NAME}" "ips@"
 }
 
-# Function to retrieve GNMI port from CONFIG_DB
-function get_gnmi_port()
+# Function to retrieve configured and common GNMI ports in preference order
+function get_gnmi_ports()
 {
     local DPU_NAME=${1:-dpu0}
+    local configured_port
     for k in $(sonic-db-cli CONFIG_DB keys "DPU|*$DPU_NAME"); do
-        sonic-db-cli CONFIG_DB hget "$k" 'gnmi_port'
+        configured_port=$(sonic-db-cli CONFIG_DB hget "$k" 'gnmi_port')
+        if [ -n "$configured_port" ]; then
+            break
+        fi
     done
+    printf '%s\n' "$configured_port" "${COMMON_GNMI_PORTS[@]}" | awk 'NF && !seen[$0]++'
+}
+
+function find_working_gnmi_port()
+{
+    local dpu_ip=$1
+    shift
+    local port
+    for port in "$@"; do
+        if timeout "$GNMI_PROBE_TIMEOUT" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc Time &>/dev/null; then
+            printf '%s\n' "$port"
+            return ${EXIT_SUCCESS}
+        fi
+    done
+    return ${EXIT_ERROR}
 }
 
 # Function to get reboot status from DPU
@@ -51,16 +73,22 @@ function get_reboot_status()
 {
     local dpu_ip=$1
     local port=$2
+    local timeout_sec=${3:-$GNMI_STATUS_TIMEOUT}
     local reboot_output_file="reboot_status_${dpu_ip}.txt"
 
-    $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null)
-    if [ $? -ne 0 ]; then
+    timeout "$timeout_sec" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null
+    local gnoi_rc=${PIPESTATUS[0]}
+    if [ $gnoi_rc -ne 0 ]; then
         rm -f "$reboot_output_file"
         return ${EXIT_ERROR}
     fi
-    local is_reboot_active
-    is_reboot_active=$(cat "$reboot_output_file" | awk '/^{.*}$/' | jq -r '.active')
+    local status_json
+    status_json=$(awk '/^{.*}$/{json=$0} END{print json}' "$reboot_output_file")
     rm -f "$reboot_output_file"
+    local is_reboot_active
+    if [ -z "$status_json" ] || ! is_reboot_active=$(jq -r 'if .active == true then true elif .active == false and ((has("status") | not) or .status.status == 1) then false else error("reboot not complete") end' <<< "$status_json"); then
+        return ${EXIT_ERROR}
+    fi
     if [ "$is_reboot_active" != "true" ]; then
         return ${EXIT_SUCCESS}
     fi
@@ -71,20 +99,24 @@ function get_reboot_status()
 function module_pre_shutdown()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_pre_shutdown('${DPU_NAME}')"
-    if [ $? -ne 0 ]; then
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_pre_shutdown('${DPU_NAME}') else 1)"
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module pre-shutdown vendor API failed"
     fi
+    return "$rc"
 }
 
 # Function to rescan PCI module
 function module_post_startup()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_post_startup('${DPU_NAME}')"
-    if [ $? -ne 0 ]; then
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_post_startup('${DPU_NAME}') else 1)"
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module post-startup vendor API failed"
     fi
+    return "$rc"
 }
 
 # Function to set state_transition_in_progress flag
@@ -92,20 +124,24 @@ function set_module_state_transition_flag()
 {
     local DPU_NAME=$1
     local FLAG_VALUE=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE})"
-    if [ $? -ne 0 ]; then
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE}) else 1)"
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Setting module state transition flag failed"
     fi
+    return "$rc"
 }
 
 # Function to clear state_transition_in_progress flag
 function clear_module_state_transition_flag()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.clear_module_state_transition('${DPU_NAME}')"
-    if [ $? -ne 0 ]; then
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().clear_module_state_transition('${DPU_NAME}') else 1)"
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Clearing module state transition flag failed"
     fi
+    return "$rc"
 }
 
 # Function to get state_transition_in_progress flag
@@ -126,8 +162,10 @@ function reboot_dpu_platform()
 {
     local DPU_NAME=$1
     local REBOOT_TYPE=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.reboot_module('${DPU_NAME}', '${REBOOT_TYPE}')"
+    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().reboot_module('${DPU_NAME}', '${REBOOT_TYPE}') else 1)"
+    local rc=$?
     log_message "INFO: Rebooting ${DPU_NAME} with reboot_type:${REBOOT_TYPE}..."
+    return "$rc"
 }
 
 # Function to wait for DPU reboot status
@@ -149,25 +187,38 @@ function wait_for_dpu_reboot_status()
     fi
 
     local poll_interval=5
-    local waited_time=0
+    local deadline=$((SECONDS + dpu_halt_services_timeout))
     while true; do
-        sleep "$poll_interval"
+        local remaining=$((deadline - SECONDS))
+        if [ "$remaining" -le 0 ]; then
+            break
+        fi
+        local sleep_time=$poll_interval
+        if [ "$remaining" -lt "$sleep_time" ]; then
+            sleep_time=$remaining
+        fi
+        sleep "$sleep_time"
+
+        remaining=$((deadline - SECONDS))
+        if [ "$remaining" -le 0 ]; then
+            break
+        fi
+        local status_timeout=$GNMI_STATUS_TIMEOUT
+        if [ "$remaining" -lt "$status_timeout" ]; then
+            status_timeout=$remaining
+        fi
 
         local reboot_status
-        get_reboot_status "${dpu_ip}" "${port}"
+        get_reboot_status "${dpu_ip}" "${port}" "$status_timeout"
         reboot_status=$?
         if [ $reboot_status -eq ${EXIT_SUCCESS} ]; then
             log_message "INFO: ${DPU_NAME} halted the services successfully"
-            break
+            return ${EXIT_SUCCESS}
         fi
 
-        waited_time=$((waited_time + poll_interval))
-        if [ $waited_time -ge $dpu_halt_services_timeout ]; then
-            log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
-            return
-        fi
     done
-    return
+    log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
+    return ${EXIT_ERROR}
 }
 
 # Function to send reboot command to DPU
@@ -177,24 +228,29 @@ function gnmi_reboot_dpu()
 
     # Retrieve DPU IP and GNMI port
     dpu_ip=$(get_dpu_ip "${DPU_NAME}")
-    port=$(get_gnmi_port "${DPU_NAME}")
-    if [ -z "$port" ]; then
-        port=$GNMI_PORT # Default GNMI port
-    fi
-    log_message "INFO: Rebooting ${DPU_NAME}, ip:$dpu_ip gnmi_port:$port"
+    local ports
+    mapfile -t ports < <(get_gnmi_ports "${DPU_NAME}")
+    log_message "INFO: Rebooting ${DPU_NAME}, ip:$dpu_ip gnmi_ports:${ports[*]}"
 
     if [ -z "$dpu_ip" ]; then
         log_message "ERROR: Failed to retrieve DPU IP for ${DPU_NAME}"
         return ${EXIT_ERROR}
     fi
 
-    $(docker exec gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -module System -rpc Reboot -jsonin '{"method":3, "message":"User initiated reboot"}' &>/dev/null)
-    if [ $? -ne 0 ]; then
+    local port
+    port=$(find_working_gnmi_port "$dpu_ip" "${ports[@]}")
+    if [ -z "$port" ]; then
+        log_message "ERROR: Failed to find a reachable gNMI port on ${DPU_NAME}"
+        log_message "ERROR: proceeding without halting the services"
+        return ${EXIT_ERROR}
+    elif ! timeout "$GNMI_REBOOT_TIMEOUT" docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -module System -rpc Reboot -jsonin '{"method":3, "message":"User initiated reboot"}' &>/dev/null; then
         log_message "ERROR: Failed to send gnoi command to halt services on ${DPU_NAME}"
         log_message "ERROR: proceeding without halting the services"
+        return ${EXIT_ERROR}
     else
         # Wait for DPU to halt services, if reboot command is successful
         wait_for_dpu_reboot_status "${dpu_ip}" "${port}" "${DPU_NAME}"
+        return $?
     fi
 }
 
@@ -207,23 +263,26 @@ function reboot_dpu()
     log_message "User requested rebooting device ${DPU_NAME} ..."
 
     # Check if the DPU operation status is online before rebooting
-    local oper_status
-    oper_status=$(show chassis modules status "${DPU_NAME^^}" | sed -n '/^ *DPU/ s/.*\s\+\(Online\|Offline\)\s\+.*/\1/p')
-    if [ $? -ne 0 ]; then
+    local module_status
+    if ! module_status=$(show chassis modules status "${DPU_NAME^^}"); then
         log_message "ERROR: Failed to retrieve DPU status."
-    else
-        log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
-        oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
-        if [ "$oper_status" != "online" ]; then
-            log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
-            return ${EXIT_DPU_DOWN}
-        fi
+        return ${EXIT_ERROR}
+    fi
+    local oper_status
+    oper_status=$(sed -n '/^ *DPU/ s/.*\s\+\(Online\|Offline\)\s\+.*/\1/p' <<< "$module_status")
+    log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
+    oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
+    if [ "$oper_status" != "online" ]; then
+        log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
+        return ${EXIT_DPU_DOWN}
     fi
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         # get and set the state_transition_in_progress flag before reboot
         if ! get_module_state_transition_flag "${DPU_NAME}"; then
-            set_module_state_transition_flag "${DPU_NAME}" True
+            if ! set_module_state_transition_flag "${DPU_NAME}" True; then
+                return ${EXIT_ERROR}
+            fi
         else
             log_message "ERROR: state_transition_in_progress flag is already set for ${DPU_NAME}"
             return ${EXIT_ERROR}
@@ -232,13 +291,17 @@ function reboot_dpu()
 
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
-    if [ $? -ne 0 ]; then
+    local gnoi_reboot_rc=$?
+    if [ "$gnoi_reboot_rc" -ne 0 ]; then
         log_message "ERROR: Failed to send gnoi command to reboot ${DPU_NAME}"
     fi
 
     local DPU_BUS_INFO=$(jq -r --arg DPU_NAME "$DPU_NAME" '.DPUS[$DPU_NAME].bus_info' "$PLATFORM_JSON_PATH")
     if [ -z "$DPU_BUS_INFO" ] || [ "$DPU_BUS_INFO" = "null" ]; then
         log_message "ERROR: Failed to retrieve bus info for ${DPU_NAME}"
+        if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+            clear_module_state_transition_flag "${DPU_NAME}"
+        fi
         return ${EXIT_ERROR}
     fi
 
@@ -246,6 +309,7 @@ function reboot_dpu()
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to pre-shutdown the module for ${DPU_NAME}"
         if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+            module_post_startup "${DPU_NAME}"
             clear_module_state_transition_flag "${DPU_NAME}"
         fi
         return ${EXIT_ERROR}
@@ -255,6 +319,7 @@ function reboot_dpu()
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to reboot the module for ${DPU_NAME}"
         if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+            module_post_startup "${DPU_NAME}"
             clear_module_state_transition_flag "${DPU_NAME}"
         fi
         return ${EXIT_ERROR}
@@ -267,8 +332,11 @@ function reboot_dpu()
             clear_module_state_transition_flag "${DPU_NAME}"
             return ${EXIT_ERROR}
         fi
-        clear_module_state_transition_flag "${DPU_NAME}"
+        if ! clear_module_state_transition_flag "${DPU_NAME}"; then
+            return ${EXIT_ERROR}
+        fi
     fi
+    return "$gnoi_reboot_rc"
 }
 
 # Function to reboot all DPUs in parallel
@@ -281,13 +349,17 @@ function reboot_all_dpus() {
     fi
 
     local failures=0
+    local pids=()
     for (( i=0; i<"$NUM_DPU"; i++ )); do
         reboot_dpu "dpu$i" "$MODULE_REBOOT_SMARTSWITCH" &
-        if [ $? -ne 0 ]; then
+        pids+=("$!")
+    done
+    local pid
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
             ((failures++))
         fi
     done
-    wait
     return $failures
 }
 
@@ -358,7 +430,9 @@ function handle_smart_switch() {
     # If the system is a smart switch, reboot all DPUs in parallel
     if is_smartswitch; then
         reboot_all_dpus "$NUM_DPU" "$MODULE_REBOOT_SMARTSWITCH"
-        result=$?
-        return $result
+        if [ $? -ne 0 ]; then
+            log_message "ERROR: One or more DPU reboot preparations failed; continuing SmartSwitch reboot"
+        fi
+        return ${EXIT_SUCCESS}
     fi
 }
