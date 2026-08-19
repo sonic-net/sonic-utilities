@@ -55,6 +55,7 @@ import sys
 
 from tabulate import tabulate
 from sonic_py_common import device_info
+from utilities_common.multi_asic import multi_asic_ns_choices, LazyChoice
 
 # mock the redis for unit test purposes #
 try:
@@ -382,7 +383,7 @@ class EcnQ(object):
 @click.option('-gdrop', '--green-drop-prob', type=str, help='set max drop/mark probability for packets marked \'green\'', default=None)
 @click.option('-ydrop', '--yellow-drop-prob', type=str, help='set max drop/mark probability for packets marked \'yellow\'', default=None)
 @click.option('-rdrop', '--red-drop-prob', type=str, help='set max drop/mark probability for packets marked \'red\'', default=None)
-@click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Namespace name or skip for all', default=None)
+@click.option('-n', '--namespace', type=LazyChoice(multi_asic_ns_choices), help='Namespace name or all', default=None)
 @click.option('-vv', '--verbose', is_flag=True, help='Verbose output', default=False)
 @click.option('-q', '--queue', type=str, help='specify queue index list: 3,4', default=None)
 @click.version_option(version='1.0')
@@ -396,6 +397,11 @@ def main(command, show_config, profile, green_min,
 
     try:
         load_db_config()
+
+        if namespace and not multi_asic.is_multi_asic():
+            click.echo("Error: -n/--namespace is not available for single ASIC platforms", err=True)
+            sys.exit(1)
+
         if show_config or profile:
             # Check if a set option has been provided
             setOption = (green_min or green_max or yellow_min or yellow_max or red_min or red_max
