@@ -29,10 +29,13 @@ def test_build_rows_with_mixed_profiles_and_groups():
     rows = show_hft._build_rows(profile_table, group_table)
 
     assert rows == [
-        ['profile2', 'disabled', '15', '-', 'PORT', 'Ethernet0\nEthernet1', 'COUNTER0\nCOUNTER2', '-', '-', '-'],
-        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', ''],
-        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
-        ['profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-', '-', '-', '-']
+        [
+            'profile2', 'disabled', '15', '-', 'PORT', 'Ethernet0\nEthernet1',
+            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-'
+        ],
+        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', ''],
+        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+        ['profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-', '-', '-', '-', '-', '-']
     ]
 
 
@@ -50,7 +53,9 @@ def test_build_rows_with_aggregator_config():
         'ag0': {
             'reporting_rate': '5000',
             'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
-            'heatmap_counters': 'PORT|IF_OUT_ERRORS,QUEUE|WRED_ECN_MARKED_PACKETS'
+            'heatmap_interval': '1000000',
+            'heatmap_counters': 'PORT|IF_OUT_ERRORS,QUEUE|WRED_ECN_MARKED_PACKETS',
+            'heatmap_bucket_boundaries': [0, 1024, 4096]
         }
     }
 
@@ -66,7 +71,9 @@ def test_build_rows_with_aggregator_config():
         'IF_IN_UCAST_PKTS',
         '5,000',
         'PORT|IF_IN_UCAST_PKTS\nQUEUE|DROPPED_PACKETS',
-        'PORT|IF_OUT_ERRORS\nQUEUE|WRED_ECN_MARKED_PACKETS'
+        '1,000,000',
+        'PORT|IF_OUT_ERRORS\nQUEUE|WRED_ECN_MARKED_PACKETS',
+        '0\n1024\n4096'
     ]]
 
 
@@ -93,6 +100,8 @@ def test_build_rows_includes_unbound_aggregator_config():
         '-',
         '5,000',
         'PORT|IF_IN_UCAST_PKTS',
+        '-',
+        '-',
         '-'
     ]]
 

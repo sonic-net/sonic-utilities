@@ -34,14 +34,17 @@ class TestConfigHftCli:
         assert payload == expected_payload
 
     def test_add_aggregator_splits_comma_separated_lists(self):
-        with patch('config.hft._process_payload') as mock_process:
+        with patch('config.hft._has_table', return_value=False), \
+                patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
                     'add', 'aggregator', 'ag0',
                     '--reporting_rate', '1000',
                     '--rollover_counters', 'PORT|IF_IN_UCAST_PKTS, QUEUE|DROPPED_PACKETS',
-                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS, QUEUE|WRED_ECN_MARKED_PACKETS'
+                    '--heatmap_interval', '1000000',
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS, QUEUE|WRED_ECN_MARKED_PACKETS',
+                    '--heatmap_bucket_boundaries', '0, 1024, 4096'
                 ]
             )
 
@@ -54,14 +57,112 @@ class TestConfigHftCli:
                 'ag0': {
                     'reporting_rate': '1000',
                     'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
-                    'heatmap_counters': ['PORT|IF_OUT_ERRORS', 'QUEUE|WRED_ECN_MARKED_PACKETS']
+                    'heatmap_interval': '1000000',
+                    'heatmap_counters': ['PORT|IF_OUT_ERRORS', 'QUEUE|WRED_ECN_MARKED_PACKETS'],
+                    'heatmap_bucket_boundaries': ['0', '1024', '4096']
                 }
             }
         }]
         assert payload == expected_payload
 
-    def test_add_group_splits_comma_separated_lists(self):
+    def test_add_aggregator_accepts_each_optional_method_independently(self):
+        commands = [
+            ['add', 'aggregator', 'reporting', '--reporting_rate', '1000'],
+            [
+                'add', 'aggregator', 'rollover',
+                '--rollover_counters', 'PORT|IF_IN_UCAST_PKTS'
+            ],
+            [
+                'add', 'aggregator', 'heatmap',
+                '--heatmap_interval', '1000000',
+                '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
+                '--heatmap_bucket_boundaries', '0,1024'
+            ]
+        ]
+
+        for command in commands:
+            with patch('config.hft._has_table', return_value=False), \
+                    patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(config_hft.hft, command)
+            assert result.exit_code == 0
+            mock_process.assert_called_once()
+
+    def test_add_aggregator_rejects_heatmap_without_bucket_boundaries(self):
         with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'aggregator', 'ag0',
+                    '--heatmap_interval', '1000000',
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS'
+                ]
+            )
+
+        assert result.exit_code == 2
+        assert 'must be configured together' in result.output
+        mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_heatmap_without_interval(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'aggregator', 'ag0',
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
+                    '--heatmap_bucket_boundaries', '0,1024'
+                ]
+            )
+
+        assert result.exit_code == 2
+        assert 'must be configured together' in result.output
+        mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_intervals_above_uint32(self):
+        for option in ('--reporting_rate', '--heatmap_interval'):
+            with patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    ['add', 'aggregator', 'ag0', option, str(2**32)]
+                )
+
+            assert result.exit_code == 2
+            mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_unordered_bucket_boundaries(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'aggregator', 'ag0',
+                    '--heatmap_interval', '1000000',
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
+                    '--heatmap_bucket_boundaries', '0,4096,1024'
+                ]
+            )
+
+        assert result.exit_code == 2
+        assert 'strictly increasing' in result.output
+        mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_bucket_boundary_above_exact_otel_range(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'aggregator', 'ag0',
+                    '--heatmap_interval', '1000000',
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
+                    '--heatmap_bucket_boundaries', str(2**53 + 1)
+                ]
+            )
+
+        assert result.exit_code == 2
+        assert 'exact OTLP encoding' in result.output
+        mock_process.assert_not_called()
+
+    def test_add_group_splits_comma_separated_lists(self):
+        with patch('config.hft._has_table', return_value=False), \
+                patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
@@ -85,6 +186,46 @@ class TestConfigHftCli:
             }
         }]
         assert payload == expected_payload
+
+    def test_add_group_preserves_existing_table_entries(self):
+        with patch('config.hft._has_table', return_value=True), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'group', 'profileA',
+                    '--group_type', 'QUEUE',
+                    '--object_names', 'Ethernet0|0',
+                    '--object_counters', 'PACKETS'
+                ]
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'add',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_GROUP/profileA|QUEUE',
+            'value': {
+                'object_names': ['Ethernet0|0'],
+                'object_counters': ['PACKETS']
+            }
+        }]
+
+    def test_add_aggregator_preserves_existing_table_entries(self):
+        with patch('config.hft._has_table', return_value=True), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['add', 'aggregator', 'ag1', '--reporting_rate', '1000']
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'add',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR/ag1',
+            'value': {'reporting_rate': '1000'}
+        }]
 
     def test_enable_profile_sets_stream_state_patch(self):
         with patch('config.hft._process_payload') as mock_process:

@@ -23,7 +23,9 @@ TABLE_HEADER = [
     'Object Counters',
     'Reporting Rate (usec)',
     'Rollover Counters',
-    'Heatmap Counters'
+    'Heatmap Interval (usec)',
+    'Heatmap Counters',
+    'Heatmap Bucket Boundaries'
 ]
 
 
@@ -95,8 +97,14 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
         aggregator_name = profile_entry.get('aggregator', DEFAULT_CELL_PLACEHOLDER)
         if aggregator_name != DEFAULT_CELL_PLACEHOLDER:
             used_aggregators.add(aggregator_name)
-        aggregator = aggregator_table.get(aggregator_name, {}) if aggregator_name != DEFAULT_CELL_PLACEHOLDER else {}
-        reporting_rate, rollover_counters, heatmap_counters = _format_aggregator(aggregator)
+        aggregator = (
+            aggregator_table.get(aggregator_name, {})
+            if aggregator_name != DEFAULT_CELL_PLACEHOLDER else {}
+        )
+        aggregator_fields = _format_aggregator(aggregator)
+        reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, heatmap_buckets = (
+            aggregator_fields
+        )
         groups = group_index.get(profile_name)
 
         if not groups:
@@ -110,7 +118,9 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
                 DEFAULT_CELL_PLACEHOLDER,
                 reporting_rate,
                 rollover_counters,
-                heatmap_counters
+                heatmap_interval,
+                heatmap_counters,
+                heatmap_buckets
             ])
             continue
 
@@ -125,12 +135,17 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
                 group['counters'],
                 reporting_rate if idx == 0 else '',
                 rollover_counters if idx == 0 else '',
-                heatmap_counters if idx == 0 else ''
+                heatmap_interval if idx == 0 else '',
+                heatmap_counters if idx == 0 else '',
+                heatmap_buckets if idx == 0 else ''
             ])
 
     for aggregator_name in natsorted(set(aggregator_table.keys()) - used_aggregators):
-        reporting_rate, rollover_counters, heatmap_counters = _format_aggregator(
+        aggregator_fields = _format_aggregator(
             aggregator_table.get(aggregator_name, {})
+        )
+        reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, heatmap_buckets = (
+            aggregator_fields
         )
         rows.append([
             DEFAULT_CELL_PLACEHOLDER,
@@ -142,7 +157,9 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
             DEFAULT_CELL_PLACEHOLDER,
             reporting_rate,
             rollover_counters,
-            heatmap_counters
+            heatmap_interval,
+            heatmap_counters,
+            heatmap_buckets
         ])
 
     return rows
@@ -151,8 +168,12 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
 def _format_aggregator(aggregator):
     reporting_rate = _format_poll_interval(aggregator.get('reporting_rate', DEFAULT_CELL_PLACEHOLDER))
     rollover_counters = _format_list(aggregator.get('rollover_counters')) or DEFAULT_CELL_PLACEHOLDER
+    heatmap_interval = _format_poll_interval(
+        aggregator.get('heatmap_interval', DEFAULT_CELL_PLACEHOLDER)
+    )
     heatmap_counters = _format_list(aggregator.get('heatmap_counters')) or DEFAULT_CELL_PLACEHOLDER
-    return reporting_rate, rollover_counters, heatmap_counters
+    heatmap_buckets = _format_list(aggregator.get('heatmap_bucket_boundaries')) or DEFAULT_CELL_PLACEHOLDER
+    return reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, heatmap_buckets
 
 
 def _index_groups(group_table):

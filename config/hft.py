@@ -118,6 +118,7 @@ def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
         op="add",
         profile_name=profile_name,
         group_type=group_type,
+        table_exists=_has_table(ctx, GROUP_TABLE_NAME),
         attributes={
             "object_names": _split_csv_items(object_names),
             "object_counters": _split_csv_items(object_counters),
@@ -129,25 +130,56 @@ def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
 @hft_add.command('aggregator', short_help="Add an HFT aggregator")
 @click.argument('aggregator_name')
 @click.option('--reporting_rate', 'reporting_rate', default=None,
-              type=click.IntRange(min=0), help='Reporting interval after aggregation in microseconds.')
+              type=click.IntRange(min=1, max=2**32 - 1),
+              help='Reporting interval after aggregation in microseconds.')
 @click.option('--rollover_counters', 'rollover_counters', default=None,
               help='Comma-separated list of GROUP|COUNTER entries requiring rollover correction.')
+@click.option('--heatmap_interval', 'heatmap_interval', default=None,
+              type=click.IntRange(min=1, max=2**32 - 1),
+              help='Independent heatmap interval in microseconds.')
 @click.option('--heatmap_counters', 'heatmap_counters', default=None,
               help='Comma-separated list of GROUP|COUNTER entries treated as heatmap data.')
+@click.option('--heatmap_bucket_boundaries', 'heatmap_bucket_boundaries', default=None,
+              help='Comma-separated inclusive upper bounds shared by all heatmap counters.')
 @click.pass_context
-def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters, heatmap_counters):
+def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
+                       heatmap_interval, heatmap_counters, heatmap_bucket_boundaries):
     """Create an aggregator definition for HFT."""
+    heatmap_counters = (
+        None if heatmap_counters is None else _split_csv_items(heatmap_counters)
+    )
+    heatmap_bucket_boundaries = _parse_heatmap_bucket_boundaries(
+        heatmap_bucket_boundaries
+    )
+    heatmap_fields = (
+        heatmap_interval is not None,
+        bool(heatmap_counters),
+        bool(heatmap_bucket_boundaries),
+    )
+    if any(heatmap_fields) and not all(heatmap_fields):
+        raise click.UsageError(
+            '--heatmap_interval, --heatmap_counters, and --heatmap_bucket_boundaries '
+            'must be configured together.'
+        )
+
     attributes = {}
     if reporting_rate is not None:
         attributes["reporting_rate"] = str(reporting_rate)
     if rollover_counters is not None:
         attributes["rollover_counters"] = _split_csv_items(rollover_counters)
+    if heatmap_interval is not None:
+        attributes["heatmap_interval"] = str(heatmap_interval)
     if heatmap_counters is not None:
-        attributes["heatmap_counters"] = _split_csv_items(heatmap_counters)
+        attributes["heatmap_counters"] = heatmap_counters
+    if heatmap_bucket_boundaries is not None:
+        attributes["heatmap_bucket_boundaries"] = [
+            str(boundary) for boundary in heatmap_bucket_boundaries
+        ]
 
     aggregator_payload = _build_aggregator_patch(
         op="add",
         aggregator_name=aggregator_name,
+        table_exists=_has_table(ctx, AGGREGATOR_TABLE_NAME),
         attributes=attributes
     )
     _process_payload(ctx, aggregator_payload)
@@ -248,6 +280,32 @@ def _split_csv_items(value):
     return [item.strip() for item in value.split(',') if item.strip()]
 
 
+def _parse_heatmap_bucket_boundaries(value):
+    """Parse strictly increasing uint64 heatmap bucket upper bounds."""
+    if value is None:
+        return None
+
+    try:
+        boundaries = [int(item) for item in _split_csv_items(value)]
+    except ValueError as error:
+        raise click.BadParameter(
+            'must be a comma-separated list of uint64 values',
+            param_hint='--heatmap_bucket_boundaries'
+        ) from error
+
+    if any(boundary < 0 or boundary > 2**53 for boundary in boundaries):
+        raise click.BadParameter(
+            'values must be between 0 and 2^53 for exact OTLP encoding',
+            param_hint='--heatmap_bucket_boundaries'
+        )
+    if any(left >= right for left, right in zip(boundaries, boundaries[1:])):
+        raise click.BadParameter(
+            'values must be strictly increasing',
+            param_hint='--heatmap_bucket_boundaries'
+        )
+    return boundaries
+
+
 def _build_profile_patch(op, profile_name, attributes):
     """Construct a JSON Patch entry targeting the profile table."""
     return [
@@ -257,17 +315,30 @@ def _build_profile_patch(op, profile_name, attributes):
     ]
 
 
-def _build_group_patch(op, profile_name, group_type, attributes):
+def _build_group_patch(op, profile_name, group_type, attributes, table_exists=False):
     """Construct a JSON Patch entry targeting the group table."""
+    group_key = _compose_group_key(profile_name, group_type)
+    if table_exists:
+        return [
+            _build_patch_entry(op, _join_pointer(GROUP_TABLE_PATH, group_key), attributes)
+        ]
     return [
         _build_patch_entry(op, GROUP_TABLE_PATH, {
-            _compose_group_key(profile_name, group_type): attributes
+            group_key: attributes
         })
     ]
 
 
-def _build_aggregator_patch(op, aggregator_name, attributes):
+def _build_aggregator_patch(op, aggregator_name, attributes, table_exists=False):
     """Construct a JSON Patch entry targeting the aggregator table."""
+    if table_exists:
+        return [
+            _build_patch_entry(
+                op,
+                _join_pointer(AGGREGATOR_TABLE_PATH, aggregator_name),
+                attributes
+            )
+        ]
     return [
         _build_patch_entry(op, AGGREGATOR_TABLE_PATH, {
             aggregator_name: attributes
@@ -393,6 +464,17 @@ def _has_existing_profile(ctx):
     except Exception:
         return False
     return bool(entries)
+
+
+def _has_table(ctx, table_name):
+    """Return True when the CFG table contains at least one entry."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return False
+    try:
+        return bool(cfgdb.get_table(table_name))
+    except Exception:
+        return False
 
 
 def _has_table_entry(ctx, table_name, entry_name):
