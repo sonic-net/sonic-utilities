@@ -621,16 +621,19 @@ def snmptrap (ctx):
     config_db.connect()
     traptable = config_db.get_table('SNMP_TRAP_CONFIG')
 
-    header = ['Version', 'TrapReceiverIP', 'Port', 'VRF', 'Community']
+    header = ['Version', 'TrapReceiverIP', 'Port', 'VRF', 'Community/User']
     body = []
     for row in traptable:
         if row == "v1TrapDest":
             ver=1
+            comm_or_user = traptable[row].get('Community', '')
         elif row == "v2TrapDest":
             ver=2
+            comm_or_user = traptable[row].get('Community', '')
         else:
             ver=3
-        body.append([ver, traptable[row]['DestIp'], traptable[row]['DestPort'], traptable[row]['vrf'], traptable[row]['Community']])
+            comm_or_user = traptable[row].get('User', traptable[row].get('Community', ''))
+        body.append([ver, traptable[row]['DestIp'], traptable[row]['DestPort'], traptable[row]['vrf'], comm_or_user])
     click.echo(tabulate(body, header))
 
 

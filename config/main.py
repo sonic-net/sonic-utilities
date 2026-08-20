@@ -4378,9 +4378,10 @@ def snmptrap(ctx):
 @click.argument('serverip', metavar='<SNMP TRAP SERVER IP Address>', required=True)
 @click.option('-p', '--port', help="SNMP Trap Server port, default 162", default="162")
 @click.option('-v', '--vrf', help="VRF Name mgmt/DataVrfName/None", default="None")
-@click.option('-c', '--comm', help="Community", default="public")
+@click.option('-c', '--comm', help="Community (SNMPv1/v2c only)", default="public")
+@click.option('-u', '--user', help="SNMPv3 user security name (SNMPv3 only)")
 @click.pass_context
-def modify_snmptrap_server(ctx, ver, serverip, port, vrf, comm):
+def modify_snmptrap_server(ctx, ver, serverip, port, vrf, comm, user):
     """Modify the SNMP Trap server configuration"""
 
     #SNMP_TRAP_CONFIG for each SNMP version
@@ -4391,7 +4392,14 @@ def modify_snmptrap_server(ctx, ver, serverip, port, vrf, comm):
     elif ver == "2":
         config_db.mod_entry('SNMP_TRAP_CONFIG', "v2TrapDest", {"DestIp": serverip, "DestPort": port, "vrf": vrf, "Community": comm})
     else:
-        config_db.mod_entry('SNMP_TRAP_CONFIG', "v3TrapDest", {"DestIp": serverip, "DestPort": port, "vrf": vrf, "Community": comm})
+        if not user:
+            click.echo("SNMPv3 trap destination requires -u/--user option")
+            sys.exit(1)
+        snmp_users = config_db.get_table("SNMP_USER")
+        if user not in snmp_users:
+            click.echo("SNMP user {} is not configured. Use 'config snmp user add' first".format(user))
+            sys.exit(1)
+        config_db.mod_entry('SNMP_TRAP_CONFIG', "v3TrapDest", {"DestIp": serverip, "DestPort": port, "vrf": vrf, "User": user})
 
     cmd="systemctl restart snmp"
     os.system (cmd)
