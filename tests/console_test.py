@@ -745,7 +745,7 @@ class TestConfigConsoleCommands(object):
 
         result = runner.invoke(
             CONSOLE_LOGGING_CMD,
-            ["1", "filename", "/var/log/console1.log", "logrotate", "10M", "5"],
+            ["1", "filename", "/var/log/console1.log", "--logrotate-size", "10M", "--logrotate-count", "5"],
             obj=db,
         )
         assert result.exit_code == 0
@@ -770,8 +770,8 @@ class TestConfigConsoleCommands(object):
 
         entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
         assert entry.get("log_file") == "/var/log/console1.log"
-        assert entry.get("logrotate_size") == "1M"
-        assert entry.get("logrotate_count") == "20"
+        assert entry.get("logrotate_size") == "10M"
+        assert entry.get("logrotate_count") == "10"
 
     def test_update_console_logging_filename_invalid_size(self):
         runner = CliRunner()
@@ -780,24 +780,28 @@ class TestConfigConsoleCommands(object):
 
         result = runner.invoke(
             CONSOLE_LOGGING_CMD,
-            ["1", "filename", "/var/log/console1.log", "logrotate", "big", "5"],
+            ["1", "filename", "/var/log/console1.log", "--logrotate-size", "big", "--logrotate-count", "5"],
             obj=db,
         )
         assert result.exit_code != 0
         assert "Invalid logrotate size" in result.output
 
-    def test_update_console_logging_filename_invalid_keyword(self):
+    def test_update_console_logging_filename_partial_logrotate_options(self):
         runner = CliRunner()
         db = Db()
         db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
 
         result = runner.invoke(
             CONSOLE_LOGGING_CMD,
-            ["1", "filename", "/var/log/console1.log", "rotate", "10M", "5"],
+            ["1", "filename", "/var/log/console1.log", "--logrotate-size", "10M"],
             obj=db,
         )
-        assert result.exit_code != 0
-        assert "Expected 'logrotate' keyword." in result.output
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("log_file") == "/var/log/console1.log"
+        assert entry.get("logrotate_size") == "10M"
+        assert entry.get("logrotate_count") == "10"
 
     def test_update_console_logging_enable_applies_defaults(self):
         runner = CliRunner()
@@ -814,8 +818,8 @@ class TestConfigConsoleCommands(object):
         entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
         assert entry.get("logging_enabled") == "yes"
         assert entry.get("log_file") == "/var/log/console-1.log"
-        assert entry.get("logrotate_size") == "1M"
-        assert entry.get("logrotate_count") == "20"
+        assert entry.get("logrotate_size") == "10M"
+        assert entry.get("logrotate_count") == "10"
 
     def test_update_console_logging_enable_success(self):
         runner = CliRunner()

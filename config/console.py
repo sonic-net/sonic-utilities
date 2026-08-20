@@ -316,8 +316,10 @@ def update_console_escape_char(db, linenum, escape):
 #
 LOGROTATE_SIZE_PATTERN = re.compile(r'^[0-9]+[kKmMgG]?$')
 DEFAULT_LOG_FILE_TEMPLATE = "/var/log/console-{}.log"
-DEFAULT_LOGROTATE_SIZE = "1M"
-DEFAULT_LOGROTATE_COUNT = "20"
+# NOTE: Keep these defaults aligned with src/sonic-host-services/scripts/console-monitor
+# (DEFAULT_LOGROTATE_SIZE / DEFAULT_LOGROTATE_COUNT).
+DEFAULT_LOGROTATE_SIZE = "10M"
+DEFAULT_LOGROTATE_COUNT = "10"
 
 
 def default_log_file(linenum):
@@ -334,16 +336,12 @@ def apply_default_logging_config(data, linenum):
         data['logrotate_count'] = DEFAULT_LOGROTATE_COUNT
 
 
-def parse_logrotate_args(ctx, logrotate_keyword, size, count):
-    """Resolve logrotate size/count from optional CLI arguments."""
-    if logrotate_keyword is None:
-        return DEFAULT_LOGROTATE_SIZE, DEFAULT_LOGROTATE_COUNT
-
-    if logrotate_keyword != 'logrotate':
-        ctx.fail("Expected 'logrotate' keyword.")
-
-    if size is None or count is None:
-        ctx.fail("Both <size> and <count> are required when 'logrotate' is specified.")
+def get_effective_logrotate_options(ctx, size, count):
+    """Resolve effective logrotate size/count from optional CLI options."""
+    if size is None:
+        size = DEFAULT_LOGROTATE_SIZE
+    if count is None:
+        count = DEFAULT_LOGROTATE_COUNT
 
     if not LOGROTATE_SIZE_PATTERN.match(size):
         ctx.fail("Invalid logrotate size '{}'. Use a value like 10M or 100k.".format(size))
@@ -377,13 +375,14 @@ def disable_console_logging(db):
 @console_logging.command('filename')
 @clicommon.pass_db
 @click.argument('filename', metavar='<file_name>', required=True)
-@click.argument('logrotate_keyword', metavar='logrotate', required=False)
-@click.argument('size', metavar='<size>', required=False)
-@click.argument('count', metavar='<count>', required=False, type=click.IntRange(1, 100))
-def set_console_logging_filename(db, filename, logrotate_keyword, size, count):
+@click.option('--logrotate-size', '-s', 'logrotate_size', metavar='<size>', default=None,
+              help='Logrotate size threshold (e.g. 10M, 100k). Default: 10M.')
+@click.option('--logrotate-count', '-c', 'logrotate_count', metavar='<count>', default=None,
+              type=click.IntRange(1, 100), help='Number of rotated log files to retain. Default: 10.')
+def set_console_logging_filename(db, filename, logrotate_size, logrotate_count):
     """Configure console log file and optional logrotate settings"""
     ctx = click.get_current_context()
-    logrotate_size, logrotate_count = parse_logrotate_args(ctx, logrotate_keyword, size, count)
+    size, count = get_effective_logrotate_options(ctx, logrotate_size, logrotate_count)
 
     linenum = ctx.parent.params['linenum']
     config_db = ValidatedConfigDBConnector(db.cfgdb)
@@ -398,13 +397,13 @@ def set_console_logging_filename(db, filename, logrotate_keyword, size, count):
     file_key = 'log_file'
 
     if (data.get(file_key) == filename and
-            data.get(size_key) == logrotate_size and
-            data.get(count_key) == logrotate_count):
+            data.get(size_key) == size and
+            data.get(count_key) == count):
         return
 
     data[file_key] = filename
-    data[size_key] = logrotate_size
-    data[count_key] = logrotate_count
+    data[size_key] = size
+    data[count_key] = count
     try:
         config_db.mod_entry(table, linenum, data)
     except ValueError as e:
