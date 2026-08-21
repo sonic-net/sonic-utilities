@@ -81,8 +81,11 @@ PRINT_MSG_TRUNCATION_SUFFIX = " ... (truncated)"
 FRR_CHECK_RETRIES = 3
 FRR_WAIT_TIME = 15
 
-# How long to wait for the vtysh process group to be reaped after SIGKILL
-KILL_WAIT_SECONDS = 10
+# How long to wait for vtysh to exit once we have closed the read end
+VTYSH_EXIT_TIMEOUT_SECONDS = 10
+
+# How long to wait for the direct child to be reaped after we SIGKILL it
+SIGKILL_REAP_TIMEOUT_SECONDS = 3
 
 REDIS_TIMEOUT_MSECS = 0
 
@@ -401,48 +404,6 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
-def terminate_vtysh_process_group(proc):
-    """
-    SIGKILL the whole process group started for the vtysh command and reap it.
-
-    fetch_routes runs "sudo vtysh", and on a SONiC host /usr/bin/vtysh is a
-    wrapper script that runs "docker exec -i bgp vtysh ...". proc.kill() only
-    signals sudo: the wrapper and the docker exec client survive it, the vtysh
-    inside the container stays blocked writing into a pipe nobody reads any
-    more, and from then on the bgp container cannot be stopped - every later
-    docker exec into it hangs. Signalling the whole group is what actually
-    releases the exec session.
-
-    This relies on Popen(start_new_session=True) making the child a process
-    group leader, so its pgid equals its pid. Do not derive the group with
-    os.getpgid(): if the new session was not created that returns route_check's
-    own group and we would kill ourselves.
-
-    It also assumes sudo leaves the command in that group. That holds for the
-    sudo we ship, but not under "Defaults use_pty" (the default from sudo
-    1.9.14), where sudo runs the command in its own session behind a pty and
-    only the sudo front-end would be signalled.
-
-    :return True if the process was reaped, False if it outlived the SIGKILL.
-    """
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError, OSError) as e:
-        # Best effort: a cleanup failure must never mask the error that got us here.
-        # Reported at WARNING because this is the only early signal that the
-        # cleanup did not take effect; the default report level hides DEBUG.
-        # Deliberately not "except Exception": a bad pid is a bug, not a
-        # cleanup failure, and must not be swallowed.
-        print_message(syslog.LOG_WARNING, f"Could not signal process group {proc.pid}: {e}")
-
-    try:
-        proc.wait(timeout=KILL_WAIT_SECONDS)
-        return True
-    except subprocess.TimeoutExpired:
-        print_message(syslog.LOG_ERR, f"vtysh (pid {proc.pid}) still alive after SIGKILL")
-        return False
-
-
 def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
     Fetch routes using the given command.
@@ -476,15 +437,12 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
             failing_routes.append(prefix)
 
     try:
-        # start_new_session puts sudo, the /usr/bin/vtysh wrapper and the
-        # docker exec client it spawns into one process group we can signal.
         # Deliberately not used as a context manager: Popen.__exit__ ends in an
-        # unbounded wait(), which is the hang this whole change removes.
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0,
-                                start_new_session=True)
+        # unbounded wait(), which is the hang this whole change removes. Every
+        # wait() below is bounded.
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0)
         completed = False
-        killed = False
-        abandoned = False
+        return_code = None
         try:
             # Use ijson to parse the JSON stream incrementally
             # kvitems('') iterates over key-value pairs at the root level
@@ -504,32 +462,52 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
             # returns whatever it managed to parse.
             print_message(syslog.LOG_WARNING, f"Error while parsing vtysh JSON stream: {e}")
         finally:
-            # Only an abandoned read needs the kill. On a clean parse vtysh has
-            # closed stdout and is exiting on its own, and poll() often has not
-            # reaped it yet - killing there would SIGKILL a healthy group and
-            # mask its exit code. A finally (not a flag) so KeyboardInterrupt
-            # takes this path too: start_new_session means a terminal SIGINT no
-            # longer reaches the chain by itself.
-            if not completed and proc.poll() is None:
-                killed = True
-                # Never return from here: a return inside finally would swallow
-                # an in-flight KeyboardInterrupt.
-                abandoned = not terminate_vtysh_process_group(proc)
+            # Closing the read end is what releases the chain, and it has to
+            # happen before any wait(). An abandoned read leaves vtysh blocked
+            # in write() with megabytes still queued; closing makes that write
+            # fail with EPIPE, so vtysh, the /usr/bin/vtysh wrapper and the
+            # docker exec client all unwind and the exec session is released.
+            # Waiting first is the deadlock this change removes.
+            # A finally (not a flag) so KeyboardInterrupt takes this path too.
             if proc.stdout:
                 proc.stdout.close()
+            try:
+                # In the same finally so the child is reaped even while a
+                # KeyboardInterrupt is propagating, which would otherwise skip
+                # this and leave the direct child a zombie. Bounded: nothing
+                # left to wait on, and fetch_routes runs on a worker thread the
+                # SIGALRM watchdog cannot interrupt, so it must not block here.
+                return_code = proc.wait(timeout=VTYSH_EXIT_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                # Closing only releases a process that goes on to write. One
+                # hung without writing needs the signal, and route_check runs
+                # on a timer, so walking away would leak a child per timeout.
+                #
+                # This reaches the direct child only: sudo does not propagate
+                # SIGKILL, so the /usr/bin/vtysh wrapper and the docker exec
+                # client below it are not covered. Reaching those would need
+                # the process group, which this function deliberately does not
+                # use - os.killpg() cannot signal the root-owned processes sudo
+                # spawns unless route_check is root, and kill(-pgid) reports
+                # success as long as it reached sudo, so the failure is silent.
+                # Whatever it does not cover still unwinds by itself the moment
+                # it writes into the pipe we closed above.
+                print_message(syslog.LOG_ERR,
+                              f"vtysh (pid {proc.pid}) did not exit; killing the direct child")
+                proc.kill()
+                try:
+                    # Leave return_code as None: the exit code from here on is
+                    # our own SIGKILL, not something vtysh should be judged by.
+                    proc.wait(timeout=SIGKILL_REAP_TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    print_message(syslog.LOG_ERR,
+                                  f"vtysh (pid {proc.pid}) survived SIGKILL; abandoning")
+            # Never return from here: a return inside finally would swallow an
+            # in-flight KeyboardInterrupt.
 
-        if abandoned:
-            # Unreapable: waiting on it would hang forever, and fetch_routes
-            # runs on a worker thread the SIGALRM watchdog cannot interrupt.
-            return missing_routes, failing_routes
-
-        try:
-            return_code = proc.wait(timeout=KILL_WAIT_SECONDS)
-        except subprocess.TimeoutExpired:
-            print_message(syslog.LOG_ERR, f"vtysh (pid {proc.pid}) did not exit; abandoning")
-            return missing_routes, failing_routes
-        # Not for a SIGKILL we sent ourselves - that would read as a vtysh crash.
-        if not killed and return_code != 0:
+        # After an abandoned read vtysh dies of SIGPIPE, which sudo reports as
+        # 141. That is this function's own doing, not a vtysh failure.
+        if completed and return_code not in (None, 0):
             print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
 
     except FileNotFoundError:

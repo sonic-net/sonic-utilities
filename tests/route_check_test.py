@@ -361,10 +361,12 @@ class TestRouteCheck(object):
 
 
 # fetch_routes runs "sudo vtysh", and /usr/bin/vtysh is a wrapper that runs
-# "docker exec -i bgp vtysh ...". Killing only the direct child leaves that
-# docker exec client behind, holding an exec session the bgp container can
-# never be stopped with. The fakes below reproduce that shape without docker:
-# the process that floods the pipe is a grandchild, not the direct child.
+# "docker exec -i bgp vtysh ...". The process holding the exec session into
+# the bgp container is a grandchild of what Popen returns, and it is the one
+# left blocked in write() when a parse is abandoned - out of reach of
+# proc.kill(), but not of closing the read end. The fakes below reproduce
+# that shape without docker: the process that floods the pipe is a
+# grandchild, not the direct child.
 GOOD_ROUTES = {
     "10.0.0.0/24": [{"protocol": "bgp", "vrfName": "default", "selected": True, "offloaded": False}],
     "10.0.1.0/24": [{"protocol": "bgp", "vrfName": "default", "selected": True,
@@ -413,14 +415,27 @@ def _wait_until_gone(pid, timeout=10):
     return _wait_until(lambda: not _pid_running(pid), timeout)
 
 
+def _pid_exists(pid):
+    """True while pid is in the process table at all, zombies included.
+
+    _pid_running() deliberately forgives a zombie, so it cannot see a child
+    that died but was never reaped. This one can.
+    """
+    return os.path.exists('/proc/{}'.format(pid))
+
+
+def _wait_until_reaped(pid, timeout=10):
+    return _wait_until(lambda: not _pid_exists(pid), timeout)
+
+
 @pytest.mark.skipif(not _proc_readable(),
-                    reason="needs a readable /proc to prove the group is gone")
-class TestFetchRoutesProcessGroup(object):
+                    reason="needs a readable /proc to prove the chain is gone")
+class TestFetchRoutesCleanup(object):
     """fetch_routes must never leave the vtysh / docker exec chain behind."""
 
     @staticmethod
     def _fake_popen(fake_cmd, captured):
-        """Run fake_cmd instead of vtysh, keeping real process-group semantics."""
+        """Run fake_cmd instead of vtysh, keeping real pipe semantics."""
         real_popen = subprocess.Popen
 
         def _popen(cmd, **kwargs):
@@ -434,11 +449,12 @@ class TestFetchRoutesProcessGroup(object):
     def _flooding_cmd(pidfile):
         """A three level chain whose deepest process floods the pipe.
 
-        The grandchild records its own pid before emitting anything, so the
-        file is always in place by the time the parse fails and cleanup runs.
-        Writing it from the parent after the fork loses that race: the parse
-        can fail and the group be signalled before the parent gets to write.
-        exec keeps the pid, so it identifies the flooding process too.
+        The grandchild is the stand-in for the docker exec client: it is the
+        one blocked in write(), and closing the read end is what has to reach
+        it. It records its own pid before emitting anything, so the file is
+        always in place by the time the parse fails and cleanup runs. Writing
+        it from the parent after the fork loses that race. exec keeps the pid,
+        so it identifies the flooding process too.
         """
         tmp = shlex.quote(str(pidfile) + '.tmp')
         final = shlex.quote(str(pidfile))
@@ -447,21 +463,28 @@ class TestFetchRoutesProcessGroup(object):
         return ['sh', '-c', 'sh -c ' + shlex.quote(inner) + ' & wait']
 
     @staticmethod
-    def _live_cmd():
-        """Emits a JSON object then stays alive, so cleanup has something to kill.
+    def _writer_cmd():
+        """Emits a JSON object then keeps writing, like vtysh with more to send.
 
-        A command that exits immediately makes proc.poll() non-None by the time
-        the finally runs, and the cleanup assertions become scheduling-dependent.
+        It has to keep writing: closing the read end only releases a process
+        that goes on to write. A sleeper would sit there untouched until the
+        bounded wait expired, which is a different code path.
         """
-        return ['sh', '-c', "printf '%s' '{}'; exec sleep 30"]
+        return ['sh', '-c', "printf '%s' '{}'; exec yes " + FLOOD_MARKER]
 
     @staticmethod
-    def _reap_group(pid):
-        """Best effort cleanup so a failing assertion does not leak the chain."""
-        try:
-            os.killpg(pid, signal.SIGKILL)
-        except OSError:
-            pass
+    def _reap(*pids):
+        """Best effort cleanup so a failing assertion does not leak the chain.
+
+        Never killpg here: fetch_routes no longer starts a new session, so the
+        child shares the test runner's process group and killpg would take the
+        whole test session down with it.
+        """
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except (OSError, TypeError):
+                pass
 
     def _run_fetch_routes(self):
         """Call fetch_routes off the main thread so a deadlock fails the test."""
@@ -477,13 +500,14 @@ class TestFetchRoutesProcessGroup(object):
         thread.start()
         thread.join(timeout=FETCH_TIMEOUT_SECONDS)
         assert not thread.is_alive(), \
-            "fetch_routes deadlocked: the vtysh process group was not terminated"
+            "fetch_routes deadlocked: the read end was not closed before waiting"
         return outcome
 
-    def test_terminates_whole_process_group_on_parse_error(self, tmp_path):
-        """The regression guard: without the group kill this deadlocks."""
+    def test_releases_whole_process_chain_on_parse_error(self, tmp_path):
+        """The regression guard: with wait() before close() this deadlocks."""
         pidfile = tmp_path / 'grandchild.pid'
         captured = {}
+        grandchild = None
         cmd = self._flooding_cmd(pidfile)
         try:
             with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)):
@@ -493,81 +517,110 @@ class TestFetchRoutesProcessGroup(object):
             assert 'exc' not in outcome, outcome.get('exc')
             assert outcome['result'] == ([], [])
 
-            # The grandchild is the stand-in for the docker exec client: it is
-            # what proc.kill() would have missed, so it is what has to be gone.
+            # The grandchild is two levels below the process Popen returned, so
+            # proc.kill() would never have reached it. Closing the read end does.
             assert _wait_until(pidfile.exists), "the fake chain never recorded its grandchild"
             grandchild = int(pidfile.read_text().strip())
             assert _wait_until_gone(grandchild), \
-                "grandchild {} survived: only the direct child was killed".format(grandchild)
+                "grandchild {} survived: the chain was not released".format(grandchild)
         finally:
-            if 'pid' in captured:
-                self._reap_group(captured['pid'])
+            self._reap(captured.get('pid'), grandchild)
+
+    def test_stdout_is_closed_before_wait(self):
+        """The whole deadlock was wait() running before the read end was closed.
+
+        Ordering is the fix. Closing afterwards is what the context manager did
+        on its own, and it never got there because wait() blocked first.
+        """
+        events = []
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.stdout.close.side_effect = lambda: events.append('close')
+        proc.wait.side_effect = lambda **kwargs: (events.append('wait'), 0)[1]
+
+        with patch('route_check.subprocess.Popen', return_value=proc), \
+                patch('route_check.ijson.kvitems', side_effect=ValueError('boom')):
+            assert route_check.fetch_routes() == ([], [])
+
+        assert events == ['close', 'wait'], \
+            "the read end must be closed before vtysh is waited on"
 
     @pytest.mark.parametrize("error", [
         UnicodeDecodeError('utf-8', b'\xff', 0, 1, 'invalid start byte'),
         ValueError('something unexpected'),
     ])
     def test_other_parse_errors_take_the_same_cleanup_path(self, error):
-        """Every branch that abandons the read has to terminate the group."""
+        """Every branch that abandons the read has to release the chain."""
         captured = {}
         try:
             with patch('route_check.subprocess.Popen',
-                       side_effect=self._fake_popen(self._live_cmd(), captured)), \
-                    patch('route_check.ijson.kvitems', side_effect=error), \
-                    patch('route_check.KILL_WAIT_SECONDS', 0.3), \
-                    patch('route_check.os.killpg') as mock_killpg:
+                       side_effect=self._fake_popen(self._writer_cmd(), captured)), \
+                    patch('route_check.ijson.kvitems', side_effect=error):
                 outcome = self._run_fetch_routes()
 
             assert 'exc' not in outcome, outcome.get('exc')
             assert outcome['result'] == ([], [])
-            mock_killpg.assert_called_once_with(captured['pid'], signal.SIGKILL)
+            assert _wait_until_gone(captured['pid']), \
+                "vtysh stand-in survived a {}".format(type(error).__name__)
         finally:
-            if 'pid' in captured:
-                self._reap_group(captured['pid'])
+            self._reap(captured.get('pid'))
 
     def test_cleanup_runs_for_non_exception_interrupts(self):
-        """KeyboardInterrupt is not an Exception, so a flag would miss it.
-
-        start_new_session also means a terminal SIGINT no longer reaches the
-        chain on its own, so this is the only thing releasing the exec session.
-        """
+        """KeyboardInterrupt is not an Exception, so a flag would miss it."""
         captured = {}
         try:
             with patch('route_check.subprocess.Popen',
-                       side_effect=self._fake_popen(self._live_cmd(), captured)), \
-                    patch('route_check.ijson.kvitems', side_effect=KeyboardInterrupt), \
-                    patch('route_check.KILL_WAIT_SECONDS', 0.3), \
-                    patch('route_check.os.killpg') as mock_killpg:
+                       side_effect=self._fake_popen(self._writer_cmd(), captured)), \
+                    patch('route_check.ijson.kvitems', side_effect=KeyboardInterrupt):
                 outcome = self._run_fetch_routes()
 
             assert isinstance(outcome.get('exc'), KeyboardInterrupt), \
                 "KeyboardInterrupt must still propagate"
-            mock_killpg.assert_called_once_with(captured['pid'], signal.SIGKILL)
+            assert _wait_until_gone(captured['pid']), \
+                "the chain outlived a KeyboardInterrupt"
+            assert _wait_until_reaped(captured['pid']), \
+                "child {} left unreaped: the bounded wait was skipped".format(captured['pid'])
         finally:
-            if 'pid' in captured:
-                self._reap_group(captured['pid'])
+            self._reap(captured.get('pid'))
 
-    def test_clean_parse_does_not_kill_a_healthy_group(self):
-        """A finished read must not SIGKILL vtysh on its way out.
+    def test_child_is_reaped_when_keyboard_interrupt_propagates(self):
+        """An interrupt must not skip the wait and leave the child a zombie.
 
-        On a clean parse poll() has often not reaped vtysh yet, so a cleanup
-        gated on liveness alone would kill a healthy group and mask its exit
-        code.
+        KeyboardInterrupt is not an Exception, so it leaves the parse through
+        the finally and would skip anything placed after it. The process level
+        test above cannot see the difference on its own, because _pid_running()
+        reports a zombie as gone.
         """
+        events = []
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.stdout.close.side_effect = lambda: events.append('close')
+        proc.wait.side_effect = lambda **kwargs: (events.append('wait'), 0)[1]
+
+        with patch('route_check.subprocess.Popen', return_value=proc), \
+                patch('route_check.ijson.kvitems', side_effect=KeyboardInterrupt), \
+                pytest.raises(KeyboardInterrupt):
+            route_check.fetch_routes()
+
+        assert events == ['close', 'wait'], \
+            "the interrupt must not skip closing the pipe and reaping the child"
+
+    def test_clean_parse_returns_parsed_routes(self):
+        """The happy path must be untouched by the cleanup change."""
         captured = {}
         cmd = ['sh', '-c', "printf '%s' " + shlex.quote(json.dumps(GOOD_ROUTES))]
         with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)), \
-                patch('route_check.os.killpg') as mock_killpg:
+                patch('route_check.print_message') as mock_msg:
             outcome = self._run_fetch_routes()
 
         assert 'exc' not in outcome, outcome.get('exc')
         missing, failing = outcome['result']
         assert missing == [{'prefix': '10.0.0.0/24', 'protocol': 'bgp'}]
         assert failing == ['10.0.1.0/24']
-        mock_killpg.assert_not_called()
+        assert not any('non-zero return code' in str(c) for c in mock_msg.call_args_list)
 
-    def test_non_zero_exit_is_reported_when_we_did_not_kill(self):
-        """A real vtysh failure must survive the SIGKILL suppression."""
+    def test_non_zero_exit_is_reported_after_a_clean_parse(self):
+        """A real vtysh failure must survive the SIGPIPE suppression."""
         captured = {}
         cmd = ['sh', '-c', "printf '%s' " + shlex.quote(json.dumps(GOOD_ROUTES)) + "; exit 3"]
         with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)), \
@@ -579,12 +632,16 @@ class TestFetchRoutesProcessGroup(object):
         assert missing == [{'prefix': '10.0.0.0/24', 'protocol': 'bgp'}]
         assert any('non-zero return code: 3' in str(c) for c in mock_msg.call_args_list)
 
-    def test_self_sent_sigkill_is_not_reported_as_a_crash(self):
-        """-9 from our own cleanup must not read as a vtysh crash."""
+    def test_sigpipe_from_our_own_close_is_not_reported_as_a_crash(self):
+        """Closing the read end kills vtysh with SIGPIPE; sudo reports 141.
+
+        That exit code is this function's own doing, so reporting it would send
+        a misleading warning to syslog on every parse failure.
+        """
         captured = {}
         try:
             with patch('route_check.subprocess.Popen',
-                       side_effect=self._fake_popen(self._live_cmd(), captured)), \
+                       side_effect=self._fake_popen(self._writer_cmd(), captured)), \
                     patch('route_check.ijson.kvitems', side_effect=ValueError('boom')), \
                     patch('route_check.print_message') as mock_msg:
                 outcome = self._run_fetch_routes()
@@ -592,22 +649,20 @@ class TestFetchRoutesProcessGroup(object):
             assert 'exc' not in outcome, outcome.get('exc')
             assert not any('non-zero return code' in str(c) for c in mock_msg.call_args_list)
         finally:
-            if 'pid' in captured:
-                self._reap_group(captured['pid'])
+            self._reap(captured.get('pid'))
 
-    def test_lingering_process_after_clean_parse_is_abandoned(self):
-        """A clean parse whose process never exits must not block forever.
+    def test_process_that_never_exits_is_killed_then_abandoned(self):
+        """Closing only releases a writer; one hung without writing needs the signal.
 
-        Nothing killed it, so the group cleanup does not run and the only
-        thing standing between fetch_routes and a permanent hang is the
-        bounded wait plus its early return.
+        Walking away would leak a child on every timeout, and route_check runs
+        on a timer. It still must not block: fetch_routes runs on a worker
+        thread the SIGALRM watchdog cannot interrupt, so both waits are bounded.
         """
         proc = MagicMock()
         proc.pid = 424242
-        proc.poll.return_value = 0
         proc.stdout = BytesIO(json.dumps(GOOD_ROUTES).encode())
         proc.wait.side_effect = subprocess.TimeoutExpired(
-            cmd='vtysh', timeout=route_check.KILL_WAIT_SECONDS)
+            cmd='vtysh', timeout=route_check.VTYSH_EXIT_TIMEOUT_SECONDS)
 
         with patch('route_check.subprocess.Popen', return_value=proc), \
                 patch('route_check.print_message') as mock_msg:
@@ -616,7 +671,34 @@ class TestFetchRoutesProcessGroup(object):
         # Whatever was parsed before the hang still comes back.
         assert missing == [{'prefix': '10.0.0.0/24', 'protocol': 'bgp'}]
         assert failing == ['10.0.1.0/24']
-        assert any('did not exit; abandoning' in str(c) for c in mock_msg.call_args_list)
+        proc.kill.assert_called_once_with()
+        assert any('did not exit; killing the direct child' in str(c)
+                   for c in mock_msg.call_args_list)
+        assert any('survived SIGKILL' in str(c) for c in mock_msg.call_args_list)
+
+    def test_kill_after_timeout_reaps_without_reporting_a_crash(self):
+        """The -9 from our own SIGKILL must not surface as a vtysh failure.
+
+        A real non-zero exit still has to be reported, so the suppression has
+        to come from not recording our own exit code rather than from a blanket
+        rule.
+        """
+        proc = MagicMock()
+        proc.pid = 424242
+        proc.stdout = BytesIO(json.dumps(GOOD_ROUTES).encode())
+        proc.wait.side_effect = [
+            subprocess.TimeoutExpired(cmd='vtysh', timeout=route_check.VTYSH_EXIT_TIMEOUT_SECONDS),
+            -9,
+        ]
+
+        with patch('route_check.subprocess.Popen', return_value=proc), \
+                patch('route_check.print_message') as mock_msg:
+            missing, failing = route_check.fetch_routes()
+
+        assert missing == [{'prefix': '10.0.0.0/24', 'protocol': 'bgp'}]
+        proc.kill.assert_called_once_with()
+        assert not any('survived SIGKILL' in str(c) for c in mock_msg.call_args_list)
+        assert not any('non-zero return code' in str(c) for c in mock_msg.call_args_list)
 
     def test_unexpected_route_entry_format_is_reported(self):
         """FRR should never emit this, but the guard must still be exercised."""
@@ -631,81 +713,15 @@ class TestFetchRoutesProcessGroup(object):
         assert outcome['result'] == ([], [])
         assert any('Unexpected route entry format' in str(c) for c in mock_msg.call_args_list)
 
-    def test_starts_new_session(self):
-        """killpg(proc.pid) is only safe because the child leads its own group."""
+    def test_does_not_start_a_new_session(self):
+        """Nothing needs the child detached now that cleanup is a close().
+
+        Leaving it in our session keeps a terminal SIGINT reaching vtysh on its
+        own, and keeps the test helpers from having to reason about groups.
+        """
         captured = {}
         cmd = ['sh', '-c', "printf '%s' " + shlex.quote(json.dumps(GOOD_ROUTES))]
         with patch('route_check.subprocess.Popen', side_effect=self._fake_popen(cmd, captured)):
             self._run_fetch_routes()
 
-        assert captured['kwargs'].get('start_new_session') is True
-
-    def test_terminate_signals_child_pid_not_our_own_group(self):
-        """Guard against 'simplifying' proc.pid into os.getpgid(proc.pid)."""
-        proc = MagicMock()
-        proc.pid = 424242
-        proc.wait.return_value = 0
-
-        with patch('route_check.os.killpg') as mock_killpg:
-            assert route_check.terminate_vtysh_process_group(proc) is True
-
-        mock_killpg.assert_called_once_with(proc.pid, signal.SIGKILL)
-        proc.wait.assert_called_once_with(timeout=route_check.KILL_WAIT_SECONDS)
-
-    def test_terminate_tolerates_already_dead_group(self):
-        proc = MagicMock()
-        proc.pid = 424242
-        proc.wait.return_value = 0
-
-        with patch('route_check.os.killpg', side_effect=ProcessLookupError), \
-                patch('route_check.print_message') as mock_msg:
-            assert route_check.terminate_vtysh_process_group(proc) is True
-
-        proc.wait.assert_called_once_with(timeout=route_check.KILL_WAIT_SECONDS)
-        # A failed killpg is the only early signal that this fix did not take
-        # effect, so it has to clear the default report level. Keep it visible.
-        assert any(c.args[0] == syslog.LOG_WARNING and 'Could not signal process group' in str(c)
-                   for c in mock_msg.call_args_list)
-
-    def test_terminate_does_not_swallow_programming_errors(self):
-        """A bad pid is a bug, not a cleanup failure - it must not be hidden.
-
-        A catch-all here silently turns os.killpg(<Mock>) into a no-op, which
-        makes callers that pass a mocked proc look like they exercise this path
-        when they do not.
-        """
-        proc = MagicMock()
-        proc.pid = object()
-
-        with pytest.raises(TypeError):
-            route_check.terminate_vtysh_process_group(proc)
-
-    def test_terminate_reports_survivor_instead_of_raising(self):
-        """A process stuck in D state must not mask the parse error."""
-        proc = MagicMock()
-        proc.pid = 424242
-        proc.wait.side_effect = subprocess.TimeoutExpired(
-            cmd='vtysh', timeout=route_check.KILL_WAIT_SECONDS)
-
-        with patch('route_check.os.killpg'), \
-                patch('route_check.print_message') as mock_msg:
-            assert route_check.terminate_vtysh_process_group(proc) is False
-
-        assert any('still alive after SIGKILL' in str(c) for c in mock_msg.call_args_list)
-
-    def test_unreapable_group_is_abandoned_not_waited_on(self):
-        """The bounded wait is pointless if the next line waits unbounded.
-
-        fetch_routes runs on a worker thread the SIGALRM watchdog cannot
-        interrupt, so an unreapable group has to be abandoned, not waited on.
-        """
-        proc = MagicMock()
-        proc.pid = 424242
-        proc.poll.return_value = None
-        proc.stdout = BytesIO(b'{"10.0.0.0/24": zzz')
-
-        with patch('route_check.subprocess.Popen', return_value=proc), \
-                patch('route_check.terminate_vtysh_process_group', return_value=False):
-            assert route_check.fetch_routes() == ([], [])
-
-        proc.wait.assert_not_called()
+        assert 'start_new_session' not in captured['kwargs']
