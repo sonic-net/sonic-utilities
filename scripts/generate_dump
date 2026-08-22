@@ -52,6 +52,7 @@ RETURN_CODE=$EXT_SUCCESS
 DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 IS_SUPERVISOR=false
+IS_CHASSIS_MODULE=false
 # True on a SONiC Switch-BMC (set below from switch_bmc=1 in platform_env.conf).
 # Switch data-plane collectors (ASIC/SDK, ports, FRR/BGP, STP, SAI) self-skip.
 # Distinct from is_bmc_supported() (Redfish debug-dump availability).
@@ -855,6 +856,59 @@ save_frr_info() {
 }
 
 ###############################################################################
+# Save chassis database CHASSIS_APP_DB and CHASSIS_STATE_DB
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_chassis_database_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_CHASSIS_MODULE; then
+        return
+    fi
+    if $IS_SUPERVISOR; then
+        # Supervisor, allways dump both database
+        save_redis "CHASSIS_APP_DB" "CHASSIS_APP_DB"  true
+        save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
+    else
+        # In LC, in case database-chassis is not reachable, ping CHASSIS_APP_DB first
+        ret=$(timeout 5 sonic-db-cli CHASSIS_APP_DB PING | grep -c True)
+        if [ $ret -gt 0 ]; then
+            save_redis "CHASSIS_APP_DB" "CHASSIS_APP_DB"  true
+            save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
+        fi
+    fi
+}
+
+###############################################################################
+# Save fabirc info
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_fabric_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_CHASSIS_MODULE; then
+        return
+    fi
+
+    save_cmd "show fabric counters port" "fabric_counters.port"
+    save_cmd "show fabric counters queue" "fabric_counters.queue"
+    save_cmd "show fabric counters rate" "fabric_counters.rate"
+    save_cmd "show fabric isolation" "fabric_isolation"
+    save_cmd "show fabric monitor capacity" "fabric_monitor.capacity"
+    save_cmd "show fabric reachability" "fabric_reachability"
+    
+}
+
+    
+###############################################################################
 # Save Redis DB contents
 # Globals:
 #  None
@@ -869,7 +923,7 @@ save_redis_info() {
     save_redis "ASIC_DB"
     save_redis "COUNTERS_DB"
     # There are secrets in CONFIG_DB need to be cleanup.
-    save_redis "CONFIG_DB" "CONFIG_DB" remove_secret_from_config_db_dump
+    save_redis "CONFIG_DB" "CONFIG_DB" false remove_secret_from_config_db_dump
     save_redis "FLEX_COUNTER_DB"
     save_redis "STATE_DB"
     save_redis "APPL_STATE_DB"
@@ -1150,12 +1204,14 @@ save_proc_stats() {
 # Arguments:
 #  DB name: DB name
 #  Filename: Destination filename, if not given then filename would be DB name
+#  host_namespace: (OPTIONAL) default false. if true, only call save_cmd on host/default namespace 
 #  cleanup_method: (OPTIONAL) the cleanup method to procress dump file after it generated.
 # Returns:
 #  None
 ###############################################################################
 save_redis() {
-    local cleanup_method=${3:-dummy_cleanup_method}
+    local host_namespace=${3:-false}
+    local cleanup_method=${4:-dummy_cleanup_method}
     trap 'handle_error $? $LINENO' ERR
     local db_name=$1
     if [ $# -ge 2 ] && [ -n "$2" ]; then
@@ -1163,7 +1219,11 @@ save_redis() {
     else
         local dest_file_name="$db_name"
     fi
-    save_cmd_all_ns "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    if $host_namespace; then
+        save_cmd "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    else
+        save_cmd_all_ns "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    fi
 }
 
 ###############################################################################
@@ -2818,6 +2878,9 @@ main() {
     save_chassis_modules_info &
     wait
     
+    save_fabric_info &
+    wait
+    
     save_platform_info &
     save_cmd "show vlan brief" "vlan.summary" &
     save_cmd "show version" "version" &
@@ -2899,6 +2962,9 @@ main() {
     wait
     save_redis_info &
 
+    save_chassis_database_info &
+    wait
+    
     save_container_files &
 
     if $DEBUG_DUMP
@@ -3277,7 +3343,11 @@ fi
 if [[ x"$switch_bmc" == x"1" ]]; then
     IS_SWITCH_BMC=true
 fi
-    
+CHASSIS_DB_CONF=/usr/share/sonic/device/${platform_name}/chassisdb.conf
+if [ -f "$CHASSIS_DB_CONF" ]; then
+    IS_CHASSIS_MODULE=true
+fi
+
 if $MKDIR "${LOCKDIR}" &>/dev/null; then
     trap 'handle_exit' EXIT
     echo "$$" > "${PIDFILE}"
