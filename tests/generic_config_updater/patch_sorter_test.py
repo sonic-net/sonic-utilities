@@ -3,6 +3,7 @@ import io
 import jsonpatch
 import sys
 import unittest
+from unittest import mock
 from unittest.mock import MagicMock, Mock
 import generic_config_updater.patch_sorter as ps
 from .gutest_helpers import Files, create_side_effect_dict, create_side_effect_jsonmovegroup_dict, \
@@ -963,9 +964,114 @@ class TestFullConfigMoveValidator(unittest.TestCase):
             self.any_simulated_config)
 
 
+class TestCreateOnlyFilter(unittest.TestCase):
+    def test_discover_create_only_fields__fallback_floor_includes_port_lanes(self):
+        """
+        Shipping images without get_create_only_fields (or with empty discovery)
+        must still protect PORT/lanes via the fallback floor.
+        """
+        create_only_filter = ps.CreateOnlyFilter(PathAddressing(ConfigWrapper()))
+        patterns = create_only_filter.patterns
+
+        self.assertTrue(patterns, "create-only pattern list must not be empty")
+        self.assertIn(["PORT", "*", "lanes"], patterns)
+        # Union floor: runtime patterns always cover the historical set.
+        for pattern in ps._CREATE_ONLY_FIELDS_FALLBACK:
+            self.assertIn(pattern, patterns)
+
+    def test_discover_create_only_fields__yang_set_covers_fallback_floor(self):
+        """
+        When discovery is available and non-empty, the YANG-derived set must
+        cover the fallback floor. Skips on images that still lack the accessor
+        or annotated models (those take the fallback-only path above).
+        """
+        path_addressing = PathAddressing(ConfigWrapper())
+        try:
+            sy = path_addressing._create_sonic_yang_with_loaded_models()
+        except Exception:
+            self.skipTest("sonic_yang models unavailable in this environment")
+
+        if not hasattr(sy, "get_create_only_fields"):
+            self.skipTest("sonic_yang.get_create_only_fields not installed yet")
+
+        discovered = sy.get_create_only_fields() or []
+        if not discovered:
+            self.skipTest("YANG models not yet annotated; fallback-only path")
+
+        discovered_set = {tuple(p) for p in discovered}
+        fallback_set = {tuple(p) for p in ps._CREATE_ONLY_FIELDS_FALLBACK}
+        missing = sorted(fallback_set - discovered_set)
+        self.assertFalse(
+            missing,
+            f"YANG create-only set narrowed below fallback floor: {missing}",
+        )
+
+    def test_discover_create_only_fields__no_accessor_uses_fallback(self):
+        """Images without get_create_only_fields take the fallback path."""
+        path_addressing = PathAddressing(ConfigWrapper())
+        # MagicMock() always has every attribute; spec=[] removes the accessor.
+        mock_sy = MagicMock(spec=[])
+        with mock.patch.object(path_addressing, "_create_sonic_yang_with_loaded_models",
+                               return_value=mock_sy):
+            create_only_filter = ps.CreateOnlyFilter(path_addressing)
+
+        self.assertFalse(hasattr(mock_sy, "get_create_only_fields"))
+        self.assertEqual(create_only_filter.patterns, ps._CREATE_ONLY_FIELDS_FALLBACK)
+
+    def test_discover_create_only_fields__missing_config_wrapper_uses_fallback(self):
+        """AttributeError from PathAddressing(None) must fall back, not raise."""
+        create_only_filter = ps.CreateOnlyFilter(PathAddressing(None))
+        self.assertEqual(create_only_filter.patterns, ps._CREATE_ONLY_FIELDS_FALLBACK)
+
+    def test_discover_create_only_fields__empty_yang_uses_fallback(self):
+        path_addressing = PathAddressing(ConfigWrapper())
+        mock_sy = MagicMock()
+        mock_sy.get_create_only_fields.return_value = []
+        with mock.patch.object(path_addressing, "_create_sonic_yang_with_loaded_models",
+                               return_value=mock_sy):
+            create_only_filter = ps.CreateOnlyFilter(path_addressing)
+
+        self.assertEqual(create_only_filter.patterns, ps._CREATE_ONLY_FIELDS_FALLBACK)
+        self.assertIn(["PORT", "*", "lanes"], create_only_filter.patterns)
+
+    def test_discover_create_only_fields__partial_yang_unions_fallback(self):
+        path_addressing = PathAddressing(ConfigWrapper())
+        mock_sy = MagicMock()
+        mock_sy.get_create_only_fields.return_value = [["PORT", "*", "lanes"]]
+        with mock.patch.object(path_addressing, "_create_sonic_yang_with_loaded_models",
+                               return_value=mock_sy):
+            create_only_filter = ps.CreateOnlyFilter(path_addressing)
+
+        patterns = create_only_filter.patterns
+        self.assertIn(["PORT", "*", "lanes"], patterns)
+        # Incomplete discovery must not drop the rest of the floor.
+        self.assertIn(["SCHEDULER", "*", "type"], patterns)
+        for pattern in ps._CREATE_ONLY_FIELDS_FALLBACK:
+            self.assertIn(pattern, patterns)
+
+    def test_discover_create_only_fields__deduplicates_yang_patterns(self):
+        path_addressing = PathAddressing(ConfigWrapper())
+        mock_sy = MagicMock()
+        mock_sy.get_create_only_fields.return_value = [
+            ["BGP_NEIGHBOR", "*", "asn"],
+            ["BGP_NEIGHBOR", "*", "asn"],
+            ["BGP_NEIGHBOR", "*", "name"],
+        ]
+        with mock.patch.object(path_addressing, "_create_sonic_yang_with_loaded_models",
+                               return_value=mock_sy):
+            create_only_filter = ps.CreateOnlyFilter(path_addressing)
+
+        patterns = create_only_filter.patterns
+        self.assertEqual(patterns.count(["BGP_NEIGHBOR", "*", "asn"]), 1)
+        self.assertIn(["BGP_NEIGHBOR", "*", "name"], patterns)
+        # Deduped YANG entries are unioned with the fallback floor.
+        for pattern in ps._CREATE_ONLY_FIELDS_FALLBACK:
+            self.assertIn(pattern, patterns)
+
+
 class TestCreateOnlyMoveValidator(unittest.TestCase):
     def setUp(self):
-        self.validator = ps.CreateOnlyMoveValidator(ps.PathAddressing())
+        self.validator = ps.CreateOnlyMoveValidator(PathAddressing(ConfigWrapper()))
         self.any_diff = ps.Diff({}, {})
 
     def test_validate__no_create_only_field__success(self):
@@ -1093,7 +1199,14 @@ class TestCreateOnlyMoveValidator(unittest.TestCase):
         }
         self.verify_parent_adding(added_parent_value, False)
 
-    def test_hard_coded_create_only_paths(self):
+    def test_get_create_only_paths__covers_fallback_annotated_tables(self):
+        """
+        Path expansion for every table in the historical create-only floor.
+        Exercises whichever pattern source CreateOnlyFilter selected for this
+        environment (YANG discovery when annotated models + accessor are
+        present; otherwise the hard-coded fallback). Includes SCHEDULER so all
+        26 fallback patterns are asserted at least once.
+        """
         config = {
             "PORT": {
                 "Ethernet0":{"lanes":"65"},
@@ -1164,7 +1277,18 @@ class TestCreateOnlyMoveValidator(unittest.TestCase):
                     "ttl": "32",
                     "type": "ERSPAN"
                 }
-            }
+            },
+            "SCHEDULER": {
+                "scheduler0": {
+                    "type": "DWRR",
+                    "weight": "10",
+                    "meter_type": "bytes",
+                    "cir": "1000",
+                    "cbs": "2000",
+                    "pir": "3000",
+                    "pbs": "4000",
+                }
+            },
         }
         expected = [
             "/PORT/Ethernet0/lanes",
@@ -1200,6 +1324,13 @@ class TestCreateOnlyMoveValidator(unittest.TestCase):
             "/MIRROR_SESSION/mirror_session_dscp/src_ip",
             "/MIRROR_SESSION/mirror_session_dscp/ttl",
             "/MIRROR_SESSION/mirror_session_dscp/type",
+            "/SCHEDULER/scheduler0/type",
+            "/SCHEDULER/scheduler0/weight",
+            "/SCHEDULER/scheduler0/meter_type",
+            "/SCHEDULER/scheduler0/cir",
+            "/SCHEDULER/scheduler0/cbs",
+            "/SCHEDULER/scheduler0/pir",
+            "/SCHEDULER/scheduler0/pbs",
         ]
 
         actual = self.validator._get_create_only_paths(config)
