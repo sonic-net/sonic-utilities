@@ -10,6 +10,7 @@ from generic_config_updater.services_validator import (
 )
 from generic_config_updater.services_validator import ntp_validator
 from generic_config_updater.services_validator import gnmi_validator, telemetry_validator
+from generic_config_updater.services_validator import frr_routing_mode_validator
 
 # Mimics subprocess.run call
 #
@@ -372,6 +373,102 @@ test_telemetry_data = [
     ]
 
 
+RESTART_BGP = "systemctl reset-failed bgp,systemctl restart bgp"
+
+test_frr_routing_mode_data = [
+        # Both empty — no restart
+        {"old": {}, "upd": {}, "cmd": ""},
+        # DEVICE_METADATA present but neither startup field changed — no restart
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"hostname": "sonic"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {"hostname": "switch"}}},
+            "cmd": ""
+        },
+        # frr_mgmt_framework_config flipped false -> true — restart bgp
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"frr_mgmt_framework_config": "false"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {"frr_mgmt_framework_config": "true"}}},
+            "cmd": RESTART_BGP
+        },
+        # frr_mgmt_framework_config added where none existed (default "false") -> "true" — restart bgp
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {"frr_mgmt_framework_config": "true"}}},
+            "cmd": RESTART_BGP
+        },
+        # frr_mgmt_framework_config added but equals the default "false" — no restart
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {"frr_mgmt_framework_config": "false"}}},
+            "cmd": ""
+        },
+        # frr_mgmt_framework_config removed (was "true", default "false") — restart bgp
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"frr_mgmt_framework_config": "true"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {}}},
+            "cmd": RESTART_BGP
+        },
+        # docker_routing_config_mode separated -> unified — restart bgp
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"docker_routing_config_mode": "separated"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {"docker_routing_config_mode": "unified"}}},
+            "cmd": RESTART_BGP
+        },
+        # docker_routing_config_mode added where none existed (default "separated") — no restart
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {"docker_routing_config_mode": "separated"}}},
+            "cmd": ""
+        },
+        # docker_routing_config_mode removed (was "unified", default "separated") — restart bgp
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"docker_routing_config_mode": "unified"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {}}},
+            "cmd": RESTART_BGP
+        },
+        # docker_routing_config_mode unchanged, unrelated field changed — no restart
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {
+                "docker_routing_config_mode": "unified", "buffer_model": "traditional"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {
+                "docker_routing_config_mode": "unified", "buffer_model": "dynamic"}}},
+            "cmd": ""
+        },
+        # Both startup fields change together — single restart
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {
+                "docker_routing_config_mode": "separated", "frr_mgmt_framework_config": "false"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {
+                "docker_routing_config_mode": "unified", "frr_mgmt_framework_config": "true"}}},
+            "cmd": RESTART_BGP
+        },
+        # DEVICE_METADATA table entirely absent from upd, old had non-default field — restart bgp
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"frr_mgmt_framework_config": "true"}}},
+            "upd": {},
+            "cmd": RESTART_BGP
+        },
+        # DEVICE_METADATA table absent from old, added in upd with non-default field — restart bgp
+        {
+            "old": {},
+            "upd": {"DEVICE_METADATA": {"localhost": {"docker_routing_config_mode": "unified"}}},
+            "cmd": RESTART_BGP
+        },
+        # frr_mgmt_framework_config removed while at its default ("false") — no restart
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"frr_mgmt_framework_config": "false"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {}}},
+            "cmd": ""
+        },
+        # docker_routing_config_mode removed while at its default ("separated") — no restart
+        {
+            "old": {"DEVICE_METADATA": {"localhost": {"docker_routing_config_mode": "separated"}}},
+            "upd": {"DEVICE_METADATA": {"localhost": {}}},
+            "cmd": ""
+        },
+    ]
+
+
 class TestServiceValidator(unittest.TestCase):
 
     @patch("generic_config_updater.services_validator.subprocess.run")
@@ -555,3 +652,35 @@ class TestServiceValidator(unittest.TestCase):
 
             result = telemetry_validator(entry["old"], entry["upd"], None)
             assert result, "telemetry_validator failed: {}".format(str(entry))
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_frr_routing_mode_validator(self, mock_subprocess):
+        """Test frr_routing_mode_validator restarts the bgp container when the
+        startup-only DEVICE_METADATA fields docker_routing_config_mode or
+        frr_mgmt_framework_config change.
+
+        On a change the validator first issues `systemctl reset-failed bgp` (to
+        clear systemd's StartLimit counter) and only then `systemctl restart bgp`.
+        Both calls must appear in the expected order. Absent fields are compared
+        against their startup defaults, so adding/removing a field only restarts
+        when it actually changes the effective value.
+        """
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+
+        for entry in test_frr_routing_mode_data:
+            subprocess_calls = []
+            subprocess_call_index = 0
+
+            if entry["cmd"]:
+                for c in entry["cmd"].split(","):
+                    subprocess_calls.append({"cmd": c, "rc": 0})
+
+            result = frr_routing_mode_validator(entry["old"], entry["upd"], None)
+            assert result, "frr_routing_mode_validator failed: {}".format(str(entry))
+            # Ensure exactly the expected number of subprocess calls fired
+            # (0 when no restart is expected).
+            expected = len(entry["cmd"].split(",")) if entry["cmd"] else 0
+            self.assertEqual(subprocess_call_index, expected,
+                             "unexpected call count for: {}".format(str(entry)))

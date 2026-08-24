@@ -184,6 +184,74 @@ def telemetry_validator(old_config, upd_config, keys):
     return True
 
 
+# These defaults must track the fallbacks in the bgp container's docker_init.sh
+# (missing docker_routing_config_mode -> "separated", missing
+# frr_mgmt_framework_config -> "false"); if that script's startup behavior ever
+# changes, update them here in lockstep. Kept as a module-level constant to make
+# clear these are frozen invariants, not an incidental per-call dict.
+#
+# NOTE: do not "reconcile" these against sonic-device_metadata.yang, which
+# declares default "unified" for docker_routing_config_mode. That YANG default
+# does NOT reflect runtime: docker_init.sh renders supervisord.conf via
+# frr_vars.j2, which emits "" for an absent field, and docker_init.sh's -z check
+# then maps that empty value to "separated". The startup fallback, not the YANG
+# model, is what this validator must match.
+_FRR_ROUTING_MODE_DEFAULTS = {"docker_routing_config_mode": "separated",
+                              "frr_mgmt_framework_config": "false"}
+
+
+def frr_routing_mode_validator(old_config, upd_config, keys):
+    # The routing daemon selection (frrcfgd vs bgpcfgd) and the set of rendered
+    # FRR config files are decided when the bgp container starts: docker_init.sh
+    # renders supervisord.conf from DEVICE_METADATA, and supervisord reads that
+    # config only once at startup. Writing the new DEVICE_METADATA into CONFIG_DB
+    # (as a config-replace / apply-patch does) therefore has no effect on its own
+    # -- the previously-selected daemon keeps running and the new BGP_* tables are
+    # never translated to FRR. Restarting the bgp container re-runs docker_init.sh,
+    # which re-renders supervisord.conf from the now-updated CONFIG_DB and launches
+    # the correct daemon set. Only these two startup-only fields need the restart.
+    #
+    # Absent values are normalized to their startup defaults (docker_init.sh treats
+    # a missing docker_routing_config_mode as "separated" and a missing
+    # frr_mgmt_framework_config as "false") so that adding or removing a field is
+    # compared against the behavior it actually replaces. See
+    # _FRR_ROUTING_MODE_DEFAULTS.
+    #
+    # Scope: supervisord.conf.j2 also gates staticroutebfd on DEVICE_METADATA
+    # switch_type -- the same startup-only class of field -- but that is
+    # deliberately out of scope here because switch_type is platform identity
+    # that never changes at runtime, so no config-time restart is warranted.
+    old_meta = old_config.get("DEVICE_METADATA", {}).get("localhost", {})
+    upd_meta = upd_config.get("DEVICE_METADATA", {}).get("localhost", {})
+
+    # Pre-scan both fields so a single commit that changes both is logged in
+    # full (one restart still covers both). A per-field early return would log
+    # only the first-matched field and hide the other's change from the audit
+    # trail.
+    changed = {field: (old_meta.get(field, default), upd_meta.get(field, default))
+               for field, default in _FRR_ROUTING_MODE_DEFAULTS.items()
+               if old_meta.get(field, default) != upd_meta.get(field, default)}
+    if changed:
+        changes_str = ", ".join(
+            f"{field}: {old!r} -> {new!r}" for field, (old, new) in changed.items())
+        logger.log(
+            logger.LOG_PRIORITY_NOTICE,
+            f"frr_routing_mode_validator: routing-mode fields changed ({changes_str}), "
+            f"restart bgp service",
+            print_to_console
+        )
+        # Best-effort pre-clear of StartLimitBurst; rc ignored because
+        # _service_restart() retries with its own reset-failed.
+        #
+        # Single-asic assumption: the bgp unit is plain "bgp". On a multi-asic
+        # platform the per-asic units are "bgp@<N>" and there is no plain "bgp"
+        # unit, so this would need per-asic handling. Every validator in this
+        # file shares that single-asic assumption today.
+        command_wrapper("systemctl reset-failed bgp")
+        return _service_restart("bgp")
+    return True
+
+
 def vlanintf_validator(old_config, upd_config, keys):
     old_vlan_intf = old_config.get("VLAN_INTERFACE", {})
     upd_vlan_intf = upd_config.get("VLAN_INTERFACE", {})
