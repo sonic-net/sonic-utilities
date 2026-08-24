@@ -1150,7 +1150,6 @@ function filter_routes()
 {
     debug "Clearing routes..."
     FILTER_ROUTES=0
-    NAMESPACE_ARG=""
     python /usr/local/bin/fast-reboot-filter-routes.py -n "$NETNS" || FILTER_ROUTES=$?
     if [[ $FILTER_ROUTES -ne 0 ]]; then
         error "Preserving connected and default routes failed."
