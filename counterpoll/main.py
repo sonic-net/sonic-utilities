@@ -1,12 +1,14 @@
 import click
 import os
-from sonic_py_common import device_info, multi_asic
+from sonic_py_common import device_info, multi_asic, logger
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.llr import is_llr_capable
 from tabulate import tabulate
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from swsscommon.swsscommon import CFG_FLEX_COUNTER_TABLE_NAME as CFG_FLEX_COUNTER_TABLE
+
+log = logger.Logger("counterpoll")
 
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
 PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
@@ -958,8 +960,18 @@ def register_dynamic_commands(cmds):
     """
     Dynamically register commands based on condition callback.
     """
-    db = ConfigDBConnector()
-    db.connect()
+    try:
+        db = ConfigDBConnector()
+        db.connect()
+    except RuntimeError as e:
+        # Runs at import time. swsscommon raises RuntimeError when CONFIG_DB is
+        # unreachable (e.g. build-time completion generation in a redis-less
+        # container). Skip DPU-only dynamic commands rather than fail the import,
+        # else the completion file is never generated.
+        log.log_warning(
+            "CONFIG_DB not available at import, skipping DPU dynamic commands "
+            "(eni/ha_set): {}".format(e))
+        return
     for cmd, cb in cmds:
         if cb(db):
             cli.add_command(cmd)
