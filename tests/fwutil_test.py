@@ -98,6 +98,14 @@ class TestComponentUpdateProvider(object):
         assert CUProvider.is_capable_auto_update('none') == True
         assert CUProvider.is_capable_auto_update('def') == True
 
+    def test_get_update_status(self):
+        cup_cls = fwutil_lib.ComponentUpdateProvider
+        get_status = cup_cls._ComponentUpdateProvider__get_update_status
+        assert get_status(cup_cls, "0.0", "1.2") == cup_cls.FW_STATUS_UPDATE_REQUIRED
+        assert get_status(cup_cls, "1.2", "1.2") == cup_cls.FW_STATUS_UP_TO_DATE
+        assert get_status(cup_cls, "0.0", "Unknown") == cup_cls.FW_STATUS_NO_UPDATE_AVAILABLE
+        assert get_status(cup_cls, "0.0", "N/A") == cup_cls.FW_STATUS_NO_UPDATE_AVAILABLE
+
     @patch('fwutil.lib.Platform')
     @patch('fwutil.lib.PlatformComponentsParser')
     @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
