@@ -15,6 +15,7 @@ from show.dldd import (
     _heartbeat_age,
     _int_value,
     _json_value,
+    _rule_instance,
     _state_redis_client,
     _timestamp_value,
     dldd as show_dldd,
@@ -66,8 +67,20 @@ def test_timestamp_value_displays_whole_epoch_seconds(value, expected):
 
 def test_wire_value_helpers_preserve_scalars_and_normalize_fault_fields():
     assert _compact("already-readable") == "already-readable"
+    assert _compact({
+        "items": [{"state": "READY", "correlation_key": "internal"}],
+    }) == '{"items":[{"state":"READY"}]}'
     assert _int_value("not-an-integer", default=7) == 7
     assert _timestamp_value(True) is True
+    assert _rule_instance({
+        "rule_instance_id": "1000001@PSU0",
+        "rule_id": 1000001,
+        "component_name": "PSU0",
+    }) == "1000001@PSU0"
+    assert _rule_instance({
+        "rule_id": 1000001,
+        "component_name": "PSU0",
+    }) == ""
 
     document = _fault_document(
         "FAULT_INFO|SENSOR0|SYMPTOM_ABNORMAL",
@@ -81,6 +94,8 @@ def test_wire_value_helpers_preserve_scalars_and_normalize_fault_fields():
     document = _fault_document(
         "FAULT_INFO|UNKNOWN|SYMPTOM_ABNORMAL",
         {
+            "rule_id": "1000001",
+            "component_name": "SENSOR0",
             "local_action_state": json.dumps({
                 "state": "IDLE",
                 "correlation_key": "internal-only-key",
@@ -88,6 +103,7 @@ def test_wire_value_helpers_preserve_scalars_and_normalize_fault_fields():
         },
     )
     assert document["local_action_state"] == {"state": "IDLE"}
+    assert "rule_instance_id" not in document["local_action_state"]
 
 
 @pytest.mark.parametrize(
@@ -922,16 +938,25 @@ def _detailed_fault_row():
             {
                 "id": 1,
                 "value_read": "30000",
-                "condition": {"type": "comparison", "value": 21000.0},
+                "correlation_key": "event-internal-key",
+                "condition": {
+                    "type": "comparison",
+                    "value": 21000.0,
+                    "correlation_key": "condition-internal-key",
+                },
             }
         ]),
         "repair_actions": json.dumps([{"action": "ACTION_REPLACE"}]),
         "actions_taken": "[]",
         "local_action_state": json.dumps({
             "state": "IDLE",
+            "rule_instance_id": "1000001@SENSOR0",
             "correlation_key": "legacy-action-internal-key",
         }),
-        "healthz_artifact": json.dumps({"state": "COMPLETED"}),
+        "healthz_artifact": json.dumps({
+            "state": "COMPLETED",
+            "metadata": {"correlation_key": "artifact-internal-key"},
+        }),
         "remote_action_time_window": "3600",
         "severity": "WARNING",
         "symptom": "SYMPTOM_OVER_THRESHOLD",
@@ -1011,8 +1036,7 @@ def test_show_faults_json_emits_structured_documents():
         "state": "IDLE",
         "rule_instance_id": "1000001@SENSOR0",
     }
-    assert "correlation_key" not in fault
-    assert "correlation_key" not in fault["local_action_state"]
+    assert "correlation_key" not in json.dumps(fault)
     assert "component_info" not in fault
 
 

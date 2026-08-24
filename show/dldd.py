@@ -66,23 +66,34 @@ def _json_value(value, default):
     return parsed if isinstance(parsed, expected_type) else default
 
 
-def _compact(value):
-    if isinstance(value, (dict, list, tuple)):
-        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+def _sanitize_output(value):
+    """Recursively remove internal correlation keys from operator output."""
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_output(item)
+            for key, item in value.items()
+            if key not in ("correlation_key", b"correlation_key")
+        }
+    if isinstance(value, list):
+        return [_sanitize_output(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_output(item) for item in value)
     return value
 
 
-def _rule_instance(record, rule_id=""):
-    value = record.get("rule_instance_id", "")
-    if value:
-        return value
-    resolved_rule_id = record.get("rule_id", rule_id)
-    component_name = record.get(
-        "component_name", record.get("component", "")
-    )
-    if resolved_rule_id in (None, "") or not component_name:
-        return ""
-    return "{}@{}".format(resolved_rule_id, component_name)
+def _compact(value):
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(
+            _sanitize_output(value),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    return value
+
+
+def _rule_instance(record):
+    """Return only the public rule-instance identity supplied by the producer."""
+    return record.get("rule_instance_id", "")
 
 
 def _bool_value(value):
@@ -117,7 +128,6 @@ def _decode_key(value):
 
 def _fault_document(key, fault):
     document = dict(fault)
-    document.pop("correlation_key", None)
     document["redis_key"] = key
     for field, default in FAULT_JSON_FIELDS.items():
         if field in document:
@@ -137,15 +147,7 @@ def _fault_document(key, fault):
             document[field] = _int_value(document[field])
     if "source_stale" in document:
         document["source_stale"] = _bool_value(document["source_stale"])
-    action_state = document.get("local_action_state")
-    if isinstance(action_state, dict):
-        action_state = dict(action_state)
-        action_state.pop("correlation_key", None)
-        rule_instance_id = _rule_instance(document)
-        if rule_instance_id:
-            action_state.setdefault("rule_instance_id", rule_instance_id)
-        document["local_action_state"] = action_state
-    return document
+    return _sanitize_output(document)
 
 
 def _state_entry(db, key):
@@ -607,7 +609,7 @@ def rules(
             return
         detail_rows = [
             (
-                _rule_instance(item, rule.get("rule_id", "")),
+                _rule_instance(item),
                 item.get("event_id", ""),
                 item.get("component_name", item.get("component", "")),
                 item.get("source_type", ""),
