@@ -80,6 +80,12 @@ PRINT_MSG_LEN_MAX = 1000
 FRR_CHECK_RETRIES = 3
 FRR_WAIT_TIME = 15
 
+# How long to wait for vtysh to exit once we have closed the read end
+VTYSH_EXIT_TIMEOUT_SECONDS = 10
+
+# How long to wait for the direct child to be reaped after we SIGKILL it
+SIGKILL_REAP_TIMEOUT_SECONDS = 3
+
 REDIS_TIMEOUT_MSECS = 0
 
 
@@ -422,34 +428,78 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
             failing_routes.append(prefix)
 
     try:
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
+        # Deliberately not used as a context manager: Popen.__exit__ ends in an
+        # unbounded wait(), which is the hang this whole change removes. Every
+        # wait() below is bounded.
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0)
+        completed = False
+        return_code = None
+        try:
+            # Use ijson to parse the JSON stream incrementally
+            # kvitems('') iterates over key-value pairs at the root level
+            # This gives us each prefix and its route entries as they become available
+            for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
+                # Process each route entry for this prefix
+                if isinstance(route_entries, list):
+                    for route_entry in route_entries:
+                        process_route_entry(prefix, route_entry)
+                else:
+                    # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
+                    print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+            completed = True
+
+        except Exception as e:
+            # Parse errors are logged and swallowed, exactly as before: this
+            # returns whatever it managed to parse.
+            print_message(syslog.LOG_WARNING, f"Error while parsing vtysh JSON stream: {e}")
+        finally:
+            # Closing the read end is what releases the chain, and it has to
+            # happen before any wait(). An abandoned read leaves vtysh blocked
+            # in write() with megabytes still queued; closing makes that write
+            # fail with EPIPE, so vtysh, the /usr/bin/vtysh wrapper and the
+            # docker exec client all unwind and the exec session is released.
+            # Waiting first is the deadlock this change removes.
+            # A finally (not a flag) so KeyboardInterrupt takes this path too.
+            if proc.stdout:
+                proc.stdout.close()
             try:
-                # Use ijson to parse the JSON stream incrementally
-                # kvitems('') iterates over key-value pairs at the root level
-                # This gives us each prefix and its route entries as they become available
-                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
-                    # Process each route entry for this prefix
-                    if isinstance(route_entries, list):
-                        for route_entry in route_entries:
-                            process_route_entry(prefix, route_entry)
-                    else:
-                        # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
-                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+                # In the same finally so the child is reaped even while a
+                # KeyboardInterrupt is propagating, which would otherwise skip
+                # this and leave the direct child a zombie. Bounded: nothing
+                # left to wait on, and fetch_routes runs on a worker thread the
+                # SIGALRM watchdog cannot interrupt, so it must not block here.
+                return_code = proc.wait(timeout=VTYSH_EXIT_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                # Closing only releases a process that goes on to write. One
+                # hung without writing needs the signal, and route_check runs
+                # on a timer, so walking away would leak a child per timeout.
+                #
+                # This reaches the direct child only: sudo does not propagate
+                # SIGKILL, so the /usr/bin/vtysh wrapper and the docker exec
+                # client below it are not covered. Reaching those would need
+                # the process group, which this function deliberately does not
+                # use - os.killpg() cannot signal the root-owned processes sudo
+                # spawns unless route_check is root, and kill(-pgid) reports
+                # success as long as it reached sudo, so the failure is silent.
+                # Whatever it does not cover still unwinds by itself the moment
+                # it writes into the pipe we closed above.
+                print_message(syslog.LOG_ERR,
+                              f"vtysh (pid {proc.pid}) did not exit; killing the direct child")
+                proc.kill()
+                try:
+                    # Leave return_code as None: the exit code from here on is
+                    # our own SIGKILL, not something vtysh should be judged by.
+                    proc.wait(timeout=SIGKILL_REAP_TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    print_message(syslog.LOG_ERR,
+                                  f"vtysh (pid {proc.pid}) survived SIGKILL; abandoning")
+            # Never return from here: a return inside finally would swallow an
+            # in-flight KeyboardInterrupt.
 
-            except ijson.JSONError as e:
-                # Handle JSON parsing errors
-                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
-            except UnicodeDecodeError as e:
-                # Handle UTF-8 decoding errors
-                print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
-            except Exception as e:
-                # Handle any other unexpected errors during parsing
-                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
-
-            # Wait for the process to terminate and get the return code
-            return_code = proc.wait()
-            if return_code != 0:
-                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
+        # After an abandoned read vtysh dies of SIGPIPE, which sudo reports as
+        # 141. That is this function's own doing, not a vtysh failure.
+        if completed and return_code not in (None, 0):
+            print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
 
     except FileNotFoundError:
         print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
