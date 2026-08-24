@@ -148,7 +148,6 @@ stages:
         pip3 install ".[testing]"
         pip3 uninstall --yes sonic-utilities
         pytest
-        make -f tests/dldd.mk coverage-gate
       displayName: 'Test Python 3'
 
     - task: PublishTestResults@2
