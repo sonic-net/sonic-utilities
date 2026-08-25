@@ -1,8 +1,12 @@
+import ipaddress
 import os
-import subprocess
+import re
 import shlex
+import subprocess
 import time
 from .gu_common import genericUpdaterLogging
+
+IFNAME_RE = re.compile(r"[A-Za-z0-9_.-]{1,15}")
 
 logger = genericUpdaterLogging.get_logger(title="Service Validator")
 
@@ -200,6 +204,18 @@ def vlanintf_validator(old_config, upd_config, keys):
     deleted_keys = list(set(old_keys) - set(upd_keys))
     for key in deleted_keys:
         iface, iface_ip = key
+        if not IFNAME_RE.fullmatch(iface):
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       "vlanintf_validator: Invalid VLAN interface name",
+                       print_to_console)
+            continue
+        try:
+            ipaddress.ip_interface(iface_ip)
+        except ValueError:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       "vlanintf_validator: Invalid VLAN interface address",
+                       print_to_console)
+            continue
         rc = command_wrapper(f"ip neigh flush dev {iface} {iface_ip}")
         if rc:
             logger.log(logger.LOG_PRIORITY_ERROR,

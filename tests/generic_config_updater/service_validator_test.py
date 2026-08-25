@@ -497,6 +497,20 @@ class TestServiceValidator(unittest.TestCase):
             caclmgrd_validator(entry["old"], entry["upd"], None)
 
     @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_vlanintf_validator_ignores_invalid_keys(self, mock_subprocess):
+        old_config = {
+            "VLAN_INTERFACE": {
+                "VlanNameThatIsTooLong|192.168.0.1/24": {},
+                "Vlan1000|invalid": {},
+            }
+        }
+
+        result = vlanintf_validator(old_config, {}, None)
+
+        self.assertTrue(result)
+        mock_subprocess.assert_not_called()
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
     def test_vlanintf_validator_failure_vlan_not_found(self, mock_subprocess):
         """Test vlanintf_validator when trying to flush neighbors on non-existent VLAN"""
         global subprocess_calls, subprocess_call_index
