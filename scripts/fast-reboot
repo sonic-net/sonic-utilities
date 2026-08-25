@@ -19,6 +19,7 @@ REBOOT_METHOD="/sbin/kexec -e"
 ASSISTANT_IP_LIST=""
 ASSISTANT_SCRIPT="/usr/local/bin/neighbor_advertiser"
 LAG_KEEPALIVE_SCRIPT="/usr/local/bin/lag_keepalive.py"
+READ_ARISTA_7060_EEPROM_SCRIPT="/usr/local/bin/arista_7060_prefdl_gen.py"
 WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
@@ -620,7 +621,6 @@ function is_secureboot() {
 function setup_reboot_variables()
 {
     # Kernel and initrd image
-    HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
     CURR_SONIC_IMAGE=$(sonic-installer list | grep "Current: " | cut -d ' ' -f 2)
     NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
     IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
@@ -919,6 +919,19 @@ EOF
 fi
 
 debug "Starting $REBOOT_TYPE"
+
+# Create and populate /host/.system-prefdl if it does not already exist
+# Should only apply to Arista-7060CX-32S-*
+HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
+if [ ! -f "/host/.system-prefdl" ]; then
+    if [ -f "/etc/sonic/.syseeprom" ]; then
+        cp /etc/sonic/.syseeprom /host/.system-prefdl
+        echo "/host/.system-prefdl not found - restored from /etc/sonic/.syseeprom"
+    elif [[ "${HWSKU}" == *"Arista-7060CX-32S-"* ]]; then
+        python3 ${READ_ARISTA_7060_EEPROM_SCRIPT}
+        echo "/host/.system-prefdl not found - restored by reading from EEPROM"
+    fi
+fi
 
 # re-run the script in background mode with detaching from the terminal session
 if [[ x"${DETACH}" == x"yes" && x"${ALREADY_DETACHED}" == x"" ]]; then
