@@ -288,7 +288,8 @@ def validate_fw(ctx, param, value):
 # 'fw' subcommand
 @component_install.command(name='fw')
 @click.option('-y', '--yes', 'yes', is_flag=True, show_default=True, help="Assume \"yes\" as answer to all prompts and run non-interactively")
-@click.option('--force-update', 'force_update', is_flag=True, show_default=True, help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
+@click.option('--force-update', 'force_update', is_flag=True, show_default=True,
+              help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
 @click.argument('fw_path', metavar='<fw_path>', callback=validate_fw)
 @click.pass_context
 def fw_install(ctx, yes, force_update, fw_path):
@@ -319,7 +320,8 @@ def fw_install(ctx, yes, force_update, fw_path):
 @component_update.command(name='fw')
 @click.option('-y', '--yes', 'yes', is_flag=True, show_default=True, help="Assume \"yes\" as answer to all prompts and run non-interactively")
 @click.option('-f', '--force', 'force', is_flag=True, show_default=True, help="Update firmware regardless the current version")
-@click.option('--force-update', 'force_update', is_flag=True, show_default=True, help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
+@click.option('--force-update', 'force_update', is_flag=True, show_default=True,
+              help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
 @click.option('-i', '--image', 'image', type=click.Choice(["current", "next"]), default="current", show_default=True, help="Update firmware using current/next SONiC image")
 @click.pass_context
 def fw_update(ctx, yes, force, force_update, image):
