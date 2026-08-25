@@ -875,7 +875,7 @@ save_chassis_database_info() {
         save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
     else
         # In LC, in case database-chassis is not reachable, ping CHASSIS_APP_DB first
-        ret=$(timeout 5 sonic-db-cli CHASSIS_APP_DB PING | grep -c True)
+        ret=$(timeout 5 sonic-db-cli CHASSIS_APP_DB PING 2>/dev/null | grep -c True)
         if [ $ret -gt 0 ]; then
             save_redis "CHASSIS_APP_DB" "CHASSIS_APP_DB"  true
             save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
@@ -884,7 +884,7 @@ save_chassis_database_info() {
 }
 
 ###############################################################################
-# Save fabirc info
+# Save fabric info
 # Globals:
 #  None
 # Arguments:
