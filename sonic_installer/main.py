@@ -387,13 +387,20 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             # Inject host DNS into chroot for sonic-package-manager to resolve hostnames.
             chroot_resolv = os.path.join(new_image_mount, RESOLV_CONF_FILE)
             if os.path.islink(chroot_resolv):
-                # Symlink: populate the target inside the chroot so the symlink resolves.
-                # Cannot cp over the symlink because the absolute target path escapes
-                # the overlay mount to the host filesystem ("are the same file" error).
+                # Symlink: populate its target inside the chroot ("cp" over the link
+                # would write through it, outside the overlay mount).
                 resolv_target = os.readlink(chroot_resolv)
+                if not os.path.isabs(resolv_target):
+                    # Relative target resolves against the symlink's directory
+                    resolv_target = os.path.join("/", os.path.dirname(RESOLV_CONF_FILE), resolv_target)
+                # Leading "/" makes normpath clamp ".." at the chroot root
+                resolv_target = os.path.normpath(resolv_target)
                 chroot_target = os.path.join(new_image_mount, resolv_target.lstrip("/"))
                 run_command_or_raise(["mkdir", "-p", os.path.dirname(chroot_target)])
-                run_command_or_raise(["cp", "-L", os.path.join("/", RESOLV_CONF_FILE), chroot_target])
+                # --remove-destination: if the target is itself a symlink, replace it
+                # instead of writing through it (could escape the mount again)
+                run_command_or_raise(["cp", "-L", "--remove-destination",
+                                      os.path.join("/", RESOLV_CONF_FILE), chroot_target])
             else:
                 # Regular file: overwrite with host DNS content.
                 run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE), chroot_resolv])
