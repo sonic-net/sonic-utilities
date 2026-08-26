@@ -31,13 +31,13 @@ def test_build_rows_with_mixed_profiles_and_groups():
     assert rows == [
         [
             'profile2', 'disabled', '15', '-', 'PORT', 'Ethernet0\nEthernet1',
-            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-', '-'
+            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-', '-', '-'
         ],
-        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', '', ''],
-        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', '', '', ''],
+        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
         [
             'profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-',
-            '-', '-', '-', '-', '-', '-'
+            '-', '-', '-', '-', '-', '-', '-'
         ]
     ]
 
@@ -73,7 +73,11 @@ def test_build_rows_with_aggregator_config():
         profile_table,
         group_table,
         aggregator_table,
-        histogram_table
+        histogram_table,
+        {
+            ('ag0', 'PORT', 'IF_IN_UCAST_PKTS'): {'bit_width': '40'},
+            'orphan|PORT|IF_OUT_OCTETS': {'bit_width': '24'}
+        }
     )
 
     assert rows == [[
@@ -86,6 +90,7 @@ def test_build_rows_with_aggregator_config():
         'IF_IN_UCAST_PKTS',
         '5,000',
         'PORT|IF_IN_UCAST_PKTS\nQUEUE|DROPPED_PACKETS',
+        'PORT|IF_IN_UCAST_PKTS: 40\nQUEUE|DROPPED_PACKETS: 32 (default)',
         '1,000,000',
         'PORT|IF_OUT_OCTETS\nQUEUE|WRED_ECN_MARKED_PACKETS',
         '256',
@@ -111,6 +116,9 @@ def test_build_rows_includes_unbound_aggregator_config():
             'ag0|PORT|IF_OUT_OCTETS': {
                 'explicit_bounds': ['0', '1000']
             }
+        },
+        {
+            'ag0|PORT|IF_IN_UCAST_PKTS': {'bit_width': 48}
         }
     )
 
@@ -124,11 +132,57 @@ def test_build_rows_includes_unbound_aggregator_config():
         '-',
         '5,000',
         'PORT|IF_IN_UCAST_PKTS',
+        'PORT|IF_IN_UCAST_PKTS: 48',
         '1,000,000',
         'PORT|IF_OUT_OCTETS',
         '128',
         'PORT|IF_OUT_OCTETS: 0,1000'
     ]]
+
+
+def test_build_rows_shows_default_rollover_width():
+    rows = show_hft._build_rows(
+        {'profileA': {'aggregator': 'ag0'}},
+        {},
+        {'ag0': {'rollover_counters': ['QUEUE|PACKETS']}},
+        {},
+        {}
+    )
+
+    assert rows[0][8:10] == [
+        'QUEUE|PACKETS',
+        'QUEUE|PACKETS: 32 (default)'
+    ]
+
+
+def test_build_rows_supports_dash_aggregator_name():
+    rows = show_hft._build_rows(
+        {'profileA': {'aggregator': '-'}},
+        {},
+        {'-': {'rollover_counters': ['QUEUE|PACKETS']}},
+        {},
+        {'-|QUEUE|PACKETS': {'bit_width': '24'}}
+    )
+
+    assert rows[0][3] == '-'
+    assert rows[0][9] == 'QUEUE|PACKETS: 24'
+
+
+def test_build_rows_ignores_unbound_rollover_child_rows():
+    rows = show_hft._build_rows(
+        {},
+        {},
+        {'ag0': {'rollover_counters': ['PORT|IF_IN_OCTETS']}},
+        {},
+        {
+            'ag0|PORT|IF_OUT_OCTETS': {'bit_width': '24'},
+            'missing|PORT|IF_IN_OCTETS': {'bit_width': '16'}
+        }
+    )
+
+    assert rows[0][9] == 'PORT|IF_IN_OCTETS: 32 (default)'
+    assert 'IF_OUT_OCTETS' not in rows[0][9]
+    assert all(row[3] != 'missing' for row in rows)
 
 
 def test_format_aggregator_only_defaults_buckets_for_configured_heatmap():
@@ -224,9 +278,11 @@ def test_display_hft_outputs_table(capsys):
     assert 'p1' in output
     assert 'Ethernet0' in output
     assert 'BYTES' in output
+    assert 'Rollover Bit Widths' in output
     assert 'Heatmap Default Buckets' in output
     assert 'Per-counter Explicit Bounds' in output
     assert show_hft.AGGREGATOR_HISTOGRAM_TABLE in requested_tables
+    assert show_hft.AGGREGATOR_ROLLOVER_TABLE in requested_tables
 
 
 def test_format_list_parses_json_array():

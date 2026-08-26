@@ -17,10 +17,12 @@ PROFILE_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_PROFILE"
 GROUP_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_GROUP"
 AGGREGATOR_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR"
 AGGREGATOR_HISTOGRAM_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM"
+AGGREGATOR_ROLLOVER_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER"
 PROFILE_TABLE_PATH = f"/{PROFILE_TABLE_NAME}"
 GROUP_TABLE_PATH = f"/{GROUP_TABLE_NAME}"
 AGGREGATOR_TABLE_PATH = f"/{AGGREGATOR_TABLE_NAME}"
 AGGREGATOR_HISTOGRAM_TABLE_PATH = f"/{AGGREGATOR_HISTOGRAM_TABLE_NAME}"
+AGGREGATOR_ROLLOVER_TABLE_PATH = f"/{AGGREGATOR_ROLLOVER_TABLE_NAME}"
 STREAM_STATE_FIELD = "stream_state"
 
 
@@ -215,6 +217,29 @@ def hft_add_histogram(ctx, aggregator_name, counter, explicit_bounds):
     _process_payload(ctx, histogram_payload)
 
 
+@hft_add.command('rollover', short_help="Add an HFT rollover counter bit width")
+@click.argument('aggregator_name')
+@click.option('--counter', 'counter', required=True,
+              help='Rollover counter selector in GROUP|COUNTER form.')
+@click.option('--bit_width', 'bit_width', required=True,
+              type=click.IntRange(min=1, max=63),
+              help='Counter bit width used for rollover correction.')
+@click.pass_context
+def hft_add_rollover(ctx, aggregator_name, counter, bit_width):
+    """Create a bit-width override for one aggregator rollover counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, '--counter')
+    rollover_payload = _build_rollover_patch(
+        op="add",
+        aggregator_name=aggregator_name,
+        group_type=group_type,
+        counter_name=counter_name,
+        table_exists=_has_table(ctx, AGGREGATOR_ROLLOVER_TABLE_NAME),
+        attributes={"bit_width": str(bit_width)}
+    )
+    _process_payload(ctx, rollover_payload)
+
+
 @hft.group('del', short_help="Remove HFT resources")
 def hft_delete():
     """Group of delete operations for HFT."""
@@ -262,7 +287,19 @@ def hft_delete_aggregator(ctx, aggregator_name):
         ctx.exit(1)
 
     remove_entire_table = _is_last_entry(ctx, AGGREGATOR_TABLE_NAME)
-    aggregator_payload = _build_histogram_children_remove_patch(ctx, aggregator_name)
+    aggregator_payload = []
+    for table_name, table_path in (
+        (AGGREGATOR_HISTOGRAM_TABLE_NAME, AGGREGATOR_HISTOGRAM_TABLE_PATH),
+        (AGGREGATOR_ROLLOVER_TABLE_NAME, AGGREGATOR_ROLLOVER_TABLE_PATH),
+    ):
+        aggregator_payload.extend(
+            _build_counter_children_remove_patch(
+                ctx,
+                aggregator_name,
+                table_name,
+                table_path
+            )
+        )
     aggregator_payload.extend(
         _build_aggregator_remove_patch(aggregator_name, remove_entire_table)
     )
@@ -298,6 +335,37 @@ def hft_delete_histogram(ctx, aggregator_name, counter):
         remove_entire_table
     )
     _process_payload(ctx, histogram_payload)
+
+
+@hft_delete.command('rollover', short_help="Delete an HFT rollover counter bit width")
+@click.argument('aggregator_name')
+@click.argument('counter')
+@click.pass_context
+def hft_delete_rollover(ctx, aggregator_name, counter):
+    """Remove a bit-width override for one aggregator rollover counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, 'counter')
+    rollover_key = _compose_rollover_key(
+        aggregator_name,
+        group_type,
+        counter_name
+    )
+    rollover_keys = _get_normalized_table_keys(
+        ctx,
+        AGGREGATOR_ROLLOVER_TABLE_NAME
+    )
+    if rollover_key not in rollover_keys:
+        click.echo("Rollover '{}' does not exist.".format(rollover_key))
+        ctx.exit(1)
+
+    remove_entire_table = len(rollover_keys) == 1
+    rollover_payload = _build_rollover_remove_patch(
+        aggregator_name,
+        group_type,
+        counter_name,
+        remove_entire_table
+    )
+    _process_payload(ctx, rollover_payload)
 
 
 def _process_payload(ctx, payload):
@@ -346,12 +414,14 @@ def _split_csv_items(value):
 
 
 def _validate_aggregator_name(aggregator_name, param_hint='aggregator_name'):
-    """Reject names that cannot be represented in a histogram composite key."""
+    """Reject names that cannot be represented in a child composite key."""
     if aggregator_name != aggregator_name.strip():
         raise click.BadParameter(
             'must not have leading or trailing whitespace',
             param_hint=param_hint
         )
+    if not aggregator_name:
+        raise click.BadParameter('must be nonempty', param_hint=param_hint)
     if '|' in aggregator_name:
         raise click.BadParameter(
             "must not contain '|'",
@@ -475,6 +545,25 @@ def _build_histogram_patch(op, aggregator_name, group_type, counter_name,
     ]
 
 
+def _build_rollover_patch(op, aggregator_name, group_type, counter_name,
+                          attributes, table_exists=False):
+    """Construct a JSON Patch entry targeting the aggregator rollover table."""
+    rollover_key = _compose_rollover_key(aggregator_name, group_type, counter_name)
+    if table_exists:
+        return [
+            _build_patch_entry(
+                op,
+                _join_pointer(AGGREGATOR_ROLLOVER_TABLE_PATH, rollover_key),
+                attributes
+            )
+        ]
+    return [
+        _build_patch_entry(op, AGGREGATOR_ROLLOVER_TABLE_PATH, {
+            rollover_key: attributes
+        })
+    ]
+
+
 def _build_stream_state_patch(profile_name, state):
     """Construct a JSON Patch entry to update a profile stream state."""
     return _build_profile_field_patch(profile_name, STREAM_STATE_FIELD, state)
@@ -542,23 +631,33 @@ def _build_histogram_remove_patch(aggregator_name, group_type, counter_name,
     ]
 
 
-def _build_histogram_children_remove_patch(ctx, aggregator_name):
-    """Remove all histogram rows owned by an aggregator."""
-    prefix = f"{aggregator_name}|"
-    all_histogram_keys = _get_normalized_table_keys(
-        ctx,
-        AGGREGATOR_HISTOGRAM_TABLE_NAME
-    )
-    histogram_keys = sorted(
-        key for key in all_histogram_keys if key.startswith(prefix)
-    )
-    if not histogram_keys:
-        return []
-    if len(histogram_keys) == len(all_histogram_keys):
-        return [_build_remove_entry(AGGREGATOR_HISTOGRAM_TABLE_PATH)]
+def _build_rollover_remove_patch(aggregator_name, group_type, counter_name,
+                                 remove_entire_table):
+    """Create a remove operation for a rollover entry or its entire table."""
+    if remove_entire_table:
+        return [_build_remove_entry(AGGREGATOR_ROLLOVER_TABLE_PATH)]
+    rollover_key = _compose_rollover_key(aggregator_name, group_type, counter_name)
     return [
-        _build_remove_entry(_join_pointer(AGGREGATOR_HISTOGRAM_TABLE_PATH, key))
-        for key in histogram_keys
+        _build_remove_entry(
+            _join_pointer(AGGREGATOR_ROLLOVER_TABLE_PATH, rollover_key)
+        )
+    ]
+
+
+def _build_counter_children_remove_patch(ctx, aggregator_name, table_name, table_path):
+    """Remove all rows in one counter child table owned by an aggregator."""
+    prefix = f"{aggregator_name}|"
+    all_child_keys = _get_normalized_table_keys(ctx, table_name)
+    child_keys = sorted(
+        key for key in all_child_keys if key.startswith(prefix)
+    )
+    if not child_keys:
+        return []
+    if len(child_keys) == len(all_child_keys):
+        return [_build_remove_entry(table_path)]
+    return [
+        _build_remove_entry(_join_pointer(table_path, key))
+        for key in child_keys
     ]
 
 
@@ -586,6 +685,11 @@ def _compose_group_key(profile_name, group_type):
 
 def _compose_histogram_key(aggregator_name, group_type, counter_name):
     """Compose the key used by the aggregator histogram table."""
+    return f"{aggregator_name}|{group_type}|{counter_name}"
+
+
+def _compose_rollover_key(aggregator_name, group_type, counter_name):
+    """Compose the key used by the aggregator rollover table."""
     return f"{aggregator_name}|{group_type}|{counter_name}"
 
 

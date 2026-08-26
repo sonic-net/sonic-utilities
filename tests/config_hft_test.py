@@ -1,6 +1,7 @@
 import json
 import os
 
+import pytest
 from click.testing import CliRunner
 from unittest.mock import patch
 
@@ -80,6 +81,12 @@ class TestConfigHftCli:
             ['bind-aggregator', 'profileA', 'ag|0'],
             ['del', 'aggregator', 'ag|0'],
             ['del', 'histogram', 'ag|0', 'PORT|IF_OUT_OCTETS'],
+            [
+                'add', 'rollover', 'ag|0',
+                '--counter', 'PORT|IF_OUT_OCTETS',
+                '--bit_width', '32'
+            ],
+            ['del', 'rollover', 'ag|0', 'PORT|IF_OUT_OCTETS'],
         )
         for command in commands:
             with patch('config.hft._process_payload') as mock_process:
@@ -102,6 +109,12 @@ class TestConfigHftCli:
                     '--explicit_bounds', '0,1'
                 ],
                 ['del', 'histogram', aggregator_name, 'PORT|IF_OUT_OCTETS'],
+                [
+                    'add', 'rollover', aggregator_name,
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--bit_width', '32'
+                ],
+                ['del', 'rollover', aggregator_name, 'PORT|IF_OUT_OCTETS'],
             )
             for command in commands:
                 with patch('config.hft._process_payload') as mock_process:
@@ -383,6 +396,122 @@ class TestConfigHftCli:
             'explicit_bounds'
         ][-1] == str(2**53)
 
+    def test_add_rollover_creates_table_with_composite_key(self):
+        with patch('config.hft._has_table', return_value=False), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'rollover', 'ag0',
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--bit_width', '32'
+                ]
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'add',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER',
+            'value': {
+                'ag0|PORT|IF_OUT_OCTETS': {'bit_width': '32'}
+            }
+        }]
+
+    def test_add_rollover_preserves_existing_table_entries(self):
+        with patch('config.hft._has_table', return_value=True), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'rollover', 'ag1',
+                    '--counter', 'QUEUE|BYTES',
+                    '--bit_width', '63'
+                ]
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'add',
+            'path': (
+                '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER/'
+                'ag1|QUEUE|BYTES'
+            ),
+            'value': {'bit_width': '63'}
+        }]
+
+    def test_add_rollover_accepts_bit_width_range_limits(self):
+        for bit_width in ('1', '63'):
+            with patch('config.hft._has_table', return_value=False), \
+                    patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    [
+                        'add', 'rollover', 'ag0',
+                        '--counter', 'PORT|UNKNOWN_COUNTER_FOR_YANG',
+                        '--bit_width', bit_width
+                    ]
+                )
+
+            assert result.exit_code == 0
+            _, payload = mock_process.call_args[0]
+            assert payload[0]['value']['ag0|PORT|UNKNOWN_COUNTER_FOR_YANG'] == {
+                'bit_width': bit_width
+            }
+
+    def test_add_rollover_rejects_bit_width_outside_range(self):
+        for bit_width in ('0', '64'):
+            with patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    [
+                        'add', 'rollover', 'ag0',
+                        '--counter', 'PORT|IF_OUT_OCTETS',
+                        '--bit_width', bit_width
+                    ]
+                )
+
+            assert result.exit_code == 2
+            mock_process.assert_not_called()
+
+    def test_add_rollover_rejects_malformed_selector(self):
+        selectors = (
+            'PORT',
+            'PORT|',
+            '|IF_OUT_OCTETS',
+            'NOT_A_GROUP|IF_OUT_OCTETS',
+            'PORT|IF_OUT_OCTETS|EXTRA',
+        )
+        for selector in selectors:
+            with patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    [
+                        'add', 'rollover', 'ag0',
+                        '--counter', selector,
+                        '--bit_width', '32'
+                    ]
+                )
+
+            assert result.exit_code == 2
+            mock_process.assert_not_called()
+
+    def test_add_rollover_rejects_empty_aggregator_name(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'rollover', '',
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--bit_width', '32'
+                ]
+            )
+
+        assert result.exit_code == 2
+        assert 'must be nonempty' in result.output
+        mock_process.assert_not_called()
+
     def test_add_group_splits_comma_separated_lists(self):
         with patch('config.hft._has_table', return_value=False), \
                 patch('config.hft._process_payload') as mock_process:
@@ -663,6 +792,108 @@ class TestConfigHftCli:
             'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM'
         }]
 
+    def test_delete_rollover_rejects_missing_entry_in_empty_table(self):
+        obj = _make_cli_obj({})
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'rollover', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 1
+        assert "Rollover 'ag0|PORT|IF_OUT_OCTETS' does not exist." in result.output
+        mock_process.assert_not_called()
+
+    def test_delete_rollover_does_not_remove_unrelated_sole_row(self):
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_ROLLOVER_TABLE_NAME: {
+                'ag1|PORT|IF_IN_OCTETS': {'bit_width': '32'}
+            }
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'rollover', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 1
+        assert "Rollover 'ag0|PORT|IF_OUT_OCTETS' does not exist." in result.output
+        mock_process.assert_not_called()
+
+    def test_delete_rollover_removes_exact_tuple_key(self):
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_ROLLOVER_TABLE_NAME: {
+                ('ag0', 'PORT', 'IF_OUT_OCTETS'): {'bit_width': '32'},
+                'ag1|QUEUE|BYTES': {'bit_width': '16'}
+            }
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'rollover', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'remove',
+            'path': (
+                '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER/'
+                'ag0|PORT|IF_OUT_OCTETS'
+            )
+        }]
+
+    def test_delete_rollover_removes_exact_list_key(self):
+        class ListKeyTable:
+            def __iter__(self):
+                return iter([
+                    ['ag0', 'PORT', 'IF_OUT_OCTETS'],
+                    'ag1|QUEUE|BYTES'
+                ])
+
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_ROLLOVER_TABLE_NAME: ListKeyTable()
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'rollover', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'remove',
+            'path': (
+                '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER/'
+                'ag0|PORT|IF_OUT_OCTETS'
+            )
+        }]
+
+    def test_delete_rollover_removes_table_for_exact_sole_string_key(self):
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_ROLLOVER_TABLE_NAME: {
+                'ag0|PORT|IF_OUT_OCTETS': {'bit_width': '32'}
+            }
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'rollover', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'remove',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER'
+        }]
+
     def test_delete_aggregator_cascades_histograms_before_parent(self):
         class MockCfgDb:
             def get_table(self, name):
@@ -741,6 +972,97 @@ class TestConfigHftCli:
                 'op': 'remove',
                 'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
             }
+        ]
+
+    @pytest.mark.parametrize(
+        'histograms,rollovers,expected_children',
+        [
+            (
+                {},
+                {'ag0|PORT|IF_OUT_OCTETS': {}},
+                ['/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER']
+            ),
+            (
+                {},
+                {
+                    ('ag0', 'PORT', 'IF_OUT_OCTETS'): {},
+                    'ag1|QUEUE|BYTES': {}
+                },
+                [
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER/'
+                    'ag0|PORT|IF_OUT_OCTETS'
+                ]
+            ),
+            (
+                {'ag0|QUEUE|BYTES': {}},
+                {'ag0|PORT|IF_OUT_OCTETS': {}},
+                [
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM',
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER'
+                ]
+            ),
+            (
+                {'ag0|QUEUE|BYTES': {}},
+                {
+                    'ag0|PORT|IF_OUT_OCTETS': {},
+                    'ag1|QUEUE|BYTES': {}
+                },
+                [
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM',
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER/'
+                    'ag0|PORT|IF_OUT_OCTETS'
+                ]
+            ),
+            (
+                {
+                    'ag0|QUEUE|BYTES': {},
+                    'ag1|PORT|IF_IN_OCTETS': {}
+                },
+                {'ag0|PORT|IF_OUT_OCTETS': {}},
+                [
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM/'
+                    'ag0|QUEUE|BYTES',
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER'
+                ]
+            ),
+            (
+                {
+                    'ag0|QUEUE|BYTES': {},
+                    'ag1|PORT|IF_IN_OCTETS': {}
+                },
+                {
+                    'ag0|PORT|IF_OUT_OCTETS': {},
+                    'ag1|QUEUE|BYTES': {}
+                },
+                [
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM/'
+                    'ag0|QUEUE|BYTES',
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER/'
+                    'ag0|PORT|IF_OUT_OCTETS'
+                ]
+            ),
+        ]
+    )
+    def test_delete_aggregator_cascades_each_child_table_independently(
+            self, histograms, rollovers, expected_children):
+        obj = _make_cli_obj({
+            config_hft.PROFILE_TABLE_NAME: {},
+            config_hft.AGGREGATOR_TABLE_NAME: {'ag0': {}, 'ag1': {}},
+            config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: histograms,
+            config_hft.AGGREGATOR_ROLLOVER_TABLE_NAME: rollovers
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'aggregator', 'ag0'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert [entry['path'] for entry in payload] == [
+            *expected_children,
+            '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR/ag0'
         ]
 
     def test_delete_aggregator_rejected_when_profile_still_references_it(self):
