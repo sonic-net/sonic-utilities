@@ -31,11 +31,14 @@ def test_build_rows_with_mixed_profiles_and_groups():
     assert rows == [
         [
             'profile2', 'disabled', '15', '-', 'PORT', 'Ethernet0\nEthernet1',
-            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-'
+            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-', '-'
         ],
-        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', ''],
-        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
-        ['profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-', '-', '-', '-', '-', '-']
+        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', '', ''],
+        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+        [
+            'profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-',
+            '-', '-', '-', '-', '-', '-'
+        ]
     ]
 
 
@@ -54,12 +57,24 @@ def test_build_rows_with_aggregator_config():
             'reporting_rate': '5000',
             'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
             'heatmap_interval': '1000000',
-            'heatmap_counters': 'PORT|IF_OUT_ERRORS,QUEUE|WRED_ECN_MARKED_PACKETS',
-            'heatmap_bucket_boundaries': [0, 1024, 4096]
+            'heatmap_counters': 'PORT|IF_OUT_OCTETS,QUEUE|WRED_ECN_MARKED_PACKETS'
+        }
+    }
+    histogram_table = {
+        'ag0|QUEUE|WRED_ECN_MARKED_PACKETS': {
+            'explicit_bounds': '["0", "64", "128"]'
+        },
+        ('ag0', 'PORT', 'IF_OUT_OCTETS'): {
+            'explicit_bounds': [0, 1250000, 2500000]
         }
     }
 
-    rows = show_hft._build_rows(profile_table, group_table, aggregator_table)
+    rows = show_hft._build_rows(
+        profile_table,
+        group_table,
+        aggregator_table,
+        histogram_table
+    )
 
     assert rows == [[
         'profileA',
@@ -72,8 +87,10 @@ def test_build_rows_with_aggregator_config():
         '5,000',
         'PORT|IF_IN_UCAST_PKTS\nQUEUE|DROPPED_PACKETS',
         '1,000,000',
-        'PORT|IF_OUT_ERRORS\nQUEUE|WRED_ECN_MARKED_PACKETS',
-        '0\n1024\n4096'
+        'PORT|IF_OUT_OCTETS\nQUEUE|WRED_ECN_MARKED_PACKETS',
+        '256',
+        'PORT|IF_OUT_OCTETS: 0,1250000,2500000\n'
+        'QUEUE|WRED_ECN_MARKED_PACKETS: 0,64,128'
     ]]
 
 
@@ -85,7 +102,14 @@ def test_build_rows_includes_unbound_aggregator_config():
             'ag0': {
                 'reporting_rate': '5000',
                 'rollover_counters': ['PORT|IF_IN_UCAST_PKTS'],
-                'heatmap_counters': []
+                'heatmap_interval': '1000000',
+                'heatmap_counters': ['PORT|IF_OUT_OCTETS'],
+                'heatmap_default_bucket_count': '128'
+            }
+        },
+        {
+            'ag0|PORT|IF_OUT_OCTETS': {
+                'explicit_bounds': ['0', '1000']
             }
         }
     )
@@ -100,10 +124,19 @@ def test_build_rows_includes_unbound_aggregator_config():
         '-',
         '5,000',
         'PORT|IF_IN_UCAST_PKTS',
-        '-',
-        '-',
-        '-'
+        '1,000,000',
+        'PORT|IF_OUT_OCTETS',
+        '128',
+        'PORT|IF_OUT_OCTETS: 0,1000'
     ]]
+
+
+def test_format_aggregator_only_defaults_buckets_for_configured_heatmap():
+    assert show_hft._format_aggregator({})[-2:] == ('-', '-')
+    assert show_hft._format_aggregator({
+        'heatmap_interval': '1000',
+        'heatmap_counters': ['PORT|IF_OUT_OCTETS']
+    })[-2:] == ('256', '-')
 
 
 def test_format_poll_interval_variants():
@@ -163,8 +196,11 @@ def test_execute_streaming_command_exits_on_unhandled_return_code(monkeypatch):
 
 
 def test_display_hft_outputs_table(capsys):
+    requested_tables = []
+
     class MockCfgDb:
         def get_table(self, name):
+            requested_tables.append(name)
             if name == show_hft.PROFILE_TABLE:
                 return {
                     'p1': {'stream_state': 'enabled', 'poll_interval': '1000'}
@@ -188,6 +224,9 @@ def test_display_hft_outputs_table(capsys):
     assert 'p1' in output
     assert 'Ethernet0' in output
     assert 'BYTES' in output
+    assert 'Heatmap Default Buckets' in output
+    assert 'Per-counter Explicit Bounds' in output
+    assert show_hft.AGGREGATOR_HISTOGRAM_TABLE in requested_tables
 
 
 def test_format_list_parses_json_array():

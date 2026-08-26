@@ -7,6 +7,14 @@ from unittest.mock import patch
 import config.hft as config_hft
 
 
+def _make_cli_obj(tables):
+    class MockCfgDb:
+        def get_table(self, name):
+            return tables.get(name, {})
+
+    return type('Obj', (), {'cfgdb': MockCfgDb()})
+
+
 class TestConfigHftCli:
     def setup_method(self):
         self.runner = CliRunner()
@@ -44,7 +52,7 @@ class TestConfigHftCli:
                     '--rollover_counters', 'PORT|IF_IN_UCAST_PKTS, QUEUE|DROPPED_PACKETS',
                     '--heatmap_interval', '1000000',
                     '--heatmap_counters', 'PORT|IF_OUT_ERRORS, QUEUE|WRED_ECN_MARKED_PACKETS',
-                    '--heatmap_bucket_boundaries', '0, 1024, 4096'
+                    '--heatmap_default_bucket_count', '64'
                 ]
             )
 
@@ -59,11 +67,49 @@ class TestConfigHftCli:
                     'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
                     'heatmap_interval': '1000000',
                     'heatmap_counters': ['PORT|IF_OUT_ERRORS', 'QUEUE|WRED_ECN_MARKED_PACKETS'],
-                    'heatmap_bucket_boundaries': ['0', '1024', '4096']
+                    'heatmap_default_bucket_count': '64'
                 }
             }
         }]
         assert payload == expected_payload
+
+    def test_aggregator_entry_paths_reject_name_with_separator(self):
+        commands = (
+            ['add', 'aggregator', 'ag|0'],
+            ['add', 'profile', 'profileA', '--aggregator', 'ag|0'],
+            ['bind-aggregator', 'profileA', 'ag|0'],
+            ['del', 'aggregator', 'ag|0'],
+            ['del', 'histogram', 'ag|0', 'PORT|IF_OUT_OCTETS'],
+        )
+        for command in commands:
+            with patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(config_hft.hft, command)
+
+            assert result.exit_code == 2
+            assert "must not contain '|'" in result.output
+            mock_process.assert_not_called()
+
+    def test_aggregator_entry_paths_reject_surrounding_whitespace(self):
+        for aggregator_name in (' ag0', 'ag0 '):
+            commands = (
+                ['add', 'aggregator', aggregator_name],
+                ['add', 'profile', 'profileA', '--aggregator', aggregator_name],
+                ['bind-aggregator', 'profileA', aggregator_name],
+                ['del', 'aggregator', aggregator_name],
+                [
+                    'add', 'histogram', aggregator_name,
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--explicit_bounds', '0,1'
+                ],
+                ['del', 'histogram', aggregator_name, 'PORT|IF_OUT_OCTETS'],
+            )
+            for command in commands:
+                with patch('config.hft._process_payload') as mock_process:
+                    result = self.runner.invoke(config_hft.hft, command)
+
+                assert result.exit_code == 2
+                assert 'must not have leading or trailing whitespace' in result.output
+                mock_process.assert_not_called()
 
     def test_add_aggregator_accepts_each_optional_method_independently(self):
         commands = [
@@ -75,8 +121,7 @@ class TestConfigHftCli:
             [
                 'add', 'aggregator', 'heatmap',
                 '--heatmap_interval', '1000000',
-                '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
-                '--heatmap_bucket_boundaries', '0,1024'
+                '--heatmap_counters', 'PORT|IF_OUT_ERRORS'
             ]
         ]
 
@@ -87,8 +132,9 @@ class TestConfigHftCli:
             assert result.exit_code == 0
             mock_process.assert_called_once()
 
-    def test_add_aggregator_rejects_heatmap_without_bucket_boundaries(self):
-        with patch('config.hft._process_payload') as mock_process:
+    def test_add_aggregator_defaults_heatmap_bucket_count(self):
+        with patch('config.hft._has_table', return_value=False), \
+                patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
@@ -98,9 +144,19 @@ class TestConfigHftCli:
                 ]
             )
 
-        assert result.exit_code == 2
-        assert 'must be configured together' in result.output
-        mock_process.assert_not_called()
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'add',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR',
+            'value': {
+                'ag0': {
+                    'heatmap_interval': '1000000',
+                    'heatmap_counters': ['PORT|IF_OUT_ERRORS'],
+                    'heatmap_default_bucket_count': '256'
+                }
+            }
+        }]
 
     def test_add_aggregator_rejects_heatmap_without_interval(self):
         with patch('config.hft._process_payload') as mock_process:
@@ -108,14 +164,84 @@ class TestConfigHftCli:
                 config_hft.hft,
                 [
                     'add', 'aggregator', 'ag0',
-                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
-                    '--heatmap_bucket_boundaries', '0,1024'
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS'
                 ]
             )
 
         assert result.exit_code == 2
         assert 'must be configured together' in result.output
         mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_heatmap_without_counters(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['add', 'aggregator', 'ag0', '--heatmap_interval', '1000000']
+            )
+
+        assert result.exit_code == 2
+        assert 'must be configured together' in result.output
+        mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_empty_heatmap_counters(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'aggregator', 'ag0',
+                    '--heatmap_interval', '1000000',
+                    '--heatmap_counters', ' , '
+                ]
+            )
+
+        assert result.exit_code == 2
+        assert 'at least one' in result.output
+        mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_bucket_count_without_heatmap(self):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['add', 'aggregator', 'ag0', '--heatmap_default_bucket_count', '32']
+            )
+
+        assert result.exit_code == 2
+        assert 'requires --heatmap_interval' in result.output
+        mock_process.assert_not_called()
+
+    def test_add_aggregator_rejects_bucket_count_outside_range(self):
+        for value in ('3', '513'):
+            with patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    [
+                        'add', 'aggregator', 'ag0',
+                        '--heatmap_interval', '1000000',
+                        '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
+                        '--heatmap_default_bucket_count', value
+                    ]
+                )
+
+            assert result.exit_code == 2
+            mock_process.assert_not_called()
+
+    def test_add_aggregator_accepts_bucket_count_range_limits(self):
+        for value in ('4', '512'):
+            with patch('config.hft._has_table', return_value=False), \
+                    patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    [
+                        'add', 'aggregator', 'ag0',
+                        '--heatmap_interval', '1000000',
+                        '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
+                        '--heatmap_default_bucket_count', value
+                    ]
+                )
+
+            assert result.exit_code == 0
+            _, payload = mock_process.call_args[0]
+            assert payload[0]['value']['ag0']['heatmap_default_bucket_count'] == value
 
     def test_add_aggregator_rejects_intervals_above_uint32(self):
         for option in ('--reporting_rate', '--heatmap_interval'):
@@ -128,37 +254,134 @@ class TestConfigHftCli:
             assert result.exit_code == 2
             mock_process.assert_not_called()
 
-    def test_add_aggregator_rejects_unordered_bucket_boundaries(self):
+    def test_add_histogram_creates_table_with_composite_key(self):
+        with patch('config.hft._has_table', return_value=False), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'histogram', 'ag0',
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--explicit_bounds', '0, 1250000, 2500000'
+                ]
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'add',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM',
+            'value': {
+                'ag0|PORT|IF_OUT_OCTETS': {
+                    'explicit_bounds': ['0', '1250000', '2500000']
+                }
+            }
+        }]
+
+    def test_add_histogram_preserves_existing_table_entries(self):
+        with patch('config.hft._has_table', return_value=True), \
+                patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'histogram', 'ag1',
+                    '--counter', 'QUEUE|BYTES',
+                    '--explicit_bounds', '1'
+                ]
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'add',
+            'path': (
+                '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM/'
+                'ag1|QUEUE|BYTES'
+            ),
+            'value': {'explicit_bounds': ['1']}
+        }]
+
+    def test_add_histogram_rejects_malformed_selector(self):
+        selectors = (
+            'PORT',
+            'PORT|',
+            '|IF_OUT_OCTETS',
+            'NOT_A_GROUP|IF_OUT_OCTETS',
+            'PORT|IF_OUT_OCTETS|EXTRA',
+        )
+        for selector in selectors:
+            with patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    [
+                        'add', 'histogram', 'ag0',
+                        '--counter', selector,
+                        '--explicit_bounds', '0,1'
+                    ]
+                )
+
+            assert result.exit_code == 2
+            mock_process.assert_not_called()
+
+    def test_add_histogram_rejects_aggregator_name_with_separator(self):
         with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
-                    'add', 'aggregator', 'ag0',
-                    '--heatmap_interval', '1000000',
-                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
-                    '--heatmap_bucket_boundaries', '0,4096,1024'
+                    'add', 'histogram', 'ag|0',
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--explicit_bounds', '0,1'
                 ]
             )
 
         assert result.exit_code == 2
-        assert 'strictly increasing' in result.output
+        assert "must not contain '|'" in result.output
         mock_process.assert_not_called()
 
-    def test_add_aggregator_rejects_bucket_boundary_above_exact_otel_range(self):
-        with patch('config.hft._process_payload') as mock_process:
+    def test_add_histogram_rejects_invalid_explicit_bounds(self):
+        invalid_bounds = (
+            '',
+            '0,,1',
+            '-1,1',
+            '+1,2',
+            '1.0,2',
+            '0,2,2',
+            '0,2,1',
+            str(2**53 + 1),
+            ','.join(str(value) for value in range(512)),
+        )
+        for bounds in invalid_bounds:
+            with patch('config.hft._process_payload') as mock_process:
+                result = self.runner.invoke(
+                    config_hft.hft,
+                    [
+                        'add', 'histogram', 'ag0',
+                        '--counter', 'PORT|IF_OUT_OCTETS',
+                        '--explicit_bounds', bounds
+                    ]
+                )
+
+            assert result.exit_code == 2
+            mock_process.assert_not_called()
+
+    def test_add_histogram_accepts_bounds_limits(self):
+        bounds = ','.join([*(str(value) for value in range(510)), str(2**53)])
+        with patch('config.hft._has_table', return_value=False), \
+                patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
-                    'add', 'aggregator', 'ag0',
-                    '--heatmap_interval', '1000000',
-                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
-                    '--heatmap_bucket_boundaries', str(2**53 + 1)
+                    'add', 'histogram', 'ag0',
+                    '--counter', 'PORT|UNKNOWN_COUNTER_FOR_YANG',
+                    '--explicit_bounds', bounds
                 ]
             )
 
-        assert result.exit_code == 2
-        assert 'exact OTLP encoding' in result.output
-        mock_process.assert_not_called()
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload[0]['value']['ag0|PORT|UNKNOWN_COUNTER_FOR_YANG'][
+            'explicit_bounds'
+        ][-1] == str(2**53)
 
     def test_add_group_splits_comma_separated_lists(self):
         with patch('config.hft._has_table', return_value=False), \
@@ -337,6 +560,188 @@ class TestConfigHftCli:
             'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
         }]
         assert payload == expected_payload
+
+    def test_delete_histogram_rejects_missing_entry_in_empty_table(self):
+        obj = _make_cli_obj({})
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'histogram', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 1
+        assert "Histogram 'ag0|PORT|IF_OUT_OCTETS' does not exist." in result.output
+        mock_process.assert_not_called()
+
+    def test_delete_histogram_rejects_missing_entry_with_one_unrelated_row(self):
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: {
+                'ag1|PORT|IF_IN_OCTETS': {}
+            }
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'histogram', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 1
+        assert "Histogram 'ag0|PORT|IF_OUT_OCTETS' does not exist." in result.output
+        mock_process.assert_not_called()
+
+    def test_delete_histogram_removes_exact_tuple_key(self):
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: {
+                ('ag0', 'PORT', 'IF_OUT_OCTETS'): {},
+                'ag1|QUEUE|BYTES': {}
+            }
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'histogram', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'remove',
+            'path': (
+                '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM/'
+                'ag0|PORT|IF_OUT_OCTETS'
+            )
+        }]
+
+    def test_delete_histogram_removes_exact_list_key(self):
+        class ListKeyTable:
+            def __iter__(self):
+                return iter([
+                    ['ag0', 'PORT', 'IF_OUT_OCTETS'],
+                    'ag1|QUEUE|BYTES'
+                ])
+
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: ListKeyTable()
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'histogram', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'remove',
+            'path': (
+                '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM/'
+                'ag0|PORT|IF_OUT_OCTETS'
+            )
+        }]
+
+    def test_delete_histogram_removes_table_for_exact_sole_string_key(self):
+        obj = _make_cli_obj({
+            config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: {
+                'ag0|PORT|IF_OUT_OCTETS': {}
+            }
+        })
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'histogram', 'ag0', 'PORT|IF_OUT_OCTETS'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [{
+            'op': 'remove',
+            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM'
+        }]
+
+    def test_delete_aggregator_cascades_histograms_before_parent(self):
+        class MockCfgDb:
+            def get_table(self, name):
+                return {
+                    config_hft.PROFILE_TABLE_NAME: {},
+                    config_hft.AGGREGATOR_TABLE_NAME: {
+                        'ag0': {},
+                        'ag1': {}
+                    },
+                    config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: {
+                        'ag0|QUEUE|BYTES': {},
+                        ('ag0', 'PORT', 'IF_OUT_OCTETS'): {},
+                        'ag1|PORT|IF_IN_OCTETS': {}
+                    }
+                }.get(name, {})
+
+        obj = type('Obj', (), {'cfgdb': MockCfgDb()})
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'aggregator', 'ag0'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [
+            {
+                'op': 'remove',
+                'path': (
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM/'
+                    'ag0|PORT|IF_OUT_OCTETS'
+                )
+            },
+            {
+                'op': 'remove',
+                'path': (
+                    '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM/'
+                    'ag0|QUEUE|BYTES'
+                )
+            },
+            {
+                'op': 'remove',
+                'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR/ag0'
+            }
+        ]
+
+    def test_delete_last_aggregator_cascades_entire_histogram_table(self):
+        class MockCfgDb:
+            def get_table(self, name):
+                return {
+                    config_hft.PROFILE_TABLE_NAME: {},
+                    config_hft.AGGREGATOR_TABLE_NAME: {'ag0': {}},
+                    config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: {
+                        'ag0|PORT|IF_OUT_OCTETS': {},
+                        'ag0|QUEUE|BYTES': {}
+                    }
+                }.get(name, {})
+
+        obj = type('Obj', (), {'cfgdb': MockCfgDb()})
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['del', 'aggregator', 'ag0'],
+                obj=obj
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload == [
+            {
+                'op': 'remove',
+                'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM'
+            },
+            {
+                'op': 'remove',
+                'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
+            }
+        ]
 
     def test_delete_aggregator_rejected_when_profile_still_references_it(self):
         with patch('config.hft._get_aggregator_users', return_value=['profileA']), \

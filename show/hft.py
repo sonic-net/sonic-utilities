@@ -12,6 +12,8 @@ import utilities_common.cli as clicommon
 PROFILE_TABLE = 'HIGH_FREQUENCY_TELEMETRY_PROFILE'
 GROUP_TABLE = 'HIGH_FREQUENCY_TELEMETRY_GROUP'
 AGGREGATOR_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
+AGGREGATOR_HISTOGRAM_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM'
+DEFAULT_HEATMAP_BUCKET_COUNT = 256
 DEFAULT_CELL_PLACEHOLDER = '-'
 TABLE_HEADER = [
     'Profile',
@@ -25,7 +27,8 @@ TABLE_HEADER = [
     'Rollover Counters',
     'Heatmap Interval (usec)',
     'Heatmap Counters',
-    'Heatmap Bucket Boundaries'
+    'Heatmap Default Buckets',
+    'Per-counter Explicit Bounds'
 ]
 
 
@@ -74,8 +77,9 @@ def _display_hft(db):
     profile_table = db.cfgdb.get_table(PROFILE_TABLE) or {}
     group_table = db.cfgdb.get_table(GROUP_TABLE) or {}
     aggregator_table = db.cfgdb.get_table(AGGREGATOR_TABLE) or {}
+    histogram_table = db.cfgdb.get_table(AGGREGATOR_HISTOGRAM_TABLE) or {}
 
-    rows = _build_rows(profile_table, group_table, aggregator_table)
+    rows = _build_rows(profile_table, group_table, aggregator_table, histogram_table)
     if not rows:
         click.echo("No high frequency telemetry configuration present.")
         return
@@ -83,9 +87,10 @@ def _display_hft(db):
     click.echo(tabulate(rows, TABLE_HEADER, tablefmt='grid'))
 
 
-def _build_rows(profile_table, group_table, aggregator_table=None):
+def _build_rows(profile_table, group_table, aggregator_table=None, histogram_table=None):
     group_index = _index_groups(group_table)
     aggregator_table = aggregator_table or {}
+    histogram_index = _index_histograms(histogram_table or {})
     used_aggregators = set()
     rows = []
 
@@ -101,10 +106,12 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
             aggregator_table.get(aggregator_name, {})
             if aggregator_name != DEFAULT_CELL_PLACEHOLDER else {}
         )
-        aggregator_fields = _format_aggregator(aggregator)
-        reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, heatmap_buckets = (
-            aggregator_fields
+        aggregator_fields = _format_aggregator(
+            aggregator,
+            histogram_index.get(aggregator_name, [])
         )
+        reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, \
+            heatmap_default_buckets, explicit_bounds = aggregator_fields
         groups = group_index.get(profile_name)
 
         if not groups:
@@ -120,7 +127,8 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
                 rollover_counters,
                 heatmap_interval,
                 heatmap_counters,
-                heatmap_buckets
+                heatmap_default_buckets,
+                explicit_bounds
             ])
             continue
 
@@ -137,16 +145,17 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
                 rollover_counters if idx == 0 else '',
                 heatmap_interval if idx == 0 else '',
                 heatmap_counters if idx == 0 else '',
-                heatmap_buckets if idx == 0 else ''
+                heatmap_default_buckets if idx == 0 else '',
+                explicit_bounds if idx == 0 else ''
             ])
 
     for aggregator_name in natsorted(set(aggregator_table.keys()) - used_aggregators):
         aggregator_fields = _format_aggregator(
-            aggregator_table.get(aggregator_name, {})
+            aggregator_table.get(aggregator_name, {}),
+            histogram_index.get(aggregator_name, [])
         )
-        reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, heatmap_buckets = (
-            aggregator_fields
-        )
+        reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, \
+            heatmap_default_buckets, explicit_bounds = aggregator_fields
         rows.append([
             DEFAULT_CELL_PLACEHOLDER,
             DEFAULT_CELL_PLACEHOLDER,
@@ -159,21 +168,54 @@ def _build_rows(profile_table, group_table, aggregator_table=None):
             rollover_counters,
             heatmap_interval,
             heatmap_counters,
-            heatmap_buckets
+            heatmap_default_buckets,
+            explicit_bounds
         ])
 
     return rows
 
 
-def _format_aggregator(aggregator):
+def _format_aggregator(aggregator, histograms=None):
     reporting_rate = _format_poll_interval(aggregator.get('reporting_rate', DEFAULT_CELL_PLACEHOLDER))
     rollover_counters = _format_list(aggregator.get('rollover_counters')) or DEFAULT_CELL_PLACEHOLDER
     heatmap_interval = _format_poll_interval(
         aggregator.get('heatmap_interval', DEFAULT_CELL_PLACEHOLDER)
     )
     heatmap_counters = _format_list(aggregator.get('heatmap_counters')) or DEFAULT_CELL_PLACEHOLDER
-    heatmap_buckets = _format_list(aggregator.get('heatmap_bucket_boundaries')) or DEFAULT_CELL_PLACEHOLDER
-    return reporting_rate, rollover_counters, heatmap_interval, heatmap_counters, heatmap_buckets
+    default_bucket_count = aggregator.get('heatmap_default_bucket_count')
+    if (default_bucket_count is None and
+            heatmap_interval != DEFAULT_CELL_PLACEHOLDER and
+            heatmap_counters != DEFAULT_CELL_PLACEHOLDER):
+        default_bucket_count = DEFAULT_HEATMAP_BUCKET_COUNT
+    heatmap_default_buckets = _format_poll_interval(default_bucket_count)
+    explicit_bounds = '\n'.join(histograms or []) or DEFAULT_CELL_PLACEHOLDER
+    return (
+        reporting_rate,
+        rollover_counters,
+        heatmap_interval,
+        heatmap_counters,
+        heatmap_default_buckets,
+        explicit_bounds
+    )
+
+
+def _index_histograms(histogram_table):
+    index = {}
+    for composite_key, attributes in histogram_table.items():
+        aggregator_name, group_type, counter_name = _split_histogram_key(composite_key)
+        if not aggregator_name or not group_type or not counter_name:
+            continue
+
+        bounds = ','.join(_ensure_list((attributes or {}).get('explicit_bounds')))
+        if not bounds:
+            continue
+        index.setdefault(aggregator_name, []).append(
+            '{}|{}: {}'.format(group_type, counter_name, bounds)
+        )
+
+    for histograms in index.values():
+        histograms.sort()
+    return index
 
 
 def _index_groups(group_table):
@@ -210,6 +252,21 @@ def _split_group_key(key):
             return parts[0], parts[1]
 
     return None, None
+
+
+def _split_histogram_key(key):
+    if not key:
+        return None, None, None
+
+    if isinstance(key, (tuple, list)) and len(key) == 3:
+        return key[0], key[1], key[2]
+
+    if isinstance(key, str):
+        parts = key.split('|')
+        if len(parts) == 3:
+            return parts[0], parts[1], parts[2]
+
+    return None, None, None
 
 
 def _format_list(value):

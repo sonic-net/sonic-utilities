@@ -10,14 +10,17 @@ TEMP_FILE_SUFFIX = ".json"
 DEFAULT_STREAM_STATE = "disabled"
 STREAM_STATE_CHOICES = ("enabled", "disabled")
 DEFAULT_POLL_INTERVAL_USEC = 10000  # microseconds
+DEFAULT_HEATMAP_BUCKET_COUNT = 256
 GROUP_TYPE_CHOICES = ("PORT", "BUFFER_POOL", "INGRESS_PRIORITY_GROUP", "QUEUE")
 
 PROFILE_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_PROFILE"
 GROUP_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_GROUP"
 AGGREGATOR_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR"
+AGGREGATOR_HISTOGRAM_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM"
 PROFILE_TABLE_PATH = f"/{PROFILE_TABLE_NAME}"
 GROUP_TABLE_PATH = f"/{GROUP_TABLE_NAME}"
 AGGREGATOR_TABLE_PATH = f"/{AGGREGATOR_TABLE_NAME}"
+AGGREGATOR_HISTOGRAM_TABLE_PATH = f"/{AGGREGATOR_HISTOGRAM_TABLE_NAME}"
 STREAM_STATE_FIELD = "stream_state"
 
 
@@ -50,6 +53,7 @@ def hft_disable(ctx, profile_name):
 @click.pass_context
 def hft_bind_aggregator(ctx, profile_name, aggregator_name):
     """Bind an existing aggregator to an HFT profile."""
+    _validate_aggregator_name(aggregator_name)
     payload = _build_profile_field_patch(profile_name, "aggregator", aggregator_name)
     _process_payload(ctx, payload)
 
@@ -81,6 +85,8 @@ def hft_add():
 @click.pass_context
 def hft_add_profile(ctx, profile_name, stream_state, poll_interval, aggregator):
     """Create a profile entry for HFT."""
+    if aggregator is not None:
+        _validate_aggregator_name(aggregator, '--aggregator')
     if _has_existing_profile(ctx):
         click.echo(
             "A profile already exists; this version supports only one profile. "
@@ -139,27 +145,30 @@ def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
               help='Independent heatmap interval in microseconds.')
 @click.option('--heatmap_counters', 'heatmap_counters', default=None,
               help='Comma-separated list of GROUP|COUNTER entries treated as heatmap data.')
-@click.option('--heatmap_bucket_boundaries', 'heatmap_bucket_boundaries', default=None,
-              help='Comma-separated inclusive upper bounds shared by all heatmap counters.')
+@click.option('--heatmap_default_bucket_count', 'heatmap_default_bucket_count', default=None,
+              type=click.IntRange(min=4, max=512),
+              help='Default bucket count for heatmap counters (defaults to 256 when enabled).')
 @click.pass_context
 def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
-                       heatmap_interval, heatmap_counters, heatmap_bucket_boundaries):
+                       heatmap_interval, heatmap_counters, heatmap_default_bucket_count):
     """Create an aggregator definition for HFT."""
+    _validate_aggregator_name(aggregator_name)
     heatmap_counters = (
         None if heatmap_counters is None else _split_csv_items(heatmap_counters)
     )
-    heatmap_bucket_boundaries = _parse_heatmap_bucket_boundaries(
-        heatmap_bucket_boundaries
-    )
-    heatmap_fields = (
-        heatmap_interval is not None,
-        bool(heatmap_counters),
-        bool(heatmap_bucket_boundaries),
-    )
-    if any(heatmap_fields) and not all(heatmap_fields):
+    if heatmap_counters is not None and not heatmap_counters:
+        raise click.BadParameter(
+            'must contain at least one GROUP|COUNTER entry',
+            param_hint='--heatmap_counters'
+        )
+    if (heatmap_interval is None) != (heatmap_counters is None):
         raise click.UsageError(
-            '--heatmap_interval, --heatmap_counters, and --heatmap_bucket_boundaries '
-            'must be configured together.'
+            '--heatmap_interval and nonempty --heatmap_counters must be configured together.'
+        )
+    if heatmap_default_bucket_count is not None and heatmap_interval is None:
+        raise click.UsageError(
+            '--heatmap_default_bucket_count requires --heatmap_interval and '
+            'nonempty --heatmap_counters.'
         )
 
     attributes = {}
@@ -169,12 +178,10 @@ def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
         attributes["rollover_counters"] = _split_csv_items(rollover_counters)
     if heatmap_interval is not None:
         attributes["heatmap_interval"] = str(heatmap_interval)
-    if heatmap_counters is not None:
         attributes["heatmap_counters"] = heatmap_counters
-    if heatmap_bucket_boundaries is not None:
-        attributes["heatmap_bucket_boundaries"] = [
-            str(boundary) for boundary in heatmap_bucket_boundaries
-        ]
+        attributes["heatmap_default_bucket_count"] = str(
+            heatmap_default_bucket_count or DEFAULT_HEATMAP_BUCKET_COUNT
+        )
 
     aggregator_payload = _build_aggregator_patch(
         op="add",
@@ -183,6 +190,29 @@ def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
         attributes=attributes
     )
     _process_payload(ctx, aggregator_payload)
+
+
+@hft_add.command('histogram', short_help="Add per-counter HFT histogram bounds")
+@click.argument('aggregator_name')
+@click.option('--counter', 'counter', required=True,
+              help='Heatmap counter selector in GROUP|COUNTER form.')
+@click.option('--explicit_bounds', 'explicit_bounds', required=True,
+              help='Comma-separated explicit histogram bounds.')
+@click.pass_context
+def hft_add_histogram(ctx, aggregator_name, counter, explicit_bounds):
+    """Create explicit histogram bounds for one aggregator counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, '--counter')
+    bounds = _parse_explicit_bounds(explicit_bounds)
+    histogram_payload = _build_histogram_patch(
+        op="add",
+        aggregator_name=aggregator_name,
+        group_type=group_type,
+        counter_name=counter_name,
+        table_exists=_has_table(ctx, AGGREGATOR_HISTOGRAM_TABLE_NAME),
+        attributes={"explicit_bounds": [str(boundary) for boundary in bounds]}
+    )
+    _process_payload(ctx, histogram_payload)
 
 
 @hft.group('del', short_help="Remove HFT resources")
@@ -216,6 +246,7 @@ def hft_delete_group(ctx, profile_name, group_type):
 @click.pass_context
 def hft_delete_aggregator(ctx, aggregator_name):
     """Remove an existing HFT aggregator."""
+    _validate_aggregator_name(aggregator_name)
     profile_users = _get_aggregator_users(ctx, aggregator_name)
     if profile_users:
         click.echo(
@@ -231,8 +262,42 @@ def hft_delete_aggregator(ctx, aggregator_name):
         ctx.exit(1)
 
     remove_entire_table = _is_last_entry(ctx, AGGREGATOR_TABLE_NAME)
-    aggregator_payload = _build_aggregator_remove_patch(aggregator_name, remove_entire_table)
+    aggregator_payload = _build_histogram_children_remove_patch(ctx, aggregator_name)
+    aggregator_payload.extend(
+        _build_aggregator_remove_patch(aggregator_name, remove_entire_table)
+    )
     _process_payload(ctx, aggregator_payload)
+
+
+@hft_delete.command('histogram', short_help="Delete per-counter HFT histogram bounds")
+@click.argument('aggregator_name')
+@click.argument('counter')
+@click.pass_context
+def hft_delete_histogram(ctx, aggregator_name, counter):
+    """Remove explicit histogram bounds for one aggregator counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, 'counter')
+    histogram_key = _compose_histogram_key(
+        aggregator_name,
+        group_type,
+        counter_name
+    )
+    histogram_keys = _get_normalized_table_keys(
+        ctx,
+        AGGREGATOR_HISTOGRAM_TABLE_NAME
+    )
+    if histogram_key not in histogram_keys:
+        click.echo("Histogram '{}' does not exist.".format(histogram_key))
+        ctx.exit(1)
+
+    remove_entire_table = len(histogram_keys) == 1
+    histogram_payload = _build_histogram_remove_patch(
+        aggregator_name,
+        group_type,
+        counter_name,
+        remove_entire_table
+    )
+    _process_payload(ctx, histogram_payload)
 
 
 def _process_payload(ctx, payload):
@@ -280,30 +345,75 @@ def _split_csv_items(value):
     return [item.strip() for item in value.split(',') if item.strip()]
 
 
-def _parse_heatmap_bucket_boundaries(value):
-    """Parse strictly increasing uint64 heatmap bucket upper bounds."""
-    if value is None:
-        return None
+def _validate_aggregator_name(aggregator_name, param_hint='aggregator_name'):
+    """Reject names that cannot be represented in a histogram composite key."""
+    if aggregator_name != aggregator_name.strip():
+        raise click.BadParameter(
+            'must not have leading or trailing whitespace',
+            param_hint=param_hint
+        )
+    if '|' in aggregator_name:
+        raise click.BadParameter(
+            "must not contain '|'",
+            param_hint=param_hint
+        )
+
+
+def _parse_counter_selector(value, param_hint):
+    """Parse a GROUP|COUNTER selector without validating the SAI counter name."""
+    parts = value.split('|') if value is not None else []
+    if len(parts) != 2:
+        raise click.BadParameter(
+            'must use GROUP|COUNTER format',
+            param_hint=param_hint
+        )
+
+    group_type, counter_name = (part.strip() for part in parts)
+    if group_type not in GROUP_TYPE_CHOICES:
+        raise click.BadParameter(
+            'GROUP must be one of {}'.format(', '.join(GROUP_TYPE_CHOICES)),
+            param_hint=param_hint
+        )
+    if not counter_name:
+        raise click.BadParameter(
+            'COUNTER must be nonempty',
+            param_hint=param_hint
+        )
+    return group_type, counter_name
+
+
+def _parse_explicit_bounds(value):
+    """Parse 1..511 strictly increasing decimal bounds in the exact OTLP range."""
+    items = [item.strip() for item in value.split(',')]
+    if not 1 <= len(items) <= 511:
+        raise click.BadParameter(
+            'must contain between 1 and 511 values',
+            param_hint='--explicit_bounds'
+        )
+    if any(not item or not item.isascii() or not item.isdigit() for item in items):
+        raise click.BadParameter(
+            'must be a comma-separated list of uint64 decimal values',
+            param_hint='--explicit_bounds'
+        )
 
     try:
-        boundaries = [int(item) for item in _split_csv_items(value)]
+        bounds = [int(item, 10) for item in items]
     except ValueError as error:
         raise click.BadParameter(
-            'must be a comma-separated list of uint64 values',
-            param_hint='--heatmap_bucket_boundaries'
+            'must be a comma-separated list of uint64 decimal values',
+            param_hint='--explicit_bounds'
         ) from error
-
-    if any(boundary < 0 or boundary > 2**53 for boundary in boundaries):
+    if any(boundary > 2**53 for boundary in bounds):
         raise click.BadParameter(
             'values must be between 0 and 2^53 for exact OTLP encoding',
-            param_hint='--heatmap_bucket_boundaries'
+            param_hint='--explicit_bounds'
         )
-    if any(left >= right for left, right in zip(boundaries, boundaries[1:])):
+    if any(left >= right for left, right in zip(bounds, bounds[1:])):
         raise click.BadParameter(
             'values must be strictly increasing',
-            param_hint='--heatmap_bucket_boundaries'
+            param_hint='--explicit_bounds'
         )
-    return boundaries
+    return bounds
 
 
 def _build_profile_patch(op, profile_name, attributes):
@@ -342,6 +452,25 @@ def _build_aggregator_patch(op, aggregator_name, attributes, table_exists=False)
     return [
         _build_patch_entry(op, AGGREGATOR_TABLE_PATH, {
             aggregator_name: attributes
+        })
+    ]
+
+
+def _build_histogram_patch(op, aggregator_name, group_type, counter_name,
+                           attributes, table_exists=False):
+    """Construct a JSON Patch entry targeting the aggregator histogram table."""
+    histogram_key = _compose_histogram_key(aggregator_name, group_type, counter_name)
+    if table_exists:
+        return [
+            _build_patch_entry(
+                op,
+                _join_pointer(AGGREGATOR_HISTOGRAM_TABLE_PATH, histogram_key),
+                attributes
+            )
+        ]
+    return [
+        _build_patch_entry(op, AGGREGATOR_HISTOGRAM_TABLE_PATH, {
+            histogram_key: attributes
         })
     ]
 
@@ -400,6 +529,39 @@ def _build_aggregator_remove_patch(aggregator_name, remove_entire_table):
     return [_build_remove_entry(_join_pointer(AGGREGATOR_TABLE_PATH, aggregator_name))]
 
 
+def _build_histogram_remove_patch(aggregator_name, group_type, counter_name,
+                                  remove_entire_table):
+    """Create a remove operation for a histogram entry or its entire table."""
+    if remove_entire_table:
+        return [_build_remove_entry(AGGREGATOR_HISTOGRAM_TABLE_PATH)]
+    histogram_key = _compose_histogram_key(aggregator_name, group_type, counter_name)
+    return [
+        _build_remove_entry(
+            _join_pointer(AGGREGATOR_HISTOGRAM_TABLE_PATH, histogram_key)
+        )
+    ]
+
+
+def _build_histogram_children_remove_patch(ctx, aggregator_name):
+    """Remove all histogram rows owned by an aggregator."""
+    prefix = f"{aggregator_name}|"
+    all_histogram_keys = _get_normalized_table_keys(
+        ctx,
+        AGGREGATOR_HISTOGRAM_TABLE_NAME
+    )
+    histogram_keys = sorted(
+        key for key in all_histogram_keys if key.startswith(prefix)
+    )
+    if not histogram_keys:
+        return []
+    if len(histogram_keys) == len(all_histogram_keys):
+        return [_build_remove_entry(AGGREGATOR_HISTOGRAM_TABLE_PATH)]
+    return [
+        _build_remove_entry(_join_pointer(AGGREGATOR_HISTOGRAM_TABLE_PATH, key))
+        for key in histogram_keys
+    ]
+
+
 def _build_patch_entry(op, path, value):
     """Wrap a JSON Patch add/replace entry."""
     return {
@@ -420,6 +582,18 @@ def _build_remove_entry(path):
 def _compose_group_key(profile_name, group_type):
     """Compose the key used by the HFT group table."""
     return f"{profile_name}|{group_type}"
+
+
+def _compose_histogram_key(aggregator_name, group_type, counter_name):
+    """Compose the key used by the aggregator histogram table."""
+    return f"{aggregator_name}|{group_type}|{counter_name}"
+
+
+def _stringify_composite_key(key):
+    """Normalize Config DB tuple and string composite keys."""
+    if isinstance(key, (tuple, list)):
+        return '|'.join(str(component) for component in key)
+    return str(key)
 
 
 def _join_pointer(base_path, key):
@@ -475,6 +649,18 @@ def _has_table(ctx, table_name):
         return bool(cfgdb.get_table(table_name))
     except Exception:
         return False
+
+
+def _get_normalized_table_keys(ctx, table_name):
+    """Return Config DB table keys normalized to pipe-delimited strings."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return []
+    try:
+        entries = cfgdb.get_table(table_name) or {}
+    except Exception:
+        return []
+    return [_stringify_composite_key(key) for key in entries]
 
 
 def _has_table_entry(ctx, table_name, entry_name):
