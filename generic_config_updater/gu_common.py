@@ -537,7 +537,11 @@ class PathAddressing:
         # TODO: Also fetch references by must statement (check similar statements)
         sy = self._create_sonic_yang_with_loaded_models()
 
-        if reload_config:
+        # 202511 note: unlike master, this branch's _get_inner_leaf_xpaths()
+        # dereferences sy.root, so the data must be loaded even when the
+        # caller passes reload_config=False (e.g. the recursive
+        # __remove_dependents path). Load whenever nothing is loaded yet.
+        if reload_config or sy.root is None:
             sy.loadData(config)
 
         # Force to be a list
