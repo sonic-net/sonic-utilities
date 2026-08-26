@@ -1,7 +1,6 @@
 import ipaddress
 import os
 import re
-import shlex
 import subprocess
 import time
 from .gu_common import genericUpdaterLogging
@@ -25,17 +24,19 @@ def set_verbose(verbose=False):
 def command_wrapper(command):
     """
     Wrapper for system commands to support GCU in container.
+
+    Args:
+        command: Command as a list of strings, e.g. ["systemctl", "restart", "foo"].
+                 Passing a list avoids the fragile build-string/shlex-split round-trip.
     """
-    if "systemctl" in command:
-        command = f"nsenter --target 1 --pid --mount --uts --ipc --net {command}"
+    if command[0] == "systemctl":
+        command = ["nsenter", "--target", "1", "--pid", "--mount", "--uts", "--ipc", "--net"] + command
     try:
-        # Split command into arguments for shell=False
-        cmd_args = shlex.split(command)
-        result = subprocess.run(cmd_args, capture_output=True, check=False, text=True)
+        result = subprocess.run(command, capture_output=True, check=False, text=True)
 
         if result.returncode != 0:
             logger.log(logger.LOG_PRIORITY_ERROR,
-                       f"Command failed: '{command}', returncode: {result.returncode}",
+                       f"Command failed: {command!r}, returncode: {result.returncode}",
                        print_to_console)
             if result.stdout:
                 logger.log(logger.LOG_PRIORITY_ERROR,
@@ -55,16 +56,16 @@ def command_wrapper(command):
 
 
 def _service_restart(svc_name):
-    rc = command_wrapper(f"systemctl restart {svc_name}")
+    rc = command_wrapper(["systemctl", "restart", svc_name])
     if rc != 0:
         # This failure is likely due to too many restarts
         #
-        rc = command_wrapper(f"systemctl reset-failed {svc_name}")
+        rc = command_wrapper(["systemctl", "reset-failed", svc_name])
         logger.log(logger.LOG_PRIORITY_ERROR, 
                 f"Service has been reset. rc={rc}; Try restart again...",
                 print_to_console)
 
-        rc = command_wrapper(f"systemctl restart {svc_name}")
+        rc = command_wrapper(["systemctl", "restart", svc_name])
         if rc != 0:
             # Even with reset-failed, restart fails.
             # Give a pause before retry.
@@ -73,7 +74,7 @@ def _service_restart(svc_name):
                     f"Restart failed for {svc_name} rc={rc} after reset; Pause for 10s & retry",
                     print_to_console)
             time.sleep(10)
-            rc = command_wrapper(f"systemctl restart {svc_name}")
+            rc = command_wrapper(["systemctl", "restart", svc_name])
 
     if rc == 0:
         logger.log(logger.LOG_PRIORITY_NOTICE,
@@ -91,8 +92,8 @@ def rsyslog_validator(old_config, upd_config, keys):
     upd_syslog = upd_config.get("SYSLOG_SERVER", {})
 
     if old_syslog != upd_syslog:
-        command_wrapper("systemctl reset-failed rsyslog-config rsyslog")
-        rc = command_wrapper("systemctl restart rsyslog-config")
+        command_wrapper(["systemctl", "reset-failed", "rsyslog-config", "rsyslog"])
+        rc = command_wrapper(["systemctl", "restart", "rsyslog-config"])
         if rc != 0:
             return False
     return True
@@ -216,7 +217,7 @@ def vlanintf_validator(old_config, upd_config, keys):
                        "vlanintf_validator: Invalid VLAN interface address",
                        print_to_console)
             continue
-        rc = command_wrapper(f"ip neigh flush dev {iface} {iface_ip}")
+        rc = command_wrapper(["ip", "neigh", "flush", "dev", iface, iface_ip])
         if rc:
             logger.log(logger.LOG_PRIORITY_ERROR,
                        f"vlanintf_validator: Failed to flush neighbors for {iface} {iface_ip}, returncode={rc}",
