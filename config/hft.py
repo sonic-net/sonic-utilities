@@ -155,6 +155,11 @@ def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
                        heatmap_interval, heatmap_counters, heatmap_default_bucket_count):
     """Create an aggregator definition for HFT."""
     _validate_aggregator_name(aggregator_name)
+    aggregator_entries = _get_table_or_fail(ctx, AGGREGATOR_TABLE_NAME)
+    if aggregator_name in {_stringify_composite_key(key) for key in aggregator_entries}:
+        raise click.ClickException(
+            "Aggregator '{}' already exists.".format(aggregator_name)
+        )
     heatmap_counters = (
         None if heatmap_counters is None else _split_csv_items(heatmap_counters)
     )
@@ -188,7 +193,7 @@ def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
     aggregator_payload = _build_aggregator_patch(
         op="add",
         aggregator_name=aggregator_name,
-        table_exists=_has_table(ctx, AGGREGATOR_TABLE_NAME),
+        table_exists=bool(aggregator_entries),
         attributes=attributes
     )
     _process_payload(ctx, aggregator_payload)
@@ -730,6 +735,19 @@ def _get_cfgdb(ctx):
     if db is None:
         return None
     return getattr(db, 'cfgdb', None)
+
+
+def _get_table_or_fail(ctx, table_name):
+    """Read a Config DB table or fail before constructing a mutation."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return {}
+    try:
+        return cfgdb.get_table(table_name) or {}
+    except Exception as error:
+        raise click.ClickException(
+            "Failed to read Config DB table '{}': {}".format(table_name, error)
+        ) from error
 
 
 def _has_existing_profile(ctx):

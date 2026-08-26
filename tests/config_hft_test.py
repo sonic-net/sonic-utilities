@@ -564,7 +564,7 @@ class TestConfigHftCli:
         }]
 
     def test_add_aggregator_preserves_existing_table_entries(self):
-        with patch('config.hft._has_table', return_value=True), \
+        with patch('config.hft._get_table_or_fail', return_value={'ag0': {}}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -578,6 +578,58 @@ class TestConfigHftCli:
             'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR/ag1',
             'value': {'reporting_rate': '1000'}
         }]
+
+    def test_add_aggregator_rejects_existing_entry_before_patch(self):
+        class MockCfgDb:
+            def get_table(self, name):
+                return {
+                    config_hft.AGGREGATOR_TABLE_NAME: {
+                        'ag0': {
+                            'heatmap_interval': '1000000',
+                            'heatmap_counters': ['PORT|IF_OUT_OCTETS']
+                        }
+                    },
+                    config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME: {
+                        'ag0|PORT|IF_OUT_OCTETS': {'explicit_bounds': ['0', '1024']}
+                    },
+                    config_hft.AGGREGATOR_ROLLOVER_TABLE_NAME: {
+                        'ag0|PORT|IF_IN_OCTETS': {'bit_width': '48'}
+                    }
+                }.get(name, {})
+
+        obj = type('Obj', (), {'cfgdb': MockCfgDb()})
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                [
+                    'add', 'aggregator', 'ag0',
+                    '--heatmap_interval', '1000000',
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS'
+                ],
+                obj=obj
+            )
+
+        assert result.exit_code == 1
+        assert "Aggregator 'ag0' already exists." in result.output
+        mock_process.assert_not_called()
+
+    def test_add_aggregator_fails_closed_when_table_read_fails(self):
+        class MockCfgDb:
+            def get_table(self, _name):
+                raise RuntimeError('database unavailable')
+
+        obj = type('Obj', (), {'cfgdb': MockCfgDb()})
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['add', 'aggregator', 'ag0', '--reporting_rate', '1000'],
+                obj=obj
+            )
+
+        assert result.exit_code == 1
+        assert "Failed to read Config DB table" in result.output
+        assert 'database unavailable' in result.output
+        mock_process.assert_not_called()
 
     def test_enable_profile_sets_stream_state_patch(self):
         with patch('config.hft._process_payload') as mock_process:
