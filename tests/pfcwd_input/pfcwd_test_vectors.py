@@ -61,16 +61,6 @@ Ethernet4      drop               200                 200    disable
 Ethernet8      drop               600                 600    disable
 """
 
-# 32-port system: multiply=1, detection/restoration=200, poll=200ms (same as default)
-pfcwd_show_start_default_32_ports = """\
-Changed polling interval to 200ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
----------  --------  ----------------  ------------------  ---------
-Ethernet0      drop               200                 200    disable
-Ethernet4      drop               200                 200    disable
-Ethernet8      drop               600                 600    disable
-"""
-
 pfcwd_show_start_history_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
