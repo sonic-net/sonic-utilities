@@ -7639,6 +7639,36 @@ The show interface errors command provides detailed statistics and error counter
   no_rx_reachability                 0               Never
   ```
 
+**show interfaces l1-summary**
+
+The show interfaces l1-summary command aggregates the layer-1 health of each interface into a single view: operational mode (speed/lane count), FEC, pre-FEC BER, oper/admin status, local/remote fault status, transceiver vendor and model, media interface, and link flap history. It combines information that would otherwise require running show interfaces status, show interfaces transceiver, show interfaces errors and show interfaces flap separately.
+
+- Usage:
+  ```
+  show interfaces l1-summary [OPTIONS] [<interface_name>]
+
+  Options:
+  -d, --display [all|frontend]   Show internal interfaces  [default: frontend]
+  -n, --namespace <namespace>    Namespace name or all
+  --verbose                      Enable verbose output
+  -?, -h, --help                 Show this message and exit.
+  ```
+- Example:
+  ```
+  admin@sonic:~$ show interfaces l1-summary
+    Interface    Alias     Mode    FEC    Pre-FEC BER    Oper    Admin    Fault                    Transceiver    Media Interface    Flaps          Last Up        Last Down
+  -----------  -------  -------  -----  -------------  ------  -------  -------  -----------------------------  -----------------  -------  ---------------  ---------------
+    Ethernet0    Port1  1600G/8     rs       3.94e-08      up       up     none           TERAHOP T-OH8ENH-N00       200GBASE-DR1        1  Jan 06 22:48:57              N/A
+    Ethernet8    Port2  1600G/8     rs       1.11e-07      up       up     none           TERAHOP T-OH8ENH-N00       200GBASE-DR1        1  Jan 06 22:48:57              N/A
+   Ethernet32    Port5  1600G/8     rs       6.06e-10    down       up    local    FINISAR CORP. FTCF2519T6PCA       800GBASE-DR4        3  Jan 06 22:49:03  Jan 07 04:12:44
+  ```
+- Example (to display a specific interface):
+  ```
+  admin@sonic:~$ show interfaces l1-summary Ethernet0
+    Interface    Alias     Mode    FEC    Pre-FEC BER    Oper    Admin    Fault             Transceiver    Media Interface    Flaps          Last Up    Last Down
+  -----------  -------  -------  -----  -------------  ------  -------  -------  ----------------------  -----------------  -------  ---------------  -----------
+    Ethernet0    Port1  1600G/8     rs       3.94e-08      up       up     none    TERAHOP T-OH8ENH-N00       200GBASE-DR1        1  Jan 06 22:48:57          N/A
+  ```
 
 **show interfaces mpls**
 
