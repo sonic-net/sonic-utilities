@@ -93,7 +93,7 @@ def poe_status(db):
         total_pwr = _get_value(fv_list.get('total_pwr'))
         pwr_consump = _get_value(fv_list.get('pwr_consump'))
         pwr_avail = N_A
-        if total_pwr is not N_A and pwr_consump is not N_A:
+        if total_pwr != N_A and pwr_consump != N_A:
             pwr_avail = str(float(total_pwr) - float(pwr_consump))
         row = [
             key.split(delimiter)[1],
