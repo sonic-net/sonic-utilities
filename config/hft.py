@@ -10,7 +10,6 @@ TEMP_FILE_SUFFIX = ".json"
 DEFAULT_STREAM_STATE = "disabled"
 STREAM_STATE_CHOICES = ("enabled", "disabled")
 DEFAULT_POLL_INTERVAL_USEC = 10000  # microseconds
-DEFAULT_HEATMAP_BUCKET_COUNT = 256
 GROUP_TYPE_CHOICES = ("PORT", "BUFFER_POOL", "INGRESS_PRIORITY_GROUP", "QUEUE")
 
 PROFILE_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_PROFILE"
@@ -80,7 +79,7 @@ def hft_add():
               type=click.Choice(STREAM_STATE_CHOICES), show_default=True,
               help='Desired stream state for this profile.')
 @click.option('--poll_interval', 'poll_interval', default=DEFAULT_POLL_INTERVAL_USEC,
-              type=click.IntRange(min=0), show_default=True,
+              type=click.IntRange(min=1, max=2**32 - 1), show_default=True,
               help='Polling interval in microseconds.')
 @click.option('--aggregator', 'aggregator', default=None,
               help='Optional aggregator name to apply to this profile.')
@@ -89,7 +88,7 @@ def hft_add_profile(ctx, profile_name, stream_state, poll_interval, aggregator):
     """Create a profile entry for HFT."""
     if aggregator is not None:
         _validate_aggregator_name(aggregator, '--aggregator')
-    if _has_existing_profile(ctx):
+    if _get_table_or_fail(ctx, PROFILE_TABLE_NAME):
         click.echo(
             "A profile already exists; this version supports only one profile. "
             "Delete the existing profile before adding another."
@@ -122,11 +121,12 @@ def hft_add_profile(ctx, profile_name, stream_state, poll_interval, aggregator):
 @click.pass_context
 def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
     """Create a group definition under an HFT profile."""
+    group_entries = _get_table_or_fail(ctx, GROUP_TABLE_NAME)
     group_payload = _build_group_patch(
         op="add",
         profile_name=profile_name,
         group_type=group_type,
-        table_exists=_has_table(ctx, GROUP_TABLE_NAME),
+        table_exists=bool(group_entries),
         attributes={
             "object_names": _split_csv_items(object_names),
             "object_counters": _split_csv_items(object_counters),
@@ -147,12 +147,9 @@ def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
               help='Independent heatmap interval in microseconds.')
 @click.option('--heatmap_counters', 'heatmap_counters', default=None,
               help='Comma-separated list of GROUP|COUNTER entries treated as heatmap data.')
-@click.option('--heatmap_default_bucket_count', 'heatmap_default_bucket_count', default=None,
-              type=click.IntRange(min=4, max=512),
-              help='Default bucket count for heatmap counters (defaults to 256 when enabled).')
 @click.pass_context
 def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
-                       heatmap_interval, heatmap_counters, heatmap_default_bucket_count):
+                       heatmap_interval, heatmap_counters):
     """Create an aggregator definition for HFT."""
     _validate_aggregator_name(aggregator_name)
     aggregator_entries = _get_table_or_fail(ctx, AGGREGATOR_TABLE_NAME)
@@ -172,11 +169,6 @@ def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
         raise click.UsageError(
             '--heatmap_interval and nonempty --heatmap_counters must be configured together.'
         )
-    if heatmap_default_bucket_count is not None and heatmap_interval is None:
-        raise click.UsageError(
-            '--heatmap_default_bucket_count requires --heatmap_interval and '
-            'nonempty --heatmap_counters.'
-        )
 
     attributes = {}
     if reporting_rate is not None:
@@ -186,9 +178,6 @@ def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
     if heatmap_interval is not None:
         attributes["heatmap_interval"] = str(heatmap_interval)
         attributes["heatmap_counters"] = heatmap_counters
-        attributes["heatmap_default_bucket_count"] = str(
-            heatmap_default_bucket_count or DEFAULT_HEATMAP_BUCKET_COUNT
-        )
 
     aggregator_payload = _build_aggregator_patch(
         op="add",
@@ -204,19 +193,21 @@ def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
 @click.option('--counter', 'counter', required=True,
               help='Heatmap counter selector in GROUP|COUNTER form.')
 @click.option('--explicit_bounds', 'explicit_bounds', required=True,
-              help='Comma-separated explicit histogram bounds.')
+              help='Comma-separated histogram upper bounds in raw counter units: '
+                   '1..511 strictly increasing values, each in 0..2^53 inclusive.')
 @click.pass_context
 def hft_add_histogram(ctx, aggregator_name, counter, explicit_bounds):
     """Create explicit histogram bounds for one aggregator counter."""
     _validate_aggregator_name(aggregator_name)
     group_type, counter_name = _parse_counter_selector(counter, '--counter')
     bounds = _parse_explicit_bounds(explicit_bounds)
+    histogram_entries = _get_table_or_fail(ctx, AGGREGATOR_HISTOGRAM_TABLE_NAME)
     histogram_payload = _build_histogram_patch(
         op="add",
         aggregator_name=aggregator_name,
         group_type=group_type,
         counter_name=counter_name,
-        table_exists=_has_table(ctx, AGGREGATOR_HISTOGRAM_TABLE_NAME),
+        table_exists=bool(histogram_entries),
         attributes={"explicit_bounds": [str(boundary) for boundary in bounds]}
     )
     _process_payload(ctx, histogram_payload)
@@ -234,12 +225,13 @@ def hft_add_rollover(ctx, aggregator_name, counter, bit_width):
     """Create a bit-width override for one aggregator rollover counter."""
     _validate_aggregator_name(aggregator_name)
     group_type, counter_name = _parse_counter_selector(counter, '--counter')
+    rollover_entries = _get_table_or_fail(ctx, AGGREGATOR_ROLLOVER_TABLE_NAME)
     rollover_payload = _build_rollover_patch(
         op="add",
         aggregator_name=aggregator_name,
         group_type=group_type,
         counter_name=counter_name,
-        table_exists=_has_table(ctx, AGGREGATOR_ROLLOVER_TABLE_NAME),
+        table_exists=bool(rollover_entries),
         attributes={"bit_width": str(bit_width)}
     )
     _process_payload(ctx, rollover_payload)
@@ -748,29 +740,6 @@ def _get_table_or_fail(ctx, table_name):
         raise click.ClickException(
             "Failed to read Config DB table '{}': {}".format(table_name, error)
         ) from error
-
-
-def _has_existing_profile(ctx):
-    """Return True when at least one HFT profile already exists."""
-    cfgdb = _get_cfgdb(ctx)
-    if cfgdb is None:
-        return False
-    try:
-        entries = cfgdb.get_table(PROFILE_TABLE_NAME) or {}
-    except Exception:
-        return False
-    return bool(entries)
-
-
-def _has_table(ctx, table_name):
-    """Return True when the CFG table contains at least one entry."""
-    cfgdb = _get_cfgdb(ctx)
-    if cfgdb is None:
-        return False
-    try:
-        return bool(cfgdb.get_table(table_name))
-    except Exception:
-        return False
 
 
 def _get_normalized_table_keys(ctx, table_name):

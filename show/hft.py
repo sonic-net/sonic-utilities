@@ -14,7 +14,6 @@ GROUP_TABLE = 'HIGH_FREQUENCY_TELEMETRY_GROUP'
 AGGREGATOR_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
 AGGREGATOR_HISTOGRAM_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM'
 AGGREGATOR_ROLLOVER_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER'
-DEFAULT_HEATMAP_BUCKET_COUNT = 256
 DEFAULT_ROLLOVER_BIT_WIDTH = 32
 DEFAULT_CELL_PLACEHOLDER = '-'
 TABLE_HEADER = [
@@ -30,7 +29,6 @@ TABLE_HEADER = [
     'Rollover Bit Widths',
     'Heatmap Interval (usec)',
     'Heatmap Counters',
-    'Heatmap Default Buckets',
     'Per-counter Explicit Bounds'
 ]
 
@@ -122,7 +120,7 @@ def _build_rows(profile_table, group_table, aggregator_table=None, histogram_tab
             rollover_index.get(aggregator_name, {})
         )
         reporting_rate, rollover_counters, rollover_bit_widths, heatmap_interval, \
-            heatmap_counters, heatmap_default_buckets, explicit_bounds = aggregator_fields
+            heatmap_counters, explicit_bounds = aggregator_fields
         groups = group_index.get(profile_name)
 
         if not groups:
@@ -139,7 +137,6 @@ def _build_rows(profile_table, group_table, aggregator_table=None, histogram_tab
                 rollover_bit_widths,
                 heatmap_interval,
                 heatmap_counters,
-                heatmap_default_buckets,
                 explicit_bounds
             ])
             continue
@@ -158,7 +155,6 @@ def _build_rows(profile_table, group_table, aggregator_table=None, histogram_tab
                 rollover_bit_widths if idx == 0 else '',
                 heatmap_interval if idx == 0 else '',
                 heatmap_counters if idx == 0 else '',
-                heatmap_default_buckets if idx == 0 else '',
                 explicit_bounds if idx == 0 else ''
             ])
 
@@ -169,7 +165,7 @@ def _build_rows(profile_table, group_table, aggregator_table=None, histogram_tab
             rollover_index.get(aggregator_name, {})
         )
         reporting_rate, rollover_counters, rollover_bit_widths, heatmap_interval, \
-            heatmap_counters, heatmap_default_buckets, explicit_bounds = aggregator_fields
+            heatmap_counters, explicit_bounds = aggregator_fields
         rows.append([
             DEFAULT_CELL_PLACEHOLDER,
             DEFAULT_CELL_PLACEHOLDER,
@@ -183,7 +179,6 @@ def _build_rows(profile_table, group_table, aggregator_table=None, histogram_tab
             rollover_bit_widths,
             heatmap_interval,
             heatmap_counters,
-            heatmap_default_buckets,
             explicit_bounds
         ])
 
@@ -206,12 +201,6 @@ def _format_aggregator(aggregator, histograms=None, rollover_overrides=None):
         aggregator.get('heatmap_interval', DEFAULT_CELL_PLACEHOLDER)
     )
     heatmap_counters = _format_list(aggregator.get('heatmap_counters')) or DEFAULT_CELL_PLACEHOLDER
-    default_bucket_count = aggregator.get('heatmap_default_bucket_count')
-    if (default_bucket_count is None and
-            heatmap_interval != DEFAULT_CELL_PLACEHOLDER and
-            heatmap_counters != DEFAULT_CELL_PLACEHOLDER):
-        default_bucket_count = DEFAULT_HEATMAP_BUCKET_COUNT
-    heatmap_default_buckets = _format_poll_interval(default_bucket_count)
     explicit_bounds = '\n'.join(histograms or []) or DEFAULT_CELL_PLACEHOLDER
     return (
         reporting_rate,
@@ -219,7 +208,6 @@ def _format_aggregator(aggregator, histograms=None, rollover_overrides=None):
         rollover_bit_widths,
         heatmap_interval,
         heatmap_counters,
-        heatmap_default_buckets,
         explicit_bounds
     )
 

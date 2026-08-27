@@ -31,13 +31,13 @@ def test_build_rows_with_mixed_profiles_and_groups():
     assert rows == [
         [
             'profile2', 'disabled', '15', '-', 'PORT', 'Ethernet0\nEthernet1',
-            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-', '-', '-'
+            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-', '-'
         ],
-        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', '', '', ''],
-        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', '', ''],
+        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
         [
             'profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-',
-            '-', '-', '-', '-', '-', '-', '-'
+            '-', '-', '-', '-', '-', '-'
         ]
     ]
 
@@ -93,7 +93,6 @@ def test_build_rows_with_aggregator_config():
         'PORT|IF_IN_UCAST_PKTS: 40\nQUEUE|DROPPED_PACKETS: 32 (default)',
         '1,000,000',
         'PORT|IF_OUT_OCTETS\nQUEUE|WRED_ECN_MARKED_PACKETS',
-        '256',
         'PORT|IF_OUT_OCTETS: 0,1250000,2500000\n'
         'QUEUE|WRED_ECN_MARKED_PACKETS: 0,64,128'
     ]]
@@ -108,8 +107,7 @@ def test_build_rows_includes_unbound_aggregator_config():
                 'reporting_rate': '5000',
                 'rollover_counters': ['PORT|IF_IN_UCAST_PKTS'],
                 'heatmap_interval': '1000000',
-                'heatmap_counters': ['PORT|IF_OUT_OCTETS'],
-                'heatmap_default_bucket_count': '128'
+                'heatmap_counters': ['PORT|IF_OUT_OCTETS']
             }
         },
         {
@@ -135,7 +133,6 @@ def test_build_rows_includes_unbound_aggregator_config():
         'PORT|IF_IN_UCAST_PKTS: 48',
         '1,000,000',
         'PORT|IF_OUT_OCTETS',
-        '128',
         'PORT|IF_OUT_OCTETS: 0,1000'
     ]]
 
@@ -183,14 +180,6 @@ def test_build_rows_ignores_unbound_rollover_child_rows():
     assert rows[0][9] == 'PORT|IF_IN_OCTETS: 32 (default)'
     assert 'IF_OUT_OCTETS' not in rows[0][9]
     assert all(row[3] != 'missing' for row in rows)
-
-
-def test_format_aggregator_only_defaults_buckets_for_configured_heatmap():
-    assert show_hft._format_aggregator({})[-2:] == ('-', '-')
-    assert show_hft._format_aggregator({
-        'heatmap_interval': '1000',
-        'heatmap_counters': ['PORT|IF_OUT_OCTETS']
-    })[-2:] == ('256', '-')
 
 
 def test_format_poll_interval_variants():
@@ -279,7 +268,6 @@ def test_display_hft_outputs_table(capsys):
     assert 'Ethernet0' in output
     assert 'BYTES' in output
     assert 'Rollover Bit Widths' in output
-    assert 'Heatmap Default Buckets' in output
     assert 'Per-counter Explicit Bounds' in output
     assert show_hft.AGGREGATOR_HISTOGRAM_TABLE in requested_tables
     assert show_hft.AGGREGATOR_ROLLOVER_TABLE in requested_tables

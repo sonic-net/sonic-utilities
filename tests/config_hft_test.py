@@ -42,9 +42,31 @@ class TestConfigHftCli:
         }]
         assert payload == expected_payload
 
+    @pytest.mark.parametrize('poll_interval', ('1', str(2**32 - 1)))
+    def test_add_profile_accepts_poll_interval_range_limits(self, poll_interval):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['add', 'profile', 'profileA', '--poll_interval', poll_interval]
+            )
+
+        assert result.exit_code == 0
+        _, payload = mock_process.call_args[0]
+        assert payload[0]['value']['profileA']['poll_interval'] == poll_interval
+
+    @pytest.mark.parametrize('poll_interval', ('0', str(2**32)))
+    def test_add_profile_rejects_poll_interval_outside_range(self, poll_interval):
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                ['add', 'profile', 'profileA', '--poll_interval', poll_interval]
+            )
+
+        assert result.exit_code == 2
+        mock_process.assert_not_called()
+
     def test_add_aggregator_splits_comma_separated_lists(self):
-        with patch('config.hft._has_table', return_value=False), \
-                patch('config.hft._process_payload') as mock_process:
+        with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
                 [
@@ -52,8 +74,7 @@ class TestConfigHftCli:
                     '--reporting_rate', '1000',
                     '--rollover_counters', 'PORT|IF_IN_UCAST_PKTS, QUEUE|DROPPED_PACKETS',
                     '--heatmap_interval', '1000000',
-                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS, QUEUE|WRED_ECN_MARKED_PACKETS',
-                    '--heatmap_default_bucket_count', '64'
+                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS, QUEUE|WRED_ECN_MARKED_PACKETS'
                 ]
             )
 
@@ -67,8 +88,7 @@ class TestConfigHftCli:
                     'reporting_rate': '1000',
                     'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
                     'heatmap_interval': '1000000',
-                    'heatmap_counters': ['PORT|IF_OUT_ERRORS', 'QUEUE|WRED_ECN_MARKED_PACKETS'],
-                    'heatmap_default_bucket_count': '64'
+                    'heatmap_counters': ['PORT|IF_OUT_ERRORS', 'QUEUE|WRED_ECN_MARKED_PACKETS']
                 }
             }
         }]
@@ -139,37 +159,10 @@ class TestConfigHftCli:
         ]
 
         for command in commands:
-            with patch('config.hft._has_table', return_value=False), \
-                    patch('config.hft._process_payload') as mock_process:
+            with patch('config.hft._process_payload') as mock_process:
                 result = self.runner.invoke(config_hft.hft, command)
             assert result.exit_code == 0
             mock_process.assert_called_once()
-
-    def test_add_aggregator_defaults_heatmap_bucket_count(self):
-        with patch('config.hft._has_table', return_value=False), \
-                patch('config.hft._process_payload') as mock_process:
-            result = self.runner.invoke(
-                config_hft.hft,
-                [
-                    'add', 'aggregator', 'ag0',
-                    '--heatmap_interval', '1000000',
-                    '--heatmap_counters', 'PORT|IF_OUT_ERRORS'
-                ]
-            )
-
-        assert result.exit_code == 0
-        _, payload = mock_process.call_args[0]
-        assert payload == [{
-            'op': 'add',
-            'path': '/HIGH_FREQUENCY_TELEMETRY_AGGREGATOR',
-            'value': {
-                'ag0': {
-                    'heatmap_interval': '1000000',
-                    'heatmap_counters': ['PORT|IF_OUT_ERRORS'],
-                    'heatmap_default_bucket_count': '256'
-                }
-            }
-        }]
 
     def test_add_aggregator_rejects_heatmap_without_interval(self):
         with patch('config.hft._process_payload') as mock_process:
@@ -211,51 +204,6 @@ class TestConfigHftCli:
         assert 'at least one' in result.output
         mock_process.assert_not_called()
 
-    def test_add_aggregator_rejects_bucket_count_without_heatmap(self):
-        with patch('config.hft._process_payload') as mock_process:
-            result = self.runner.invoke(
-                config_hft.hft,
-                ['add', 'aggregator', 'ag0', '--heatmap_default_bucket_count', '32']
-            )
-
-        assert result.exit_code == 2
-        assert 'requires --heatmap_interval' in result.output
-        mock_process.assert_not_called()
-
-    def test_add_aggregator_rejects_bucket_count_outside_range(self):
-        for value in ('3', '513'):
-            with patch('config.hft._process_payload') as mock_process:
-                result = self.runner.invoke(
-                    config_hft.hft,
-                    [
-                        'add', 'aggregator', 'ag0',
-                        '--heatmap_interval', '1000000',
-                        '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
-                        '--heatmap_default_bucket_count', value
-                    ]
-                )
-
-            assert result.exit_code == 2
-            mock_process.assert_not_called()
-
-    def test_add_aggregator_accepts_bucket_count_range_limits(self):
-        for value in ('4', '512'):
-            with patch('config.hft._has_table', return_value=False), \
-                    patch('config.hft._process_payload') as mock_process:
-                result = self.runner.invoke(
-                    config_hft.hft,
-                    [
-                        'add', 'aggregator', 'ag0',
-                        '--heatmap_interval', '1000000',
-                        '--heatmap_counters', 'PORT|IF_OUT_ERRORS',
-                        '--heatmap_default_bucket_count', value
-                    ]
-                )
-
-            assert result.exit_code == 0
-            _, payload = mock_process.call_args[0]
-            assert payload[0]['value']['ag0']['heatmap_default_bucket_count'] == value
-
     def test_add_aggregator_rejects_intervals_above_uint32(self):
         for option in ('--reporting_rate', '--heatmap_interval'):
             with patch('config.hft._process_payload') as mock_process:
@@ -268,7 +216,7 @@ class TestConfigHftCli:
             mock_process.assert_not_called()
 
     def test_add_histogram_creates_table_with_composite_key(self):
-        with patch('config.hft._has_table', return_value=False), \
+        with patch('config.hft._get_table_or_fail', return_value={}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -292,7 +240,7 @@ class TestConfigHftCli:
         }]
 
     def test_add_histogram_preserves_existing_table_entries(self):
-        with patch('config.hft._has_table', return_value=True), \
+        with patch('config.hft._get_table_or_fail', return_value={'existing': {}}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -379,7 +327,7 @@ class TestConfigHftCli:
 
     def test_add_histogram_accepts_bounds_limits(self):
         bounds = ','.join([*(str(value) for value in range(510)), str(2**53)])
-        with patch('config.hft._has_table', return_value=False), \
+        with patch('config.hft._get_table_or_fail', return_value={}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -397,7 +345,7 @@ class TestConfigHftCli:
         ][-1] == str(2**53)
 
     def test_add_rollover_creates_table_with_composite_key(self):
-        with patch('config.hft._has_table', return_value=False), \
+        with patch('config.hft._get_table_or_fail', return_value={}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -419,7 +367,7 @@ class TestConfigHftCli:
         }]
 
     def test_add_rollover_preserves_existing_table_entries(self):
-        with patch('config.hft._has_table', return_value=True), \
+        with patch('config.hft._get_table_or_fail', return_value={'existing': {}}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -443,7 +391,7 @@ class TestConfigHftCli:
 
     def test_add_rollover_accepts_bit_width_range_limits(self):
         for bit_width in ('1', '63'):
-            with patch('config.hft._has_table', return_value=False), \
+            with patch('config.hft._get_table_or_fail', return_value={}), \
                     patch('config.hft._process_payload') as mock_process:
                 result = self.runner.invoke(
                     config_hft.hft,
@@ -513,7 +461,7 @@ class TestConfigHftCli:
         mock_process.assert_not_called()
 
     def test_add_group_splits_comma_separated_lists(self):
-        with patch('config.hft._has_table', return_value=False), \
+        with patch('config.hft._get_table_or_fail', return_value={}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -540,7 +488,7 @@ class TestConfigHftCli:
         assert payload == expected_payload
 
     def test_add_group_preserves_existing_table_entries(self):
-        with patch('config.hft._has_table', return_value=True), \
+        with patch('config.hft._get_table_or_fail', return_value={'existing': {}}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
@@ -631,6 +579,63 @@ class TestConfigHftCli:
         assert 'database unavailable' in result.output
         mock_process.assert_not_called()
 
+    @pytest.mark.parametrize(
+        'table_name,command',
+        (
+            (
+                config_hft.PROFILE_TABLE_NAME,
+                ['add', 'profile', 'profileA']
+            ),
+            (
+                config_hft.GROUP_TABLE_NAME,
+                [
+                    'add', 'group', 'profileA',
+                    '--group_type', 'PORT',
+                    '--object_names', 'Ethernet0',
+                    '--object_counters', 'IF_OUT_OCTETS'
+                ]
+            ),
+            (
+                config_hft.AGGREGATOR_HISTOGRAM_TABLE_NAME,
+                [
+                    'add', 'histogram', 'ag0',
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--explicit_bounds', '0,1'
+                ]
+            ),
+            (
+                config_hft.AGGREGATOR_ROLLOVER_TABLE_NAME,
+                [
+                    'add', 'rollover', 'ag0',
+                    '--counter', 'PORT|IF_OUT_OCTETS',
+                    '--bit_width', '32'
+                ]
+            ),
+        ),
+        ids=('profile', 'group', 'histogram', 'rollover')
+    )
+    def test_add_resource_fails_closed_when_table_read_fails(self, table_name, command):
+        class MockCfgDb:
+            def get_table(self, name):
+                assert name == table_name
+                raise RuntimeError('database unavailable')
+
+        obj = type('Obj', (), {'cfgdb': MockCfgDb()})
+        with patch('config.hft._process_payload') as mock_process:
+            result = self.runner.invoke(
+                config_hft.hft,
+                command,
+                obj=obj,
+                standalone_mode=False
+            )
+
+        assert result.exit_code == 1
+        assert isinstance(result.exception, config_hft.click.ClickException)
+        assert str(result.exception) == (
+            "Failed to read Config DB table '{}': database unavailable".format(table_name)
+        )
+        mock_process.assert_not_called()
+
     def test_enable_profile_sets_stream_state_patch(self):
         with patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
@@ -679,7 +684,7 @@ class TestConfigHftCli:
         assert payload == expected_payload
 
     def test_add_profile_rejected_when_profile_already_exists(self):
-        with patch('config.hft._has_existing_profile', return_value=True), \
+        with patch('config.hft._get_table_or_fail', return_value={'existing': {}}), \
                 patch('config.hft._process_payload') as mock_process:
             result = self.runner.invoke(
                 config_hft.hft,
