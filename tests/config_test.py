@@ -4496,6 +4496,123 @@ class TestConfigInterface(object):
         assert result.exit_code != 0
         assert "Invalid interface range" in result.output
 
+    # --- config interface startup/shutdown --from/--to (issue #790) ---
+    #
+    # The mock PORT table intentionally has gaps (Ethernet0, Ethernet4,
+    # Ethernet8, ... Ethernet40, Ethernet44, ...), so a range between
+    # Ethernet0 and Ethernet40 must only ever touch the ports that are
+    # actually configured, never fabricate Ethernet1/2/3/etc.
+    FROM_TO_IN_RANGE = [
+        "Ethernet0", "Ethernet4", "Ethernet8", "Ethernet12", "Ethernet16",
+        "Ethernet20", "Ethernet24", "Ethernet28", "Ethernet32", "Ethernet36",
+        "Ethernet40",
+    ]
+    FROM_TO_OUT_OF_RANGE = "Ethernet44"
+
+    @pytest.mark.parametrize("cmd_name,target_status,other_status", [
+        ("shutdown", "down", "up"),
+        ("startup", "up", "down"),
+    ])
+    def test_from_to_range_success(self, cmd_name, target_status, other_status):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        for port in self.FROM_TO_IN_RANGE + [self.FROM_TO_OUT_OF_RANGE]:
+            db.cfgdb.mod_entry("PORT", port, {"admin_status": other_status})
+
+        result = runner.invoke(config.config.commands['interface'].commands[cmd_name],
+                               ['--from', 'Ethernet0', '--to', 'Ethernet40'], obj=obj)
+        assert result.exit_code == 0, result.output
+
+        port_dict = db.cfgdb.get_table('PORT')
+        for port in self.FROM_TO_IN_RANGE:
+            assert port_dict[port]['admin_status'] == target_status
+        # A port just outside the requested range must not be touched.
+        assert port_dict[self.FROM_TO_OUT_OF_RANGE]['admin_status'] == other_status
+
+    @pytest.mark.parametrize("cmd_name,target_status,other_status", [
+        ("shutdown", "down", "up"),
+        ("startup", "up", "down"),
+    ])
+    def test_from_to_range_degenerate(self, cmd_name, target_status, other_status):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        db.cfgdb.mod_entry("PORT", "Ethernet8", {"admin_status": other_status})
+        db.cfgdb.mod_entry("PORT", "Ethernet12", {"admin_status": other_status})
+
+        result = runner.invoke(config.config.commands['interface'].commands[cmd_name],
+                               ['--from', 'Ethernet8', '--to', 'Ethernet8'], obj=obj)
+        assert result.exit_code == 0, result.output
+
+        port_dict = db.cfgdb.get_table('PORT')
+        assert port_dict['Ethernet8']['admin_status'] == target_status
+        assert port_dict['Ethernet12']['admin_status'] == other_status
+
+    def test_from_to_range_alias_mode(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # Ethernet0/Ethernet4/Ethernet8 are aliased etp1/etp2/etp3 in the mock DB.
+        for port in ["Ethernet0", "Ethernet4", "Ethernet8"]:
+            db.cfgdb.mod_entry("PORT", port, {"admin_status": "up"})
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        try:
+            result = runner.invoke(config.config.commands['interface'].commands['shutdown'],
+                                   ['--from', 'etp1', '--to', 'etp3'], obj=obj)
+        finally:
+            os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 0, result.output
+        port_dict = db.cfgdb.get_table('PORT')
+        assert port_dict['Ethernet0']['admin_status'] == 'down'
+        assert port_dict['Ethernet4']['admin_status'] == 'down'
+        assert port_dict['Ethernet8']['admin_status'] == 'down'
+
+    # Table of (args, expected substring of the error message) for every
+    # --from/--to validation failure. Exercised against both startup and
+    # shutdown, since they share the same validation logic.
+    FROM_TO_ERROR_CASES = [
+        (['--from', 'Ethernet0'], "--from and --to"),                                    # --to missing
+        (['--to', 'Ethernet0'], "--from and --to"),                                       # --from missing
+        ([], "Interface name is required"),                                               # neither given
+        (['Ethernet0', '--from', 'Ethernet0', '--to', 'Ethernet40'], "Cannot specify"),    # positional + range
+        (['--from', 'Ethernet995', '--to', 'Ethernet40'], "not a configured interface"),  # --from not configured
+        (['--from', 'Ethernet0', '--to', 'Ethernet995'], "not a configured interface"),   # --to not configured
+        (['--from', 'Ethernet40', '--to', 'Ethernet0'], "comes after"),                   # reversed range
+    ]
+
+    @pytest.mark.parametrize("cmd_name", ["startup", "shutdown"])
+    @pytest.mark.parametrize("args,expected_message", FROM_TO_ERROR_CASES)
+    def test_from_to_range_errors(self, args, expected_message, cmd_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands['interface'].commands[cmd_name],
+                               args, obj=obj)
+        assert result.exit_code != 0
+        assert expected_message in result.output
+
+    @pytest.mark.parametrize("cmd_name", ["startup", "shutdown"])
+    @patch('config.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_from_to_range_rejected_multi_asic(self, cmd_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        for port in self.FROM_TO_IN_RANGE:
+            db.cfgdb.mod_entry("PORT", port, {"admin_status": "up"})
+
+        result = runner.invoke(config.config.commands['interface'].commands[cmd_name],
+                               ['--from', 'Ethernet0', '--to', 'Ethernet40'], obj=obj)
+        assert result.exit_code != 0
+        assert "Interface range not supported in multi-asic platforms" in result.output
+
     def teardown_method(self):
         print("TEARDOWN")
 

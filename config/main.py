@@ -5337,35 +5337,96 @@ def fast_linkup(ctx, interface_name, mode, verbose):
     if verbose:
         command += ['-vv']
     clicommon.run_command(command, display_cmd=verbose)
+
+
+def _get_configured_interface_range(config_db, from_intf, to_intf):
+    """Return the naturally-sorted list of actually configured PORT interfaces
+    between from_intf and to_intf (inclusive).
+
+    Only physical PORT-table entries that already exist in CONFIG_DB are
+    considered, so gaps in interface numbering (e.g. Ethernet0, Ethernet4,
+    Ethernet8, ...) are handled correctly instead of assuming a fixed stride.
+    """
+    port_dict = config_db.get_table('PORT')
+    sorted_ports = natsorted(port_dict.keys())
+
+    if from_intf not in sorted_ports:
+        raise ValueError("Interface '{}' is not a configured interface".format(from_intf))
+    if to_intf not in sorted_ports:
+        raise ValueError("Interface '{}' is not a configured interface".format(to_intf))
+
+    from_idx = sorted_ports.index(from_intf)
+    to_idx = sorted_ports.index(to_intf)
+
+    if from_idx > to_idx:
+        raise ValueError(
+            "Invalid interface range: '--from {}' comes after '--to {}' in the "
+            "configured interface order".format(from_intf, to_intf))
+
+    return sorted_ports[from_idx:to_idx + 1]
+
+
 #
 # 'startup' subcommand
 #
 
 @interface.command()
-@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('interface_name', metavar='<interface_name>', required=False)
+@click.option('--from', 'from_intf', metavar='<from_interface>', default=None,
+              help='Start interface of an interface range (must be used with --to)')
+@click.option('--to', 'to_intf', metavar='<to_interface>', default=None,
+              help='End interface of an interface range (must be used with --from)')
 @click.pass_context
-def startup(ctx, interface_name):
+def startup(ctx, interface_name, from_intf, to_intf):
     """Start up interface"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
-    if clicommon.get_interface_naming_mode() == "alias":
-        interface_name = interface_alias_to_name(config_db, interface_name)
+    if from_intf or to_intf:
+        if interface_name is not None:
+            ctx.fail("Cannot specify <interface_name> together with --from/--to")
+        if not from_intf or not to_intf:
+            ctx.fail("Both --from and --to must be specified together")
+
+        if clicommon.get_interface_naming_mode() == "alias":
+            from_intf = interface_alias_to_name(config_db, from_intf)
+            to_intf = interface_alias_to_name(config_db, to_intf)
+            if from_intf is None:
+                ctx.fail("Unable to resolve alias for '--from' interface")
+            if to_intf is None:
+                ctx.fail("Unable to resolve alias for '--to' interface")
+
+        try:
+            intf_fs = _get_configured_interface_range(config_db, from_intf, to_intf)
+        except ValueError as e:
+            ctx.fail(str(e))
+
+        if len(intf_fs) > 1 and multi_asic.is_multi_asic():
+            ctx.fail("Interface range not supported in multi-asic platforms !!")
+
+        log.log_info("'interface startup --from {} --to {}' executing...".format(from_intf, to_intf))
+    else:
         if interface_name is None:
-            ctx.fail("'interface_name' is None!")
+            ctx.fail("Interface name is required, or specify both --from and --to")
 
-    try:
-        intf_fs = parse_interface_in_filter(interface_name)
-    except ValueError as e:
-        ctx.fail(str(e))
+        if clicommon.get_interface_naming_mode() == "alias":
+            interface_name = interface_alias_to_name(config_db, interface_name)
+            if interface_name is None:
+                ctx.fail("'interface_name' is None!")
 
-    if len(intf_fs) > 1 and multi_asic.is_multi_asic():
-        ctx.fail("Interface range not supported in multi-asic platforms !!")
+        try:
+            intf_fs = parse_interface_in_filter(interface_name)
+        except ValueError as e:
+            ctx.fail(str(e))
 
-    if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
-        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
+        if len(intf_fs) > 1 and multi_asic.is_multi_asic():
+            ctx.fail("Interface range not supported in multi-asic platforms !!")
 
-    log.log_info("'interface startup {}' executing...".format(interface_name))
+        if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
+            ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
+
+        log.log_info("'interface startup {}' executing...".format(interface_name))
+
     port_dict = config_db.get_table('PORT')
     for port_name in port_dict:
         if port_name in intf_fs:
@@ -5391,29 +5452,61 @@ def startup(ctx, interface_name):
 #
 
 @interface.command()
-@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('interface_name', metavar='<interface_name>', required=False)
+@click.option('--from', 'from_intf', metavar='<from_interface>', default=None,
+              help='Start interface of an interface range (must be used with --to)')
+@click.option('--to', 'to_intf', metavar='<to_interface>', default=None,
+              help='End interface of an interface range (must be used with --from)')
 @click.pass_context
-def shutdown(ctx, interface_name):
+def shutdown(ctx, interface_name, from_intf, to_intf):
     """Shut down interface"""
-    log.log_info("'interface shutdown {}' executing...".format(interface_name))
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
-    if clicommon.get_interface_naming_mode() == "alias":
-        interface_name = interface_alias_to_name(config_db, interface_name)
+    if from_intf or to_intf:
+        if interface_name is not None:
+            ctx.fail("Cannot specify <interface_name> together with --from/--to")
+        if not from_intf or not to_intf:
+            ctx.fail("Both --from and --to must be specified together")
+
+        if clicommon.get_interface_naming_mode() == "alias":
+            from_intf = interface_alias_to_name(config_db, from_intf)
+            to_intf = interface_alias_to_name(config_db, to_intf)
+            if from_intf is None:
+                ctx.fail("Unable to resolve alias for '--from' interface")
+            if to_intf is None:
+                ctx.fail("Unable to resolve alias for '--to' interface")
+
+        try:
+            intf_fs = _get_configured_interface_range(config_db, from_intf, to_intf)
+        except ValueError as e:
+            ctx.fail(str(e))
+
+        if len(intf_fs) > 1 and multi_asic.is_multi_asic():
+            ctx.fail("Interface range not supported in multi-asic platforms !!")
+
+        log.log_info("'interface shutdown --from {} --to {}' executing...".format(from_intf, to_intf))
+    else:
         if interface_name is None:
-            ctx.fail("'interface_name' is None!")
+            ctx.fail("Interface name is required, or specify both --from and --to")
 
-    try:
-        intf_fs = parse_interface_in_filter(interface_name)
-    except ValueError as e:
-        ctx.fail(str(e))
+        log.log_info("'interface shutdown {}' executing...".format(interface_name))
 
-    if len(intf_fs) > 1 and multi_asic.is_multi_asic():
-        ctx.fail("Interface range not supported in multi-asic platforms !!")
+        if clicommon.get_interface_naming_mode() == "alias":
+            interface_name = interface_alias_to_name(config_db, interface_name)
+            if interface_name is None:
+                ctx.fail("'interface_name' is None!")
 
-    if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
-        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
+        try:
+            intf_fs = parse_interface_in_filter(interface_name)
+        except ValueError as e:
+            ctx.fail(str(e))
+
+        if len(intf_fs) > 1 and multi_asic.is_multi_asic():
+            ctx.fail("Interface range not supported in multi-asic platforms !!")
+
+        if len(intf_fs) == 1 and interface_name_is_valid(config_db, interface_name) is False:
+            ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
 
     port_dict = config_db.get_table('PORT')
     for port_name in port_dict:
