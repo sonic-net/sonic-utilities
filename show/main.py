@@ -227,16 +227,8 @@ def connect_storm_control_config_db(namespace=None):
 #
 # Get storm-control configurations per interface append to body
 #
-def get_storm_interface(intf, body, namespace=None):
+def get_storm_interface(intf, body, config_db):
     storm_type_list = ['broadcast', 'unknown-unicast', 'unknown-multicast']
-
-    config_db = connect_storm_control_config_db(namespace)
-
-    table = config_db.get_table('PORT_STORM_CONTROL')
-
-    #To avoid further looping below
-    if not table:
-        return
 
     for storm_type in storm_type_list:
         storm_key = intf + '|' + storm_type
@@ -539,9 +531,13 @@ def storm_control(ctx, namespace, display):
         if namespace is None:
             display_storm_all()
         else:
-            interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
-            for intf in interfaces:
-                get_storm_interface(intf, body, namespace)
+            config_db = connect_storm_control_config_db(namespace)
+            table = config_db.get_table('PORT_STORM_CONTROL')
+            # To avoid further looping below
+            if table:
+                interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
+                for intf in interfaces:
+                    get_storm_interface(intf, body, config_db)
             click.echo(tabulate(body, header, tablefmt="grid"))
 
 @storm_control.command('interface')
