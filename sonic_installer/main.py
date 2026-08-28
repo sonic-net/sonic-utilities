@@ -877,7 +877,8 @@ DOCKER_CONTAINER_LIST = [
     "syncd",
     "teamd",
     "telemetry",
-    "mgmt-framework"
+    "mgmt-framework",
+    "ptp"
 ]
 
 # Upgrade docker image
