@@ -1,0 +1,58 @@
+#!/bin/bash
+# cli-client — near-instant Python CLI via a pre-fork server.
+#
+# Usage: cli-client <cli-script> [args...]
+#
+# On first call the server is not yet running, so this client starts it
+# in the background and runs the CLI script directly (normal speed).  On all
+# subsequent calls the server is ready: we connect via TCP localhost,
+# send argv/cwd/env, and stream the output back — avoiding ~1 s of
+# Python interpreter startup and module imports.
+set -eEu -o pipefail
+
+[[ $# -ge 1 ]] || { echo "Usage: cli-client <cli-script> [args...]" >&2; exit 1; }
+script="$1"; shift
+
+# Resolve the path to the companion server script (same directory).
+server="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/cli-server"
+
+# fallback: start the server in the background and run the CLI script directly.
+# Used whenever the server is not yet available (first call, stale files, etc.).
+fallback() { "$server" "$script" & exec "$script" "$@"; }
+
+# ── Runtime dir (must match cli-server) ──────────────────────────
+dir="/tmp/cli-server"
+[[ -d "$dir" ]] || fallback "$@"
+
+# ── Find server port ─────────────────────────────────────────────
+[[ -f "$dir/$script.port" ]] || fallback "$@"
+port=$(<"$dir/$script.port")
+
+# Connect to the server via TCP; fall back to direct execution on failure.
+exec 3<>/dev/tcp/127.0.0.1/"$port" 2>/dev/null || fallback "$@"
+
+# Read the forked child's PID so we can forward signals.
+IFS= read -r line <&3; pid="${line:1}"
+for sig in INT TERM; do trap "kill -$sig $pid 2>/dev/null" "$sig"; done
+
+# ── Send argv, cwd, env (length-prefixed blocks) ────────────────
+
+if [[ $# -gt 0 ]]; then argv=$(printf ' %q' "$@"); argv="${argv:1}"; else argv=""; fi
+printf '%d\n%s' "${#argv}" "$argv" >&3
+printf '%d\n%s' "${#PWD}" "$PWD" >&3
+e=$(mktemp); env -0 > "$e" 2>/dev/null
+printf '%d\n' "$(stat -c %s "$e")" >&3; cat "$e" >&3; rm -f "$e"
+
+# ── Read tagged output from server ───────────────────────────────
+# O = stdout line, E = stderr line, X = exit code (terminates).
+# awk is much faster than bash `read` for large outputs.
+# -W interactive disables stdin/stdout block-buffering so streamed
+# output is not held back.
+
+awk -W interactive '{
+    tag = substr($0, 1, 1)
+    data = substr($0, 2)
+    if (tag == "O") print data
+    else if (tag == "E") print data > "/dev/stderr"
+    else if (tag == "X") exit (data + 0)
+}' <&3
