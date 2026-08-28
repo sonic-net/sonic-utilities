@@ -78,6 +78,7 @@ from . import switch
 from . import icmp
 from . import copp
 from . import orchagent
+from . import ptp
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -329,6 +330,7 @@ cli.add_command(switch.switch)
 cli.add_command(icmp.icmp)
 cli.add_command(copp.copp)
 cli.add_command(orchagent.orchagent)
+cli.add_command(ptp.ptp)
 
 # syslog module
 cli.add_command(syslog.syslog)
