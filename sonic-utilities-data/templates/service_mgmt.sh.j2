@@ -118,12 +118,19 @@ function stop() {
     docker exec -t ${SERVICE}${DEV} {{ manifest.service["pre-shutdown-action"] }}
 {%- endif %}
 
+{%- if manifest.service["graceful-stop-on-warm-fast-boot"] %}
+
+    # Package opted out of being killed on WARM/FAST boot
+    /usr/bin/${SERVICE}.sh stop $DEV
+{%- else %}
+
     # For WARM/FAST boot do not perform service stop
     if [[ x"$WARM_BOOT" != x"true" ]] && [[ x"$FAST_BOOT" != x"true" ]]; then
         /usr/bin/${SERVICE}.sh stop $DEV
     else
         docker kill ${SERVICE}$DEV &> /dev/null || debug "Docker ${SERVICE}$DEV is not running ($?) ..."
     fi
+{%- endif %}
 
     debug "Stopped ${SERVICE}$DEV service..."
 

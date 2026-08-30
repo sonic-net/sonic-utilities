@@ -199,6 +199,7 @@ class ManifestSchema:
             ManifestArray('dependent-of', DefaultMarshaller(str)),
             ManifestField('post-start-action', DefaultMarshaller(str), ''),
             ManifestField('pre-shutdown-action', DefaultMarshaller(str), ''),
+            ManifestField('graceful-stop-on-warm-fast-boot', DefaultMarshaller(bool), False),
             ManifestField('asic-service', DefaultMarshaller(bool), False),
             ManifestField('host-service', DefaultMarshaller(bool), True),
             ManifestField('delayed', DefaultMarshaller(bool), False),
