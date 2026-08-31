@@ -764,6 +764,39 @@ class TestVnetRouteCheck(object):
             "2001:db8::1/128",
         ]
 
+    def test_filter_out_vnet_ip2me_routes_handles_consecutive_routes(self):
+        intf_table = MagicMock()
+        intf_table.getKeys.return_value = [
+            "PortChannel1.1102:100.1.0.17/30",
+            "PortChannel2.1102:100.1.0.21/30",
+        ]
+        vnet_routes = {
+            "Vnet3": {
+                "routes": [
+                    "100.1.0.17/32",
+                    "100.1.0.21/32",
+                    "50.0.2.1/32",
+                ],
+                "vrf_oid": "oid:0x3",
+            }
+        }
+
+        with patch("vnet_route_check.swsscommon.DBConnector", create=True), \
+                patch(
+                    "vnet_route_check.swsscommon.Table",
+                    return_value=intf_table,
+                    create=True,
+                ), \
+                patch(
+                    "vnet_route_check.get_vnet_intfs",
+                    return_value={
+                        "Vnet3": ["PortChannel1.1102", "PortChannel2.1102"]
+                    },
+                ):
+            vnet_route_check.filter_out_vnet_ip2me_routes(vnet_routes)
+
+        assert vnet_routes["Vnet3"]["routes"] == ["50.0.2.1/32"]
+
     @patch("vnet_route_check.swsscommon.DBConnector")
     @patch("vnet_route_check.swsscommon.Table")
     def test_vnet_route_check(self, mock_table, mock_conn):

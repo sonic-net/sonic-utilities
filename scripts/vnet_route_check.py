@@ -194,12 +194,13 @@ def filter_out_vnet_ip2me_routes(vnet_routes):
             ip2me_route = rif_ip + '/32'
             vnet_ip2me_routes.append(ip2me_route)
 
-    for vnet, vnet_attrs in vnet_routes.items():
-        for route in vnet_attrs['routes']:
-            if route in vnet_ip2me_routes:
-                vnet_attrs['routes'].remove(route)
+    for vnet in list(vnet_routes.keys()):
+        vnet_routes[vnet]['routes'] = [
+            route for route in vnet_routes[vnet]['routes']
+            if route not in vnet_ip2me_routes
+        ]
 
-        if not vnet_attrs['routes']:
+        if not vnet_routes[vnet]['routes']:
             vnet_routes.pop(vnet)
 
 
