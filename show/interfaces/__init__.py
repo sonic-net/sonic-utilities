@@ -301,6 +301,61 @@ def currrent_mode(ctx, interface):
     click.echo(tabulate(body, header, tablefmt="grid"))
 
 
+# 'breakout supported-mode' subcommand ("show interfaces breakout supported-mode")
+@breakout.command('supported-mode')
+@click.argument('interface', metavar='<interface_name>', required=False, type=str)
+@click.pass_context
+def supported_mode(ctx, interface):
+    """
+    Show supported Breakout modes by interface(s).
+
+    Args:
+        ctx: Click context for the breakout command group.
+        interface: Optional interface name to query.
+
+    Returns:
+        None.
+    """
+
+    platform_file = device_info.get_path_to_port_config_file()
+    hwsku_path = device_info.get_path_to_hwsku_dir()
+    hwsku_file = os.path.join(hwsku_path, HWSKU_JSON)
+    platform_data = readJsonFile(platform_file)
+    hwsku_data = readJsonFile(hwsku_file)
+    platform_dict = platform_data.get('interfaces', {})
+    hwsku_dict = hwsku_data.get('interfaces', {})
+
+    if not platform_dict or not hwsku_dict:
+        click.echo("Can not load port config from {} or {} file".format(platform_file, hwsku_file))
+        raise click.Abort()
+
+    header = ['Interface', 'Supported Breakout Modes']
+    body = []
+    interface_names = [interface] if interface is not None else natsorted(platform_dict.keys())
+
+    for name in interface_names:
+        interface_data = platform_dict.get(name)
+        if interface_data is None:
+            body.append([name, "Not Available"])
+            continue
+
+        interface_data = interface_data.copy()
+        interface_data.update(hwsku_dict.get(name, {}))
+        modes = interface_data.get('breakout_modes')
+        if isinstance(modes, dict):
+            modes = ",".join(modes.keys())
+        elif isinstance(modes, (list, tuple)):
+            modes = ",".join(str(mode) for mode in modes)
+        elif modes is not None:
+            modes = str(modes)
+        else:
+            modes = "Not Available"
+
+        body.append([name, modes])
+
+    click.echo(tabulate(body, header, tablefmt="grid"))
+
+
 #
 # 'neighbor' group ###
 #
