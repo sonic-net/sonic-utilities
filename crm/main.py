@@ -148,11 +148,12 @@ class Crm:
 
                 if crm_stats:
                     for res in ["acl_group", "acl_table"]:
-                        data.append([
-                                        stage, bind_point, res,
-                                        crm_stats['crm_stats_' + res + "_used"],
-                                        crm_stats['crm_stats_' + res + "_available"]
-                                    ])
+                        if "crm_stats_" + res + "_used" in crm_stats:
+                            data.append([
+                                            stage, bind_point, res,
+                                            crm_stats['crm_stats_' + res + "_used"],
+                                            crm_stats['crm_stats_' + res + "_available"]
+                                        ])
 
         return data
     def get_acl_table_resources(self):
