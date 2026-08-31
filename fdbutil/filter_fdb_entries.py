@@ -9,7 +9,7 @@ import traceback
 from collections import defaultdict
 from ipaddress import ip_address, ip_network, ip_interface
 
-def get_vlan_cidr_map(filename):
+def get_vlan_cidr_map_and_switch_mac(filename):
     """
         Generate Vlan CIDR information from Config DB file
 
@@ -37,9 +37,9 @@ def get_vlan_cidr_map(filename):
                     vlan_cidr[vlan] = {4: ip_address("0.0.0.0"), 6: ip_address("::")}
                 vlan_cidr[vlan][ip_interface(cidr).version] = ip_interface(cidr).network
 
-    return vlan_cidr
+    return vlan_cidr, config_db_entries["DEVICE_METADATA"]["localhost"]["mac"].replace(':', '-').upper()
 
-def get_arp_entries_map(arp_filename, config_db_filename):
+def get_arp_entries_map_and_switch_mac(arp_filename, config_db_filename):
     """
         Generate map for ARP entries
 
@@ -53,7 +53,7 @@ def get_arp_entries_map(arp_filename, config_db_filename):
         Returns:
             arp_map(dict) map of ARP entries using MAC as key.
     """
-    vlan_cidr = get_vlan_cidr_map(config_db_filename)
+    vlan_cidr, switch_mac = get_vlan_cidr_map_and_switch_mac(config_db_filename)
 
     with open(arp_filename, 'r') as fp:
         arp_entries = json.load(fp)
@@ -69,7 +69,7 @@ def get_arp_entries_map(arp_filename, config_db_filename):
                 and "neigh" in config:
                 arp_map[config["neigh"].replace(':', '-').upper()] = ""
 
-    return arp_map
+    return arp_map, switch_mac
 
 def filter_fdb_entries(fdb_filename, arp_filename, config_db_filename, backup_file):
     """
@@ -87,7 +87,7 @@ def filter_fdb_entries(fdb_filename, arp_filename, config_db_filename, backup_fi
         Returns:
             None
     """
-    arp_map = get_arp_entries_map(arp_filename, config_db_filename)
+    arp_map, switch_mac = get_arp_entries_map_and_switch_mac(arp_filename, config_db_filename)
 
     with open(fdb_filename, 'r') as fp:
         fdb_entries = json.load(fp)
@@ -95,7 +95,8 @@ def filter_fdb_entries(fdb_filename, arp_filename, config_db_filename, backup_fi
     def filter_fdb_entry(fdb_entry):
         for key, _ in fdb_entry.items():
             if 'FDB_TABLE' in key:
-                return key.split(':')[-1].upper() in arp_map
+                mac = key.split(':')[-1].upper()
+                return mac != switch_mac and mac in arp_map
 
         # malformed entry, default to False so it will be deleted
         return False
