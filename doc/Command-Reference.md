@@ -9941,9 +9941,10 @@ This command displays the configured SNMP Trap server IP addresses.
 - Example:
   ```
     admin@sonic:~$ show snmptrap
-      Version  TrapReceiverIP      Port  VRF    Community
-    ---------  ----------------  ------  -----  -----------
+      Version  TrapReceiverIP      Port  VRF    Community/User
+    ---------  ----------------  ------  -----  ---------------
             2  31.31.31.31          456  mgmt   public
+            3  21.21.21.21          162  mgmt   snmpuser
   ```
 
 ### Management VRF Config commands
