@@ -721,7 +721,7 @@ def filter_out_vnet_routes(namespace, routes):
 
     for vnet_route_db_key in vnet_routes_db_keys:
         vnet_route_attrs = vnet_route_db_key.split(':', 1)
-        vnet_route = vnet_route_attrs[1]
+        vnet_route = add_prefix_ifnot(vnet_route_attrs[1].lower())
         vnet_routes.append(vnet_route)
 
     updated_routes = []

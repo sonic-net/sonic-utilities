@@ -736,6 +736,34 @@ class TestVnetRouteCheck(object):
     def init(self):
         vnet_route_check.UNIT_TESTING = 1
 
+    def test_get_vnet_routes_from_app_db_normalizes_host_prefixes(self):
+        vnet_table = MagicMock()
+        vnet_table.getKeys.return_value = [
+            "Vnet1:50.0.0.1",
+            "Vnet1:2001:db8::1",
+        ]
+        tunnel_table = MagicMock()
+        tunnel_table.getKeys.return_value = []
+
+        with patch("vnet_route_check.swsscommon.DBConnector", create=True), \
+                patch("vnet_route_check.swsscommon.Table",
+                      side_effect=[vnet_table, tunnel_table],
+                      create=True), \
+                patch(
+                    "vnet_route_check.get_vnet_intfs",
+                    return_value={"Vnet1": ["Vlan3001"]},
+                ), \
+                patch(
+                    "vnet_route_check.get_vrf_entries",
+                    return_value={"Vlan3001": "oid:0x3000000000d4b"},
+                ):
+            routes = vnet_route_check.get_vnet_routes_from_app_db()
+
+        assert routes["Vnet1"]["routes"] == [
+            "50.0.0.1/32",
+            "2001:db8::1/128",
+        ]
+
     @patch("vnet_route_check.swsscommon.DBConnector")
     @patch("vnet_route_check.swsscommon.Table")
     def test_vnet_route_check(self, mock_table, mock_conn):
