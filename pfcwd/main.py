@@ -398,6 +398,26 @@ class PfcwdCli(object):
                 continue
             self.config_db.mod_entry(CONFIG_DB_PFC_WD_TABLE_NAME, port, None)
 
+    def count_pfc_enabled_ports(self, ports):
+        """Count the ports that PFC watchdog will actually be configured on.
+
+        verify_pfc_enable_status_per_port() skips any port that has no 'pfc_enable' in
+        PORT_QOS_MAP, so these are the ports that receive a PFC_WD entry and contribute
+        watchdog polling load. Counting every PORT entry instead would inflate the timers
+        on behalf of ports that never get a watchdog.
+
+        Args:
+            ports (list): Candidate ports, i.e. the external and backplane ports.
+
+        Returns:
+            int: Number of the given ports that have PFC enabled.
+        """
+        port_qos_map = self.config_db.get_table(PORT_QOS_MAP)
+        return sum(
+            1 for port in ports
+            if port_qos_map.get(port, {}).get('pfc_enable') is not None
+        )
+
     @multi_asic_util.run_on_multi_asic
     def start_default(self):
         if os.geteuid() != 0:
@@ -415,7 +435,7 @@ class PfcwdCli(object):
         if not enable or enable.lower() != "enable":
             return
 
-        port_num = len(list(self.config_db.get_table('PORT').keys()))
+        port_num = self.count_pfc_enabled_ports(active_ports)
 
         # Paramter values positively correlate to the number of ports.
         multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)

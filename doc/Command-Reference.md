@@ -9238,7 +9238,7 @@ Default values are the following:
    - action - 'drop'
    - pfc stat history - disable
 
-Additionally if number of ports in the system exceeds 32, all times will be multiplied by roughly <num_ports\>/32.
+Additionally if the number of ports the watchdog is enabled on exceeds 32, all times will be multiplied by roughly <num_ports\>/32. Only ports that PFC watchdog is actually configured on are counted, i.e. ports that have `pfc_enable` set in `PORT_QOS_MAP`; ports that are skipped because PFC is not enabled on them do not affect these times.
 
 
 **show pfcwd config**
