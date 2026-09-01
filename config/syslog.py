@@ -561,6 +561,15 @@ def get_feature_names_to_proceed(db, service_name, namespace):
     return feature_list
 
 
+def get_running_container_names():
+    """Return the exact names of currently running containers."""
+    output, _ = clicommon.run_command(
+        ['docker', 'ps', '-f', 'status=running', '--format', '{{.Names}}'],
+        return_cmd=True
+    )
+    return set(output.splitlines()) if output else set()
+
+
 @rate_limit_feature.command("enable")
 @click.argument("service_name", required=False)
 @click.option('--namespace', '-n', 'namespace', default=None, 
@@ -570,11 +579,12 @@ def get_feature_names_to_proceed(db, service_name, namespace):
 def enable_rate_limit_feature(db, service_name, namespace):
     """ Enable syslog rate limit feature """
     feature_list = get_feature_names_to_proceed(db, service_name, namespace)
+    if not feature_list:
+        return
+    running_containers = get_running_container_names()
     for feature_name in feature_list:
         click.echo(f'Enabling syslog rate limit feature for {feature_name}')
-        shell_cmd = f'docker ps -f status=running --format "{{{{.Names}}}}" | grep -E "^{feature_name}$"'
-        output, _ = clicommon.run_command(shell_cmd, return_cmd=True, shell=True)
-        if not output:
+        if feature_name not in running_containers:
             click.echo(f'{feature_name} is not running, ignoring...')
             continue
         
@@ -612,11 +622,12 @@ def enable_rate_limit_feature(db, service_name, namespace):
 def disable_rate_limit_feature(db, service_name, namespace):
     """ Disable syslog rate limit feature """
     feature_list = get_feature_names_to_proceed(db, service_name, namespace)
+    if not feature_list:
+        return
+    running_containers = get_running_container_names()
     for feature_name in feature_list:
         click.echo(f'Disabling syslog rate limit feature for {feature_name}')
-        shell_cmd = f'docker ps -f status=running --format "{{{{.Names}}}}" | grep -E "^{feature_name}$"'
-        output, _ = clicommon.run_command(shell_cmd, return_cmd=True, shell=True)
-        if not output:
+        if feature_name not in running_containers:
             click.echo(f'{feature_name} is not running, ignoring...')
             continue
         

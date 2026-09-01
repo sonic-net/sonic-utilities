@@ -405,13 +405,16 @@ class TestSyslog:
 
         runner = CliRunner()
 
-        mock_run.return_value = ('no such process', 0)
+        mock_run.side_effect = lambda command, **kwargs: (
+            ('bgp', 0) if command[:2] == ['docker', 'ps'] else ('no such process', 0)
+        )
         result = runner.invoke(
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["enable"], obj=db
         )
         assert result.exit_code == SUCCESS
         
         # container not run
+        mock_run.side_effect = None
         mock_run.return_value = ('', 0)
         result = runner.invoke(
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["enable"], obj=db
@@ -419,7 +422,9 @@ class TestSyslog:
         assert result.exit_code == SUCCESS
         
         # process already running
-        mock_run.return_value = ('something', 0)
+        mock_run.side_effect = lambda command, **kwargs: (
+            ('bgp', 0) if command[:2] == ['docker', 'ps'] else ('something', 0)
+        )
         result = runner.invoke(
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["enable"], obj=db
         )
@@ -428,7 +433,9 @@ class TestSyslog:
         # one command fail
         def side_effect(*args, **kwargs):
             side_effect.call_count += 1
-            if side_effect.call_count <= 2:
+            if side_effect.call_count == 1:
+                return 'bgp', 0
+            elif side_effect.call_count == 2:
                 return 'no such process', 0
             else:
                 return '', -1
@@ -448,13 +455,16 @@ class TestSyslog:
 
         runner = CliRunner()
 
-        mock_run.return_value = ('something', 0)
+        mock_run.side_effect = lambda command, **kwargs: (
+            ('bgp', 0) if command[:2] == ['docker', 'ps'] else ('something', 0)
+        )
         result = runner.invoke(
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["disable"], obj=db
         )
         assert result.exit_code == SUCCESS
         
         # container not run
+        mock_run.side_effect = None
         mock_run.return_value = ('', 0)
         result = runner.invoke(
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["disable"], obj=db
@@ -462,7 +472,9 @@ class TestSyslog:
         assert result.exit_code == SUCCESS
         
         # process already stopped
-        mock_run.return_value = ('no such process', 0)
+        mock_run.side_effect = lambda command, **kwargs: (
+            ('bgp', 0) if command[:2] == ['docker', 'ps'] else ('no such process', 0)
+        )
         result = runner.invoke(
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["disable"], obj=db
         )
@@ -471,7 +483,9 @@ class TestSyslog:
         # one command fail
         def side_effect(*args, **kwargs):
             side_effect.call_count += 1
-            if side_effect.call_count <= 2:
+            if side_effect.call_count == 1:
+                return 'bgp', 0
+            elif side_effect.call_count == 2:
                 return 'something', 0
             else:
                 return '', -1
@@ -481,6 +495,16 @@ class TestSyslog:
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["disable"], obj=db
         )
         assert result.exit_code == SUCCESS
+
+    @mock.patch('config.syslog.clicommon.run_command')
+    def test_get_running_container_names(self, mock_run):
+        mock_run.return_value = ('bgp\nswss0\n', 0)
+
+        assert config.syslog.get_running_container_names() == {'bgp', 'swss0'}
+        mock_run.assert_called_once_with(
+            ['docker', 'ps', '-f', 'status=running', '--format', '{{.Names}}'],
+            return_cmd=True
+        )
 
     @mock.patch('config.syslog.clicommon.run_command')
     def test_config_log_level(self, mock_run):
