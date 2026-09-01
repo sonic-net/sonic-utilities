@@ -38,6 +38,19 @@ LLDP_INSTANCE_IN_HOST_NAMESPACE = ''
 LLDP_DEFAULT_INTERFACE_LIST_IN_ASIC_NAMESPACE = ''
 SPACE_TOKEN = ' '
 
+# Global helper function to check if LLDP docker is running for a given namespace
+def is_instance_running(instance_num):
+    lldp_container_cmd = 'sudo docker container inspect -f {{.State.Status}} lldp{} '.format(instance_num)
+    p = subprocess.Popen(lldp_container_cmd, stdout=subprocess.PIPE, shell=True, text=True)
+    (output, err) = p.communicate()
+
+    ## Wait for end of command. Get return returncode ##
+    returncode = p.wait()
+
+    if returncode == 0:
+        if output == 'running':
+            return True
+    return False
 
 class Lldpshow(object):
     def __init__(self):
@@ -83,6 +96,11 @@ class Lldpshow(object):
         """
         for lldp_instace_num in range(len(self.lldp_instance)):
             lldp_interface_list = lldp_port if lldp_port is not None else self.lldp_interface[lldp_instace_num]
+
+            # Skip instances that are not in 'running' state
+            if is_instance_running(self.lldp_instance[lldp_instace_num]) == False:
+                continue
+
             # In detail mode we will pass interface list (only front ports) and get O/P as plain text
             # and in table format we will get xml output
             if not lldp_detail_info:
