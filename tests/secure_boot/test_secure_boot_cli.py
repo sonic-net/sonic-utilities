@@ -5,7 +5,7 @@ from show.secure_boot import secure_boot as show_secure_boot
 from config.secure_boot import secure_boot as config_secure_boot
 
 MODE = {"raw": 11, "hex": "0x000b", "name": "Generic Mode", "policy": {"vendor_store_write": True, "vendor_store_lock": True, "customer_store_write": False, "customer_store_lock": True}}
-KEYS = {"PKVendor":{"state":"present","certificate_count":1},"KEKVendor":{"state":"present","certificate_count":2},"dbVendor":{"state":"present","certificate_count":3},"dbxVendor":{"state":"empty","certificate_count":0},"PKCustomer":{"state":"empty","certificate_count":0},"KEKCustomer":{"state":"empty","certificate_count":0},"dbCustomer":{"state":"empty","certificate_count":0},"dbxCustomer":{"state":"empty","certificate_count":0}}
+KEYS = {"PKVendor":{"state":"present","entry_count":1},"KEKVendor":{"state":"present","entry_count":2},"dbVendor":{"state":"present","entry_count":3},"dbxVendor":{"state":"empty","entry_count":0},"PKCustomer":{"state":"empty","entry_count":0},"KEKCustomer":{"state":"empty","entry_count":0},"dbCustomer":{"state":"empty","entry_count":0},"dbxCustomer":{"state":"empty","entry_count":0}}
 
 class TestShowSecureBoot(unittest.TestCase):
     @patch("show.secure_boot.run_backend")

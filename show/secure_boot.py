@@ -53,8 +53,8 @@ def status():
     for var in ("PK", "KEK", "db", "dbx"):
         vendor=keys.get(f"{var}Vendor", {})
         customer=keys.get(f"{var}Customer", {})
-        rows.append([var, vendor.get("state","unknown"), vendor.get("certificate_count","-"), customer.get("state","unknown"), customer.get("certificate_count","-")])
-    click.echo(tabulate(rows, headers=["Variable","Vendor State","Vendor Certs","Customer State","Customer Certs"], tablefmt="simple"))
+        rows.append([var, vendor.get("state","unknown"), vendor.get("entry_count","-"), customer.get("state","unknown"), customer.get("entry_count","-")])
+    click.echo(tabulate(rows, headers=["Variable","Vendor State","Vendor Entries","Customer State","Customer Entries"], tablefmt="simple"))
 
 @secure_boot.command()
 def mode():
@@ -84,8 +84,8 @@ def keys_cmd():
     for var in ("PK","KEK","db","dbx"):
         for store,suffix in (("vendor","Vendor"),("customer","Customer")):
             item=data.get(f"{var}{suffix}", {})
-            rows.append([var,store,item.get("state","unknown"),item.get("certificate_count","-")])
-    click.echo(tabulate(rows, headers=["Variable","Store","State","Certificates"], tablefmt="simple"))
+            rows.append([var,store,item.get("state","unknown"),item.get("entry_count","-")])
+    click.echo(tabulate(rows, headers=["Variable","Store","State","Entries"], tablefmt="simple"))
 
 @secure_boot.command(name="key")
 @click.argument("variable", type=click.Choice(["PK","KEK","db","dbx"], case_sensitive=False))
@@ -97,5 +97,5 @@ def key_cmd(variable, store):
     except BackendError as exc:
         raise click.ClickException(str(exc))
     item = next(iter(data.values()))
-    rows = [["Variable", variable], ["Store", store], ["State", item.get("state","unknown")], ["Certificates", item.get("certificate_count","-")]]
+    rows = [["Variable", variable], ["Store", store], ["State", item.get("state","unknown")], ["Entries", item.get("entry_count","-")]]
     click.echo(tabulate(rows, tablefmt="plain"))
