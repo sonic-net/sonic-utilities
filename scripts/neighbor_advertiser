@@ -30,6 +30,7 @@ DEFAULT_DURATION = 300
 DEFAULT_REQUEST_TIMEOUT = 2
 DEFAULT_FERRET_QUERY_RETRIES = 3
 DEFAULT_CONFIG_DB_WAIT_TIME = 3 # seconds
+DEFAULT_VXLAN_CONFIG_DB_WAIT_TIME = 1 # seconds
 SYSLOG_IDENTIFIER = 'neighbor_advertiser'
 
 
@@ -556,6 +557,9 @@ def remove_vxlan_tunnel_map():
 
 def reset_vxlan_tunnel():
     remove_vxlan_tunnel_map()
+    # Allow orchagent to process the tunnel map deletion before the tunnel deletion.
+    # Otherwise, a scheduling race can leave orphaned VXLAN objects in ASIC_DB.
+    time.sleep(DEFAULT_VXLAN_CONFIG_DB_WAIT_TIME)
     remove_vxlan_tunnel()
     log.log_info('Finish resetting vxlan tunnel')
 
