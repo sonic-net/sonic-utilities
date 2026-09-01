@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sys
+import unittest
 from unittest import mock
 
 import pytest
@@ -21,6 +22,8 @@ from .bgp_commands_input.bgp_network_test_vector import (
 from . import config_int_ip_common
 import utilities_common.constants as constants
 import config.main as config
+
+unittest.TestCase.maxDiff = None
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
