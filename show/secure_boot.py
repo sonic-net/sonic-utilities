@@ -12,15 +12,24 @@ try:
 except Exception:  # pragma: no cover
     GROUP_CLS = click.Group
 
-BACKEND = "/usr/sbin/tam-uefi-tool"
+BACKEND = "/usr/sbin/secure-boot-backend"
 TIMEOUT = 180
+
 
 class BackendError(RuntimeError):
     pass
 
+
 def run_backend(*args):
     try:
-        cp = subprocess.run([BACKEND] + list(args), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=TIMEOUT, check=False)
+        cp = subprocess.run(
+            [BACKEND] + list(args),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=TIMEOUT,
+            check=False,
+        )
     except FileNotFoundError:
         raise BackendError(f"{BACKEND} is not installed")
     except subprocess.TimeoutExpired:
@@ -33,10 +42,12 @@ def run_backend(*args):
         raise BackendError(data.get("error", "secure boot backend failed"))
     return data
 
+
 @click.group(name="secure-boot", cls=GROUP_CLS)
 def secure_boot():
     """Show Secure Boot certificate backend state."""
     pass
+
 
 @secure_boot.command()
 def status():
@@ -49,12 +60,24 @@ def status():
     click.echo("Secure Boot Backend: platform")
     click.echo("UEFI Mode: {} ({}, {})".format(m["raw"], m["hex"], m["name"]))
     click.echo("")
-    rows=[]; keys=data["keys"]
+    rows = []
+    keys = data["keys"]
     for var in ("PK", "KEK", "db", "dbx"):
-        vendor=keys.get(f"{var}Vendor", {})
-        customer=keys.get(f"{var}Customer", {})
-        rows.append([var, vendor.get("state","unknown"), vendor.get("entry_count","-"), customer.get("state","unknown"), customer.get("entry_count","-")])
-    click.echo(tabulate(rows, headers=["Variable","Vendor State","Vendor Entries","Customer State","Customer Entries"], tablefmt="simple"))
+        vendor = keys.get(f"{var}Vendor", {})
+        customer = keys.get(f"{var}Customer", {})
+        rows.append([
+            var,
+            vendor.get("state", "unknown"),
+            vendor.get("entry_count", "-"),
+            customer.get("state", "unknown"),
+            customer.get("entry_count", "-"),
+        ])
+    click.echo(tabulate(
+        rows,
+        headers=["Variable", "Vendor State", "Vendor Entries", "Customer State", "Customer Entries"],
+        tablefmt="simple",
+    ))
+
 
 @secure_boot.command()
 def mode():
@@ -73,6 +96,7 @@ def mode():
     ]
     click.echo(tabulate(rows, tablefmt="plain"))
 
+
 @secure_boot.command(name="keys")
 def keys_cmd():
     """Show PK/KEK/db/dbx state."""
@@ -80,16 +104,17 @@ def keys_cmd():
         data = run_backend("keys")
     except BackendError as exc:
         raise click.ClickException(str(exc))
-    rows=[]
-    for var in ("PK","KEK","db","dbx"):
-        for store,suffix in (("vendor","Vendor"),("customer","Customer")):
-            item=data.get(f"{var}{suffix}", {})
-            rows.append([var,store,item.get("state","unknown"),item.get("entry_count","-")])
-    click.echo(tabulate(rows, headers=["Variable","Store","State","Entries"], tablefmt="simple"))
+    rows = []
+    for var in ("PK", "KEK", "db", "dbx"):
+        for store, suffix in (("vendor", "Vendor"), ("customer", "Customer")):
+            item = data.get(f"{var}{suffix}", {})
+            rows.append([var, store, item.get("state", "unknown"), item.get("entry_count", "-")])
+    click.echo(tabulate(rows, headers=["Variable", "Store", "State", "Entries"], tablefmt="simple"))
+
 
 @secure_boot.command(name="key")
-@click.argument("variable", type=click.Choice(["PK","KEK","db","dbx"], case_sensitive=False))
-@click.option("--store", type=click.Choice(["vendor","customer"]), default="customer", show_default=True)
+@click.argument("variable", type=click.Choice(["PK", "KEK", "db", "dbx"], case_sensitive=False))
+@click.option("--store", type=click.Choice(["vendor", "customer", "unified"]), default="customer", show_default=True)
 def key_cmd(variable, store):
     """Show one Secure Boot variable state."""
     try:
@@ -97,5 +122,10 @@ def key_cmd(variable, store):
     except BackendError as exc:
         raise click.ClickException(str(exc))
     item = next(iter(data.values()))
-    rows = [["Variable", variable], ["Store", store], ["State", item.get("state","unknown")], ["Entries", item.get("entry_count","-")]]
+    rows = [
+        ["Variable", variable],
+        ["Store", store],
+        ["State", item.get("state", "unknown")],
+        ["Entries", item.get("entry_count", "-")],
+    ]
     click.echo(tabulate(rows, tablefmt="plain"))

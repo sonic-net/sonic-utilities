@@ -74,6 +74,7 @@ from . import bgp_cli
 from . import stp
 from . import evpn_mh
 from . import llr
+from . import secure_boot
 
 # mock masic APIs for unit test
 try:
@@ -1847,6 +1848,9 @@ config.add_command(dns.dns)
 
 # Switchport module
 config.add_command(switchport.switchport)
+
+# Secure Boot module
+config.add_command(secure_boot.secure_boot)
 
 @config.command()
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false,

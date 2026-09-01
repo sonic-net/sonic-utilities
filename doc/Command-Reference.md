@@ -207,6 +207,9 @@
   * [sFlow Config commands](#sflow-config-commands)
 * [SED](#sed)
   * [SED Config commands](#sed-config-commands)
+* [Secure Boot Commands](#secure-boot-commands)
+  * [Secure Boot show commands](#secure-boot-show-commands)
+  * [Secure Boot config commands](#secure-boot-config-commands)
 * [SNMP](#snmp)
   * [SNMP Show commands](#snmp-show-commands)
   * [SNMP Config commands](#snmp-config-commands)
@@ -293,6 +296,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v13 | Sep-01-2026 | Add Secure Boot show and config commands |
 | v12 | Jul-16-2026 | Add console mirror commands |
 | v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
@@ -13320,6 +13324,148 @@ This command resets the SED password to the default value.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#sed)
+
+
+## Secure Boot Commands
+
+Secure Boot commands are used to display Secure Boot mode and variable state, and to submit authenticated-variable update operations for the standard UEFI Secure Boot variables `PK`, `KEK`, `db`, and `dbx`.
+
+The commands use a platform Secure Boot backend. The platform backend is responsible for validating authenticated-variable payloads, enforcing platform policy, and accessing protected Secure Boot variable storage. The exact mode, policy state, variable state, and entry counts are platform dependent.
+
+### Secure Boot show commands
+
+**show secure-boot status**
+
+This command displays the Secure Boot backend mode together with the state and entry count of `PK`, `KEK`, `db`, and `dbx` in the vendor and customer stores.
+
+- Usage:
+  ```
+  show secure-boot status
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show secure-boot status
+  Secure Boot Backend: platform
+  UEFI Mode: 43 (0x002b, Generic Mode)
+
+  Variable    Vendor State      Vendor Entries    Customer State      Customer Entries
+  ----------  ----------------  ----------------  ------------------  ------------------
+  PK          present                          1  empty                                0
+  KEK         present                          1  empty                                0
+  db          present                         23  empty                                0
+  dbx         empty                            0  empty                                0
+  ```
+
+**show secure-boot mode**
+
+This command displays the Secure Boot mode and the write/lock policy reported by the platform backend.
+
+- Usage:
+  ```
+  show secure-boot mode
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show secure-boot mode
+  Mode                  43 (Generic Mode)
+  Mode Hex              0x002b
+  Vendor store write    yes
+  Vendor store lock     yes
+  Customer store write  no
+  Customer store lock   yes
+  ```
+
+**show secure-boot keys**
+
+This command displays the state and entry count for `PK`, `KEK`, `db`, and `dbx` in each supported Secure Boot variable store.
+
+- Usage:
+  ```
+  show secure-boot keys
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show secure-boot keys
+  Variable    Store       State      Entries
+  ----------  ----------  ---------  -------
+  PK          vendor      present          1
+  PK          customer    empty            0
+  KEK         vendor      present          1
+  KEK         customer    empty            0
+  db          vendor      present         23
+  db          customer    empty            0
+  dbx         vendor      empty            0
+  dbx         customer    empty            0
+  ```
+
+**show secure-boot key**
+
+This command displays the state and entry count for one Secure Boot variable.
+
+- Usage:
+  ```
+  show secure-boot key <PK|KEK|db|dbx> [--store <vendor|customer|unified>]
+  ```
+
+- Parameters:
+  - _variable_: Secure Boot variable to display. Valid values are `PK`, `KEK`, `db`, and `dbx`.
+  - `--store`: Secure Boot variable store to query. Valid values are `vendor`, `customer`, and `unified`. The default is `customer`.
+
+- Example:
+  ```
+  admin@sonic:~$ show secure-boot key PK --store vendor
+  Variable  PK
+  Store     vendor
+  State     present
+  Entries   1
+  ```
+
+  The `unified` store reports the effective Secure Boot variable state exposed by platforms that provide a unified view of the underlying Secure Boot variable stores:
+  ```
+  admin@sonic:~$ show secure-boot key db --store unified
+  Variable  db
+  Store     unified
+  State     present
+  Entries   23
+  ```
+
+### Secure Boot config commands
+
+Secure Boot configuration commands submit authenticated update material to the platform Secure Boot backend. The CLI does not generate or store private signing keys.
+
+**config secure-boot certificate update**
+
+This command submits an authenticated-variable update file for `PK`, `KEK`, `db`, or `dbx`.
+
+- Usage:
+  ```
+  config secure-boot certificate update <PK|KEK|db|dbx> <auth-var-file> [--operation <append|update|remove>]
+  ```
+
+- Parameters:
+  - _variable_: Secure Boot variable to update. Valid values are `PK`, `KEK`, `db`, and `dbx`.
+  - _auth-var-file_: Path to the authenticated-variable update file.
+  - `--operation`: Update operation. Valid values are `append`, `update`, and `remove`. The default is `update`.
+
+  This single command covers authenticated-variable update operations:
+  - Append new material to a variable: `--operation append`.
+  - Replace the current contents of a variable: `--operation update`.
+  - Remove authorized material from a variable: `--operation remove`.
+
+  For example, revoking a previously trusted image or certificate can be performed by submitting an authenticated update that appends the corresponding revocation entry to `dbx`.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config secure-boot certificate update db db.auth --operation append
+  Secure Boot certificate update submitted successfully
+  Variable: db
+  Operation: append
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#secure-boot-commands)
 
 ## SNMP
 
