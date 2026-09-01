@@ -264,6 +264,18 @@ class ServiceCreator:
         if container_spec['privileged']:
             run_opt.append('--privileged')
 
+        for capability in container_spec['cap-add']:
+            run_opt.append(f'--cap-add={capability}')
+
+        for option in container_spec['security-opt']:
+            run_opt.append(f'--security-opt={option}')
+
+        for ulimit in container_spec['ulimits']:
+            run_opt.append(f'--ulimit={ulimit}')
+
+        for device in container_spec['devices']:
+            run_opt.append(f'--device={device}')
+
         run_opt.append('-t')
 
         for volume in container_spec['volumes']:

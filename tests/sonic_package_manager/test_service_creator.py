@@ -14,6 +14,8 @@ from sonic_package_manager.package import Package
 from sonic_package_manager.service_creator.creator import *
 from sonic_package_manager.service_creator.creator import ETC_SYSTEMD_LOCATION
 from sonic_package_manager.service_creator.feature import FeatureRegistry
+from sonic_package_manager.service_creator.creator import DOCKER_CTL_SCRIPT_LOCATION, DOCKER_CTL_SCRIPT_TEMPLATE
+from sonic_package_manager.service_creator.creator import TEMPLATES_PATH
 
 
 @pytest.fixture
@@ -149,6 +151,32 @@ def test_service_creator_with_debug_dump(sonic_fs, manifest, service_creator):
     service_creator.create(package)
 
     assert sonic_fs.exists(os.path.join(DEBUG_DUMP_SCRIPT_LOCATION, 'test'))
+
+
+def test_service_creator_container_hardening_opts(sonic_fs, manifest, service_creator):
+    entry = PackageEntry('test', 'azure/sonic-test')
+    manifest['container']['privileged'] = False
+    manifest['container']['cap-add'] = ['NET_ADMIN']
+    manifest['container']['security-opt'] = ['apparmor=unconfined']
+    manifest['container']['ulimits'] = ['nofile=65536:65536']
+    manifest['container']['devices'] = ['/dev/mem']
+
+    tmpl_path = os.path.join(TEMPLATES_PATH, DOCKER_CTL_SCRIPT_TEMPLATE)
+    with open(tmpl_path, 'w') as tmpl:
+        tmpl.write('{{ docker_image_run_opt }}')
+
+    package = Package(entry, Metadata(manifest))
+    service_creator.create(package)
+
+    with open(os.path.join(DOCKER_CTL_SCRIPT_LOCATION, 'test.sh')) as script:
+        run_opt = script.read()
+
+    assert '--privileged' not in run_opt
+    assert '--cap-add=NET_ADMIN' in run_opt
+    assert '--security-opt=apparmor=unconfined' in run_opt
+    assert '--ulimit=nofile=65536:65536' in run_opt
+    assert '--device=/dev/mem' in run_opt
+    assert '-v /etc/sonic:/etc/sonic:ro' in run_opt
 
 
 def test_service_creator_yang(sonic_fs, manifest, mock_sonic_db,

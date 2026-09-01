@@ -219,6 +219,10 @@ class ManifestSchema:
         ]),
         ManifestRoot('container', [
             ManifestField('privileged', DefaultMarshaller(bool), False),
+            ManifestArray('cap-add', DefaultMarshaller(str)),
+            ManifestArray('security-opt', DefaultMarshaller(str)),
+            ManifestArray('ulimits', DefaultMarshaller(str)),
+            ManifestArray('devices', DefaultMarshaller(str)),
             ManifestArray('volumes', DefaultMarshaller(str)),
             ManifestArray('mounts', ManifestRoot('mounts', [
                 ManifestField('source', DefaultMarshaller(str)),
