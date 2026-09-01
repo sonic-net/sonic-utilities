@@ -1,6 +1,7 @@
 import ipaddress
 import os
 import re
+import shlex
 import subprocess
 import time
 from .gu_common import genericUpdaterLogging
@@ -31,12 +32,13 @@ def command_wrapper(command):
     """
     if command[0] == "systemctl":
         command = ["nsenter", "--target", "1", "--pid", "--mount", "--uts", "--ipc", "--net"] + command
+    command_text = shlex.join(command)
     try:
         result = subprocess.run(command, capture_output=True, check=False, text=True)
 
         if result.returncode != 0:
             logger.log(logger.LOG_PRIORITY_ERROR,
-                       f"Command failed: {command!r}, returncode: {result.returncode}",
+                       f"Command failed: '{command_text}', returncode: {result.returncode}",
                        print_to_console)
             if result.stdout:
                 logger.log(logger.LOG_PRIORITY_ERROR,
@@ -50,7 +52,7 @@ def command_wrapper(command):
         return result.returncode
     except Exception as e:
         logger.log(logger.LOG_PRIORITY_ERROR,
-                   f"Command execution failed: {command}, error: {e}",
+                   f"Command execution failed: {command_text}, error: {e}",
                    print_to_console)
         return 1
 

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from generic_config_updater.services_validator import (
+    command_wrapper,
     vlan_validator,
     rsyslog_validator,
     caclmgrd_validator,
@@ -373,6 +374,34 @@ test_telemetry_data = [
 
 
 class TestServiceValidator(unittest.TestCase):
+
+    @patch("generic_config_updater.services_validator.logger")
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_command_wrapper_logs_stable_command_format(self, mock_subprocess, mock_logger):
+        mock_subprocess.return_value = MockSubprocessResult(1)
+
+        result = command_wrapper(["systemctl", "restart", "dhcp_relay"])
+
+        self.assertEqual(result, 1)
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command failed: 'nsenter --target 1 --pid --mount --uts --ipc --net "
+            "systemctl restart dhcp_relay', returncode: 1",
+            False
+        )
+
+        mock_logger.reset_mock()
+        mock_subprocess.side_effect = OSError("execution error")
+
+        result = command_wrapper(["systemctl", "restart", "dhcp_relay"])
+
+        self.assertEqual(result, 1)
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command execution failed: nsenter --target 1 --pid --mount --uts --ipc --net "
+            "systemctl restart dhcp_relay, error: execution error",
+            False
+        )
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_change_apply_subprocess_run(self, mock_subprocess):
