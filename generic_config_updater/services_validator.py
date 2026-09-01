@@ -32,7 +32,7 @@ def command_wrapper(command):
     """
     if command[0] == "systemctl":
         command = ["nsenter", "--target", "1", "--pid", "--mount", "--uts", "--ipc", "--net"] + command
-    command_text = shlex.join(command)
+    command_text = " ".join(shlex.quote(arg) for arg in command)
     try:
         result = subprocess.run(command, capture_output=True, check=False, text=True)
 
