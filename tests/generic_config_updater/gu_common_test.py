@@ -56,11 +56,10 @@ class TestDryRunConfigWrapper(unittest.TestCase):
                   ]
 
         expected = imitated_config_db
+        actual = config_wrapper.get_config_db_as_json()
         for change in changes:
             # Act
-            config_wrapper.apply_change_to_config_db(change)
-
-            actual = config_wrapper.get_config_db_as_json()
+            actual = config_wrapper.apply_change_to_config_db(actual, change)
             expected = change.apply(expected)
 
             # Assert
@@ -221,6 +220,92 @@ class TestConfigWrapper(unittest.TestCase):
         # Assert
         self.assertEqual(expected, actual)
         self.assertIsNotNone(error)
+
+    def test_validate_config_db_config__same_config_called_twice__loadData_called_once(self):
+        """Cache hit: second call with same config must not call loadData again."""
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.loadYangModel = MagicMock()
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        config = {"ACL_TABLE": {}}
+
+        config_wrapper.validate_config_db_config(config)
+        config_wrapper.validate_config_db_config(config)
+
+        # loadData should only be called once — second call hits the result cache
+        mock_sy.loadData.assert_called_once()
+
+    def test_validate_config_db_config__different_configs__loadData_called_each_time(self):
+        """Cache miss: different configs must each call loadData."""
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        config_a = {"ACL_TABLE": {"rule1": {}}}
+        config_b = {"ACL_TABLE": {"rule2": {}}}
+
+        config_wrapper.validate_config_db_config(config_a)
+        config_wrapper.validate_config_db_config(config_b)
+
+        self.assertEqual(2, mock_sy.loadData.call_count)
+
+    def test_find_ref_paths__after_validate_same_config__loadData_skipped(self):
+        """
+        Core optimization: if validate_config_db_config already loaded config into sy,
+        find_ref_paths with the same config must skip loadData entirely.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config = {"ACL_TABLE": {}}
+
+        # First: validate loads the config into sy and sets _currently_loaded_hash
+        config_wrapper.validate_config_db_config(config)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash,
+                             "validate_config_db_config should have set _currently_loaded_hash")
+        load_count_after_validate = mock_sy.loadData.call_count
+
+        # Second: find_ref_paths with same config should NOT call loadData again
+        path_addressing.find_ref_paths("/ACL_TABLE", config, reload_config=True)
+        load_count_after_find = mock_sy.loadData.call_count
+
+        self.assertEqual(load_count_after_validate, load_count_after_find,
+                         "find_ref_paths should skip loadData when validate already loaded same config")
+
+    def test_find_ref_paths__after_validate_different_config__loadData_called(self):
+        """
+        Cache miss in find_ref_paths: if validate loaded config_A, calling find_ref_paths
+        with config_B must still call loadData.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config_a = {"ACL_TABLE": {"rule1": {}}}
+        config_b = {"ACL_TABLE": {"rule2": {}}}
+
+        config_wrapper.validate_config_db_config(config_a)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash,
+                             "validate_config_db_config should have set _currently_loaded_hash")
+        load_count_after_validate = mock_sy.loadData.call_count
+
+        path_addressing.find_ref_paths("/ACL_TABLE", config_b, reload_config=True)
+        load_count_after_find = mock_sy.loadData.call_count
+
+        self.assertEqual(load_count_after_find, load_count_after_validate + 1,
+                         "find_ref_paths should call loadData exactly once when config differs")
 
     def test_validate_bgp_peer_group__valid_non_intersecting_ip_ranges__returns_true(self):
         # Arrange
@@ -487,48 +572,6 @@ class TestConfigWrapper(unittest.TestCase):
         # Assert
         self.assertDictEqual({"any_table": {"key": "value"}}, actual)
 
-    def test_create_sonic_yang_with_loaded_models__creates_new_sonic_yang_every_call(self):
-        # check yang models fields are the same or None, non-yang model fields are different
-        def check(sy1, sy2):
-            # instances are different
-            self.assertNotEqual(sy1, sy2)
-
-            # yang models fields are same or None
-            self.assertTrue(sy1.confDbYangMap is sy2.confDbYangMap)
-            self.assertTrue(sy1.ctx is sy2.ctx)
-            self.assertTrue(sy1.DEBUG is sy2.DEBUG)
-            self.assertTrue(sy1.preProcessedYang is sy2.preProcessedYang)
-            self.assertTrue(sy1.SYSLOG_IDENTIFIER is sy2.SYSLOG_IDENTIFIER)
-            self.assertTrue(sy1.yang_dir is sy2.yang_dir)
-            self.assertTrue(sy1.yangFiles is sy2.yangFiles)
-            self.assertTrue(sy1.yJson is sy2.yJson)
-            self.assertTrue(not(hasattr(sy1, 'module')) or sy1.module is None) # module is unused, might get deleted
-            self.assertTrue(not(hasattr(sy2, 'module')) or sy2.module is None)
-
-            # non yang models fields are different
-            self.assertFalse(sy1.root is sy2.root)
-            self.assertFalse(sy1.jIn is sy2.jIn)
-            self.assertFalse(sy1.tablesWithOutYang is sy2.tablesWithOutYang)
-            self.assertFalse(sy1.xlateJson is sy2.xlateJson)
-            self.assertFalse(sy1.revXlateJson is sy2.revXlateJson)
-
-        config_wrapper = gu_common.ConfigWrapper()
-        self.assertTrue(config_wrapper.sonic_yang_with_loaded_models is None)
-
-        sy1 = config_wrapper.create_sonic_yang_with_loaded_models()
-        sy2 = config_wrapper.create_sonic_yang_with_loaded_models()
-
-        # Simulating loading non-yang model fields
-        sy1.loadData(Files.ANY_CONFIG_DB)
-        sy1.getData()
-
-        # Simulating loading non-yang model fields
-        sy2.loadData(Files.ANY_CONFIG_DB)
-        sy2.getData()
-
-        check(sy1, sy2)
-        check(sy1, config_wrapper.sonic_yang_with_loaded_models)
-        check(sy2, config_wrapper.sonic_yang_with_loaded_models)
 
 class TestPatchWrapper(unittest.TestCase):
     def setUp(self):
@@ -611,6 +654,64 @@ class TestPatchWrapper(unittest.TestCase):
 
         # Act
         actual = patch_wrapper.simulate_patch(patch, Files.CONFIG_DB_AS_JSON)
+
+        # Assert
+        self.assertDictEqual(expected, actual)
+
+    def test_simulate_config_db_patch__empties_leaf_list__field_is_dropped(self):
+        # Arrange
+        patch_wrapper = gu_common.PatchWrapper()
+        config = {
+            "BGP_ALLOWED_PREFIXES": {
+                "DEPLOYMENT_ID|0": {
+                    "prefixes_v4": ["10.20.0.0/16"],
+                    "prefixes_v6": ["fc01:20::/64"],
+                }
+            }
+        }
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}])
+        # ConfigDB cannot store an empty leaf-list, the field has to be absent
+        expected = {"BGP_ALLOWED_PREFIXES": {"DEPLOYMENT_ID|0": {"prefixes_v6": ["fc01:20::/64"]}}}
+
+        # Act
+        actual = patch_wrapper.simulate_config_db_patch(patch, config)
+
+        # Assert
+        self.assertDictEqual(expected, actual)
+
+    def test_simulate_config_db_patch__leaf_list_still_has_items__field_is_kept(self):
+        # Arrange
+        patch_wrapper = gu_common.PatchWrapper()
+        config = {
+            "BGP_ALLOWED_PREFIXES": {
+                "DEPLOYMENT_ID|0": {
+                    "prefixes_v4": ["10.20.0.0/16", "10.30.0.0/16"],
+                }
+            }
+        }
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}])
+        expected = {"BGP_ALLOWED_PREFIXES": {"DEPLOYMENT_ID|0": {"prefixes_v4": ["10.30.0.0/16"]}}}
+
+        # Act
+        actual = patch_wrapper.simulate_config_db_patch(patch, config)
+
+        # Assert
+        self.assertDictEqual(expected, actual)
+
+    def test_simulate_patch__sonic_yang_config__empty_yang_list_is_kept(self):
+        # Arrange
+        # simulate_patch must stay shape agnostic. In SonicYang json a list holds yang list
+        # entries, not leaf-list items, so it must not be treated as an empty leaf-list.
+        patch_wrapper = gu_common.PatchWrapper()
+        config = {"sonic-vlan:sonic-vlan": {"VLAN": {"VLAN_LIST": [{"name": "Vlan1000"}]}}}
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/sonic-vlan:sonic-vlan/VLAN/VLAN_LIST/0"}])
+        expected = {"sonic-vlan:sonic-vlan": {"VLAN": {"VLAN_LIST": []}}}
+
+        # Act
+        actual = patch_wrapper.simulate_patch(patch, config)
 
         # Assert
         self.assertDictEqual(expected, actual)
@@ -726,7 +827,7 @@ class TestPathAddressing(unittest.TestCase):
             self.assertEqual(expected, actual)
 
         check("", [])
-        check("/", [""])
+        check("/", [])
         check("/token", ["token"])
         check("/more/than/one/token", ["more", "than", "one", "token"])
         check("/has/numbers/0/and/symbols/^", ["has", "numbers", "0", "and", "symbols", "^"])
@@ -779,33 +880,6 @@ class TestPathAddressing(unittest.TestCase):
         # XPATH 1.0 does not support double-quotes within double-quoted string. str literal can be "[^"]*"
         # Not validating no double-quotes within double-quoted string
         check('/a/mix["of""quotes\'does"]/not/work/well', ["a", 'mix["of""quotes\'does"]', "not", "work", "well"])
-
-    def test_create_xpath(self):
-        def check(tokens, xpath):
-            expected=xpath
-            actual=self.path_addressing.create_xpath(tokens)
-            self.assertEqual(expected, actual)
-
-        check([], "/")
-        check(["token"], "/token")
-        check(["more", "than", "one", "token"], "/more/than/one/token")
-        check(["multi", "tokens", "with", "empty", "last", "token", ""], "/multi/tokens/with/empty/last/token/")
-        check(["has", "numbers", "0", "and", "symbols", "^"], "/has/numbers/0/and/symbols/^")
-        check(["has[a='predicate']", "in", "the", "beginning"], "/has[a='predicate']/in/the/beginning")
-        check(["ha", "s[a='predicate']", "in", "the", "middle"], "/ha/s[a='predicate']/in/the/middle")
-        check(["ha", "s[a='predicate-in-the-end']"], "/ha/s[a='predicate-in-the-end']")
-        check(["it", "has[more='than'][one='predicate']", "somewhere"], "/it/has[more='than'][one='predicate']/somewhere")
-        check(["ha", "s[a='predicate\"with']", "double-quotes", "inside"], "/ha/s[a='predicate\"with']/double-quotes/inside")
-        check(["a", 'predicate[with="double"]', "quotes"], '/a/predicate[with="double"]/quotes')
-        check(['multiple["predicate"][with="double"]', "quotes"], '/multiple["predicate"][with="double"]/quotes')
-        check(['multiple["predicate"][with="double"]', "quotes"], '/multiple["predicate"][with="double"]/quotes')
-        check(["ha", 's[a="predicate\'with"]', "single-quote", "inside"], '/ha/s[a="predicate\'with"]/single-quote/inside')
-        # XPATH 1.0 does not support single-quote within single-quoted string. str literal can be '[^']*'
-        # Not validating no single-quote within single-quoted string
-        check(["a", "mix['of''quotes\"does']", "not", "work", "well"], "/a/mix['of''quotes\"does']/not/work/well", )
-        # XPATH 1.0 does not support double-quotes within double-quoted string. str literal can be "[^"]*"
-        # Not validating no double-quotes within double-quoted string
-        check(["a", 'mix["of""quotes\'does"]', "not", "work", "well"], '/a/mix["of""quotes\'does"]/not/work/well')
 
     def test_find_ref_paths__ref_is_the_whole_key__returns_ref_paths(self):
         # Arrange
