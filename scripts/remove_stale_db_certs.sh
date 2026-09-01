@@ -231,6 +231,27 @@ auth_to_esl() {
     [ -s "$_out" ] || return 1
 }
 
+# Validate that an authenticated update is structurally valid and carries no
+# EFI Signature List payload, as required for replacing db with an empty list.
+validate_remove_all_auth() {
+    _auth="$1"
+    _dw="$(read_u32le "$_auth" 16)" \
+        || die "invalid remove-all .auth header: $REMOVE_ALL_AUTH"
+    [ "$_dw" -gt 24 ] \
+        || die "invalid remove-all .auth certificate length: $REMOVE_ALL_AUTH"
+
+    _size="$(wc -c < "$_auth" | tr -d ' ')"
+    _header_size=$((16 + _dw))
+    [ "$_size" -eq "$_header_size" ] \
+        || die "remove-all .auth must contain an empty signature-list payload: $REMOVE_ALL_AUTH"
+
+    _pkcs7_size=$((_dw - 24))
+    dd if="$_auth" of="$WORK/remove_all.p7b" bs=1 skip=40 count="$_pkcs7_size" 2>/dev/null \
+        || die "failed to read remove-all .auth signature: $REMOVE_ALL_AUTH"
+    openssl asn1parse -inform DER -in "$WORK/remove_all.p7b" -noout >/dev/null 2>&1 \
+        || die "invalid DER signature structure in remove-all .auth: $REMOVE_ALL_AUTH"
+}
+
 # ---------------------------------------------------------------------------
 # Build the db certificate table
 # ---------------------------------------------------------------------------
@@ -583,6 +604,7 @@ fi
 [ -f "$REMOVE_ALL_AUTH" ] \
     || die "remove-all .auth not found: $REMOVE_ALL_AUTH (supply the signed empty-db .auth)"
 [ -s "$REMOVE_ALL_AUTH" ] || die "remove-all .auth is empty: $REMOVE_ALL_AUTH"
+validate_remove_all_auth "$REMOVE_ALL_AUTH"
 
 # Verify each selected reinstall .auth actually exists on disk.
 while IFS= read -r a; do
