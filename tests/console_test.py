@@ -896,6 +896,24 @@ class TestConsutilLib(object):
         print('[{}]'.format(', '.join(map(str, ports))))
         assert len(ports) == 2
 
+    @mock.patch('consutil.lib.SysInfoProvider.list_console_ttys',
+                mock.MagicMock(return_value=["/dev/ttyUSB2"]))
+    def test_console_port_info_configured_unconfigured_line(self):
+        """Regression test for #4745: a tty with no CONSOLE_PORT entry is not
+        'configured', so it must be rendered as '-' rather than as a
+        configured-but-disabled ('Disabled') line."""
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        provider = ConsolePortProvider(db, configured_only=False)
+        ports = {port.line_num: port for port in provider.get_all()}
+
+        # configured port with flow_control field omitted -> still configured, "Disabled"
+        assert ports["1"].configured is True
+        assert ports["1"].flow_control is False
+        # tty with no CONSOLE_PORT entry at all -> not configured
+        assert ports["2"].configured is False
+
     def test_console_port_provider_get_line_success(self):
         db = Db()
         db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
@@ -1249,6 +1267,30 @@ class TestConsutilShow(object):
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         assert result.output == TestConsutilShow.expect_show_output
+
+    @mock.patch('consutil.lib.SysInfoProvider.init_device_prefix', mock.MagicMock(return_value=None))
+    @mock.patch('consutil.lib.SysInfoProvider.list_active_console_processes',
+                mock.MagicMock(return_value={}))
+    @mock.patch('consutil.lib.SysInfoProvider.list_console_ttys',
+                mock.MagicMock(return_value=["/dev/ttyUSB2"]))
+    def test_show_unconfigured_line_flow_control(self):
+        """Regression test for #4745: an available tty with no CONSOLE_PORT entry must
+        show '-' for Flow Control, not 'Disabled'."""
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", 1, {"baud_rate": "9600"})
+        db.cfgdb.set_entry("CONSOLE_PORT", 3, {"baud_rate": "9600", "flow_control": "1"})
+
+        # do not use '--brief' so the unconfigured tty (line 2) is included
+        result = runner.invoke(consutil.consutil.commands["show"], [], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+
+        rows = {row.split()[0].lstrip('*'): row.split() for row in result.output.splitlines()[2:] if row.strip()}
+        assert rows["1"][2] == "Disabled"  # configured, flow_control field omitted
+        assert rows["2"][2] == "-"         # unconfigured tty
+        assert rows["3"][2] == "Enabled"   # configured, flow_control=1
 
 
 class TestConsutilShowEscape(object):

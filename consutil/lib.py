@@ -28,6 +28,9 @@ CONSOLE_SWITCH_TABLE = "CONSOLE_SWITCH"
 
 LINE_KEY = "LINE"
 CUR_STATE_KEY = "CUR_STATE"
+# Internal marker (not a CONFIG_DB/STATE_DB field) set only on bare tty lines discovered
+# on the filesystem that have no CONSOLE_PORT entry.
+UNCONFIGURED_KEY = "_UNCONFIGURED"
 
 # CONFIG_DB Keys
 BAUD_KEY = "baud_rate"
@@ -201,7 +204,10 @@ class ConsolePortProvider(object):
             for tty in available_ttys:
                 k = tty[len(SysInfoProvider.DEVICE_PREFIX):]
                 if k not in keys:
-                    port = { LINE_KEY: k }
+                    port = {
+                        LINE_KEY: k,
+                        UNCONFIGURED_KEY: True,
+                    }
                     ports.append(port)
         self._ports = ports
 
@@ -226,6 +232,10 @@ class ConsolePortInfo(object):
     @property
     def flow_control(self):
         return FLOW_KEY in self._info and self._info[FLOW_KEY] == "1"
+
+    @property
+    def configured(self):
+        return not self._info.get(UNCONFIGURED_KEY, False)
 
     @property
     def remote_device(self):
