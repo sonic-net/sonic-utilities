@@ -34,6 +34,31 @@ def _set_config(db, field, value):
     click.echo("DLDD configuration '{}' set to '{}'".format(field, value))
 
 
+def _setting_callback(field, argument_name):
+    if argument_name == "count":
+        def callback(db, count):
+            _set_config(db, field, count)
+    else:
+        def callback(db, seconds):
+            _set_config(db, field, seconds)
+    return callback
+
+
+def _register_settings(group, settings):
+    """Register declarative single-field DLDD configuration commands."""
+    for symbol, command_name, field, argument_name, help_text in settings:
+        callback = _setting_callback(field, argument_name)
+        callback.__name__ = symbol
+        callback.__qualname__ = symbol
+        callback.__doc__ = help_text
+        command = group.command(command_name)(
+            click.argument(argument_name, type=_config_integer(field))(
+                clicommon.pass_db(callback)
+            )
+        )
+        globals()[symbol] = command
+
+
 @click.group(cls=clicommon.AbbreviationGroup)
 def dldd():
     """Configure device-local diagnosis."""
@@ -46,22 +71,16 @@ def threshold():
     pass
 
 
-@threshold.command("individual-max-failure")
-@click.argument(
-    "count", type=_config_integer("individual_max_failure_threshold")
+_register_settings(
+    threshold,
+    (
+        ("individual_max_failure", "individual-max-failure",
+         "individual_max_failure_threshold", "count",
+         "Set consecutive failures tolerated for an individual rule/key."),
+        ("broken_rules_max", "broken-rules-max", "broken_rules_max_threshold",
+         "count", "Set the broken-rule count tolerated before service failure."),
+    ),
 )
-@clicommon.pass_db
-def individual_max_failure(db, count):
-    """Set consecutive failures tolerated for an individual rule/key."""
-    _set_config(db, "individual_max_failure_threshold", count)
-
-
-@threshold.command("broken-rules-max")
-@click.argument("count", type=_config_integer("broken_rules_max_threshold"))
-@clicommon.pass_db
-def broken_rules_max(db, count):
-    """Set the broken-rule count tolerated before service failure."""
-    _set_config(db, "broken_rules_max_threshold", count)
 
 
 @dldd.command("polling-interval")
@@ -78,60 +97,29 @@ def polling_interval(db, monitor, seconds):
     _set_config(db, POLLING_INTERVAL_FIELDS[monitor.lower()], seconds)
 
 
-@dldd.command("source-unavailable-grace-period")
-@click.argument(
-    "seconds", type=_config_integer("source_unavailable_grace_period")
+_register_settings(
+    dldd,
+    (
+        ("source_unavailable_grace_period", "source-unavailable-grace-period",
+         "source_unavailable_grace_period", "seconds",
+         "Set source-unavailability grace time in seconds."),
+        ("source_recovery_samples", "source-recovery-samples",
+         "source_recovery_samples", "count",
+         "Set successful samples required to recover a source."),
+        ("inactive_fault_retention_period", "inactive-fault-retention-period",
+         "inactive_fault_retention_period", "seconds",
+         "Set inactive-fault retention time in seconds."),
+        ("fault_evidence_ack_timeout", "fault-evidence-ack-timeout",
+         "fault_evidence_ack_timeout", "seconds",
+         "Set the initial fault-evidence acknowledgement timeout in seconds."),
+        ("active_fault_recheck_interval", "active-fault-recheck-interval",
+         "active_fault_recheck_interval", "seconds",
+         "Set the active-fault recheck interval in seconds."),
+        ("rules_inbox_settle_time", "rules-inbox-settle-time",
+         "rules_inbox_settle_time", "seconds",
+         "Set the rules-inbox stability window in seconds."),
+    ),
 )
-@clicommon.pass_db
-def source_unavailable_grace_period(db, seconds):
-    """Set source-unavailability grace time in seconds."""
-    _set_config(db, "source_unavailable_grace_period", seconds)
-
-
-@dldd.command("source-recovery-samples")
-@click.argument("count", type=_config_integer("source_recovery_samples"))
-@clicommon.pass_db
-def source_recovery_samples(db, count):
-    """Set successful samples required to recover a source."""
-    _set_config(db, "source_recovery_samples", count)
-
-
-@dldd.command("inactive-fault-retention-period")
-@click.argument(
-    "seconds", type=_config_integer("inactive_fault_retention_period")
-)
-@clicommon.pass_db
-def inactive_fault_retention_period(db, seconds):
-    """Set inactive-fault retention time in seconds."""
-    _set_config(db, "inactive_fault_retention_period", seconds)
-
-
-@dldd.command("fault-evidence-ack-timeout")
-@click.argument(
-    "seconds", type=_config_integer("fault_evidence_ack_timeout")
-)
-@clicommon.pass_db
-def fault_evidence_ack_timeout(db, seconds):
-    """Set the initial fault-evidence acknowledgement timeout in seconds."""
-    _set_config(db, "fault_evidence_ack_timeout", seconds)
-
-
-@dldd.command("active-fault-recheck-interval")
-@click.argument(
-    "seconds", type=_config_integer("active_fault_recheck_interval")
-)
-@clicommon.pass_db
-def active_fault_recheck_interval(db, seconds):
-    """Set the active-fault recheck interval in seconds."""
-    _set_config(db, "active_fault_recheck_interval", seconds)
-
-
-@dldd.command("rules-inbox-settle-time")
-@click.argument("seconds", type=_config_integer("rules_inbox_settle_time"))
-@clicommon.pass_db
-def rules_inbox_settle_time(db, seconds):
-    """Set the rules-inbox stability window in seconds."""
-    _set_config(db, "rules_inbox_settle_time", seconds)
 
 
 @dldd.command("clear-state")

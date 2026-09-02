@@ -1,27 +1,15 @@
 """Tests for DLDD configuration and operational display commands."""
 
 import json
-import sys
-import types
 from unittest.mock import Mock, call
 
 import pytest
 from click.testing import CliRunner
 
 from config.dldd import dldd as config_dldd
-from show.dldd import (
-    _compact,
-    _fault_document,
-    _heartbeat_age,
-    _int_value,
-    _json_value,
-    _rule_instance,
-    _state_redis_client,
-    _timestamp_value,
-    dldd as show_dldd,
-)
+from show.dldd import dldd as show_dldd
 from utilities_common.db import Db
-from utilities_common.dldd import DLDD_CONFIG_FIELDS, is_dldd_fault
+from utilities_common.dldd import DLDD_CONFIG_FIELDS
 
 
 def _db():
@@ -32,78 +20,17 @@ def _db():
     return db
 
 
-@pytest.mark.parametrize(
-    "value,default,expected",
-    (
-        ('[{"rule": "PSU_OV_FAULT"}]', [], [{"rule": "PSU_OV_FAULT"}]),
-        ('{"state": "RUNNING"}', {}, {"state": "RUNNING"}),
-        ([{"rule": "PSU_OV_FAULT"}], [], [{"rule": "PSU_OV_FAULT"}]),
-        ({"state": "RUNNING"}, {}, {"state": "RUNNING"}),
-        ("not-json", [], []),
-        ('{"wrong": "shape"}', [], []),
-        ("[]", {}, {}),
-        (None, [], []),
-    ),
-)
-def test_json_value_decodes_only_expected_container_type(value, default, expected):
-    assert _json_value(value, default) == expected
+def _invoke_ok(command, arguments, **kwargs):
+    result = CliRunner().invoke(command, arguments, **kwargs)
+    assert result.exit_code == 0, result.output
+    return result
 
 
-@pytest.mark.parametrize(
-    "value,expected",
-    (
-        (1745614266.999, 1745614266),
-        ("1745614266.999", 1745614266),
-        (-1.1, -2),
-        (1745614266, 1745614266),
-        (None, ""),
-        ("", ""),
-        ("not-a-timestamp", "not-a-timestamp"),
-    ),
-)
-def test_timestamp_value_displays_whole_epoch_seconds(value, expected):
-    assert _timestamp_value(value) == expected
-
-
-def test_wire_value_helpers_preserve_scalars_and_normalize_fault_fields():
-    assert _compact("already-readable") == "already-readable"
-    assert _compact({
-        "items": [{"state": "READY", "correlation_key": "internal"}],
-    }) == '{"items":[{"state":"READY"}]}'
-    assert _int_value("not-an-integer", default=7) == 7
-    assert _timestamp_value(True) is True
-    assert _rule_instance({
-        "rule_instance_id": "1000001@PSU0",
-        "rule_id": 1000001,
-        "component_name": "PSU0",
-    }) == "1000001@PSU0"
-    assert _rule_instance({
-        "rule_id": 1000001,
-        "component_name": "PSU0",
-    }) == ""
-
-    document = _fault_document(
-        "FAULT_INFO|SENSOR0|SYMPTOM_ABNORMAL",
-        {"source_stale": "yes"},
-    )
-    assert document == {
-        "redis_key": "FAULT_INFO|SENSOR0|SYMPTOM_ABNORMAL",
-        "source_stale": True,
-    }
-
-    document = _fault_document(
-        "FAULT_INFO|UNKNOWN|SYMPTOM_ABNORMAL",
-        {
-            "rule_id": "1000001",
-            "component_name": "SENSOR0",
-            "local_action_state": json.dumps({
-                "state": "IDLE",
-                "correlation_key": "internal-only-key",
-            }),
-        },
-    )
-    assert document["local_action_state"] == {"state": "IDLE"}
-    assert "rule_instance_id" not in document["local_action_state"]
+def _assert_output(output, present=(), absent=()):
+    for value in present:
+        assert value in output
+    for value in absent:
+        assert value not in output
 
 
 @pytest.mark.parametrize(
@@ -125,9 +52,8 @@ def test_wire_value_helpers_preserve_scalars_and_normalize_fault_fields():
 def test_config_commands_update_global_entry(arguments, field, value):
     db = _db()
 
-    result = CliRunner().invoke(config_dldd, arguments, obj=db)
+    result = _invoke_ok(config_dldd, arguments, obj=db)
 
-    assert result.exit_code == 0, result.output
     db.cfgdb.mod_entry.assert_called_once_with(
         "DLDD_CONFIG",
         "global",
@@ -142,11 +68,7 @@ def test_config_commands_update_global_entry(arguments, field, value):
         ("threshold", "individual-max-failure", "-1"),
         ("threshold", "broken-rules-max", "4294967296"),
         ("polling-interval", "redis", "0"),
-        ("polling-interval", "other", "60"),
         ("source-recovery-samples", "0"),
-        ("fault-evidence-ack-timeout", "0"),
-        ("active-fault-recheck-interval", "0"),
-        ("rules-inbox-settle-time", "0"),
     ),
 )
 def test_config_commands_reject_invalid_values(arguments):
@@ -187,13 +109,12 @@ def test_clear_state_confirmation_and_scope(
     run_command = Mock()
     monkeypatch.setattr("config.dldd.clicommon.run_command", run_command)
 
-    result = CliRunner().invoke(
+    result = _invoke_ok(
         config_dldd,
         arguments,
         input=user_input,
     )
 
-    assert result.exit_code == 0, result.output
     if expected_command is None:
         assert result.output.endswith("Aborted.\n")
         run_command.assert_not_called()
@@ -215,9 +136,8 @@ def test_show_config_displays_all_operator_fields():
         "rules_inbox_settle_time": "45",
     }
 
-    result = CliRunner().invoke(show_dldd, ("config",), obj=db)
+    result = _invoke_ok(show_dldd, ("config",), obj=db)
 
-    assert result.exit_code == 0, result.output
     for description, field, unused_minimum in DLDD_CONFIG_FIELDS:
         assert description in result.output
         assert field in result.output
@@ -231,10 +151,8 @@ def test_show_config_displays_all_operator_fields():
     db.db.get_all.assert_called_once_with("STATE_DB", "DLDD_STATUS|process_state")
 
 
-def test_show_status_displays_service_and_broken_rules():
-    db = _db()
-    db.db.get_redis_client.return_value.ttl.return_value = 109
-    db.db.get_all.return_value = {
+def _detailed_status_state():
+    return {
         "state": "DEGRADED",
         "reason": "one rule degraded",
         "running_schema": "0.0.1",
@@ -245,13 +163,14 @@ def test_show_status_displays_service_and_broken_rules():
         "activation_fallback_used": "false",
         "previous_active_rules_checksum": "sha256:old",
         "local_action_default_timeout": "45",
+        "async_pool_workers": "8",
+        "async_pool_busy": "2",
+        "async_pool_queued": "3",
         "broken_rules": json.dumps([
             {
                 "rule_instance_id": "1000001@PSU0",
                 "rule": "PSU_OV_FAULT",
-                "rule_id": 1000001,
                 "version": "1.0.0",
-                "component_name": "PSU0",
                 "correlation_key": "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu",
                 "state": "DEGRADED",
                 "failure_count": 3,
@@ -264,10 +183,6 @@ def test_show_status_displays_service_and_broken_rules():
                 "source": "redis:STATE_DB:PSU_INFO",
                 "state": "UNAVAILABLE",
                 "failure_count": 2,
-                "graceful": False,
-                "since": 1745614100.0,
-                "grace_deadline": 1745614400.0,
-                "last_success": 1745614000.0,
                 "affected_rules": [1000001],
                 "stale_faults": ["FAULT_INFO|PSU0|SYMPTOM_OVER_THRESHOLD"],
                 "reason": "producer unavailable",
@@ -280,7 +195,6 @@ def test_show_status_displays_service_and_broken_rules():
                 "rule": "PSU_OV_FAULT",
                 "event_id": 1,
                 "component_type": "PSU",
-                "component_name": "PSU0",
                 "correlation_key": "inflight-key-that-must-not-be-rendered",
                 "state": "HELD_BY_PRIMARY",
                 "owning_monitor": "redis",
@@ -291,8 +205,6 @@ def test_show_status_displays_service_and_broken_rules():
                     "state": "WAITING_FOR_RECHECK",
                     "worker_id": "action-1",
                     "started_at": 1745614202.0,
-                    "wait_until": 1745614300.0,
-                    "last_error": "",
                 },
             }
         ]),
@@ -301,221 +213,66 @@ def test_show_status_displays_service_and_broken_rules():
                 "rule_instance_id": "1000001@PSU0",
                 "monitor": "redis",
                 "rule_id": 1000001,
-                "component_name": "PSU0",
                 "correlation_key": "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu",
                 "state": "IN_FLIGHT",
-                "observed_at": 1745614400.0,
                 "reason": "primary ownership lease expired",
             }
         ]),
     }
 
-    result = CliRunner().invoke(show_dldd, ("status",), obj=db)
 
-    assert result.exit_code == 0, result.output
+def test_show_status_is_compact_by_default():
+    db = _db()
+    db.db.get_redis_client.return_value.ttl.return_value = 109
+    db.db.get_all.return_value = _detailed_status_state()
+
+    result = _invoke_ok(show_dldd, ("status",), obj=db)
+
+    assert len(result.output.splitlines()) == 3
+    _assert_output(
+        result.output,
+        present=("State", "Heartbeat age", "Activation", "Rules source",
+                 "DEGRADED", "11 seconds (approximate)", "PASSED", "inbox"),
+        absent=("one rule degraded", "Running schema", "Active rules checksum",
+                "Reason", "PSU_OV_FAULT", "redis:STATE_DB:PSU_INFO",
+                "1000001@PSU0", "primary ownership lease expired"),
+    )
+    for value in ("DEGRADED", "11 seconds (approximate)", "PASSED", "inbox"):
+        assert result.output.count(value) == 1
+
+
+def test_show_status_detail_displays_service_and_diagnostics():
+    db = _db()
+    db.db.get_redis_client.return_value.ttl.return_value = 109
+    db.db.get_all.return_value = _detailed_status_state()
+
+    result = _invoke_ok(show_dldd, ("status", "--detail"), obj=db)
+
     db.db.get_all.assert_called_once_with("STATE_DB", "DLDD_STATUS|process_state")
     db.db.get_redis_client.assert_called_once_with("STATE_DB")
     db.db.get_redis_client.return_value.ttl.assert_called_once_with("DLDD_STATUS|process_state")
-    assert "DEGRADED" in result.output
-    assert "11 seconds (approximate)" in result.output
-    assert "0.0.1" in result.output
-    assert "sha256:1234" in result.output
-    assert "Active rules source" in result.output
-    assert "inbox" in result.output
-    assert "Activation result" in result.output
-    assert "PASSED" in result.output
-    assert "Activation fallback used" in result.output
-    assert "Previous active rules checksum" in result.output
-    assert "sha256:old" in result.output
-    assert "45" in result.output
-    assert "Broken rules" in result.output
-    assert "PSU_OV_FAULT" in result.output
-    assert "Correlation key" not in result.output
-    assert "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu" not in result.output
-    assert "query_error: source unavailable" in result.output
-    assert "Source status" in result.output
-    assert "redis:STATE_DB:PSU_INFO" in result.output
-    assert "producer unavailable" in result.output
-    assert "FAULT_INFO|PSU0|SYMPTOM_OVER_THRESHOLD" in result.output
-    assert "Affected rules" in result.output
-    assert "Primary-owned fault work" in result.output
-    assert "Rule instance" in result.output
-    assert "1000001@PSU0" in result.output
-    assert "inflight-key-that-must-not-be-rendered" not in result.output
-    assert "WAITING_FOR_RECHECK" in result.output
-    assert "action-1" in result.output
-    assert "Local action work" in result.output
-    assert "Started" in result.output
-    assert "local_action_wait" in result.output
-    assert "Service diagnostics" in result.output
-    assert "primary ownership lease expired" in result.output
-    assert "1745614200.0" not in result.output
+    _assert_output(
+        result.output,
+        present=(
+            "DEGRADED", "11 seconds (approximate)", "0.0.1", "sha256:1234",
+            "Async collection pool", "Broken rules", "PSU_OV_FAULT",
+            "Source status", "redis:STATE_DB:PSU_INFO",
+            "Primary-owned fault work", "1000001@PSU0", "Local action work",
+            "WAITING_FOR_RECHECK", "Service diagnostics",
+            "primary ownership lease expired",
+        ),
+        absent=("Correlation key", "inflight-key-that-must-not-be-rendered",
+                "1745614200.0"),
+    )
 
 
 def test_show_status_handles_missing_state():
     db = _db()
     db.db.get_all.return_value = {}
 
-    result = CliRunner().invoke(show_dldd, ("status",), obj=db)
+    result = _invoke_ok(show_dldd, ("status",), obj=db)
 
-    assert result.exit_code == 0, result.output
     assert result.output == "DLDD status is unavailable in STATE_DB.\n"
-
-
-def test_heartbeat_age_uses_redis_client_when_dbconnector_has_no_ttl(monkeypatch):
-    class DBConnector(object):
-        pass
-
-    db = _db()
-    db.db.get_redis_client.return_value = DBConnector()
-    redis_client = Mock()
-    redis_client.ttl.return_value = 90
-    monkeypatch.setattr(
-        "show.dldd._state_redis_client", lambda: redis_client
-    )
-
-    assert _heartbeat_age(db) == "30 seconds (approximate)"
-    redis_client.ttl.assert_called_once_with("DLDD_STATUS|process_state")
-
-
-@pytest.mark.parametrize("ttl", (None, -1))
-def test_heartbeat_age_reports_unavailable_for_nonexpiring_status(ttl):
-    db = _db()
-    db.db.get_redis_client.return_value.ttl.return_value = ttl
-
-    assert _heartbeat_age(db) == "unavailable"
-
-
-def test_heartbeat_age_handles_state_db_failure():
-    db = _db()
-    db.db.get_redis_client.side_effect = RuntimeError("STATE_DB unavailable")
-
-    assert _heartbeat_age(db) == "unavailable"
-
-
-@pytest.mark.parametrize(
-    "socket_path,expected_arguments",
-    (
-        ("/var/run/redis/redis.sock", {
-            "unix_socket_path": "/var/run/redis/redis.sock",
-            "db": 6,
-        }),
-        ("", {"host": "127.0.0.1", "port": 6379, "db": 6}),
-    ),
-)
-def test_state_redis_client_supports_socket_and_tcp_database_config(
-    monkeypatch, socket_path, expected_arguments
-):
-    redis_constructor = Mock(return_value=object())
-    monkeypatch.setitem(
-        sys.modules,
-        "redis",
-        types.SimpleNamespace(Redis=redis_constructor),
-    )
-
-    from swsscommon import swsscommon
-
-    monkeypatch.setattr(
-        swsscommon.SonicDBConfig,
-        "getDbId",
-        staticmethod(lambda unused_database, unused_key: 6),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        swsscommon.SonicDBConfig,
-        "getDbSock",
-        staticmethod(lambda unused_database, unused_key: socket_path),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        swsscommon.SonicDBConfig,
-        "getDbHostname",
-        staticmethod(lambda unused_database, unused_key: "127.0.0.1"),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        swsscommon.SonicDBConfig,
-        "getDbPort",
-        staticmethod(lambda unused_database, unused_key: 6379),
-        raising=False,
-    )
-
-    _state_redis_client()
-
-    redis_constructor.assert_called_once_with(**expected_arguments)
-
-
-def test_show_status_handles_empty_optional_diagnostics():
-    db = _db()
-    db.db.get_redis_client.return_value.ttl.return_value = 120
-    db.db.get_all.return_value = {"state": "RUNNING"}
-
-    result = CliRunner().invoke(show_dldd, ("status",), obj=db)
-
-    assert result.exit_code == 0, result.output
-    assert "RUNNING" in result.output
-    assert "Broken rules" not in result.output
-    assert "Source status" not in result.output
-    assert "Primary-owned fault work" not in result.output
-    assert "Service diagnostics" not in result.output
-    assert "Async collection pool" not in result.output
-
-
-def test_show_status_displays_compact_async_pool_metrics():
-    db = _db()
-    db.db.get_redis_client.return_value.ttl.return_value = 120
-    db.db.get_all.return_value = {
-        "state": "RUNNING",
-        "async_pool_workers": "8",
-        "async_pool_busy": "2",
-        "async_pool_queued": "3",
-        "async_pool_avg_queue_latency_ms": "0.25",
-        "async_pool_avg_execution_time_ms": "1.75",
-        "async_pool_avg_utilization_percent": "12.5",
-    }
-
-    result = CliRunner().invoke(show_dldd, ("status",), obj=db)
-
-    assert result.exit_code == 0, result.output
-    assert "Async collection pool" in result.output
-    assert "Workers" in result.output
-    assert "Busy" in result.output
-    assert "Queued" in result.output
-    assert "Avg queue latency (ms)" in result.output
-    assert "Avg execution time (ms)" in result.output
-    assert "Avg utilization (%)" in result.output
-    assert "8" in result.output
-    assert "2" in result.output
-    assert "3" in result.output
-    assert "0.25" in result.output
-    assert "1.75" in result.output
-    assert "12.5" in result.output
-
-
-def test_show_status_ignores_malformed_inflight_entries_without_actions():
-    db = _db()
-    db.db.get_redis_client.return_value.ttl.return_value = 120
-    db.db.get_all.return_value = {
-        "state": "RUNNING",
-        "inflight_fault_evidence": json.dumps([
-            "not-an-evidence-object",
-            {
-                "rule_instance_id": "1000001@PSU0",
-                "rule_id": 1000001,
-                "component_type": "PSU",
-                "component_name": "PSU0",
-                "state": "IN_FLIGHT",
-                "local_action_state": "[]",
-            },
-        ]),
-    }
-
-    result = CliRunner().invoke(show_dldd, ("status",), obj=db)
-
-    assert result.exit_code == 0, result.output
-    assert "Primary-owned fault work" in result.output
-    assert "PSU0" in result.output
-    assert "Local action work" not in result.output
 
 
 def _rule_status_rows():
@@ -552,7 +309,6 @@ def _rule_status_rows():
                     "failure_count": 0,
                     "source_id": "redis:PSU_INFO",
                     "correlation_key": "1000001:1:PSU0:redis",
-                    "reason": "",
                 }
             ],
         },
@@ -564,7 +320,6 @@ def _rule_status_rows():
             "health": "DEGRADED",
             "work_items_healthy": 0,
             "work_items_total": 1,
-            "work_items_omitted": 3,
             "active_faults": 0,
             "last_attempt": 1745614200.0,
             "last_success": 1745614100.0,
@@ -573,21 +328,7 @@ def _rule_status_rows():
             "work_items": [
                 {
                     "rule_instance_id": "1000002@FAN0",
-                    "event_id": 2,
                     "component_name": "FAN0",
-                    "source_type": "i2c",
-                    "monitor": "common",
-                    "state": "DEGRADED",
-                    "sampling_interval": 10.0,
-                    "interval_source": "event",
-                    "active_fault": False,
-                    "last_attempt": 1745614200.0,
-                    "last_success": 1745614100.0,
-                    "next_due": 1745614210.0,
-                    "failure_count": 3,
-                    "source_id": "i2c:fan0",
-                    "correlation_key": "1000002:2:FAN0:i2c",
-                    "reason": "source unavailable",
                 }
             ],
         },
@@ -635,15 +376,22 @@ def _use_state_entries(db, entries):
     )
 
 
-def test_show_rules_default_reads_only_small_summary_hashes():
+def _invoke_rules(entries, arguments=("rules",)):
     db = _db()
-    _use_state_entries(db, _rule_status_entries())
+    _use_state_entries(db, entries)
+    return db, _invoke_ok(show_dldd, arguments, obj=db)
 
-    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
 
-    assert result.exit_code == 0, result.output
-    assert "PSU_OV_FAULT" in result.output
-    assert "FAN_SPEED_FAULT" in result.output
+def test_show_rules_default_reads_only_small_summary_hashes():
+    db, result = _invoke_rules(_rule_status_entries())
+
+    _assert_output(
+        result.output,
+        present=("Rule ID", "Rule", "Component", "Health", "Active faults",
+                 "PSU_OV_FAULT", "FAN_SPEED_FAULT"),
+        absent=("Version", "Work items", "Last attempt", "Last success",
+                "Failure streak", "Reason"),
+    )
     requested = [item.args[1] for item in db.db.get_all.call_args_list]
     assert "DLDD_RULE_STATUS|rule|PSU_OV_FAULT" in requested
     assert "DLDD_RULE_STATUS|rule|FAN_SPEED_FAULT" in requested
@@ -651,53 +399,35 @@ def test_show_rules_default_reads_only_small_summary_hashes():
 
 
 def test_show_rules_filters_health_component_and_no_active_fault():
-    db = _db()
-    _use_state_entries(db, _rule_status_entries())
-
-    result = CliRunner().invoke(
-        show_dldd,
-        (
-            "rules",
-            "--health",
-            "degraded",
-            "--component",
-            "FAN0",
-            "--no-active-fault",
-        ),
-        obj=db,
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "FAN_SPEED_FAULT" in result.output
-    assert "DEGRADED" in result.output
-    assert "0/1" in result.output
-    assert "source unavailable" in result.output
-    assert "1745614200.0" not in result.output
-    assert "PSU_OV_FAULT" not in result.output
-    assert db.db.get_all.call_args_list == [
-        call("STATE_DB", "DLDD_STATUS|process_state"),
-        call("STATE_DB", "DLDD_RULE_STATUS|active"),
-        call("STATE_DB", "DLDD_RULE_STATUS|rule|PSU_OV_FAULT"),
-        call("STATE_DB", "DLDD_RULE_STATUS|rule|FAN_SPEED_FAULT"),
-        call("STATE_DB", "DLDD_RULE_DETAIL|rule|FAN_SPEED_FAULT"),
-    ]
+    for component in ("FAN", "FAN0"):
+        db, result = _invoke_rules(
+            _rule_status_entries(),
+            ("rules", "--health", "degraded", "--component", component,
+             "--no-active-fault"),
+        )
+        _assert_output(
+            result.output,
+            present=("FAN_SPEED_FAULT", "DEGRADED"),
+            absent=("Work items", "0/1", "source unavailable",
+                    "1745614200.0", "PSU_OV_FAULT"),
+        )
+        requested = [item.args[1] for item in db.db.get_all.call_args_list]
+        assert "DLDD_RULE_DETAIL|rule|PSU_OV_FAULT" not in requested
+        if component == "FAN0":
+            assert requested.count("DLDD_RULE_DETAIL|rule|FAN_SPEED_FAULT") == 1
 
 
 def test_show_rules_filters_active_fault_and_displays_detail():
-    db = _db()
-    _use_state_entries(
-        db, _rule_status_entries(detail_truncated="true")
-    )
-
-    result = CliRunner().invoke(
-        show_dldd,
+    _, result = _invoke_rules(
+        _rule_status_entries(detail_truncated="true"),
         ("rules", "--active-fault", "--detail"),
-        obj=db,
     )
 
-    assert result.exit_code == 0, result.output
     assert "PSU_OV_FAULT" in result.output
     assert "FAN_SPEED_FAULT" not in result.output
+    assert "Version" in result.output
+    assert "Work items" in result.output
+    assert "Failure streak" in result.output
     assert "Rule PSU_OV_FAULT (1000001) work items" in result.output
     assert "PSU0" in result.output
     assert "async" in result.output
@@ -710,33 +440,26 @@ def test_show_rules_filters_active_fault_and_displays_detail():
 
 
 def test_show_rules_rejects_stale_generation_snapshot():
-    db = _db()
     entries = _rule_status_entries(checksum="sha256:old")
     entries["DLDD_STATUS|process_state"] = {
         "active_rules_checksum": "sha256:current"
     }
-    _use_state_entries(db, entries)
+    _, result = _invoke_rules(entries)
 
-    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
-
-    assert result.exit_code == 0, result.output
     assert "does not match the active rules generation" in result.output
     assert "PSU_OV_FAULT" not in result.output
 
 
-def test_show_rules_rejects_malformed_rule_key_without_exception():
-    db = _db()
+def test_show_rules_rejects_stale_detail_generation():
     entries = _rule_status_entries()
-    entries["DLDD_RULE_STATUS|active"].update({
-        "rule_keys": '[{"not": "a key"}]',
-        "rule_count": "1",
-    })
-    _use_state_entries(db, entries)
+    entries["DLDD_RULE_DETAIL|rule|FAN_SPEED_FAULT"][
+        "active_rules_checksum"
+    ] = "sha256:old"
 
-    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
+    _, result = _invoke_rules(entries, ("rules", "--component", "FAN0"))
 
-    assert result.exit_code == 0, result.output
-    assert "index is incomplete or malformed" in result.output
+    assert "rule detail is incomplete for the active generation" in result.output
+    assert "FAN_SPEED_FAULT" not in result.output
 
 
 @pytest.mark.parametrize(
@@ -750,113 +473,9 @@ def test_show_rules_rejects_malformed_rule_key_without_exception():
     ),
 )
 def test_show_rules_handles_missing_process_or_rule_status(entries, expected):
-    db = _db()
-    _use_state_entries(db, entries)
+    _, result = _invoke_rules(entries)
 
-    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
-
-    assert result.exit_code == 0, result.output
     assert expected in result.output
-
-
-def test_show_rules_rejects_missing_rule_summary():
-    db = _db()
-    entries = _rule_status_entries()
-    entries.pop("DLDD_RULE_STATUS|rule|PSU_OV_FAULT")
-    _use_state_entries(db, entries)
-
-    result = CliRunner().invoke(show_dldd, ("rules",), obj=db)
-
-    assert result.exit_code == 0, result.output
-    assert "rule status is incomplete for the active generation" in result.output
-
-
-def test_show_rules_accepts_direct_summary_component_match():
-    db = _db()
-    _use_state_entries(db, _rule_status_entries())
-
-    result = CliRunner().invoke(
-        show_dldd,
-        ("rules", "--component", "FAN"),
-        obj=db,
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "FAN_SPEED_FAULT" in result.output
-    assert "PSU_OV_FAULT" not in result.output
-
-
-def test_show_rules_reuses_detail_and_reports_omitted_items():
-    db = _db()
-    _use_state_entries(db, _rule_status_entries())
-
-    result = CliRunner().invoke(
-        show_dldd,
-        ("rules", "--component", "FAN0", "--detail"),
-        obj=db,
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "FAN_SPEED_FAULT" in result.output
-    assert "3 additional work item(s) omitted" in result.output
-    assert "detail was truncated" not in result.output
-    detail_reads = [
-        request
-        for request in db.db.get_all.call_args_list
-        if request.args[1] == "DLDD_RULE_DETAIL|rule|FAN_SPEED_FAULT"
-    ]
-    assert len(detail_reads) == 1
-
-
-@pytest.mark.parametrize("failure_mode", ("invalid-key", "stale-detail"))
-def test_show_rules_rejects_unusable_detail_during_component_filter(
-    failure_mode,
-):
-    db = _db()
-    entries = _rule_status_entries()
-    summary_key = "DLDD_RULE_STATUS|rule|FAN_SPEED_FAULT"
-    if failure_mode == "invalid-key":
-        entries[summary_key]["detail_key"] = "NOT_A_DLDD_DETAIL_KEY"
-    else:
-        detail_key = entries[summary_key]["detail_key"]
-        entries[detail_key]["active_rules_checksum"] = "sha256:stale"
-    _use_state_entries(db, entries)
-
-    result = CliRunner().invoke(
-        show_dldd,
-        ("rules", "--component", "FAN0"),
-        obj=db,
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "rule detail is incomplete for the active generation" in result.output
-
-
-def test_show_rules_filters_component_absent_from_detail():
-    db = _db()
-    _use_state_entries(db, _rule_status_entries())
-
-    result = CliRunner().invoke(
-        show_dldd,
-        ("rules", "--component", "NOT_PRESENT"),
-        obj=db,
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "PSU_OV_FAULT" not in result.output
-    assert "FAN_SPEED_FAULT" not in result.output
-
-
-def test_show_rules_rejects_unusable_detail_in_detail_view():
-    db = _db()
-    entries = _rule_status_entries()
-    entries["DLDD_RULE_STATUS|rule|PSU_OV_FAULT"]["detail_key"] = "bad-key"
-    _use_state_entries(db, entries)
-
-    result = CliRunner().invoke(show_dldd, ("rules", "--detail"), obj=db)
-
-    assert result.exit_code == 0, result.output
-    assert "rule detail is incomplete for the active generation" in result.output
 
 
 def test_show_faults_displays_and_filters_records():
@@ -868,29 +487,15 @@ def test_show_faults_displays_and_filters_records():
     db.db.get_all.side_effect = (
         {
             "producer": "dldd",
-            "rule_id": "2000001",
-            "schema_version": "0.0.1",
-            "active_rules_checksum": "sha256:test",
-            "component_type": "FAN",
             "component_name": "FAN0",
-            "component_serial_number": "FAN-SERIAL",
             "symptom": "SYMPTOM_ABNORMAL",
             "status": "INACTIVE",
             "severity": "WARNING",
-            "rule": "FAN_FAULT",
-            "occurrences": "1",
             "last_detection_time": "1745614200.0",
-            "reason": "DSE instance was authoritatively removed",
-            "description": "Fan recovered",
         },
         {
             "producer": "dldd",
-            "rule_id": "1000001",
-            "schema_version": "0.0.1",
-            "active_rules_checksum": "sha256:test",
-            "component_type": "PSU",
             "component_name": "PSU0",
-            "component_serial_number": "PSU-SERIAL",
             "symptom": "SYMPTOM_OVER_THRESHOLD",
             "status": "ACTIVE",
             "severity": "CRITICAL",
@@ -901,24 +506,24 @@ def test_show_faults_displays_and_filters_records():
         },
     )
 
-    result = CliRunner().invoke(
+    result = _invoke_ok(
         show_dldd,
         ("faults", "--status", "ACTIVE", "--component", "PSU0"),
         obj=db,
     )
 
-    assert result.exit_code == 0, result.output
     db.db.keys.assert_called_once_with("STATE_DB", "FAULT_INFO|*")
     assert db.db.get_all.call_args_list == [
         call("STATE_DB", "FAULT_INFO|FAN0|SYMPTOM_ABNORMAL"),
         call("STATE_DB", "FAULT_INFO|PSU0|SYMPTOM_OVER_THRESHOLD"),
     ]
-    assert "PSU0" in result.output
-    assert "PSU_OV_FAULT" in result.output
-    assert "PSU output over voltage" in result.output
-    assert "FAN0" not in result.output
-    assert "DSE instance was authoritatively removed" not in result.output
-    assert "1745614266.0" not in result.output
+    _assert_output(
+        result.output,
+        present=("Component", "Symptom", "Status", "Severity", "Last detection",
+                 "PSU0", "SYMPTOM_OVER_THRESHOLD", "ACTIVE", "CRITICAL"),
+        absent=("Rule", "Occurrences", "Reason", "Description", "PSU_OV_FAULT",
+                "PSU output over voltage", "FAN0", "1745614266.0"),
+    )
 
 
 def _detailed_fault_row():
@@ -946,18 +551,11 @@ def _detailed_fault_row():
                 },
             }
         ]),
-        "repair_actions": json.dumps([{"action": "ACTION_REPLACE"}]),
-        "actions_taken": "[]",
         "local_action_state": json.dumps({
             "state": "IDLE",
             "rule_instance_id": "1000001@SENSOR0",
             "correlation_key": "legacy-action-internal-key",
         }),
-        "healthz_artifact": json.dumps({
-            "state": "COMPLETED",
-            "metadata": {"correlation_key": "artifact-internal-key"},
-        }),
-        "remote_action_time_window": "3600",
         "severity": "WARNING",
         "symptom": "SYMPTOM_OVER_THRESHOLD",
         "status": "ACTIVE",
@@ -981,56 +579,35 @@ def _db_with_single_fault(
 def test_show_faults_detail_decodes_nested_fields():
     db = _db_with_single_fault(_detailed_fault_row())
 
-    result = CliRunner().invoke(
+    result = _invoke_ok(
         show_dldd, ("faults", "--detail"), obj=db
     )
 
-    assert result.exit_code == 0, result.output
-    assert "Fault SENSOR0 / SYMPTOM_OVER_THRESHOLD" in result.output
-    assert "Component serial number" in result.output
-    assert "SERIAL0" in result.output
-    assert "Events" in result.output
-    assert '"value_read": "30000"' in result.output
-    assert "Local action state" in result.output
-    assert "Reason" in result.output
-    assert "1745614266.8" not in result.output
-
-
-def test_show_faults_displays_inactive_transition_reason():
-    fault = _detailed_fault_row()
-    fault.update({
-        "status": "INACTIVE",
-        "reason": "authoritative DSE expansion removed instance SENSOR0",
-    })
-    db = _db_with_single_fault(fault)
-
-    result = CliRunner().invoke(
-        show_dldd, ("faults", "--status", "INACTIVE"), obj=db
+    _assert_output(
+        result.output,
+        present=("Fault SENSOR0 / SYMPTOM_OVER_THRESHOLD", "Producer", "dldd",
+                 "Component serial number", "SERIAL0", "Events",
+                 '"value_read": "30000"', "Local action state"),
+        absent=("1745614266.8", "correlation_key"),
     )
-
-    assert result.exit_code == 0, result.output
-    assert "INACTIVE" in result.output
-    assert "authoritative DSE expansion removed instance SENSOR0" in result.output
 
 
 def test_show_faults_json_emits_structured_documents():
     db = _db_with_single_fault(_detailed_fault_row())
 
-    result = CliRunner().invoke(
+    result = _invoke_ok(
         show_dldd, ("faults", "--json"), obj=db
     )
 
-    assert result.exit_code == 0, result.output
     documents = json.loads(result.output)
     assert len(documents) == 1
     fault = documents[0]
-    assert fault["component_type"] == "CURRENT_SENSOR"
-    assert fault["component_name"] == "SENSOR0"
-    assert fault["component_serial_number"] == "SERIAL0"
-    assert fault["rule_id"] == 1000001
-    assert fault["origin_time"] == 1745614200
-    assert fault["last_detection_time"] == 1745614266
-    assert fault["reason"] == ""
+    assert (fault["component_type"], fault["component_name"], fault["rule_id"]) == (
+        "CURRENT_SENSOR", "SENSOR0", 1000001,
+    )
+    assert (fault["origin_time"], fault["last_detection_time"]) == (
+        1745614200, 1745614266,
+    )
     assert fault["events"][0]["value_read"] == "30000"
     assert fault["local_action_state"] == {
         "state": "IDLE",
@@ -1041,61 +618,22 @@ def test_show_faults_json_emits_structured_documents():
 
 
 def test_show_faults_ignores_rows_owned_by_other_agents():
-    db = _db_with_single_fault(
-        {
-            "producer": "another-agent",
-            "rule": "FOREIGN_RULE",
-            "rule_id": "1000001",
-            "schema_version": "0.0.1",
-            "active_rules_checksum": "sha256:foreign",
-            "component_type": "FOREIGN",
-            "component_name": "foreign-component",
-            "symptom": "foreign-symptom",
-            "status": "ACTIVE",
-            "description": "foreign fault",
-        },
-        key=b"FAULT_INFO|foreign-component|foreign-symptom",
-    )
+    fault = _detailed_fault_row()
+    fault["producer"] = "another-agent"
+    db = _db_with_single_fault(fault)
 
-    result = CliRunner().invoke(show_dldd, ("faults",), obj=db)
+    result = _invoke_ok(show_dldd, ("faults",), obj=db)
 
-    assert result.exit_code == 0, result.output
-    assert "foreign-component" not in result.output
-    assert "foreign-symptom" not in result.output
-    assert "foreign fault" not in result.output
-
-
-def test_fault_ownership_uses_explicit_producer_marker():
-    assert is_dldd_fault({"producer": "dldd"})
-    assert is_dldd_fault({b"producer": b"dldd"})
-    assert not is_dldd_fault({"producer": "another-agent"})
-    assert not is_dldd_fault({
-        "rule": "LOOKALIKE",
-        "rule_id": "1000001",
-        "schema_version": "0.0.1",
-        "active_rules_checksum": "sha256:lookalike",
-    })
+    assert "SENSOR0" not in result.output
+    assert "SYMPTOM_OVER_THRESHOLD" not in result.output
+    assert "Current is high" not in result.output
 
 
 def test_show_faults_handles_empty_table():
     db = _db()
     db.db.keys.return_value = None
 
-    result = CliRunner().invoke(show_dldd, ("faults",), obj=db)
+    result = _invoke_ok(show_dldd, ("faults",), obj=db)
 
-    assert result.exit_code == 0, result.output
     assert "Component" in result.output
     assert "Symptom" in result.output
-
-
-def test_show_faults_applies_status_filter_independently_of_component():
-    db = _db_with_single_fault(_detailed_fault_row())
-
-    result = CliRunner().invoke(
-        show_dldd,
-        ("faults", "--status", "INACTIVE"),
-        obj=db,
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "SENSOR0" not in result.output

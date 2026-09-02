@@ -22,13 +22,13 @@ from utilities_common.dldd import (
 FAULT_INFO_PATTERN = "FAULT_INFO|*"
 HEARTBEAT_TTL_SECONDS = 120
 
-FAULT_JSON_FIELDS = {
-    "events": [],
-    "repair_actions": [],
-    "actions_taken": [],
-    "local_action_state": {},
-    "healthz_artifact": {},
-}
+FAULT_NESTED_FIELDS = (
+    ("events", "Events", []),
+    ("repair_actions", "Repair actions", []),
+    ("actions_taken", "Actions taken", []),
+    ("local_action_state", "Local action state", {}),
+    ("healthz_artifact", "Healthz artifact", {}),
+)
 
 STATUS_FIELDS = (
     ("State", "state"),
@@ -127,26 +127,18 @@ def _decode_key(value):
 
 
 def _fault_document(key, fault):
-    document = dict(fault)
-    document["redis_key"] = key
-    for field, default in FAULT_JSON_FIELDS.items():
+    document = dict(fault, redis_key=key)
+    for field, unused_title, default in FAULT_NESTED_FIELDS:
         if field in document:
             document[field] = _json_value(document[field], default)
-    for field in (
-        "origin_time",
-        "last_detection_time",
+    for fields, transform in (
+        (("origin_time", "last_detection_time"), _timestamp_value),
+        (("rule_id", "occurrences", "remote_action_time_window"), _int_value),
+        (("source_stale",), _bool_value),
     ):
-        if field in document:
-            document[field] = _timestamp_value(document[field])
-    for field in (
-        "rule_id",
-        "occurrences",
-        "remote_action_time_window",
-    ):
-        if field in document:
-            document[field] = _int_value(document[field])
-    if "source_stale" in document:
-        document["source_stale"] = _bool_value(document["source_stale"])
+        for field in fields:
+            if field in document:
+                document[field] = transform(document[field])
     return _sanitize_output(document)
 
 
@@ -161,6 +153,187 @@ def _print_table(rows, headers):
         tablefmt="simple",
         disable_numparse=True,
     ))
+
+
+def _record_field(field, default="", transform=None):
+    """Build a DLDD table accessor for one record field."""
+    def read(record):
+        value = record.get(field, default)
+        return transform(value) if transform else value
+
+    return read
+
+
+def _component_name(record):
+    """Return the canonical component name with the legacy field fallback."""
+    return record.get("component_name", record.get("component", ""))
+
+
+def _work_item_counts(record):
+    return "{}/{}".format(
+        record.get("work_items_healthy", 0),
+        record.get("work_items_total", 0),
+    )
+
+
+def _collection_mode(record):
+    return "async" if _bool_value(record.get("async", False)) else "inline"
+
+
+def _sampling_interval(record):
+    return "{} ({})".format(
+        record.get("sampling_interval", ""),
+        record.get("interval_source", ""),
+    )
+
+
+def _record_value(record, accessor):
+    return accessor(record) if callable(accessor) else record.get(accessor, "")
+
+
+def _print_record_table(records, columns):
+    """Render mapping records using one explicit DLDD output contract."""
+    rows = [
+        tuple(_record_value(record, accessor) for unused_header, accessor in columns)
+        for record in records
+        if isinstance(record, dict)
+    ]
+    headers = tuple(header for header, unused_accessor in columns)
+    _print_table(rows, headers)
+
+
+def _detail_option(help_text):
+    return click.option("detail", "--detail", is_flag=True, help=help_text)
+
+
+BROKEN_RULE_COLUMNS = (
+    ("Rule instance", _rule_instance),
+    ("Rule", "rule"),
+    ("Version", "version"),
+    ("State", "state"),
+    ("Failures", "failure_count"),
+    ("Last attempt", _record_field("last_attempt", transform=_timestamp_value)),
+    ("Reason", "reason"),
+)
+
+SOURCE_STATUS_COLUMNS = (
+    ("Source", "source"),
+    ("State", "state"),
+    ("Failures", "failure_count"),
+    ("Graceful", "graceful"),
+    ("Since", _record_field("since", transform=_timestamp_value)),
+    ("Grace deadline", _record_field("grace_deadline", transform=_timestamp_value)),
+    ("Last success", _record_field("last_success", transform=_timestamp_value)),
+    ("Affected rules", _record_field("affected_rules", [], _compact)),
+    ("Stale faults", _record_field("stale_faults", [], _compact)),
+    ("Reason", "reason"),
+)
+
+INFLIGHT_COLUMNS = (
+    ("Rule instance", _rule_instance),
+    ("Rule", "rule"),
+    ("Event", "event_id"),
+    ("Component type", "component_type"),
+    ("State", "state"),
+    ("Monitor", "owning_monitor"),
+    ("Since", _record_field("since", transform=_timestamp_value)),
+    ("Deadline", _record_field("hold_deadline", transform=_timestamp_value)),
+    ("Reason", "reason"),
+)
+
+DIAGNOSTIC_COLUMNS = (
+    ("Rule instance", _rule_instance),
+    ("Monitor", "monitor"),
+    ("Rule ID", "rule_id"),
+    ("Component", _component_name),
+    ("State", "state"),
+    ("Observed at", _record_field("observed_at", transform=_timestamp_value)),
+    ("Reason", "reason"),
+)
+
+RULE_COLUMNS = (
+    ("Rule ID", "rule_id"),
+    ("Rule", "rule"),
+    ("Version", "version"),
+    ("Component", "component"),
+    ("Health", "health"),
+    ("Work items", _work_item_counts),
+    ("Active faults", _record_field("active_faults", 0)),
+    ("Last attempt", _record_field("last_attempt", transform=_timestamp_value)),
+    ("Last success", _record_field("last_success", transform=_timestamp_value)),
+    ("Failure streak", _record_field("failure_count", 0)),
+    ("Reason", "reason"),
+)
+
+RULE_SUMMARY_COLUMNS = (
+    ("Rule ID", "rule_id"),
+    ("Rule", "rule"),
+    ("Component", "component"),
+    ("Health", "health"),
+    ("Active faults", _record_field("active_faults", 0)),
+)
+
+RULE_DETAIL_COLUMNS = (
+    ("Rule instance", _rule_instance),
+    ("Event", "event_id"),
+    ("Component", _component_name),
+    ("Source type", "source_type"),
+    ("Monitor", "monitor"),
+    ("Collection", _collection_mode),
+    ("State", "state"),
+    ("Interval", _sampling_interval),
+    ("Active fault", _record_field("active_fault", False)),
+    ("Last attempt", _record_field("last_attempt", transform=_timestamp_value)),
+    ("Last success", _record_field("last_success", transform=_timestamp_value)),
+    ("Next due", _record_field("next_due", transform=_timestamp_value)),
+    ("Failures", _record_field("failure_count", 0)),
+    ("Source ID", "source_id"),
+    ("Reason", "reason"),
+)
+
+FAULT_COLUMNS = (
+    ("Component", "component_name"),
+    ("Symptom", "symptom"),
+    ("Status", "status"),
+    ("Severity", "severity"),
+    ("Rule", "rule"),
+    ("Occurrences", "occurrences"),
+    ("Last detection", "last_detection_time"),
+    ("Reason", "reason"),
+    ("Description", "description"),
+)
+
+FAULT_SUMMARY_COLUMNS = (
+    ("Component", "component_name"),
+    ("Symptom", "symptom"),
+    ("Status", "status"),
+    ("Severity", "severity"),
+    ("Last detection", "last_detection_time"),
+)
+
+FAULT_DETAIL_FIELDS = (
+    ("Redis key", "redis_key"),
+    ("Producer", "producer"),
+    ("Component type", "component_type"),
+    ("Component name", "component_name"),
+    ("Component serial number", "component_serial_number"),
+    ("Rule", "rule"),
+    ("Rule ID", "rule_id"),
+    ("Rule version", "rule_version"),
+    ("Schema version", "schema_version"),
+    ("Active rules checksum", "active_rules_checksum"),
+    ("Error type", "error_type"),
+    ("Severity", "severity"),
+    ("Symptom", "symptom"),
+    ("Status", "status"),
+    ("Origin time", "origin_time"),
+    ("Last detection time", "last_detection_time"),
+    ("Occurrences", "occurrences"),
+    ("Remote action time window", "remote_action_time_window"),
+    ("Source stale", _record_field("source_stale", False)),
+    ("Reason", "reason"),
+    ("Description", "description"),
+)
 
 
 def _state_redis_client():
@@ -232,116 +405,56 @@ def config(db):
 
 
 @dldd.command("status")
+@_detail_option("Show generation metadata and runtime diagnostic tables.")
 @clicommon.pass_db
-def status(db):
-    """Show DLDD service state and runtime diagnostics."""
+def status(db, detail):
+    """Show compact DLDD service health."""
     process_state = _state_entry(db, DLDD_STATUS_KEY)
     if not process_state:
         click.echo("DLDD status is unavailable in STATE_DB.")
+        return
+
+    heartbeat_age = _heartbeat_age(db)
+    if not detail:
+        _print_table([(
+            process_state.get("state", ""), heartbeat_age,
+            process_state.get("activation_result", ""),
+            process_state.get("active_rules_source", ""),
+        )], (
+            "State", "Heartbeat age", "Activation", "Rules source",
+        ))
         return
 
     rows = [
         (description, process_state.get(field, ""))
         for description, field in STATUS_FIELDS
     ]
-    rows.insert(1, ("Heartbeat age", _heartbeat_age(db)))
+    rows.insert(1, ("Heartbeat age", heartbeat_age))
     _print_table(rows, ("Field", "Value"))
 
     if any(field in process_state for unused_label, field in ASYNC_POOL_FIELDS):
         click.echo("\nAsync collection pool")
-        _print_table(
-            [[
-                process_state.get(field, "")
-                for unused_label, field in ASYNC_POOL_FIELDS
-            ]],
-            [label for label, unused_field in ASYNC_POOL_FIELDS],
-        )
+        _print_record_table([process_state], ASYNC_POOL_FIELDS)
 
     broken_rules = _json_value(process_state.get("broken_rules"), [])
     if broken_rules:
         click.echo("\nBroken rules")
-        rule_rows = [
-            (
-                _rule_instance(rule),
-                rule.get("rule", ""),
-                rule.get("version", ""),
-                rule.get("state", ""),
-                rule.get("failure_count", ""),
-                _timestamp_value(rule.get("last_attempt", "")),
-                rule.get("reason", ""),
-            )
-            for rule in broken_rules
-            if isinstance(rule, dict)
-        ]
-        _print_table(
-            rule_rows,
-            (
-                "Rule instance",
-                "Rule",
-                "Version",
-                "State",
-                "Failures",
-                "Last attempt",
-                "Reason",
-            ),
-        )
+        _print_record_table(broken_rules, BROKEN_RULE_COLUMNS)
 
     source_status = _json_value(process_state.get("source_status"), [])
     if source_status:
         click.echo("\nSource status")
-        source_rows = [
-            (
-                source.get("source", ""),
-                source.get("state", ""),
-                source.get("failure_count", ""),
-                source.get("graceful", ""),
-                _timestamp_value(source.get("since", "")),
-                _timestamp_value(source.get("grace_deadline", "")),
-                _timestamp_value(source.get("last_success", "")),
-                _compact(source.get("affected_rules", [])),
-                _compact(source.get("stale_faults", [])),
-                source.get("reason", ""),
-            )
-            for source in source_status
-            if isinstance(source, dict)
-        ]
-        _print_table(
-            source_rows,
-            (
-                "Source",
-                "State",
-                "Failures",
-                "Graceful",
-                "Since",
-                "Grace deadline",
-                "Last success",
-                "Affected rules",
-                "Stale faults",
-                "Reason",
-            ),
-        )
+        _print_record_table(source_status, SOURCE_STATUS_COLUMNS)
 
     inflight = _json_value(process_state.get("inflight_fault_evidence"), [])
     if inflight:
         click.echo("\nPrimary-owned fault work")
-        inflight_rows = []
         action_rows = []
         for evidence in inflight:
             if not isinstance(evidence, dict):
                 continue
             action_state = _json_value(evidence.get("local_action_state"), {})
-            inflight_rows.append((
-                _rule_instance(evidence),
-                evidence.get("rule", ""),
-                evidence.get("event_id", ""),
-                evidence.get("component_type", ""),
-                evidence.get("state", ""),
-                evidence.get("owning_monitor", ""),
-                _timestamp_value(evidence.get("since", "")),
-                _timestamp_value(evidence.get("hold_deadline", "")),
-                evidence.get("reason", ""),
-            ))
-            if isinstance(action_state, dict) and action_state.get("state"):
+            if action_state.get("state"):
                 action_rows.append((
                     _rule_instance(evidence),
                     evidence.get("rule", ""),
@@ -352,20 +465,7 @@ def status(db):
                     _timestamp_value(action_state.get("wait_until", "")),
                     action_state.get("last_error", ""),
                 ))
-        _print_table(
-            inflight_rows,
-            (
-                "Rule instance",
-                "Rule",
-                "Event",
-                "Component type",
-                "State",
-                "Monitor",
-                "Since",
-                "Deadline",
-                "Reason",
-            ),
-        )
+        _print_record_table(inflight, INFLIGHT_COLUMNS)
         if action_rows:
             click.echo("\nLocal action work")
             _print_table(
@@ -385,33 +485,7 @@ def status(db):
     diagnostics = _json_value(process_state.get("service_diagnostics"), [])
     if diagnostics:
         click.echo("\nService diagnostics")
-        diagnostic_rows = [
-            (
-                _rule_instance(diagnostic),
-                diagnostic.get("monitor", ""),
-                diagnostic.get("rule_id", ""),
-                diagnostic.get(
-                    "component_name", diagnostic.get("component", "")
-                ),
-                diagnostic.get("state", ""),
-                _timestamp_value(diagnostic.get("observed_at", "")),
-                diagnostic.get("reason", ""),
-            )
-            for diagnostic in diagnostics
-            if isinstance(diagnostic, dict)
-        ]
-        _print_table(
-            diagnostic_rows,
-            (
-                "Rule instance",
-                "Monitor",
-                "Rule ID",
-                "Component",
-                "State",
-                "Observed at",
-                "Reason",
-            ),
-        )
+        _print_record_table(diagnostics, DIAGNOSTIC_COLUMNS)
 
 
 @dldd.command("rules")
@@ -435,12 +509,7 @@ def status(db):
     default=None,
     help="Limit output based on whether the rule has an active fault.",
 )
-@click.option(
-    "detail",
-    "--detail",
-    is_flag=True,
-    help="Show per-event, component, and source work-item state.",
-)
+@_detail_option("Show per-event, component, and source work-item state.")
 @clicommon.pass_db
 def rules(
     db,
@@ -532,11 +601,7 @@ def rules(
                     )
                     return
                 components = {
-                    str(
-                        item.get(
-                            "component_name", item.get("component", "")
-                        )
-                    )
+                    str(_component_name(item))
                     for item in items
                     if isinstance(item, dict)
                 }
@@ -557,40 +622,9 @@ def rules(
             str(rule.get("rule", "")),
         )
     )
-    rows = [
-        (
-            rule.get("rule_id", ""),
-            rule.get("rule", ""),
-            rule.get("version", ""),
-            rule.get("component", ""),
-            rule.get("health", ""),
-            "{}/{}".format(
-                rule.get("work_items_healthy", 0),
-                rule.get("work_items_total", 0),
-            ),
-            rule.get("active_faults", 0),
-            _timestamp_value(rule.get("last_attempt", "")),
-            _timestamp_value(rule.get("last_success", "")),
-            rule.get("failure_count", 0),
-            rule.get("reason", ""),
-        )
-        for rule in selected
-    ]
-    _print_table(
-        rows,
-        (
-            "Rule ID",
-            "Rule",
-            "Version",
-            "Component",
-            "Health",
-            "Work items",
-            "Active faults",
-            "Last attempt",
-            "Last success",
-            "Failure streak",
-            "Reason",
-        ),
+    _print_record_table(
+        selected,
+        RULE_COLUMNS if detail else RULE_SUMMARY_COLUMNS,
     )
 
     if not detail:
@@ -607,50 +641,7 @@ def rules(
                 "DLDD rule detail is incomplete for the active generation."
             )
             return
-        detail_rows = [
-            (
-                _rule_instance(item),
-                item.get("event_id", ""),
-                item.get("component_name", item.get("component", "")),
-                item.get("source_type", ""),
-                item.get("monitor", ""),
-                "async" if _bool_value(item.get("async", False)) else "inline",
-                item.get("state", ""),
-                "{} ({})".format(
-                    item.get("sampling_interval", ""),
-                    item.get("interval_source", ""),
-                ),
-                item.get("active_fault", False),
-                _timestamp_value(item.get("last_attempt", "")),
-                _timestamp_value(item.get("last_success", "")),
-                _timestamp_value(item.get("next_due", "")),
-                item.get("failure_count", 0),
-                item.get("source_id", ""),
-                item.get("reason", ""),
-            )
-            for item in rule_work_items
-            if isinstance(item, dict)
-        ]
-        _print_table(
-            detail_rows,
-            (
-                "Rule instance",
-                "Event",
-                "Component",
-                "Source type",
-                "Monitor",
-                "Collection",
-                "State",
-                "Interval",
-                "Active fault",
-                "Last attempt",
-                "Last success",
-                "Next due",
-                "Failures",
-                "Source ID",
-                "Reason",
-            ),
-        )
+        _print_record_table(rule_work_items, RULE_DETAIL_COLUMNS)
         omitted = _int_value(rule.get("work_items_omitted", 0))
         if omitted:
             click.echo(
@@ -673,12 +664,7 @@ def rules(
     help="Limit output to one fault status.",
 )
 @click.option("component_filter", "--component", help="Limit output to one component name.")
-@click.option(
-    "detail",
-    "--detail",
-    is_flag=True,
-    help="Show complete scalar metadata and decoded nested fields.",
-)
+@_detail_option("Show complete scalar metadata and decoded nested fields.")
 @click.option(
     "json_output",
     "--json",
@@ -698,7 +684,6 @@ def faults(db, status_filter, component_filter, detail, json_output):
             continue
         fault = _fault_document(key, fault)
         component = fault.get("component_name", "")
-        symptom = fault.get("symptom", "")
         fault_status = fault.get("status", "")
 
         if component_filter and component != component_filter:
@@ -711,34 +696,9 @@ def faults(db, status_filter, component_filter, detail, json_output):
         click.echo(json.dumps(faults, sort_keys=True, indent=2))
         return
 
-    rows = [
-        (
-            fault.get("component_name", ""),
-            fault.get("symptom", ""),
-            fault.get("status", ""),
-            fault.get("severity", ""),
-            fault.get("rule", ""),
-            fault.get("occurrences", ""),
-            fault.get("last_detection_time", ""),
-            fault.get("reason", ""),
-            fault.get("description", ""),
-        )
-        for fault in faults
-    ]
-
-    _print_table(
-        rows,
-        (
-            "Component",
-            "Symptom",
-            "Status",
-            "Severity",
-            "Rule",
-            "Occurrences",
-            "Last detection",
-            "Reason",
-            "Description",
-        ),
+    _print_record_table(
+        faults,
+        FAULT_COLUMNS if detail else FAULT_SUMMARY_COLUMNS,
     )
 
     if not detail:
@@ -751,50 +711,14 @@ def faults(db, status_filter, component_filter, detail, json_output):
             )
         )
         scalar_rows = [
-            ("Redis key", fault.get("redis_key", "")),
-            ("Component type", fault.get("component_type", "")),
-            ("Component name", fault.get("component_name", "")),
-            (
-                "Component serial number",
-                fault.get("component_serial_number", ""),
-            ),
-            ("Rule", fault.get("rule", "")),
-            ("Rule ID", fault.get("rule_id", "")),
-            ("Rule version", fault.get("rule_version", "")),
-            ("Schema version", fault.get("schema_version", "")),
-            (
-                "Active rules checksum",
-                fault.get("active_rules_checksum", ""),
-            ),
-            ("Error type", fault.get("error_type", "")),
-            ("Severity", fault.get("severity", "")),
-            ("Symptom", fault.get("symptom", "")),
-            ("Status", fault.get("status", "")),
-            ("Origin time", fault.get("origin_time", "")),
-            (
-                "Last detection time",
-                fault.get("last_detection_time", ""),
-            ),
-            ("Occurrences", fault.get("occurrences", "")),
-            (
-                "Remote action time window",
-                fault.get("remote_action_time_window", ""),
-            ),
-            ("Source stale", fault.get("source_stale", False)),
-            ("Reason", fault.get("reason", "")),
-            ("Description", fault.get("description", "")),
+            (label, _record_value(fault, accessor))
+            for label, accessor in FAULT_DETAIL_FIELDS
         ]
         _print_table(scalar_rows, ("Field", "Value"))
-        for field, title in (
-            ("events", "Events"),
-            ("repair_actions", "Repair actions"),
-            ("actions_taken", "Actions taken"),
-            ("local_action_state", "Local action state"),
-            ("healthz_artifact", "Healthz artifact"),
-        ):
+        for field, title, default in FAULT_NESTED_FIELDS:
             click.echo("\n{}".format(title))
             click.echo(json.dumps(
-                fault.get(field, FAULT_JSON_FIELDS[field]),
+                fault.get(field, default),
                 sort_keys=True,
                 indent=2,
             ))
