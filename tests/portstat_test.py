@@ -272,7 +272,7 @@ Broadcast Packets Received..................... 0
 Jabbers Received............................... 0
 Fragments Received............................. 0
 Undersize Received............................. 0
-Overruns Received.............................. 0
+IP Packets Received............................ 0
 
 Packets Transmitted 64 Octets.................. 0
 Packets Transmitted 65-127 Octets.............. 0
