@@ -7036,6 +7036,8 @@ This show command displays the port capability for all interfaces i.e. index, la
   show interfaces breakout
   show interfaces breakout current-mode
   show interfaces breakout current-mode <interface_name>
+  show interfaces breakout supported-mode
+  show interfaces breakout supported-mode <interface_name>
   ```
 
 - Example:
@@ -7075,6 +7077,16 @@ The "current-mode" subcommand is used to display current breakout mode for all i
   +=============+=========================+
   | Ethernet0   | 4x25G[10G]              |
   +-------------+-------------------------+
+  ```
+
+The "supported-mode" subcommand displays the breakout modes supported by the platform for all interfaces or a specified interface.
+  ```
+  admin@lnos-x1-a-fab01:~$ show interfaces breakout supported-mode Ethernet0
+  +-------------+----------------------------+
+  | Interface   | Supported Breakout Modes   |
+  +=============+============================+
+  | Ethernet0   | 1x400G,2x200G,4x100G       |
+  +-------------+----------------------------+
   ```
 
 **show interfaces counters**
