@@ -337,6 +337,22 @@ function filter_asic_list()
     fi
 }
 
+# Create and populate /host/.system-prefdl if it does not already exist
+# Should only apply to Arista-7060CX-32S-*
+function arista_7060_gen_system_prefdl()
+{
+    HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
+    if [ ! -f "/host/.system-prefdl" ]; then
+        if [ -f "/etc/sonic/.syseeprom" ]; then
+            cp /etc/sonic/.syseeprom /host/.system-prefdl
+            echo "/host/.system-prefdl not found - restored from /etc/sonic/.syseeprom"
+        elif [[ "${HWSKU}" == *"Arista-7060CX-32S-"* ]]; then
+            python3 ${READ_ARISTA_7060_EEPROM_SCRIPT}
+            echo "/host/.system-prefdl not found - restored by reading from EEPROM"
+        fi
+    fi 
+}
+
 function clear_boot()
 {
     # common_clear
@@ -621,6 +637,7 @@ function is_secureboot() {
 function setup_reboot_variables()
 {
     # Kernel and initrd image
+    HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
     CURR_SONIC_IMAGE=$(sonic-installer list | grep "Current: " | cut -d ' ' -f 2)
     NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
     IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
@@ -920,18 +937,8 @@ fi
 
 debug "Starting $REBOOT_TYPE"
 
-# Create and populate /host/.system-prefdl if it does not already exist
-# Should only apply to Arista-7060CX-32S-*
-HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
-if [ ! -f "/host/.system-prefdl" ]; then
-    if [ -f "/etc/sonic/.syseeprom" ]; then
-        cp /etc/sonic/.syseeprom /host/.system-prefdl
-        echo "/host/.system-prefdl not found - restored from /etc/sonic/.syseeprom"
-    elif [[ "${HWSKU}" == *"Arista-7060CX-32S-"* ]]; then
-        python3 ${READ_ARISTA_7060_EEPROM_SCRIPT}
-        echo "/host/.system-prefdl not found - restored by reading from EEPROM"
-    fi
-fi
+# Check if device is Arista-7060CX-32S and if system_prefdl generation is needed
+arista_7060_gen_system_prefdl
 
 # re-run the script in background mode with detaching from the terminal session
 if [[ x"${DETACH}" == x"yes" && x"${ALREADY_DETACHED}" == x"" ]]; then
