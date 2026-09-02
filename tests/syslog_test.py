@@ -20,6 +20,8 @@ from syslog_util.common import FEATURE_TABLE, \
                                SYSLOG_CONFIG_FEATURE_TABLE, \
                                SYSLOG_RATE_LIMIT_INTERVAL, \
                                SYSLOG_RATE_LIMIT_BURST, \
+                               FEATURE_HAS_GLOBAL_SCOPE, \
+                               FEATURE_HAS_PER_ASIC_SCOPE, \
                                SUPPORT_RATE_LIMIT
 
 from .mock_tables import dbconnector
@@ -505,6 +507,42 @@ class TestSyslog:
             ['docker', 'ps', '-f', 'status=running', '--format', '{{.Names}}'],
             return_cmd=True
         )
+
+    @mock.patch('config.syslog.clicommon.run_command')
+    @mock.patch('config.syslog.multi_asic.is_multi_asic', return_value=True)
+    @mock.patch('config.syslog.multi_asic.get_num_asics', return_value=2)
+    def test_enable_syslog_rate_limit_feature_multi_asic(
+            self, mock_get_num_asics, mock_is_multi_asic, mock_run):
+        db = Db()
+        db.cfgdb.set_entry(FEATURE_TABLE, 'swss', {
+            SUPPORT_RATE_LIMIT: 'true',
+            FEATURE_HAS_GLOBAL_SCOPE: 'false',
+            FEATURE_HAS_PER_ASIC_SCOPE: 'true',
+            'state': 'enabled'
+        })
+
+        def run_command(command, **kwargs):
+            if command[:2] == ['docker', 'ps']:
+                return 'swss0\nswss1\n', 0
+            return 'RUNNING', 0
+
+        mock_run.side_effect = run_command
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands['syslog'].commands['rate-limit-feature'].commands['enable'], obj=db
+        )
+
+        assert result.exit_code == SUCCESS
+        assert 'swss0 is not running' not in result.output
+        assert 'swss1 is not running' not in result.output
+        assert mock.call(
+            ['docker', 'exec', '-i', 'swss0', 'supervisorctl', 'status', 'containercfgd'],
+            ignore_error=True, return_cmd=True
+        ) in mock_run.call_args_list
+        assert mock.call(
+            ['docker', 'exec', '-i', 'swss1', 'supervisorctl', 'status', 'containercfgd'],
+            ignore_error=True, return_cmd=True
+        ) in mock_run.call_args_list
 
     @mock.patch('config.syslog.clicommon.run_command')
     def test_config_log_level(self, mock_run):
