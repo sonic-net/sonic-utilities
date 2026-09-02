@@ -26,6 +26,9 @@ SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
 LOG_WARN = logger.Logger.LOG_PRIORITY_WARNING
 LOG_NOTICE = logger.Logger.LOG_PRIORITY_NOTICE
+SECURE_BOOT_KEY_UPDATE_SCRIPT = "/usr/local/bin/secure_boot_enroll_key.sh"
+EFI_GLOBAL_GUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+EFI_PK_PATH = "/sys/firmware/efi/efivars/PK-{}".format(EFI_GLOBAL_GUID)
 
 # Global Config object
 _config = None
@@ -518,6 +521,43 @@ def validate_positive_int(ctx, param, value):
     raise click.BadParameter("Must be a positive integer")
 
 
+def validate_remove_pk_dir(ctx, param, value):
+    """Validate a directory containing signed empty KEK and PK updates."""
+    if value is None:
+        return value
+
+    required_files = ("remove-all-kek.auth", "remove-all-pk.auth")
+    missing_files = [
+        filename for filename in required_files
+        if not os.path.isfile(os.path.join(value, filename))
+    ]
+    if missing_files:
+        raise click.BadParameter(
+            "directory must contain {}".format(" and ".join(required_files))
+        )
+    return value
+
+
+def remove_secure_boot_platform_keys(auth_dir):
+    """Remove the UEFI Secure Boot KEK and PK using signed empty updates."""
+    updates = (
+        ("KEK", os.path.join(auth_dir, "remove-all-kek.auth")),
+        ("PK", os.path.join(auth_dir, "remove-all-pk.auth")),
+    )
+
+    for var_name, auth_file in updates:
+        echo_and_log("Removing UEFI Secure Boot {} using {}...".format(var_name, auth_file))
+        run_command_or_raise(
+            [SECURE_BOOT_KEY_UPDATE_SCRIPT, var_name, auth_file],
+            capture=False,
+        )
+
+
+def is_secure_boot_pk_enrolled():
+    """Return whether the UEFI Platform Key variable is present."""
+    return os.path.isfile(EFI_PK_PATH)
+
+
 # Main entrypoint
 @click.group(cls=AliasedGroup)
 def sonic_installer():
@@ -556,9 +596,14 @@ def sonic_installer():
               help='If system available memory is lower than threshold, setup SWAP memory',
               cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
+@click.option('--remove-pk', type=click.Path(exists=True, file_okay=False, readable=True,
+              resolve_path=True), callback=validate_remove_pk_dir, metavar='DIRECTORY',
+              help='After installation, remove KEK and PK using remove-all-kek.auth and '
+              'remove-all-pk.auth from DIRECTORY')
 @click.argument('url')
 def install(url, force, skip_platform_check=False, skip_migration=False, skip_package_migration=False,
-            skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None, available_mem_threshold=None):
+            skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None,
+            available_mem_threshold=None, remove_pk=None):
     """ Install image from local binary or URL"""
     bootloader = get_bootloader()
 
@@ -578,6 +623,16 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
     binary_image_version = bootloader.get_binary_image_version(image_path)
     if not binary_image_version:
         echo_and_log("Image file does not exist or is not a valid SONiC image file", LOG_ERR)
+        raise click.Abort()
+
+    if (is_secure_boot_pk_enrolled() and not remove_pk
+            and not bootloader.image_has_secure_boot_db_auth(image_path)):
+        echo_and_log(
+            "The device has an enrolled UEFI Secure Boot PK, but the image does not "
+            "contain boot/DB.auth. Use an image with DB.auth or provide "
+            "--remove-pk=<directory>. Aborting...",
+            LOG_ERR,
+        )
         raise click.Abort()
 
     # Is this version already installed?
@@ -602,6 +657,8 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             raise click.Abort()
 
         if bootloader.is_secure_upgrade_image_verification_supported():
+            echo_and_log("Enrolling image {} Secure Boot db certificate...".format(binary_image_version))
+            bootloader.enroll_image_secure_boot_keys(image_path)
             echo_and_log("Verifying image {} signature...".format(binary_image_version))
             if not bootloader.verify_image_sign(image_path):
                 echo_and_log('Error: Failed verify image signature', LOG_ERR)
@@ -637,6 +694,9 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 
         if not skip_package_migration:
             migrate_sonic_packages(bootloader, binary_image_version)
+
+    if remove_pk:
+        remove_secure_boot_platform_keys(remove_pk)
 
     # Finally, sync filesystem
     run_command(["sync"])

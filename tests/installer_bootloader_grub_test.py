@@ -130,3 +130,40 @@ def test_verify_image():
     assert not bootloader.is_secure_upgrade_image_verification_supported()
     # command should fail
     assert not bootloader.verify_image_sign(image)
+
+
+def test_enroll_image_secure_boot_keys_missing_script():
+
+    bootloader = grub.GrubBootloader()
+    image = f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde'
+    with patch("sonic_installer.bootloader.grub.os.path.exists", return_value=False):
+        # When the enrollment script is absent, the method reports failure without raising.
+        assert not bootloader.enroll_image_secure_boot_keys(image)
+
+
+def test_enroll_image_secure_boot_keys_runs_script():
+
+    bootloader = grub.GrubBootloader()
+    image = f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde'
+    completed = Mock()
+    completed.returncode = 0
+    completed.stdout = b'db certificate enrolled\n'
+    with patch("sonic_installer.bootloader.grub.os.path.exists", return_value=True), \
+            patch("sonic_installer.bootloader.grub.subprocess.run", return_value=completed) as mock_run:
+        assert bootloader.enroll_image_secure_boot_keys(image)
+        mock_run.assert_called_once_with(
+            ['/usr/local/bin/secure_boot_enroll_db.sh', image], capture_output=True)
+
+
+def test_image_has_secure_boot_db_auth():
+
+    bootloader = grub.GrubBootloader()
+    image = f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde'
+    completed = Mock(returncode=0, stdout=b'image bundles boot/DB.auth\n')
+    with patch("sonic_installer.bootloader.grub.os.path.exists", return_value=True), \
+            patch("sonic_installer.bootloader.grub.subprocess.run", return_value=completed) as mock_run:
+        assert bootloader.image_has_secure_boot_db_auth(image)
+        mock_run.assert_called_once_with(
+            ['/usr/local/bin/secure_boot_enroll_db.sh', '--check', image],
+            capture_output=True,
+        )
