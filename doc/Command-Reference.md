@@ -8064,6 +8064,7 @@ This command is used to administratively shut down either the Physical interface
   *Versions >= 201904*
   ```
   config interface shutdown <interface_name> (for 201904+ version)
+  config interface shutdown --from <from_interface> --to <to_interface>
   ```
   *Versions <= 201811*
   ```
@@ -8086,6 +8087,11 @@ This command is used to administratively shut down either the Physical interface
   admin@sonic:~$ sudo config interface shutdown Ethernet8,Ethernet16-20,Ethernet32
   ```
 
+  shutdown a range of configured physical interfaces using --from/--to
+  ```
+  admin@sonic:~$ sudo config interface shutdown --from Ethernet0 --to Ethernet40
+  ```
+
 **config interface startup <interface_name> (Versions >= 201904)**
 
 **config interface <interface_name> startup (Versions <= 201811)**
@@ -8097,6 +8103,7 @@ This command is used for administratively bringing up the Physical interface or 
   *Versions >= 201904*
   ```
   config interface startup <interface_name> (for 201904+ version)
+  config interface startup --from <from_interface> --to <to_interface>
   ```
   *Versions <= 201811*
   ```
@@ -8118,6 +8125,14 @@ This command is used for administratively bringing up the Physical interface or 
   ```
   admin@sonic:~$ sudo config interface startup Ethernet8,Ethernet16-20,Ethernet32
   ```
+
+  startup a range of configured physical interfaces using --from/--to
+  ```
+  admin@sonic:~$ sudo config interface startup --from Ethernet0 --to Ethernet40
+  ```
+
+  Note: --from and --to are inclusive, and only the configured physical interfaces between them are
+  affected. Both endpoints must be configured physical interfaces.
 
 **config interface <interface_name> speed (Versions >= 202006)**
 
