@@ -6,6 +6,9 @@ import subprocess
 import sys
 import time
 import utilities_common.cli as clicommon
+from utilities_common.image_disk_space import (
+    check_image_install_free_disk_space,
+)
 from urllib.request import urlopen, urlretrieve
 
 import click
@@ -587,6 +590,16 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             echo_and_log('Error: Failed to set image as default', LOG_ERR)
             raise click.Abort()
     else:
+        # Validate that enough disk space is available before modifying the
+        # installed image state. The helper automatically applies the NPU or
+        # DPU threshold based on the system on which this command is running.
+        if not check_image_install_free_disk_space():
+            echo_and_log(
+                "Insufficient free disk space to install the image. Aborting...",
+                LOG_ERR,
+            )
+            raise click.Abort()
+
         # Verify not installing non-secure image in a secure running image
         if not force and not bootloader.verify_secureboot_image(image_path):
             echo_and_log("Image file '{}' is of a different type than running image.\n".format(url) +
