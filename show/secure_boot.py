@@ -1,10 +1,9 @@
 """show secure-boot commands."""
 
-import json
-import subprocess
-
 import click
 from tabulate import tabulate
+
+from utilities_common.secure_boot import BackendError, run_backend
 
 try:
     import utilities_common.cli as clicommon
@@ -12,35 +11,7 @@ try:
 except Exception:  # pragma: no cover
     GROUP_CLS = click.Group
 
-BACKEND = "/usr/sbin/secure-boot-backend"
 TIMEOUT = 180
-
-
-class BackendError(RuntimeError):
-    pass
-
-
-def run_backend(*args):
-    try:
-        cp = subprocess.run(
-            [BACKEND] + list(args),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=TIMEOUT,
-            check=False,
-        )
-    except FileNotFoundError:
-        raise BackendError(f"{BACKEND} is not installed")
-    except subprocess.TimeoutExpired:
-        raise BackendError("secure boot backend timed out")
-    try:
-        data = json.loads(cp.stdout or "{}")
-    except json.JSONDecodeError:
-        raise BackendError("invalid backend response: {}".format((cp.stdout or "").strip()))
-    if cp.returncode != 0 or "error" in data:
-        raise BackendError(data.get("error", "secure boot backend failed"))
-    return data
 
 
 @click.group(name="secure-boot", cls=GROUP_CLS)
@@ -53,15 +24,26 @@ def secure_boot():
 def status():
     """Show Secure Boot backend mode and key state."""
     try:
-        data = run_backend("status")
+        data = run_backend(("status",), TIMEOUT)
     except BackendError as exc:
         raise click.ClickException(str(exc))
     m = data["mode"]
-    click.echo("Secure Boot Backend: platform")
     click.echo("UEFI Mode: {} ({}, {})".format(m["raw"], m["hex"], m["name"]))
     click.echo("")
-    rows = []
     keys = data["keys"]
+    has_unified = any(f"{var}Unified" in keys for var in ("PK", "KEK", "db", "dbx"))
+    if has_unified:
+        rows = []
+        for var in ("PK", "KEK", "db", "dbx"):
+            item = keys.get(f"{var}Unified", {})
+            rows.append([var, item.get("state", "unknown"), item.get("entry_count", "-")])
+        click.echo(tabulate(
+            rows,
+            headers=["Variable", "State", "Entries"],
+            tablefmt="simple",
+        ))
+        return
+    rows = []
     for var in ("PK", "KEK", "db", "dbx"):
         vendor = keys.get(f"{var}Vendor", {})
         customer = keys.get(f"{var}Customer", {})
@@ -83,7 +65,7 @@ def status():
 def mode():
     """Show Secure Boot backend mode."""
     try:
-        data = run_backend("mode")
+        data = run_backend(("mode",), TIMEOUT)
     except BackendError as exc:
         raise click.ClickException(str(exc))
     rows = [
@@ -101,11 +83,15 @@ def mode():
 def keys_cmd():
     """Show PK/KEK/db/dbx state."""
     try:
-        data = run_backend("keys")
+        data = run_backend(("keys",), TIMEOUT)
     except BackendError as exc:
         raise click.ClickException(str(exc))
     rows = []
     for var in ("PK", "KEK", "db", "dbx"):
+        unified = data.get(f"{var}Unified")
+        if unified is not None:
+            rows.append([var, "unified", unified.get("state", "unknown"), unified.get("entry_count", "-")])
+            continue
         for store, suffix in (("vendor", "Vendor"), ("customer", "Customer")):
             item = data.get(f"{var}{suffix}", {})
             rows.append([var, store, item.get("state", "unknown"), item.get("entry_count", "-")])
@@ -114,17 +100,34 @@ def keys_cmd():
 
 @secure_boot.command(name="key")
 @click.argument("variable", type=click.Choice(["PK", "KEK", "db", "dbx"], case_sensitive=False))
-@click.option("--store", type=click.Choice(["vendor", "customer", "unified"]), default="customer", show_default=True)
+@click.option("--store", type=click.Choice(["vendor", "customer", "unified"]), default=None)
 def key_cmd(variable, store):
     """Show one Secure Boot variable state."""
+    # Omitting --store lets the selected backend pick its natural default
+    # (unified for generic UEFI, customer for platform backends).
+    args = ["key", variable]
+    if store is not None:
+        args.extend(["--store", store])
     try:
-        data = run_backend("key", variable, "--store", store)
+        data = run_backend(tuple(args), TIMEOUT)
     except BackendError as exc:
         raise click.ClickException(str(exc))
-    item = next(iter(data.values()))
+    if not data:
+        raise click.ClickException("invalid empty backend response")
+    key_name, item = next(iter(data.items()))
+    if store is not None:
+        display_store = store
+    elif key_name.endswith("Unified"):
+        display_store = "unified"
+    elif key_name.endswith("Vendor"):
+        display_store = "vendor"
+    elif key_name.endswith("Customer"):
+        display_store = "customer"
+    else:
+        display_store = "unknown"
     rows = [
         ["Variable", variable],
-        ["Store", store],
+        ["Store", display_store],
         ["State", item.get("state", "unknown")],
         ["Entries", item.get("entry_count", "-")],
     ]

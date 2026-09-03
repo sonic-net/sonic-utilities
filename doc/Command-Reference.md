@@ -13330,7 +13330,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#sed)
 
 Secure Boot commands are used to display Secure Boot mode and variable state, and to submit authenticated-variable update operations for the standard UEFI Secure Boot variables `PK`, `KEK`, `db`, and `dbx`.
 
-The commands use a platform Secure Boot backend. The platform backend is responsible for validating authenticated-variable payloads, enforcing platform policy, and accessing protected Secure Boot variable storage. The exact mode, policy state, variable state, and entry counts are platform dependent.
+The commands talk to a single stable entry point, `/usr/sbin/secure-boot-backend`, which is the SONiC Secure Boot backend selector. The selector uses an explicitly registered platform backend when present, otherwise the SONiC generic UEFI backend when standard UEFI variable services are available, and otherwise reports Secure Boot management as unsupported. A platform backend is registered by providing `/usr/lib/sonic/secure-boot/platform-backend`. The selected backend is responsible for validating authenticated-variable payloads, enforcing policy, and accessing protected Secure Boot variable storage. The exact mode, policy state, variable state, and entry counts are backend and platform dependent.
 
 ### Secure Boot show commands
 
@@ -13346,7 +13346,6 @@ This command displays the Secure Boot backend mode together with the state and e
 - Example:
   ```
   admin@sonic:~$ show secure-boot status
-  Secure Boot Backend: platform
   UEFI Mode: 43 (0x002b, Generic Mode)
 
   Variable    Vendor State      Vendor Entries    Customer State      Customer Entries
@@ -13359,7 +13358,7 @@ This command displays the Secure Boot backend mode together with the state and e
 
 **show secure-boot mode**
 
-This command displays the Secure Boot mode and the write/lock policy reported by the platform backend.
+This command displays the Secure Boot mode and the write/lock policy reported by the backend.
 
 - Usage:
   ```
@@ -13434,7 +13433,7 @@ This command displays the state and entry count for one Secure Boot variable.
 
 ### Secure Boot config commands
 
-Secure Boot configuration commands submit authenticated update material to the platform Secure Boot backend. The CLI does not generate or store private signing keys.
+Secure Boot configuration commands submit authenticated update material to the Secure Boot backend. The CLI does not generate or store private signing keys.
 
 **config secure-boot certificate update**
 
