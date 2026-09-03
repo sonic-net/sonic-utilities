@@ -1205,12 +1205,15 @@ def _restart_services():
         if has_route_check:
             clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
-        for svc in _get_monit_services_by_prefix('container_memory_'):
+        memory_services = _get_monit_services_by_prefix('container_memory_')
+        for svc in memory_services:
             clicommon.run_command(['sudo', 'monit', 'monitor', svc])
         log.log_notice("Waiting for monit monitor actions to complete ...")
         if has_route_check:
             _wait_for_monit_service_monitored('routeCheck')
         _wait_for_monit_service_monitored('container_checker')
+        for svc in memory_services:
+            _wait_for_monit_service_monitored(svc)
     except subprocess.CalledProcessError as err:
         pass
     # Reload Monit configuration to pick up new hostname in case it changed
