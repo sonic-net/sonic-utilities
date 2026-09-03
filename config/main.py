@@ -1047,6 +1047,10 @@ def _stop_services():
             clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
         for svc in _get_monit_services_by_prefix('container_memory_'):
             clicommon.run_command(['sudo', 'monit', 'unmonitor', svc])
+        # chrony is BindsTo=sonic.target and gets stopped/restarted below. Suspend monit
+        # supervision of it first so monit doesn't race that intentional restart.
+        if _monit_service_exists('chrony'):
+            clicommon.run_command(['sudo', 'monit', 'unmonitor', 'chrony'])
     except subprocess.CalledProcessError as err:
         pass
 
@@ -1207,10 +1211,15 @@ def _restart_services():
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
         for svc in _get_monit_services_by_prefix('container_memory_'):
             clicommon.run_command(['sudo', 'monit', 'monitor', svc])
+        has_chrony = _monit_service_exists('chrony')
+        if has_chrony:
+            clicommon.run_command(['sudo', 'monit', 'monitor', 'chrony'])
         log.log_notice("Waiting for monit monitor actions to complete ...")
         if has_route_check:
             _wait_for_monit_service_monitored('routeCheck')
         _wait_for_monit_service_monitored('container_checker')
+        if has_chrony:
+            _wait_for_monit_service_monitored('chrony')
     except subprocess.CalledProcessError as err:
         pass
     # Reload Monit configuration to pick up new hostname in case it changed

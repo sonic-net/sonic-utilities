@@ -1419,7 +1419,10 @@ class TestLoadMinigraph(object):
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
-            assert mock_run_command.call_count == 23
+            # +3 vs. no-chrony: unmonitor chrony, monitor chrony, and the status poll
+            # inside _wait_for_monit_service_monitored('chrony'). mock_check_call has no
+            # side_effect here, so _monit_service_exists('chrony') reports it as present.
+            assert mock_run_command.call_count == 26
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -5680,3 +5683,103 @@ class TestGetMonitServicesByPrefix(object):
     def test_monit_not_running(self, mock_check_output):
         result = config._get_monit_services_by_prefix('container_memory_')
         assert result == []
+
+
+class TestStopServicesChronyMonit(object):
+    """Regression tests for sonic-net/sonic-buildimage#28943: chrony is
+    BindsTo=sonic.target, so monit must stop supervising it before
+    sonic.target is stopped, or monit can race the intentional restart
+    with its own 'systemctl start chrony.service' action. Guarded by
+    _monit_service_exists() so images predating sonic-buildimage#28284
+    (no chrony monit check) keep working unchanged."""
+
+    def _run_stop_services(self, chrony_exists):
+        calls = []
+
+        def fake_check_call(cmd, **kwargs):
+            if cmd[-1] == 'chrony' and not chrony_exists:
+                raise subprocess.CalledProcessError(1, cmd)
+            return 0
+
+        def fake_run_command(cmd, *args, **kwargs):
+            calls.append(list(cmd))
+            return ("", 0)
+
+        with mock.patch('config.main.subprocess.check_call', side_effect=fake_check_call), \
+                mock.patch('config.main.subprocess.check_output', return_value=""), \
+                mock.patch('config.main.clicommon.run_command', side_effect=fake_run_command), \
+                mock.patch('config.main._get_sonic_services', return_value=[]):
+            config._stop_services()
+
+        return calls
+
+    def test_chrony_unmonitored_before_sonic_target_stop(self):
+        calls = self._run_stop_services(chrony_exists=True)
+
+        assert ['sudo', 'monit', 'unmonitor', 'chrony'] in calls
+        unmonitor_idx = calls.index(['sudo', 'monit', 'unmonitor', 'chrony'])
+        stop_idx = calls.index(
+            ['sudo', 'systemctl', 'stop', 'sonic.target', '--job-mode', 'replace-irreversibly'])
+        assert unmonitor_idx < stop_idx
+
+    def test_no_chrony_commands_when_chrony_not_in_monit(self):
+        calls = self._run_stop_services(chrony_exists=False)
+
+        assert not any('chrony' in c for c in calls)
+        # Pre-existing behavior must remain intact regardless of chrony
+        assert ['sudo', 'monit', 'unmonitor', 'container_checker'] in calls
+        assert ['sudo', 'systemctl', 'stop', 'sonic.target', '--job-mode', 'replace-irreversibly'] in calls
+
+
+class TestRestartServicesChronyMonit(object):
+    """Regression tests for sonic-net/sonic-buildimage#28943: monit must
+    resume supervising chrony only after sonic.target has been restarted,
+    and (since 'monit monitor' is asynchronous, see #4295) must wait for
+    chrony to reach the monitored state before 'monit reload' runs."""
+
+    def _run_restart_services(self, chrony_exists):
+        calls = []
+
+        def fake_check_call(cmd, **kwargs):
+            if cmd[-1] == 'chrony' and not chrony_exists:
+                raise subprocess.CalledProcessError(1, cmd)
+            return 0
+
+        def fake_run_command(cmd, *args, **kwargs):
+            calls.append(list(cmd))
+            return ("", 0)
+
+        def fake_wait(service, timeout=10):
+            calls.append(['WAIT_FOR_MONITORED', service])
+
+        with mock.patch('config.main.subprocess.check_call', side_effect=fake_check_call), \
+                mock.patch('config.main.subprocess.check_output', return_value=""), \
+                mock.patch('config.main.clicommon.run_command', side_effect=fake_run_command), \
+                mock.patch('config.main._wait_for_monit_service_monitored', side_effect=fake_wait), \
+                mock.patch('config.main.get_service_finish_timestamp', return_value=""), \
+                mock.patch('config.main.wait_service_restart_finish'), \
+                mock.patch('config.main.get_device_name', return_value=None), \
+                mock.patch('config.main.reset_mgmt_interface_if_usb_not_running'):
+            config._restart_services()
+
+        return calls
+
+    def test_chrony_monitored_after_restart_and_waited_before_reload(self):
+        calls = self._run_restart_services(chrony_exists=True)
+
+        restart_idx = calls.index(['sudo', 'systemctl', 'restart', 'sonic.target'])
+        monitor_idx = calls.index(['sudo', 'monit', 'monitor', 'chrony'])
+        wait_idx = calls.index(['WAIT_FOR_MONITORED', 'chrony'])
+        reload_idx = calls.index(['sudo', 'monit', 'reload'])
+
+        assert restart_idx < monitor_idx < wait_idx < reload_idx
+
+    def test_no_chrony_commands_when_chrony_not_in_monit(self):
+        calls = self._run_restart_services(chrony_exists=False)
+
+        assert ['WAIT_FOR_MONITORED', 'chrony'] not in calls
+        assert not any('chrony' in c for c in calls if c[0] != 'WAIT_FOR_MONITORED')
+        # Pre-existing behavior must remain intact regardless of chrony
+        assert ['sudo', 'monit', 'monitor', 'container_checker'] in calls
+        assert ['WAIT_FOR_MONITORED', 'container_checker'] in calls
+        assert ['sudo', 'monit', 'reload'] in calls
