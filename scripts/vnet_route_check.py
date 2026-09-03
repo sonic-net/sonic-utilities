@@ -5,6 +5,7 @@ import json
 import syslog
 import subprocess
 import argparse
+from ipaddress import ip_network
 from swsscommon import swsscommon
 
 ''' vnet_route_check.py: tool that verifies VNET routes consistency between SONiC and vendor SDK DBs.
@@ -52,6 +53,13 @@ default_vrf_oid = ""
 
 report_level = syslog.LOG_WARNING
 write_to_syslog = True
+
+
+def add_prefix_ifnot(ip):
+    """Return a canonical route prefix, adding a host mask when absent."""
+    if '/' not in ip:
+        ip += '/128' if ':' in ip else '/32'
+    return str(ip_network(ip))
 
 
 def set_level(lvl, log_to_syslog):
@@ -186,12 +194,13 @@ def filter_out_vnet_ip2me_routes(vnet_routes):
             ip2me_route = rif_ip + '/32'
             vnet_ip2me_routes.append(ip2me_route)
 
-    for vnet, vnet_attrs in vnet_routes.items():
-        for route in vnet_attrs['routes']:
-            if route in vnet_ip2me_routes:
-                vnet_attrs['routes'].remove(route)
+    for vnet in list(vnet_routes.keys()):
+        vnet_routes[vnet]['routes'] = [
+            route for route in vnet_routes[vnet]['routes']
+            if route not in vnet_ip2me_routes
+        ]
 
-        if not vnet_attrs['routes']:
+        if not vnet_routes[vnet]['routes']:
             vnet_routes.pop(vnet)
 
 
@@ -214,7 +223,7 @@ def get_vnet_routes_from_app_db():
     for vnet_route_db_key in vnet_routes_db_keys:
         vnet_route_list = vnet_route_db_key.split(':',1)
         vnet_name = vnet_route_list[0]
-        vnet_route = vnet_route_list[1]
+        vnet_route = add_prefix_ifnot(vnet_route_list[1].lower())
 
         if vnet_name not in vnet_routes:
             vnet_routes[vnet_name] = {}
