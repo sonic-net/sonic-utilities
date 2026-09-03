@@ -1,5 +1,6 @@
 import click
 import string
+import re
 import utilities_common.cli as clicommon
 from .validated_config_db_connector import ValidatedConfigDBConnector
 from jsonpatch import JsonPatchConflict
@@ -308,6 +309,139 @@ def update_console_escape_char(db, linenum, escape):
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
     else:
         ctx.fail("Trying to update console port setting, which is not present.")
+
+
+#
+# 'console logging' group ('config console logging ...')
+#
+LOGROTATE_SIZE_PATTERN = re.compile(r'^[0-9]+[kKmMgG]?$')
+DEFAULT_LOG_FILE_TEMPLATE = "/var/log/console-{}.log"
+# NOTE: Keep these defaults aligned with src/sonic-host-services/scripts/console-monitor
+# (DEFAULT_LOGROTATE_SIZE / DEFAULT_LOGROTATE_COUNT).
+DEFAULT_LOGROTATE_SIZE = "10M"
+DEFAULT_LOGROTATE_COUNT = "10"
+
+
+def default_log_file(linenum):
+    return DEFAULT_LOG_FILE_TEMPLATE.format(linenum)
+
+
+def apply_default_logging_config(data, linenum):
+    """Fill in default log file and logrotate settings when not configured."""
+    if not data.get('log_file'):
+        data['log_file'] = default_log_file(linenum)
+    if not data.get('logrotate_size'):
+        data['logrotate_size'] = DEFAULT_LOGROTATE_SIZE
+    if not data.get('logrotate_count'):
+        data['logrotate_count'] = DEFAULT_LOGROTATE_COUNT
+
+
+def get_effective_logrotate_options(ctx, size, count):
+    """Resolve effective logrotate size/count from optional CLI options."""
+    if size is None:
+        size = DEFAULT_LOGROTATE_SIZE
+    if count is None:
+        count = DEFAULT_LOGROTATE_COUNT
+
+    if not LOGROTATE_SIZE_PATTERN.match(size):
+        ctx.fail("Invalid logrotate size '{}'. Use a value like 10M or 100k.".format(size))
+
+    return size, str(count)
+
+
+@console.group('logging')
+@click.argument('linenum', metavar='<line_number>', required=True, type=click.IntRange(0, 65535))
+def console_logging(linenum):
+    """Console I/O logging configuration"""
+    pass
+
+
+@console_logging.command('enable')
+@clicommon.pass_db
+def enable_console_logging(db):
+    """Enable console I/O logging for a console line"""
+    linenum = click.get_current_context().parent.params['linenum']
+    _set_console_logging_state(linenum, db, "yes")
+
+
+@console_logging.command('disable')
+@clicommon.pass_db
+def disable_console_logging(db):
+    """Disable console I/O logging for a console line"""
+    linenum = click.get_current_context().parent.params['linenum']
+    _set_console_logging_state(linenum, db, "no")
+
+
+@console_logging.command('filename')
+@clicommon.pass_db
+@click.argument('filename', metavar='<file_name>', required=True)
+@click.option('--logrotate-size', '-s', 'logrotate_size', metavar='<size>', default=None,
+              help='Logrotate size threshold (e.g. 10M, 100k). Default: 10M.')
+@click.option('--logrotate-count', '-c', 'logrotate_count', metavar='<count>', default=None,
+              type=click.IntRange(1, 100), help='Number of rotated log files to retain. Default: 10.')
+def set_console_logging_filename(db, filename, logrotate_size, logrotate_count):
+    """Configure console log file and optional logrotate settings"""
+    ctx = click.get_current_context()
+    size, count = get_effective_logrotate_options(ctx, logrotate_size, logrotate_count)
+
+    linenum = ctx.parent.params['linenum']
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    table = "CONSOLE_PORT"
+    data = config_db.get_entry(table, linenum)
+    if not data:
+        ctx.fail("Trying to update console port setting, which is not present.")
+
+    size_key = 'logrotate_size'
+    count_key = 'logrotate_count'
+    file_key = 'log_file'
+
+    if (data.get(file_key) == filename and
+            data.get(size_key) == size and
+            data.get(count_key) == count):
+        return
+
+    data[file_key] = filename
+    data[size_key] = size
+    data[count_key] = count
+    try:
+        config_db.mod_entry(table, linenum, data)
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+def _set_console_logging_state(linenum, db, enabled_value):
+    ctx = click.get_current_context()
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    table = "CONSOLE_PORT"
+    enabled_key = 'logging_enabled'
+
+    data = config_db.get_entry(table, linenum)
+    if not data:
+        ctx.fail("Trying to update console port setting, which is not present.")
+
+    if enabled_value == "yes":
+        old_log_file = data.get('log_file')
+        old_size = data.get('logrotate_size')
+        old_count = data.get('logrotate_count')
+        apply_default_logging_config(data, linenum)
+        defaults_changed = (
+            data.get('log_file') != old_log_file or
+            data.get('logrotate_size') != old_size or
+            data.get('logrotate_count') != old_count
+        )
+    else:
+        defaults_changed = False
+
+    if data.get(enabled_key) == enabled_value and not defaults_changed:
+        return
+
+    data[enabled_key] = enabled_value
+    try:
+        config_db.mod_entry(table, linenum, data)
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
 def isExistingSameDevice(config_db, deviceName, table):
