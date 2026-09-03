@@ -131,9 +131,11 @@ def test_show_config_displays_all_operator_fields():
         }
     }
     db.db.get_all.return_value = {
-        "individual_max_failure_threshold": "15",
-        "redis_monitor_polling_interval": "30",
-        "rules_inbox_settle_time": "45",
+        "effective_config": json.dumps({
+            "individual_max_failure_threshold": 15,
+            "redis_monitor_polling_interval": 30,
+            "rules_inbox_settle_time": 45,
+        }),
     }
 
     result = _invoke_ok(show_dldd, ("config",), obj=db)
@@ -160,12 +162,11 @@ def _detailed_status_state():
         "active_rules_checksum": "sha256:1234",
         "active_rules_source": "inbox",
         "activation_result": "PASSED",
-        "activation_fallback_used": "false",
-        "previous_active_rules_checksum": "sha256:old",
-        "local_action_default_timeout": "45",
-        "async_pool_workers": "8",
-        "async_pool_busy": "2",
-        "async_pool_queued": "3",
+        "rule_count": "12",
+        "active_fault_count": "2",
+        "rule_exception_count": "1",
+        "source_exception_count": "1",
+        "inflight_count": "0",
         "broken_rules": json.dumps([
             {
                 "rule_instance_id": "1000001@PSU0",
@@ -188,36 +189,6 @@ def _detailed_status_state():
                 "reason": "producer unavailable",
             }
         ]),
-        "inflight_fault_evidence": json.dumps([
-            {
-                "rule_instance_id": "1000001@PSU0",
-                "rule_id": 1000001,
-                "rule": "PSU_OV_FAULT",
-                "event_id": 1,
-                "component_type": "PSU",
-                "correlation_key": "inflight-key-that-must-not-be-rendered",
-                "state": "HELD_BY_PRIMARY",
-                "owning_monitor": "redis",
-                "hold_deadline": 1745614300.0,
-                "since": 1745614201.0,
-                "reason": "local_action_wait",
-                "local_action_state": {
-                    "state": "WAITING_FOR_RECHECK",
-                    "worker_id": "action-1",
-                    "started_at": 1745614202.0,
-                },
-            }
-        ]),
-        "service_diagnostics": json.dumps([
-            {
-                "rule_instance_id": "1000001@PSU0",
-                "monitor": "redis",
-                "rule_id": 1000001,
-                "correlation_key": "1000001:1:PSU0:SYMPTOM_OVER_THRESHOLD:psu",
-                "state": "IN_FLIGHT",
-                "reason": "primary ownership lease expired",
-            }
-        ]),
     }
 
 
@@ -231,14 +202,14 @@ def test_show_status_is_compact_by_default():
     assert len(result.output.splitlines()) == 3
     _assert_output(
         result.output,
-        present=("State", "Heartbeat age", "Activation", "Rules source",
-                 "DEGRADED", "11 seconds (approximate)", "PASSED", "inbox"),
+        present=("State", "Heartbeat age", "Rules", "Faults", "Rule errors",
+                 "Source errors", "DEGRADED", "11 seconds (approximate)",
+                 "12", "2"),
         absent=("one rule degraded", "Running schema", "Active rules checksum",
                 "Reason", "PSU_OV_FAULT", "redis:STATE_DB:PSU_INFO",
                 "1000001@PSU0", "primary ownership lease expired"),
     )
-    for value in ("DEGRADED", "11 seconds (approximate)", "PASSED", "inbox"):
-        assert result.output.count(value) == 1
+    assert result.output.count("DEGRADED") == 1
 
 
 def test_show_status_detail_displays_service_and_diagnostics():
@@ -255,13 +226,10 @@ def test_show_status_detail_displays_service_and_diagnostics():
         result.output,
         present=(
             "DEGRADED", "11 seconds (approximate)", "0.0.1", "sha256:1234",
-            "Async collection pool", "Broken rules", "PSU_OV_FAULT",
-            "Source status", "redis:STATE_DB:PSU_INFO",
-            "Primary-owned fault work", "1000001@PSU0", "Local action work",
-            "WAITING_FOR_RECHECK", "Service diagnostics",
-            "primary ownership lease expired",
+            "Broken rules", "PSU_OV_FAULT", "Source status",
+            "redis:STATE_DB:PSU_INFO", "1000001@PSU0",
         ),
-        absent=("Correlation key", "inflight-key-that-must-not-be-rendered",
+        absent=("Correlation key", "Async collection pool", "Local action work",
                 "1745614200.0"),
     )
 
@@ -275,207 +243,17 @@ def test_show_status_handles_missing_state():
     assert result.output == "DLDD status is unavailable in STATE_DB.\n"
 
 
-def _rule_status_rows():
-    return [
-        {
-            "rule_id": 1000001,
-            "rule": "PSU_OV_FAULT",
-            "version": "1.0.0",
-            "component": "PSU",
-            "health": "OK",
-            "work_items_healthy": 1,
-            "work_items_total": 1,
-            "work_items_omitted": 0,
-            "active_faults": 1,
-            "last_attempt": 1745614266.0,
-            "last_success": 1745614266.0,
-            "failure_count": 0,
-            "reason": "",
-            "work_items": [
-                {
-                    "rule_instance_id": "1000001@PSU0",
-                    "event_id": 1,
-                    "component_name": "PSU0",
-                    "source_type": "redis",
-                    "monitor": "redis",
-                    "async": True,
-                    "state": "READY",
-                    "sampling_interval": 60.0,
-                    "interval_source": "monitor_default",
-                    "active_fault": True,
-                    "last_attempt": 1745614266.0,
-                    "last_success": 1745614266.0,
-                    "next_due": 1745614326.0,
-                    "failure_count": 0,
-                    "source_id": "redis:PSU_INFO",
-                    "correlation_key": "1000001:1:PSU0:redis",
-                }
-            ],
-        },
-        {
-            "rule_id": 1000002,
-            "rule": "FAN_SPEED_FAULT",
-            "version": "2.0.0",
-            "component": "FAN",
-            "health": "DEGRADED",
-            "work_items_healthy": 0,
-            "work_items_total": 1,
-            "active_faults": 0,
-            "last_attempt": 1745614200.0,
-            "last_success": 1745614100.0,
-            "failure_count": 3,
-            "reason": "source unavailable",
-            "work_items": [
-                {
-                    "rule_instance_id": "1000002@FAN0",
-                    "component_name": "FAN0",
-                }
-            ],
-        },
-    ]
-
-
-def _rule_status_entries(
-    checksum="sha256:test", detail_truncated="false"
-):
-    entries = {
-        "DLDD_STATUS|process_state": {
-            "active_rules_checksum": checksum,
-        }
-    }
-    rule_keys = []
-    for rule in _rule_status_rows():
-        status_key = "DLDD_RULE_STATUS|rule|{}".format(rule["rule"])
-        detail_key = "DLDD_RULE_DETAIL|rule|{}".format(rule["rule"])
-        summary = dict(rule)
-        work_items = summary.pop("work_items")
-        summary.update({
-            "active_rules_checksum": checksum,
-            "detail_key": detail_key,
-        })
-        entries[status_key] = summary
-        entries[detail_key] = {
-            "active_rules_checksum": checksum,
-            "rule_id": rule["rule_id"],
-            "rule": rule["rule"],
-            "work_items": json.dumps(work_items),
-        }
-        rule_keys.append(status_key)
-    entries["DLDD_RULE_STATUS|active"] = {
-        "active_rules_checksum": checksum,
-        "rule_keys": json.dumps(rule_keys),
-        "rule_count": str(len(rule_keys)),
-        "detail_truncated": detail_truncated,
-    }
-    return entries
-
-
-def _use_state_entries(db, entries):
-    db.db.get_all.side_effect = lambda unused_database, key: entries.get(
-        key, {}
-    )
-
-
-def _invoke_rules(entries, arguments=("rules",)):
+def test_show_rules_displays_count_and_only_exceptions():
     db = _db()
-    _use_state_entries(db, entries)
-    return db, _invoke_ok(show_dldd, arguments, obj=db)
+    db.db.get_all.return_value = _detailed_status_state()
 
-
-def test_show_rules_default_reads_only_small_summary_hashes():
-    db, result = _invoke_rules(_rule_status_entries())
+    result = _invoke_ok(show_dldd, ("rules",), obj=db)
 
     _assert_output(
         result.output,
-        present=("Rule ID", "Rule", "Component", "Health", "Active faults",
-                 "PSU_OV_FAULT", "FAN_SPEED_FAULT"),
-        absent=("Version", "Work items", "Last attempt", "Last success",
-                "Failure streak", "Reason"),
+        present=("Loaded rules: 12", "PSU_OV_FAULT", "query_error"),
+        absent=("Work items", "Correlation key", "DLDD_RULE_DETAIL"),
     )
-    requested = [item.args[1] for item in db.db.get_all.call_args_list]
-    assert "DLDD_RULE_STATUS|rule|PSU_OV_FAULT" in requested
-    assert "DLDD_RULE_STATUS|rule|FAN_SPEED_FAULT" in requested
-    assert not any(key.startswith("DLDD_RULE_DETAIL|rule|") for key in requested)
-
-
-def test_show_rules_filters_health_component_and_no_active_fault():
-    for component in ("FAN", "FAN0"):
-        db, result = _invoke_rules(
-            _rule_status_entries(),
-            ("rules", "--health", "degraded", "--component", component,
-             "--no-active-fault"),
-        )
-        _assert_output(
-            result.output,
-            present=("FAN_SPEED_FAULT", "DEGRADED"),
-            absent=("Work items", "0/1", "source unavailable",
-                    "1745614200.0", "PSU_OV_FAULT"),
-        )
-        requested = [item.args[1] for item in db.db.get_all.call_args_list]
-        assert "DLDD_RULE_DETAIL|rule|PSU_OV_FAULT" not in requested
-        if component == "FAN0":
-            assert requested.count("DLDD_RULE_DETAIL|rule|FAN_SPEED_FAULT") == 1
-
-
-def test_show_rules_filters_active_fault_and_displays_detail():
-    _, result = _invoke_rules(
-        _rule_status_entries(detail_truncated="true"),
-        ("rules", "--active-fault", "--detail"),
-    )
-
-    assert "PSU_OV_FAULT" in result.output
-    assert "FAN_SPEED_FAULT" not in result.output
-    assert "Version" in result.output
-    assert "Work items" in result.output
-    assert "Failure streak" in result.output
-    assert "Rule PSU_OV_FAULT (1000001) work items" in result.output
-    assert "PSU0" in result.output
-    assert "async" in result.output
-    assert "60.0 (monitor_default)" in result.output
-    assert "1000001@PSU0" in result.output
-    assert "Correlation key" not in result.output
-    assert "1000001:1:PSU0:redis" not in result.output
-    assert "detail was truncated" in result.output
-    assert "1745614266.0" not in result.output
-
-
-def test_show_rules_rejects_stale_generation_snapshot():
-    entries = _rule_status_entries(checksum="sha256:old")
-    entries["DLDD_STATUS|process_state"] = {
-        "active_rules_checksum": "sha256:current"
-    }
-    _, result = _invoke_rules(entries)
-
-    assert "does not match the active rules generation" in result.output
-    assert "PSU_OV_FAULT" not in result.output
-
-
-def test_show_rules_rejects_stale_detail_generation():
-    entries = _rule_status_entries()
-    entries["DLDD_RULE_DETAIL|rule|FAN_SPEED_FAULT"][
-        "active_rules_checksum"
-    ] = "sha256:old"
-
-    _, result = _invoke_rules(entries, ("rules", "--component", "FAN0"))
-
-    assert "rule detail is incomplete for the active generation" in result.output
-    assert "FAN_SPEED_FAULT" not in result.output
-
-
-@pytest.mark.parametrize(
-    "entries,expected",
-    (
-        ({}, "DLDD status is unavailable in STATE_DB."),
-        (
-            {"DLDD_STATUS|process_state": {"active_rules_checksum": "sha256:test"}},
-            "DLDD rule status is unavailable in STATE_DB.",
-        ),
-    ),
-)
-def test_show_rules_handles_missing_process_or_rule_status(entries, expected):
-    _, result = _invoke_rules(entries)
-
-    assert expected in result.output
 
 
 def test_show_faults_displays_and_filters_records():
