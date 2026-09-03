@@ -13,6 +13,7 @@ def test_run_command():
         output = sonic_installer_common.run_command([sys.executable, "-c", "import sys; sys.exit(6)"])
     assert e.value.code == 6
 
+
 @patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
 @pytest.mark.parametrize("resolv_conf_symlink_target", [
     "/run/resolvconf/resolv.conf",       # absolute symlink
