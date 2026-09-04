@@ -128,7 +128,7 @@ def is_issu_status_enabled_container(container_name):
     el = root.find('platform_info').find('issu-enabled')
 
     if el is not None:
-        issu_enabled = int(el.text) == 1
+        issu_enabled = int(el.text) in (1, 2)
 
     return issu_enabled
 

@@ -23,6 +23,7 @@ WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
+HWSKU=$(sonic-db-cli CONFIG_DB HGET "DEVICE_METADATA|localhost" "hwsku")
 PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
 LOG_SSD_HEALTH="/usr/local/bin/log_ssd_health"
 SSD_UTIL="/usr/local/bin/ssdutil"
@@ -650,7 +651,6 @@ function is_secureboot() {
 function setup_reboot_variables()
 {
     # Kernel and initrd image
-    HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
     CURR_SONIC_IMAGE=$(sonic-installer list | grep "Current: " | cut -d ' ' -f 2)
     NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
     IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
@@ -1011,11 +1011,49 @@ case "$REBOOT_TYPE" in
     "warm-reboot")
         execute_in_namespaces all check_warm_restart_in_progress
         if [[ "$sonic_asic_type" == "mellanox" ]]; then
-            REBOOT_TYPE="fastfast-reboot"
-            BOOT_TYPE_ARG="fastfast"
-            # source mlnx-ffb.sh file with
-            # functions to check ISSU upgrade possibility
-            source mlnx-ffb.sh
+            HWSKU_DIR="${DEVPATH}/${PLATFORM}/${HWSKU}"
+            SAI_PROFILE="${HWSKU_DIR}/sai.profile"
+
+            if [[ ! -f "${SAI_PROFILE}" ]]; then
+                error "Failed to find SAI profile: ${SAI_PROFILE}"
+                exit "${EXIT_FAILURE}"
+            fi
+
+            SAI_INIT_CONFIG_FILE=$(awk -F= '/^SAI_INIT_CONFIG_FILE=/{print $2; exit}' "${SAI_PROFILE}")
+            SAI_INIT_CONFIG_FILE="${HWSKU_DIR}/$(basename "${SAI_INIT_CONFIG_FILE}")"
+
+            if [[ ! -f "${SAI_INIT_CONFIG_FILE}" ]]; then
+                error "Failed to resolve SAI XML from ${SAI_PROFILE}"
+                exit "${EXIT_FAILURE}"
+            fi
+
+            NVIDIA_WARMBOOT_MODE=$(
+                sed -n 's:.*<issu-enabled>\([0-9]*\)</issu-enabled>.*:\1:p' "${SAI_INIT_CONFIG_FILE}" |
+                head -n1
+            )
+
+            case "${NVIDIA_WARMBOOT_MODE}" in
+                2)
+                    debug "Starting NVIDIA warmboot"
+                    BOOT_TYPE_ARG="warm"
+                    ;;
+                1)
+                    debug "Starting NVIDIA fastfastboot"
+                    REBOOT_TYPE="fastfast-reboot"
+                    BOOT_TYPE_ARG="fastfast"
+                    # source mlnx-ffb.sh file with
+                    # functions to check NVIDIA fastfast upgrade possibility
+                    source mlnx-ffb.sh
+                    ;;
+                0)
+                    error "NVIDIA warmboot is disabled"
+                    exit "${EXIT_NOT_SUPPORTED}"
+                    ;;
+                *)
+                    error "Invalid NVIDIA warmboot mode: ${NVIDIA_WARMBOOT_MODE}"
+                    exit "${EXIT_FAILURE}"
+                    ;;
+            esac
         else
             BOOT_TYPE_ARG="warm"
         fi
