@@ -32,7 +32,9 @@ def command_wrapper(command):
     """
     if command[0] == "systemctl":
         command = ["nsenter", "--target", "1", "--pid", "--mount", "--uts", "--ipc", "--net"] + command
+    command_text = "<unavailable>"
     try:
+        command_text = repr(command)
         command_text = " ".join(shlex.quote(arg) for arg in command)
         result = subprocess.run(command, capture_output=True, check=False, text=True)
 
@@ -51,7 +53,6 @@ def command_wrapper(command):
 
         return result.returncode
     except Exception as e:
-        command_text = locals().get("command_text", repr(command))
         logger.log(logger.LOG_PRIORITY_ERROR,
                    f"Command execution failed: '{command_text}', error: {e}",
                    print_to_console)
