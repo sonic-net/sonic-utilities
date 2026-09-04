@@ -2526,6 +2526,34 @@ save_sai_failure_dump(){
         return
     fi
     for file in $(find_files "/var/log/sai_failure_dump/"); do
+        # A tar dump (*.tar) takes much more space than a gzipped one,
+        # compress it first to save space before collecting it.  Skip the
+        # in-place gzip if a "$file.gz" already exists, so we never clobber a
+        # pre-existing, independent .gz dump (gzip's overwrite would replace
+        # its content with this tar's).  In that case the .tar is collected
+        # as-is (save_file gzips it into the tarball without touching the
+        # sibling on disk).
+        #
+        # If gzip itself fails, that usually means a broken environment (e.g. a
+        # full filesystem) in which the subsequent save_file/tar-append would
+        # likely fail too.  Rather than risk deleting the only intact copy of
+        # the dump, skip this file entirely: leave the original tar in place
+        # under /var/log/sai_failure_dump/ so it can be recovered manually.
+        #
+        # compressed_src records the original tar path ONLY when this iteration
+        # produced the gzip artifact, so cleanup removes that original -- and
+        # never a pre-existing, similarly named file for an input that was
+        # already a *.gz.
+        compressed_src=""
+        if [ -z "${file##*.tar}" ] && [ ! -e "$file.gz" ]; then
+            if gzip "$file"; then
+                compressed_src="$file"
+                file="$file.gz"
+            else
+                # Compression failed -- keep the source tar and move on.
+                continue
+            fi
+        fi
         if $TAR -tf $TARFILE | grep $BASE/log/$(basename $file); then
             # if the files are already collected under the log/ dir
             # just add a symbolic link
@@ -2534,15 +2562,26 @@ save_sai_failure_dump(){
                 file=$file.gz
             fi
             ${CMD_PREFIX}save_symlink ${file} sai_failure_dump log
+            save_status=$?
         else
             if [ ! -z "${file##*.gz}" ]; then
                 ${CMD_PREFIX}save_file ${file} sai_failure_dump true true
             else
                 ${CMD_PREFIX}save_file ${file} sai_failure_dump false true
             fi
+            save_status=$?
         fi
-        #Clean up the file once its part of tech support
-        rm -f $file
+        # Clean up the collected file once it is part of tech support, plus
+        # the original tar this iteration compressed (if any) so no leftover
+        # uncompressed tar is left behind.  Only tracked paths are removed.
+        #
+        # Only clean up on a successful collection.  On a *.tar we compressed,
+        # gzip has already removed the original tar, so the *.tar.gz is now the
+        # only copy -- deleting it after a failed save would lose the dump.
+        # Keep it in place for recovery / a later retry instead.
+        if [ "$save_status" -eq 0 ]; then
+            rm -f -- "$file" ${compressed_src:+"$compressed_src"}
+        fi
     done
 }
 
