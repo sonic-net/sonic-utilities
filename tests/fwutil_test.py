@@ -11,6 +11,42 @@ sys.modules['sonic_platform'] = MagicMock()
 sys.modules['sonic_platform.platform'] = MagicMock()
 import fwutil.lib as fwutil_lib
 
+
+def make_fw_double(method_name, *, supports_force, raises_type_error=False,
+                   return_value=None):
+    """Build a firmware component test double for install/update tests.
+
+    Returns an object exposing a single ``method_name`` (``install_firmware`` or
+    ``update_firmware``) that appends every call to ``.calls`` and then returns
+    ``return_value`` (or raises ``TypeError`` when ``raises_type_error``).
+
+    ``force_update`` support is expressed through the method's *real* signature so
+    ``supports_force_update`` (which inspects the signature) sees it correctly:
+    when ``supports_force`` the method takes ``force_update=False`` and records
+    ``(path, force_update)``; otherwise it takes only ``path`` and records
+    ``(path,)``. A ``**kwargs``-style shortcut is deliberately avoided because it
+    would be misdetected as force-update-capable.
+    """
+    calls = []
+
+    if supports_force:
+        def method(self, path, force_update=False):
+            calls.append((path, force_update))
+            if raises_type_error:
+                raise TypeError("backend boom")
+            return return_value
+    else:
+        def method(self, path):
+            calls.append((path,))
+            if raises_type_error:
+                raise TypeError("backend boom")
+            return return_value
+
+    double = type("_FwDouble", (), {method_name: method})()
+    double.calls = calls
+    return double
+
+
 class TestSquashFs(object):
     def setup_method(self):
         print('SETUP')
@@ -156,11 +192,17 @@ class TestComponentUpdateProvider(object):
     @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
     @patch('os.mkdir')
     def test_regular_modular_chassis_parsing(self, mock_mkdir, mock_validate, mock_parser_class, mock_platform_class):
-        """Test that regular modular chassis is treated as modular for parsing"""
-        # Setup mock chassis that is not SmartSwitch but has modules
+        """Test that a chassis with module firmware components is treated as modular"""
+        # Setup mock chassis that is not SmartSwitch and has a module that
+        # actually exposes firmware components (a genuine modular chassis).
         mock_chassis = MagicMock()
         mock_chassis.is_smartswitch.return_value = False
-        mock_chassis.get_all_modules.return_value = [MagicMock(), MagicMock()]  # 2 modules
+        mock_component = MagicMock()
+        mock_component.get_name.return_value = "CPLD"
+        mock_module = MagicMock()
+        mock_module.get_name.return_value = "Module1"
+        mock_module.get_all_components.return_value = [mock_component]
+        mock_chassis.get_all_modules.return_value = [mock_module]
 
         # Setup mock platform
         mock_platform = MagicMock()
@@ -177,6 +219,162 @@ class TestComponentUpdateProvider(object):
         # Verify that PlatformComponentsParser was called with is_modular_chassis=True
         # because regular modular chassis should be treated as modular
         mock_parser_class.assert_called_once_with(True)
+
+    @patch('fwutil.lib.Platform')
+    @patch('fwutil.lib.PlatformComponentsParser')
+    @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema', MagicMock())
+    @patch('os.mkdir', MagicMock())
+    def test_module_without_components_is_non_modular(self, mock_parser_class, mock_platform_class):
+        """A chassis whose modules expose no firmware components is NOT modular.
+
+        Mirrors the NVIDIA AST2700 BMC, which exposes a component-less
+        SWITCH-HOST module. Such a module must not make fwutil treat the device
+        as modular (which would wrongly require a "module" section in
+        platform_components.json).
+        """
+        mock_chassis = MagicMock()
+        mock_chassis.is_smartswitch.return_value = False
+        mock_module = MagicMock()
+        mock_module.get_name.return_value = "SWITCH-HOST"
+        mock_module.get_all_components.return_value = []  # no firmware components
+        mock_chassis.get_all_modules.return_value = [mock_module]
+
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_platform_class.return_value = mock_platform
+        mock_parser_class.return_value = MagicMock()
+
+        fwutil_lib.ComponentUpdateProvider()
+
+        # A component-less module must be treated as non-modular.
+        mock_parser_class.assert_called_once_with(False)
+
+    @patch('fwutil.lib.Platform')
+    @patch('fwutil.lib.PlatformComponentsParser')
+    @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
+    @patch('os.mkdir')
+    def test_any_module_with_components_is_modular(self, mock_mkdir, mock_validate,
+                                                   mock_parser_class, mock_platform_class):
+        """Covers the any-module-has-components contract.
+
+        A chassis may mix a component-less module (e.g. the BMC's SWITCH-HOST)
+        with a module that does expose firmware components. If *any* module has
+        components the chassis must be treated as modular, so the component-less
+        module alongside it must not suppress modularity.
+        """
+        mock_chassis = MagicMock()
+        mock_chassis.is_smartswitch.return_value = False
+
+        empty_module = MagicMock()
+        empty_module.get_name.return_value = "SWITCH-HOST"
+        empty_module.get_all_components.return_value = []  # no firmware components
+
+        component = MagicMock()
+        component.get_name.return_value = "CPLD"
+        fw_module = MagicMock()
+        fw_module.get_name.return_value = "Module1"
+        fw_module.get_all_components.return_value = [component]
+
+        mock_chassis.get_all_modules.return_value = [empty_module, fw_module]
+
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_platform_class.return_value = mock_platform
+        mock_parser_class.return_value = MagicMock()
+
+        fwutil_lib.ComponentUpdateProvider()
+
+        # Any module with components makes the chassis modular.
+        mock_parser_class.assert_called_once_with(True)
+
+    def test_component_less_module_construction_succeeds(self, tmp_path):
+        """Integration test with REAL schema parsing/validation.
+
+        A chassis that exposes a component-less module (e.g. the NVIDIA AST2700
+        BMC's SWITCH-HOST) together with a platform_components.json that has no
+        'module' section must construct without error. This exercises the real
+        PlatformComponentsParser and __validate_platform_schema (neither is
+        mocked), guarding against the regression where the non-modular chassis
+        still tripped a spurious 'module names mismatch'.
+        """
+        import json
+
+        root = str(tmp_path)
+        platform_components = {
+            "chassis": {
+                "BMC-CHASSIS": {
+                    "component": {}
+                }
+            }
+        }
+        with open(os.path.join(root, "platform_components.json"), "w") as f:
+            json.dump(platform_components, f)
+
+        module = MagicMock()
+        module.get_name.return_value = "SWITCH-HOST"
+        module.get_all_components.return_value = []  # component-less module
+
+        chassis = MagicMock()
+        chassis.is_smartswitch.return_value = False
+        chassis.get_name.return_value = "BMC-CHASSIS"
+        chassis.get_all_components.return_value = []
+        chassis.get_all_modules.return_value = [module]
+
+        # Route the parser at our temp platform_components.json (the FWUPDATE
+        # path branch just joins root + filename) and skip real dir creation.
+        with patch('fwutil.lib.Platform') as platform_cls, \
+             patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', root), \
+             patch('os.path.isdir', return_value=True):
+            platform_cls.return_value.get_chassis.return_value = chassis
+            cup = fwutil_lib.ComponentUpdateProvider(root)
+
+        assert cup.is_modular_chassis() is False
+        # The real parser must not have required/parsed a module section for a
+        # non-modular chassis: the parsed schema's module map is empty.
+        pcp = cup._ComponentUpdateProvider__pcp
+        assert pcp.module_component_map == {}
+
+    def test_modular_chassis_missing_module_section_fails(self, tmp_path):
+        """Complement to test_component_less_module_construction_succeeds.
+
+        A genuinely modular chassis (a module exposes firmware components) with
+        the SAME missing 'module' section must FAIL, proving the module-section
+        requirement is enforced conditionally on modularity - not skipped
+        unconditionally. Exercises the real PlatformComponentsParser and
+        __validate_platform_schema paths (neither is mocked).
+        """
+        import json
+
+        root = str(tmp_path)
+        # Identical to the non-modular case: chassis section only, no 'module'.
+        platform_components = {
+            "chassis": {
+                "BMC-CHASSIS": {
+                    "component": {}
+                }
+            }
+        }
+        with open(os.path.join(root, "platform_components.json"), "w") as f:
+            json.dump(platform_components, f)
+
+        component = MagicMock()
+        component.get_name.return_value = "CPLD"
+        module = MagicMock()
+        module.get_name.return_value = "Module1"
+        module.get_all_components.return_value = [component]  # modular chassis
+
+        chassis = MagicMock()
+        chassis.is_smartswitch.return_value = False
+        chassis.get_name.return_value = "BMC-CHASSIS"
+        chassis.get_all_components.return_value = []
+        chassis.get_all_modules.return_value = [module]
+
+        with patch('fwutil.lib.Platform') as platform_cls, \
+             patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', root), \
+             patch('os.path.isdir', return_value=True):
+            platform_cls.return_value.get_chassis.return_value = chassis
+            with pytest.raises(RuntimeError, match="module"):
+                fwutil_lib.ComponentUpdateProvider(root)
 
     @patch('fwutil.lib.Platform')
     @patch('fwutil.lib.PlatformComponentsParser')
@@ -334,6 +532,67 @@ class TestFwutilMain(object):
         assert result == "Comp1"
         assert ctx.obj[fw_main.COMPONENT_CTX_KEY] is component
 
+    def test_invoke_install_firmware_is_keyword_only(self):
+        # force_update is keyword-only: a positional boolean must be rejected.
+        import fwutil.main as fw_main
+        component = MagicMock()
+        with pytest.raises(TypeError):
+            fw_main._invoke_install_firmware(component, "/tmp/fw.bin", True)
+        component.install_firmware.assert_not_called()
+
+    def test_invoke_install_firmware_uses_force_when_supported(self):
+        import fwutil.main as fw_main
+        component = make_fw_double(
+            "install_firmware", supports_force=True, return_value=True
+        )
+        result = fw_main._invoke_install_firmware(
+            component, "/tmp/fw.bin", force_update=True
+        )
+        assert result is True
+        assert component.calls == [("/tmp/fw.bin", True)]
+
+    def test_invoke_install_firmware_no_force(self):
+        import fwutil.main as fw_main
+        component = make_fw_double(
+            "install_firmware", supports_force=True, return_value=True
+        )
+        result = fw_main._invoke_install_firmware(
+            component, "/tmp/fw.bin", force_update=False
+        )
+        assert result is True
+        assert component.calls == [("/tmp/fw.bin", False)]
+
+    def test_invoke_install_firmware_falls_back_when_unsupported(self):
+        # A component whose install_firmware lacks force_update is detected via
+        # its signature (not by catching TypeError) and gets a plain install.
+        import fwutil.main as fw_main
+        component = make_fw_double(
+            "install_firmware", supports_force=False, return_value=True
+        )
+        with patch.object(fw_main, "log_helper") as mock_log:
+            result = fw_main._invoke_install_firmware(
+                component, "/tmp/fw.bin", force_update=True
+            )
+        assert result is True
+        assert component.calls == [("/tmp/fw.bin",)]
+        mock_log.print_warning.assert_called_once()
+
+    def test_invoke_install_firmware_backend_typeerror_propagates_without_retry(self):
+        # A TypeError from a force-update-capable install_firmware must propagate
+        # unchanged and must NOT trigger a second, force_update-less install.
+        import fwutil.main as fw_main
+        component = make_fw_double(
+            "install_firmware", supports_force=True, raises_type_error=True,
+            return_value=True,
+        )
+        with patch.object(fw_main, "log_helper") as mock_log:
+            with pytest.raises(TypeError, match="backend boom"):
+                fw_main._invoke_install_firmware(
+                    component, "/tmp/fw.bin", force_update=True
+                )
+        assert component.calls == [("/tmp/fw.bin", True)]  # single call, no retry
+        mock_log.print_warning.assert_not_called()
+
 
 class TestFWPackageUntar(object):
     """Tests for FWPackage.untar_fwpackage() path traversal protection."""
@@ -410,3 +669,69 @@ class TestFWPackageUntar(object):
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
             result = pkg.untar_fwpackage()
         assert result is True
+
+
+class TestForceUpdateSupport:
+    """update_firmware() must decide --force-update support from the backend's
+    signature (before invocation), not by catching a TypeError from the backend
+    call. Catching a runtime TypeError could mask a real backend bug and, worse,
+    silently re-run a firmware update that may have already started."""
+
+    def _make_cup(self, component, firmware_path="/tmp/fw.bin"):
+        cup = fwutil_lib.ComponentUpdateProvider.__new__(fwutil_lib.ComponentUpdateProvider)
+        fw_key = fwutil_lib.PlatformComponentsParser.FIRMWARE_KEY
+        cup.chassis_component_map = {"CHASSIS": {"COMP": component}}
+        cup.module_component_map = {}
+        pcp = MagicMock()
+        pcp.FIRMWARE_KEY = fw_key
+        pcp.chassis_component_map = {"CHASSIS": {"COMP": {fw_key: firmware_path}}}
+        cup._ComponentUpdateProvider__pcp = pcp
+        cup._ComponentUpdateProvider__root_path = None
+        return cup
+
+    @patch("fwutil.lib.log_helper")
+    def test_force_update_used_when_supported(self, mock_log):
+        comp = make_fw_double("update_firmware", supports_force=True)
+        cup = self._make_cup(comp)
+        cup.update_firmware("CHASSIS", None, "COMP", force_update=True)
+        assert comp.calls == [("/tmp/fw.bin", True)]
+        mock_log.print_warning.assert_not_called()
+
+    @patch("fwutil.lib.log_helper")
+    def test_falls_back_when_force_update_unsupported(self, mock_log):
+        comp = make_fw_double("update_firmware", supports_force=False)
+        cup = self._make_cup(comp)
+        cup.update_firmware("CHASSIS", None, "COMP", force_update=True)
+        assert comp.calls == [("/tmp/fw.bin",)]
+        mock_log.print_warning.assert_called_once()
+
+    @patch("fwutil.lib.log_helper")
+    def test_backend_typeerror_propagates_without_retry(self, mock_log):
+        # The regression this fix guards: a TypeError from a force-update-capable
+        # backend must propagate unchanged and must NOT trigger a second,
+        # force_update-less invocation.
+        comp = make_fw_double(
+            "update_firmware", supports_force=True, raises_type_error=True
+        )
+        cup = self._make_cup(comp)
+        with pytest.raises(TypeError, match="backend boom"):
+            cup.update_firmware("CHASSIS", None, "COMP", force_update=True)
+        assert comp.calls == [("/tmp/fw.bin", True)]  # single call, no retry
+        mock_log.print_warning.assert_not_called()
+
+    @patch("fwutil.lib.log_helper")
+    def test_no_force_update_calls_without_force(self, mock_log):
+        comp = make_fw_double("update_firmware", supports_force=True)
+        cup = self._make_cup(comp)
+        cup.update_firmware("CHASSIS", None, "COMP", force_update=False)
+        assert comp.calls == [("/tmp/fw.bin", False)]
+        mock_log.print_warning.assert_not_called()
+
+    def test_force_update_is_keyword_only(self):
+        # force_update is keyword-only: passing it positionally must be rejected
+        # so it can never be misbound to another positional argument.
+        comp = make_fw_double("update_firmware", supports_force=True)
+        cup = self._make_cup(comp)
+        with pytest.raises(TypeError):
+            cup.update_firmware("CHASSIS", None, "COMP", True)
+        assert comp.calls == []
