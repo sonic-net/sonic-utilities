@@ -2953,7 +2953,7 @@ main() {
         collect_broadcom
     fi
 
-    if [ "$asic" = "cisco-8000" ]; then
+    if [ "$asic" = "cisco-8000" ] || [ "$asic" = "cisco" ]; then
         collect_cisco_8000
     fi
 

@@ -938,6 +938,11 @@ class TestGetAsicName(unittest.TestCase):
             self.assertEqual(fov.get_asic_name(), "cisco-8000")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
+    def test_get_asic_cisco_short_name(self, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'cisco'}
+        self.assertEqual(fov.get_asic_name(), "cisco")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
     def test_get_asic_marvell_teralynx(self, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'marvell-teralynx'}
         for scope in ["localhost", "asic0"]:

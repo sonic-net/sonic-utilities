@@ -167,10 +167,10 @@ class GrubBootloader(OnieInstallerBootloader):
 
         check_if_verification_is_enabled_and_supported_code = '''
         SECURE_UPGRADE_ENABLED=0
-        #Disabling the check for cisco-8000 platforms as platform-side support is not ready yet. This will be removed once platform
-        #support is added.
+        #Disabling the check for cisco / cisco-8000 platforms as platform-side support is not ready yet.
+        #This will be removed once platform support is added.
         ASIC_TYPE=$(sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)
-        if [ -d "/sys/firmware/efi/efivars" ] && [[ ${ASIC_TYPE} != *"cisco-8000"* ]]; then
+        if [ -d "/sys/firmware/efi/efivars" ] && [[ ${ASIC_TYPE} != *"cisco-8000"* && ${ASIC_TYPE} != "cisco" ]]; then
             if ! [ -n "$(ls -A /sys/firmware/efi/efivars 2>/dev/null)" ]; then
                 mount -t efivarfs none /sys/firmware/efi/efivars 2>/dev/null
             fi
