@@ -1559,6 +1559,16 @@ def remove_router_interface_ip_address(config_db, interface_name, ipaddress_to_r
         if ipaddress.ip_interface(ipaddress_string) == ipaddress_to_remove:
             config_db.set_entry(table_name, (interface_name, ipaddress_string), None)
 
+
+def validate_ip_address(ctx, param, ip_addr):
+    """Helper function to validate IP address
+    """
+    try:
+        ipaddress.ip_network(ip_addr, False)
+        return ip_addr
+    except ValueError as e:
+        raise click.UsageError(str(e))
+
 def validate_ipv4_address(ctx, param, ip_addr):
     """Helper function to validate ipv4 address
     """
@@ -3319,8 +3329,8 @@ def erspan(ctx):
 
 @erspan.command('add')
 @click.argument('session_name', metavar='<session_name>', required=True)
-@click.argument('src_ip', metavar='<src_ip>', callback=validate_ipv4_address, required=True)
-@click.argument('dst_ip', metavar='<dst_ip>', callback=validate_ipv4_address,required=True)
+@click.argument('src_ip', metavar='<src_ip>', callback=validate_ip_address, required=True)
+@click.argument('dst_ip', metavar='<dst_ip>', callback=validate_ip_address, required=True)
 @click.argument('dscp', metavar='<dscp>', type=DSCP_RANGE, required=True)
 @click.argument('ttl', metavar='<ttl>', type=TTL_RANGE, required=True)
 @click.argument('gre_type', metavar='[gre_type]', callback=validate_gre_type, required=False)
