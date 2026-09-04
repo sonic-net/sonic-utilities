@@ -398,8 +398,25 @@ class TestServiceValidator(unittest.TestCase):
         self.assertEqual(result, 1)
         mock_logger.log.assert_called_once_with(
             mock_logger.LOG_PRIORITY_ERROR,
-            "Command execution failed: nsenter --target 1 --pid --mount --uts --ipc --net "
-            "systemctl restart dhcp_relay, error: execution error",
+            "Command execution failed: 'nsenter --target 1 --pid --mount --uts --ipc --net "
+            "systemctl restart dhcp_relay', error: execution error",
+            False
+        )
+
+    @patch("generic_config_updater.services_validator.logger")
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_command_wrapper_handles_command_formatting_error(self, mock_subprocess, mock_logger):
+        with patch(
+            "generic_config_updater.services_validator.shlex.quote",
+            side_effect=TypeError("formatting error")
+        ):
+            result = command_wrapper(["echo", "value"])
+
+        self.assertEqual(result, 1)
+        mock_subprocess.assert_not_called()
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command execution failed: '['echo', 'value']', error: formatting error",
             False
         )
 
