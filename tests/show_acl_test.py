@@ -1,5 +1,6 @@
 import os
 import pytest
+from unittest import mock
 from click.testing import CliRunner
 
 import acl_loader.main as acl_loader_show
@@ -85,6 +86,33 @@ class TestShowACLSingleASIC(object):
         result_top = result.output.split('\n')[2]
         expected_output = "DATAACL_5  RULE_1        9999  FORWARD   IP_PROTOCOL: 126  Active"
         assert result_top == expected_output
+
+    def test_show_acl_rule_ecn(self, setup_teardown_single_asic):
+        runner = CliRunner()
+        aclloader = AclLoader()
+        # Inject an ECN-marking rule directly (isolated from the shared mock
+        # tables) so the assertion is deterministic and cannot perturb other
+        # tests' tabulate column widths.
+        aclloader.get_rules_db_info = mock.MagicMock(return_value={
+            ("DATAACL", "RULE_ECN"): {
+                "PRIORITY": "9990",
+                "L4_SRC_PORT": "5000",
+                "ECN_ACTION": "3",
+            }
+        })
+        aclloader.acl_rule_status = {("DATAACL", "RULE_ECN"): {"status": "Active"}}
+        context = {
+            "acl_loader": aclloader
+        }
+        result = runner.invoke(acl_loader_show.cli.commands['show'].commands['rule'],
+                               ['DATAACL', 'RULE_ECN'], obj=context)
+        assert result.exit_code == 0
+        # ECN_ACTION must be rendered under the Action column as "ECN: <value>";
+        # before the fix it leaked into the Match column as the raw "ECN_ACTION" key.
+        assert "ECN: 3" in result.output
+        assert "ECN_ACTION" not in result.output
+        # The non-action fields are still shown as matches.
+        assert "L4_SRC_PORT: 5000" in result.output
 
 
 class TestShowACLMultiASIC(object):
