@@ -12,6 +12,7 @@ import utilities_common.multi_asic as multi_asic_util
 from importlib import reload
 from natsort import natsorted
 from sonic_py_common import device_info
+from swsscommon import swsscommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
@@ -1283,6 +1284,27 @@ def aging_time(ctx):
             click.echo("Aging time for {} is {} seconds".format(key.split(':')[-1], fdb_aging_time))
         else:
             click.echo("Aging time not configured for the {}".format(key.split(':')[-1]))
+
+
+#
+# 'fdb' group ("show fdb ...")
+#
+
+@cli.group(cls=clicommon.AliasedGroup)
+def fdb():
+    """Show FDB (MAC) configuration"""
+    pass
+
+
+@fdb.command('mac-sync-mode')
+@clicommon.pass_db
+def mac_sync_mode(db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
+
+    fdb_sync = db.cfgdb.get_entry(swsscommon.CFG_FDB_SYNC_TABLE_NAME, 'global')
+    click.echo(fdb_sync.get('mac_sync_mode', 'kernel'))
+
+
 #
 # 'show route-map' command ("show route-map")
 #
