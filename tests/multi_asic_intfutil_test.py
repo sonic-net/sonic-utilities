@@ -99,6 +99,37 @@ Ethernet-BP4      up       up  Ethernet-BP4          ASIC1:Eth1-ASIC1
 
 intf_invalid_asic_error = """ValueError: Unknown Namespace asic99"""
 
+intf_l1_summary = (
+    "     Interface           Alias    Mode    FEC    Pre-FEC BER    Oper    Admin         Fault            "
+    "Transceiver         Media Interface    Flaps          Last Up        Last Down\n"
+    "--------------  --------------  ------  -----  -------------  ------  -------  ------------  "
+    "---------------------  ----------------------  -------  ---------------  ---------------\n"
+    "     Ethernet0     Ethernet1/1   40G/4    N/A       6.05e-10      up       up  local+remote  "
+    "Mellanox MFA1A00-C003                     N/A      N/A              N/A              N/A\n"
+    "     Ethernet4     Ethernet1/2   40G/4    N/A       0.00e+00      up       up         local          "
+    "          N/A                     N/A      N/A              N/A              N/A\n"
+    "    Ethernet64    Ethernet1/17   40G/4    N/A            N/A      up       up        remote         "
+    "      XXXX XXX  400ZR, DWDM, amplified        2  Feb 12 23:25:31  Feb 12 23:03:40\n"
+    "  Ethernet-BP0    Ethernet-BP0   40G/4    N/A            N/A      up       up          none          "
+    "          N/A                     N/A      N/A              N/A              N/A\n"
+    "  Ethernet-BP4    Ethernet-BP4   40G/4    N/A            N/A      up       up          none          "
+    "          N/A                     N/A      N/A              N/A              N/A\n"
+    "Ethernet-BP256  Ethernet-BP256   40G/4    N/A            N/A      up       up          none          "
+    "          N/A                     N/A      N/A              N/A              N/A\n"
+    "Ethernet-BP260  Ethernet-BP260   40G/4    N/A            N/A      up       up          none          "
+    "          N/A                     N/A      N/A              N/A              N/A\n"
+)
+
+intf_l1_summary_asic1_ethernet64 = (
+    "  Interface         Alias    Mode    FEC    Pre-FEC BER    Oper    Admin    Fault    Transceiver   "
+    "      Media Interface    Flaps          Last Up        Last Down\n"
+    "-----------  ------------  ------  -----  -------------  ------  -------  -------  -------------  "
+    "----------------------  -------  ---------------  ---------------\n"
+    " Ethernet64  Ethernet1/17   40G/4    N/A            N/A      up       up   remote       XXXX XXX  "
+    "400ZR, DWDM, amplified        2  Feb 12 23:25:31  Feb 12 23:03:40\n"
+)
+
+
 
 @pytest.mark.usefixtures("setup_multi_asic_env", "setup_env_paths")
 class TestInterfacesMultiAsic(object):
@@ -195,6 +226,21 @@ class TestInterfacesMultiAsic(object):
         print("result = {}".format(result))
         assert return_code == 1
         assert result == intf_invalid_asic_error
+
+    def test_multi_asic_interface_l1_summary(self):
+        return_code, result = get_result_and_return_code(['intfutil', '-c', 'l1_summary', '-d', 'all'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_l1_summary
+
+    def test_multi_asic_interface_l1_summary_asic1_l1_ethernet64(self):
+        return_code, result = get_result_and_return_code(
+            ['intfutil', '-c', 'l1_summary', '-n', 'asic1', '-i', 'Ethernet64'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_l1_summary_asic1_ethernet64
 
 
 @pytest.mark.usefixtures("setup_multi_asic_env", "setup_env_paths")
