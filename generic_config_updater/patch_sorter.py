@@ -8,6 +8,42 @@ from typing import Any, IO, List, Optional, Tuple
 from .gu_common import OperationWrapper, OperationType, GenericConfigUpdaterError, \
                        JsonChange, PathAddressing, genericUpdaterLogging
 
+# Floor of create-only patterns used during the transition to YANG annotations.
+# Exit condition: delete this list (and the union below) once every branch this
+# consumer ships to carries annotated models that discover at least these
+# entries via sonic_yang.get_create_only_fields(). Until then, discovery is
+# unioned with this floor so YANG can only add patterns, never silently drop
+# protection. test_discover_create_only_fields__yang_set_covers_fallback_floor
+# fails if a non-empty discovered set ever narrows below this floor.
+_CREATE_ONLY_FIELDS_FALLBACK = [
+    ["PORT", "*", "lanes"],
+    ["LOOPBACK_INTERFACE", "*", "vrf_name"],
+    ["BGP_NEIGHBOR", "*", "holdtime"],
+    ["BGP_NEIGHBOR", "*", "keepalive"],
+    ["BGP_NEIGHBOR", "*", "name"],
+    ["BGP_NEIGHBOR", "*", "asn"],
+    ["BGP_NEIGHBOR", "*", "local_addr"],
+    ["BGP_NEIGHBOR", "*", "nhopself"],
+    ["BGP_NEIGHBOR", "*", "rrclient"],
+    ["BGP_PEER_RANGE", "*", "*"],
+    ["BGP_SENTINELS", "*", "*"],
+    ["BGP_MONITORS", "*", "holdtime"],
+    ["BGP_MONITORS", "*", "keepalive"],
+    ["BGP_MONITORS", "*", "name"],
+    ["BGP_MONITORS", "*", "asn"],
+    ["BGP_MONITORS", "*", "local_addr"],
+    ["BGP_MONITORS", "*", "nhopself"],
+    ["BGP_MONITORS", "*", "rrclient"],
+    ["MIRROR_SESSION", "*", "*"],
+    ["SCHEDULER", "*", "type"],
+    ["SCHEDULER", "*", "weight"],
+    ["SCHEDULER", "*", "meter_type"],
+    ["SCHEDULER", "*", "cir"],
+    ["SCHEDULER", "*", "cbs"],
+    ["SCHEDULER", "*", "pir"],
+    ["SCHEDULER", "*", "pbs"],
+]
+
 class Diff:
     """
     A class that contains the diff info between current and target configs.
@@ -712,29 +748,55 @@ class CreateOnlyFilter:
     A filtering class for create-only fields.
     """
     def __init__(self, path_addressing):
-        # TODO: create-only fields are hard-coded for now, it should be moved to YANG model
         self.path_addressing = path_addressing
-        self.patterns = [
-            ["PORT", "*", "lanes"],
-            ["LOOPBACK_INTERFACE", "*", "vrf_name"],
-            ["BGP_NEIGHBOR", "*", "holdtime"],
-            ["BGP_NEIGHBOR", "*", "keepalive"],
-            ["BGP_NEIGHBOR", "*", "name"],
-            ["BGP_NEIGHBOR", "*", "asn"],
-            ["BGP_NEIGHBOR", "*", "local_addr"],
-            ["BGP_NEIGHBOR", "*", "nhopself"],
-            ["BGP_NEIGHBOR", "*", "rrclient"],
-            ["BGP_PEER_RANGE", "*", "*"],
-            ["BGP_SENTINELS", "*", "*"],
-            ["BGP_MONITORS", "*", "holdtime"],
-            ["BGP_MONITORS", "*", "keepalive"],
-            ["BGP_MONITORS", "*", "name"],
-            ["BGP_MONITORS", "*", "asn"],
-            ["BGP_MONITORS", "*", "local_addr"],
-            ["BGP_MONITORS", "*", "nhopself"],
-            ["BGP_MONITORS", "*", "rrclient"],
-            ["MIRROR_SESSION", "*", "*"],
-        ]
+        self.logger = genericUpdaterLogging.get_logger(title="Patch Sorter - CreateOnlyFilter")
+        self.patterns = self._discover_create_only_fields()
+
+    def _discover_create_only_fields(self):
+        """
+        Prefer YANG-derived create-only patterns from sonic_yang, unioned with
+        _CREATE_ONLY_FIELDS_FALLBACK so an incomplete annotation set cannot
+        silently narrow protection. When discovery is unavailable or empty
+        (unannotated models, missing sonic_yang API, PathAddressing without
+        config_wrapper), use the fallback alone.
+        """
+        try:
+            sy = self.path_addressing._create_sonic_yang_with_loaded_models()
+        except AttributeError:
+            # PathAddressing built without a config_wrapper (gu_common.py).
+            sy = None
+        except Exception as ex:
+            self.logger.log_warning(
+                "Failed to load sonic_yang for create-only discovery, "
+                f"using fallback. Error: {ex}")
+            sy = None
+
+        yang_patterns = []
+        if sy is not None and hasattr(sy, "get_create_only_fields"):
+            yang_patterns = sy.get_create_only_fields() or []
+
+        fallback = [list(p) for p in _CREATE_ONLY_FIELDS_FALLBACK]
+        if not yang_patterns:
+            return fallback
+
+        # De-duplicate YANG results while preserving order, then union the
+        # fallback floor so YANG can only add patterns.
+        deduped = []
+        seen = set()
+        for pattern in yang_patterns:
+            key = tuple(pattern)
+            if key not in seen:
+                seen.add(key)
+                deduped.append(list(pattern))
+
+        missing = [p for p in fallback if tuple(p) not in seen]
+        if missing:
+            self.logger.log_warning(
+                f"YANG create-only discovery omitted {len(missing)} fallback "
+                f"pattern(s), unioning them back in: {missing}")
+            for pattern in missing:
+                deduped.append(list(pattern))
+        return deduped
 
     def get_filter(self):
         return JsonPointerFilter(self.patterns,
