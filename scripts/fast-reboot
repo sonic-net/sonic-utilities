@@ -379,6 +379,7 @@ function arista_7060_gen_system_prefdl()
             echo "/host/.system-prefdl not found - restored by reading from EEPROM"
         fi
     fi 
+}
 
 function clear_fast_boot_table()
 {
