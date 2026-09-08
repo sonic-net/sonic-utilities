@@ -157,6 +157,31 @@ function get_module_state_transition_flag()
     fi
 }
 
+
+# Validate target DPU disk space before reboot.
+# A missing platform threshold is a no-op for backward compatibility.
+function check_dpu_reboot_disk_space()
+{
+    local DPU_NAME=$1
+
+    python3 - "$DPU_NAME" "$PLATFORM_JSON_PATH" <<'PYCODE'
+import sys
+
+from utilities_common.image_disk_space import (
+    check_remote_dpu_reboot_free_disk_space,
+)
+
+dpu_name = sys.argv[1]
+platform_json_path = sys.argv[2] or None
+
+result = check_remote_dpu_reboot_free_disk_space(
+    dpu_name=dpu_name,
+    platform_json_path=platform_json_path,
+)
+sys.exit(0 if result else 1)
+PYCODE
+}
+
 # Function to reboot DPU
 function reboot_dpu_platform()
 {
@@ -277,6 +302,12 @@ function reboot_dpu()
         return ${EXIT_DPU_DOWN}
     fi
 
+    check_dpu_reboot_disk_space "${DPU_NAME}"
+    if [ $? -ne 0 ]; then
+        log_message "ERROR: ${DPU_NAME} reboot aborted due to insufficient free disk space"
+        return ${EXIT_ERROR}
+    fi
+
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         # get and set the state_transition_in_progress flag before reboot
         if ! get_module_state_transition_flag "${DPU_NAME}"; then
@@ -355,11 +386,14 @@ function reboot_all_dpus() {
         pids+=("$!")
     done
     local pid
+
+    # Wait on each PID individually so we can capture its exit status.
     for pid in "${pids[@]}"; do
         if ! wait "$pid"; then
             ((failures++))
         fi
     done
+
     return $failures
 }
 

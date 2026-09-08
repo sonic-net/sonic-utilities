@@ -243,6 +243,24 @@ class TestRouteCheck(object):
             set_mock(mock_table, mock_conn, mock_sel, mock_subs, mock_config_db)
             yield
 
+    def test_filter_out_vnet_routes_normalizes_host_prefixes(self):
+        vnet_table = MagicMock()
+        vnet_table.getKeys.return_value = [
+            "Vnet1:50.0.0.1",
+            "Vnet1:2001:db8::1",
+        ]
+        tunnel_table = MagicMock()
+        tunnel_table.getKeys.return_value = []
+
+        with patch("route_check.swsscommon.DBConnector", create=True), \
+                patch("route_check.swsscommon.Table",
+                      side_effect=[vnet_table, tunnel_table],
+                      create=True):
+            routes = route_check.filter_out_vnet_routes(
+                "", ["50.0.0.1/32", "2001:db8::1/128", "10.0.0.0/24"])
+
+        assert routes == ["10.0.0.0/24"]
+
     @pytest.mark.parametrize("test_num", TEST_DATA.keys())
     def test_route_check(self, mock_dbs, test_num):
         logger.debug("test_route_check: test_num={}".format(test_num))

@@ -22,6 +22,7 @@ class TestFastReboot:
                 os.chmod(working_script_path, 0o700)
             shutil.copy('/bin/false', os.path.join(tmp_dir, failing_script))
             shutil.copy('/bin/true', os.path.join(tmp_dir, 'sonic-cfggen'))
+            shutil.copy('/bin/true', os.path.join(tmp_dir, 'sonic-db-cli'))
             env = os.environ.copy()
             env['PATH'] = f"{tmp_dir}:{env.get('PATH', '')}"
             res = subprocess.run([fast_reboot, '-h'], env=env)
