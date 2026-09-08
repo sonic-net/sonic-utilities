@@ -94,10 +94,9 @@ class TestFeaturePatchApplication(unittest.TestCase):
         patch_wrapper = PatchWrapper(config_wrapper)
         return gu.PatchApplier(config_wrapper=config_wrapper, patch_wrapper=patch_wrapper, changeapplier=change_applier)
     
-    @patch('generic_config_updater.change_applier.get_config_db_as_json', side_effect=get_running_config)
     @patch("generic_config_updater.change_applier.get_config_db")
     @patch("generic_config_updater.change_applier.set_config")
-    def run_single_success_case_applier(self, data, mock_set, mock_db, mock_get_config_db_as_json):
+    def run_single_success_case_applier(self, data, mock_set, mock_db):
         current_config = data["current_config"]
         expected_config = data["expected_config"]
         patch = jsonpatch.JsonPatch(data["patch"])
@@ -125,8 +124,7 @@ class TestFeaturePatchApplication(unittest.TestCase):
         self.assertEqual(simulated_config, expected_config)
     
     @patch("generic_config_updater.change_applier.get_config_db")
-    @patch('generic_config_updater.change_applier.get_config_db_as_json', side_effect=get_running_config)
-    def run_single_failure_case_applier(self, data, mock_db, mock_get_config_db_as_json):
+    def run_single_failure_case_applier(self, data, mock_db):
         current_config = data["current_config"]
         patch = jsonpatch.JsonPatch(data["patch"])
         expected_error_substrings = data["expected_error_substrings"]
