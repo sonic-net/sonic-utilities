@@ -405,6 +405,36 @@ class DryRunConfigWrapper(ConfigWrapper):
             self.imitated_config_db = super().get_config_db_as_json()
 
 
+def remove_empty_leaf_lists(config):
+    """Drop leaf-list fields whose value is an empty list.
+
+    Expects ConfigDB shaped json, i.e. table -> key -> field. At that shape a
+    list valued field is always a leaf-list, so every empty list found here is
+    an empty leaf-list. Do not call this with SonicYang shaped json, where a
+    list is a yang list of entries rather than a leaf-list.
+
+    ConfigDB has no representation for an empty leaf-list. set_entry serializes
+    [] to an empty string, which is then read back as [''], so a config that asks
+    for [] can never be satisfied. The canonical way to express "this leaf-list
+    has no items" is for the field to be absent.
+
+    Normalizing the simulated target keeps the patch sorter, the change applier
+    and the final verification in agreement: the sorter emits a field-level
+    remove instead of a replace-with-empty-list that ConfigDB cannot store.
+    """
+    for entries in config.values():
+        if not isinstance(entries, dict):
+            continue
+        for fields in entries.values():
+            if not isinstance(fields, dict):
+                continue
+            empty_leaf_lists = [field for field, value in fields.items()
+                                if isinstance(value, list) and len(value) == 0]
+            for field in empty_leaf_lists:
+                del fields[field]
+    return config
+
+
 class PatchWrapper:
     def __init__(self, config_wrapper=None, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
@@ -438,12 +468,21 @@ class PatchWrapper:
     def simulate_patch(self, patch, jsonconfig):
         return patch.apply(jsonconfig)
 
+    def simulate_config_db_patch(self, patch, config_db):
+        """Simulate a patch against ConfigDB shaped json.
+
+        Use this instead of simulate_patch whenever the result is meant to be a
+        ConfigDB target, so that empty leaf-lists are normalized to absent
+        fields, which is the only way ConfigDB can express them.
+        """
+        return remove_empty_leaf_lists(self.simulate_patch(patch, config_db))
+
     def convert_config_db_patch_to_sonic_yang_patch(self, patch):
         if not(self.validate_config_db_patch_has_yang_models(patch)):
             raise ValueError(f"Given patch is not valid")
 
         current_config_db = self.config_wrapper.get_config_db_as_json()
-        target_config_db = self.simulate_patch(patch, current_config_db)
+        target_config_db = self.simulate_config_db_patch(patch, current_config_db)
 
         current_yang = self.config_wrapper.convert_config_db_to_sonic_yang(current_config_db)
         target_yang = self.config_wrapper.convert_config_db_to_sonic_yang(target_config_db)

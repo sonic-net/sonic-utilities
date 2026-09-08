@@ -1020,13 +1020,33 @@ def _monit_service_exists(service):
         return False
 
 
+def _get_monit_services_by_prefix(prefix):
+    """Return list of monit service names that start with the given prefix."""
+    try:
+        output = subprocess.check_output(
+            ['sudo', 'monit', 'summary'],
+            stderr=subprocess.DEVNULL,
+            text=True
+        )
+        services = []
+        for line in output.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(prefix):
+                services.append(stripped.split()[0])
+        return services
+    except subprocess.CalledProcessError:
+        return []
+
+
 def _stop_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Disabling container and routeCheck monitoring ...")
+        click.echo("Disabling container, routeCheck and memory monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
         if _monit_service_exists('routeCheck'):
             clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
+        for svc in _get_monit_services_by_prefix('container_memory_'):
+            clicommon.run_command(['sudo', 'monit', 'unmonitor', svc])
     except subprocess.CalledProcessError as err:
         pass
 
@@ -1180,11 +1200,13 @@ def _restart_services():
     wait_service_restart_finish('networking', last_networking_timestamp)
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Enabling container and routeCheck monitoring ...")
+        click.echo("Enabling container, routeCheck and memory monitoring ...")
         has_route_check = _monit_service_exists('routeCheck')
         if has_route_check:
             clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
+        for svc in _get_monit_services_by_prefix('container_memory_'):
+            clicommon.run_command(['sudo', 'monit', 'monitor', svc])
         log.log_notice("Waiting for monit monitor actions to complete ...")
         if has_route_check:
             _wait_for_monit_service_monitored('routeCheck')
@@ -4109,7 +4131,7 @@ def warm_restart_enable(ctx, namespace, module):
     if namespace is not None:
         if namespace not in ctx.obj["all_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["all_namespaces"]
 
     config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
@@ -4132,7 +4154,7 @@ def warm_restart_disable(ctx, namespace, module):
     if namespace is not None:
         if namespace not in ctx.obj["all_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["all_namespaces"]
 
     config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
@@ -4155,7 +4177,7 @@ def warm_restart_neighsyncd_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 9999):
@@ -4177,7 +4199,7 @@ def warm_restart_bgp_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
@@ -4199,7 +4221,7 @@ def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
@@ -4221,7 +4243,7 @@ def warm_restart_bgp_eoiu(ctx, namespace, enable):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     for namespace in namespaces:
         db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])

@@ -1,4 +1,13 @@
 {
+    "PORT_STORM_CONTROL|Ethernet0|broadcast": {
+        "kbps": "111000"
+    },
+    "PORT_STORM_CONTROL|Ethernet0|unknown-unicast": {
+        "kbps": "222000"
+    },
+    "PORT_STORM_CONTROL|Ethernet0|unknown-multicast": {
+        "kbps": "333000"
+    },
     "DEVICE_METADATA|localhost": {
         "asic_id": "01.00.0",
         "asic_name": "asic0",

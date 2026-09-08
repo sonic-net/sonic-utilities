@@ -277,6 +277,7 @@ class TestMultiAsicPfcstat(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["pfc"].commands["counters"],
+            ["--display", "all"]
         )
         print(result.output)
         assert result.exit_code == 0
@@ -288,7 +289,7 @@ class TestMultiAsicPfcstat(object):
         assert result.exit_code == 0
         result = runner.invoke(
             show.cli.commands["pfc"].commands["counters"],
-            []
+            ["--display", "all"]
         )
         print(result.output)
         show.run_command(['pfcstat', '-d'])
@@ -326,7 +327,7 @@ class TestMultiAsicPfcstat(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["pfc"].commands["counters"],
-            ["--history"]
+            ["--display", "all", "--history"]
         )
         print(result.output)
         assert result.exit_code == 0
@@ -339,7 +340,7 @@ class TestMultiAsicPfcstat(object):
         assert result.exit_code == 0
         result = runner.invoke(
             show.cli.commands["pfc"].commands["counters"],
-            ["--history"]
+            ["--display", "all", "--history"]
         )
         print(result.output)
         show.run_command(['pfcstat', '-d'])

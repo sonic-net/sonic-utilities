@@ -11,6 +11,7 @@ from natsort import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
+from sonic_py_common import syslogger
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from portconfig import get_child_ports
 import sonic_platform_base.sonic_sfp.sfputilhelper
@@ -22,6 +23,15 @@ from datetime import datetime
 HWSKU_JSON = 'hwsku.json'
 
 REDIS_HOSTIP = "127.0.0.1"
+LANES = "lanes"
+ASIC = "asic"
+STATUS = "status"
+DOWN = "DOWN"
+UP = "UP"
+APPL_PORT_TABLE = "PORT_TABLE"
+OPER_STATUS = "oper_status"
+
+log = syslogger.SysLogger("show_interfaces")
 
 # Read given JSON file
 def readJsonFile(fileName):
@@ -1511,3 +1521,97 @@ def phy_serdes(db, ctx, interfacename, namespace, display, snr, rxvga, txfir):
     if txfir:
         attr_data = port_phy_data.get('tx_fir_taps_list')
         display_phy_taps_attribute('TX FIR Taps', attr_data)
+
+
+@interfaces.group(name='label-port', cls=clicommon.AliasedGroup)
+def labelport():
+    """Show label-port information"""
+    pass
+
+
+def get_ports_data():
+    """
+    This function returns a dictionary of ports, their lanes and status
+    """
+    ports_dict = {}
+    namespaces = multi_asic.get_namespace_list()
+    for namespace in namespaces:
+        db = multi_asic.connect_to_all_dbs_for_ns(namespace=namespace)
+        port_table = multi_asic.get_port_table(namespace=namespace)
+        for port_name, port_info in port_table.items():
+            lanes = [lane for lane in port_info.get(LANES, "").split(',') if lane]
+            oper = db.get(db.APPL_DB, f"{APPL_PORT_TABLE}:{port_name}", OPER_STATUS)
+            status = (oper or DOWN).upper()
+            ports_dict[port_name] = {
+                LANES: [int(lane) for lane in lanes],
+                STATUS: status,
+                ASIC: namespace
+            }
+    return ports_dict
+
+
+def get_labelport_to_ports_map(ports_dict, labelport_map, lanes_per_asic):
+    """
+    This function returns a dictionary of LabelPorts -> ports
+    key = labelport_num, value = list of ports connected to this LabelPort
+    """
+    lanes_to_labelport = {}
+    for k, values in labelport_map.items():
+        for v in values:
+            lanes_to_labelport[int(v)] = int(k)
+    labelport_lanes_number = len(labelport_map[list(labelport_map.keys())[0]])
+    labelport_to_ports_map = {}
+    for port, info in ports_dict.items():
+        for lane in info.get(LANES, []):
+            asic_number = multi_asic.get_asic_index_from_namespace(info.get(ASIC))
+            lane += asic_number * lanes_per_asic
+            labelport_num = lanes_to_labelport.get(lane)
+            try:
+                position = labelport_map[str(labelport_num)].index(str(lane))
+            except (KeyError, ValueError):
+                log.log_debug("Lane {} not found in labelport {}".format(lane, labelport_num))
+                continue
+            port_name = f"{port}|{info.get(ASIC)}" if info.get(ASIC) != "" else port
+            if labelport_num not in labelport_to_ports_map:
+                labelport_to_ports_map[int(labelport_num)] = ['-'] * labelport_lanes_number
+            labelport_to_ports_map[int(labelport_num)][position] = f"{port_name}({info.get(STATUS, DOWN)})"
+    return labelport_to_ports_map
+
+
+@labelport.command(name='status')
+def labelport_status():
+    """
+    Show a mapping and status of label-ports -> ports
+    """
+    # Get the labelport -> lanes mapping from platform.json
+    platform_data = device_info.get_platform_json_data()
+    if platform_data is None:
+        click.echo("No platform data found", err=True)
+        raise click.Abort()
+    labelport_map = platform_data.get('label_port_lanes_mapping')
+    if labelport_map is None:
+        click.echo("No Label-port mapping found in platform data", err=True)
+        raise click.Abort()
+    lanes_per_asic = 0
+    if multi_asic.is_multi_asic():
+        try:
+            lanes_per_asic = int(platform_data.get('number_of_lanes_per_asic'))
+        except (TypeError, ValueError):
+            click.echo("No number of lanes per ASIC found in platform data", err=True)
+            raise click.Abort()
+    labelport_lanes_number = len(labelport_map[list(labelport_map.keys())[0]])
+    # Get all ports data
+    ports_dict = get_ports_data()
+
+    # Create a dictionary of labelports -> ports: key = labelport_num, value = list of ports connected to this labelport
+    labelport_to_ports_map = get_labelport_to_ports_map(ports_dict, labelport_map, lanes_per_asic)
+
+    # Build the table
+    header = ['Label Port'] + [f'Lane {i+1}' for i in range(labelport_lanes_number)]
+    body = [
+        [int(labelport)] + labelport_to_ports_map.get(
+            int(labelport), ['-'] * labelport_lanes_number
+        )
+        for labelport in sorted(labelport_map.keys(), key=int)
+    ]
+    click.echo(tabulate(body, header, tablefmt="outline"))

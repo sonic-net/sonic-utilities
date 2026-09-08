@@ -1354,7 +1354,12 @@ class BulkLeafListMoveGenerator:
 
             if isinstance(current_val, list) and isinstance(target_val, list):
                 # Only handle leaf-lists (lists of scalars)
+                # An empty target leaf-list is deliberately excluded: a bulk
+                # REPLACE with [] serializes to an empty string in CONFIG_DB,
+                # which is an invalid state. Those transitions are left to the
+                # granular removal generators, which remove the field instead.
                 if (current_val != target_val and
+                        len(target_val) > 0 and
                         self._is_leaf_list(current_val) and
                         self._is_leaf_list(target_val)):
                     yield JsonMoveGroup(
@@ -2406,7 +2411,7 @@ class StrictPatchSorter:
         if not(self.patch_wrapper.validate_config_db_patch_has_yang_models(patch)):
             raise ValueError(f"Given patch is not valid because it has changes to tables without YANG models")
 
-        target_config = self.patch_wrapper.simulate_patch(patch, current_config)
+        target_config = self.patch_wrapper.simulate_config_db_patch(patch, current_config)
 
         # Validate target config
         self.logger.log_info("Validating target config according to YANG models.")
@@ -2596,7 +2601,7 @@ class NonStrictPatchSorter:
 
     def sort(self, patch, algorithm=Algorithm.DFS, trace_io: Optional[IO] = None):
         current_config = self.config_wrapper.get_config_db_as_json()
-        target_config = self.patch_wrapper.simulate_patch(patch, current_config)
+        target_config = self.patch_wrapper.simulate_config_db_patch(patch, current_config)
 
         # Splitting current/target config based on YANG covered vs non-YANG covered configs
         self.logger.log_info("Splitting current/target config based on YANG covered vs non-YANG covered configs.")
@@ -2658,7 +2663,7 @@ class PatchSorter:
 
     def sort(self, patch, algorithm=Algorithm.DFS, preloaded_current_config=None, trace_io: Optional[IO] = None):
         current_config = preloaded_current_config if preloaded_current_config else self.config_wrapper.get_config_db_as_json()
-        target_config = self.patch_wrapper.simulate_patch(patch, current_config)
+        target_config = self.patch_wrapper.simulate_config_db_patch(patch, current_config)
 
         diff = Diff(copy.deepcopy(current_config), target_config)
 

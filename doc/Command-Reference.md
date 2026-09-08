@@ -47,6 +47,7 @@
   * [Console config commands](#console-config-commands)
   * [Console connect commands](#console-connect-commands)
   * [Console clear commands](#console-clear-commands)
+  * [Console mirror commands](#console-mirror-commands)
   * [DPU serial console utility](#dpu-serial-console-utility)
 * [CRM](#crm)
   * [CRM show commands](#crm-show-commands)
@@ -292,6 +293,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v12 | Jul-16-2026 | Add console mirror commands |
 | v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
@@ -3940,6 +3942,121 @@ Optionally, you can clear with a remote device name by specifying the `-d` or `-
   admin@sonic:~$ sonic-clear --devicename switch1
   ```
 
+### Console mirror commands
+
+The `consutil mirror` commands manage console traffic recording sessions without
+interrupting an active interactive console connection. Starting, stopping,
+updating, and showing mirror sessions require root privileges.
+
+By default, `<target>` is interpreted as a console line number. Specify `-d` or
+`--devicename` to interpret it as the configured remote device name instead.
+
+**consutil mirror start**
+
+This command starts a mirror recording session for a console line. Only one
+mirror session can be active for a line at a time.
+
+- Usage:
+  ```
+  consutil mirror start <target> [-d|--devicename] [--direction {rx|tx|both}] [--timeout <duration>] [--max-file-size <MB>]
+  ```
+
+The recording direction defaults to `both`. The timeout must be a positive
+integer followed by `s`, `m`, `h`, or `d` and defaults to `24h`. The maximum
+file size is a positive integer in MB and defaults to `64`; when the limit is
+reached, recording continues in a new part file.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror start 1 --direction both
+  Started mirror on line [1]
+  Recording file: /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z-part0001.log
+  Auto-stop timeout: 24h
+  Remaining: 24h
+  ```
+
+The target can also be selected by remote device name, and the recording
+timeout and part size can be overridden:
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror start switch1 --devicename --direction rx --timeout 2h --max-file-size 128
+  Started mirror on line [1]
+  Recording file: /var/log/sonic/console-mirror/line1/console-mirror-line1-rx-20260613T141200Z-part0001.log
+  Auto-stop timeout: 2h
+  Remaining: 2h
+  ```
+
+**consutil mirror stop**
+
+This command stops an active mirror session. By default, all recording part
+files are retained.
+
+- Usage:
+  ```
+  consutil mirror stop <target> [-d|--devicename] [-a|--archive]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror stop 1
+  Stopped mirror on line [1]
+  Recording files retained with prefix:
+  /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z
+  ```
+
+Specify `-a` or `--archive` to package all part files into a ZIP archive. Source
+log files are removed only after packaging completes successfully. After the
+initial packaging response, the CLI waits up to 10 minutes for the final
+response.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror stop 1 --archive
+  Stopped mirror on line [1]; packaging recording
+  Expected archive: /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z.zip
+  Waiting for packaging to complete...
+
+  Recording archive: /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z.zip
+  ```
+
+**consutil mirror timeout**
+
+This command replaces the timeout of an active mirror session. The remaining
+time is reset from the moment the command is processed.
+
+- Usage:
+  ```
+  consutil mirror timeout <target> <duration> [-d|--devicename]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror timeout 1 2h
+  Updated mirror timeout on line [1]
+  Timeout: 2h
+  Remaining: 2h
+  ```
+
+**consutil mirror show**
+
+This command displays the mirror status for one console line. If `<target>` is
+omitted, it displays the status of all configured console lines.
+
+- Usage:
+  ```
+  consutil mirror show [<target>] [-d|--devicename]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo consutil mirror show
+    Line  State    Start Time            Direction    Timeout    Remaining    File
+  ------  -------  --------------------  -----------  ---------  -----------  -------------------------------------------------------------------------------------------
+       1  active   2026-06-13T14:12:00Z  both         24h        12h15m       /var/log/sonic/console-mirror/line1/console-mirror-line1-both-20260613T141200Z-part0001.log
+       2  idle     -                     -            -          -            -
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#console)
 
 ### DPU serial console utility
@@ -6884,6 +7001,7 @@ Subsequent pages explain each of these commands in detail.
   switchport   Show Interface switchport information
   tpid         Show Interface tpid information
   transceiver  Show SFP Transceiver information
+  label-port   Show label-port mapping information
   ```
 
 **show interfaces autoneg**
@@ -7764,6 +7882,91 @@ is command.
 **show interfaces transceiver**
 
 This command is already explained [here](#Transceivers)
+
+**show interfaces label-port status**
+
+This command displays a standardized mapping of front-panel label ports to SONiC interface names, their lanes, and operational status under the current breakout configuration. Each table cell shows the mapped interface name and status for the corresponding lane (for example, `Ethernet0(UP)`). On multi-ASIC systems, the interface name also includes the ASIC namespace (for example, `Ethernet0|asic0(UP)`).
+
+- Usage:
+  ```
+  show interfaces label-port status
+  ```
+
+- Example (single-ASIC, 2 x 4x breakout):
+  ```
+  admin@sonic:~$ show interfaces label-port status
+  +--------------+-----------------+-----------------+-----------------+-----------------+
+  |   Label Port | Lane 1          | Lane 2          | Lane 3          | Lane 4          |
+  +==============+=================+=================+=================+=================+
+  |            1 | Ethernet0(UP)   | Ethernet0(UP)   | Ethernet0(UP)   | Ethernet0(UP)   |
+  |            2 | Ethernet4(UP)   | Ethernet4(UP)   | Ethernet4(UP)   | Ethernet4(UP)   |
+  |            3 | Ethernet8(UP)   | Ethernet8(UP)   | Ethernet8(UP)   | Ethernet8(UP)   |
+  |          ... | ...             | ...             | ...             | ...             |
+  |          128 | Ethernet508(UP) | Ethernet508(UP) | Ethernet508(DOWN) | Ethernet508(UP) |
+  +--------------+-----------------+-----------------+-----------------+-----------------+
+  ```
+
+- Example (single-ASIC, 4 x 2x breakout):
+  ```
+  admin@sonic:~$ show interfaces label-port status
+  +--------------+-----------------+-----------------+------------------+------------------+
+  |   Label Port | Lane 1          | Lane 2          | Lane 3           | Lane 4           |
+  +==============+=================+=================+==================+==================+
+  |            1 | Ethernet0(UP)   | Ethernet0(UP)   | Ethernet2(UP)    | Ethernet2(UP)    |
+  |            2 | Ethernet4(UP)   | Ethernet4(UP)   | Ethernet6(UP)    | Ethernet6(UP)    |
+  |            3 | Ethernet8(UP)   | Ethernet8(UP)   | Ethernet10(UP)   | Ethernet10(UP)   |
+  |          ... | ...             | ...             | ...              | ...              |
+  |          128 | Ethernet508(UP) | Ethernet508(UP) | Ethernet510(DOWN) | Ethernet510(UP)   |
+  +--------------+-----------------+-----------------+------------------+------------------+
+  ```
+
+- Example (multi-ASIC):
+  ```
+  admin@sonic:~$ show interfaces label-port status
+  +--------------+---------------------+-----------------------+------------------------+------------------------+
+  |   Label Port | Lane 1              | Lane 2                | Lane 3                 | Lane 4                 |
+  +==============+=====================+=======================+========================+========================+
+  |            1 | Ethernet0|asic0(UP) | Ethernet512|asic1(UP) | Ethernet1024|asic2(UP) | Ethernet1536|asic3(UP) |
+  |            2 | Ethernet1|asic0(UP) | Ethernet513|asic1(UP) | Ethernet1025|asic2(UP) | Ethernet1537|asic3(UP) |
+  |            3 | Ethernet2|asic0(UP) | Ethernet514|asic1(UP) | Ethernet1026|asic2(UP) | Ethernet1538|asic3(UP) |
+  |          ... | ...                 | ...                   | ...                    | ...                    |
+  |          512 | Ethernet511|asic0(UP) | Ethernet1023|asic1(UP) | Ethernet1535|asic2(DOWN) | Ethernet2047|asic3(UP) |
+  +--------------+---------------------+-----------------------+------------------------+------------------------+
+  ```
+
+- Platform requirements (`platform.json`):
+
+  All supported platforms must define `label_port_lanes_mapping`:
+
+  - **Key**: label-port identifier (string), for example `"1"`, `"2"`.
+  - **Value**: list of global lane numbers (strings), for example `["0", "1", "2", "3"]`.
+
+  Multi-ASIC platforms must also define `number_of_lanes_per_asic`. This value is used to compute global lane offsets:
+
+  `global_lane = local_lane + (asic_index x number_of_lanes_per_asic)`
+
+  Single-ASIC example:
+  ```json
+  "label_port_lanes_mapping": {
+     "1": ["0", "1", "2", "3"],
+     "2": ["4", "5", "6", "7"],
+     ...
+     "127": ["504", "505", "506", "507"],
+     "128": ["508", "509", "510", "511"]
+  }
+  ```
+
+  Multi-ASIC example:
+  ```json
+  "number_of_lanes_per_asic": "512",
+  "label_port_lanes_mapping": {
+     "1": ["0", "512", "1024", "1536"],
+     "2": ["1", "513", "1025", "1537"],
+     ...
+     "511": ["510", "1022", "1534", "2046"],
+     "512": ["511", "1023", "1535", "2047"]
+  }
+  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#interfaces)
 
@@ -11200,7 +11403,7 @@ Default values are the following:
    - action - 'drop'
    - pfc stat history - disable
 
-Additionally if number of ports in the system exceeds 32, all times will be multiplied by roughly <num_ports\>/32.
+Additionally if the number of ports the watchdog is enabled on exceeds 32, all times will be multiplied by roughly <num_ports\>/32. Only ports that PFC watchdog is actually configured on are counted, i.e. ports that have `pfc_enable` set in `PORT_QOS_MAP`; ports that are skipped because PFC is not enabled on them do not affect these times.
 
 
 **show pfcwd config**
