@@ -1,5 +1,4 @@
 import ipaddress
-import shutil
 
 import click
 from natsort import natsorted
@@ -529,35 +528,13 @@ def routes():
     pass
 
 
-def _ecmp_row_width(max_item_len, num_wrap_cols, fixed_cols_est, max_per_row=None):
-    """Compute how many ECMP items fit per row to stay within the current terminal width.
-
-    :param max_item_len:   length of the longest individual item string
-    :param num_wrap_cols:  number of columns that wrap (2 for nexthop+interface,
-                           3 for endpoint+mac+vni)
-    :param fixed_cols_est: estimated width of non-wrapping column content plus all
-                           inter-column tabulate spacing (2 spaces × (ncols-1))
-    :param max_per_row:    optional upper bound on items per row
-    """
-    if max_item_len <= 0:
-        return 1
-    terminal_cols = shutil.get_terminal_size((80, 24)).columns
-    row_width = (terminal_cols - fixed_cols_est) // (num_wrap_cols * (max_item_len + 1))
-    row_width = max(1, row_width)
-    if max_per_row is not None:
-        row_width = min(max_per_row, row_width)
-    return row_width
-
-
 def pretty_print_local(table, r, nexthop_val, ifname_val):
     nexthops = [nexthop.strip() for nexthop in nexthop_val.split(',')] if nexthop_val else [""]
     interfaces = [interface.strip() for interface in ifname_val.split(',')] if ifname_val else []
 
-    all_items = list(nexthops) + list(interfaces)
-    max_len = max((len(item) for item in all_items), default=0)
-    # route_header: ['vnet name', 'prefix', 'nexthop', 'interface']
-    # fixed_cols_est = vnet_name(~15) + prefix(~18) + 4-col spacing(6) = 39
-    row_width = _ecmp_row_width(max_len, num_wrap_cols=2, fixed_cols_est=39, max_per_row=2)
+    # Terminal-width sizing isn't feasible here (rows are wrapped one key at a
+    # time, before column widths are known), so cap at a fixed 2 items per row.
+    row_width = 2
 
     max_entries = max(len(nexthops), len(interfaces))
     i = 0
@@ -576,17 +553,9 @@ def pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state):
     macs = mac_addr.split(',') if mac_addr and ',' in mac_addr else None
     vnis = vni.split(',') if vni and ',' in vni else None
 
-    # Derive row_width from the longest single item across all three fields so
-    # that long MAC addresses or IPv6 endpoints don't overflow the terminal.
-    all_items = list(endpoints)
-    if macs:
-        all_items.extend(macs)
-    if vnis:
-        all_items.extend(vnis)
-    max_len = max((len(item) for item in all_items), default=0)
-    # tunnel_header: ['vnet name', 'prefix', 'endpoint', 'mac address', 'vni', 'metric', 'status']
-    # fixed_cols_est = vnet_name(~15) + prefix(~16) + metric(6) + status(6) + 7-col spacing(12) = 55
-    row_width = _ecmp_row_width(max_len, num_wrap_cols=3, fixed_cols_est=55, max_per_row=2)
+    # Terminal-width sizing isn't feasible here (rows are wrapped one key at a
+    # time, before column widths are known), so cap at a fixed 2 items per row.
+    row_width = 2
 
     i = 0
     while i < len(endpoints):

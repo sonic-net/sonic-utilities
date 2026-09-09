@@ -1,6 +1,5 @@
 # flake8: noqa: E501
 import os
-from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -11,21 +10,16 @@ import show.main as show
 import show.vnet as vnet
 from tests.mock_tables import dbconnector
 
-# Pin terminal width for all vnet route tests so row_width is deterministic.
-_MOCK_TERMINAL = os.terminal_size((200, 24))
-
 
 class TestShowVnetRoutesAll(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
-        cls._terminal_patcher = patch("show.vnet.shutil.get_terminal_size", return_value=_MOCK_TERMINAL)
-        cls._terminal_patcher.start()
 
     @classmethod
     def teardown_class(cls):
-        cls._terminal_patcher.stop()
+        pass
 
     def test_Preety_print(self):
         table =[]
@@ -55,7 +49,7 @@ class TestShowVnetRoutesAll(object):
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         epval = "192.168.1.1,192.168.1.2,192.168.1.3,192.168.1.4,192.168.1.5,192.168.1.6,192.168.1.7,192.168.1.8,192.168.1.9,192.168.1.10,192.168.1.11,192.168.1.12,192.168.1.13,192.168.1.14,192.168.1.15"
         vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
-        # max_len=12 ('192.168.1.15'); at T=200, raw=(200-55)//(3*13)=3, capped to max_per_row=2
+        # row_width is fixed at 2
         expected_output =[
             ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1,192.168.1.2',   '', '', '0', 'active'],
             ['',                '',                         '192.168.1.3,192.168.1.4',   '', '', '', ''],
@@ -82,7 +76,7 @@ class TestShowVnetRoutesAll(object):
         mac_addr = "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02,aa:bb:cc:00:00:03,aa:bb:cc:00:00:04"
         vni = "100,200,300,400"
         metric = ""
-        # MAC items are 17 chars; at T=200, row_width=(200-55)//(3*18)=2
+        # row_width is fixed at 2
         vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output = [
             ["TestVnet", "10.0.0.1/32", "1.1.1.1,1.1.1.1", "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02", "100,200", "", "active"],
@@ -97,7 +91,7 @@ class TestShowVnetRoutesAll(object):
         mac_addr = "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02,aa:bb:cc:00:00:03"
         vni = "100,200,300"
         metric = "5"
-        # max_len=17 (MACs); at T=200, row_width=2
+        # row_width is fixed at 2
         vnet.pretty_print_tunnel(table, row, epval, mac_addr, vni, metric, state)
         expected_output = [
             ["TestVnet", "10.0.0.1/32", "1.1.1.1,2.2.2.2", "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02", "100,200", "5",  "active"],
@@ -361,13 +355,10 @@ class TestShowVnetRoutesECMP(object):
         print("SETUP")
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         dbconnector.topo = "vnet_ecmp"
-        cls._terminal_patcher = patch("show.vnet.shutil.get_terminal_size", return_value=_MOCK_TERMINAL)
-        cls._terminal_patcher.start()
 
     @classmethod
     def teardown_class(cls):
         dbconnector.topo = None
-        cls._terminal_patcher.stop()
 
     def test_show_vnet_routes_tunnel_ecmp(self):
         """Test show vnet routes tunnel filtered for a real-world ECMP vnet with 10-12 endpoints."""
@@ -378,7 +369,7 @@ class TestShowVnetRoutesECMP(object):
         assert result.exit_code == 0
         output = result.output
 
-        # 30.0.21.0/24: 12 unique endpoints. MAC items are 17 chars; at T=200, row_width=2. Exact output pinned.
+        # 30.0.21.0/24: 12 unique endpoints. row_width is fixed at 2. Exact output pinned.
         expected_21 = (
             "Vnet_7127926  30.0.21.0/24  100.106.230.44,10.134.85.10      00:22:48:03:8c:f8,60:45:bd:a3:8d:ab  7127926,7127926  5         active\n"
             "                            100.106.229.38,100.106.229.170   60:45:bd:a3:21:88,60:45:bd:a2:e4:39  7127926,7127926\n"
