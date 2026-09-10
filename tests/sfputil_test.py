@@ -217,6 +217,7 @@ class TestSfputil(object):
                 'active_apsel_hostlane8': 1,
                 'media_interface_technology': 'C-band tunable laser',
                 'cmis_rev': '5.0',
+                'cdb_supported': True,
                 'supported_max_tx_power': 0,
                 'supported_min_tx_power': -20,
                 'supported_max_laser_freq': 196100,
@@ -233,6 +234,7 @@ class TestSfputil(object):
             "        Active App Selection Host Lane 8: 1\n"
             "        Application Advertisement: 400G CR8 - Host Assign (0x1) - Copper cable - Media Assign (0x2)\n"
             "                                   200GBASE-CR4 (Clause 136) - Host Assign (Unknown) - Unknown - Media Assign (Unknown)\n"
+            "        CDB Supported: True\n"
             "        CMIS Revision: 5.0\n"
             "        Connector: LC\n"
             "        Encoding: N/A\n"

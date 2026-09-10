@@ -91,6 +91,7 @@ QSFP_DD_DATA_MAP = {
     'encoding': 'Encoding',
     'connector': 'Connector',
     'application_advertisement': 'Application Advertisement',
+    'cdb_supported': 'CDB Supported',
     'hardware_rev': 'Hardware Revision',
     'media_interface_code': 'Media Interface Code',
     'host_electrical_interface': 'Host Electrical Interface',
