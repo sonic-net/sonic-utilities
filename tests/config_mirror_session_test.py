@@ -115,13 +115,6 @@ def test_mirror_session_erspan_add():
     assert result.exit_code != 0
     assert ERR_MSG_IP_FAILURE in result.stdout
 
-    # Verify invalid ip version
-    result = runner.invoke(
-            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
-            ["test_session", "1::1", "2::2", "8", "63", "10", "100"])
-    assert result.exit_code != 0
-    assert ERR_MSG_IP_VERSION_FAILURE in result.stdout
-
     # Verify invalid dscp
     result = runner.invoke(
             config.config.commands["mirror_session"].commands["erspan"].commands["add"],
@@ -176,6 +169,13 @@ def test_mirror_session_erspan_add():
 
         mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None, None, None, 0, 0)
 
+        # Verify IPv6 ERSPAN session
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "2001:db8::1", "2001:db8::2", "8", "63", "10", "100"])
+
+        assert result.exit_code == 0
+        mocked.assert_called_with("test_session", "2001:db8::1", "2001:db8::2", 8, 63, 10, 100, None, None, None, 0, 0)
 
 @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
 @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=ValueError))
