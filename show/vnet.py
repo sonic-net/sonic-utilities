@@ -529,8 +529,9 @@ def routes():
 
 
 def pretty_print_local(table, r, nexthop_val, ifname_val):
-    nexthops = [nexthop.strip() for nexthop in nexthop_val.split(',')] if nexthop_val else [""]
-    interfaces = [interface.strip() for interface in ifname_val.split(',')] if ifname_val else []
+    # Not stripped: splitting and re-joining on ',' preserves the original spacing verbatim.
+    nexthops = nexthop_val.split(',') if nexthop_val else [""]
+    interfaces = ifname_val.split(',') if ifname_val else []
 
     # Terminal-width sizing isn't feasible here (rows are wrapped one key at a
     # time, before column widths are known), so cap at a fixed 2 items per row.
