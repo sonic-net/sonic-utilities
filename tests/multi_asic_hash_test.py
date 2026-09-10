@@ -3,7 +3,7 @@ import os
 import sys
 import logging
 import importlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import click
 import show.main as show
@@ -32,6 +32,15 @@ HASH_FIELD_LIST = [
 
 SUCCESS = 0
 ERROR2 = 2
+
+_REAL_CHOICE_CONVERT = click.Choice.convert
+
+
+def _namespace_only_choice_convert(self, value, param=None, ctx=None):
+    """Mock namespace validation only; leave other Choice types unchanged."""
+    if param is not None and param.name == 'namespace':
+        return 'asic0'
+    return _REAL_CHOICE_CONVERT(self, value, param, ctx)
 
 
 class TestHashMultiAsic:
@@ -77,7 +86,7 @@ class TestHashMultiAsic:
 
     # CONFIG SWITCH-HASH GLOBAL (multi-asic)
 
-    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    @patch.object(click.Choice, 'convert', _namespace_only_choice_convert)
     @pytest.mark.parametrize(
         "hash", [
             "ecmp-hash",
@@ -98,7 +107,7 @@ class TestHashMultiAsic:
 
         assert result.exit_code == SUCCESS
 
-    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    @patch.object(click.Choice, 'convert', _namespace_only_choice_convert)
     @pytest.mark.parametrize(
         "hash", [
             "ecmp-hash-algorithm",
@@ -136,7 +145,7 @@ class TestHashMultiAsic:
         assert result.output == assert_show_output.show_hash_global_multi_asic
         assert result.exit_code == SUCCESS
 
-    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    @patch.object(click.Choice, 'convert', _namespace_only_choice_convert)
     def test_show_hash_global_multi_asic_single_ns(self):
         db = Db()
         runner = CliRunner()
@@ -169,7 +178,7 @@ class TestHashMultiAsic:
         assert result.output == assert_show_output.show_hash_capabilities_multi_asic
         assert result.exit_code == SUCCESS
 
-    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    @patch.object(click.Choice, 'convert', _namespace_only_choice_convert)
     def test_show_hash_capabilities_multi_asic_single_ns(self):
         db = Db()
         runner = CliRunner()
