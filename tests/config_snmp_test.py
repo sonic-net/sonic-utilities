@@ -845,28 +845,105 @@ class TestSNMPConfigCommands(object):
                                               [{'addr': '10.1.0.32', 'netmask': '255.255.255.0',
                                                 'broadcast': '10.1.0.255'}],
                                                 10: [{'addr': 'fe80::1%eth0', 'netmask': 'ffff:ffff:ffff:ffff::/64'}]}))
-    @patch('os.system', mock.Mock(return_value=0))
     def test_config_snmpagentaddress_add_linklocal(self):
         db = Db()
         obj = {'db': db.cfgdb}
         runner = CliRunner()
-        runner.invoke(config.config.commands["snmpagentaddress"].commands["add"], ["fe80::1%eth0"], obj=obj)
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            runner.invoke(config.config.commands["snmpagentaddress"].commands["add"], ["fe80::1%eth0"], obj=obj)
         assert ('fe80::1%eth0', '', '') in db.cfgdb.get_keys('SNMP_AGENT_ADDRESS_CONFIG')
         assert db.cfgdb.get_entry("SNMP_AGENT_ADDRESS_CONFIG", "fe80::1%eth0||") == {}
+        assert mock_run_command.call_count == 2
+        mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
+        mock_run_command.assert_any_call(['systemctl', 'restart', 'snmp.service'], display_cmd=False)
 
     @patch('netifaces.interfaces', mock.Mock(return_value=['eth0']))
     @patch('netifaces.ifaddresses', mock.Mock(return_value={2:
                                               [{'addr': '10.1.0.32', 'netmask': '255.255.255.0',
                                                 'broadcast': '10.1.0.255'}],
                                                 10: [{'addr': 'fe80::1', 'netmask': 'ffff:ffff:ffff:ffff::/64'}]}))
-    @patch('os.system', mock.Mock(return_value=0))
     def test_config_snmpagentaddress_add_ipv4(self):
         db = Db()
         obj = {'db': db.cfgdb}
         runner = CliRunner()
-        runner.invoke(config.config.commands["snmpagentaddress"].commands["add"], ["10.1.0.32"], obj=obj)
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            runner.invoke(config.config.commands["snmpagentaddress"].commands["add"], ["10.1.0.32"], obj=obj)
         assert ('10.1.0.32', '', '') in db.cfgdb.get_keys('SNMP_AGENT_ADDRESS_CONFIG')
         assert db.cfgdb.get_entry("SNMP_AGENT_ADDRESS_CONFIG", "10.1.0.32||") == {}
+        assert mock_run_command.call_count == 2
+        mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
+        mock_run_command.assert_any_call(['systemctl', 'restart', 'snmp.service'], display_cmd=False)
+
+    @patch('netifaces.interfaces', mock.Mock(return_value=['eth0']))
+    @patch('netifaces.ifaddresses', mock.Mock(return_value={2:
+                                              [{'addr': '10.1.0.32', 'netmask': '255.255.255.0',
+                                                'broadcast': '10.1.0.255'}],
+                                                10: [{'addr': 'fe80::1', 'netmask': 'ffff:ffff:ffff:ffff::/64'}]}))
+    def test_config_snmpagentaddress_add_restart_failure(self):
+        db = Db()
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command', side_effect=SystemExit(1)):
+            result = runner.invoke(config.config.commands["snmpagentaddress"].commands["add"], ["10.1.0.32"], obj=obj)
+        assert 'Restart service snmp failed with error' in result.output
+
+    def test_config_snmpagentaddress_del(self):
+        db = Db()
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            runner.invoke(config.config.commands["snmpagentaddress"].commands["del"], ["10.1.0.32"], obj=obj)
+        assert mock_run_command.call_count == 2
+        mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
+        mock_run_command.assert_any_call(['systemctl', 'restart', 'snmp.service'], display_cmd=False)
+
+    def test_config_snmpagentaddress_del_restart_failure(self):
+        db = Db()
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command', side_effect=SystemExit(1)):
+            result = runner.invoke(config.config.commands["snmpagentaddress"].commands["del"], ["10.1.0.32"], obj=obj)
+        assert 'Restart service snmp failed with error' in result.output
+
+    def test_config_snmptrap_modify(self):
+        db = Db()
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["snmptrap"].commands["modify"],
+                                   ["1", "10.1.0.32", "-p", "162", "-v", "mgmt", "-c", "public"], obj=obj)
+        assert result.exit_code == 0
+        assert mock_run_command.call_count == 2
+        mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
+        mock_run_command.assert_any_call(['systemctl', 'restart', 'snmp.service'], display_cmd=False)
+
+    def test_config_snmptrap_modify_restart_failure(self):
+        db = Db()
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command', side_effect=SystemExit(1)):
+            result = runner.invoke(config.config.commands["snmptrap"].commands["modify"],
+                                   ["1", "10.1.0.32", "-p", "162", "-v", "mgmt", "-c", "public"], obj=obj)
+        assert 'Restart service snmp failed with error' in result.output
+
+    def test_config_snmptrap_del(self):
+        db = Db()
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["snmptrap"].commands["del"], ["1"], obj=obj)
+        assert result.exit_code == 0
+        assert mock_run_command.call_count == 2
+        mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
+        mock_run_command.assert_any_call(['systemctl', 'restart', 'snmp.service'], display_cmd=False)
+
+    def test_config_snmptrap_del_restart_failure(self):
+        db = Db()
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command', side_effect=SystemExit(1)):
+            result = runner.invoke(config.config.commands["snmptrap"].commands["del"], ["1"], obj=obj)
+        assert 'Restart service snmp failed with error' in result.output
 
     @classmethod
     def teardown_class(cls):
