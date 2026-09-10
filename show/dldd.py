@@ -2,6 +2,7 @@
 
 import json
 import math
+from typing import Any, Tuple
 
 import click
 from tabulate import tabulate
@@ -19,7 +20,7 @@ from utilities_common.dldd import (
 FAULT_INFO_PATTERN = "FAULT_INFO|*"
 HEARTBEAT_TTL_SECONDS = 120
 
-FAULT_NESTED_FIELDS = (
+FAULT_NESTED_FIELDS: Tuple[Tuple[str, str, Any], ...] = (
     ("events", "Events", []),
     ("repair_actions", "Repair actions", []),
     ("actions_taken", "Actions taken", []),
@@ -118,7 +119,7 @@ def _decode_key(value):
 
 def _fault_document(key, fault):
     document = dict(fault, redis_key=key)
-    for field, unused_title, default in FAULT_NESTED_FIELDS:
+    for field, _unused_title, default in FAULT_NESTED_FIELDS:
         if field in document:
             document[field] = _json_value(document[field], default)
     for fields, transform in (
@@ -275,7 +276,7 @@ def _heartbeat_age(db):
     except Exception:
         return "unavailable"
 
-    if ttl is None or ttl < 0:
+    if not isinstance(ttl, int) or ttl < 0:
         return "unavailable"
     return "{} seconds (approximate)".format(max(0, HEARTBEAT_TTL_SECONDS - ttl))
 
