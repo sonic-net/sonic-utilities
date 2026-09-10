@@ -773,18 +773,42 @@ class TestConfigConsoleCommands(object):
         assert entry.get("logrotate_size") == "10M"
         assert entry.get("logrotate_count") == "10"
 
-    def test_update_console_logging_filename_invalid_size(self):
+    @pytest.mark.parametrize("logrotate_size", ["big", "10m", "10g"])
+    def test_update_console_logging_filename_invalid_size(self, logrotate_size):
         runner = CliRunner()
         db = Db()
         db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
 
         result = runner.invoke(
             CONSOLE_LOGGING_CMD,
-            ["1", "filename", "/var/log/console1.log", "--logrotate-size", "big", "--logrotate-count", "5"],
+            ["1", "filename", "/var/log/console1.log", "--logrotate-size", logrotate_size, "--logrotate-count", "5"],
             obj=db,
         )
         assert result.exit_code != 0
         assert "Invalid logrotate size" in result.output
+
+    @pytest.mark.parametrize(("filename", "error_message"), [
+        ("var/log/console1.log", "Log file path must be an absolute path."),
+        ("/var/log/console 1.log", "Log file path must not contain whitespace."),
+        ("/var/log/console1.log\npostrotate", "Log file path must not contain whitespace."),
+        ("/var/log/{console}.log", "Log file path must not contain '{' or '}'."),
+        ("/var/log/console1.log}postrotate{", "Log file path must not contain '{' or '}'."),
+    ])
+    def test_update_console_logging_filename_invalid_path(self, filename, error_message):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "filename", filename],
+            obj=db,
+        )
+        assert result.exit_code != 0
+        assert error_message in result.output
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert "log_file" not in entry
 
     def test_update_console_logging_filename_partial_logrotate_options(self):
         runner = CliRunner()

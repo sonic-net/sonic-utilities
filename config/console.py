@@ -1,4 +1,5 @@
 import click
+import os
 import string
 import re
 import utilities_common.cli as clicommon
@@ -314,7 +315,7 @@ def update_console_escape_char(db, linenum, escape):
 #
 # 'console logging' group ('config console logging ...')
 #
-LOGROTATE_SIZE_PATTERN = re.compile(r'^[0-9]+[kKmMgG]?$')
+LOGROTATE_SIZE_PATTERN = re.compile(r'^[0-9]+[kKMG]?$')
 DEFAULT_LOG_FILE_TEMPLATE = "/var/log/console-{}.log"
 # NOTE: Keep these defaults aligned with src/sonic-host-services/scripts/console-monitor
 # (DEFAULT_LOGROTATE_SIZE / DEFAULT_LOGROTATE_COUNT).
@@ -324,6 +325,21 @@ DEFAULT_LOGROTATE_COUNT = "10"
 
 def default_log_file(linenum):
     return DEFAULT_LOG_FILE_TEMPLATE.format(linenum)
+
+
+def validate_log_file_path(ctx, path):
+    """Validate log file path to prevent logrotate config injection."""
+    if not os.path.isabs(path):
+        ctx.fail("Log file path must be an absolute path.")
+
+    if any(ch.isspace() for ch in path):
+        ctx.fail("Log file path must not contain whitespace.")
+
+    if '{' in path or '}' in path:
+        ctx.fail("Log file path must not contain '{' or '}'.")
+
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in path):
+        ctx.fail("Log file path must not contain control characters.")
 
 
 def apply_default_logging_config(data, linenum):
@@ -344,7 +360,7 @@ def get_effective_logrotate_options(ctx, size, count):
         count = DEFAULT_LOGROTATE_COUNT
 
     if not LOGROTATE_SIZE_PATTERN.match(size):
-        ctx.fail("Invalid logrotate size '{}'. Use a value like 10M or 100k.".format(size))
+        ctx.fail("Invalid logrotate size '{}'. Use a value like 10M or 100K.".format(size))
 
     return size, str(count)
 
@@ -374,14 +390,18 @@ def disable_console_logging(db):
 
 @console_logging.command('filename')
 @clicommon.pass_db
-@click.argument('filename', metavar='<file_name>', required=True)
+@click.argument('filename', metavar='<absolute_path>', required=True)
 @click.option('--logrotate-size', '-s', 'logrotate_size', metavar='<size>', default=None,
-              help='Logrotate size threshold (e.g. 10M, 100k). Default: 10M.')
+              help='Logrotate size threshold (e.g. 10M, 100K). Default: 10M.')
 @click.option('--logrotate-count', '-c', 'logrotate_count', metavar='<count>', default=None,
               type=click.IntRange(1, 100), help='Number of rotated log files to retain. Default: 10.')
 def set_console_logging_filename(db, filename, logrotate_size, logrotate_count):
-    """Configure console log file and optional logrotate settings"""
+    """Configure console log file and optional logrotate settings.
+
+    filename must be an absolute path (e.g. /var/log/console-1.log).
+    """
     ctx = click.get_current_context()
+    validate_log_file_path(ctx, filename)
     size, count = get_effective_logrotate_options(ctx, logrotate_size, logrotate_count)
 
     linenum = ctx.parent.params['linenum']
