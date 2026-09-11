@@ -923,6 +923,28 @@ class TestShowInterfaces(object):
             display_cmd=True,
         )
 
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_l1_summary_asic0(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['interfaces'].commands['l1-summary'], ['Ethernet0', '-n', 'asic0'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'l1_summary', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_l1_summary_all(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['l1-summary'],
+            ['-d', 'all'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['intfutil', '-c', 'l1_summary', '-d', 'all'], display_cmd=False)
+
     def teardown_method(self):
         print('TEAR DOWN')
 

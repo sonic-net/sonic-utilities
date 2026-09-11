@@ -2071,13 +2071,15 @@
             "RX_BPS": "0",
             "RX_PPS": "0",
             "TX_BPS": "0",
-            "TX_PPS": "0"
+            "TX_PPS": "0",
+            "FEC_PRE_BER": "6.05e-10"
     },
     "RATES:oid:0x1000000000004": {
             "RX_BPS": "0",
             "RX_PPS": "0",
             "TX_BPS": "0",
-            "TX_PPS": "0"
+            "TX_PPS": "0",
+            "FEC_PRE_BER": "0"
     },
     "RATES:oid:0x1000000000006": {
             "RX_BPS": "0",

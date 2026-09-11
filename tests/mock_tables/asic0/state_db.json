@@ -1,4 +1,22 @@
 {
+    "PORT_OPERR_TABLE|Ethernet0": {
+        "oper_error_status": "3"
+    },
+    "PORT_OPERR_TABLE|Ethernet4": {
+        "oper_error_status": "1"
+    },
+    "PORT_OPERR_TABLE|Ethernet-BP0": {
+        "oper_error_status": "0"
+    },
+    "PORT_OPERR_TABLE|Ethernet-BP4": {
+        "oper_error_status": "0"
+    },
+    "PORT_OPERR_TABLE|Ethernet-BP256": {
+        "oper_error_status": "0"
+    },
+    "PORT_OPERR_TABLE|Ethernet-BP260": {
+        "oper_error_status": "0"
+    },
     "TRANSCEIVER_INFO|Ethernet0": {
         "type": "QSFP28 or later",
         "vendor_rev": "AC",
