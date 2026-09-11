@@ -177,14 +177,14 @@ def _invoke_install_firmware(component, fw_path, *, force_update=False) -> bool:
     Support is detected from install_firmware's signature before invocation. A
     TypeError raised from inside install_firmware is therefore never masked or
     retried (which could re-run a firmware install that already started) - it
-    propagates to the caller.
+    propagates to the caller. If force_update is requested but unsupported,
+    raise instead of silently falling back, so the caller aborts with a clear
+    error (mirroring how -n/--namespace hard-fails on single-asic platforms).
     """
-    if force_update and supports_force_update(component.install_firmware):
-        return component.install_firmware(fw_path, force_update=True)
+    if force_update and not supports_force_update(component.install_firmware):
+        raise RuntimeError("Component does not support --force-update")
     if force_update:
-        log_helper.print_warning(
-            "Component does not support --force-update; continuing without it"
-        )
+        return component.install_firmware(fw_path, force_update=True)
     return component.install_firmware(fw_path)
 
 
@@ -289,7 +289,9 @@ def validate_fw(ctx, param, value):
 @component_install.command(name='fw')
 @click.option('-y', '--yes', 'yes', is_flag=True, show_default=True, help="Assume \"yes\" as answer to all prompts and run non-interactively")
 @click.option('--force-update', 'force_update', is_flag=True, show_default=True,
-              help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
+              help="Force reinstall/downgrade via the component update backend "
+                   "(e.g. PLDM Force Update). Only supported by some backends; "
+                   "fails with an error if the target component doesn't support it")
 @click.argument('fw_path', metavar='<fw_path>', callback=validate_fw)
 @click.pass_context
 def fw_install(ctx, yes, force_update, fw_path):
@@ -321,7 +323,9 @@ def fw_install(ctx, yes, force_update, fw_path):
 @click.option('-y', '--yes', 'yes', is_flag=True, show_default=True, help="Assume \"yes\" as answer to all prompts and run non-interactively")
 @click.option('-f', '--force', 'force', is_flag=True, show_default=True, help="Update firmware regardless the current version")
 @click.option('--force-update', 'force_update', is_flag=True, show_default=True,
-              help="Pass --force-update to the component update backend (e.g. PLDM Force Update)")
+              help="Force reinstall/downgrade via the component update backend "
+                   "(e.g. PLDM Force Update). Only supported by some backends; "
+                   "fails with an error if the target component doesn't support it")
 @click.option('-i', '--image', 'image', type=click.Choice(["current", "next"]), default="current", show_default=True, help="Update firmware using current/next SONiC image")
 @click.pass_context
 def fw_update(ctx, yes, force, force_update, image):

@@ -562,20 +562,19 @@ class TestFwutilMain(object):
         assert result is True
         assert component.calls == [("/tmp/fw.bin", False)]
 
-    def test_invoke_install_firmware_falls_back_when_unsupported(self):
+    def test_invoke_install_firmware_raises_when_unsupported(self):
         # A component whose install_firmware lacks force_update is detected via
-        # its signature (not by catching TypeError) and gets a plain install.
+        # its signature (not by catching TypeError) and raises instead of
+        # silently falling back to a plain install.
         import fwutil.main as fw_main
         component = make_fw_double(
             "install_firmware", supports_force=False, return_value=True
         )
-        with patch.object(fw_main, "log_helper") as mock_log:
-            result = fw_main._invoke_install_firmware(
+        with pytest.raises(RuntimeError, match="does not support --force-update"):
+            fw_main._invoke_install_firmware(
                 component, "/tmp/fw.bin", force_update=True
             )
-        assert result is True
-        assert component.calls == [("/tmp/fw.bin",)]
-        mock_log.print_warning.assert_called_once()
+        assert component.calls == []
 
     def test_invoke_install_firmware_backend_typeerror_propagates_without_retry(self):
         # A TypeError from a force-update-capable install_firmware must propagate
@@ -585,13 +584,11 @@ class TestFwutilMain(object):
             "install_firmware", supports_force=True, raises_type_error=True,
             return_value=True,
         )
-        with patch.object(fw_main, "log_helper") as mock_log:
-            with pytest.raises(TypeError, match="backend boom"):
-                fw_main._invoke_install_firmware(
-                    component, "/tmp/fw.bin", force_update=True
-                )
+        with pytest.raises(TypeError, match="backend boom"):
+            fw_main._invoke_install_firmware(
+                component, "/tmp/fw.bin", force_update=True
+            )
         assert component.calls == [("/tmp/fw.bin", True)]  # single call, no retry
-        mock_log.print_warning.assert_not_called()
 
 
 class TestFWPackageUntar(object):
@@ -697,13 +694,12 @@ class TestForceUpdateSupport:
         assert comp.calls == [("/tmp/fw.bin", True)]
         mock_log.print_warning.assert_not_called()
 
-    @patch("fwutil.lib.log_helper")
-    def test_falls_back_when_force_update_unsupported(self, mock_log):
+    def test_raises_when_force_update_unsupported(self):
         comp = make_fw_double("update_firmware", supports_force=False)
         cup = self._make_cup(comp)
-        cup.update_firmware("CHASSIS", None, "COMP", force_update=True)
-        assert comp.calls == [("/tmp/fw.bin",)]
-        mock_log.print_warning.assert_called_once()
+        with pytest.raises(RuntimeError, match="does not support --force-update"):
+            cup.update_firmware("CHASSIS", None, "COMP", force_update=True)
+        assert comp.calls == []
 
     @patch("fwutil.lib.log_helper")
     def test_backend_typeerror_propagates_without_retry(self, mock_log):

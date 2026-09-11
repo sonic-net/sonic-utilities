@@ -826,6 +826,9 @@ class ComponentUpdateProvider(PlatformDataProvider):
         if not parser:
             return
 
+        if force_update and not supports_force_update(component.update_firmware):
+            raise RuntimeError("Component does not support --force-update")
+
         firmware_path = parser[self.__pcp.FIRMWARE_KEY]
 
         if self.__root_path is not None:
@@ -835,13 +838,9 @@ class ComponentUpdateProvider(PlatformDataProvider):
             click.echo("Updating firmware:")
             click.echo(TAB + firmware_path)
             log_helper.log_fw_update_start(component_path, firmware_path)
-            if force_update and supports_force_update(component.update_firmware):
+            if force_update:
                 component.update_firmware(firmware_path, force_update=True)
             else:
-                if force_update:
-                    log_helper.print_warning(
-                        "Component does not support --force-update; continuing without it"
-                    )
                 component.update_firmware(firmware_path)
             log_helper.log_fw_update_end(component_path, firmware_path, True)
         except KeyboardInterrupt:
