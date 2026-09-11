@@ -3,7 +3,11 @@ import sys
 
 from click.testing import CliRunner
 
-from tests.fdbshow_input.fdbshow_masic_test_vectors import show_mac_masic_asic0_output, test_data
+from tests.fdbshow_input.fdbshow_masic_test_vectors import (
+    show_mac_masic_asic0_output,
+    show_mac_masic_all_output,
+    test_data,
+)
 from tests.utils import get_result_and_return_code
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -31,6 +35,20 @@ class TestFdbshowMultiAsic(object):
         assert result == show_mac_masic_asic0_output
 
         self.command_executor(test_data["show_mac_masic_asic0"])
+
+    def test_show_mac_masic_all_namespaces(self):
+        # Without -n the FDB of every ASIC namespace is shown. This must not
+        # hang on the host connection (regression: show mac blocked forever on
+        # multi-ASIC because the host COUNTERS_DB has no COUNTERS_PORT_NAME_MAP).
+        return_code, result = get_result_and_return_code([
+            'fdbshow'
+        ])
+        print("return_code: {}".format(return_code))
+        print("result: {}".format(result))
+        assert return_code == 0
+        assert result == show_mac_masic_all_output
+
+        self.command_executor(test_data["show_mac_masic_all"])
 
     @classmethod
     def teardown_class(cls):

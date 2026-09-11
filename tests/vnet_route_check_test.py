@@ -736,6 +736,67 @@ class TestVnetRouteCheck(object):
     def init(self):
         vnet_route_check.UNIT_TESTING = 1
 
+    def test_get_vnet_routes_from_app_db_normalizes_host_prefixes(self):
+        vnet_table = MagicMock()
+        vnet_table.getKeys.return_value = [
+            "Vnet1:50.0.0.1",
+            "Vnet1:2001:db8::1",
+        ]
+        tunnel_table = MagicMock()
+        tunnel_table.getKeys.return_value = []
+
+        with patch("vnet_route_check.swsscommon.DBConnector", create=True), \
+                patch("vnet_route_check.swsscommon.Table",
+                      side_effect=[vnet_table, tunnel_table],
+                      create=True), \
+                patch(
+                    "vnet_route_check.get_vnet_intfs",
+                    return_value={"Vnet1": ["Vlan3001"]},
+                ), \
+                patch(
+                    "vnet_route_check.get_vrf_entries",
+                    return_value={"Vlan3001": "oid:0x3000000000d4b"},
+                ):
+            routes = vnet_route_check.get_vnet_routes_from_app_db()
+
+        assert routes["Vnet1"]["routes"] == [
+            "50.0.0.1/32",
+            "2001:db8::1/128",
+        ]
+
+    def test_filter_out_vnet_ip2me_routes_handles_consecutive_routes(self):
+        intf_table = MagicMock()
+        intf_table.getKeys.return_value = [
+            "PortChannel1.1102:100.1.0.17/30",
+            "PortChannel2.1102:100.1.0.21/30",
+        ]
+        vnet_routes = {
+            "Vnet3": {
+                "routes": [
+                    "100.1.0.17/32",
+                    "100.1.0.21/32",
+                    "50.0.2.1/32",
+                ],
+                "vrf_oid": "oid:0x3",
+            }
+        }
+
+        with patch("vnet_route_check.swsscommon.DBConnector", create=True), \
+                patch(
+                    "vnet_route_check.swsscommon.Table",
+                    return_value=intf_table,
+                    create=True,
+                ), \
+                patch(
+                    "vnet_route_check.get_vnet_intfs",
+                    return_value={
+                        "Vnet3": ["PortChannel1.1102", "PortChannel2.1102"]
+                    },
+                ):
+            vnet_route_check.filter_out_vnet_ip2me_routes(vnet_routes)
+
+        assert vnet_routes["Vnet3"]["routes"] == ["50.0.2.1/32"]
+
     @patch("vnet_route_check.swsscommon.DBConnector")
     @patch("vnet_route_check.swsscommon.Table")
     def test_vnet_route_check(self, mock_table, mock_conn):

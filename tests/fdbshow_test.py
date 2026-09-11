@@ -591,3 +591,46 @@ class TestFdbshow():
         print("result = {}".format(result))
         assert return_code == 1
         assert result == show_mac_invalid_address_output.strip("\n")
+
+    def test_show_mac_evpn_mh_endpoint_ip(self):
+        """Cover the endpoint_ip path (VXLAN remote MAC)"""
+        self.set_mock_variant("8")
+
+        result = self.runner.invoke(show.cli.commands["mac"], [])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "192.168.1.1" in result.output
+
+        return_code, result = get_result_and_return_code(['fdbshow'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "192.168.1.1" in result
+
+    def test_show_mac_evpn_mh_nhg(self):
+        """Cover the NHG bridge port path (SAI_BRIDGE_PORT_TYPE_BRIDGE_PORT_NEXT_HOP_GROUP)"""
+        self.set_mock_variant("8")
+
+        result = self.runner.invoke(show.cli.commands["mac"], [])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "10.0.0.1" in result.output
+
+        return_code, result = get_result_and_return_code(['fdbshow'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "10.0.0.1" in result
+
+    def test_show_mac_local_flag(self):
+        """Cover the -l/--local flag: remote MACs (endpoint_ip and NHG) are skipped"""
+        self.set_mock_variant("8")
+
+        return_code, result = get_result_and_return_code(['fdbshow', '-l'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "192.168.1.1" not in result
+        assert "10.0.0.1" not in result

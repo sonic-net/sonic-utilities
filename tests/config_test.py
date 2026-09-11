@@ -4,6 +4,7 @@ import pytest
 import filecmp
 import importlib
 import os
+import subprocess
 import traceback
 import json
 import jsonpatch
@@ -52,14 +53,14 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
 
 load_minigraph_command_output="""\
 Acquired lock on {0}
-Disabling container and routeCheck monitoring ...
+Disabling container, routeCheck and memory monitoring ...
 Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
 Running command: pfcwd start_default
 Restarting SONiC target ...
-Enabling container and routeCheck monitoring ...
+Enabling container, routeCheck and memory monitoring ...
 Reloading Monit configuration ...
 Please note setting loaded from minigraph will be lost after system reboot. To preserve setting, run `config save`.
 Released lock on {0}
@@ -728,8 +729,12 @@ class TestConfigReload(object):
         open(cls.dummy_cfg_file, 'w').close()
 
     def test_config_reload(self, get_cmd_module, setup_single_broadcom_asic):
-        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
-            (config, show) = get_cmd_module
+        (config, show) = get_cmd_module
+
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch.object(config, "config_file_yang_validation") as mock_validate_config:
 
             jsonfile_config = os.path.join(mock_db_path, "config_db.json")
             jsonfile_init_cfg = os.path.join(mock_db_path, "init_cfg.json")
@@ -753,6 +758,216 @@ class TestConfigReload(object):
 
             assert "\n".join([line.rstrip() for line in result.output.split('\n')][:2]) == \
                 reload_config_with_sys_info_command_output.format(config.SYSTEM_RELOAD_LOCK)
+            mock_validate_config.assert_called_once_with(jsonfile_config)
+
+    def test_config_reload_default_config_validation_failure(self, get_cmd_module, setup_single_broadcom_asic):
+        (config, show) = get_cmd_module
+
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+
+        with mock.patch("utilities_common.cli.run_command") as mock_run_command, \
+                mock.patch.object(
+                    config, "config_file_yang_validation", side_effect=click.Abort) as mock_validate_config:
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["reload"], ["-y", "-n"])
+
+            assert result.exit_code != 0
+            mock_validate_config.assert_called_once_with(jsonfile_config)
+            mock_run_command.assert_not_called()
+
+    def test_config_reload_force_skips_validation(self, get_cmd_module, setup_single_broadcom_asic):
+        (config, show) = get_cmd_module
+
+        config.DEFAULT_CONFIG_DB_FILE = os.path.join(
+            mock_db_path, 'missing_config_db.json'
+        )
+
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch.object(config, "config_file_yang_validation") as mock_validate_config:
+            runner = CliRunner()
+            result = runner.invoke(
+                config.config.commands["reload"], ["-y", "-f", "-n"]
+            )
+
+            assert result.exit_code == 0
+            mock_validate_config.assert_not_called()
+
+    def test_config_reload_blocked_during_warm_boot(self, get_cmd_module, setup_single_broadcom_asic):
+        """config reload must abort when a warm-boot is in progress (Redmine #5154490)."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = True
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = False
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch.object(config, 'config_file_yang_validation'):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y"])
+            assert result.exit_code != 0
+            assert "warm-boot" in result.output
+            assert "still in progress" in result.output
+
+    def test_config_reload_blocked_during_fast_boot(self, get_cmd_module, setup_single_broadcom_asic):
+        """config reload must abort when a fast-reboot is in progress.
+        fast-reboot sets both FAST_RESTART_ENABLE_TABLE and WARM_RESTART_ENABLE_TABLE;
+        isFastBootInProgress is checked first so the label is correct."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = True
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = True
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch.object(config, 'config_file_yang_validation'):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y"])
+            assert result.exit_code != 0
+            assert "fast-reboot" in result.output
+            assert "still in progress" in result.output
+
+    def test_config_reload_not_blocked_when_no_boot_in_progress(self, get_cmd_module, setup_single_broadcom_asic):
+        """Guard runs but does not block when no boot is in progress; both checks are invoked."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = False
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = False
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch.object(config, 'config_file_yang_validation'), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch('config.main._stop_services'), \
+                mock.patch('config.main._restart_services'), \
+                mock.patch('config.main._reset_failed_services'), \
+                mock.patch("utilities_common.cli.run_command",
+                           mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y"])
+            assert result.exit_code == 0
+            assert "still in progress" not in result.output
+            mock_swsscommon.RestartWaiter.isFastBootInProgress.assert_called_once()
+            mock_swsscommon.RestartWaiter.isWarmBootInProgress.assert_called_once()
+
+    def test_config_reload_no_service_restart_skips_guard(self, get_cmd_module, setup_single_broadcom_asic):
+        """With -n (no_service_restart), guard is skipped — no syncd teardown, no risk."""
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = True
+
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch.object(config, 'config_file_yang_validation'), \
+                mock.patch("utilities_common.cli.run_command",
+                           mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y", "-n"])
+            assert result.exit_code == 0
+            assert "still in progress" not in result.output
+            mock_swsscommon.RestartWaiter.isFastBootInProgress.assert_not_called()
+            mock_swsscommon.RestartWaiter.isWarmBootInProgress.assert_not_called()
+
+    def test_config_reload_default_config_missing_file(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+
+        config.DEFAULT_CONFIG_DB_FILE = os.path.join(
+            mock_db_path, 'missing_config_db.json'
+        )
+
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            runner = CliRunner()
+            result = runner.invoke(
+                config.config.commands["reload"], ["-y", "-n"]
+            )
+
+            assert result.exit_code != 0
+            assert (
+                "The config file {} doesn't exist".format(
+                    config.DEFAULT_CONFIG_DB_FILE
+                ) in result.output
+            )
+            assert "Traceback" not in result.output
+            mock_run_command.assert_not_called()
+
+    def test_config_reload_default_config_invalid_json(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            with mock.patch('config.main.os.access', return_value=True):
+                with mock.patch.object(
+                    config,
+                    "config_file_yang_validation",
+                    side_effect=Exception("bad json"),
+                ):
+                    runner = CliRunner()
+                    result = runner.invoke(
+                        config.config.commands["reload"], ["-y", "-n"]
+                    )
+
+                    assert result.exit_code != 0
+                    assert (
+                        "Failed to read config file {}: bad json".format(
+                            jsonfile_config
+                        ) in result.output
+                    )
+                    assert "Traceback" not in result.output
+                    mock_run_command.assert_not_called()
+
+    def test_config_reload_default_config_invalid_root(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+
+        with mock.patch(
+            "utilities_common.cli.run_command"
+        ) as mock_run_command:
+            with mock.patch('config.main.os.access', return_value=True):
+                with mock.patch.object(
+                    config,
+                    "config_file_yang_validation",
+                    return_value=False,
+                ) as mock_validate_config:
+                    runner = CliRunner()
+                    result = runner.invoke(
+                        config.config.commands["reload"], ["-y", "-n"]
+                    )
+
+                    assert result.exit_code != 0
+                    assert (
+                        "Invalid config file:'{}'!".format(
+                            jsonfile_config
+                        ) in result.output
+                    )
+                    mock_validate_config.assert_called_once_with(
+                        jsonfile_config
+                    )
+                    mock_run_command.assert_not_called()
 
     def test_config_reload_stdin(self, get_cmd_module, setup_single_broadcom_asic):
         def mock_json_load(f):
@@ -1110,6 +1325,53 @@ class TestConfigReloadMasic(object):
             assert result.exit_code == 0
             assert "\n".join([li.rstrip() for li in result.output.split('\n')]) == \
                 RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
+
+    def test_config_reload_default_files_validate_all_namespaces(self):
+        dummy_cfg_file = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db.json"
+        )
+        dummy_cfg_file_asic0 = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db0.json"
+        )
+        dummy_cfg_file_asic1 = os.path.join(
+            os.sep, "tmp", "reload_validate_config_db1.json"
+        )
+        device_metadata = {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "some_platform",
+                    "mac": "02:42:f0:7f:01:05"
+                }
+            }
+        }
+        self._create_dummy_config(dummy_cfg_file, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(
+                            side_effect=mock_run_command_side_effect
+                        )), \
+                mock.patch.object(
+                    config, 'DEFAULT_CONFIG_DB_FILE', dummy_cfg_file
+                ), \
+                mock.patch(
+                    'config.main.config_file_yang_validation',
+                    return_value=True
+                ) as mock_validate_config:
+            runner = CliRunner()
+
+            result = runner.invoke(
+                config.config.commands["reload"], ['-y', '-n']
+            )
+
+            assert result.exit_code == 0
+            assert mock_validate_config.call_count == 3
+            assert mock_validate_config.call_args_list == [
+                mock.call(dummy_cfg_file),
+                mock.call(dummy_cfg_file_asic0),
+                mock.call(dummy_cfg_file_asic1),
+            ]
 
     @classmethod
     def teardown_class(cls):
@@ -5386,3 +5648,103 @@ class TestSwssReady(object):
                 mock.patch('config.main.clicommon.run_command',
                            mock.MagicMock(return_value=("not-found", 0))):
             assert config._swss_ready() is True
+
+
+class TestGetMonitServicesByPrefix(object):
+    """Tests for _get_monit_services_by_prefix()."""
+
+    @mock.patch('config.main.subprocess.check_output')
+    def test_finds_container_memory_services(self, mock_check_output):
+        mock_check_output.return_value = (
+            "Monit 5.33.0 uptime: 1h 2m\n"
+            " routeCheck                       OK                          Program\n"
+            " container_checker                OK                          Program\n"
+            " container_memory_snmp            OK                          Program\n"
+            " container_memory_gnmi            OK                          Program\n"
+            " container_memory_bmp             OK                          Program\n"
+        )
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == ['container_memory_snmp', 'container_memory_gnmi', 'container_memory_bmp']
+
+    @mock.patch('config.main.subprocess.check_output')
+    def test_no_matching_services(self, mock_check_output):
+        mock_check_output.return_value = (
+            " routeCheck                       OK                          Program\n"
+            " container_checker                OK                          Program\n"
+        )
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == []
+
+    @mock.patch('config.main.subprocess.check_output',
+                side_effect=subprocess.CalledProcessError(1, 'monit'))
+    def test_monit_not_running(self, mock_check_output):
+        result = config._get_monit_services_by_prefix('container_memory_')
+        assert result == []
+
+
+class TestRestartServicesMonitOrdering(object):
+    """Regression test for sonic-net/sonic-utilities#4774.
+
+    `monit monitor <service>` is asynchronous. If `monit reload` runs before
+    the monitor action for a container_memory_* service has completed, that
+    service can be left "Not monitored" permanently. This test verifies that
+    every container_memory_* service discovered by
+    _get_monit_services_by_prefix() is both monitored and waited on (via
+    _wait_for_monit_service_monitored()) strictly before `monit reload`.
+    """
+
+    @mock.patch('config.main.reset_mgmt_interface_if_usb_not_running')
+    @mock.patch('config.main.get_device_name', return_value=None)
+    @mock.patch('config.main._monit_service_exists', return_value=False)
+    @mock.patch('config.main.subprocess.check_call')
+    @mock.patch('config.main.wait_service_restart_finish')
+    @mock.patch('config.main.get_service_finish_timestamp', return_value="0")
+    @mock.patch('config.main._get_monit_services_by_prefix',
+                return_value=['container_memory_snmp', 'container_memory_gnmi'])
+    @mock.patch('config.main._wait_for_monit_service_monitored')
+    @mock.patch('config.main.clicommon.run_command')
+    def test_memory_services_monitored_and_waited_before_reload(
+        self, run_cmd, wait_mock, get_svcs, _gst, _wsrf, _check_call,
+        _monit_exists, _get_dev, _reset_usb,
+    ):
+        # Shared event recorder so ordering across the two independent mocks
+        # (clicommon.run_command and _wait_for_monit_service_monitored) can
+        # actually be compared on a single timeline.
+        events = []
+
+        def run_command_side_effect(cmd, *args, **kwargs):
+            if cmd[:3] == ['sudo', 'monit', 'monitor']:
+                events.append(('monitor', cmd[3]))
+            elif cmd == ['sudo', 'monit', 'reload']:
+                events.append(('reload', None))
+            return ("", 0)
+
+        def wait_side_effect(service, timeout=10):
+            events.append(('wait', service))
+
+        run_cmd.side_effect = run_command_side_effect
+        wait_mock.side_effect = wait_side_effect
+
+        config._restart_services()
+
+        memory_services = {'container_memory_snmp', 'container_memory_gnmi'}
+        monitored = [svc for kind, svc in events if kind == 'monitor']
+        waited = [svc for kind, svc in events if kind == 'wait']
+
+        # sudo monit monitor container_checker / container_memory_snmp / container_memory_gnmi
+        assert 'container_checker' in monitored
+        assert memory_services <= set(monitored)
+
+        # _wait_for_monit_service_monitored() called for container_checker and
+        # both container_memory_* services.
+        assert 'container_checker' in waited
+        assert memory_services <= set(waited)
+
+        # All memory-service waits must occur strictly before monit reload.
+        reload_idx = next(i for i, e in enumerate(events) if e[0] == 'reload')
+        memory_wait_idxs = [
+            i for i, (kind, svc) in enumerate(events)
+            if kind == 'wait' and svc in memory_services
+        ]
+        assert memory_wait_idxs, "no wait recorded for container_memory_* services"
+        assert all(i < reload_idx for i in memory_wait_idxs)

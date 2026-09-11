@@ -79,7 +79,11 @@ def find_known_types_sec(pb2_obj, pb2_dict):
             field_type = field_descriptor.type
             if field_type == field_descriptor.TYPE_MESSAGE:
                 obj = getattr(proto_obj, field_name)
-                if field_descriptor.label == field_descriptor.LABEL_REPEATED:
+                if hasattr(field_descriptor, 'is_repeated'):
+                    is_repeated = field_descriptor.is_repeated
+                else:
+                    is_repeated = field_descriptor.label == field_descriptor.LABEL_REPEATED
+                if is_repeated:
                     process_rep_field(obj, proto_dict, field_name)
                 else:
                     process_msg_field(obj, proto_dict, field_name)

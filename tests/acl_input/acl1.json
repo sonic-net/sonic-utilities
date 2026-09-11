@@ -359,6 +359,30 @@
 						"name": "bmc_acl_northbound_v6"
 					}
 				},
+				"acl_noiptype": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "1"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "acl_noiptype"
+					}
+				},
 				"DATAACLV4V6": {
 					"acl-entries": {
 						"acl-entry": {

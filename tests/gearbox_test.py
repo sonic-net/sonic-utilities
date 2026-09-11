@@ -163,6 +163,23 @@ class TestInterfaceFecStats(TestCase):
         output = self._capture(port_name="EthernetInvalid", display_type='histogram')
         self.assertIn("Error", output)
 
+    def test_fec_histogram_last_updated_header(self):
+        output = self._capture(port_name="Ethernet0", display_type='histogram')
+        self.assertIn("Last Updated", output)
+
+    def test_fec_histogram_timestamp_formatted(self):
+        # Mock has S0_TIMESTAMP set to a non-zero ms value; format it the same way the script does
+        from datetime import datetime as _dt
+        ts_ms = 1716579600000
+        expected = _dt.fromtimestamp(ts_ms / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
+        output = self._capture(port_name="Ethernet0", display_type='histogram')
+        self.assertIn(expected, output)
+
+    def test_fec_histogram_zero_and_missing_timestamps_render_na(self):
+        # S1_TIMESTAMP is "0" (sentinel) and S2..S15 have no *_TIMESTAMP entry; all must render as N/A
+        output = self._capture(port_name="Ethernet0", display_type='histogram')
+        self.assertIn("N/A", output)
+
     @classmethod
     def teardown_class(cls):
         os.environ["UTILITIES_UNIT_TESTING"] = "0"

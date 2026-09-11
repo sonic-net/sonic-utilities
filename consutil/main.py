@@ -9,11 +9,24 @@
 try:
     import click
     import os
+    import pwd
     import sys
     import utilities_common.cli as clicommon
 
     from tabulate import tabulate
-    from .lib import *
+    from .lib import (
+        ConsolePortProvider,
+        ERR_CMD,
+        ERR_DEV,
+        LineNotFoundError,
+        MIRROR_DIRECTIONS,
+        console_connect,
+        get_target_line,
+        initialize_console_runtime,
+        require_root,
+        send_mirror_message,
+        validate_mirror_timeout_duration,
+    )
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
 
@@ -22,13 +35,7 @@ except ImportError as e:
 @clicommon.pass_db
 def consutil(db):
     """consutil - Command-line utility for interacting with switches via console device"""
-    config_db = db.cfgdb
-    data = config_db.get_entry(CONSOLE_SWITCH_TABLE, FEATURE_KEY)
-    if FEATURE_ENABLED_KEY not in data or data[FEATURE_ENABLED_KEY] == "no":
-        click.echo("Console switch feature is disabled")
-        sys.exit(ERR_DISABLE)
-
-    SysInfoProvider.init_device_prefix()
+    initialize_console_runtime(db)
 
 
 # 'show' subcommand
@@ -37,7 +44,7 @@ def consutil(db):
 @click.option('--brief', '-b', is_flag=True)
 def show(db, brief):
     """Show all ports and their info include available ttyUSB devices unless specified brief mode"""
-    port_provider = ConsolePortProvider(db, brief, refresh=True)  # noqa: F405
+    port_provider = ConsolePortProvider(db, brief, refresh=True)
     ports = list(port_provider.get_all())
 
     # sort ports for table rendering
@@ -75,7 +82,7 @@ def show(db, brief):
 @click.option('--brief', '-b', is_flag=True)
 def show_escape(db, brief):
     """Show all default and line escape char info include available ttyUSB devices unless specified brief mode"""
-    port_provider = ConsolePortProvider(db, brief, refresh=True)  # noqa: F405
+    port_provider = ConsolePortProvider(db, brief, refresh=True)
     ports = list(port_provider.get_all())
 
     # sort ports for table rendering
@@ -121,7 +128,6 @@ def clear(db, target, devicename):
     else:
         click.echo("Cleared line")
 
-
 # 'connect' subcommand
 @consutil.command()
 @clicommon.pass_db
@@ -130,33 +136,150 @@ def clear(db, target, devicename):
               help="connect by name - if flag is set, interpret target as device name instead")
 def connect(db, target, devicename):
     """Connect to switch via console device - TARGET is line number or device name of switch"""
-    # identify the target line
-    port_provider = ConsolePortProvider(db, configured_only=False)
-    try:
-        target_port = port_provider.get(target, use_device=devicename)
-    except LineNotFoundError:
-        click.echo("Cannot connect: target [{}] does not exist".format(target))
-        sys.exit(ERR_DEV)
+    console_connect(target, use_device=devicename, db=db)
 
-    line_num = target_port.line_num
 
-    # connect
-    try:
-        session = target_port.connect()
-    except LineBusyError:
-        click.echo("Cannot connect: line [{}] is busy".format(line_num))
-        sys.exit(ERR_BUSY)
-    except InvalidConfigurationError as cfg_err:
-        click.echo("Cannot connect: {}".format(cfg_err.message))
-        sys.exit(ERR_CFG)
-    except ConnectionFailedError:
-        click.echo("Cannot connect: unable to open picocom process")
-        sys.exit(ERR_DEV)
+# 'mirror' subcommand group
+@consutil.group()
+def mirror():
+    """Manage console mirror recording sessions"""
+    pass
 
-    # interact
-    click.echo("Successful connection to line [{}]\nPress ^{} ^X to disconnect"
-               .format(line_num, target_port.escape_char.upper() if target_port.escape_char is not None else "A"))
-    session.interact()
+
+# 'mirror start' subcommand
+@mirror.command("start")
+@clicommon.pass_db
+@click.argument("target")
+@click.option("--devicename", "-d", is_flag=True,
+              help="interpret target as device name instead of line number")
+@click.option(
+    "--direction",
+    type=click.Choice(MIRROR_DIRECTIONS),
+    default="both",
+    show_default=True,
+)
+@click.option("--timeout", callback=validate_mirror_timeout_duration,
+              help="auto-stop timeout, for example 30m, 2h, or 1d")
+@click.option("--max-file-size", type=click.IntRange(min=1, max=16777215),
+              help="maximum size of each recording part in MB")
+def mirror_start(db, target, devicename, direction, timeout, max_file_size):
+    """Start mirroring a console line"""
+    def _current_user():
+        sudo_user = os.environ.get("SUDO_USER")
+        if sudo_user:
+            return sudo_user
+        uid = os.getuid()
+        try:
+            return pwd.getpwuid(uid).pw_name
+        except KeyError:
+            return str(uid)
+
+    require_root()
+    line = get_target_line(db, target, use_device=devicename)
+    request = {
+        "op": "start",
+        "line": line,
+        "direction": direction,
+        "owner_pid": os.getpid(),
+        "started_by": _current_user(),
+    }
+    if timeout:
+        request["timeout"] = timeout
+    if max_file_size:
+        request["max_file_size"] = max_file_size
+
+    response = send_mirror_message(line, request)
+    click.echo("Started mirror on line [{}]".format(line))
+    click.echo("Recording file: {}".format(response.get("file_path", "-")))
+    click.echo("Auto-stop timeout: {}".format(response.get("timeout", "-")))
+    click.echo("Remaining: {}".format(response.get("remaining", "-")))
+
+
+# 'mirror stop' subcommand
+@mirror.command("stop")
+@clicommon.pass_db
+@click.argument("target")
+@click.option("--devicename", "-d", is_flag=True,
+              help="interpret target as device name instead of line number")
+@click.option("--archive", "-a", is_flag=True,
+              help="package all parts into a ZIP and remove source logs")
+def mirror_stop(db, target, devicename, archive):
+    """Stop mirroring a console line"""
+    require_root()
+    line = get_target_line(db, target, use_device=devicename)
+    request = {"op": "stop", "line": line, "archive": archive}
+    if archive:
+        def show_progress(first_msg):
+            click.echo(
+                "Stopped mirror on line [{}]; packaging recording".format(line))
+            click.echo("Expected archive: {}".format(
+                first_msg.get("archive_path", "-")))
+            click.echo("Waiting for packaging to complete...")
+            click.echo("")
+        _, final = send_mirror_message(
+            line, request, wait_for_final=True, on_first_reply=show_progress)
+        click.echo("Recording archive: {}".format(
+            final.get("archive_path", "-")))
+    else:
+        response = send_mirror_message(line, request)
+        click.echo("Stopped mirror on line [{}]".format(line))
+        click.echo("Recording files retained with prefix:")
+        click.echo(response.get("recording_prefix", "-"))
+
+
+# 'mirror timeout' subcommand
+@mirror.command("timeout")
+@clicommon.pass_db
+@click.argument("target")
+@click.argument("duration", callback=validate_mirror_timeout_duration)
+@click.option("--devicename", "-d", is_flag=True,
+              help="interpret target as device name instead of line number")
+def mirror_timeout(db, target, duration, devicename):
+    """Update a console mirror timeout"""
+    require_root()
+    line = get_target_line(db, target, use_device=devicename)
+    request = {"op": "timeout", "line": line, "timeout": duration}
+    response = send_mirror_message(line, request)
+    click.echo("Updated mirror timeout on line [{}]".format(line))
+    click.echo("Timeout: {}".format(response.get("timeout", "-")))
+    click.echo("Remaining: {}".format(response.get("remaining", "-")))
+
+
+# 'mirror show' subcommand
+@mirror.command("show")
+@clicommon.pass_db
+@click.argument("target", required=False)
+@click.option("--devicename", "-d", is_flag=True,
+              help="interpret target as device name instead of line number")
+def mirror_show(db, target, devicename):
+    """Show console mirror status"""
+    require_root()
+    if target:
+        lines = [get_target_line(db, target, use_device=devicename)]
+    else:
+        port_provider = ConsolePortProvider(db, configured_only=True)
+        lines = sorted(
+            [port.line_num for port in port_provider.get_all()], key=lambda line: int(line))
+
+    rows = []
+    for line in lines:
+        try:
+            status = send_mirror_message(
+                line, {"op": "status", "line": line}, quiet=True)
+        except (OSError, RuntimeError):
+            status = {"line": line, "state": "error"}
+        rows.append([
+            line,
+            status.get("state", "idle"),
+            status.get("start_time") or "-",
+            status.get("direction") or "-",
+            status.get("timeout") or "-",
+            status.get("remaining") or "-",
+            status.get("file_path") or "-",
+        ])
+
+    click.echo(tabulate(rows, ["Line", "State", "Start Time",
+               "Direction", "Timeout", "Remaining", "File"]))
 
 
 if __name__ == '__main__':

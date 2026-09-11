@@ -515,7 +515,8 @@ def check_existing_tunnel():
 def add_vxlan_tunnel(dst_ipv4_addr):
     vxlan_tunnel_info = {
         'src_ip': get_loopback_addr(4),
-        'dst_ip': dst_ipv4_addr
+        'dst_ip': dst_ipv4_addr,
+        'ttl_mode': 'pipe'
     }
 
     config_db.set_entry('VXLAN_TUNNEL', VXLAN_TUNNEL_NAME, vxlan_tunnel_info)
@@ -608,4 +609,3 @@ if __name__ == '__main__':
     except Exception as e:
         log.log_error('! [Failure] {} {}'.format(e, traceback.format_exc()))
         sys.exit(1)
-

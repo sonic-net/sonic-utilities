@@ -23,6 +23,7 @@ WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
+HWSKU=$(sonic-db-cli CONFIG_DB HGET "DEVICE_METADATA|localhost" "hwsku")
 PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
 LOG_SSD_HEALTH="/usr/local/bin/log_ssd_health"
 SSD_UTIL="/usr/local/bin/ssdutil"
@@ -62,6 +63,27 @@ MIN_HD_SPACE_NEEDED=$((100000 * $NUM_ASIC)) # 100M * NUM_ASIC
 
 # List of ASICs that perform the reboot
 ASIC_LIST=($(seq 0 $(( NUM_ASIC - 1))))
+
+function record_reboot_marker()
+{
+    # Persist a best-effort marker recording the reboot we are about to perform. Stored
+    # under /host so it survives the reboot; postupgrade_actions may read it to correlate
+    # a hardware-induced fault with a user-issued warm/fast/express reboot.
+    #
+    # NOTE: This file persists across reboots, so readers MUST treat it as potentially stale
+    # unless it is explicitly cleared after processing (or cleared by non-warm reboot paths).
+    # Best-effort: never block the reboot if writing the flag fails (script runs with -e).
+    local REBOOT_FLAG_FILE="/host/reboot-cause/warm-reboot-flag.txt"
+    rm -f "${REBOOT_FLAG_FILE}" || true
+    mkdir -p "$(dirname "${REBOOT_FLAG_FILE}")" || true
+    {
+        # reboot_type = user-invoked command (warm-/fast-/express-reboot); reboot_type_effective
+        # = the internal type actually run (may differ, e.g. fastfast-reboot on Mellanox warm).
+        echo "reboot_type=\"${REBOOT_SCRIPT_NAME}\""
+        echo "reboot_type_effective=\"${REBOOT_TYPE}\""
+        echo "reboot_time=\"${REBOOT_TIME}\""
+    } > "${REBOOT_FLAG_FILE}" || true
+}
 
 function error()
 {
@@ -133,7 +155,7 @@ function execute_in_namespaces()
             wait "$pid" && rc=0 || rc=$?
             # If the command failed, remove the ASIC from the list
             if [[ $rc -ne 0 ]]; then
-                error "Command $cmd failed for $dev returned $rc"
+                error "Command $cmd failed for asic$dev returned $rc"
                 if [[ $FORCE == "no" ]]; then
                     exit $rc
                 else
@@ -141,7 +163,7 @@ function execute_in_namespaces()
                     # Remove failed ASIC from the list
                     ASIC_LIST=(${ASIC_LIST[@]/$dev})
                     # Disable fast/warm-reboot for the failed ASIC
-                    sonic-db-cli -n "asic$dev" HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
+                    sonic-db-cli -n "asic$dev" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
                     config warm_restart disable system -n "asic$dev" &>/dev/null || /bin/true
                 fi
             fi
@@ -320,7 +342,11 @@ function filter_asic_list()
         for asic in "${ASIC_LIST[@]}"; do
             local skip=0
             for skip_asic in "${SKIP_ASICS[@]}"; do
-                if [[ $asic -eq $skip_asic ]]; then
+                if [[ ! " ${ASIC_LIST[@]} " =~ " ${skip_asic} " ]]; then
+                    error "Invalid ASIC number to skip: ${skip_asic}, valid ASIC numbers are: ${ASIC_LIST[@]}"
+                    exit "${EXIT_FAILURE}"
+                fi
+                if [[ "$asic" == "$skip_asic" ]]; then
                     skip=1
                     break
                 fi
@@ -336,6 +362,12 @@ function filter_asic_list()
         # Log the skipped ASICs
         debug "Skipping warm-reboot on ASICs: ${SKIP_ASIC_LIST}"
     fi
+}
+
+function clear_fast_boot_table()
+{
+    #update FAST_RESTART_ENABLE_TABLE to false
+    sonic-db-cli -n "$NETNS" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
 }
 
 function clear_boot()
@@ -363,10 +395,7 @@ function clear_boot()
         fi
     done
 
-    #clear_fast_boot
-    if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
-        sonic-db-cli STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
-    fi
+    execute_in_namespaces all clear_fast_boot_table
 }
 
 function init_warm_reboot_states()
@@ -622,7 +651,6 @@ function is_secureboot() {
 function setup_reboot_variables()
 {
     # Kernel and initrd image
-    HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
     CURR_SONIC_IMAGE=$(sonic-installer list | grep "Current: " | cut -d ' ' -f 2)
     NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
     IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
@@ -965,25 +993,67 @@ fi
 
 check_conflict_boot_in_fw_update
 
+function enable_fast_boot()
+{
+    sonic-db-cli -n "$NETNS" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "true" &>/dev/null || /bin/true
+    config warm_restart enable -n "$NETNS" system
+}
 
 # Check reboot type supported
 BOOT_TYPE_ARG="cold"
 case "$REBOOT_TYPE" in
     "fast-reboot")
-        check_warm_restart_in_progress
+        execute_in_namespaces all check_warm_restart_in_progress
         BOOT_TYPE_ARG=$REBOOT_TYPE
         trap clear_boot EXIT HUP INT QUIT TERM KILL ABRT ALRM
-        sonic-db-cli STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "true" &>/dev/null
-        config warm_restart enable system
+        execute_in_namespaces all enable_fast_boot
         ;;
     "warm-reboot")
         execute_in_namespaces all check_warm_restart_in_progress
         if [[ "$sonic_asic_type" == "mellanox" ]]; then
-            REBOOT_TYPE="fastfast-reboot"
-            BOOT_TYPE_ARG="fastfast"
-            # source mlnx-ffb.sh file with
-            # functions to check ISSU upgrade possibility
-            source mlnx-ffb.sh
+            HWSKU_DIR="${DEVPATH}/${PLATFORM}/${HWSKU}"
+            SAI_PROFILE="${HWSKU_DIR}/sai.profile"
+
+            if [[ ! -f "${SAI_PROFILE}" ]]; then
+                error "Failed to find SAI profile: ${SAI_PROFILE}"
+                exit "${EXIT_FAILURE}"
+            fi
+
+            SAI_INIT_CONFIG_FILE=$(awk -F= '/^SAI_INIT_CONFIG_FILE=/{print $2; exit}' "${SAI_PROFILE}")
+            SAI_INIT_CONFIG_FILE="${HWSKU_DIR}/$(basename "${SAI_INIT_CONFIG_FILE}")"
+
+            if [[ ! -f "${SAI_INIT_CONFIG_FILE}" ]]; then
+                error "Failed to resolve SAI XML from ${SAI_PROFILE}"
+                exit "${EXIT_FAILURE}"
+            fi
+
+            NVIDIA_WARMBOOT_MODE=$(
+                sed -n 's:.*<issu-enabled>\([0-9]*\)</issu-enabled>.*:\1:p' "${SAI_INIT_CONFIG_FILE}" |
+                head -n1
+            )
+
+            case "${NVIDIA_WARMBOOT_MODE}" in
+                2)
+                    debug "Starting NVIDIA warmboot"
+                    BOOT_TYPE_ARG="warm"
+                    ;;
+                1)
+                    debug "Starting NVIDIA fastfastboot"
+                    REBOOT_TYPE="fastfast-reboot"
+                    BOOT_TYPE_ARG="fastfast"
+                    # source mlnx-ffb.sh file with
+                    # functions to check NVIDIA fastfast upgrade possibility
+                    source mlnx-ffb.sh
+                    ;;
+                0)
+                    error "NVIDIA warmboot is disabled"
+                    exit "${EXIT_NOT_SUPPORTED}"
+                    ;;
+                *)
+                    error "Invalid NVIDIA warmboot mode: ${NVIDIA_WARMBOOT_MODE}"
+                    exit "${EXIT_FAILURE}"
+                    ;;
+            esac
         else
             BOOT_TYPE_ARG="warm"
         fi
@@ -1137,7 +1207,7 @@ function pause_orchagent()
     docker exec -i swss$DEV /usr/bin/orchagent_restart_check -w 2000 -r 5 > /dev/null || RESTARTCHECK_RC=$?
     if [[ RESTARTCHECK_RC -ne 0 ]]; then
         error "RESTARTCHECK failed"
-        if [[ x"${FORCE}" == x"yes" ]]; then
+        if [[ x"${FORCE}" == x"yes" && $NUM_ASIC -eq 1 ]]; then
             debug "Ignoring orchagent pausing failure ..."
         else
             exit "${EXIT_ORCHAGENT_SHUTDOWN}"
@@ -1164,16 +1234,22 @@ fi
 # service will go down and we cannot recover from it.
 set +e
 
-if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
-    # Clear all routes except of default and connected routes for faster reconciliation time.
+
+function filter_routes()
+{
     debug "Clearing routes..."
     FILTER_ROUTES=0
-    python /usr/local/bin/fast-reboot-filter-routes.py || FILTER_ROUTES=$?
-    if [[ FILTER_ROUTES -ne 0 ]]; then
+    python /usr/local/bin/fast-reboot-filter-routes.py -n "$NETNS" || FILTER_ROUTES=$?
+    if [[ $FILTER_ROUTES -ne 0 ]]; then
         error "Preserving connected and default routes failed."
     else
         debug "Routes deleted from APP-DB, default and connected routes preserved."
     fi
+}
+
+if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
+    # Clear all routes except of default and connected routes for faster reconciliation time.
+    execute_in_namespaces asic filter_routes
 fi
 
 # disable trap-handlers which were set before
@@ -1243,6 +1319,10 @@ fi
 # Upon next boot, the contents of this file will be used to determine the
 # cause of the previous reboot
 echo "User issued '${REBOOT_SCRIPT_NAME}' command [User: ${REBOOT_USER}, Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+
+# Record the reboot type so postupgrade_actions can detect a hardware fault that
+# occurred during this warm/fast/express reboot.
+record_reboot_marker
 
 # Wait until all buffers synced with disk
 sync

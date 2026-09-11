@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from generic_config_updater.services_validator import (
+    command_wrapper,
     vlan_validator,
     rsyslog_validator,
     caclmgrd_validator,
@@ -374,6 +375,51 @@ test_telemetry_data = [
 
 class TestServiceValidator(unittest.TestCase):
 
+    @patch("generic_config_updater.services_validator.logger")
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_command_wrapper_logs_stable_command_format(self, mock_subprocess, mock_logger):
+        mock_subprocess.return_value = MockSubprocessResult(1)
+
+        result = command_wrapper(["systemctl", "restart", "dhcp_relay"])
+
+        self.assertEqual(result, 1)
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command failed: 'nsenter --target 1 --pid --mount --uts --ipc --net "
+            "systemctl restart dhcp_relay', returncode: 1",
+            False
+        )
+
+        mock_logger.reset_mock()
+        mock_subprocess.side_effect = OSError("execution error")
+
+        result = command_wrapper(["systemctl", "restart", "dhcp_relay"])
+
+        self.assertEqual(result, 1)
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command execution failed: 'nsenter --target 1 --pid --mount --uts --ipc --net "
+            "systemctl restart dhcp_relay', error: execution error",
+            False
+        )
+
+    @patch("generic_config_updater.services_validator.logger")
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_command_wrapper_handles_command_formatting_error(self, mock_subprocess, mock_logger):
+        with patch(
+            "generic_config_updater.services_validator.shlex.quote",
+            side_effect=TypeError("formatting error")
+        ):
+            result = command_wrapper(["echo", "value"])
+
+        self.assertEqual(result, 1)
+        mock_subprocess.assert_not_called()
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command execution failed: '['echo', 'value']', error: formatting error",
+            False
+        )
+
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_change_apply_subprocess_run(self, mock_subprocess):
         global subprocess_calls, subprocess_call_index
@@ -495,6 +541,20 @@ class TestServiceValidator(unittest.TestCase):
             msg = "case failed: {}".format(str(entry))
 
             caclmgrd_validator(entry["old"], entry["upd"], None)
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_vlanintf_validator_ignores_invalid_keys(self, mock_subprocess):
+        old_config = {
+            "VLAN_INTERFACE": {
+                "VlanNameThatIsTooLong|192.168.0.1/24": {},
+                "Vlan1000|invalid": {},
+            }
+        }
+
+        result = vlanintf_validator(old_config, {}, None)
+
+        self.assertTrue(result)
+        mock_subprocess.assert_not_called()
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_vlanintf_validator_failure_vlan_not_found(self, mock_subprocess):

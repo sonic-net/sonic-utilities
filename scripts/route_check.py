@@ -76,9 +76,16 @@ MIN_SCAN_INTERVAL = 10      # Every 10 seconds
 MAX_SCAN_INTERVAL = 3600    # An hour
 
 PRINT_MSG_LEN_MAX = 1000
+PRINT_MSG_TRUNCATION_SUFFIX = " ... (truncated)"
 
 FRR_CHECK_RETRIES = 3
 FRR_WAIT_TIME = 15
+
+# How long to wait for vtysh to exit once we have closed the read end
+VTYSH_EXIT_TIMEOUT_SECONDS = 10
+
+# How long to wait for the direct child to be reaped after we SIGKILL it
+SIGKILL_REAP_TIMEOUT_SECONDS = 3
 
 REDIS_TIMEOUT_MSECS = 0
 
@@ -129,15 +136,23 @@ def print_message(lvl, *args, write_to_stdout=True):
     :param lvl: Log level for this message as ERR/INFO/DEBUG
     :param args: message as list of strings or convertible to string
     :param write_to_stdout: print the message to stdout if set to true
-    :return None
+    :return msg string (may be truncated)
     """
     msg = ""
+    truncated = False
     if (lvl <= report_level):
         for arg in args:
             rem_len = PRINT_MSG_LEN_MAX - len(msg)
             if rem_len <= 0:
+                truncated = True
                 break
-            msg += str(arg)[0:rem_len]
+            s = str(arg)
+            if len(s) > rem_len:
+                truncated = True
+            msg += s[0:rem_len]
+
+        if truncated and PRINT_MSG_LEN_MAX > len(PRINT_MSG_TRUNCATION_SUFFIX):
+            msg = msg[:PRINT_MSG_LEN_MAX - len(PRINT_MSG_TRUNCATION_SUFFIX)] + PRINT_MSG_TRUNCATION_SUFFIX
 
         if write_to_stdout:
             print(msg)
@@ -417,39 +432,83 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
         if not route_entry.get('selected', False):
             return
         if not route_entry.get('offloaded', False):
-            missing_routes.append(prefix)
+            missing_routes.append({'prefix': prefix, 'protocol': route_entry.get('protocol', '')})
         if route_entry.get('failed', False):
             failing_routes.append(prefix)
 
     try:
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
+        # Deliberately not used as a context manager: Popen.__exit__ ends in an
+        # unbounded wait(), which is the hang this whole change removes. Every
+        # wait() below is bounded.
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0)
+        completed = False
+        return_code = None
+        try:
+            # Use ijson to parse the JSON stream incrementally
+            # kvitems('') iterates over key-value pairs at the root level
+            # This gives us each prefix and its route entries as they become available
+            for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
+                # Process each route entry for this prefix
+                if isinstance(route_entries, list):
+                    for route_entry in route_entries:
+                        process_route_entry(prefix, route_entry)
+                else:
+                    # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
+                    print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+            completed = True
+
+        except Exception as e:
+            # Parse errors are logged and swallowed, exactly as before: this
+            # returns whatever it managed to parse.
+            print_message(syslog.LOG_WARNING, f"Error while parsing vtysh JSON stream: {e}")
+        finally:
+            # Closing the read end is what releases the chain, and it has to
+            # happen before any wait(). An abandoned read leaves vtysh blocked
+            # in write() with megabytes still queued; closing makes that write
+            # fail with EPIPE, so vtysh, the /usr/bin/vtysh wrapper and the
+            # docker exec client all unwind and the exec session is released.
+            # Waiting first is the deadlock this change removes.
+            # A finally (not a flag) so KeyboardInterrupt takes this path too.
+            if proc.stdout:
+                proc.stdout.close()
             try:
-                # Use ijson to parse the JSON stream incrementally
-                # kvitems('') iterates over key-value pairs at the root level
-                # This gives us each prefix and its route entries as they become available
-                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
-                    # Process each route entry for this prefix
-                    if isinstance(route_entries, list):
-                        for route_entry in route_entries:
-                            process_route_entry(prefix, route_entry)
-                    else:
-                        # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
-                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+                # In the same finally so the child is reaped even while a
+                # KeyboardInterrupt is propagating, which would otherwise skip
+                # this and leave the direct child a zombie. Bounded: nothing
+                # left to wait on, and fetch_routes runs on a worker thread the
+                # SIGALRM watchdog cannot interrupt, so it must not block here.
+                return_code = proc.wait(timeout=VTYSH_EXIT_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                # Closing only releases a process that goes on to write. One
+                # hung without writing needs the signal, and route_check runs
+                # on a timer, so walking away would leak a child per timeout.
+                #
+                # This reaches the direct child only: sudo does not propagate
+                # SIGKILL, so the /usr/bin/vtysh wrapper and the docker exec
+                # client below it are not covered. Reaching those would need
+                # the process group, which this function deliberately does not
+                # use - os.killpg() cannot signal the root-owned processes sudo
+                # spawns unless route_check is root, and kill(-pgid) reports
+                # success as long as it reached sudo, so the failure is silent.
+                # Whatever it does not cover still unwinds by itself the moment
+                # it writes into the pipe we closed above.
+                print_message(syslog.LOG_ERR,
+                              f"vtysh (pid {proc.pid}) did not exit; killing the direct child")
+                proc.kill()
+                try:
+                    # Leave return_code as None: the exit code from here on is
+                    # our own SIGKILL, not something vtysh should be judged by.
+                    proc.wait(timeout=SIGKILL_REAP_TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    print_message(syslog.LOG_ERR,
+                                  f"vtysh (pid {proc.pid}) survived SIGKILL; abandoning")
+            # Never return from here: a return inside finally would swallow an
+            # in-flight KeyboardInterrupt.
 
-            except ijson.JSONError as e:
-                # Handle JSON parsing errors
-                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
-            except UnicodeDecodeError as e:
-                # Handle UTF-8 decoding errors
-                print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
-            except Exception as e:
-                # Handle any other unexpected errors during parsing
-                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
-
-            # Wait for the process to terminate and get the return code
-            return_code = proc.wait()
-            if return_code != 0:
-                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
+        # After an abandoned read vtysh dies of SIGPIPE, which sudo reports as
+        # 141. That is this function's own doing, not a vtysh failure.
+        if completed and return_code not in (None, 0):
+            print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
 
     except FileNotFoundError:
         print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
@@ -662,7 +721,7 @@ def filter_out_vnet_routes(namespace, routes):
 
     for vnet_route_db_key in vnet_routes_db_keys:
         vnet_route_attrs = vnet_route_db_key.split(':', 1)
-        vnet_route = vnet_route_attrs[1]
+        vnet_route = add_prefix_ifnot(vnet_route_attrs[1].lower())
         vnet_routes.append(vnet_route)
 
     updated_routes = []
@@ -733,20 +792,45 @@ def is_feature_bgp_enabled(namespace):
 
 def check_frr_pending_routes(namespace):
     """
-    Check FRR routes for offload flag presence by executing "show ip route json"
-    Returns a list of routes that have no offload flag.
+    Check FRR routes for offload flag presence by executing "show ip route json".
+    Returns lists of routes that are persistently non-offloaded across all retry
+    iterations (intersection logic).
+
+    Intersection approach: only routes that appear as stuck in *every* poll
+    are returned for mitigation.  A route that clears between iterations is
+    converging normally and should not be mitigated.
     """
+    acc_miss = []
+    acc_fail = []
 
-    missed_rt = []
-    failed_rt = []
-    retries = FRR_CHECK_RETRIES
-    for i in range(retries):
-        missed_rt, failed_rt = get_frr_routes_parallel(namespace)
+    for i in range(FRR_CHECK_RETRIES):
+        curr_miss, curr_fail = get_frr_routes_parallel(namespace)
 
-        if not missed_rt and not failed_rt:
+        if i == 0:
+            acc_miss = curr_miss
+            acc_fail = curr_fail
+        else:
+            curr_miss_set = {entry['prefix'] for entry in curr_miss}
+            curr_fail_set = set(curr_fail)
+            acc_miss = [entry for entry in acc_miss if entry['prefix'] in curr_miss_set]
+            acc_fail = [prefix for prefix in acc_fail if prefix in curr_fail_set]
+
+        if not acc_miss and not acc_fail:
             break
 
-        time.sleep(FRR_WAIT_TIME)
+        if i < FRR_CHECK_RETRIES - 1:
+            time.sleep(FRR_WAIT_TIME)
+
+    missed_rt = acc_miss
+    failed_rt = acc_fail
+
+    excluded_miss = {entry['prefix'] for entry in curr_miss} - {entry['prefix'] for entry in acc_miss}
+    excluded_fail = set(curr_fail) - set(acc_fail)
+    if excluded_miss or excluded_fail:
+        print_message(syslog.LOG_DEBUG,
+                      f"Routes pending in final poll but excluded by intersection "
+                      f"(not mitigated): missed={excluded_miss} failed={excluded_fail}")
+
     print_message(syslog.LOG_DEBUG, f"FRR missed routes: {missed_rt}")
     print_message(syslog.LOG_DEBUG, f"FRR failed routes: {failed_rt}")
     return missed_rt, failed_rt
@@ -888,6 +972,8 @@ def check_routes_for_namespace(namespace):
     rt_frr_miss = []
     rt_frr_failed = []
 
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
+
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
     rt_appl = get_appdb_routes(namespace)
@@ -945,8 +1031,6 @@ def check_routes_for_namespace(namespace):
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
-    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
-
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
 
@@ -964,6 +1048,16 @@ def check_routes_for_namespace(namespace):
                           : {}".format(namespace, rt_frr_failed))
 
     return results, adds, deletes
+
+
+def summarize_results(results):
+    """
+    Summarize mismatch results by counting entries per namespace/category.
+    :param results: dict of {namespace: {category: [entries]}}
+    :return dict of {namespace: {category: count}}
+    """
+    return {ns: {k: len(v) for k, v in entries.items()}
+            for ns, entries in results.items()}
 
 
 def check_routes(namespace):
@@ -1000,6 +1094,8 @@ def check_routes(namespace):
                 return -1, results
 
     if results:
+        print_message(syslog.LOG_WARNING, "Route mismatch counts: ",
+                      json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
         print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
         print_message(syslog.LOG_WARNING, "add: ", json.dumps(all_adds, indent=4))
@@ -1070,6 +1166,8 @@ def check_sids(namespace):
                 return -1, results
 
     if results:
+        print_message(syslog.LOG_WARNING, "SID mismatch counts: ",
+                      json.dumps(summarize_results(results), separators=(",", ":")))
         print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
         return -1, results
     else:

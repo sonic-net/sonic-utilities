@@ -111,7 +111,19 @@ QSFP_DD_DATA_MAP = {
     'supported_max_tx_power': 'Supported Max TX Power',
     'supported_min_tx_power': 'Supported Min TX Power',
     'supported_max_laser_freq': 'Supported Max Laser Frequency',
-    'supported_min_laser_freq': 'Supported Min Laser Frequency'
+    'supported_min_laser_freq': 'Supported Min Laser Frequency',
+    'els_identifier': 'ELS Identifier',
+    'els_revision': 'ELS Revision',
+    'els_laser_count': 'ELS Laser Count',
+    'els_vendor_name': 'ELS Vendor Name',
+    'els_vendor_oui': 'ELS Vendor OUI',
+    'els_vendor_pn': 'ELS Vendor PN',
+    'els_vendor_rev': 'ELS Vendor Rev',
+    'els_vendor_sn': 'ELS Vendor SN',
+    'els_date_code': 'ELS Vendor Date Code(YYYY-MM-DD Lot)',
+    'els_max_power': 'ELS Maximum Power Consumption',
+    'rlm_laser_lpmode_control': 'RLM Laser Lpower Mode Control',
+    'rlm_laser_wavelength_grid': 'RLM Laser Wavelength Grid',
 }
 
 SFP_DOM_CHANNEL_MONITOR_MAP = {
@@ -204,6 +216,28 @@ DOM_MODULE_MONITOR_MAP = {
     'voltage': 'Vcc'
 }
 
+ELS_DOM_MONITOR_MAP = {
+    'els_temperature': 'ELS Temperature',
+    'els_voltage': 'ELS Vcc',
+}
+
+ELS_THRESHOLD_MAP = {
+    'els_temphighalarm': 'ELS TempHighAlarm',
+    'els_templowalarm': 'ELS TempLowAlarm',
+    'els_temphighwarning': 'ELS TempHighWarning',
+    'els_templowwarning': 'ELS TempLowWarning',
+    'els_vcchighalarm': 'ELS VccHighAlarm',
+    'els_vcclowalarm': 'ELS VccLowAlarm',
+    'els_vcchighwarning': 'ELS VccHighWarning',
+    'els_vcclowwarning': 'ELS VccLowWarning',
+    'els_txpowerhighalarm': 'ELS TxPowerHighAlarm',
+    'els_txpowerlowalarm': 'ELS TxPowerLowAlarm',
+    'els_txpowerhighwarning': 'ELS TxPowerHighWarning',
+    'els_txpowerlowwarning': 'ELS TxPowerLowWarning',
+    'els_txbiashighalarm': 'ELS TxBiasHighAlarm',
+    'els_txbiashighwarning': 'ELS TxBiasHighWarning'
+}
+
 DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
     'txpowerhighalarm':   'dBm',
     'txpowerlowalarm':    'dBm',
@@ -228,6 +262,28 @@ DOM_MODULE_THRESHOLD_UNIT_MAP = {
     'vcclowalarm':     'Volts',
     'vcchighwarning':  'Volts',
     'vcclowwarning':   'Volts'
+}
+
+ELS_DOM_MONITOR_UNIT_MAP = {
+    'els_temperature': 'C',
+    'els_voltage': 'Volts',
+}
+
+ELS_THRESHOLD_UNIT_MAP = {
+    'els_temphighalarm': 'C',
+    'els_templowalarm': 'C',
+    'els_temphighwarning': 'C',
+    'els_templowwarning': 'C',
+    'els_vcchighalarm': 'Volts',
+    'els_vcclowalarm': 'Volts',
+    'els_vcchighwarning': 'Volts',
+    'els_vcclowwarning': 'Volts',
+    'els_txpowerhighalarm': 'mW',
+    'els_txpowerlowalarm': 'mW',
+    'els_txpowerhighwarning': 'mW',
+    'els_txpowerlowwarning': 'mW',
+    'els_txbiashighalarm': 'mA',
+    'els_txbiashighwarning': 'mA'
 }
 
 DOM_VALUE_UNIT_MAP = {
@@ -453,6 +509,30 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
             module_threshold_align)
         output_dom += output_module_threshold
 
+        # This is specific for CPO DOM value parsing.
+        is_cpo = sfp_type.startswith('CPO')
+        if is_cpo:
+            laser_keys = [key for key in dom_info_dict if key.startswith('RLM') and 'Laser' in key]
+            dom_monitor_map = ELS_DOM_MONITOR_MAP.copy()
+            dom_monitor_map.update({key: key for key in laser_keys})
+            dom_monitor_unit_map = ELS_DOM_MONITOR_UNIT_MAP.copy()
+            dom_monitor_unit_map.update({key: '' for key in laser_keys})  # laser monitor values include units
+            output_dom += (indent + 'ELSMonitorValues:\n')
+            sorted_key_table = natsorted(dom_monitor_map)
+            output_els_monitor = format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                dom_monitor_map,
+                dom_monitor_unit_map)
+            output_dom += output_els_monitor
+
+            # Threshold
+            output_dom += (indent + 'ELSThresholdValues:\n')
+            sorted_key_table = natsorted(ELS_THRESHOLD_MAP)
+            output_els_threshold = format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                ELS_THRESHOLD_MAP,
+                ELS_THRESHOLD_UNIT_MAP)
+            output_dom += output_els_threshold
     else:
         output_dom += (indent + 'MonitorData:\n')
         sorted_key_table = natsorted(SFP_DOM_CHANNEL_MONITOR_MAP)
@@ -692,36 +772,41 @@ def eeprom(port, dump_dom, namespace):
                     click.echo("Sfp.get_transceiver_info() is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                output += convert_sfp_info_to_output_string(xcvr_info)
+                if xcvr_info is None:
+                    output += "{}{}\n".format(' ' * 8, "Error: Failed to read EEPROM for this port")
+                else:
+                    output += convert_sfp_info_to_output_string(xcvr_info)
 
-                if dump_dom:
-                    try:
-                        api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
-                    except NotImplementedError:
-                        output += "API is currently not implemented for this platform\n"
-                        click.echo(output)
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
-                    if api is None:
-                        output += "API is none while getting DOM info!\n"
-                        click.echo(output)
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
-                    try:
-                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
-                    except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
-                                   "for this platform")
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                    if dump_dom:
+                        try:
+                            api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
+                        except NotImplementedError:
+                            output += "API is currently not implemented for this platform\n"
+                            click.echo(output)
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                        if api is None:
+                            output += "API is none while getting DOM info!\n"
+                            click.echo(output)
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                        try:
+                            xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
+                        except NotImplementedError:
+                            click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
+                                       "for this platform")
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    try:
-                        xcvr_dom_threshold_info = platform_chassis.get_sfp(physical_port).get_transceiver_threshold_info()
-                        if xcvr_dom_threshold_info:
-                            xcvr_dom_info.update(xcvr_dom_threshold_info)
-                    except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_threshold_info() is currently not implemented for this platform")
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                        try:
+                            xcvr_dom_threshold_info = platform_chassis.get_sfp(
+                                physical_port).get_transceiver_threshold_info()
+                            if xcvr_dom_threshold_info:
+                                xcvr_dom_info.update(xcvr_dom_threshold_info)
+                        except NotImplementedError:
+                            click.echo("Sfp.get_transceiver_threshold_info() is currently "
+                                       "not implemented for this platform")
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    output += convert_dom_to_output_string(xcvr_info['type'],
-                                                           is_sfp_cmis, xcvr_dom_info)
+                        output += convert_dom_to_output_string(xcvr_info['type'],
+                                                               is_sfp_cmis, xcvr_dom_info)
 
             output += '\n'
 
@@ -1204,6 +1289,9 @@ def show_firmware_version(physical_port):
     try:
         sfp = platform_chassis.get_sfp(physical_port)
         api = sfp.get_xcvr_api()
+        if api is None:
+            click.echo("Error: Failed to access transceiver EEPROM")
+            sys.exit(EXIT_FAIL)
         out = api.get_module_fw_info()
         click.echo(out['info'])
     except NotImplementedError:
@@ -1290,6 +1378,9 @@ def set_lpmode(logical_port, enable, use_lpmode_pin=False):
 
         i += 1
 
+
+# 'show' subcommand — alias of `sfputil show lpmode`
+lpmode.add_command(show.commands['lpmode'], name='show')
 
 # 'off' subcommand
 @lpmode.command()
@@ -1431,6 +1522,10 @@ def update_firmware_info_to_state_db(port_name):
 def firmware():
     """Download/Upgrade firmware on the transceiver"""
     pass
+
+
+# 'show' subcommand — alias of `sfputil show fwversion`
+firmware.add_command(show.commands['fwversion'], name='show')
 
 def run_firmware(port_name, mode):
     """

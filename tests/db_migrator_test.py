@@ -166,7 +166,15 @@ class TestMellanoxBufferMigrator(object):
                               'non-default-xoff',
                               'non-default-lossless-profile-in-pg',
                               'non-default-lossy-profile-in-pg',
-                              'non-default-pg'
+                              'non-default-pg',
+                              # An explicit buffer_model=dynamic must survive migration on any SKU for which
+                              # dynamic is not the default-traditional model, ie. non "Mellanox-" prefixed SKUs
+                              # and the SKUs listed in mellanox_buffer_migrator.dynamic_model_skus.
+                              'non-default-config-dynamic-acs',
+                              'non-default-config-dynamic-nvidia',
+                              # A "Mellanox-" prefixed SKU outside that list is still forced to traditional
+                              'non-default-config-dynamic-mellanox',
+                              'non-default-config-traditional-acs'
                              ])
     def test_mellanox_buffer_migrator_negative_cold_reboot(self, scenario):
         db_before_migrate = scenario + '-input'
@@ -267,6 +275,22 @@ class TestMellanoxBufferMigrator(object):
         input_config_db = 'non-default-config-input'
         input_appl_db = 'non-default-input'
         self.mellanox_buffer_migrator_warm_reboot_runner(input_config_db, input_appl_db, expected_config_db, expected_appl_db, False)
+
+    def test_mellanox_buffer_migrator_dynamic_preserved_for_warm_reboot(self):
+        """
+        mlnx_flush_new_buffer_configuration is reached from the warm reboot path as well,
+        verify the explicit buffer_model=dynamic is preserved there too
+        """
+        device_info.get_sonic_version_info = get_sonic_version_info_mlnx
+        expected_config_db = 'non-default-config-dynamic-acs-expected'
+        expected_appl_db = 'non-default-expected'
+        input_config_db = 'non-default-config-dynamic-acs-input'
+        input_appl_db = 'non-default-input'
+        self.mellanox_buffer_migrator_warm_reboot_runner(input_config_db,
+                                                         input_appl_db,
+                                                         expected_config_db,
+                                                         expected_appl_db,
+                                                         is_buffer_config_default_expected=False)
 
     @pytest.mark.parametrize('buffer_model', ['traditional', 'dynamic'])
     @pytest.mark.parametrize('ingress_pools', ['double-pools', 'single-pool'])

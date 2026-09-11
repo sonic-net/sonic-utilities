@@ -16,7 +16,7 @@ class TestMultiAsicPatchApplier(unittest.TestCase):
 
     @patch('generic_config_updater.gu_common.ConfigWrapper.get_empty_tables', return_value=[])
     @patch('generic_config_updater.gu_common.ConfigWrapper.get_config_db_as_json')
-    @patch('generic_config_updater.gu_common.PatchWrapper.simulate_patch')
+    @patch('generic_config_updater.gu_common.PatchWrapper.simulate_config_db_patch')
     @patch('generic_config_updater.generic_updater.ChangeApplier')
     def test_apply_patch_specific_namespace(self, mock_ChangeApplier, mock_simulate_patch, mock_get_config, mock_get_empty_tables):
         scope = "asic0"

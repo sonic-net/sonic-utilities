@@ -1246,6 +1246,78 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         path_addressing = ps.PathAddressing(config_wrapper)
         self.validator = ps.NoDependencyMoveValidator(path_addressing, config_wrapper)
 
+    def test_validate__unresolvable_ref_in_simulated_config__add_rejected(self):
+        # A dangling leafref in the transient simulated intermediate config makes find_ref_paths
+        # raise ValueError. For a simulated-config-facing check (ADD here), the validator must reject
+        # the move (return False) so the sort backtracks, rather than letting the exception abort the
+        # whole sort.
+        current_config = {"PORT": {"Ethernet0": {}}}
+        target_config = {
+            "PORT": {"Ethernet0": {}},
+            "ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"]}}
+        }
+        diff = ps.Diff(current_config, target_config)
+        move = JsonMoveGroup("", ps.JsonMove(diff, OperationType.ADD, ["ACL_TABLE"], ["ACL_TABLE"]))
+        simulated_config = move.apply(diff.current_config)
+
+        self.validator.path_addressing.find_ref_paths = Mock(
+            side_effect=ValueError("'Ethernet0' is not in list"))
+
+        # Must not raise; the move is rejected so the DFS can backtrack. Pin the exact arguments so a
+        # regression swapping simulated_config <-> diff.current_config in the ADD branch is caught
+        # (simulated_config is value-distinct from current_config here: it carries the added ACL_TABLE).
+        self.assertFalse(self.validator.validate(move, diff, simulated_config)[0])
+        self.validator.path_addressing.find_ref_paths.assert_called_once_with(
+            ["/ACL_TABLE"], simulated_config, reload_config=True)
+
+    def test_validate__unresolvable_ref_in_simulated_config__replace_rejected(self):
+        # REPLACE is the operation type for a PORT breakout (rewriting lanes while an ACL reference
+        # lingers). _validate_replace validates added_paths against the simulated intermediate config,
+        # so an unresolvable reference there (KeyError here, e.g. a table with no YANG model) must
+        # reject the move rather than aborting the sort.
+        current_config = {"PORT": {"Ethernet0": {}}}
+        target_config = {
+            "PORT": {"Ethernet0": {}},
+            "ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"]}}
+        }
+        diff = ps.Diff(current_config, target_config)
+        move = JsonMoveGroup("", ps.JsonMove(diff, OperationType.REPLACE, [], []))
+        simulated_config = move.apply(diff.current_config)
+
+        self.validator.path_addressing.find_ref_paths = Mock(
+            side_effect=KeyError("ACL_TABLE"))
+
+        # Must not raise; the move is rejected so the DFS can backtrack. Pin the config argument so a
+        # regression routing REPLACE added_paths through diff.current_config instead of the simulated
+        # config is caught (the two configs are value-distinct: simulated carries the added ACL_TABLE).
+        self.assertFalse(self.validator.validate(move, diff, simulated_config)[0])
+        self.validator.path_addressing.find_ref_paths.assert_called_once_with(
+            ["/ACL_TABLE"], simulated_config, reload_config=True)
+
+    def test_validate__value_error_on_current_config__propagates(self):
+        # A check against diff.current_config (a valid committed state) is not simulated, so a
+        # ValueError from find_ref_paths signals a genuine schema error and must propagate rather
+        # than being silently swallowed as a move rejection.
+        current_config = {
+            "PORT": {"Ethernet0": {}},
+            "ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"]}}
+        }
+        target_config = {"PORT": {"Ethernet0": {}}}
+        diff = ps.Diff(current_config, target_config)
+        move = JsonMoveGroup("", ps.JsonMove(diff, OperationType.REMOVE, ["ACL_TABLE"]))
+        simulated_config = move.apply(diff.current_config)
+
+        self.validator.path_addressing.find_ref_paths = Mock(
+            side_effect=ValueError("Keys in configDb not matching keys in SonicYang"))
+
+        with self.assertRaises(ValueError):
+            self.validator.validate(move, diff, simulated_config)
+        # Pin that the REMOVE validation ran against diff.current_config (unguarded), not
+        # simulated_config: the re-raise must be the guaranteed-current-config path, not a lucky
+        # raise that a config swap could mask. Configs are value-distinct (current has ACL_TABLE).
+        self.validator.path_addressing.find_ref_paths.assert_called_once_with(
+            ["/ACL_TABLE"], diff.current_config, reload_config=True)
+
     def test_validate__add_full_config_has_dependencies__failure(self):
         # Arrange
         # CROPPED_CONFIG_DB_AS_JSON has dependencies between PORT and ACL_TABLE
@@ -2061,6 +2133,90 @@ class RemoveCreateOnlyDependencyMoveValidator(unittest.TestCase):
             with self.subTest(name=test_case_name):
                 self._run_single_test(test_cases[test_case_name])
 
+    def test_validate__unresolvable_ref_in_simulated_config__move_rejected(self):
+        # A create-only PORT field change (breakout rewriting lanes) can transiently
+        # remove the port from a multi-member leaf-list (e.g. ACL_TABLE.ports) in the simulated
+        # intermediate config while a leafref to it is still present. Resolving that dangling
+        # leafref raises ValueError ("'<port>' is not in list"). The validator must treat this as
+        # an invalid intermediate move (return False) so the sort backtracks, rather than letting
+        # the exception propagate and abort the whole sort.
+        current_config = {
+            "PORT": {
+                "Ethernet312": {"lanes": "305,306,307,308,309,310,311,312", "admin_status": "up"}
+            },
+            "ACL_TABLE": {
+                "DATAACL": {"type": "L3", "ports": ["Ethernet312", "Ethernet280"]}
+            }
+        }
+        target_config = {
+            "PORT": {
+                "Ethernet312": {"lanes": "305", "admin_status": "up"}
+            },
+            "ACL_TABLE": {
+                "DATAACL": {"type": "L3", "ports": ["Ethernet280"]}
+            }
+        }
+        # The transient intermediate config the sorter is validating: Ethernet312's create-only
+        # 'lanes' field has already been rewritten toward the target, but the ACL_TABLE leafref to
+        # it has not been removed yet, so the reference is momentarily dangling. Resolving it raises
+        # ValueError. Kept value-distinct from current_config (different lanes) so the argument
+        # assertion below would catch a regression that passed current_config to find_ref_paths.
+        simulated_config = {
+            "PORT": {
+                "Ethernet312": {"lanes": "305", "admin_status": "up"}
+            },
+            "ACL_TABLE": {
+                "DATAACL": {"type": "L3", "ports": ["Ethernet312", "Ethernet280"]}
+            }
+        }
+
+        move = JsonMoveGroup("", Mock())
+        diff = ps.Diff(current_config, target_config)
+
+        self.validator.path_addressing.find_ref_paths = Mock(
+            side_effect=ValueError("'Ethernet312' is not in list"))
+
+        # Must not raise; the move is rejected so the DFS can backtrack.
+        self.assertFalse(self.validator.validate(move, diff, simulated_config)[0])
+        # Pin the assertion to the code path under test: the rejection must come from the guarded
+        # find_ref_paths call raising, resolved against the simulated (intermediate) config. Asserting
+        # the exact arguments also catches a regression that swapped simulated_config <-> current_config.
+        self.validator.path_addressing.find_ref_paths.assert_called_once_with(
+            "/PORT/Ethernet312", simulated_config, reload_config=True)
+
+    def test_validate__keyerror_in_simulated_config__move_rejected(self):
+        # find_ref_paths also raises KeyError (not just ValueError) when a referenced path's table
+        # has no YANG model in the simulated intermediate config. The guard must treat that the same
+        # way as an unresolvable reference: reject the move so the sort backtracks, not abort it.
+        current_config = {
+            "PORT": {
+                "Ethernet312": {"lanes": "305,306,307,308,309,310,311,312", "admin_status": "up"}
+            }
+        }
+        target_config = {
+            "PORT": {
+                "Ethernet312": {"lanes": "305", "admin_status": "up"}
+            }
+        }
+        # Value-distinct from current_config (lanes already rewritten toward the target) so the
+        # argument assertion below catches a regression that passed current_config instead.
+        simulated_config = {
+            "PORT": {
+                "Ethernet312": {"lanes": "305", "admin_status": "up"}
+            }
+        }
+
+        move = JsonMoveGroup("", Mock())
+        diff = ps.Diff(current_config, target_config)
+
+        self.validator.path_addressing.find_ref_paths = Mock(
+            side_effect=KeyError("ACL_TABLE"))
+
+        # Must not raise; the move is rejected so the DFS can backtrack.
+        self.assertFalse(self.validator.validate(move, diff, simulated_config)[0])
+        self.validator.path_addressing.find_ref_paths.assert_called_once_with(
+            "/PORT/Ethernet312", simulated_config, reload_config=True)
+
     def _run_single_test(self, test_case):
         # Arrange
         expected = test_case['expected']
@@ -2337,12 +2493,12 @@ class TestBulkLeafListMoveGenerator(unittest.TestCase):
             target={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR", "ports": ["Ethernet0"]}}},
             ex_ops=[])
 
-    def test_generate__leaf_list_all_items_removed__single_replace_move(self):
-        """Removing all items from a leaf-list should produce one REPLACE with empty list."""
+    def test_generate__leaf_list_all_items_removed__no_bulk_replace_move(self):
+        """Removing all items from a leaf-list should not bulk-replace with an empty list."""
         self.verify(
             current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
             target={"ACL_TABLE": {"EVERFLOW": {"ports": [], "type": "MIRROR"}}},
-            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports", "value": []}])
+            ex_ops=[])
 
     def test_generate__multiple_tables_with_leaf_lists__multiple_moves(self):
         """Multiple differing leaf-lists should each get a REPLACE move."""
@@ -3573,6 +3729,42 @@ class TestPatchSorter(unittest.TestCase):
             if notfound_substrings:
                 self.fail(f"Did not find the substrings {notfound_substrings} in the error: '{error}'")
 
+    def test_patch_sorter__remove_last_bgp_allowed_prefix__removes_field_instead_of_emptying_it(self):
+        current_config = {
+            "BGP_ALLOWED_PREFIXES": {
+                "DEPLOYMENT_ID|0": {
+                    "deployment": "DEPLOYMENT_ID",
+                    "id": 0,
+                    "prefixes_v4": ["10.20.0.0/16"],
+                    "prefixes_v6": ["fc00:f0::/64"],
+                }
+            }
+        }
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4/0"}
+        ])
+        sorter = self.create_patch_sorter(current_config)
+
+        actual_changes = sorter.sort(patch)
+        # Removing the only item has to drop the whole field. ConfigDB cannot store an
+        # empty leaf-list, it would be written as "" and read back as [""].
+        expected_changes = [
+            JsonChange(jsonpatch.JsonPatch([
+                {"op": "remove", "path": "/BGP_ALLOWED_PREFIXES/DEPLOYMENT_ID|0/prefixes_v4"}
+            ]))
+        ]
+
+        self.assertEqual(expected_changes, actual_changes)
+
+        target_config = PatchWrapper().simulate_config_db_patch(patch, current_config)
+        self.assertNotIn("prefixes_v4", target_config["BGP_ALLOWED_PREFIXES"]["DEPLOYMENT_ID|0"])
+        simulated_config = current_config
+        for change in actual_changes:
+            simulated_config = change.apply(simulated_config)
+            is_valid, error = self.config_wrapper.validate_config_db_config(simulated_config)
+            self.assertTrue(is_valid, f"Change will produce invalid config. Error: {error}")
+        self.assertEqual(target_config, simulated_config)
+
     def test_sort__does_not_remove_tables_without_yang_unintentionally_if_generated_change_replaces_whole_config(self):
         # Arrange
         current_config = Files.CONFIG_DB_AS_JSON # has a table without yang named 'TABLE_WITHOUT_YANG'
@@ -3846,7 +4038,7 @@ class TestNonStrictPatchSorter(unittest.TestCase):
         config_wrapper.get_config_db_as_json.side_effect = \
             [any_current_config]
 
-        patch_wrapper.simulate_patch.side_effect = \
+        patch_wrapper.simulate_config_db_patch.side_effect = \
             create_side_effect_dict(
                 {(str(patch), str(any_current_config)):
                     any_target_config})
@@ -3939,7 +4131,7 @@ class TestStrictPatchSorter(unittest.TestCase):
         config_wrapper.get_config_db_as_json.side_effect = \
             [any_current_config, any_target_config]
 
-        patch_wrapper.simulate_patch.side_effect = \
+        patch_wrapper.simulate_config_db_patch.side_effect = \
             create_side_effect_dict(
                 {(str(patch), str(any_current_config)):
                     any_target_config})

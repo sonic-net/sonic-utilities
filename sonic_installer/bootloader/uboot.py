@@ -8,6 +8,7 @@ import os
 import re
 from shlex import split
 import click
+from utilities_common.chassis import is_bmc
 
 from ..common import (
    HOST_PATH,
@@ -99,5 +100,8 @@ class UbootBootloader(OnieInstallerBootloader):
 
     @classmethod
     def detect(cls):
+        # BMC runs U-Boot too but is owned by BmcUbootBootloader; exclude it here.
+        if is_bmc():
+            return False
         arch = platform.machine()
         return ("arm" in arch) or ("aarch64" in arch)

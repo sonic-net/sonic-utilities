@@ -58,9 +58,9 @@ class TestShowMlnx(object):
         assert e.value.code == 1
         mock_runcmd.assert_called_with(expected_calls, print_to_console=False)
 
-    @pytest.mark.parametrize("status", [True, False])
+    @pytest.mark.parametrize("issu_xml_value,expected", [(0, False), (1, True), (2, True)])
     @patch('show.plugins.mlnx.run_command')
-    def test_is_issue_status_enabled(self, mock_runcmd, status):
+    def test_is_issue_status_enabled(self, mock_runcmd, issu_xml_value, expected):
         def mock_return(*args, **kwargs):
             cmd = ' '.join(args[0])
             if cmd == f"docker exec {show.CONTAINER_NAME} cat /{show.HWSKU_PATH}/sai.profile":
@@ -69,7 +69,7 @@ class TestShowMlnx(object):
                 return (f"""<?xml version="1.0"?>
                 <root>
                     <platform_info>
-                        <issu-enabled>{int(status)}</issu-enabled>
+                        <issu-enabled>{issu_xml_value}</issu-enabled>
                     </platform_info>
                 </root>
                 """, '')
@@ -78,12 +78,12 @@ class TestShowMlnx(object):
 
         mock_runcmd.side_effect = mock_return
         result = show.is_issu_status_enabled()
-        assert result is status
+        assert result is expected
 
-    @pytest.mark.parametrize("status", [True, False])
+    @pytest.mark.parametrize("issu_xml_value,expected", [(0, False), (1, True), (2, True)])
     @patch('show.plugins.mlnx.multi_asic.get_num_asics', return_value=4)
     @patch('show.plugins.mlnx.run_command')
-    def test_is_issue_status_enabled_multi_asic(self, mock_runcmd, mock_get_numasics, status):
+    def test_is_issue_status_enabled_multi_asic(self, mock_runcmd, mock_get_numasics, issu_xml_value, expected):
         def mock_return(*args, **kwargs):
             cmd = ' '.join(args[0])
             if (
@@ -102,7 +102,7 @@ class TestShowMlnx(object):
                 return (f"""<?xml version="1.0"?>
                 <root>
                     <platform_info>
-                        <issu-enabled>{int(status)}</issu-enabled>
+                        <issu-enabled>{issu_xml_value}</issu-enabled>
                     </platform_info>
                 </root>
                 """, '')
@@ -111,7 +111,7 @@ class TestShowMlnx(object):
 
         mock_runcmd.side_effect = mock_return
         result = show.is_issu_status_enabled()
-        assert result is status
+        assert result is expected
 
     def teardown_method(self):
         print('TEARDOWN')

@@ -72,6 +72,8 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import evpn_mh
+from . import llr
 
 # mock masic APIs for unit test
 try:
@@ -128,15 +130,16 @@ GUID_MAX_LEN = 255
 asic_type = None
 
 
-SAMPLE_RATE_MIN = 256
-SAMPLE_RATE_MAX = 8388608
+SAMPLE_RATE_MIN = 2
+SAMPLE_RATE_MAX = 0xFFFFFFFF  # uint32 max
 TRUNCATE_SIZE_MIN = 64
 TRUNCATE_SIZE_MAX = 9216
 
 
 def validate_sample_rate(ctx, param, value):
     if value != 0 and (value < SAMPLE_RATE_MIN or value > SAMPLE_RATE_MAX):
-        raise click.BadParameter(f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX}")
+        raise click.BadParameter(
+            f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX} (uint32 max)")
     return value
 
 
@@ -1017,13 +1020,33 @@ def _monit_service_exists(service):
         return False
 
 
+def _get_monit_services_by_prefix(prefix):
+    """Return list of monit service names that start with the given prefix."""
+    try:
+        output = subprocess.check_output(
+            ['sudo', 'monit', 'summary'],
+            stderr=subprocess.DEVNULL,
+            text=True
+        )
+        services = []
+        for line in output.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(prefix):
+                services.append(stripped.split()[0])
+        return services
+    except subprocess.CalledProcessError:
+        return []
+
+
 def _stop_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Disabling container and routeCheck monitoring ...")
+        click.echo("Disabling container, routeCheck and memory monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
         if _monit_service_exists('routeCheck'):
             clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
+        for svc in _get_monit_services_by_prefix('container_memory_'):
+            clicommon.run_command(['sudo', 'monit', 'unmonitor', svc])
     except subprocess.CalledProcessError as err:
         pass
 
@@ -1177,15 +1200,20 @@ def _restart_services():
     wait_service_restart_finish('networking', last_networking_timestamp)
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Enabling container and routeCheck monitoring ...")
+        click.echo("Enabling container, routeCheck and memory monitoring ...")
         has_route_check = _monit_service_exists('routeCheck')
         if has_route_check:
             clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
+        memory_services = _get_monit_services_by_prefix('container_memory_')
+        for svc in memory_services:
+            clicommon.run_command(['sudo', 'monit', 'monitor', svc])
         log.log_notice("Waiting for monit monitor actions to complete ...")
         if has_route_check:
             _wait_for_monit_service_monitored('routeCheck')
         _wait_for_monit_service_monitored('container_checker')
+        for svc in memory_services:
+            _wait_for_monit_service_monitored(svc)
     except subprocess.CalledProcessError as err:
         pass
     # Reload Monit configuration to pick up new hostname in case it changed
@@ -1703,7 +1731,10 @@ def config_file_yang_validation(filename):
     if multi_asic.is_multi_asic():
         asic_list.extend(multi_asic.get_namespace_list())
     for scope in asic_list:
-        config_to_check = config.get(scope) if multi_asic.is_multi_asic() else config
+        if multi_asic.is_multi_asic() and HOST_NAMESPACE in config:
+            config_to_check = config.get(scope)
+        else:
+            config_to_check = config if scope == HOST_NAMESPACE else None
         if config_to_check:
             try:
                 sy.loadData(configdbJson=config_to_check)
@@ -1795,9 +1826,13 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
+config.add_command(evpn_mh.evpn_mh)
 
 # add stp commands
 config.add_command(stp.spanning_tree)
+
+# add llr commands
+config.add_command(llr.llr)
 
 # add mclag commands
 config.add_command(mclag.mclag)
@@ -2191,7 +2226,50 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
             return
 
-    if filename is not None and filename != "/dev/stdin":
+    if filename is None and file_format == 'config_db':
+        if not force:
+            cfg_files_to_validate = [DEFAULT_CONFIG_DB_FILE]
+            if multi_asic.is_multi_asic():
+                default_cfg_file_root, default_cfg_file_ext = os.path.splitext(
+                    DEFAULT_CONFIG_DB_FILE
+                )
+                cfg_files_to_validate.extend([
+                    "{}{}{}".format(
+                        default_cfg_file_root,
+                        inst,
+                        default_cfg_file_ext,
+                    )
+                    for inst in range(num_asic)
+                ])
+
+            for cfg_file in cfg_files_to_validate:
+                if not os.path.exists(cfg_file):
+                    click.echo(
+                        "The config file {} doesn't exist".format(cfg_file)
+                    )
+                    raise click.Abort()
+                if not os.access(cfg_file, os.R_OK):
+                    click.echo(
+                        "The config file {} is not readable".format(cfg_file)
+                    )
+                    raise click.Abort()
+                try:
+                    if not config_file_yang_validation(cfg_file):
+                        click.secho(
+                            "Invalid config file:'{}'!".format(cfg_file),
+                            fg='magenta'
+                        )
+                        raise click.Abort()
+                except click.Abort:
+                    raise
+                except Exception as e:
+                    click.echo(
+                        "Failed to read config file {}: {}".format(
+                            cfg_file, str(e)
+                        )
+                    )
+                    raise click.Abort()
+    elif filename is not None and filename != "/dev/stdin":
         if multi_asic.is_multi_asic():
             for cfg_file in cfg_files:
                 if cfg_file is not None:
@@ -2200,6 +2278,24 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             config_file_yang_validation(filename)
 
     #Stop services before config push
+    if not no_service_restart:
+        try:
+            _db = swsscommon.DBConnector('STATE_DB', 0)
+            boot_type = None
+            # fast-reboot sets both FAST_RESTART_ENABLE_TABLE and WARM_RESTART_ENABLE_TABLE;
+            # check fast first so the label is correct when both flags are set.
+            if swsscommon.RestartWaiter.isFastBootInProgress(_db):
+                boot_type = 'fast-reboot'
+            elif swsscommon.RestartWaiter.isWarmBootInProgress(_db):
+                boot_type = 'warm-boot'
+            if boot_type:
+                click.echo(f"A {boot_type} is still in progress. Please wait for finalization to complete.")
+                sys.exit(CONFIG_RELOAD_NOT_READY)
+        except SystemExit:
+            raise
+        except Exception:
+            pass
+
     if not no_service_restart:
         log.log_notice("'reload' stopping services...")
         _stop_services()
@@ -2817,9 +2913,22 @@ def suppress_pending_fib(db, state):
     if multi_asic.get_num_asics() > 1:
         namespace_list = multi_asic.get_namespaces_from_linux()
 
+    changed = False
     for ns in namespace_list:
         config_db = db.cfgdb_clients[ns]
+        entry = config_db.get_entry('DEVICE_METADATA', 'localhost')
+        if entry.get('suppress-fib-pending') == state:
+            continue
         config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
+        changed = True
+
+    if changed:
+        click.echo(f"""suppress-fib-pending set to '{state}' in CONFIG_DB. This does NOT take effect until a config reload.
+Persist and apply with:
+    config save -y
+    config reload -y""")
+    else:
+        click.echo(f"suppress-fib-pending is already '{state}'; no change made.")
 
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
@@ -2931,6 +3040,7 @@ def remove_portchannel(ctx, portchannel_name):
         db.set_entry('PORTCHANNEL', portchannel_name, None)
     except JsonPatchConflict:
         ctx.fail("{} is not present.".format(portchannel_name))
+
 
 @portchannel.group(cls=clicommon.AbbreviationGroup, name='member')
 @click.pass_context
@@ -3222,7 +3332,7 @@ def erspan(ctx):
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
 @click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
-              help="Sampling rate (1-in-N), 256..8388608. 0 disables sampling")
+              help="Sampling rate (1-in-N), 2..4294967295. 0 disables sampling")
 @click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
               help="Truncation size in bytes, 64..9216. 0 disables truncation")
 def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
@@ -4024,7 +4134,7 @@ def warm_restart_enable(ctx, namespace, module):
     if namespace is not None:
         if namespace not in ctx.obj["all_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["all_namespaces"]
 
     config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
@@ -4047,7 +4157,7 @@ def warm_restart_disable(ctx, namespace, module):
     if namespace is not None:
         if namespace not in ctx.obj["all_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["all_namespaces"]
 
     config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
@@ -4070,7 +4180,7 @@ def warm_restart_neighsyncd_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 9999):
@@ -4092,7 +4202,7 @@ def warm_restart_bgp_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
@@ -4114,7 +4224,7 @@ def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
@@ -4136,7 +4246,7 @@ def warm_restart_bgp_eoiu(ctx, namespace, enable):
     if namespace is not None:
         if namespace not in ctx.obj["asic_namespaces"]:
             raise click.UsageError("Invalid namespace: {}".format(namespace))
-    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+    namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     for namespace in namespaces:
         db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
@@ -5329,6 +5439,93 @@ def shutdown(ctx, interface_name):
             config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
 
 #
+# 'sys-mac' group ('config interface sys-mac ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def sys_mac(ctx):
+    pass
+
+
+@sys_mac.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def add_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Add System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if not is_portchannel_name_valid(interface_name):
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                 .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        try:
+            gateway_mac = netaddr.EUI(sys_mac)
+        except Exception:
+            ctx.fail(f'System MAC address {sys_mac} format is not valid.')
+        if (gateway_mac.words[0] & 0b01):
+            ctx.fail(f'System MAC address {sys_mac} is multicast, only unicast allowed.')
+
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+        if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+            if port_id is None:
+                ctx.fail(f"Cannot extract port ID from interface name '{interface_name}'")
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            cmd.append('-c')
+            cmd.append('evpn mh es-sys-mac {}'.format(sys_mac))
+            run_vtysh_command(cmd, ctx)
+
+        try:
+            # Only write to CONFIG_DB after FRR update succeeds
+            config_db.mod_entry("PORTCHANNEL", interface_name, {'system_mac': sys_mac})
+        except (ValueError, JsonPatchConflict) as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@sys_mac.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def del_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Del System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    if not is_portchannel_name_valid(interface_name):
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                 .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        entry = dict(config_db.get_entry("PORTCHANNEL", interface_name))
+        conf_sys_mac = None
+        if 'system_mac' in entry:
+            conf_sys_mac = entry['system_mac']
+            del entry['system_mac']
+        if conf_sys_mac and conf_sys_mac == sys_mac:
+            # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+            cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+            evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+            if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+                cmd.append('-c')
+                cmd.append('no evpn mh es-sys-mac')
+                run_vtysh_command(cmd, ctx)
+
+            try:
+                # Only write to CONFIG_DB after FRR update succeeds
+                config_db.set_entry("PORTCHANNEL", interface_name, entry)
+            except (ValueError, JsonPatchConflict) as e:
+                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        else:
+            ctx.fail("For {} sys-mac is not present or different value is configured.".format(interface_name))
+
+#
 # 'speed' subcommand
 #
 
@@ -5711,6 +5908,248 @@ def fec(ctx, interface_name, interface_fec, verbose):
     if verbose:
         command += ["-vv"]
     clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# EVPN interface commands
+#
+EVPN_ES_TABLE = 'EVPN_ETHERNET_SEGMENT'
+EVPN_ES_DF_PREF_MIN = 1
+EVPN_ES_DF_PREF_DEFAULT = 32767
+EVPN_ES_DF_PREF_MAX = 65535
+EVPN_ESI_NUM_BYTES = 10
+
+
+def is_reserved_esi(esi_str):
+    reserved = False
+
+    if esi_str == "00:00:00:00:00:00:00:00:00:00":
+        reserved = True
+    elif esi_str.lower() == "ff:ff:ff:ff:ff:ff:ff:ff:ff:ff":
+        reserved = True
+
+    return reserved
+
+
+def parse_esi_input(ctx, esi_input_strs):
+    esi_args = {'df_pref': str(EVPN_ES_DF_PREF_DEFAULT)}
+
+    if esi_input_strs[0] == 'auto-system-mac':
+        esi_args['type'] = 'TYPE_3_MAC_BASED'
+        esi_args['esi'] = 'AUTO'
+    elif ':' in esi_input_strs[0]:
+        if is_reserved_esi(esi_input_strs[0]):
+            ctx.fail("Not allowed to configure a reserved ESI")
+
+        esi_bytes = esi_input_strs[0].split(':')
+        if len(esi_bytes) != EVPN_ESI_NUM_BYTES:
+            ctx.fail(f"Failed to parse manual ESI {esi_input_strs[0]}")
+        try:
+            type_byte = int(esi_bytes[0], 16)
+        except Exception as e:
+            ctx.fail(f"Failed to parse ESI byte '{esi_bytes[0]}' - {e}")
+        if type_byte != 0:
+            ctx.fail(f"Manual ESI must start with type 0, got {esi_bytes[0]}")
+        for byte in esi_bytes:
+            try:
+                parsed_byte = int(byte, 16)
+            except Exception as e:
+                ctx.fail(f"Failed to parse ESI byte '{byte}' - {e}")
+            if parsed_byte > 0xFF:
+                ctx.fail(f"'Byte' {byte} is > 255")
+            if not re.fullmatch(r'[0-9a-fA-F]{2}', byte):
+                ctx.fail(f"Failed to parse ESI byte '{byte}'")
+
+        esi_args['type'] = 'TYPE_0_OPERATOR_CONFIGURED'
+        esi_args['esi'] = esi_input_strs[0].lower()
+    else:
+        ctx.fail(f"Unknown ESI type {esi_input_strs[0]}")
+
+    return esi_args
+
+
+def port_id_from_if_name(if_name):
+    """Extract the numeric port identifier from an interface name.
+    Returns a string of digits (with any underscores removed) if the
+    interface name matches the expected pattern, otherwise returns None.
+    """
+    port_id_re = re.compile(r'[a-zA-Z]+(?P<port_id>[0-9_]+)')
+    match = port_id_re.search(if_name)
+    if not match:
+        return None
+    port_id_group = match.group('port_id')
+    if port_id_group:
+        return port_id_group.replace('_', '')
+    return None
+
+
+def run_vtysh_command(cmd, ctx=None):
+    """
+    Run a vtysh command.
+    If a Click context is provided, capture the return code/output and
+    surface failures via ctx.fail() instead of exiting abruptly.
+    When no context is provided, preserve the original behavior of
+    clicommon.run_command(), which may call sys.exit() on error.
+    """
+    if ctx is None:
+        # Preserve existing behavior for callers that don't use Click ctx
+        return clicommon.run_command(cmd)
+    output, rc = clicommon.run_command(cmd, return_cmd=True, ignore_error=True)
+    if rc != 0:
+        message = output if output else f"Command '{cmd}' failed with return code {rc}"
+        ctx.fail(message)
+    return output
+
+
+def check_if_same_manual_esi_exists(ctx, esi_args, es_data):
+    if esi_args['type'] == 'TYPE_0_OPERATOR_CONFIGURED':
+        for es_intf_name, es_intf_data in es_data.items():
+            if esi_args['esi'].lower() == es_intf_data.get('esi', '').lower():
+                ctx.fail(f"The ESI '{esi_args['esi']}' is already in use by '{es_intf_name}'")
+
+
+def is_valid_df_pref(df_pref):
+    """
+    Validate that the DF preference is an integer within the allowed range.
+    Returns True if df_pref can be parsed as an integer and is between
+    EVPN_ES_DF_PREF_MIN and EVPN_ES_DF_PREF_MAX (inclusive), otherwise False.
+    """
+    try:
+        df_pref_int = int(df_pref)
+    except (ValueError, TypeError):
+        return False
+    return df_pref_int in range(EVPN_ES_DF_PREF_MIN, EVPN_ES_DF_PREF_MAX + 1)
+
+#
+# 'evpn-esi' group ('config interface evpn-esi ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def evpn_esi(ctx):
+    """Set EVPN ES interface attributes"""
+    pass
+
+
+@evpn_esi.command('add')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('esi_type', metavar='<esi_type>', required=True)
+def add_evpn_es(ctx, interface_name, esi_type):
+    """Add EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_data = config_db.get_table(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name in es_data:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} already configured.")
+
+    esi_args = parse_esi_input(ctx, [esi_type])
+
+    check_if_same_manual_esi_exists(ctx, esi_args, es_data)
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        esi_type = esi_args['type']
+        if esi_type == 'TYPE_0_OPERATOR_CONFIGURED' and esi_args['esi']:
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(esi_args['esi']))
+        elif esi_type == 'TYPE_3_MAC_BASED':
+            if port_id is None:
+                ctx.fail(f"Cannot extract port ID from interface name '{interface_name}'")
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            po_table = config_db.get_entry('PORTCHANNEL', interface_name)
+            if po_table and 'system_mac' in po_table:
+                cmd.append('-c')
+                cmd.append('evpn mh es-sys-mac {}'.format(po_table['system_mac']))
+        run_vtysh_command(cmd, ctx)
+
+        # Only write to CONFIG_DB after FRR update succeeds
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, esi_args)
+    except (ValueError, JsonPatchConflict) as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@evpn_esi.command('del')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+def del_evpn_es(ctx, interface_name):
+    """Del EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    evpn_es_keys = config_db.get_keys(EVPN_ES_TABLE)
+    if interface_name not in evpn_es_keys:
+        ctx.fail(f"EVPN Ethernet Segment '{interface_name}' does not exist")
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('no evpn mh es-sys-mac')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-df-pref')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-id')
+        run_vtysh_command(cmd, ctx)
+
+        # Only delete from CONFIG_DB after FRR update succeeds
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, None)
+    except JsonPatchConflict as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@interface.command()
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('df_pref', metavar='<df_pref>', required=True)
+@click.pass_context
+def evpn_df_pref(ctx, interface_name, df_pref):
+    """Set EVPN ES DF Preference"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_keys = config_db.get_keys(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name not in es_keys:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} does not exist")
+
+    if not is_valid_df_pref(df_pref):
+        ctx.fail(
+            f"EVPN Ethernet Segment {interface_name} - DF Preference {df_pref} is not valid. "
+            f"Valid values are {EVPN_ES_DF_PREF_MIN}-{EVPN_ES_DF_PREF_MAX}."
+        )
+
+    try:
+        # Update frr first to ensure FRR config succeeds before modifying CONFIG_DB
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('evpn mh es-df-pref {}'.format(int(df_pref)))
+        run_vtysh_command(cmd, ctx)
+
+        # Only write to CONFIG_DB after FRR update succeeds
+        config_db.mod_entry(EVPN_ES_TABLE, interface_name, {'df_pref': str(df_pref)})
+    except (ValueError, JsonPatchConflict) as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 #
 # 'ip' subgroup ('config interface ip ...')
@@ -7965,6 +8404,21 @@ def add_route(ctx, command_str):
         # If exist update current entry
         current_entry = config_db.get_entry('STATIC_ROUTE', key)
 
+        # Check for duplicate nexthop: build existing (nexthop, nexthop-vrf, ifname) tuples
+        # and reject the add if the incoming tuple is already present.
+        existing_nh = current_entry.get('nexthop', '').split(',')
+        existing_nhvrf = current_entry.get('nexthop-vrf', '').split(',')
+        existing_ifname = current_entry.get('ifname', '').split(',')
+        existing_zip = list(itertools.zip_longest(existing_nh, existing_nhvrf, existing_ifname, fillvalue=''))
+
+        incoming_tuple = (
+            route.get('nexthop', ''),
+            route.get('nexthop-vrf', vrf),
+            route.get('ifname', ''),
+        )
+        if incoming_tuple in existing_zip:
+            ctx.fail('Nexthop {} already exists for route {}'.format(incoming_tuple, key))
+
         for item in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
             if item not in current_entry:
                 current_entry[item] = ''
@@ -9659,6 +10113,75 @@ def disable_link_local(ctx):
                     continue
                 set_ipv6_link_local_only_on_interface(config_db, table_dict, table_type, key, mode)
 
+# 'static-anycast-gateway' group ('config static-anycast-gateway ...')
+#
+
+
+@config.group(cls=clicommon.AbbreviationGroup, name='static-anycast-gateway')
+def static_anycast_gateway():
+    """sag-related configuration tasks"""
+    pass
+
+#
+# 'static-anycast-gateway mac_address' group
+#
+
+
+@static_anycast_gateway.group(cls=clicommon.AbbreviationGroup, name='mac_address')
+def mac_address():
+    """Add/Delete static-anycast-gateway mac address"""
+    pass
+
+
+@mac_address.command('add')
+@click.argument('mac_address', metavar='<mac_address>', required=True, type=str)
+@clicommon.pass_db
+def add_mac(db, mac_address):
+    """Add static-anycast-gateway mac address command"""
+    log.log_info(f"'static-anycast-gateway mac_address add {mac_address}' executing...")
+
+    try:
+        gateway_mac = netaddr.EUI(mac_address)
+    except Exception:
+        click.get_current_context().fail(f'static-anycast-gateway MAC address {mac_address} format is not valid.')
+
+    if (gateway_mac.words[0] & 0b01):
+        click.get_current_context().fail(
+            f'static-anycast-gateway MAC address {mac_address} is multicast, only allow unicast.')
+
+    if not db.cfgdb.get_entry('SAG', 'GLOBAL'):
+        db.cfgdb.set_entry('SAG', 'GLOBAL', {'gateway_mac': mac_address})
+    else:
+        click.get_current_context().fail(
+            f'static-anycast-gateway MAC address {mac_address} already exists. Remove it first'
+        )
+
+
+@mac_address.command('del')
+@clicommon.pass_db
+def del_mac(db):
+    """Del static-anycast-gateway mac address command"""
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
+    if sag_entry:
+        mac_address = sag_entry.get('gateway_mac', 'unknown')
+        if mac_address == 'unknown':
+            click.get_current_context().fail('static-anycast-gateway MAC address not found.')
+        log.log_info(f"'static-anycast-gateway mac_address del {mac_address}' executing...")
+        vlan_intf_table = db.cfgdb.get_table('VLAN_INTERFACE') or {}
+        enabled_vlans = sorted(vlan for vlan, entry in vlan_intf_table.items()
+                               if entry.get('static_anycast_gateway') == 'true')
+        if enabled_vlans:
+            click.get_current_context().fail(
+                'static-anycast-gateway MAC address is in use by VLAN interfaces: {}'.format(
+                    ', '.join(enabled_vlans)
+                )
+            )
+        remaining_entry = dict(sag_entry)
+        remaining_entry.pop('gateway_mac', None)
+        db.cfgdb.set_entry('SAG', 'GLOBAL', remaining_entry if remaining_entry else None)
+    else:
+        log.log_info("'static-anycast-gateway mac_address del' executing...")
+        click.get_current_context().fail('static-anycast-gateway MAC address not found.')
 
 #
 # 'rate' group ('config rate ...')

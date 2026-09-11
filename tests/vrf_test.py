@@ -308,6 +308,17 @@ Error: 'vrf_name' length should not exceed 15 characters
         assert ('VrfNameTooLong!!!') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
 
+    def test_vrf_show_unconfigured_vrf(self):
+        """Test show VRF command failing where the user specifies the wrong VRF"""
+        runner = CliRunner()
+        db = Db()
+
+        vrf_name = "Vrf-null"
+        result = runner.invoke(show.cli.commands['vrf'], [vrf_name], obj=db)
+
+        assert result.exit_code != 0
+        assert f"Error: VRF {vrf_name} is not configured." in result.output
+
     @patch('config.main.ValidatedConfigDBConnector')
     @patch('config.main.ConfigDBConnector')
     def test_vrf_group_no_namespace_defaults(self, mock_cdb, mock_vcdb):

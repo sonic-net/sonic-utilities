@@ -6,6 +6,9 @@ import subprocess
 import sys
 import time
 import utilities_common.cli as clicommon
+from utilities_common.image_disk_space import (
+    check_image_install_free_disk_space,
+)
 from urllib.request import urlopen, urlretrieve
 
 import click
@@ -387,13 +390,20 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             # Inject host DNS into chroot for sonic-package-manager to resolve hostnames.
             chroot_resolv = os.path.join(new_image_mount, RESOLV_CONF_FILE)
             if os.path.islink(chroot_resolv):
-                # Symlink: populate the target inside the chroot so the symlink resolves.
-                # Cannot cp over the symlink because the absolute target path escapes
-                # the overlay mount to the host filesystem ("are the same file" error).
+                # Symlink: populate its target inside the chroot ("cp" over the link
+                # would write through it, outside the overlay mount).
                 resolv_target = os.readlink(chroot_resolv)
+                if not os.path.isabs(resolv_target):
+                    # Relative target resolves against the symlink's directory
+                    resolv_target = os.path.join("/", os.path.dirname(RESOLV_CONF_FILE), resolv_target)
+                # Leading "/" makes normpath clamp ".." at the chroot root
+                resolv_target = os.path.normpath(resolv_target)
                 chroot_target = os.path.join(new_image_mount, resolv_target.lstrip("/"))
                 run_command_or_raise(["mkdir", "-p", os.path.dirname(chroot_target)])
-                run_command_or_raise(["cp", "-L", os.path.join("/", RESOLV_CONF_FILE), chroot_target])
+                # --remove-destination: if the target is itself a symlink, replace it
+                # instead of writing through it (could escape the mount again)
+                run_command_or_raise(["cp", "-L", "--remove-destination",
+                                      os.path.join("/", RESOLV_CONF_FILE), chroot_target])
             else:
                 # Regular file: overwrite with host DNS content.
                 run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE), chroot_resolv])
@@ -580,6 +590,16 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             echo_and_log('Error: Failed to set image as default', LOG_ERR)
             raise click.Abort()
     else:
+        # Validate that enough disk space is available before modifying the
+        # installed image state. The helper automatically applies the NPU or
+        # DPU threshold based on the system on which this command is running.
+        if not check_image_install_free_disk_space():
+            echo_and_log(
+                "Insufficient free disk space to install the image. Aborting...",
+                LOG_ERR,
+            )
+            raise click.Abort()
+
         # Verify not installing non-secure image in a secure running image
         if not force and not bootloader.verify_secureboot_image(image_path):
             echo_and_log("Image file '{}' is of a different type than running image.\n".format(url) +
@@ -595,6 +615,8 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             raise click.Abort()
 
         if bootloader.is_secure_upgrade_image_verification_supported():
+            echo_and_log("Enrolling image {} Secure Boot db certificate...".format(binary_image_version))
+            bootloader.enroll_image_secure_boot_keys(image_path)
             echo_and_log("Verifying image {} signature...".format(binary_image_version))
             if not bootloader.verify_image_sign(image_path):
                 echo_and_log('Error: Failed verify image signature', LOG_ERR)

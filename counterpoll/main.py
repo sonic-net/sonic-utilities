@@ -1,10 +1,14 @@
 import click
 import os
-from sonic_py_common import device_info, multi_asic
+from sonic_py_common import device_info, multi_asic, logger
+import utilities_common.multi_asic as multi_asic_util
+from utilities_common.llr import is_llr_capable
 from tabulate import tabulate
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from swsscommon.swsscommon import CFG_FLEX_COUNTER_TABLE_NAME as CFG_FLEX_COUNTER_TABLE
+
+log = logger.Logger("counterpoll")
 
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
 PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
@@ -187,7 +191,7 @@ def port_buffer_drop_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()),
+              type=click.Choice(get_valid_namespace_choices()),
               default=multi_asic.get_current_namespace())
 @click.pass_context
 def phy(ctx, namespace):
@@ -491,7 +495,7 @@ def flowcnt_trap_disable(ctx):
 def flowcnt_route(ctx, namespace):
     """ Route flow counter commands """
     ctx.obj = connect_to_db(namespace)
-    exit_if_route_flow_counter_not_support()
+    exit_if_route_flow_counter_not_support(namespace)
 
 
 @flowcnt_route.command(name='interval')
@@ -716,6 +720,46 @@ def srv6_disable(ctx):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
 
 
+# ICMP echo session counter commands. Drives the ICMP_SESSION row of
+# FLEX_COUNTER_TABLE which orchagent's flexcounterorch watches to toggle
+# ICMP echo session stat collection (selective or native back-end,
+# chosen per platform).
+@cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
+@click.pass_context
+def icmp(ctx, namespace):
+    """ ICMP echo session counter commands """
+    ctx.obj = connect_to_db(namespace)
+
+
+@icmp.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def icmp_interval(ctx, poll_interval):
+    """ Set ICMP echo session counter query interval """
+    icmp_info = {'POLL_INTERVAL': poll_interval}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
+@icmp.command(name='enable')
+@click.pass_context
+def icmp_enable(ctx):
+    """ Enable ICMP echo session counter query """
+    icmp_info = {'FLEX_COUNTER_STATUS': ENABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
+@icmp.command(name='disable')
+@click.pass_context
+def icmp_disable(ctx):
+    """ Disable ICMP echo session counter query """
+    icmp_info = {'FLEX_COUNTER_STATUS': DISABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "ICMP_SESSION", icmp_info)
+
+
 # Switch counter commands
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
@@ -772,6 +816,43 @@ def switch_disable(ctx):
     ctx.obj.mod_entry(table, key, data)
 
 
+# LLR counter commands
+@cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=multi_asic_util.LazyChoice(get_valid_namespace_choices),
+              default=multi_asic.get_current_namespace())
+@click.pass_context
+def llr(ctx, namespace):
+    """ LLR port counter commands """
+    if not is_llr_capable(namespace):
+        click.echo("Error: LLR is not supported on this platform.")
+        raise SystemExit(1)
+    ctx.obj = connect_to_db(namespace)
+
+
+@llr.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(100, 30000))
+@click.pass_context
+def llr_interval(ctx, poll_interval):
+    """ Set LLR port counter query interval """
+    ctx.obj.mod_entry(CFG_FLEX_COUNTER_TABLE, "LLR", {"POLL_INTERVAL": poll_interval})
+
+
+@llr.command(name='enable')
+@click.pass_context
+def llr_enable(ctx):
+    """ Enable LLR port counter query """
+    ctx.obj.mod_entry(CFG_FLEX_COUNTER_TABLE, "LLR", {"FLEX_COUNTER_STATUS": ENABLE})
+
+
+@llr.command(name='disable')
+@click.pass_context
+def llr_disable(ctx):
+    """ Disable LLR port counter query """
+    ctx.obj.mod_entry(CFG_FLEX_COUNTER_TABLE, "LLR", {"FLEX_COUNTER_STATUS": DISABLE})
+
+
 @cli.command()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
@@ -798,7 +879,9 @@ def show(namespace):
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
+    icmp_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'ICMP_SESSION')
     switch_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SWITCH')
+    llr_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'LLR')
 
     header = ("Type", "Interval (in ms)", "Status")
     data = []
@@ -839,12 +922,19 @@ def show(namespace):
     if srv6_info:
         data.append(["SRV6_STAT", srv6_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     srv6_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if icmp_info:
+        data.append(["ICMP_SESSION_STAT", icmp_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    icmp_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if switch_info:
         data.append([
             "SWITCH_STAT",
             switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
             switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
         ])
+    if llr_info:
+        data.append(["LLR_STAT",
+                     llr_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                     llr_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     dpu = is_dpu(configdb)
     if dpu and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
@@ -870,8 +960,18 @@ def register_dynamic_commands(cmds):
     """
     Dynamically register commands based on condition callback.
     """
-    db = ConfigDBConnector()
-    db.connect()
+    try:
+        db = ConfigDBConnector()
+        db.connect()
+    except RuntimeError as e:
+        # Runs at import time. swsscommon raises RuntimeError when CONFIG_DB is
+        # unreachable (e.g. build-time completion generation in a redis-less
+        # container). Skip DPU-only dynamic commands rather than fail the import,
+        # else the completion file is never generated.
+        log.log_warning(
+            "CONFIG_DB not available at import, skipping DPU dynamic commands "
+            "(eni/ha_set): {}".format(e))
+        return
     for cmd, cb in cmds:
         if cb(db):
             cli.add_command(cmd)
