@@ -1715,21 +1715,33 @@ def logging(process, lines, follow, verbose):
     else:
         log_path = "/var/log"
     if follow:
-        cmd = ['sudo', 'tail', '-F', '{}/syslog'.format(log_path)]
-        run_command(cmd, display_cmd=verbose)
+        run_command(['sudo', 'tail', '-F', '{}/syslog'.format(log_path)], display_cmd=verbose)
+        return
+
+    log_files = ["{}/syslog.1".format(log_path)] if os.path.isfile("{}/syslog.1".format(log_path)) else []
+    log_files.append("{}/syslog".format(log_path))
+
+    # "-h" keeps output filename-free across multiple files; "--" stops a
+    # process value starting with "-" from being read as a grep option.
+    if process is not None:
+        cmd = ["sudo", "grep", "-h", "--", process] + log_files
     else:
-        if os.path.isfile("{}/syslog.1".format(log_path)):
-            cmd = "sudo cat {}/syslog.1 {}/syslog".format(log_path, log_path)
-        else:
-            cmd = "sudo cat {}/syslog".format(log_path)
+        cmd = ["sudo", "cat"] + log_files
 
-        if process is not None:
-            cmd += " | grep '{}'".format(process)
+    if lines is None:
+        run_command(cmd, display_cmd=verbose)
+        return
 
-        if lines is not None:
-            cmd += " | tail -{}".format(lines)
-
-        run_command(cmd, display_cmd=verbose, shell=True)
+    tail_cmd = ["tail", "-n", str(lines)]
+    if verbose:
+        click.echo(click.style("Command: ", fg='cyan') +
+                   click.style("{} | {}".format(' '.join(cmd), ' '.join(tail_cmd)), fg='green'))
+    exitcodes, output = getstatusoutput_noshell_pipe(cmd, tail_cmd)
+    if output:
+        click.echo(output)
+    rc = next((code for code in reversed(exitcodes) if code != 0), 0)
+    if rc != 0:
+        sys.exit(rc)
 
 #
 # 'version' command ("show version")
