@@ -204,11 +204,60 @@ result['asic_nexthop_table'] = asic_nexthop_table
 return redis.status_reply(cjson.encode(result))
 """
 
+RECHECK_READ_SCRIPT = """
+-- ARGV contains an IP count, that many suspect IPs, then their MACs.
+local suspect_ip_count = tonumber(ARGV[1])
+local suspect_ips = {}
+for i = 2, suspect_ip_count + 1 do
+    suspect_ips[ARGV[i]] = true
+end
+local suspect_macs = {}
+for i = suspect_ip_count + 2, #ARGV do
+    suspect_macs[string.lower(ARGV[i])] = true
+end
+
+local neighbors = {}
+local asic_fdb = {}
+
+redis.call('SELECT', 0)
+local neighbor_prefix = 'NEIGH_TABLE:Vlan'
+local neighbor_keys = redis.call('KEYS', neighbor_prefix .. '*')
+for _, neighbor_key in ipairs(neighbor_keys) do
+    local separator_index = string.find(neighbor_key, ':', string.len(neighbor_prefix) + 1, true)
+    if separator_index then
+        local neighbor_ip = string.sub(neighbor_key, separator_index + 1)
+        if suspect_ips[neighbor_ip] then
+            local mac = redis.call('HGET', neighbor_key, 'neigh')
+            if mac then
+                neighbors[neighbor_ip] = string.lower(mac)
+            end
+        end
+    end
+end
+
+redis.call('SELECT', 1)
+local fdb_prefix = 'ASIC_STATE:SAI_OBJECT_TYPE_FDB_ENTRY:'
+local fdb_keys = redis.call('KEYS', fdb_prefix .. '*')
+for _, fdb_key in ipairs(fdb_keys) do
+    local fdb_details = cjson.decode(string.sub(fdb_key, string.len(fdb_prefix) + 1))
+    local mac = string.lower(fdb_details['mac'])
+    if suspect_macs[mac] then
+        local bridge_port_id = redis.call('HGET', fdb_key, 'SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID')
+        if bridge_port_id then
+            asic_fdb[mac] = bridge_port_id
+        end
+    end
+end
+
+return redis.status_reply(cjson.encode({neighbors=neighbors, asic_fdb=asic_fdb}))
+"""
+
 # Allow kernel ARP/ND and orchagent to converge before validating the
 # one-time automatic neighbor flush mitigation.
 POST_FLUSH_CHECK_DELAY_SEC = 10
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
+RECHECK_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_RECHECK_SCRIPT_SHA1"
 ZERO_MAC = "00:00:00:00:00:00"
 NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
                                   "TUNNEL_IN_ASIC", "HWSTATUS"]
@@ -401,25 +450,29 @@ def flush_inconsistent_neighbors(failed_neighbors):
     return len(flushed_neighbors)
 
 
-def read_tables_from_db(appl_db):
-    """Reads required tables from db."""
-    # NOTE: let's cache the db read script sha1 in APPL_DB under
-    # key "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
+def load_db_read_script(appl_db, script, cache_key):
+    """Load a Redis read script if needed and cache its SHA1 in APPL_DB."""
     def _load_script():
-        redis_load_cmd = "SCRIPT LOAD \"%s\"" % DB_READ_SCRIPT
-        db_read_script_sha1 = redis_cli(redis_load_cmd).strip()
-        WRITE_LOG_INFO("loaded script sha1: %s", db_read_script_sha1)
-        appl_db.set(DB_READ_SCRIPT_CONFIG_DB_KEY, db_read_script_sha1)
-        return db_read_script_sha1
+        redis_load_cmd = "SCRIPT LOAD \"%s\"" % script
+        script_sha1 = redis_cli(redis_load_cmd).strip()
+        WRITE_LOG_INFO("loaded script sha1: %s", script_sha1)
+        appl_db.set(cache_key, script_sha1)
+        return script_sha1
 
     def _is_script_existed(script_sha1):
         redis_script_exists_cmd = "SCRIPT EXISTS %s" % script_sha1
         cmd_output = redis_cli(redis_script_exists_cmd).strip()
         return "1" in cmd_output
 
-    db_read_script_sha1 = appl_db.get(DB_READ_SCRIPT_CONFIG_DB_KEY)
-    if ((not db_read_script_sha1) or (not _is_script_existed(db_read_script_sha1))):
-        db_read_script_sha1 = _load_script()
+    script_sha1 = appl_db.get(cache_key)
+    if ((not script_sha1) or (not _is_script_existed(script_sha1))):
+        script_sha1 = _load_script()
+    return script_sha1
+
+
+def read_tables_from_db(appl_db):
+    """Reads required tables from db."""
+    db_read_script_sha1 = load_db_read_script(appl_db, DB_READ_SCRIPT, DB_READ_SCRIPT_CONFIG_DB_KEY)
 
     redis_run_cmd = "EVALSHA %s 0" % db_read_script_sha1
     result = redis_cli(redis_run_cmd).strip()
@@ -443,6 +496,26 @@ def read_tables_from_db(appl_db):
     WRITE_LOG_DEBUG("ASIC nexthop table: %s", json.dumps(asic_nexthop_table, indent=4))
     return neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, \
         asic_neigh_table, asic_nexthop_table
+
+
+def read_recheck_tables_from_db(appl_db, suspect_ips, suspect_macs):
+    """Read suspect NEIGH/FDB bindings without the mux or ASIC L3 tables."""
+    script_sha1 = load_db_read_script(appl_db, RECHECK_READ_SCRIPT, RECHECK_READ_SCRIPT_CONFIG_DB_KEY)
+    script_args = [str(len(suspect_ips))] + list(suspect_ips) + list(suspect_macs)
+    redis_run_cmd = "EVALSHA %s 0 %s" % (script_sha1, " ".join(shlex.quote(arg) for arg in script_args))
+    tables = json.loads(redis_cli(redis_run_cmd))
+
+    for table_name in ("neighbors", "asic_fdb"):
+        if tables[table_name] == []:
+            tables[table_name] = {}
+        if not isinstance(tables[table_name], dict):
+            raise TypeError("Invalid %s table in recheck response" % table_name)
+
+    neighbors = tables["neighbors"]
+    asic_fdb = {mac: bridge_port.lstrip("oid:0x") for mac, bridge_port in tables["asic_fdb"].items()}
+    WRITE_LOG_DEBUG("recheck neighbors: %s", json.dumps(neighbors, indent=4))
+    WRITE_LOG_DEBUG("recheck ASIC FDB: %s", json.dumps(asic_fdb, indent=4))
+    return neighbors, asic_fdb
 
 
 def get_if_br_oid_to_port_name_map():
@@ -705,7 +778,9 @@ def recheck_bouncing_neighbors(check_results, first_neighbors, first_mac_to_port
                    "to filter transient FDB/NEIGH races.", len(suspects), delay_ms)
     time.sleep(delay_ms / 1000.0)
 
-    second_neighbors, _, _, _, second_asic_fdb, _, _, _ = read_tables_from_db(appl_db)
+    suspect_ips = [ip for ip, _mac, _port in suspects]
+    suspect_macs = sorted({mac for _ip, mac, _port in suspects})
+    second_neighbors, second_asic_fdb = read_recheck_tables_from_db(appl_db, suspect_ips, suspect_macs)
     second_mac_to_port = get_mac_to_port_name_map(second_asic_fdb, if_oid_to_port_name_map)
 
     bouncing_ips = detect_bouncing(suspects, first_neighbors, first_mac_to_port,

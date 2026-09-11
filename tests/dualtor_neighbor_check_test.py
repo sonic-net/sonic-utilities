@@ -1415,11 +1415,13 @@ class TestDualtorNeighborCheck(object):
             "IN_MUX_TOGGLE": False, "HWSTATUS": False,
         }]
         with patch("dualtor_neighbor_check.time.sleep") as mock_sleep, \
-                patch("dualtor_neighbor_check.read_tables_from_db") as mock_read:
+                patch("dualtor_neighbor_check.read_tables_from_db") as mock_full_read, \
+                patch("dualtor_neighbor_check.read_recheck_tables_from_db") as mock_read:
             bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
                 check_results, {}, {}, MagicMock(), {}, delay_ms=0)
         assert bouncing == set()
         mock_sleep.assert_not_called()
+        mock_full_read.assert_not_called()
         mock_read.assert_not_called()
 
     def test_recheck_bouncing_neighbors_no_suspects_skips_reread(self, mock_log_functions):
@@ -1429,11 +1431,13 @@ class TestDualtorNeighborCheck(object):
             "IN_MUX_TOGGLE": False, "HWSTATUS": True,
         }]
         with patch("dualtor_neighbor_check.time.sleep") as mock_sleep, \
-                patch("dualtor_neighbor_check.read_tables_from_db") as mock_read:
+                patch("dualtor_neighbor_check.read_tables_from_db") as mock_full_read, \
+                patch("dualtor_neighbor_check.read_recheck_tables_from_db") as mock_read:
             bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
                 check_results, {}, {}, MagicMock(), {}, delay_ms=300)
         assert bouncing == set()
         mock_sleep.assert_not_called()
+        mock_full_read.assert_not_called()
         mock_read.assert_not_called()
 
     def test_recheck_bouncing_neighbors_detects_mac_move(self, mock_log_functions):
@@ -1446,16 +1450,21 @@ class TestDualtorNeighborCheck(object):
         first_mac_to_port = {"aa:bb:cc:dd:ee:02": "Ethernet8"}
 
         second_neighbors = {"10.0.0.2": "aa:bb:cc:dd:ee:02"}
-        second_asic_fdb = {"aa:bb:cc:dd:ee:02": "oid:0xbridgeport_eth36"}
-        if_oid_to_port_name_map = {"oid:0xbridgeport_eth36": "Ethernet36"}
+        second_asic_fdb = {"aa:bb:cc:dd:ee:02": "3a00000000064c"}
+        if_oid_to_port_name_map = {"3a00000000064c": "Ethernet36"}
+        appl_db = MagicMock()
 
-        with patch("dualtor_neighbor_check.time.sleep"), \
-                patch("dualtor_neighbor_check.read_tables_from_db",
-                      return_value=(second_neighbors, {}, {}, {}, second_asic_fdb, [], [], {})):
+        with patch("dualtor_neighbor_check.time.sleep") as mock_sleep, \
+                patch("dualtor_neighbor_check.read_tables_from_db") as mock_full_read, \
+                patch("dualtor_neighbor_check.read_recheck_tables_from_db",
+                      return_value=(second_neighbors, second_asic_fdb)) as mock_read:
             bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
                 check_results, first_neighbors, first_mac_to_port,
-                MagicMock(), if_oid_to_port_name_map, delay_ms=300)
+                appl_db, if_oid_to_port_name_map, delay_ms=300)
         assert bouncing == {"10.0.0.2"}
+        mock_sleep.assert_called_once_with(0.3)
+        mock_full_read.assert_not_called()
+        mock_read.assert_called_once_with(appl_db, ["10.0.0.2"], ["aa:bb:cc:dd:ee:02"])
 
     def test_recheck_bouncing_neighbors_stable_returns_empty(self, mock_log_functions):
         """A failing row whose bindings are stable across reads is NOT bouncing
@@ -1466,13 +1475,187 @@ class TestDualtorNeighborCheck(object):
         }]
         first_neighbors = {"10.0.0.2": "aa:bb:cc:dd:ee:02"}
         first_mac_to_port = {"aa:bb:cc:dd:ee:02": "Ethernet8"}
-        second_asic_fdb = {"aa:bb:cc:dd:ee:02": "oid:0xbridgeport_eth8"}
-        if_oid_to_port_name_map = {"oid:0xbridgeport_eth8": "Ethernet8"}
+        second_asic_fdb = {"aa:bb:cc:dd:ee:02": "3a00000000064b"}
+        if_oid_to_port_name_map = {"3a00000000064b": "Ethernet8"}
 
         with patch("dualtor_neighbor_check.time.sleep"), \
-                patch("dualtor_neighbor_check.read_tables_from_db",
-                      return_value=(dict(first_neighbors), {}, {}, {}, second_asic_fdb, [], [], {})):
+                patch("dualtor_neighbor_check.read_recheck_tables_from_db",
+                      return_value=(dict(first_neighbors), second_asic_fdb)):
             bouncing = dualtor_neighbor_check.recheck_bouncing_neighbors(
                 check_results, first_neighbors, first_mac_to_port,
                 MagicMock(), if_oid_to_port_name_map, delay_ms=300)
         assert bouncing == set()
+
+    @pytest.mark.parametrize("cached, script_exists", [(False, False), (True, False), (True, True)])
+    def test_read_recheck_tables_normalizes_bridge_ports(self, mock_log_functions, cached, script_exists):
+        script_sha1 = "c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"
+        appl_db = MagicMock()
+        appl_db.get.return_value = script_sha1 if cached else None
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01", "fc02:1000::2": "ee:86:d8:46:7d:01"}
+        asic_fdb = {"ee:86:d8:46:7d:01": "oid:0x3a00000000064b"}
+        replies = []
+        expected_calls = []
+        if cached:
+            replies.append("1" if script_exists else "0")
+            expected_calls.append(call("sudo redis-cli SCRIPT EXISTS %s" % script_sha1))
+        if not cached or not script_exists:
+            replies.append(script_sha1)
+            expected_calls.append(call("sudo redis-cli SCRIPT LOAD \"%s\"" % dualtor_neighbor_check.RECHECK_READ_SCRIPT))
+        replies.append(json.dumps({"neighbors": neighbors, "asic_fdb": asic_fdb}))
+        expected_calls.append(call(
+            "sudo redis-cli EVALSHA %s 0 2 192.168.0.2 fc02:1000::2 ee:86:d8:46:7d:01" % script_sha1
+        ))
+
+        with patch("dualtor_neighbor_check.run_command", side_effect=replies) as mock_run:
+            result = dualtor_neighbor_check.read_recheck_tables_from_db(
+                appl_db, list(neighbors), list(asic_fdb)
+            )
+
+        assert result == (neighbors, {"ee:86:d8:46:7d:01": "3a00000000064b"})
+        assert mock_run.call_args_list == expected_calls
+        appl_db.get.assert_called_once_with(dualtor_neighbor_check.RECHECK_READ_SCRIPT_CONFIG_DB_KEY)
+        if not cached or not script_exists:
+            appl_db.set.assert_called_once_with(dualtor_neighbor_check.RECHECK_READ_SCRIPT_CONFIG_DB_KEY, script_sha1)
+        else:
+            appl_db.set.assert_not_called()
+
+    @pytest.mark.parametrize("empty_table", [{}, []])
+    def test_read_recheck_tables_empty_bindings(self, mock_log_functions, empty_table):
+        with patch("dualtor_neighbor_check.load_db_read_script", return_value="cached"), \
+                patch("dualtor_neighbor_check.redis_cli", return_value=json.dumps(
+                    {"neighbors": empty_table, "asic_fdb": empty_table}
+                )):
+            assert dualtor_neighbor_check.read_recheck_tables_from_db(
+                MagicMock(), ["192.168.0.2"], ["ee:86:d8:46:7d:01"]
+            ) == ({}, {})
+
+    @pytest.mark.parametrize("table_name", ["neighbors", "asic_fdb"])
+    @pytest.mark.parametrize("invalid_table", [None, False, [1]])
+    def test_read_recheck_tables_rejects_invalid_tables(self, mock_log_functions, table_name, invalid_table):
+        tables = {"neighbors": {}, "asic_fdb": {}}
+        tables[table_name] = invalid_table
+        with patch("dualtor_neighbor_check.load_db_read_script", return_value="cached"), \
+                patch("dualtor_neighbor_check.redis_cli", return_value=json.dumps(tables)), \
+                pytest.raises(TypeError, match="Invalid %s table" % table_name):
+            dualtor_neighbor_check.read_recheck_tables_from_db(MagicMock(), ["192.168.0.2"], [])
+
+    @pytest.mark.parametrize("response, error", [("not json", json.JSONDecodeError), ("{}", KeyError)])
+    def test_read_recheck_tables_propagates_bad_response(self, mock_log_functions, response, error):
+        with patch("dualtor_neighbor_check.load_db_read_script", return_value="cached"), \
+                patch("dualtor_neighbor_check.redis_cli", return_value=response), \
+                pytest.raises(error):
+            dualtor_neighbor_check.read_recheck_tables_from_db(MagicMock(), ["192.168.0.2"], [])
+
+    def test_db_read_scripts_survive_command_splitting(self):
+        for script in (dualtor_neighbor_check.DB_READ_SCRIPT, dualtor_neighbor_check.RECHECK_READ_SCRIPT):
+            command = "sudo redis-cli SCRIPT LOAD \"%s\"" % script
+            assert shlex.split(command) == ["sudo", "redis-cli", "SCRIPT", "LOAD", script]
+
+    def test_recheck_reads_only_suspects_with_unique_macs(self, mock_log_functions):
+        appl_db = MagicMock()
+        mac = "aa:bb:cc:dd:ee:02"
+        check_results = [
+            {"NEIGHBOR": "10.0.0.2", "MAC": mac, "PORT": "Ethernet8",
+             "IN_MUX_TOGGLE": False, "HWSTATUS": False},
+            {"NEIGHBOR": "fc02:1000::2", "MAC": mac, "PORT": "Ethernet8",
+             "IN_MUX_TOGGLE": False, "HWSTATUS": False},
+            {"NEIGHBOR": "10.0.0.3", "MAC": "aa:bb:cc:dd:ee:03", "PORT": "Ethernet12",
+             "IN_MUX_TOGGLE": False, "HWSTATUS": True},
+        ]
+        neighbors = {"10.0.0.2": mac, "fc02:1000::2": mac}
+        with patch("dualtor_neighbor_check.time.sleep"), \
+                patch("dualtor_neighbor_check.read_recheck_tables_from_db",
+                      return_value=(neighbors, {mac: "3a00000000064b"})) as mock_read:
+            result = dualtor_neighbor_check.recheck_bouncing_neighbors(
+                check_results, neighbors, {mac: "Ethernet8"},
+                appl_db, {"3a00000000064b": "Ethernet8"}, 300
+            )
+        assert result == set()
+        mock_read.assert_called_once_with(appl_db, ["10.0.0.2", "fc02:1000::2"], [mac])
+
+    def test_recheck_propagates_redis_failure(self, mock_log_functions):
+        check_results = [{
+            "NEIGHBOR": "10.0.0.2", "MAC": "aa:bb:cc:dd:ee:02", "PORT": "Ethernet8",
+            "IN_MUX_TOGGLE": False, "HWSTATUS": False,
+        }]
+        with patch("dualtor_neighbor_check.time.sleep"), \
+                patch("dualtor_neighbor_check.read_recheck_tables_from_db",
+                      side_effect=RuntimeError("Redis reread failed")), \
+                pytest.raises(RuntimeError, match="Redis reread failed"):
+            dualtor_neighbor_check.recheck_bouncing_neighbors(check_results, {}, {}, MagicMock(), {}, 300)
+
+    @pytest.mark.parametrize("arguments, delay", [
+        ([], 300), (["--recheck-delay-ms", "0"], 0), (["--recheck-delay-ms", "25"], 25)
+    ])
+    def test_parse_args_recheck_delay(self, arguments, delay):
+        with patch("dualtor_neighbor_check.sys.argv", ["dualtor_neighbor_check.py"] + arguments):
+            assert dualtor_neighbor_check.parse_args().recheck_delay_ms == delay
+
+    def test_parse_args_rejects_negative_recheck_delay(self, capsys):
+        with patch("dualtor_neighbor_check.sys.argv", ["dualtor_neighbor_check.py", "--recheck-delay-ms", "-1"]), \
+                pytest.raises(SystemExit) as exc:
+            dualtor_neighbor_check.parse_args()
+        assert exc.value.code == 2
+        assert "--recheck-delay-ms must be non-negative." in capsys.readouterr().err
+
+    def test_parse_check_results_never_demotes_zero_mac(self, mock_log_functions):
+        check_results = [{
+            "NEIGHBOR": "10.0.0.2", "MAC": dualtor_neighbor_check.ZERO_MAC, "PORT": "N/A",
+            "MUX_STATE": "N/A", "IN_MUX_TOGGLE": "N/A", "NEIGHBOR_IN_ASIC": False,
+            "TUNNEL_IN_ASIC": False, "HWSTATUS": False, "_NEIGHBOR_MODE": "host-route",
+        }]
+        result, failed = dualtor_neighbor_check.parse_check_results(check_results, bouncing_ips={"10.0.0.2"})
+        assert result is False
+        assert failed == check_results
+        assert failed[0]["HWSTATUS"] == "inconsistent"
+
+    @pytest.mark.parametrize("neighbor_mode", ["host-route", "prefix-route"])
+    @pytest.mark.parametrize("include_stable, delay_ms", [(False, 300), (True, 300), (False, 0)])
+    def test_main_rechecks_before_flushing(self, mock_log_functions, neighbor_mode, include_stable, delay_ms):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"10.0.0.2": "aa:bb:cc:dd:ee:02"}
+        first_fdb = {"aa:bb:cc:dd:ee:02": "3a00000000064b"}
+        second_fdb = {"aa:bb:cc:dd:ee:02": "3a00000000064c"}
+        if_oid_to_port_name_map = {
+            "3a00000000064b": "Ethernet8", "3a00000000064c": "Ethernet36", "3a00000000064d": "Ethernet4"
+        }
+        if include_stable:
+            neighbors["10.0.0.3"] = "aa:bb:cc:dd:ee:03"
+            first_fdb["aa:bb:cc:dd:ee:03"] = "3a00000000064d"
+            second_fdb["aa:bb:cc:dd:ee:03"] = "3a00000000064d"
+        mux_states = {"Ethernet8": "active", "Ethernet4": "active"}
+        tables = (
+            neighbors, mux_states, dict(mux_states),
+            {port: neighbor_mode for port in mux_states}, first_fdb, [], [], {}
+        )
+        expected_failed = ["10.0.0.3"] if include_stable else (["10.0.0.2"] if delay_ms == 0 else [])
+
+        with patch("dualtor_neighbor_check.sys.argv",
+                   ["dualtor_neighbor_check.py", "--recheck-delay-ms", str(delay_ms)]), \
+                patch("dualtor_neighbor_check.config_logging"), \
+                patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector"), \
+                patch("dualtor_neighbor_check.daemon_base.db_connect"), \
+                patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
+                patch("dualtor_neighbor_check.get_mux_cable_config", return_value={"Ethernet8": {}}), \
+                patch("dualtor_neighbor_check.get_if_br_oid_to_port_name_map", return_value=if_oid_to_port_name_map), \
+                patch("dualtor_neighbor_check.read_tables_from_db", return_value=tables) as mock_full_read, \
+                patch("dualtor_neighbor_check.read_recheck_tables_from_db",
+                      return_value=(neighbors, second_fdb)) as mock_recheck, \
+                patch("dualtor_neighbor_check.flush_neighbor") as mock_flush, \
+                patch("dualtor_neighbor_check.time.sleep") as mock_sleep:
+            result = dualtor_neighbor_check.main()
+
+        assert result == (1 if expected_failed else 0)
+        assert mock_flush.call_args_list == [call(ip) for ip in expected_failed]
+        assert mock_full_read.call_count == (2 if expected_failed else 1)
+        assert mock_recheck.call_count == (mock_full_read.call_count if delay_ms else 0)
+        expected_sleeps = [call(delay_ms / 1000.0)] if delay_ms else []
+        if expected_failed:
+            expected_sleeps += [call(dualtor_neighbor_check.POST_FLUSH_CHECK_DELAY_SEC)] + expected_sleeps
+            mock_log_error.assert_any_call("Found neighbors that are inconsistent with mux states: %s", expected_failed)
+            mock_log_error.assert_called_with("ALERT: post-flush dualtor neighbor check still found inconsistent neighbors.")
+        else:
+            mock_log_error.assert_not_called()
+        assert mock_sleep.call_args_list == expected_sleeps
+        if delay_ms:
+            assert any("bouncing" in str(log_call) for log_call in mock_log_warn.call_args_list)
