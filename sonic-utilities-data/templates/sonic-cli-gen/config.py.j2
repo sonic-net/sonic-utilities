@@ -372,7 +372,7 @@ def {{ list_update_group }}_clear(
 @{{ table.name }}_{{ object.name }}.command(name="{{ cli_name(attr.name) }}")
 {{ gen_click_arguments([attr]) }}
 @clicommon.pass_db
-def {{ table.name }}_{{ object.name }}_{{ attr.name }}(db, {{ pythonize([attr]) }}):
+def {{ table.name }}_{{ object.name }}_{{ attr.name|lower|replace("-","_") }}(db, {{ pythonize([attr]) }}):
     """ {{ attr.description }} """
 
     table = "{{ table.name }}"
