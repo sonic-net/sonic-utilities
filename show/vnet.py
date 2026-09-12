@@ -445,9 +445,9 @@ def endpoint(args):
 
             for k in vnet_rt_keys:
                 val = appl_db.get_all(appl_db.APPL_DB, k)
-                endpoints = val.get('endpoint').split(',') if 'endpoint' in val else []
+                endpoints = [ep.strip() for ep in val.get('endpoint').split(',')] if 'endpoint' in val else []
                 if 'endpoint_monitor' in val:
-                    monitors = val.get('endpoint_monitor').split(',')
+                    monitors = [m.strip() for m in val.get('endpoint_monitor').split(',')]
                 else:
                     continue
                 for idx, ep in enumerate(endpoints):
@@ -497,8 +497,8 @@ def endpoint(args):
 
             for k in vnet_rt_keys:
                 val = appl_db.get_all(appl_db.APPL_DB, k)
-                endpoints = val.get('endpoint').split(',') if val and 'endpoint' in val else []
-                monitors = val.get('endpoint_monitor').split(',') if val and 'endpoint_monitor' in val else []
+                endpoints = [ep.strip() for ep in val.get('endpoint').split(',')] if val and 'endpoint' in val else []
+                monitors = [m.strip() for m in val.get('endpoint_monitor').split(',')] if val and 'endpoint_monitor' in val else []
                 for idx, ep in enumerate(endpoints):
                     if args == ep:
                         prefix.append(k.split(":", 2)[2])
