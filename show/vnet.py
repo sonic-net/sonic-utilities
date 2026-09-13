@@ -498,7 +498,10 @@ def endpoint(args):
             for k in vnet_rt_keys:
                 val = appl_db.get_all(appl_db.APPL_DB, k)
                 endpoints = [ep.strip() for ep in val.get('endpoint').split(',')] if val and 'endpoint' in val else []
-                monitors = [m.strip() for m in val.get('endpoint_monitor').split(',')] if val and 'endpoint_monitor' in val else []
+                if val and 'endpoint_monitor' in val:
+                    monitors = [m.strip() for m in val.get('endpoint_monitor').split(',')]
+                else:
+                    monitors = []
                 for idx, ep in enumerate(endpoints):
                     if args == ep:
                         prefix.append(k.split(":", 2)[2])
@@ -533,8 +536,6 @@ def pretty_print_local(table, r, nexthop_val, ifname_val):
     nexthops = nexthop_val.split(',') if nexthop_val else [""]
     interfaces = ifname_val.split(',') if ifname_val else []
 
-    # Terminal-width sizing isn't feasible here (rows are wrapped one key at a
-    # time, before column widths are known), so cap at a fixed 2 items per row.
     row_width = 2
 
     max_entries = max(len(nexthops), len(interfaces))
@@ -554,8 +555,6 @@ def pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state):
     macs = mac_addr.split(',') if mac_addr and ',' in mac_addr else None
     vnis = vni.split(',') if vni and ',' in vni else None
 
-    # Terminal-width sizing isn't feasible here (rows are wrapped one key at a
-    # time, before column widths are known), so cap at a fixed 2 items per row.
     row_width = 2
 
     i = 0
