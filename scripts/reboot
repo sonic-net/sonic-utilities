@@ -178,12 +178,16 @@ function reboot_pre_check()
 
     if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ]; then
         ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK}
-        [[ $? -ne 0 ]] && exit $?
+        PRE_CHECK_RC=$?
+        if [[ ${PRE_CHECK_RC} -ne 0 ]]; then
+            VERBOSE=yes debug "Platform reboot pre-check failed: rc=${PRE_CHECK_RC}"
+            exit ${PRE_CHECK_RC}
+        fi
     fi
 
     # Verify the next image by sonic-installer
-    local message=$(sonic-installer verify-next-image 2>&1)
-    if [ $? -ne 0 ]; then
+    local message
+    if ! message=$(sonic-installer verify-next-image 2>&1); then
         VERBOSE=yes debug "Failed to verify next image: ${message}"
         exit ${EXIT_SONIC_INSTALLER_VERIFY_REBOOT}
     fi
