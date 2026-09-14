@@ -543,6 +543,28 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["TUNNEL"]["POLL_INTERVAL"]
 
+    def test_register_dynamic_commands_survives_db_connect_failure(self):
+        # Importing counterpoll.main must not require a live CONFIG_DB. The
+        # build-time bash-completion generator imports every CLI module in a
+        # redis-less container; if the connect failure (RuntimeError)
+        # propagates from register_dynamic_commands (which runs at import), the
+        # generator drops the counterpoll completion file and "counterpoll <Tab>"
+        # stops working.
+        mock_conn = mock.Mock()
+        mock_conn.connect.side_effect = RuntimeError("Unable to connect to redis")
+        with mock.patch.object(counterpoll, "ConfigDBConnector", return_value=mock_conn):
+            # Must not raise even though connect() fails.
+            counterpoll.register_dynamic_commands(counterpoll.dynamic_commands)
+
+    def test_register_dynamic_commands_propagates_unexpected_error(self):
+        # Only swsscommon connection failures (RuntimeError) are tolerated;
+        # unrelated errors must still surface rather than be silently swallowed.
+        mock_conn = mock.Mock()
+        mock_conn.connect.side_effect = ValueError("unexpected")
+        with mock.patch.object(counterpoll, "ConfigDBConnector", return_value=mock_conn):
+            with pytest.raises(ValueError):
+                counterpoll.register_dynamic_commands(counterpoll.dynamic_commands)
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
