@@ -4551,27 +4551,65 @@ class TestConfigInterface(object):
         assert port_dict['Ethernet8']['admin_status'] == target_status
         assert port_dict['Ethernet12']['admin_status'] == other_status
 
-    def test_from_to_range_alias_mode(self):
+    @pytest.mark.parametrize("cmd_name,target_status,other_status", [
+        ("shutdown", "down", "up"),
+        ("startup", "up", "down"),
+    ])
+    def test_from_to_range_alias_mode(self, cmd_name, target_status, other_status):
         db = Db()
         runner = CliRunner()
         obj = {'config_db': db.cfgdb}
 
         # Ethernet0/Ethernet4/Ethernet8 are aliased etp1/etp2/etp3 in the mock DB.
         for port in ["Ethernet0", "Ethernet4", "Ethernet8"]:
-            db.cfgdb.mod_entry("PORT", port, {"admin_status": "up"})
+            db.cfgdb.mod_entry("PORT", port, {"admin_status": other_status})
 
         os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
         try:
-            result = runner.invoke(config.config.commands['interface'].commands['shutdown'],
+            result = runner.invoke(config.config.commands['interface'].commands[cmd_name],
                                    ['--from', 'etp1', '--to', 'etp3'], obj=obj)
         finally:
             os.environ['SONIC_CLI_IFACE_MODE'] = "default"
 
         assert result.exit_code == 0, result.output
         port_dict = db.cfgdb.get_table('PORT')
-        assert port_dict['Ethernet0']['admin_status'] == 'down'
-        assert port_dict['Ethernet4']['admin_status'] == 'down'
-        assert port_dict['Ethernet8']['admin_status'] == 'down'
+        assert port_dict['Ethernet0']['admin_status'] == target_status
+        assert port_dict['Ethernet4']['admin_status'] == target_status
+        assert port_dict['Ethernet8']['admin_status'] == target_status
+
+    @pytest.mark.parametrize("cmd_name", ["startup", "shutdown"])
+    def test_from_to_range_unresolved_from_alias(self, cmd_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        try:
+            with patch('config.main.interface_alias_to_name', side_effect=[None, 'Ethernet40']):
+                result = runner.invoke(config.config.commands['interface'].commands[cmd_name],
+                                       ['--from', 'bogus_alias', '--to', 'etp11'], obj=obj)
+        finally:
+            os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code != 0
+        assert "Unable to resolve alias for '--from' interface" in result.output
+
+    @pytest.mark.parametrize("cmd_name", ["startup", "shutdown"])
+    def test_from_to_range_unresolved_to_alias(self, cmd_name):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        try:
+            with patch('config.main.interface_alias_to_name', side_effect=['Ethernet0', None]):
+                result = runner.invoke(config.config.commands['interface'].commands[cmd_name],
+                                       ['--from', 'etp1', '--to', 'bogus_alias'], obj=obj)
+        finally:
+            os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code != 0
+        assert "Unable to resolve alias for '--to' interface" in result.output
 
     # Table of (args, expected substring of the error message) for every
     # --from/--to validation failure. Exercised against both startup and
