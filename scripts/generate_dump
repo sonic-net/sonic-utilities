@@ -2384,7 +2384,7 @@ save_log_files() {
 #  0 if BMC is supported, 1 otherwise
 ###############################################################################
 is_bmc_supported() {
-    python3 -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
+    python3 -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data() and device_info.get_bmc_os() == device_info.BMC_OS_OPENBMC) else 1)"
 }
 
 ###############################################################################
@@ -2397,7 +2397,7 @@ is_bmc_supported() {
 trigger_bmc_debug_log_dump() {
     trap 'handle_error $? $LINENO' ERR
     if ! is_bmc_supported; then
-        echo "INFO: BMC is not found on this platform. Skipping..."
+        echo "INFO: BMC (OpenBMC) is not found on this platform. Skipping..."
         return
     fi
     # Trigger BMC redfish API to start BMC debug log dump task

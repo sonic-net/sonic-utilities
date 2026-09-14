@@ -5,10 +5,58 @@ import config.bmc as bmc
 from unittest import mock
 from click.testing import CliRunner
 from mock import MagicMock
+from sonic_py_common import device_info
+from utilities_common.db import Db
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
+
+OPENBMC_PATCH = mock.patch(
+    'config.bmc.device_info.get_bmc_os',
+    return_value=device_info.BMC_OS_OPENBMC)
+SONIC_BMC_PATCH = mock.patch(
+    'config.bmc.device_info.get_bmc_os',
+    return_value=device_info.BMC_OS_SONIC)
+SWITCH_HOST_PATCH = mock.patch(
+    'config.bmc.device_info.is_switch_host',
+    return_value=True)
+
+
+class TestBmcConfigOs(object):
+    """Test class for 'config bmc os' command"""
+
+    @SWITCH_HOST_PATCH
+    def test_config_bmc_os_sonic(self, mock_is_switch_host):
+        db = Db()
+        runner = CliRunner()
+        result = runner.invoke(bmc.config_bmc_os, ['sonic'], obj=db)
+        assert result.exit_code == 0
+        assert "BMC OS set to sonic" in result.output
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'bmc')['os'] == 'sonic'
+
+    @SWITCH_HOST_PATCH
+    def test_config_bmc_os_openbmc(self, mock_is_switch_host):
+        db = Db()
+        runner = CliRunner()
+        result = runner.invoke(bmc.config_bmc_os, ['openbmc'], obj=db)
+        assert result.exit_code == 0
+        assert "BMC OS set to openbmc" in result.output
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'bmc')['os'] == 'openbmc'
+
+    @SWITCH_HOST_PATCH
+    def test_config_bmc_os_case_insensitive(self, mock_is_switch_host):
+        db = Db()
+        runner = CliRunner()
+        result = runner.invoke(bmc.config_bmc_os, ['SONIC'], obj=db)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'bmc')['os'] == 'sonic'
+
+    def test_config_bmc_os_invalid(self):
+        db = Db()
+        runner = CliRunner()
+        result = runner.invoke(bmc.config_bmc_os, ['linux'], obj=db)
+        assert result.exit_code != 0
 
 
 class TestBmcResetRootPassword(object):
@@ -18,7 +66,9 @@ class TestBmcResetRootPassword(object):
     def setup_class(cls):
         print("SETUP")
 
-    def test_reset_root_password_success(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_reset_root_password_success(self, mock_get_bmc_os, mock_is_switch_host):
         """Test successful root password reset"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -38,7 +88,18 @@ class TestBmcResetRootPassword(object):
             assert "BMC root password reset successful" in result.output
             mock_bmc.reset_root_password.assert_called_once()
 
-    def test_reset_root_password_failure(self):
+    @SWITCH_HOST_PATCH
+    @SONIC_BMC_PATCH
+    def test_reset_root_password_rejected_when_sonic_bmc(self, mock_get_bmc_os, mock_is_switch_host):
+        """Test root password reset rejected when BMC OS is sonic"""
+        runner = CliRunner()
+        result = runner.invoke(bmc.reset_root_password, [])
+        assert result.exit_code != 0
+        assert "Operation not supported when BMC OS is sonic" in result.output
+
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_reset_root_password_failure(self, mock_get_bmc_os, mock_is_switch_host):
         """Test failed root password reset"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -58,7 +119,9 @@ class TestBmcResetRootPassword(object):
             assert "BMC root password reset failed: Password reset failed" in result.output
             mock_bmc.reset_root_password.assert_called_once()
 
-    def test_reset_root_password_bmc_not_available(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_reset_root_password_bmc_not_available(self, mock_get_bmc_os, mock_is_switch_host):
         """Test when BMC is not available"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -75,7 +138,9 @@ class TestBmcResetRootPassword(object):
             assert result.exit_code == 0
             assert "BMC is not available on this platform" in result.output
 
-    def test_reset_root_password_exception(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_reset_root_password_exception(self, mock_get_bmc_os, mock_is_switch_host):
         """Test when an exception occurs"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -100,7 +165,9 @@ class TestBmcOpenSession(object):
     def setup_class(cls):
         print("SETUP")
 
-    def test_open_session_success(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_open_session_success(self, mock_get_bmc_os, mock_is_switch_host):
         """Test successful session opening"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -121,7 +188,18 @@ class TestBmcOpenSession(object):
             assert "Token: token_abc" in result.output
             mock_bmc.open_session.assert_called_once()
 
-    def test_open_session_failure_no_credentials(self):
+    @SWITCH_HOST_PATCH
+    @SONIC_BMC_PATCH
+    def test_open_session_rejected_when_sonic_bmc(self, mock_get_bmc_os, mock_is_switch_host):
+        """Test open-session rejected when BMC OS is sonic"""
+        runner = CliRunner()
+        result = runner.invoke(bmc.open_session, [])
+        assert result.exit_code != 0
+        assert "Operation not supported when BMC OS is sonic" in result.output
+
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_open_session_failure_no_credentials(self, mock_get_bmc_os, mock_is_switch_host):
         """Test failed session opening with no credentials"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -141,7 +219,9 @@ class TestBmcOpenSession(object):
             assert "Failed to open session: Login failed" in result.output
             mock_bmc.open_session.assert_called_once()
 
-    def test_open_session_failure_empty_credentials(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_open_session_failure_empty_credentials(self, mock_get_bmc_os, mock_is_switch_host):
         """Test failed session opening with empty credentials"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -161,7 +241,9 @@ class TestBmcOpenSession(object):
             assert "Failed to open session: Login successful" in result.output
             mock_bmc.open_session.assert_called_once()
 
-    def test_open_session_bmc_not_available(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_open_session_bmc_not_available(self, mock_get_bmc_os, mock_is_switch_host):
         """Test when BMC is not available"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -178,7 +260,9 @@ class TestBmcOpenSession(object):
             assert result.exit_code == 0
             assert "BMC is not available on this platform" in result.output
 
-    def test_open_session_exception(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_open_session_exception(self, mock_get_bmc_os, mock_is_switch_host):
         """Test when an exception occurs"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -203,7 +287,9 @@ class TestBmcCloseSession(object):
     def setup_class(cls):
         print("SETUP")
 
-    def test_close_session_success(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_close_session_success(self, mock_get_bmc_os, mock_is_switch_host):
         """Test successful session closing"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -223,7 +309,18 @@ class TestBmcCloseSession(object):
             assert "Session closed successfully" in result.output
             mock_bmc.close_session.assert_called_once_with('session_123')
 
-    def test_close_session_failure(self):
+    @SWITCH_HOST_PATCH
+    @SONIC_BMC_PATCH
+    def test_close_session_rejected_when_sonic_bmc(self, mock_get_bmc_os, mock_is_switch_host):
+        """Test close-session rejected when BMC OS is sonic"""
+        runner = CliRunner()
+        result = runner.invoke(bmc.close_session, ['--session-id', 'session_123'])
+        assert result.exit_code != 0
+        assert "Operation not supported when BMC OS is sonic" in result.output
+
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_close_session_failure(self, mock_get_bmc_os, mock_is_switch_host):
         """Test failed session closing"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -243,7 +340,9 @@ class TestBmcCloseSession(object):
             assert "Failed to close session: Session not found" in result.output
             mock_bmc.close_session.assert_called_once_with('invalid_session')
 
-    def test_close_session_bmc_not_available(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_close_session_bmc_not_available(self, mock_get_bmc_os, mock_is_switch_host):
         """Test when BMC is not available"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
@@ -260,7 +359,9 @@ class TestBmcCloseSession(object):
             assert result.exit_code == 0
             assert "BMC is not available on this platform" in result.output
 
-    def test_close_session_exception(self):
+    @SWITCH_HOST_PATCH
+    @OPENBMC_PATCH
+    def test_close_session_exception(self, mock_get_bmc_os, mock_is_switch_host):
         """Test when an exception occurs"""
         runner = CliRunner()
         mock_sonic_platform = MagicMock()
