@@ -619,7 +619,7 @@ def get_interface_names_in_namespace(ctx, interface_name):
                 valid_in_filter.append(intf)
             else:
                 if other_ns_ports is None:
-                    # Lazy init on first miss to skip uneccessary config_db connections
+                    # Lazy init on first miss to skip unnecessary config_db connections
                     # when all input interfaces are valid.
                     other_ns_ports = _load_other_namespace_ports(namespace)
                 # Case when interface is present in other namespace.

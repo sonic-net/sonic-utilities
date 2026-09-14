@@ -55,7 +55,7 @@ def expand_single_intf_filter(intf_filter):
             raise ValueError(
                 "Invalid interface range '{}'. A range must start with "
                 "'{}' or '{}'.".format(intf_filter, SONIC_PORT_NAME_PREFIX,
-                                      SONIC_LAG_NAME_PREFIX))
+                                       SONIC_LAG_NAME_PREFIX))
 
     return ([intf_filter], False)
 
