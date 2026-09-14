@@ -1,7 +1,7 @@
 import os
 import sys
 from click.testing import CliRunner
-from unittest import TestCase
+from unittest import TestCase, mock
 from swsscommon.swsscommon import ConfigDBConnector
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -45,6 +45,15 @@ current_mode_intf_output_Ethernet60 = ''+ \
 +-------------+-------------------------+
 """
 
+# Expected output for 'show breakout supported-mode Ethernet0'
+supported_mode_intf_output = '' + \
+    """+-------------+----------------------------+
+| Interface   | Supported Breakout Modes   |
++=============+============================+
+| Ethernet0   | 1x400G,2x200G,4x100G       |
++-------------+----------------------------+
+"""
+
 class TestBreakout(TestCase):
     @classmethod
     def setup_class(cls):
@@ -70,10 +79,65 @@ class TestBreakout(TestCase):
         assert result.output == current_mode_intf_output
 
     # Negetive Test 'show interfaces  breakout current-mode Ethernet60'
-    def test_single_intf_current_mode(self):
+    def test_unknown_intf_current_mode(self):
         result = self.runner.invoke(show.cli.commands["interfaces"].commands["breakout"].commands["current-mode"], ["Ethernet60"], obj=self.obj)
         print(sys.stderr, result.output)
         assert result.output == current_mode_intf_output_Ethernet60
+
+    # Test 'show interfaces breakout supported-mode Ethernet0' without ConfigDB
+    def test_single_intf_supported_mode(self):
+        platform_data = {
+            'interfaces': {
+                'Ethernet0': {
+                    'breakout_modes': {
+                        '1x400G': ['etp1'],
+                        '2x200G': ['etp1a', 'etp1b'],
+                        '4x100G': ['etp1a', 'etp1b', 'etp1c', 'etp1d']
+                    }
+                }
+            }
+        }
+        result = self._invoke_supported_mode(platform_data, "Ethernet0")
+        print(sys.stderr, result.output)
+        assert result.output == supported_mode_intf_output
+
+    def _invoke_supported_mode(self, platform_data, interface=None):
+        command = show.cli.commands["interfaces"].commands["breakout"]
+        args = ["supported-mode"]
+        if interface is not None:
+            args.append(interface)
+        with mock.patch("show.interfaces.readJsonFile", return_value=platform_data), \
+             mock.patch("show.interfaces.device_info.get_path_to_port_config_file",
+                        return_value='platform.json'), \
+             mock.patch("show.interfaces.ConfigDBConnector",
+                        side_effect=AssertionError("ConfigDB must not be accessed")):
+            return self.runner.invoke(command, args, obj={})
+
+    def test_supported_mode_empty_platform(self):
+        result = self._invoke_supported_mode({'interfaces': {}})
+        assert result.exit_code != 0
+        assert "Can not load port config from platform.json file" in result.output
+
+    def test_supported_mode_unknown_interface(self):
+        platform_data = {'interfaces': {'Ethernet0': {'breakout_modes': {'1x400G': ['etp1']}}}}
+        result = self._invoke_supported_mode(platform_data, "Ethernet60")
+        assert "Ethernet60" in result.output
+        assert "Not Available" in result.output
+
+    def test_supported_mode_list(self):
+        platform_data = {'interfaces': {'Ethernet0': {'breakout_modes': ['1x400G', '2x200G']}}}
+        result = self._invoke_supported_mode(platform_data, "Ethernet0")
+        assert "1x400G,2x200G" in result.output
+
+    def test_supported_mode_scalar(self):
+        platform_data = {'interfaces': {'Ethernet0': {'breakout_modes': '1x400G,2x200G'}}}
+        result = self._invoke_supported_mode(platform_data, "Ethernet0")
+        assert "1x400G,2x200G" in result.output
+
+    def test_supported_mode_missing_modes(self):
+        platform_data = {'interfaces': {'Ethernet0': {}}}
+        result = self._invoke_supported_mode(platform_data, "Ethernet0")
+        assert "Not Available" in result.output
 
     @classmethod
     def teardown_class(cls):
