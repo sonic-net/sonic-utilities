@@ -10,7 +10,7 @@ import syslog
 import tempfile
 from json import load
 from sys import flags
-from time import sleep as tsleep
+from time import monotonic, sleep as tsleep
 
 import sonic_yang
 from jsondiff import diff
@@ -27,6 +27,65 @@ YANG_DIR = "/usr/local/yang-models"
 CONFIG_DB_JSON_FILE = '/etc/sonic/confib_db.json'
 # TODO: Find a place for it on sonic switch.
 DEFAULT_CONFIG_DB_JSON_FILE = '/etc/sonic/port_breakout_config_db.json'
+
+# Frontend policy for how long to wait for old ports to leave ASIC DB during a
+# breakout. Two limits run together, because neither alone can tell a slow
+# breakout apart from a stuck one.
+#
+# The first is a stall window, measuring the gap since a port was last seen
+# leaving ASIC DB, so any port completing resets it. That is what lets one
+# constant serve a single parent and a whole chassis alike: a wide breakout is
+# only ever asked to keep making progress. The window has to cover the longest
+# plausible teardown of one port, since a single-parent breakout offers no
+# progress signal at all until its first child finishes. The longest gap between
+# consecutive removals measured so far is 33s, on a Cisco 8122 with every
+# front-panel port resident, so this leaves roughly nine times that.
+DPB_DELETE_STALL_TIMEOUT_SEC = 300
+DPB_DELETE_REPORT_INTERVAL_SEC = 30
+
+# The second is an absolute ceiling, for the pathological case where ports
+# trickle out just fast enough to keep resetting the stall window forever. It
+# scales with the number of old children being deleted so that a single-parent
+# breakout is not saddled with a ceiling sized for a whole chassis.
+#
+# This allowance is deliberately far below the worst per-child cost measured,
+# which was 16.5s. That figure is a tail rather than a rate: a small breakout
+# pays a full teardown stall for only a handful of ports, so one or two unlucky
+# ports dominate its total, and the cost does not recur for every child of a
+# wide one. Deleting 498 children took 675s, an average of 1.36s each. So the
+# stall window absorbs the tail that small deletes are exposed to and this
+# covers the bulk of a wide one, which puts both of those measurements inside
+# the ceiling with about two and a half times margin.
+DPB_DELETE_PER_CHILD_TIMEOUT_SEC = 3
+
+# Gap between ASIC DB surveys. Surveying every front-panel port costs about
+# 90ms, so this paces the polling and also sets how promptly the wait notices
+# the last port leaving.
+DPB_DELETE_POLL_INTERVAL_SEC = 1
+
+
+def getAsicDeleteHardTimeout(deleteCount):
+    '''
+    Absolute ceiling for the ASIC delete wait.
+
+    Sized from the old children being deleted, not the new ones being created,
+    since it is the teardown that takes the time.
+
+    Built up from the stall window rather than a constant of its own, because
+    the ceiling must never be tighter than the stall window: were it so, the
+    ceiling would always expire first and the stall window could never be
+    reached. Deriving it keeps that true if either constant is ever retuned.
+
+    Parameters:
+        deleteCount (int): number of distinct old ports being deleted.
+
+    Returns:
+        (int): seconds, after which the wait fails however much progress it is
+               making.
+    '''
+    return (DPB_DELETE_STALL_TIMEOUT_SEC
+            + DPB_DELETE_PER_CHILD_TIMEOUT_SEC * deleteCount)
+
 
 class ConfigMgmt():
     '''
@@ -348,6 +407,36 @@ class ConfigMgmtDPB(ConfigMgmt):
 
         return False
 
+    def _portsStillInAsicDb(self, db, ports, portMap):
+        '''
+        Find which of the given ports are still present in ASIC DB.
+
+        Every port is examined rather than stopping at the first one found,
+        because the size of this set is the progress signal the delete wait
+        relies on. Stopping early only ever reveals the port at the head of the
+        list, which is why a first-hit check cannot tell a slow breakout apart
+        from a stuck one.
+
+        Parameters:
+            db (SonicV2Connector): database.
+            ports (list): List of ports
+            portMap (dict): port to OID map.
+
+        Returns:
+            (list): ports still present, in the order given.
+        '''
+        try:
+            # connect to ASIC DB,
+            db.connect(db.ASIC_DB)
+            return [port for port in ports
+                    if self._checkKeyinAsicDB(self.oidKey + portMap[port], db)]
+
+        except Exception as e:
+            self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, msg=str(e))
+            # An unreadable DB is not evidence of progress; report everything as
+            # outstanding so a transient failure cannot be mistaken for success.
+            return list(ports)
+
     def _checkNoPortsInAsicDb(self, db, ports, portMap):
         '''
         Check ASIC DB for PORTs in port List
@@ -360,56 +449,128 @@ class ConfigMgmtDPB(ConfigMgmt):
         Returns:
             (bool): True, if all ports are not present.
         '''
-        try:
-            # connect to ASIC DB,
-            db.connect(db.ASIC_DB)
-            for port in ports:
-                key = self.oidKey + portMap[port]
-                if self._checkKeyinAsicDB(key, db) == True:
-                    return False
-
-        except Exception as e:
-            self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, msg=str(e))
-            return False
-
-        return True
+        return not self._portsStillInAsicDb(db, ports, portMap)
 
     def _verifyAsicDB(self, db, ports, portMap, timeout):
         '''
-        Verify in the Asic DB that port are deleted, Keep on trying till timeout
-        period.
+        Wait for ports to be deleted from ASIC DB.
+
+        Waits as long as the deletion keeps making progress, and gives up once
+        nothing has left ASIC DB for the whole stall window, or once the scaled
+        ceiling for this many ports expires. A budget sized from the delete
+        count alone cannot work: the per-port cost measured varies by two orders
+        of magnitude, so a budget honest about the worst case would run into the
+        hours, and any cap tight enough to be useful aborts a healthy wide
+        breakout. Progress is the only reliable signal that the teardown is
+        alive, and the ceiling is there only to bound a run that trickles.
 
         Parameters:
             db (SonicV2Connector): database.
             ports (list): port list to check in ASIC DB.
             portMap (dict): oid<->port map.
-            timeout (int): timeout period
+            timeout (int): seconds tolerated with no port leaving ASIC DB.
 
         Returns:
             (bool)
         '''
         self.sysLog(doPrint=True, msg="Verify Port Deletion from Asic DB, Wait...")
         try:
-            for waitTime in range(timeout):
-                self.sysLog(logLevel=syslog.LOG_DEBUG, msg='Check Asic DB: {} \
-                    try'.format(waitTime+1))
-                # checkNoPortsInAsicDb will return True if all ports are not
-                # present in ASIC DB
-                if self._checkNoPortsInAsicDb(db, ports, portMap):
-                    break
-                tsleep(1)
+            total = len(set(ports))
+            pending = self._portsStillInAsicDb(db, ports, portMap)
+            # Track the fewest ports ever seen outstanding, so a transient DB
+            # read failure cannot be counted as progress when it recovers.
+            fewestPending = len(pending)
+            lastProgress = monotonic()
+            lastReport = lastProgress
+            hardTimeout = getAsicDeleteHardTimeout(total)
+            hardDeadline = lastProgress + hardTimeout
+            attempt = 0
 
-            # raise if timer expired
-            if waitTime + 1 == timeout:
-                self.sysLog(syslog.LOG_CRIT, "!!!  Critical Failure, Ports \
-                    are not Deleted from ASIC DB, Bail Out  !!!", doPrint=True)
-                raise Exception("Ports are present in ASIC DB after {} secs".format(timeout))
+            while pending:
+                stalledFor = monotonic() - lastProgress
+                if stalledFor >= timeout:
+                    self.sysLog(syslog.LOG_CRIT, "!!!  Critical Failure, Ports \
+                        are not Deleted from ASIC DB, Bail Out  !!!", doPrint=True)
+                    raise Exception(
+                        "Ports are present in ASIC DB after {} secs without "
+                        "progress: {}".format(timeout, ', '.join(pending)))
+
+                if monotonic() >= hardDeadline:
+                    self.sysLog(syslog.LOG_CRIT, "!!!  Critical Failure, Ports \
+                        are not Deleted from ASIC DB, Bail Out  !!!", doPrint=True)
+                    raise Exception(
+                        "Ports are present in ASIC DB after {} secs: {}".format(
+                            hardTimeout, ', '.join(pending)))
+
+                tsleep(DPB_DELETE_POLL_INTERVAL_SEC)
+
+                attempt += 1
+                self.sysLog(logLevel=syslog.LOG_DEBUG, msg='Check Asic DB: {} \
+                    try'.format(attempt))
+                pending = self._portsStillInAsicDb(db, ports, portMap)
+
+                if len(pending) < fewestPending:
+                    fewestPending = len(pending)
+                    lastProgress = monotonic()
+
+                # A wide breakout can run for minutes, so show that the wait is
+                # alive rather than hung. Rate limited because a whole-chassis
+                # selection clears hundreds of ports and one line each would
+                # bury the output that follows; the first report is therefore
+                # only due after the interval, leaving anything as quick as a
+                # single-parent breakout as quiet as it has always been.
+                if monotonic() - lastReport >= DPB_DELETE_REPORT_INTERVAL_SEC:
+                    lastReport = monotonic()
+                    progress = "Deleted {} of {} ports from Asic DB, " \
+                        "Wait...".format(total - len(pending), total)
+                    # Printed rather than left to sysLog(doPrint=True), which
+                    # reaches the console only above LOG_INFO or under python
+                    # -i. Flushed because stdout is usually a pipe, and a wait
+                    # of several minutes must not sit in a buffer.
+                    print(progress, flush=True)
+                    self.sysLog(msg=progress)
 
         except Exception as e:
             self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, msg=str(e))
             raise e
 
         return True
+
+    def validateBreakOutPort(self, delPorts=list(), portJson=dict(), \
+            force=False, loadDefConfig=True):
+        '''
+        Validate one aggregate breakout without writing anything.
+
+        Run this on a throwaway engine so the complete delete, add and default
+        configuration result is checked against a cloned copy of the config
+        before the apply engine touches Config DB.
+
+        Parameters:
+            delPorts (list): ports to be deleted.
+            portJson (dict): Config DB json Part of all Ports, generated from
+                platform.json.
+            force (bool): if false return dependecies, else delete dependencies.
+            loadDefConfig: If loadDefConfig, add default config for ports as well.
+
+        Returns:
+            (deps, ret) (tuple)[list, bool]: dependecies and success/failure.
+        '''
+        try:
+            delConfigToLoad, deps, ret = self._deletePorts(ports=delPorts, \
+                force=force)
+            if ret == False:
+                return deps, ret
+
+            addConfigToLoad, ret = self._addPorts(portJson=portJson, \
+                loadDefConfig=loadDefConfig)
+            if ret == False:
+                return None, ret
+
+        except Exception as e:
+            self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, msg=str(e))
+            return None, False
+
+        return None, True
 
     def breakOutPort(self, delPorts=list(), portJson=dict(), force=False, \
             loadDefConfig=True):
@@ -426,7 +587,6 @@ class ConfigMgmtDPB(ConfigMgmt):
         Returns:
             (deps, ret) (tuple)[list, bool]: dependencies and success/failure.
         '''
-        MAX_WAIT = 60
         try:
             # delete Port and get the Config diff, deps and True/False
             delConfigToLoad, deps, ret = self._deletePorts(ports=delPorts, \
@@ -447,6 +607,20 @@ class ConfigMgmtDPB(ConfigMgmt):
             if_name_map, if_oid_map = port_util.get_interface_oid_map(dataBase)
             self.sysLog(syslog.LOG_DEBUG, 'if_name_map {}'.format(if_name_map))
 
+            # The delete wait can only watch ports it holds an OID for, so
+            # check the map covers every port before anything is torn down. A
+            # missing OID would otherwise surface as a KeyError inside the
+            # wait, where it is indistinguishable from an unreadable DB and so
+            # reports every port as outstanding: the wait would stall for its
+            # whole window and only then fail, with the ports already gone
+            # from Config DB.
+            missingOids = [port for port in delPorts if port not in if_name_map]
+            if missingOids:
+                raise Exception(
+                    "No ASIC DB OID for {}; refusing to delete ports whose "
+                    "removal cannot be verified".format(
+                        ', '.join(sorted(missingOids))))
+
             # If we are here, then get ready to update the Config DB as below:
             # -- shutdown the ports,
             # -- Update deletion of ports in Config DB,
@@ -456,7 +630,7 @@ class ConfigMgmtDPB(ConfigMgmt):
             self.writeConfigDB(delConfigToLoad)
             # Verify in Asic DB,
             self._verifyAsicDB(db=dataBase, ports=delPorts, portMap=if_name_map, \
-                timeout=MAX_WAIT)
+                timeout=DPB_DELETE_STALL_TIMEOUT_SEC)
             self.writeConfigDB(addConfigtoLoad)
 
         except Exception as e:

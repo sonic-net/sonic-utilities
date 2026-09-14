@@ -26,9 +26,8 @@ from generic_config_updater.main import (
 )
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
-from portconfig import get_child_ports
 from socket import AF_INET, AF_INET6
-from sonic_py_common import device_info, multi_asic
+from sonic_py_common import device_info, multi_asic, port_util
 from sonic_py_common.general import getstatusoutput_noshell
 from sonic_py_common.interface import get_interface_table_name, get_port_table_name, get_intf_longname
 from utilities_common import util_base
@@ -66,6 +65,7 @@ from . import vlan
 from . import vxlan
 from . import plugins
 from .config_mgmt import ConfigMgmtDPB, ConfigMgmt, YANG_DIR
+from . import dpb
 from . import mclag
 from . import syslog
 from . import switchport
@@ -97,7 +97,6 @@ ASIC_CONF_FILENAME = 'asic.conf'
 DEFAULT_CONFIG_DB_FILE = '/etc/sonic/config_db.json'
 DEFAULT_CONFIG_YANG_FILE = '/etc/sonic/config_yang.json'
 NAMESPACE_PREFIX = 'asic'
-INTF_KEY = "interfaces"
 DEFAULT_GOLDEN_CONFIG_DB_FILE = '/etc/sonic/golden_config_db.json'
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
@@ -211,43 +210,21 @@ def _get_breakout_options(ctx, param, incomplete):
         return []
     else:
         breakout_file_input = read_json_file(breakout_cfg_file)
-        if interface_name in breakout_file_input[INTF_KEY]:
-            breakout_mode_options = [mode for i, v in breakout_file_input[INTF_KEY].items() if i == interface_name \
-                                          for mode in v["breakout_modes"].keys()]
-            all_mode_options = [str(c) for c in breakout_mode_options if incomplete in c]
+        breakout_mode_options = dpb.completionModes(breakout_file_input, interface_name)
+        all_mode_options = [str(c) for c in breakout_mode_options if incomplete in c]
         return all_mode_options
 
-def _validate_interface_mode(ctx, breakout_cfg_file, interface_name, target_brkout_mode, cur_brkout_mode):
-    """ Validate Parent interface and user selected mode before starting deletion or addition process """
-    breakout_file_input = read_json_file(breakout_cfg_file)["interfaces"]
+def breakout_oidPorts():
+    """Names of ports that currently hold an ASIC DB OID.
 
-    if interface_name not in breakout_file_input:
-        click.secho("[ERROR] {} is not a Parent port. So, Breakout Mode is not available on this port".format(interface_name), fg='red')
-        return False
+    Left to raise if ASIC DB cannot be read: without this map a breakout
+    cannot tell whether its deletes completed, so there is nothing useful to
+    fall back to.
+    """
+    dataBase = SonicV2Connector(host="127.0.0.1")
+    if_name_map, _ = port_util.get_interface_oid_map(dataBase)
+    return set(if_name_map)
 
-    # Check whether target breakout mode is available for the user-selected interface or not
-    if target_brkout_mode not in breakout_file_input[interface_name]["breakout_modes"].keys():
-        click.secho('[ERROR] Target mode {} is not available for the port {}'. format(target_brkout_mode, interface_name), fg='red')
-        return False
-
-    # Get config db context
-    config_db = ctx.obj['config_db']
-    port_dict = config_db.get_table('PORT')
-
-    # Check whether there is any port in config db.
-    if not port_dict:
-        click.echo("port_dict is None!")
-        return False
-
-    # Check whether the  user-selected interface is part of  'port' table in config db.
-    if interface_name not in port_dict:
-        click.secho("[ERROR] {} is not in port_dict".format(interface_name))
-        return False
-    click.echo("\nRunning Breakout Mode : {} \nTarget Breakout Mode : {}".format(cur_brkout_mode, target_brkout_mode))
-    if (cur_brkout_mode == target_brkout_mode):
-        click.secho("[WARNING] No action will be taken as current and desired Breakout Mode are same.", fg='magenta')
-        sys.exit(0)
-    return True
 
 def load_ConfigMgmt(verbose):
     """ Load config for the commands which are capable of change in config DB. """
@@ -5520,110 +5497,38 @@ def advertised_types(ctx, interface_name, interface_type_list, verbose):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('mode', required=True, type=click.STRING, shell_complete=_get_breakout_options)
 @click.option('-f', '--force-remove-dependencies', is_flag=True,  help='Clear all dependencies internally first.')
+@click.option('-s', '--skip-unsupported', is_flag=True, help='Skip ports that cannot be broken out and continue with the rest.')
 @click.option('-l', '--load-predefined-config', is_flag=True,  help='load predefied user configuration (alias, lanes, speed etc) first.')
-@click.option('-y', '--yes', is_flag=True, callback=_abort_if_false, expose_value=False, prompt='Do you want to Breakout the port, continue?')
+@click.option('-y', '--yes', is_flag=True, help='Do not prompt for confirmation.')
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 @click.pass_context
-def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load_predefined_config):
-    """ Set interface breakout mode """
-    breakout_cfg_file = device_info.get_path_to_port_config_file()
+def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, skip_unsupported, load_predefined_config, yes):
+    """ Set interface breakout mode
 
-    if not os.path.isfile(breakout_cfg_file) or not breakout_cfg_file.endswith('.json'):
-        click.secho("[ERROR] Breakout feature is not available without platform.json file", fg='red')
-        raise click.Abort()
-
-    # Get the config_db connector
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
-
-    target_brkout_mode = mode
-
-    # Get current breakout mode
-    cur_brkout_dict = config_db.get_table('BREAKOUT_CFG')
-    if len(cur_brkout_dict) == 0:
-        click.secho("[ERROR] BREAKOUT_CFG table is NOT present in CONFIG DB", fg='red')
-        raise click.Abort()
-
-    if interface_name not in cur_brkout_dict.keys():
-        click.secho("[ERROR] {} interface is NOT present in BREAKOUT_CFG table of CONFIG DB".format(interface_name), fg='red')
-        raise click.Abort()
-
-    cur_brkout_mode = cur_brkout_dict[interface_name]["brkout_mode"]
-
-    # Validate Interface and Breakout mode
-    if not _validate_interface_mode(ctx, breakout_cfg_file, interface_name, mode, cur_brkout_mode):
-        raise click.Abort()
-
-    """ Interface Deletion Logic """
-    # Get list of interfaces to be deleted
-    del_ports = get_child_ports(interface_name, cur_brkout_mode, breakout_cfg_file)
-    del_intf_dict = {intf: del_ports[intf]["speed"] for intf in del_ports}
-
-    if del_intf_dict:
-        click.echo("\nPorts to be deleted : \n {}".format(json.dumps(del_intf_dict, indent=4)))
-    else:
-        click.secho("[ERROR] del_intf_dict is None! No interfaces are there to be deleted", fg='red')
-        raise click.Abort()
-
-    """ Interface Addition Logic """
-    # Get list of interfaces to be added
-    add_ports = get_child_ports(interface_name, target_brkout_mode, breakout_cfg_file)
-    add_intf_dict = {intf: add_ports[intf]["speed"] for intf in add_ports}
-
-    if add_intf_dict:
-        click.echo("Ports to be added : \n {}".format(json.dumps(add_intf_dict, indent=4)))
-    else:
-        click.secho("[ERROR] port_dict is None!", fg='red')
-        raise click.Abort()
-
-    # validate all del_ports before calling breakOutPort
-    for intf in del_intf_dict.keys():
-        if not interface_name_is_valid(config_db, intf):
-            click.secho("[ERROR] Interface name {} is invalid".format(intf))
-            raise click.Abort()
-
-    port_dict = {}
-    for intf in add_intf_dict:
-        if intf in add_ports:
-            port_dict[intf] = add_ports[intf]
-
-    # writing JSON object
-    with open('new_port_config.json', 'w') as f:
-        json.dump(port_dict, f, indent=4)
-
-    # Start Iteration with Dy Port BreakOut Config Mgmt
+    <interface_name> is a parent port, a comma separated list of parent ports,
+    or an inclusive flat range such as Ethernet0-64. Every selected parent is
+    moved to the same target mode in one aggregate operation.
+    """
     try:
-        """ Load config for the commands which are capable of change in config DB """
-        cm = load_ConfigMgmt(verbose)
+        exit_code = dpb.runBreakout(
+            configDb=ValidatedConfigDBConnector(ctx.obj['config_db']),
+            selector=interface_name, mode=mode,
+            force=force_remove_dependencies,
+            skipUnsupported=skip_unsupported,
+            loadDefConfig=load_predefined_config, yes=yes,
+            engineFactory=lambda: load_ConfigMgmt(verbose),
+            applyPorts=lambda cm, delPorts, portJson, force, loadDefConfig:
+                breakout_Ports(cm, delPorts=delPorts, portJson=portJson,
+                               force=force, loadDefConfig=loadDefConfig,
+                               verbose=verbose),
+            warnExtraTables=lambda cm, delPorts:
+                breakout_warnUser_extraTables(cm, delPorts, confirm=True),
+            lockFile=SYSTEM_RELOAD_LOCK,
+            readOidPorts=breakout_oidPorts)
+    except dpb.DpbUsageError as e:
+        ctx.fail(str(e))
 
-        """ Delete all ports if forced else print dependencies using ConfigMgmt API """
-        final_delPorts = [intf for intf in del_intf_dict]
-        """ Warn user if tables without yang models exist and have final_delPorts """
-        breakout_warnUser_extraTables(cm, final_delPorts, confirm=True)
-
-        # Create a dictionary containing all the added ports with its capabilities like alias, lanes, speed etc.
-        portJson = dict(); portJson['PORT'] = port_dict
-
-        # breakout_Ports will abort operation on failure, So no need to check return
-        breakout_Ports(cm, delPorts=final_delPorts, portJson=portJson, force=force_remove_dependencies,
-                       loadDefConfig=load_predefined_config, verbose=verbose)
-
-        # Set Current Breakout mode in config DB
-        brkout_cfg_keys = config_db.get_keys('BREAKOUT_CFG')
-        if interface_name not in  brkout_cfg_keys:
-            click.secho("[ERROR] {} is not present in 'BREAKOUT_CFG' Table!".format(interface_name), fg='red')
-            raise click.Abort()
-        try:
-            config_db.set_entry("BREAKOUT_CFG", interface_name, {'brkout_mode': target_brkout_mode})
-        except ValueError as e:
-            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
-        click.secho("Breakout process got successfully completed."
-                    .format(interface_name), fg="cyan", underline=True)
-        click.echo("Please note loaded setting will be lost after system reboot. To preserve setting, run `config save`.")
-
-    except Exception as e:
-        click.secho("Failed to break out Port. Error: {}".format(str(e)), fg='magenta')
-
-        sys.exit(1)
+    sys.exit(exit_code)
 
 def _get_all_mgmtinterface_keys():
     """Returns list of strings containing mgmt interface keys

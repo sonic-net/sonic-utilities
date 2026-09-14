@@ -435,7 +435,8 @@ class TestConfigDPB(object):
 
         print(result.exit_code, result.output)
         assert result.exit_code == 1
-        assert "Ethern interface is NOT present" in result.output
+        assert "SKIPPED_NOT_PARENT" in result.output
+        assert "not an active platform parent" in result.output
 
         # Input Data
         interface = 'Ethernet0'
