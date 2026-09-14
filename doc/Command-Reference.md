@@ -37,6 +37,7 @@
   * [ASIC SDK health event clear commands](#asic-sdk-health-event-clear-commands)
 * [BMC](#bmc)
   * [BMC config commands](#bmc-config-commands)
+  * [BMC chassis module commands](#bmc-chassis-module-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
 * [BGP](#bgp)
@@ -3064,6 +3065,29 @@ This command resets the BMC root password to default
   BMC root password reset successful
   ```
 
+### BMC chassis module commands
+
+**show chassis modules status**
+
+On a BMC, this command appends `Result` and `Request-Id` after the existing
+`Shutdown-Timeout (sec)` column. For a `SWITCH-HOST` row, they show the most
+recent operation result and request ID from `HOST_STATE|switch-host`; a
+missing value is shown as `-`. Other module types show `N/A` in these two
+columns. Non-BMC output is unchanged.
+
+- Usage:
+  ```bash
+  show chassis modules status [<module_name>]
+  ```
+
+`GRACEFUL_RESTART` has no CLI command. Its CLI equivalent is to shut down the
+switch host and then start it again:
+
+```bash
+config chassis modules shutdown SWITCH-HOST
+config chassis modules startup SWITCH-HOST
+```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bmc)
 
 ## BFD
@@ -4345,7 +4369,7 @@ This command is vendor-specific and supported on the modules to set the target m
 
 Example of the module supporting target mode
 
-![RMT_UPGRD](https://github.com/AnoopKamath/sonic-utilities_remote_upgrade/assets/115578705/c3b0bb62-eb14-4b05-b0a8-96b8c082455a)
+Remote upgrade workflow
 
 **sfputil firmware target**
 
@@ -11536,7 +11560,7 @@ Both modular and non modular chassis platforms are supported.
   Installing firmware:
       /usr/local/lib/firmware/mellanox/sn3800/chassis1/bios.bin
 
-  admin@sonic:~$ sudo config platform firmware install module Module1 component BIOS fw https://www.mellanox.com/fw/sn3800/module1/bios.bin
+  admin@sonic:~$ sudo config platform firmware install module Module1 component BIOS fw https://firmware.example.com/module1/bios.bin
   Warning: Immediate cold reboot is required to complete BIOS firmware update.
   New firmware will be installed, continue? [y/N]: y
   Downloading firmware:
