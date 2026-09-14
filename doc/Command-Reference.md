@@ -18092,3 +18092,42 @@ Yellow Action............... forward
 Green Action................ forward
 Red Action.................. drop
 ```
+
+## Chassis system LAG consistency
+
+VOQ chassis linecards only. Compares `CHASSIS_APP_DB` system LAG tables with local `ASIC_DB` on each ASIC namespace.
+
+**show chassis system-lag-consistency**
+
+- Full check: `SYSTEM_LAG_ID_TABLE` and `SYSTEM_LAG_MEMBER_TABLE` vs ASIC LAG / LAG member objects.
+- `--lag-id-only`: LAG ID table only (skips lag member checks).
+- `-j` / `--json`: structured JSON output (process exit code is always 0 with `--json`).
+
+Member status: chassis `disabled` is compared to ASIC `ingress_disable` / `egress_disable`.
+SWSS may leave both flags `false` on SYSTEM ports when chassis lists the member as
+disabled; symmetric flags (both true or both false) are treated as a match for
+`disabled`. Chassis `enabled` requires both ASIC disable flags to be false.
+
+Examples:
+
+```
+show chassis system-lag-consistency
+show chassis system-lag-consistency --lag-id-only
+show chassis system-lag-consistency --lag-id-only -j
+```
+
+The same logic is available as a standalone script:
+
+```
+/usr/local/bin/chassis_db_consistency_checker.py [--lag-id-only] [--json]
+```
+
+Standalone script exit behavior (Monit / manual, without `--json`):
+
+- Mismatch: CRITICAL syslog messages and non-zero exit (`RC_ERR`).
+- Success: exit 0 (`RC_OK`).
+- Not applicable (non-VOQ or supervisor): exit 0 with informational log.
+- `--json`: always exit 0; mismatches appear in the JSON `status` field.
+
+Full member checks issue several `redis-dump` calls per ASIC namespace; allow
+enough time in Monit cycle intervals on busy linecards.
