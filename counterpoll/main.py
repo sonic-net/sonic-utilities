@@ -122,10 +122,10 @@ def port_interval(ctx, poll_interval):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
 
 
-@port.command('flr-interval-factor')
+@port.command('secondary-poll-factor')
 @click.argument('factor', type=click.IntRange(min=1))
-def flr_interval_factor(factor):
-    """ Set port counter FLR interval factor """
+def secondary_poll_factor(factor):
+    """ Set port counter secondary poll factor """
     configdb = ConfigDBConnector()
     configdb.connect()
     port_info = {}
@@ -900,9 +900,9 @@ def show(namespace):
         data.append(["QUEUE_STAT", queue_info.get("POLL_INTERVAL", DEFLT_10_SEC), queue_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_info:
         interval_display = port_info.get("POLL_INTERVAL", DEFLT_1_SEC)
-        flr_factor = port_info.get("SECONDARY_POLL_FACTOR", "")
-        if flr_factor:
-            interval_display = f"{interval_display} (FLR: {flr_factor})"
+        secondary_poll_factor = port_info.get("SECONDARY_POLL_FACTOR", "")
+        if secondary_poll_factor:
+            interval_display = f"{interval_display} (Secondary: {secondary_poll_factor})"
         data.append(["PORT_STAT", interval_display, port_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_drop_info:
         data.append([PORT_BUFFER_DROP, port_drop_info.get("POLL_INTERVAL", DEFLT_60_SEC), port_drop_info.get("FLEX_COUNTER_STATUS", DISABLE)])

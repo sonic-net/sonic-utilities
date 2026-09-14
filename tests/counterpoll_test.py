@@ -82,7 +82,7 @@ class TestCounterpoll(object):
         assert result.output == expected_counterpoll_show_dpu
 
     @mock.patch('counterpoll.main.device_info.get_platform_info')
-    def test_show_port_flr_interval_factor(self, mock_get_platform_info):
+    def test_show_port_secondary_poll_factor(self, mock_get_platform_info):
         mock_get_platform_info.return_value = {}
         configdb = mock.Mock()
         configdb.get_entry.side_effect = lambda table, key: {
@@ -100,7 +100,7 @@ class TestCounterpoll(object):
         assert result.exit_code == 0
         port_line = next(line for line in result.output.splitlines()
                          if line.startswith("PORT_STAT"))
-        assert "1000 (FLR: 4)" in port_line
+        assert "1000 (Secondary: 4)" in port_line
         assert port_line.endswith("enable")
 
     def test_port_buffer_drop_interval(self):
@@ -588,13 +588,13 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["PORT"]["POLL_INTERVAL"]
 
-    def test_port_flr_interval_factor(self):
+    def test_port_secondary_poll_factor(self):
         runner = CliRunner()
         configdb = mock.Mock()
 
         with mock.patch.object(counterpoll, "ConfigDBConnector", return_value=configdb):
             result = runner.invoke(
-                counterpoll.cli.commands["port"].commands["flr-interval-factor"],
+                counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
                 ["4"]
             )
 
@@ -604,13 +604,13 @@ class TestCounterpoll(object):
             "FLEX_COUNTER_TABLE", "PORT", {"SECONDARY_POLL_FACTOR": 4}
         )
 
-    def test_port_flr_interval_factor_must_be_positive(self):
+    def test_port_secondary_poll_factor_must_be_positive(self):
         runner = CliRunner()
         configdb_cls = mock.Mock()
 
         with mock.patch.object(counterpoll, "ConfigDBConnector", configdb_cls):
             result = runner.invoke(
-                counterpoll.cli.commands["port"].commands["flr-interval-factor"],
+                counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
                 ["0"]
             )
 
