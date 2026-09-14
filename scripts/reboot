@@ -55,6 +55,7 @@ SMART_SWITCH="no"
 DPU_MODULE_NAME=""
 REBOOT_DPU="no"
 PRE_SHUTDOWN="no"
+SWITCH_HOST_PRE_SHUTDOWN="no"
 BLOCKING_MODE="no"
 BLOCKING_MODE_TIMEOUT_IN_SECOND=180
 SHOW_TIMER="no"
@@ -65,6 +66,12 @@ function debug()
         echo `date` $@
     fi
     logger "$@"
+}
+
+function is_switch_host_device()
+{
+    python3 -I -c "from sonic_py_common import device_info; print(getattr(device_info, 'is_switch_host', lambda: False)())" \
+        | grep -q True
 }
 
 function tag_images()
@@ -93,6 +100,8 @@ function stop_pmon_service()
 
 function stop_sonic_services()
 {
+    local syncd_shutdown_rc pmon_running pmon_inspect_rc
+
     if [[ x"$SUBTYPE" == x"DualToR" ]]; then
         debug "DualToR detected, stopping mux container before reboot..."
         systemctl stop mux
@@ -108,15 +117,38 @@ function stop_sonic_services()
             while [[ ($asic_num -lt $NUM_ASIC) ]]; do
                 debug "Stopping syncd$asic_num process..."
                 docker exec -i syncd$asic_num /usr/bin/syncd_request_shutdown --cold > /dev/null
+                syncd_shutdown_rc=$?
+                if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" && ${syncd_shutdown_rc} -ne 0 ]]; then
+                    VERBOSE=yes debug "PRE-SHUTDOWN FAILED: syncd shutdown request"
+                    return ${EXIT_ERROR}
+                fi
                 ((asic_num = asic_num + 1))
             done
         else
             debug "Stopping syncd process..."
             docker exec -i syncd /usr/bin/syncd_request_shutdown --cold > /dev/null
+            syncd_shutdown_rc=$?
+            if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" && ${syncd_shutdown_rc} -ne 0 ]]; then
+                VERBOSE=yes debug "PRE-SHUTDOWN FAILED: syncd shutdown request"
+                return ${EXIT_ERROR}
+            fi
         fi
         sleep 3
     fi
     stop_pmon_service
+
+    if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" ]]; then
+        pmon_running=$(docker inspect -f '{{.State.Running}}' pmon 2>/dev/null)
+        pmon_inspect_rc=$?
+        if [[ ${pmon_inspect_rc} -ne 0 ]]; then
+            VERBOSE=yes debug "PRE-SHUTDOWN FAILED: unable to verify pmon stopped"
+            return ${EXIT_ERROR}
+        fi
+        if [[ "${pmon_running}" == "true" ]]; then
+            VERBOSE=yes debug "PRE-SHUTDOWN FAILED: pmon still running"
+            return ${EXIT_ERROR}
+        fi
+    fi
 }
 
 function stop_services_asan()
@@ -151,7 +183,7 @@ function show_help_and_exit()
     echo "    Available options:"
     echo "        -h, -? : getting this help"
     echo "        -d : DPU module name on a smart switch, option is invalid when on DPU"
-    echo "        -p : Pre-shutdown steps on DPU, invalid on NPU"
+    echo "        -p : Pre-shutdown steps on a DPU or switch host; invalid on other devices"
     echo "        -b : Enable the command to run in blocking mode"
     echo "        -v : Print out detail logs. For blocking mode will print dots to identify the script is running"
 
@@ -308,6 +340,17 @@ if [[ "$EUID" -ne 0 ]]; then
     exit ${EXIT_ERROR}
 fi
 
+if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+    if [[ "$(is_dpu)" == "True" ]]; then
+        :
+    elif [[ "${REBOOT_DPU}" == "yes" ]]; then
+        log_message "ERROR: '-p' option specified for a non-DPU"
+        exit ${EXIT_ERROR}
+    elif is_switch_host_device; then
+        SWITCH_HOST_PRE_SHUTDOWN="yes"
+    fi
+fi
+
 debug "User requested rebooting device ..."
 
 # Validate local disk space before beginning reboot side effects.
@@ -330,15 +373,17 @@ if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "no" ]; then
         debug "Failed to disable dhcp_server on bridge-midplane"
 fi
 
-handle_smart_switch "$REBOOT_DPU" "$PRE_SHUTDOWN" "$DPU_MODULE_NAME"
-smart_switch_result=$?
-if [[ $smart_switch_result -ne 0 ]]; then
-    exit $smart_switch_result
-fi
+if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" != "yes" ]]; then
+    handle_smart_switch "$REBOOT_DPU" "$PRE_SHUTDOWN" "$DPU_MODULE_NAME"
+    smart_switch_result=$?
+    if [[ $smart_switch_result -ne 0 ]]; then
+        exit $smart_switch_result
+    fi
 
-# On a smartswitch, complete the DPU reboot and exit
-if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
-    exit $smart_switch_result
+    # On a smartswitch, complete the DPU reboot and exit
+    if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
+        exit $smart_switch_result
+    fi
 fi
 
 check_conflict_boot_in_fw_update
@@ -354,6 +399,10 @@ linecard_reboot_notify_supervisor
 
 # Stop SONiC services gracefully.
 stop_sonic_services
+stop_sonic_services_rc=$?
+if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" && ${stop_sonic_services_rc} -ne 0 ]]; then
+    exit ${stop_sonic_services_rc}
+fi
 
 # Stop ASAN-enabled services so the report can be generated
 if [[ x"$ASAN" == x"yes" ]]; then
@@ -367,6 +416,11 @@ clear_warm_boot
 # cause of the previous reboot
 echo "User issued 'reboot' command [User: ${REBOOT_USER}, Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
 sync
+sync_rc=$?
+if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" && ${sync_rc} -ne 0 ]]; then
+    VERBOSE=yes debug "PRE-SHUTDOWN FAILED: sync"
+    exit ${EXIT_ERROR}
+fi
 /sbin/fstrim -av
 sleep 3
 
@@ -386,14 +440,68 @@ fi
 
 if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
     debug "Executing the pre-reboot script"
-    ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
-    EXIT_CODE="$?"
-    if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
-        debug "WARNING: Failed to handle pre-reboot script: rc=${EXIT_CODE}"
+    if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" ]]; then
+        HOOK_TIMEOUT=$(jq -c '
+            if has("pre_shutdown_hook_timeout_secs") then
+                .pre_shutdown_hook_timeout_secs
+            else
+                60
+            end
+        ' "${PLATFORM_JSON_PATH}")
+        if ! [[ "${HOOK_TIMEOUT}" =~ ^[1-9][0-9]*$ ]]; then
+            VERBOSE=yes debug "PRE-SHUTDOWN FAILED: invalid pre_shutdown_hook_timeout_secs '${HOOK_TIMEOUT}'"
+            exit ${EXIT_ERROR}
+        fi
+
+        SONIC_PRE_SHUTDOWN=1 timeout --kill-after=10 "${HOOK_TIMEOUT}" \
+            "${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}"
+        EXIT_CODE=$?
+        if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
+            VERBOSE=yes debug "PRE-SHUTDOWN FAILED: pre-reboot hook rc=${EXIT_CODE}"
+            exit ${EXIT_ERROR}
+        fi
+    else
+        ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
+        EXIT_CODE="$?"
+        if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
+            debug "WARNING: Failed to handle pre-reboot script: rc=${EXIT_CODE}"
+        fi
     fi
 fi
 
-if [ -x ${WATCHDOG_UTIL} ]; then
+if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" ]]; then
+    WD_MIN=$(jq -c '
+        if has("pre_shutdown_min_watchdog_secs") then
+            .pre_shutdown_min_watchdog_secs
+        else
+            0
+        end
+    ' "${PLATFORM_JSON_PATH}")
+    if ! [[ "${WD_MIN}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+        VERBOSE=yes debug "PRE-SHUTDOWN FAILED: invalid pre_shutdown_min_watchdog_secs '${WD_MIN}'"
+        exit ${EXIT_ERROR}
+    fi
+    if [[ ! -x ${WATCHDOG_UTIL} ]]; then
+        VERBOSE=yes debug "PRE-SHUTDOWN FAILED: watchdog utility unavailable"
+        exit ${EXIT_ERROR}
+    fi
+
+    debug "Enabling the Watchdog before reboot"
+    WD_OUT=$(${WATCHDOG_UTIL} arm)
+    if [[ "${WD_OUT}" =~ ^Watchdog\ armed\ for\ (0|[1-9][0-9]*)\ seconds$ ]]; then
+        WD_ARMED_SECS="${BASH_REMATCH[1]}"
+    else
+        VERBOSE=yes debug "PRE-SHUTDOWN FAILED: watchdog arm/readback"
+        exit ${EXIT_ERROR}
+    fi
+    if [[ ${#WD_ARMED_SECS} -lt ${#WD_MIN} ||
+          ( ${#WD_ARMED_SECS} -eq ${#WD_MIN} &&
+            "${WD_ARMED_SECS}" < "${WD_MIN}" ) ]]; then
+        VERBOSE=yes debug "PRE-SHUTDOWN FAILED: watchdog readback ${WD_ARMED_SECS}s below required ${WD_MIN}s"
+        exit ${EXIT_ERROR}
+    fi
+    debug "watchdog armed: ${WD_ARMED_SECS}s (required minimum ${WD_MIN}s)"
+elif [ -x ${WATCHDOG_UTIL} ]; then
     debug "Enabling the Watchdog before reboot"
     ${WATCHDOG_UTIL} arm
 fi
