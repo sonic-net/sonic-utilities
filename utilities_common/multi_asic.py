@@ -133,7 +133,17 @@ _multi_asic_click_options = [
 ]
 
 def multi_asic_namespace_validation_callback(ctx, param, value):
-    if not multi_asic.is_multi_asic:
+    # Click invokes option callbacks even when the option is left at its
+    # default (e.g. value is None or the default namespace), so only reject a
+    # namespace that was explicitly supplied on the command line. Otherwise
+    # every command using this callback would abort on single-asic devices
+    # even when -n/--namespace was not passed. Also note is_multi_asic must be
+    # called (not just referenced) for the check to work.
+    explicitly_set = (
+        ctx is not None
+        and ctx.get_parameter_source(param.name) == click.core.ParameterSource.COMMANDLINE
+    )
+    if explicitly_set and not multi_asic.is_multi_asic():
         click.echo("-n/--namespace is not available for single asic")
         ctx.abort()
     return value
