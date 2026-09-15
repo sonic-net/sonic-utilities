@@ -1083,7 +1083,7 @@ class TestShowProcesses(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['ps', '-eo', 'pid,ppid,cmd,%mem,%cpu'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['ps', '-eo', 'pid,ppid,comm,%mem,%cpu'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_cpu(self, mock_run_command):
