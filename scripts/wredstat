@@ -305,6 +305,12 @@ class Wredstat(object):
             return 0
 
 
+    def _is_na(self, val):
+        if val is None:
+            return True
+        s = str(val).strip()
+        return s == "" or s.upper() == "N/A"
+
     def aggregate_from_json_output(self, json_output):
         """
         json_output: { port: { ... queue_key: {queueindex, ... counters ...}, ... }, ... }
@@ -313,6 +319,14 @@ class Wredstat(object):
         { queueindex: {queueindex, queuetype, wredDrppacket, wredDrpbytes, ecnpacket, ecnbytes}, ... }
         """
         agg = {}
+        # Track fields that had at least one applicable (non-N/A) value.
+        field_map = {
+            "wredDrppacket": "wreddroppacket",
+            "wredDrpbytes": "wreddropbytes",
+            "ecnpacket": "ecnmarkedpacket",
+            "ecnbytes": "ecnmarkedbytes",
+        }
+        applicable = {}
 
         for port, port_blob in (json_output or {}).items():
             if not isinstance(port_blob, dict):
@@ -340,11 +354,19 @@ class Wredstat(object):
                         "ecnpacket": 0,
                         "ecnbytes": 0,
                     })
+                    applicable.setdefault(key, {field: False for field in field_map})
 
-                    agg[key]["wredDrppacket"] += self._to_int(data.get("wreddroppacket"))
-                    agg[key]["wredDrpbytes"]  += self._to_int(data.get("wreddropbytes"))
-                    agg[key]["ecnpacket"]     += self._to_int(data.get("ecnmarkedpacket"))
-                    agg[key]["ecnbytes"]      += self._to_int(data.get("ecnmarkedbytes"))
+                    for field, src in field_map.items():
+                        val = data.get(src)
+                        agg[key][field] += self._to_int(val)
+                        if not self._is_na(val):
+                            applicable[key][field] = True
+
+        # If every individual entry for a field was N/A, display N/A instead of 0.
+        for key, fields in applicable.items():
+            for field, has_value in fields.items():
+                if not has_value:
+                    agg[key][field] = STATUS_NA
 
         return agg
 
