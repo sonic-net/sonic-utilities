@@ -4,9 +4,13 @@ from tabulate import tabulate
 
 import utilities_common.cli as clicommon
 
+PTP_TABLE = "PTP"
 PTP_PORT_TABLE = "PTP_PORT"
+PTP_UNICAST_MASTER_TABLE = "PTP_UNICAST_MASTER_TABLE"
+PTP_UNICAST_MASTER_TABLE_IP = "PTP_UNICAST_MASTER_TABLE_IP"
 PORT_TABLE = "PORT"
 PTP_MODE_NONE = "none"
+NOT_SET = "not set"
 
 
 def _convert_ifname(ctx, interface_name):
@@ -59,6 +63,106 @@ def show_ptp_port_status(db, interface_name):
     click.echo(tabulate(body, header, tablefmt='simple'))
 
 
+def _cfg_value(entry, field):
+    if not entry:
+        return NOT_SET
+    value = entry.get(field)
+    if value is None or value == '':
+        return NOT_SET
+    return str(value)
+
+
+def _unicast_listen_enabled(port_info):
+    return str(port_info.get('unicast_listen', 'false')).lower() == 'true'
+
+
+def _port_role(port_info):
+    """Configured unicast role: slave if a master table is bound, master if unicast listen is on."""
+    has_table = bool(port_info.get('unicast_table'))
+    listen = _unicast_listen_enabled(port_info)
+    if has_table and listen:
+        return 'slave/master'
+    if has_table:
+        return 'slave'
+    if listen:
+        return 'master'
+    return 'auto'
+
+
+def _split_umt_ip_key(key):
+    if isinstance(key, (list, tuple)) and len(key) >= 2:
+        return str(key[0]), str(key[1])
+    parts = str(key).split('|', 1)
+    if len(parts) != 2:
+        return None
+    return parts[0], parts[1]
+
+
+def _unicast_master_rows(tables, ip_entries):
+    ips_by_table = {}
+    for key in ip_entries:
+        parsed = _split_umt_ip_key(key)
+        if not parsed:
+            continue
+        table_id, ip_address = parsed
+        ips_by_table.setdefault(table_id, []).append(ip_address)
+
+    table_ids = natsorted({str(k) for k in tables} | set(ips_by_table))
+    rows = []
+    for table_id in table_ids:
+        addresses = natsorted(ips_by_table.get(table_id, []))
+        if not addresses:
+            rows.append([table_id, NOT_SET])
+            continue
+        for address in addresses:
+            rows.append([table_id, address])
+    return rows
+
+
+def show_ptp_protocol_status(db):
+    config_db = db.cfgdb
+    global_cfg = config_db.get_entry(PTP_TABLE, 'global') or {}
+    tables = config_db.get_table(PTP_UNICAST_MASTER_TABLE) or {}
+    ip_entries = config_db.get_table(PTP_UNICAST_MASTER_TABLE_IP) or {}
+    ptp_ports = config_db.get_table(PTP_PORT_TABLE) or {}
+
+    click.echo('PTP Protocol')
+    click.echo('')
+    proto_header = ['Parameter', 'Value']
+    proto_body = [
+        ['domain-number', _cfg_value(global_cfg, 'domain_number')],
+        ['sync-interval', _cfg_value(global_cfg, 'sync_interval')],
+        ['announce-interval', _cfg_value(global_cfg, 'announce_interval')],
+    ]
+    click.echo(tabulate(proto_body, proto_header, tablefmt='simple'))
+    click.echo('')
+
+    click.echo('Unicast Master Table')
+    umt_rows = _unicast_master_rows(tables, ip_entries)
+    if not umt_rows:
+        click.echo('No unicast master tables configured')
+    else:
+        click.echo(tabulate(umt_rows, ['Table ID', 'Address'], tablefmt='simple'))
+    click.echo('')
+
+    click.echo('PTP Ports')
+    if not ptp_ports:
+        click.echo('No PTP ports configured')
+        return
+
+    port_header = ['Interface', 'Role', 'Unicast Table', 'Unicast Listen']
+    port_body = []
+    for ifname in natsorted(list(ptp_ports.keys())):
+        info = ptp_ports[ifname] or {}
+        port_body.append([
+            _display_ifname(ifname),
+            _port_role(info),
+            info.get('unicast_table') or '-',
+            'true' if _unicast_listen_enabled(info) else 'false',
+        ])
+    click.echo(tabulate(port_body, port_header, tablefmt='simple'))
+
+
 #
 # 'ptp' group ("show ptp ...")
 #
@@ -86,3 +190,22 @@ def port():
 def port_status(db, interface_name):
     """Show PTP enable state and timestamp mode per port"""
     show_ptp_port_status(db, interface_name)
+
+
+#
+# 'protocol' group ("show ptp protocol ...")
+#
+@ptp.group(cls=clicommon.AbbreviationGroup, name='protocol')
+def protocol():
+    """Show PTP protocol configuration and port roles"""
+    pass
+
+
+#
+# 'status' command ("show ptp protocol status")
+#
+@protocol.command('status')
+@clicommon.pass_db
+def protocol_status(db):
+    """Show PTP domain, intervals, unicast master tables, and port master/slave roles"""
+    show_ptp_protocol_status(db)
