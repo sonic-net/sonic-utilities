@@ -100,6 +100,12 @@ def _get_optional_positive_int(data: Dict, key: str) -> Optional[int]:
     return value
 
 
+# Public aliases: other platform.json driven install limits reuse this parsing
+# instead of adding another platform.json reader.
+load_platform_json = _load_platform_json
+get_optional_positive_int = _get_optional_positive_int
+
+
 def get_min_free_disk_in_gb_for_image(
     image_type: str,
     platform_json_path: Optional[str] = None,
