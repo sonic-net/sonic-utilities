@@ -1,8 +1,10 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
+import sys
 import time
 
 import pytest
@@ -15,6 +17,35 @@ SWITCH_HOST_ENV = {
     "REBOOT_TEST_IS_DPU": "False",
     "REBOOT_TEST_IS_SWITCH_HOST": "True",
 }
+
+
+@pytest.mark.parametrize("is_switch_host", [True, False])
+def test_switch_host_identity_helper(tmp_path, is_switch_host):
+    """Run the script's embedded Python, independently of the PATH stubs."""
+    match = re.search(
+        r"^function is_switch_host_device\(\)\n\{.*?^\}",
+        REBOOT_SCRIPT.read_text(), re.MULTILINE | re.DOTALL)
+    assert match is not None
+    assert "python3 -I -c" in match.group()
+    package = tmp_path / "sonic_py_common"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "device_info.py").write_text(
+        "def is_switch_host():\n    return {}\n".format(is_switch_host))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python3").symlink_to(sys.executable)
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + os.defpath
+    # Isolated mode ignores PYTHONPATH; inject only the test package explicitly.
+    helper = match.group().replace(
+        "from sonic_py_common import device_info;",
+        "import sys; sys.path.insert(0, {!r}); from sonic_py_common import device_info;".format(str(tmp_path)))
+    result = subprocess.run(
+        ["bash", "-c", helper + "\nis_switch_host_device"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=10)
+    assert (result.returncode == 0) is is_switch_host
+    assert result.stderr == ""
 
 
 def _write_executable(path, body):

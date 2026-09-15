@@ -70,7 +70,7 @@ function debug()
 
 function is_switch_host_device()
 {
-    python3 -I -c "from sonic_py_common import device_info; print(getattr(device_info, 'is_switch_host', lambda: False)())" \
+    python3 -I -c "from sonic_py_common import device_info; print(device_info.is_switch_host())" \
         | grep -q True
 }
 
