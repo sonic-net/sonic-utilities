@@ -1736,11 +1736,17 @@ def logging(process, lines, follow, verbose):
     if verbose:
         click.echo(click.style("Command: ", fg='cyan') +
                    click.style("{} | {}".format(' '.join(cmd), ' '.join(tail_cmd)), fg='green'))
-    exitcodes, output = getstatusoutput_noshell_pipe(cmd, tail_cmd)
-    if output:
-        click.echo(output)
-    rc = next((code for code in reversed(exitcodes) if code != 0), 0)
-    if rc != 0:
+    # Chain the pipeline manually (rather than via getstatusoutput_noshell_pipe,
+    # which buffers the whole output via communicate()) so tail inherits the
+    # terminal's stdout and output streams line-by-line as before, while still
+    # avoiding a shell entirely.
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(tail_cmd, stdin=p1.stdout)
+    p1.stdout.close()  # SIGPIPE to p1 if p2 exits early
+    p2.wait()
+    p1.wait()
+    rc = p2.returncode or p1.returncode
+    if rc:
         sys.exit(rc)
 
 #

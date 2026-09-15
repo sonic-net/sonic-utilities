@@ -182,50 +182,57 @@ def test_show_logging_follow_ignores_other_args(run_command):
         EXPECTED_BASE_COMMAND_LIST + ['tail', '-F', '/var/log/syslog'], display_cmd=False)
 
 
-@patch('show.main.getstatusoutput_noshell_pipe')
+@patch('show.main.subprocess.Popen')
 @pytest.mark.parametrize("isfile, exists, log_files", LOGGING_PATH_CASES)
-def test_show_logging_lines_no_filter(mock_pipe, isfile, exists, log_files):
-    mock_pipe.return_value = ([0, 0], "line1\nline2")
+def test_show_logging_lines_no_filter(mock_popen, isfile, exists, log_files):
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
     with patch('os.path.isfile', MagicMock(return_value=isfile)), \
             patch('os.path.exists', MagicMock(return_value=exists)):
         result = CliRunner().invoke(show.cli.commands["logging"], ['-l', '10'])
-    mock_pipe.assert_called_with(EXPECTED_BASE_COMMAND_LIST + ['cat'] + log_files, ['tail', '-n', '10'])
+    assert mock_popen.call_args_list == [
+        call(EXPECTED_BASE_COMMAND_LIST + ['cat'] + log_files, stdout=subprocess.PIPE),
+        call(['tail', '-n', '10'], stdin=mock_p1.stdout),
+    ]
     assert result.exit_code == 0
-    assert "line1\nline2" in result.output
 
 
-@patch('show.main.getstatusoutput_noshell_pipe')
+@patch('show.main.subprocess.Popen')
 @pytest.mark.parametrize("isfile, exists, log_files", LOGGING_PATH_CASES)
-def test_show_logging_lines_filter(mock_pipe, isfile, exists, log_files):
-    mock_pipe.return_value = ([0, 0], "line1")
+def test_show_logging_lines_filter(mock_popen, isfile, exists, log_files):
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
     with patch('os.path.isfile', MagicMock(return_value=isfile)), \
             patch('os.path.exists', MagicMock(return_value=exists)):
         result = CliRunner().invoke(show.cli.commands["logging"], ['xcvrd', '-l', '10'])
-    mock_pipe.assert_called_with(
-        EXPECTED_BASE_COMMAND_LIST + ['grep', '-h', '--', 'xcvrd'] + log_files, ['tail', '-n', '10'])
+    assert mock_popen.call_args_list == [
+        call(EXPECTED_BASE_COMMAND_LIST + ['grep', '-h', '--', 'xcvrd'] + log_files, stdout=subprocess.PIPE),
+        call(['tail', '-n', '10'], stdin=mock_p1.stdout),
+    ]
     assert result.exit_code == 0
-    assert "line1" in result.output
 
 
-@patch('show.main.getstatusoutput_noshell_pipe')
-def test_show_logging_lines_verbose(mock_pipe):
-    mock_pipe.return_value = ([0, 0], "out")
+@patch('show.main.subprocess.Popen')
+def test_show_logging_lines_verbose(mock_popen):
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
     with patch('os.path.isfile', MagicMock(return_value=False)), \
             patch('os.path.exists', MagicMock(return_value=False)):
         result = CliRunner().invoke(show.cli.commands["logging"], ['-l', '5', '--verbose'])
     assert "sudo cat /var/log/syslog | tail -n 5" in result.output
 
 
-@patch('show.main.getstatusoutput_noshell_pipe')
+@patch('show.main.subprocess.Popen')
 @pytest.mark.parametrize(
-        "exitcodes",
+        "p1_rc, p2_rc",
         [
-            [1, 0],  # grep found nothing, tail on empty stdin still exits 0
-            [0, 1],  # tail itself fails
+            (1, 0),  # grep found nothing, tail on empty stdin still exits 0
+            (0, 1),  # tail itself fails
         ]
 )
-def test_show_logging_lines_nonzero_status(mock_pipe, exitcodes):
-    mock_pipe.return_value = (exitcodes, "")
+def test_show_logging_lines_nonzero_status(mock_popen, p1_rc, p2_rc):
+    mock_p1, mock_p2 = MagicMock(returncode=p1_rc), MagicMock(returncode=p2_rc)
+    mock_popen.side_effect = [mock_p1, mock_p2]
     with patch('os.path.isfile', MagicMock(return_value=False)), \
             patch('os.path.exists', MagicMock(return_value=False)):
         result = CliRunner().invoke(show.cli.commands["logging"], ['xcvrd', '-l', '10'])
@@ -249,15 +256,18 @@ def test_show_logging_process_argv_integrity(run_command, process):
         ['sudo', 'grep', '-h', '--', process, '/var/log/syslog'], display_cmd=False)
 
 
-@patch('show.main.getstatusoutput_noshell_pipe')
+@patch('show.main.subprocess.Popen')
 @pytest.mark.parametrize("process", INJECTION_PROCESS_VALUES)
-def test_show_logging_lines_process_argv_integrity(mock_pipe, process):
-    mock_pipe.return_value = ([0, 0], "")
+def test_show_logging_lines_process_argv_integrity(mock_popen, process):
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
     with patch('os.path.isfile', MagicMock(return_value=False)), \
             patch('os.path.exists', MagicMock(return_value=False)):
         CliRunner().invoke(show.cli.commands["logging"], [process, '-l', '10'])
-    mock_pipe.assert_called_with(
-        ['sudo', 'grep', '-h', '--', process, '/var/log/syslog'], ['tail', '-n', '10'])
+    assert mock_popen.call_args_list == [
+        call(['sudo', 'grep', '-h', '--', process, '/var/log/syslog'], stdout=subprocess.PIPE),
+        call(['tail', '-n', '10'], stdin=mock_p1.stdout),
+    ]
 
 
 @patch('show.main.run_command')
