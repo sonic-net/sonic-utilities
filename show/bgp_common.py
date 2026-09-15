@@ -1,6 +1,6 @@
-import copy
 import ipaddress
 import json
+import sys
 
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import device_info, multi_asic
@@ -52,7 +52,7 @@ def get_mpls_label_strgs(label_list):
             label_str_2_return += "/" + label_string
     return label_str_2_return
 
-def get_nexthop_info_str(nxhp_info, filterByIp):
+def get_nexthop_info_str(nxhp_info, filterByIp, is_voq_chassis=None):
     str_2_return = ""
     if "ip" in nxhp_info:
         if filterByIp:
@@ -83,7 +83,12 @@ def get_nexthop_info_str(nxhp_info, filterByIp):
     if "active" not in nxhp_info:
         str_2_return += " inactive"
     if "recursive" in nxhp_info:
-        if device_info.is_voq_chassis():
+        # Prefer caller-provided value so hot paths (print/merge) only call
+        # device_info.is_voq_chassis() once. Fallback keeps direct callers working
+        # and remains mock-friendly for unit tests (no process-wide cache).
+        if is_voq_chassis is None:
+            is_voq_chassis = device_info.is_voq_chassis()
+        if is_voq_chassis:
             str_2_return = "  " + str_2_return + " recursive via iBGP"
         else:
             str_2_return += " (recursive)"
@@ -147,117 +152,189 @@ def print_ip_routes(route_info, filter_by_ip):
     This interpretation is based on FRR 7.2 branch. If we later moved on to a new branch, we may
     have to rexamine if there are any changes made that may impact the parsing logic
     """
-    proto_code = {"system":'X', "kernel":'K', "connected":'C', "static":'S',
-                  "rip":'R', "ripng":'R', "ospf":'O', "ospf6":'O', "isis":'I',
-                  "bgp":'B', "pim":'P', "hsls":'H', "olsr":'o', "babel":'A'}
-    for route, info in sorted(route_info.items(), key=get_ip_value):
-        for i in range(0, len(info)):
+    proto_code = {"system": 'X', "kernel": 'K', "connected": 'C', "static": 'S',
+                  "rip": 'R', "ripng": 'R', "ospf": 'O', "ospf6": 'O', "isis": 'I',
+                  "bgp": 'B', "pim": 'P', "hsls": 'H', "olsr": 'o', "babel": 'A'}
+    sorted_routes = sorted(route_info.items(), key=get_ip_value)
+    out_lines = []
+    flush_threshold = 2048
+    write = sys.stdout.write
+    # Resolve once per show; avoid ConfigDB/Redis per nexthop.
+    is_voq_chassis = device_info.is_voq_chassis()
+
+    def _flush():
+        if out_lines:
+            write("".join(out_lines))
+            out_lines.clear()
+
+    for route, info in sorted_routes:
+        for item in info:
             if filter_by_ip:
-                print("Routing entry for {}".format(str(route)))
-                str_2_print = '  Known via "{}", distance {}, metric {}'.format(info[i]['protocol'], info[i]['distance'], info[i]['metric'])
-                if "selected" in info[i]:
+                out_lines.append("Routing entry for {}\n".format(str(route)))
+                str_2_print = '  Known via "{}", distance {}, metric {}'.format(
+                    item['protocol'], item['distance'], item['metric'])
+                if "selected" in item:
                     str_2_print += ", best"
-                print(str_2_print)
-                print("  Last update {} ago".format(info[i]['uptime']))
-                for j in range(0, len(info[i]['nexthops'])):
-                    if "directlyConnected" in info[i]['nexthops'][j]:
-                        print("  * directly connected, {}\n".format(info[i]['nexthops'][j]['interfaceName']))
+                out_lines.append(str_2_print + "\n")
+                out_lines.append("  Last update {} ago\n".format(item['uptime']))
+                for nh in item['nexthops']:
+                    if "directlyConnected" in nh:
+                        out_lines.append("  * directly connected, {}\n\n".format(nh['interfaceName']))
                     else:
-                        str_2_print = get_nexthop_info_str(info[i]['nexthops'][j], True)
-                        print(str_2_print)
-                print("")
+                        out_lines.append(get_nexthop_info_str(nh, True, is_voq_chassis=is_voq_chassis) + "\n")
+                out_lines.append("\n")
             else:
-                str_2_print = ""
-                str_2_print += proto_code[info[i]['protocol']]
-                if "instance" in info[i]:
-                    str_2_print += "[" + str(info[i]['instance']) + "]"
-                if "selected" in info[i]:
-                    str_2_print += ">"
+                protocol = item.get('protocol')
+                prefix_head = proto_code.get(protocol, '?')
+                if "instance" in item:
+                    prefix_head += "[" + str(item['instance']) + "]"
+                if "selected" in item:
+                    prefix_head += ">"
                 else:
-                    str_2_print += " "
-                for j in range(0, len(info[i]['nexthops'])):
+                    prefix_head += " "
+
+                str_length = 0
+                for j, nh in enumerate(item['nexthops']):
                     if j != 0:
                         str_2_print = "  "
-                    str_2_print += get_status_output_char(info[i], j)
+                    else:
+                        str_2_print = prefix_head
+                    str_2_print += get_status_output_char(item, j)
                     # on 1st nexhop print the prefix and distance/metric if appropriate.
                     # on all subsequent nexthop replace the prefix and distance/metric by empty spaces only.
                     if j == 0:
-                        str_2_print += info[i]['prefix'] + get_distance_metric_str(info[i])
+                        str_2_print += item['prefix'] + get_distance_metric_str(item)
                         str_length = len(str_2_print)
                     else:
                         # For all subsequent nexthops skip the spacing to not repeat the prefix section
-                        str_2_print += " "*(str_length - 3)
+                        str_2_print += " " * (str_length - 3)
                     # Get the nexhop info portion of the string
-                    str_2_print += get_nexthop_info_str(info[i]['nexthops'][j], False)
+                    str_2_print += get_nexthop_info_str(nh, False, is_voq_chassis=is_voq_chassis)
                     # add uptime at the end of the string
-                    str_2_print += " {}".format(info[i]['uptime'])
-                    # print out this string
-                    print(str_2_print)
+                    str_2_print += " {}".format(item['uptime'])
+                    out_lines.append(str_2_print + "\n")
+
+            if len(out_lines) >= flush_threshold:
+                _flush()
+
+    _flush()
 
 
-def merge_to_combined_route(combined_route, route, new_info_l):
+def merge_to_combined_route(combined_route, route, new_info_l, is_voq_chassis=None):
     # The following protocols do not have multi-nexthops. mbrship test with small list is faster than small set
     # If other protocol are also single nexthop not in this list just add them
     single_nh_proto = ["connected"]
+    if is_voq_chassis is None:
+        is_voq_chassis = device_info.is_voq_chassis()
     # check if this route already exists. if so, combine nethops and update the count
     if route in combined_route:
+        route_entries = combined_route[route]
+        # Build protocol -> first index map to preserve historical
+        # "first matching protocol entry" behavior from the old scan loop
+        # for multi-nexthop protocols.
+        protocol_to_index = {}
+        for idx, entry in enumerate(route_entries):
+            protocol = entry['protocol']
+            if protocol not in protocol_to_index:
+                protocol_to_index[protocol] = idx
+
         while len(new_info_l):
             new_info = new_info_l.pop()
-            proto_matched = False
-            skip_this_new_info = False
-            for j in range(0, len(combined_route[route])):
-                if new_info['protocol'] == combined_route[route][j]['protocol']:
-                    proto_matched = True
-                    if new_info['protocol'] in single_nh_proto:
-                        # For single nexhop protocols handling differs where it should be either not added or add ASIS
-                        # If this is new, need to add the new_info. else skip this new_info
-                        if combined_route[route][j]['nexthops'][0]['interfaceName'] == new_info['nexthops'][0]['interfaceName']:
-                            skip_this_new_info = True
-                            break
-                    else:
-                        # protocol may contain multiple nexthops. Need to filter by nexthops
-                        additional_nh_l = []
-                        while len(new_info['nexthops']):
-                            nh = new_info['nexthops'].pop()
-                            found = False
-                            for y in range(0, len(combined_route[route][j]['nexthops'])):
-                                if "interfaceName" in nh and "interfaceName" in combined_route[route][j]['nexthops'][y]:
-                                    if nh['interfaceName'] == combined_route[route][j]['nexthops'][y]['interfaceName']:
-                                        found = True
-                                        break
-                                if device_info.is_voq_chassis():
-                                    if nh['ip'] == combined_route[route][j]['nexthops'][y]['ip']:
-                                        if 'interfaceName' not in combined_route[route][j]['nexthops'][y]:
-                                            combined_route[route][j]['nexthops'][y] = nh
-                                        found = True
-                                        break
-                                elif "active" not in nh and "active" not in combined_route[route][j]['nexthops'][y]:
-                                    if nh['ip'] == combined_route[route][j]['nexthops'][y]['ip']:
-                                        found = True
-                                        break
-                            if not found:
-                                additional_nh_l.append(copy.deepcopy(nh))
+            protocol = new_info['protocol']
+            existing_index = protocol_to_index.get(protocol)
 
-                        if len(additional_nh_l) > 0:
-                            combined_route[route][j]['internalNextHopNum'] + len(additional_nh_l)
-                            if combined_route[route][j]['internalNextHopActiveNum'] > 0 and new_info['internalNextHopActiveNum'] > 0:
-                                combined_route[route][j]['internalNextHopActiveNum'] + len(additional_nh_l)
-                            combined_route[route][j]['nexthops'] += additional_nh_l
-                        # the nexhops merged, no need to add the new_info
+            if existing_index is None:
+                # This new_info is unique and should be added to the route
+                route_entries.append(new_info)
+                # Preserve old scan-loop behavior for later items in this call:
+                # once the first entry for a protocol is appended, subsequent
+                # same-protocol multi-nh entries should merge against it.
+                protocol_to_index[protocol] = len(route_entries) - 1
+                continue
+
+            if protocol in single_nh_proto:
+                # Match legacy behavior: scan ALL same-protocol entries for an
+                # interface match before appending a new connected entry.
+                if not new_info.get('nexthops'):
+                    continue
+                new_iface = new_info['nexthops'][0].get('interfaceName')
+                skip_this_new_info = False
+                for entry in route_entries:
+                    if entry['protocol'] != protocol:
+                        continue
+                    if not entry.get('nexthops'):
+                        continue
+                    existing_iface = entry['nexthops'][0].get('interfaceName')
+                    if existing_iface == new_iface:
                         skip_this_new_info = True
                         break
-            if not proto_matched or not skip_this_new_info:
-                # This new_info is unique and should be added to the route
-                combined_route[route].append(new_info)
+                if not skip_this_new_info:
+                    route_entries.append(new_info)
+                continue
+
+            existing_entry = route_entries[existing_index]
+
+            # protocol may contain multiple nexthops. Need to filter by nexthops
+            existing_nh_list = existing_entry['nexthops']
+            # First-wins maps match the old nested-loop "break on first match".
+            iface_to_index = {}
+            ip_to_index = {}
+            inactive_ip_set = set()
+            for idx, nh in enumerate(existing_nh_list):
+                nh_iface = nh.get('interfaceName')
+                if nh_iface is not None and nh_iface not in iface_to_index:
+                    iface_to_index[nh_iface] = idx
+                nh_ip = nh.get('ip')
+                if nh_ip is not None:
+                    if nh_ip not in ip_to_index:
+                        ip_to_index[nh_ip] = idx
+                    if 'active' not in nh:
+                        inactive_ip_set.add(nh_ip)
+
+            additional_nh_l = []
+            while len(new_info['nexthops']):
+                nh = new_info['nexthops'].pop()
+                nh_iface = nh.get('interfaceName')
+                nh_ip = nh.get('ip')
+
+                if nh_iface is not None and nh_iface in iface_to_index:
+                    continue
+
+                if is_voq_chassis and nh_ip is not None and nh_ip in ip_to_index:
+                    existing_idx = ip_to_index[nh_ip]
+                    if 'interfaceName' not in existing_nh_list[existing_idx]:
+                        existing_nh_list[existing_idx] = nh
+                        if nh_iface is not None and nh_iface not in iface_to_index:
+                            iface_to_index[nh_iface] = existing_idx
+                    continue
+
+                if (not is_voq_chassis and nh_ip is not None and
+                        'active' not in nh and nh_ip in inactive_ip_set):
+                    continue
+
+                # Popped from new_info; unique ownership, no deepcopy needed.
+                additional_nh_l.append(nh)
+
+            if len(additional_nh_l) > 0:
+                # Keep legacy behavior (intentional no-op expressions)
+                # to avoid changing JSON output semantics unexpectedly.
+                existing_entry['internalNextHopNum'] + len(additional_nh_l)
+                if (existing_entry['internalNextHopActiveNum'] > 0 and
+                        new_info['internalNextHopActiveNum'] > 0):
+                    existing_entry['internalNextHopActiveNum'] + len(additional_nh_l)
+                existing_nh_list += additional_nh_l
     else:
         combined_route[route] = new_info_l
 
 def process_route_info(route_info, device, filter_back_end, print_ns_str, asic_cnt, ns_str, combined_route, back_end_intf_set):
     new_route = {}
+    # Resolve once per process_route_info call (not once per prefix in merge).
+    is_voq_chassis = device_info.is_voq_chassis() if (asic_cnt > 1 and filter_back_end) else None
     for route, info in route_info.items():
         new_info_l = []
         new_info_cnt = 0
         while len(info):
+            # Popped entries are owned here; avoid deepcopy of every nexthop.
             new_info = info.pop()
             new_nhop_l = []
             del_cnt = 0
@@ -267,12 +344,12 @@ def process_route_info(route_info, device, filter_back_end, print_ns_str, asic_c
                     if nh['interfaceName'] in back_end_intf_set or nh['interfaceName'].startswith('Ethernet-IB'):
                         del_cnt += 1
                     else:
-                        new_nhop_l.append(copy.deepcopy(nh))
+                        new_nhop_l.append(nh)
                 else:
-                    new_nhop_l.append(copy.deepcopy(nh))
+                    new_nhop_l.append(nh)
             # use the new filtered nhop list if it is not empty. if empty nexthop , this route is filtered out completely
             if len(new_nhop_l) > 0:
-                new_info['nexthops'] = copy.deepcopy(new_nhop_l)
+                new_info['nexthops'] = new_nhop_l
                 new_info_cnt += 1
                 # in case there are any nexthop that were deleted, we will need to adjust the nexhopt counts as well
                 if del_cnt > 0:
@@ -280,20 +357,22 @@ def process_route_info(route_info, device, filter_back_end, print_ns_str, asic_c
                     new_info['internalNextHopNum'] = internalNextHopNum
                     internalNextHopActiveNum = new_info['internalNextHopActiveNum'] - del_cnt
                     new_info['internalNextHopActiveNum'] = internalNextHopActiveNum
-                new_info_l.append(copy.deepcopy(new_info))
+                new_info_l.append(new_info)
         if new_info_cnt:
             if asic_cnt > 1:
                 if filter_back_end:
-                    merge_to_combined_route(combined_route, route, new_info_l)
+                    merge_to_combined_route(
+                        combined_route, route, new_info_l, is_voq_chassis=is_voq_chassis
+                    )
                 else:
-                    new_route[route] = copy.deepcopy(new_info_l)
+                    new_route[route] = new_info_l
             else:
-                new_route[route] = copy.deepcopy(new_info_l)
+                new_route[route] = new_info_l
     if new_route:
         if print_ns_str:
-            combined_route['{}'.format(ns_str)] = copy.deepcopy(new_route)
+            combined_route['{}'.format(ns_str)] = new_route
         else:
-            combined_route.update(copy.deepcopy(new_route))
+            combined_route.update(new_route)
 
 def print_show_ip_route_hdr():
     # This prints out the show ip route header based on FRR 7.2 version.
