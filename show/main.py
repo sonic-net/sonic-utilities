@@ -1715,21 +1715,39 @@ def logging(process, lines, follow, verbose):
     else:
         log_path = "/var/log"
     if follow:
-        cmd = ['sudo', 'tail', '-F', '{}/syslog'.format(log_path)]
-        run_command(cmd, display_cmd=verbose)
+        run_command(['sudo', 'tail', '-F', '{}/syslog'.format(log_path)], display_cmd=verbose)
+        return
+
+    log_files = ["{}/syslog.1".format(log_path)] if os.path.isfile("{}/syslog.1".format(log_path)) else []
+    log_files.append("{}/syslog".format(log_path))
+
+    # "-h" keeps output filename-free across multiple files; "--" stops a
+    # process value starting with "-" from being read as a grep option.
+    if process is not None:
+        cmd = ["sudo", "grep", "-h", "--", process] + log_files
     else:
-        if os.path.isfile("{}/syslog.1".format(log_path)):
-            cmd = "sudo cat {}/syslog.1 {}/syslog".format(log_path, log_path)
-        else:
-            cmd = "sudo cat {}/syslog".format(log_path)
+        cmd = ["sudo", "cat"] + log_files
 
-        if process is not None:
-            cmd += " | grep '{}'".format(process)
+    if lines is None:
+        run_command(cmd, display_cmd=verbose)
+        return
 
-        if lines is not None:
-            cmd += " | tail -{}".format(lines)
-
-        run_command(cmd, display_cmd=verbose, shell=True)
+    tail_cmd = ["tail", "-n", str(lines)]
+    if verbose:
+        click.echo(click.style("Command: ", fg='cyan') +
+                   click.style("{} | {}".format(' '.join(cmd), ' '.join(tail_cmd)), fg='green'))
+    # Chain the pipeline manually (rather than via getstatusoutput_noshell_pipe,
+    # which buffers the whole output via communicate()) so tail inherits the
+    # terminal's stdout and output streams line-by-line as before, while still
+    # avoiding a shell entirely.
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(tail_cmd, stdin=p1.stdout)
+    p1.stdout.close()  # SIGPIPE to p1 if p2 exits early
+    p2.wait()
+    p1.wait()
+    rc = p2.returncode or p1.returncode
+    if rc:
+        sys.exit(rc)
 
 #
 # 'version' command ("show version")
