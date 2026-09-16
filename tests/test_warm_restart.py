@@ -499,3 +499,130 @@ def test_show_warm_restart_config_unix_sock_usage_and_namespace(setup_state_db_m
     """)
     assert result.exit_code == 2
     assert result.output == expected_output
+
+
+# Guard refusing warm restart while the ZMQ route path is enabled.
+
+@pytest.fixture
+def swss_zmq_enabled(configdbconnector_mock):
+    config_db = configdbconnector_mock()
+    config_db.mod_entry("SYSTEM_DEFAULTS", "swss_zmq", {"status": "enabled"})
+    return config_db
+
+
+@pytest.mark.parametrize("module", ["system", "bgp", "swss"])
+def test_config_warm_restart_enable_refused_when_zmq_enabled(
+        sonicv2connector_mock, swss_zmq_enabled, module):
+    swss_zmq_enabled.mod_entry("FEATURE", module, {"state": "enabled"})
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["enable", module],
+    )
+    assert result.exit_code != 0
+    assert "swss_zmq is enabled" in result.output
+    assert module in result.output
+
+    state_db = sonicv2connector_mock()
+    assert state_db.get(state_db.STATE_DB,
+                        "WARM_RESTART_ENABLE_TABLE|{}".format(module),
+                        "enable") is None
+
+
+def test_config_warm_restart_enable_allows_unrelated_module_when_zmq_enabled(
+        sonicv2connector_mock, swss_zmq_enabled):
+    """teamd is outside the rejected set."""
+    swss_zmq_enabled.mod_entry("FEATURE", "teamd", {"state": "enabled"})
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["enable", "teamd"],
+    )
+    assert result.exit_code == 0
+
+    state_db = sonicv2connector_mock()
+    assert state_db.get(state_db.STATE_DB,
+                        "WARM_RESTART_ENABLE_TABLE|teamd", "enable") == "true"
+
+
+@pytest.mark.parametrize("status", ["disabled", None])
+def test_config_warm_restart_enable_allowed_when_zmq_off(
+        sonicv2connector_mock, configdbconnector_mock, status):
+    config_db = configdbconnector_mock()
+    if status is not None:
+        config_db.mod_entry("SYSTEM_DEFAULTS", "swss_zmq", {"status": status})
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["enable"],
+    )
+    assert result.exit_code == 0
+
+    state_db = sonicv2connector_mock()
+    assert state_db.get(state_db.STATE_DB,
+                        "WARM_RESTART_ENABLE_TABLE|system", "enable") == "true"
+
+
+def test_config_warm_restart_disable_allowed_when_zmq_enabled(
+        sonicv2connector_mock, swss_zmq_enabled):
+    """Disable stays available to clear an armed flag."""
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["disable"],
+    )
+    assert result.exit_code == 0
+
+    state_db = sonicv2connector_mock()
+    assert state_db.get(state_db.STATE_DB,
+                        "WARM_RESTART_ENABLE_TABLE|system", "enable") == "false"
+
+
+@pytest.mark.parametrize("armed_namespace", ["", "asic0", "asic3"])
+def test_config_warm_restart_enable_multi_asic_refused_per_namespace(
+        sonicv2connector_mock, configdbconnector_mock, multi_asic, armed_namespace):
+    """swss_zmq enabled in any namespace refuses the command."""
+    configdbconnector_mock(namespace=armed_namespace).mod_entry(
+        "SYSTEM_DEFAULTS", "swss_zmq", {"status": "enabled"})
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["enable"],
+    )
+    assert result.exit_code != 0
+    assert "swss_zmq is enabled" in result.output
+    if armed_namespace:
+        assert "namespace {}".format(armed_namespace) in result.output
+
+    for namespace in multi_asic["namespaces"]:
+        state_db = sonicv2connector_mock(namespace=namespace)
+        assert state_db.get(state_db.STATE_DB,
+                            "WARM_RESTART_ENABLE_TABLE|system", "enable") is None
+
+
+def test_config_warm_restart_enable_multi_asic_scoped_to_clean_namespace(
+        sonicv2connector_mock, configdbconnector_mock, multi_asic):
+    """-n scopes the check: a conflict elsewhere does not block."""
+    configdbconnector_mock(namespace="asic1").mod_entry(
+        "SYSTEM_DEFAULTS", "swss_zmq", {"status": "enabled"})
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["enable", "-n", "asic2", "system"],
+    )
+    assert result.exit_code == 0
+
+    state_db = sonicv2connector_mock(namespace="asic2")
+    assert state_db.get(state_db.STATE_DB,
+                        "WARM_RESTART_ENABLE_TABLE|system", "enable") == "true"
+
+
+def test_config_warm_restart_enable_multi_asic_scoped_to_conflicting_namespace(
+        sonicv2connector_mock, configdbconnector_mock, multi_asic):
+    """-n targeting the conflicting namespace is refused."""
+    configdbconnector_mock(namespace="asic1").mod_entry(
+        "SYSTEM_DEFAULTS", "swss_zmq", {"status": "enabled"})
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["enable", "-n", "asic1", "system"],
+    )
+    assert result.exit_code != 0
+    assert "namespace asic1" in result.output
+
+    state_db = sonicv2connector_mock(namespace="asic1")
+    assert state_db.get(state_db.STATE_DB,
+                        "WARM_RESTART_ENABLE_TABLE|system", "enable") is None

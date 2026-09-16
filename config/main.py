@@ -40,7 +40,12 @@ from utilities_common.intf_filter import parse_interface_in_filter
 from utilities_common import bgp_util
 import utilities_common.cli as clicommon
 from utilities_common.helper import get_port_pbh_binding, get_port_acl_binding, update_config
-from utilities_common.general import load_db_config, load_module_from_source
+from utilities_common.general import (
+    load_db_config,
+    load_module_from_source,
+    is_route_perf_zmq_enabled,
+    ZMQ_WARM_RESTART_CONFLICT_MODULES,
+)
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
@@ -4140,6 +4145,16 @@ def warm_restart_enable(ctx, namespace, module):
     feature_table = config_db.get_table('FEATURE')
     if module != 'system' and module not in feature_table:
         sys.exit('Feature {} is unknown'.format(module))
+    # swss_zmq is per-namespace, so check every namespace being armed.
+    if module in ZMQ_WARM_RESTART_CONFLICT_MODULES:
+        for ns in namespaces:
+            if is_route_perf_zmq_enabled(ctx.obj["config_db"][ns]):
+                scope = " in namespace {}".format(ns) if ns else ""
+                sys.exit(
+                    "swss_zmq is enabled{}. Warm restart for '{}' is unsupported with the "
+                    "ZMQ route path.\n"
+                    "Disable swss_zmq in SYSTEM_DEFAULTS to use warm restart.".format(scope, module)
+                )
     prefix = ctx.obj['prefix']
     _hash = '{}{}'.format(prefix, module)
 

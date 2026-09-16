@@ -15710,6 +15710,24 @@ If this configuration is enabled for that service, it will perform warm reboot f
   admin@sonic:~$ sudo config warm_restart enable teamd
   ```
 
+The ZMQ route path and warm restart are mutually exclusive. When `swss_zmq` is enabled in
+`SYSTEM_DEFAULTS`, fpmsyncd and orchagent refuse to start the ZMQ route path alongside an armed
+warm or fast restart. The command therefore rejects the `system`, `bgp` and `swss` modules while
+`swss_zmq` is enabled, and `warm-reboot`, `fast-reboot` and `express-reboot` reject the same
+combination. Disable `swss_zmq` in `SYSTEM_DEFAULTS` to use warm restart.
+
+On multi-ASIC devices every namespace runs its own fpmsyncd and orchagent against its own
+`swss_zmq` knob, so each namespace being armed is checked against its own CONFIG_DB. `swss_zmq`
+enabled in any one of them rejects the command, and the message names that namespace. Use
+`-n/--namespace` to arm a single namespace, which then checks only that namespace.
+
+- Example (warm_restart refused because the ZMQ route path is enabled):
+  ```
+  admin@sonic:~$ sudo config warm_restart enable
+  swss_zmq is enabled. Warm restart for 'system' is unsupported with the ZMQ route path.
+  Disable swss_zmq in SYSTEM_DEFAULTS to use warm restart.
+  ```
+
 
 **config warm_restart neighsyncd_timer**
 

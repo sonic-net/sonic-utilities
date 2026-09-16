@@ -8,6 +8,14 @@ FEATURE_TABLE = "FEATURE"
 FEATURE_HAS_PER_ASIC_SCOPE = 'has_per_asic_scope'
 FEATURE_HAS_GLOBAL_SCOPE = 'has_global_scope'
 
+SYSTEM_DEFAULTS_TABLE = "SYSTEM_DEFAULTS"
+SWSS_ZMQ_KEY = "swss_zmq"
+SYSTEM_DEFAULTS_STATUS_FIELD = "status"
+
+# Restart scopes the ZMQ route path rejects. Keep aligned with
+# warm_or_fast_restart_enabled() in sonic-swss lib/orch_zmq_config.cpp.
+ZMQ_WARM_RESTART_CONFLICT_MODULES = frozenset({"system", "bgp", "swss"})
+
 def load_module_from_source(module_name, file_path):
     """
     This function will load the Python source file specified by <file_path>
@@ -67,3 +75,12 @@ def get_feature_state_data(config_db, feature):
         if info_dict['state'].lower() == "enabled":
             global_scope = "True"
     return global_scope, asic_scope
+
+
+def is_route_perf_zmq_enabled(config_db):
+    '''
+    Return True when SYSTEM_DEFAULTS|swss_zmq is enabled in the given CONFIG_DB.
+    '''
+    system_defaults = config_db.get_table(SYSTEM_DEFAULTS_TABLE)
+    entry = system_defaults.get(SWSS_ZMQ_KEY, {})
+    return entry.get(SYSTEM_DEFAULTS_STATUS_FIELD) == "enabled"
