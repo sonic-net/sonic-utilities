@@ -1,0 +1,11 @@
+{
+    "ACL_RULE": {
+        "control-plane-v4|30-SNMP": {
+            "IP_PROTOCOL": "17",
+            "SRC_IP": "172.168.158.0/24",
+            "PACKET_ACTION": "ACCEPT",
+            "L4_DST_PORT_RANGE": "161-162",
+            "PRIORITY": "9999"
+        }
+    }
+}
