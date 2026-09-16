@@ -161,3 +161,104 @@ class TestShowPtpProtocolStatus(object):
             assert "slave/master" in result.output
         finally:
             _clear_ptp_protocol_config(db)
+
+
+def _ptp_counters_cmd():
+    return show.cli.commands["ptp"].commands["counters"]
+
+
+def _set_ptp_counters(db, ifname, fields):
+    sep = db.db.get_db_separator(db.db.COUNTERS_DB)
+    key = 'COUNTERS_PTP{}{}'.format(sep, ifname)
+    for field, value in fields.items():
+        db.db.set(db.db.COUNTERS_DB, key, field, str(value))
+
+
+def _clear_ptp_counters(db):
+    sep = db.db.get_db_separator(db.db.COUNTERS_DB)
+    prefix = 'COUNTERS_PTP' + sep
+    for key in db.db.keys(db.db.COUNTERS_DB, prefix + '*') or []:
+        db.db.delete(db.db.COUNTERS_DB, key)
+
+
+class TestShowPtpCounters(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+    def test_show_ptp_counters_empty(self):
+        db = Db()
+        _clear_ptp_counters(db)
+        runner = CliRunner()
+        result = runner.invoke(_ptp_counters_cmd(), [], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert "No PTP counters in COUNTERS_DB" in result.output
+
+    def test_show_ptp_counters_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(_ptp_counters_cmd(), ["Ethernet999"], obj=Db())
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert "does not exist in the PORT table" in result.output
+
+    def test_show_ptp_counters_missing_for_interface(self):
+        db = Db()
+        _clear_ptp_counters(db)
+        runner = CliRunner()
+        result = runner.invoke(_ptp_counters_cmd(), ["Ethernet0"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert "No PTP counters for interface 'Ethernet0'" in result.output
+
+    def test_show_ptp_counters_one_interface(self):
+        db = Db()
+        _clear_ptp_counters(db)
+        _set_ptp_counters(db, 'Ethernet0', {
+            'portIdentity': 'aa:bb:cc.fffe.001122-1',
+            'rx_Sync': '10',
+            'tx_Sync': '1',
+            'rx_Delay_Req': '4',
+            'tx_Delay_Req': '4',
+            'rx_Announce': '7',
+            'tx_Announce': '0',
+            'delay_timeout': '33017',
+            'unicast_request_timeout': '2069',
+        })
+        try:
+            runner = CliRunner()
+            result = runner.invoke(_ptp_counters_cmd(), ["Ethernet0"], obj=db)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert "Ethernet0" in result.output
+            assert "aa:bb:cc.fffe.001122-1" in result.output
+            assert re.search(r"Sync\s+10\s+1", result.output)
+            assert re.search(r"Delay_Req\s+4\s+4", result.output)
+            assert re.search(r"Announce\s+7\s+0", result.output)
+            assert "Service" in result.output
+            assert re.search(r"delay_timeout\s+33017", result.output)
+            assert re.search(r"unicast_request_timeout\s+2069", result.output)
+            assert "Ethernet4" not in result.output
+        finally:
+            _clear_ptp_counters(db)
+
+    def test_show_ptp_counters_all_interfaces(self):
+        db = Db()
+        _clear_ptp_counters(db)
+        _set_ptp_counters(db, 'Ethernet0', {'rx_Sync': '10', 'tx_Sync': '0'})
+        _set_ptp_counters(db, 'Ethernet4', {'rx_Sync': '0', 'tx_Sync': '8'})
+        try:
+            runner = CliRunner()
+            result = runner.invoke(_ptp_counters_cmd(), [], obj=db)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert "Ethernet0" in result.output
+            assert "Ethernet4" in result.output
+            assert re.search(r"Sync\s+10\s+0", result.output)
+            assert re.search(r"Sync\s+0\s+8", result.output)
+        finally:
+            _clear_ptp_counters(db)

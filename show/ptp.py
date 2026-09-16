@@ -11,6 +11,35 @@ PTP_UNICAST_MASTER_TABLE_IP = "PTP_UNICAST_MASTER_TABLE_IP"
 PORT_TABLE = "PORT"
 PTP_MODE_NONE = "none"
 NOT_SET = "not set"
+COUNTERS_PTP_TABLE = "COUNTERS_PTP"
+
+# linuxptp pmc GET PORT_STATS_NP: (display name, rx field, tx field)
+PTP_COUNTER_PAIRS = (
+    ("Sync", "rx_Sync", "tx_Sync"),
+    ("Delay_Req", "rx_Delay_Req", "tx_Delay_Req"),
+    ("Pdelay_Req", "rx_Pdelay_Req", "tx_Pdelay_Req"),
+    ("Pdelay_Resp", "rx_Pdelay_Resp", "tx_Pdelay_Resp"),
+    ("Follow_Up", "rx_Follow_Up", "tx_Follow_Up"),
+    ("Delay_Resp", "rx_Delay_Resp", "tx_Delay_Resp"),
+    ("Pdelay_Resp_Follow_Up", "rx_Pdelay_Resp_Follow_Up", "tx_Pdelay_Resp_Follow_Up"),
+    ("Announce", "rx_Announce", "tx_Announce"),
+    ("Signaling", "rx_Signaling", "tx_Signaling"),
+    ("Management", "rx_Management", "tx_Management"),
+)
+
+# linuxptp pmc GET PORT_SERVICE_STATS_NP: (display name, field)
+PTP_SERVICE_COUNTERS = (
+    ("announce_timeout", "announce_timeout"),
+    ("sync_timeout", "sync_timeout"),
+    ("delay_timeout", "delay_timeout"),
+    ("unicast_service_timeout", "unicast_service_timeout"),
+    ("unicast_request_timeout", "unicast_request_timeout"),
+    ("master_announce_timeout", "master_announce_timeout"),
+    ("master_sync_timeout", "master_sync_timeout"),
+    ("qualification_timeout", "qualification_timeout"),
+    ("sync_mismatch", "sync_mismatch"),
+    ("followup_mismatch", "followup_mismatch"),
+)
 
 
 def _convert_ifname(ctx, interface_name):
@@ -163,6 +192,74 @@ def show_ptp_protocol_status(db):
     click.echo(tabulate(port_body, port_header, tablefmt='simple'))
 
 
+def _counters_key(db, ifname):
+    sep = db.db.get_db_separator(db.db.COUNTERS_DB)
+    return "{}{}{}".format(COUNTERS_PTP_TABLE, sep, ifname)
+
+
+def _counters_ifnames(db):
+    sep = db.db.get_db_separator(db.db.COUNTERS_DB)
+    prefix = COUNTERS_PTP_TABLE + sep
+    names = []
+    for key in db.db.keys(db.db.COUNTERS_DB, prefix + '*') or []:
+        ifname = key[len(prefix):]
+        if ifname:
+            names.append(ifname)
+    return natsorted(names)
+
+
+def _show_one_ptp_counters(db, ifname):
+    entry = db.db.get_all(db.db.COUNTERS_DB, _counters_key(db, ifname)) or {}
+    if not entry:
+        click.echo("No PTP counters for interface '{}'".format(_display_ifname(ifname)))
+        return False
+
+    click.echo("Interface: {}".format(_display_ifname(ifname)))
+    if entry.get('portIdentity'):
+        click.echo("portIdentity: {}".format(entry['portIdentity']))
+    click.echo('')
+    body = []
+    for label, rx_field, tx_field in PTP_COUNTER_PAIRS:
+        body.append([
+            label,
+            entry.get(rx_field, '0'),
+            entry.get(tx_field, '0'),
+        ])
+    click.echo(tabulate(body, ['Message', 'RX', 'TX'], tablefmt='simple'))
+    click.echo('')
+    click.echo('Service')
+    service_body = []
+    for label, field in PTP_SERVICE_COUNTERS:
+        service_body.append([label, entry.get(field, '0')])
+    click.echo(tabulate(service_body, ['Event', 'Count'], tablefmt='simple'))
+    return True
+
+
+def show_ptp_counters(db, interface_name):
+    ctx = click.get_current_context()
+    interface_name = _convert_ifname(ctx, interface_name)
+
+    if interface_name:
+        port_tbl = db.cfgdb.get_table(PORT_TABLE) or {}
+        if interface_name not in port_tbl:
+            ctx.fail("Interface '{}' does not exist in the PORT table".format(interface_name))
+        if not _show_one_ptp_counters(db, interface_name):
+            return
+        return
+
+    names = _counters_ifnames(db)
+    if not names:
+        click.echo("No PTP counters in COUNTERS_DB")
+        return
+
+    first = True
+    for ifname in names:
+        if not first:
+            click.echo('')
+        first = False
+        _show_one_ptp_counters(db, ifname)
+
+
 #
 # 'ptp' group ("show ptp ...")
 #
@@ -209,3 +306,14 @@ def protocol():
 def protocol_status(db):
     """Show PTP domain, intervals, unicast master tables, and port master/slave roles"""
     show_ptp_protocol_status(db)
+
+
+#
+# 'counters' command ("show ptp counters [interface]")
+#
+@ptp.command('counters')
+@click.argument('interface_name', metavar='<interface_name>', required=False)
+@clicommon.pass_db
+def counters(db, interface_name):
+    """Show PTP PORT_STATS_NP and PORT_SERVICE_STATS_NP counters from COUNTERS_DB"""
+    show_ptp_counters(db, interface_name)
