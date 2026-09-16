@@ -24,6 +24,7 @@ from .common import (
     DOCKERDIR_NAME,
 )
 from .exception import SonicRuntimeException
+from .patch_cli import register_patch_commands
 
 SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
@@ -1019,6 +1020,9 @@ def verify_next_image():
         echo_and_log('Image verification failed', LOG_ERR)
         sys.exit(1)
     click.echo('Image successfully verified')
+
+
+register_patch_commands(sonic_installer, abort_if_false)
 
 if __name__ == '__main__':
     sonic_installer()
