@@ -967,7 +967,7 @@ save_sdk_sysfs() {
     # there are module's sysfs which we cannot access while the module is in fw control
     local fw_control_skip_list=(frequency_support frequency hw_present hw_reset low_power_mode power_good power_limit interrupt)
     # there are module's sysfs which we cannot access while the module is in sw control
-    local sw_control_skip_list=(module_ext_info els_laser_status els_error)
+    local sw_control_skip_list=(module_ext_info els_laser_status els_error module_cpo_info)
 
     $MKDIR $V -p "$dest"
 
