@@ -253,7 +253,6 @@ def test_show_logging_lines_non_numeric():
     assert result.exit_code != 0
 
 
-
 @patch('show.main.subprocess.Popen')
 @pytest.mark.parametrize("process", INJECTION_PROCESS_VALUES)
 def test_show_logging_process_argv_integrity(mock_popen, process):
