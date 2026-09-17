@@ -1720,32 +1720,44 @@ def logging(process, lines, follow, verbose):
 
     log_files = ["{}/syslog.1".format(log_path)] if os.path.isfile("{}/syslog.1".format(log_path)) else []
     log_files.append("{}/syslog".format(log_path))
+    cat_cmd = ["sudo", "cat"] + log_files
 
-    # "-h" keeps output filename-free across multiple files; "--" stops a
-    # process value starting with "-" from being read as a grep option.
-    if process is not None:
-        cmd = ["sudo", "grep", "-h", "--", process] + log_files
-    else:
-        cmd = ["sudo", "cat"] + log_files
-
-    if lines is None:
-        run_command(cmd, display_cmd=verbose)
+    if process is None and lines is None:
+        run_command(cat_cmd, display_cmd=verbose)
         return
 
-    tail_cmd = ["tail", "-n", str(lines)]
+    # Only "cat" needs root, to read the log files; "grep"/"tail" run as the
+    # invoking user -- same privilege boundary as the old
+    # "sudo cat ... | grep ... | tail ..." shell form, instead of running the
+    # user-controlled process regex (or tail) as root.
+    cmds = [cat_cmd]
+    if process is not None:
+        # "-h" keeps output filename-free across multiple files; "--" stops
+        # a process value starting with "-" from being read as a grep option.
+        cmds.append(["grep", "-h", "--", process])
+    if lines is not None:
+        cmds.append(["tail", "-n", str(lines)])
+
     if verbose:
         click.echo(click.style("Command: ", fg='cyan') +
-                   click.style("{} | {}".format(' '.join(cmd), ' '.join(tail_cmd)), fg='green'))
+                   click.style(' | '.join(' '.join(cmd) for cmd in cmds), fg='green'))
+
     # Chain the pipeline manually (rather than via getstatusoutput_noshell_pipe,
-    # which buffers the whole output via communicate()) so tail inherits the
-    # terminal's stdout and output streams line-by-line as before, while still
+    # which buffers the whole output via communicate()) so the last stage
+    # inherits the terminal's stdout and streams line-by-line, while still
     # avoiding a shell entirely.
-    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    p2 = subprocess.Popen(tail_cmd, stdin=p1.stdout)
-    p1.stdout.close()  # SIGPIPE to p1 if p2 exits early
-    p2.wait()
-    p1.wait()
-    rc = p2.returncode or p1.returncode
+    procs = []
+    stdin = None
+    for i, cmd in enumerate(cmds):
+        stdout = subprocess.PIPE if i < len(cmds) - 1 else None
+        procs.append(subprocess.Popen(cmd, stdin=stdin, stdout=stdout))
+        if stdin is not None:
+            stdin.close()  # SIGPIPE upstream if a downstream stage exits early
+        stdin = procs[-1].stdout
+
+    for proc in procs:
+        proc.wait()
+    rc = next((proc.returncode for proc in reversed(procs) if proc.returncode), 0)
     if rc:
         sys.exit(rc)
 
