@@ -1715,21 +1715,51 @@ def logging(process, lines, follow, verbose):
     else:
         log_path = "/var/log"
     if follow:
-        cmd = ['sudo', 'tail', '-F', '{}/syslog'.format(log_path)]
-        run_command(cmd, display_cmd=verbose)
-    else:
-        if os.path.isfile("{}/syslog.1".format(log_path)):
-            cmd = "sudo cat {}/syslog.1 {}/syslog".format(log_path, log_path)
-        else:
-            cmd = "sudo cat {}/syslog".format(log_path)
+        run_command(['sudo', 'tail', '-F', '{}/syslog'.format(log_path)], display_cmd=verbose)
+        return
 
-        if process is not None:
-            cmd += " | grep '{}'".format(process)
+    log_files = ["{}/syslog.1".format(log_path)] if os.path.isfile("{}/syslog.1".format(log_path)) else []
+    log_files.append("{}/syslog".format(log_path))
+    cat_cmd = ["sudo", "cat"] + log_files
 
-        if lines is not None:
-            cmd += " | tail -{}".format(lines)
+    if process is None and lines is None:
+        run_command(cat_cmd, display_cmd=verbose)
+        return
 
-        run_command(cmd, display_cmd=verbose, shell=True)
+    # Only "cat" needs root, to read the log files; "grep"/"tail" run as the
+    # invoking user -- same privilege boundary as the old
+    # "sudo cat ... | grep ... | tail ..." shell form, instead of running the
+    # user-controlled process regex (or tail) as root.
+    cmds = [cat_cmd]
+    if process is not None:
+        # "-h" keeps output filename-free across multiple files; "--" stops
+        # a process value starting with "-" from being read as a grep option.
+        cmds.append(["grep", "-h", "--", process])
+    if lines is not None:
+        cmds.append(["tail", "-n", str(lines)])
+
+    if verbose:
+        click.echo(click.style("Command: ", fg='cyan') +
+                   click.style(' | '.join(' '.join(cmd) for cmd in cmds), fg='green'))
+
+    # Chain the pipeline manually (rather than via getstatusoutput_noshell_pipe,
+    # which buffers the whole output via communicate()) so the last stage
+    # inherits the terminal's stdout and streams line-by-line, while still
+    # avoiding a shell entirely.
+    procs = []
+    stdin = None
+    for i, cmd in enumerate(cmds):
+        stdout = subprocess.PIPE if i < len(cmds) - 1 else None
+        procs.append(subprocess.Popen(cmd, stdin=stdin, stdout=stdout))
+        if stdin is not None:
+            stdin.close()  # SIGPIPE upstream if a downstream stage exits early
+        stdin = procs[-1].stdout
+
+    for proc in procs:
+        proc.wait()
+    rc = next((proc.returncode for proc in reversed(procs) if proc.returncode), 0)
+    if rc:
+        sys.exit(rc)
 
 #
 # 'version' command ("show version")
