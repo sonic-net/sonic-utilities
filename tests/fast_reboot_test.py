@@ -116,6 +116,11 @@ class TestFastRebootZmqGuard:
                         if line.startswith('case "$REBOOT_TYPE"'))
         assert guard < dispatch
 
+        # -D re-execs and the parent exits 0, so a later guard would report
+        # the refusal only in the log.
+        detach = next(n for n, line in top_level if 'ALREADY_DETACHED' in line)
+        assert guard < detach
+
         arming = [n for n, line in top_level
                   if re.search(r'config warm_restart enable'
                                r'|enable_warm_restart'

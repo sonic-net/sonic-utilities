@@ -1001,6 +1001,8 @@ EOF
     }
 fi
 
+check_swss_zmq_conflict
+
 debug "Starting $REBOOT_TYPE"
 
 # re-run the script in background mode with detaching from the terminal session
@@ -1019,8 +1021,6 @@ if [[ "$REBOOT_TYPE" == "express-reboot" ]] && \
 fi
 
 check_conflict_boot_in_fw_update
-
-check_swss_zmq_conflict
 
 function enable_fast_boot()
 {
