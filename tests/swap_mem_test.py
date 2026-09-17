@@ -77,7 +77,7 @@ def test_resolve_uses_requested_size_when_largest(tmp_path):
     )
 
 
-def test_resolve_never_goes_below_default(tmp_path):
+def test_resolve_honors_request_below_default(tmp_path):
     path = write_platform_json(
         tmp_path, {swap_mem.MIN_SWAP_MEM_SIZE_KEY: 512}
     )
@@ -87,6 +87,50 @@ def test_resolve_never_goes_below_default(tmp_path):
             512,
             DEFAULT_SWAP_MEM_SIZE,
             platform_json_path=path,
+        )
+        == 512
+    )
+
+
+def test_resolve_platform_raises_request_below_default(tmp_path):
+    path = write_platform_json(
+        tmp_path, {swap_mem.MIN_SWAP_MEM_SIZE_KEY: 3072}
+    )
+
+    assert (
+        swap_mem.resolve_swap_mem_size(
+            512,
+            DEFAULT_SWAP_MEM_SIZE,
+            platform_json_path=path,
+        )
+        == 3072
+    )
+
+
+def test_resolve_uses_default_without_request_or_platform_key(tmp_path):
+    path = write_platform_json(tmp_path, {})
+
+    assert (
+        swap_mem.resolve_swap_mem_size(
+            None,
+            DEFAULT_SWAP_MEM_SIZE,
+            platform_json_path=path,
+        )
+        == DEFAULT_SWAP_MEM_SIZE
+    )
+
+
+@pytest.mark.parametrize("content", ["5", '"a string"', "[1, 2, 3]", "null", "{bad json"])
+def test_resolve_with_malformed_platform_json(tmp_path, content):
+    """A platform.json that is not an object must not break the install."""
+    path = tmp_path / "platform.json"
+    path.write_text(content)
+
+    assert (
+        swap_mem.resolve_swap_mem_size(
+            None,
+            DEFAULT_SWAP_MEM_SIZE,
+            platform_json_path=str(path),
         )
         == DEFAULT_SWAP_MEM_SIZE
     )
@@ -182,7 +226,7 @@ def test_resolve_total_mem_threshold_uses_requested_when_largest(tmp_path):
     )
 
 
-def test_resolve_total_mem_threshold_never_below_default(tmp_path):
+def test_resolve_total_mem_threshold_honors_request_below_default(tmp_path):
     path = write_platform_json(
         tmp_path, {swap_mem.MIN_TOTAL_MEM_THRESHOLD_KEY: 1024}
     )
@@ -193,7 +237,7 @@ def test_resolve_total_mem_threshold_never_below_default(tmp_path):
             DEFAULT_TOTAL_MEM_THRESHOLD,
             platform_json_path=path,
         )
-        == DEFAULT_TOTAL_MEM_THRESHOLD
+        == 1024
     )
 
 

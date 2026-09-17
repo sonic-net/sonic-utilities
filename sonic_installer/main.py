@@ -635,15 +635,25 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
                 echo_and_log('Verification successful')
 
         echo_and_log("Installing image {} and setting it as default...".format(binary_image_version))
-        effective_swap_mem_size = resolve_swap_mem_size(swap_mem_size, SWAP_MEM_SIZE_DEFAULT)
-        effective_total_mem_threshold = resolve_total_mem_threshold(
-            total_mem_threshold, TOTAL_MEM_THRESHOLD_DEFAULT)
-        if not skip_setup_swap and effective_swap_mem_size != swap_mem_size:
-            echo_and_log("Using SWAP memory size of {} MiB required by the platform".format(
-                effective_swap_mem_size))
-        if not skip_setup_swap and effective_total_mem_threshold != total_mem_threshold:
-            echo_and_log("Using total memory threshold of {} MiB required by the platform".format(
-                effective_total_mem_threshold))
+        effective_swap_mem_size = swap_mem_size
+        effective_total_mem_threshold = total_mem_threshold
+        if not skip_setup_swap:
+            # Without platform.json these are what SWAPAllocator would use, so
+            # comparing against them reports only what the platform raised.
+            requested_swap_mem_size = (
+                swap_mem_size if swap_mem_size is not None else SWAP_MEM_SIZE_DEFAULT)
+            requested_total_mem_threshold = (
+                total_mem_threshold if total_mem_threshold is not None
+                else TOTAL_MEM_THRESHOLD_DEFAULT)
+            effective_swap_mem_size = resolve_swap_mem_size(swap_mem_size, SWAP_MEM_SIZE_DEFAULT)
+            effective_total_mem_threshold = resolve_total_mem_threshold(
+                total_mem_threshold, TOTAL_MEM_THRESHOLD_DEFAULT)
+            if effective_swap_mem_size != requested_swap_mem_size:
+                echo_and_log("Using SWAP memory size of {} MiB required by the platform".format(
+                    effective_swap_mem_size))
+            if effective_total_mem_threshold != requested_total_mem_threshold:
+                echo_and_log("Using total memory threshold of {} MiB required by the platform".format(
+                    effective_total_mem_threshold))
         with SWAPAllocator(not skip_setup_swap, effective_swap_mem_size,
                            effective_total_mem_threshold, available_mem_threshold):
             try:
