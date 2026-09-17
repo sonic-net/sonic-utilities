@@ -814,6 +814,7 @@ class TestPatchWrapper(unittest.TestCase):
 
         self.assertTrue(patch_wrapper.verify_same_json(after_update_config_db_cropped, after_update_sonic_yang_as_config_db))
 
+
 class TestRewritePatchEmptyingTables(unittest.TestCase):
     def _ops(self, patch):
         return [dict(op) for op in patch]
@@ -943,6 +944,7 @@ class TestRewritePatchEmptyingTables(unittest.TestCase):
         actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
 
         self.assertIs(actual, patch)
+
 
 class TestPathAddressing(unittest.TestCase):
     def setUp(self):
