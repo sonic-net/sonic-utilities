@@ -60,7 +60,7 @@ def _load_platform_json(
 
     try:
         with open(platform_json_path, "r") as platform_json_file:
-            return json.load(platform_json_file)
+            platform_data = json.load(platform_json_file)
     except (OSError, ValueError, TypeError) as error:
         logging.warning(
             "Failed to read platform.json %s: %s",
@@ -69,11 +69,27 @@ def _load_platform_json(
         )
         return {}
 
+    if not isinstance(platform_data, dict):
+        logging.warning(
+            "Ignoring platform.json %s: expected an object, found %s",
+            platform_json_path,
+            type(platform_data).__name__,
+        )
+        return {}
 
-def _get_optional_positive_int(data: Dict, key: str) -> Optional[int]:
+    return platform_data
+
+
+def _get_optional_positive_int(
+    data: Dict,
+    key: str,
+    context: str = "disk-space check",
+) -> Optional[int]:
     """Return an optional positive integer.
 
-    A missing or invalid key disables the corresponding disk-space check.
+    A missing or invalid key disables the corresponding check. Callers that
+    reuse this parser for something other than disk space pass their own
+    context so the log message describes what was actually skipped.
     """
     if key not in data:
         return None
@@ -82,22 +98,30 @@ def _get_optional_positive_int(data: Dict, key: str) -> Optional[int]:
         value = int(data[key])
     except (TypeError, ValueError) as error:
         logging.error(
-            "Invalid %s=%s; skipping the disk-space check: %s",
+            "Invalid %s=%s; skipping the %s: %s",
             key,
             data.get(key),
+            context,
             error,
         )
         return None
 
     if value <= 0:
         logging.error(
-            "Invalid %s=%s; skipping the disk-space check",
+            "Invalid %s=%s; skipping the %s",
             key,
             value,
+            context,
         )
         return None
 
     return value
+
+
+# Public aliases: other platform.json driven install limits reuse this parsing
+# instead of adding another platform.json reader.
+load_platform_json = _load_platform_json
+get_optional_positive_int = _get_optional_positive_int
 
 
 def get_min_free_disk_in_gb_for_image(
