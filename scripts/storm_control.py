@@ -89,7 +89,7 @@ class storm_control(object):
         if not validate_interface(port):
             print ("Invalid Interface:{}".format(port))
             return False
-        key = port_name + '|' + storm_type
+        key = port + '|' + storm_type
         entry = self.db.get_entry(STORM_TABLE_NAME, key)
         if len(entry):
             self.db.set_entry(STORM_TABLE_NAME, key, None)
