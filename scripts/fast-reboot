@@ -921,6 +921,33 @@ function check_warm_restart_in_progress() {
     done
 }
 
+function check_swss_zmq_conflict() {
+    # fpmsyncd and orchagent refuse to start the ZMQ route path once a restart is
+    # armed, leaving the dataplane unprogrammed. Refuse before arming instead.
+    # swss_zmq is per-namespace; ASIC_LIST already excludes skipped ASICs.
+    local namespaces=("")
+    if [[ $NUM_ASIC -gt 1 ]]; then
+        for dev in ${ASIC_LIST[@]}; do
+            namespaces+=("asic$dev")
+        done
+    fi
+
+    local ns zmq_status
+    for ns in "${namespaces[@]}"; do
+        local ns_opt=()
+        local ns_text=""
+        if [[ -n "${ns}" ]]; then
+            ns_opt=(-n "${ns}")
+            ns_text=" in namespace ${ns}"
+        fi
+        zmq_status=$(sonic-db-cli "${ns_opt[@]}" CONFIG_DB hget "SYSTEM_DEFAULTS|swss_zmq" "status" 2>/dev/null)
+        if [[ x"${zmq_status}" == x"enabled" ]]; then
+            error "swss_zmq is enabled${ns_text}. ${REBOOT_TYPE} is unsupported with the ZMQ route path. Disable swss_zmq in SYSTEM_DEFAULTS to use ${REBOOT_TYPE}."
+            exit "${EXIT_NOT_SUPPORTED}"
+        fi
+    done
+}
+
 function enable_warm_restart() {
     config warm_restart enable -n "$NETNS" system
 }
@@ -973,6 +1000,8 @@ EOF
         exit "${EXIT_FAILURE}"
     }
 fi
+
+check_swss_zmq_conflict
 
 debug "Starting $REBOOT_TYPE"
 
