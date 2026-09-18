@@ -1,3 +1,4 @@
+import copy
 import json
 import jsonpatch
 import os
@@ -11,7 +12,7 @@ from .gutest_helpers import create_side_effect_dict, create_side_effect_skipfirs
 import generic_config_updater.generic_updater as gu
 import generic_config_updater.patch_sorter as ps
 import generic_config_updater.change_applier as ca
-from generic_config_updater.gu_common import IllegalPatchOperationError
+from generic_config_updater.gu_common import EmptyTableError, IllegalPatchOperationError, PatchWrapper
 
 # import sys
 # sys.path.insert(0,'../../generic_config_updater')
@@ -74,7 +75,8 @@ class TestPatchApplier(unittest.TestCase):
         }
 
         config_wrapper = Mock()
-        config_wrapper.get_config_db_as_json.side_effect = [old_config, target_without_vlan]
+        config_wrapper.get_config_db_as_json.side_effect = [
+            old_config, old_config, target_without_vlan]
         config_wrapper.get_empty_tables.side_effect = lambda cfg: (
             ["VLAN"] if cfg.get("VLAN") == {} else []
         )
@@ -97,12 +99,70 @@ class TestPatchApplier(unittest.TestCase):
         changeapplier.apply.return_value = target_without_vlan
 
         patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
-        patch_applier.apply(emptying_patch)
+        patch_applier.apply(emptying_patch, rewrite_emptying_tables=True)
 
         sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
         self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
+        self.assertEqual(
+            {"VLAN": ["Vlan10", "Vlan20"]},
+            patch_applier.changeapplier.apply.call_args.kwargs.get("table_key_snapshot"))
         config_wrapper.validate_field_operation.assert_called_once_with(
             old_config, target_with_empty_vlan)
+
+    def test_apply__emptying_rewrite_skips_if_live_table_gained_key(self):
+        # Table-level remove would delete a key added after the first snapshot.
+        # Re-read ConfigDB and keep key-level removes if the table no longer empties.
+        old_config = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+        live_config = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+                "Vlan30": {"vlanid": "30"},
+            },
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+        emptying_ops = [
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+        ]
+        emptying_patch = jsonpatch.JsonPatch(emptying_ops)
+        live_target = {
+            "VLAN": {"Vlan30": {"vlanid": "30"}},
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.side_effect = [
+            old_config, live_config, live_target]
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: (
+            ["VLAN"] if cfg.get("VLAN") == {} else []
+        )
+
+        patch_wrapper = Mock()
+        patch_wrapper.simulate_config_db_patch.side_effect = (
+            lambda p, cfg: jsonpatch.JsonPatch([dict(op) for op in p]).apply(
+                copy.deepcopy(cfg)))
+        patch_wrapper.verify_same_json.return_value = True
+
+        changes = [Mock()]
+        patchsorter = Mock()
+        patchsorter.sort.return_value = changes
+        changeapplier = Mock()
+        changeapplier.apply.return_value = live_target
+
+        patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
+        patch_applier.apply(emptying_patch, rewrite_emptying_tables=True)
+
+        sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
+        self.assertEqual(emptying_ops, [dict(op) for op in sorted_patch])
+        self.assertIsNone(
+            patch_applier.changeapplier.apply.call_args.kwargs.get("table_key_snapshot"))
 
     def test_apply__emptying_protected_loopback0__validates_original_transition(self):
         # Field-operation checks must run on the original simulated target.
@@ -138,10 +198,45 @@ class TestPatchApplier(unittest.TestCase):
             IllegalPatchOperationError,
             patch_applier.apply,
             emptying_patch,
+            rewrite_emptying_tables=True,
         )
         config_wrapper.validate_field_operation.assert_called_once_with(
             old_config, target_with_empty_table)
         patch_applier.changeapplier.apply.assert_not_called()
+
+    def test_apply__rewrite_disabled_emptying_keys__fails_before_writes(self):
+        # Default is rewrite off (config replace / rollback). A target that
+        # still contains "TABLE": {} fails with EmptyTableError first.
+        old_config = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+        emptying_patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+        ])
+        target_with_empty_vlan = {
+            "VLAN": {},
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.return_value = old_config
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: (
+            ["VLAN"] if cfg.get("VLAN") == {} else []
+        )
+
+        patch_wrapper = Mock()
+        patch_wrapper.simulate_config_db_patch.return_value = target_with_empty_vlan
+
+        patch_applier = gu.PatchApplier(Mock(), Mock(), config_wrapper, patch_wrapper)
+
+        self.assertRaises(EmptyTableError, patch_applier.apply, emptying_patch)
+        patch_applier.changeapplier.apply.assert_not_called()
+        patch_applier.patchsorter.sort.assert_not_called()
 
     def __create_patch_applier(self,
                                changes=None,
@@ -200,6 +295,36 @@ class TestConfigReplacer(unittest.TestCase):
         )
         config_replacer.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
+
+    def test_replace__empty_table_in_target__fails_before_writes(self):
+        # generate_patch() of a replacement target that still contains
+        # "VLAN": {} emits per-key removes. Rewrite must stay off so this
+        # fails with EmptyTableError before any ConfigDB write.
+        old_config = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+        target_config = {
+            "VLAN": {},
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.return_value = old_config
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: (
+            ["VLAN"] if cfg.get("VLAN") == {} else []
+        )
+
+        patch_wrapper = PatchWrapper(config_wrapper)
+        changeapplier = Mock()
+        patch_applier = gu.PatchApplier(Mock(), changeapplier, config_wrapper, patch_wrapper)
+        config_replacer = gu.ConfigReplacer(patch_applier, config_wrapper, patch_wrapper)
+
+        self.assertRaises(EmptyTableError, config_replacer.replace, target_config)
+        changeapplier.apply.assert_not_called()
 
     def __create_config_replacer(self, changes=None, verified_same_config=True):
         config_wrapper = Mock()
@@ -738,7 +863,10 @@ class TestGenericUpdater(unittest.TestCase):
                                     self.any_ignore_paths)
 
         # Assert
-        patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)])
+        patch_applier.apply.assert_has_calls(
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None,
+                  rewrite_emptying_tables=True)]
+        )
 
     def test_replace__creates_replacer_and_replace(self):
         # Arrange
@@ -883,7 +1011,8 @@ class TestDecorator(unittest.TestCase):
 
         # Assert
         self.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)]
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None,
+                  rewrite_emptying_tables=False)]
         )
 
     def test_replace__calls_decorated_replacer(self):
@@ -938,7 +1067,8 @@ class TestSonicYangDecorator(unittest.TestCase):
             [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)]
         )
         sonic_yang_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH, True, trace_io=None)]
+            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH, True, trace_io=None,
+                  rewrite_emptying_tables=False)]
         )
 
     def test_replace__converts_to_config_db_and_calls_decorated_class(self):
@@ -992,7 +1122,8 @@ class TestConfigLockDecorator(unittest.TestCase):
         # Assert
         config_lock_decorator.config_lock.acquire_lock.assert_called_once()
         config_lock_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None)]
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, True, trace_io=None,
+                  rewrite_emptying_tables=False)]
         )
         config_lock_decorator.config_lock.release_lock.assert_called_once()
 

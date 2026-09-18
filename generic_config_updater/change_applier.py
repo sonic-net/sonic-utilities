@@ -10,7 +10,7 @@ from collections import defaultdict
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_py_common import multi_asic
 from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
-from .gu_common import JsonChange
+from .gu_common import JsonChange, get_config_db_as_json, validate_table_key_snapshot
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 UPDATER_CONF_FILE = f"{SCRIPT_DIR}/gcu_services_validator.conf.json"
@@ -65,7 +65,11 @@ class DryRunChangeApplier:
     def __init__(self, config_wrapper):
         self.config_wrapper = config_wrapper
 
-    def apply(self, current_configdb: dict, change: JsonChange) -> dict:
+    def apply(self, current_configdb: dict, change: JsonChange,
+              table_key_snapshot=None) -> dict:
+        if table_key_snapshot:
+            validate_table_key_snapshot(
+                current_configdb, table_key_snapshot, getattr(change, "patch", None))
         return self.config_wrapper.apply_change_to_config_db(current_configdb, change)
 
     def remove_backend_tables_from_config(self, data):
@@ -138,7 +142,14 @@ class ChangeApplier:
         log_error("run_data vs expected_data: {}".format(
             str(jsondiff.diff(run_data, upd_data))[0:40]))
 
-    def apply(self, current_configdb: dict, change: JsonChange) -> dict:
+    def apply(self, current_configdb: dict, change: JsonChange,
+              table_key_snapshot=None) -> dict:
+        if table_key_snapshot:
+            # Recheck live Redis, not the in-memory apply snapshot, so a
+            # concurrent key add is visible before remove /TABLE is written.
+            live_data = get_config_db_as_json(self.scope)
+            validate_table_key_snapshot(
+                live_data, table_key_snapshot, getattr(change, "patch", None))
         run_data = current_configdb
         upd_data = prune_empty_table(change.apply(run_data, in_place=False))
         upd_keys = defaultdict(dict)

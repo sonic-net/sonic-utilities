@@ -445,7 +445,9 @@ def rewrite_patch_emptying_tables(patch, current_config, empty_tables, path_addr
 
     Any other operation (add, replace, table-level remove, field-level remove,
     whole-config update) is left unchanged so existing apply-patch behavior is
-    preserved.
+    preserved. RFC 6902 copy/move name their source in "from"; tables
+    referenced that way are not rewritten so later copy/move still have a
+    source. Extra "from" on other ops is ignored, matching JSON Patch.
     """
     if not empty_tables:
         return patch
@@ -456,6 +458,7 @@ def rewrite_patch_emptying_tables(patch, current_config, empty_tables, path_addr
     empty_tables = set(empty_tables)
     parsed_ops = []
     ops_by_table = {table: [] for table in empty_tables}
+    from_tables = set()
 
     for operation in patch:
         path = operation.get(OperationWrapper.PATH_KEYWORD, "")
@@ -464,9 +467,16 @@ def rewrite_patch_emptying_tables(patch, current_config, empty_tables, path_addr
         if tokens and tokens[0] in empty_tables:
             ops_by_table[tokens[0]].append((operation, tokens))
 
+        if operation.get(OperationWrapper.OP_KEYWORD) in ("copy", "move"):
+            from_path = operation.get(OperationWrapper.FROM_KEYWORD)
+            if from_path:
+                from_tokens = path_addressing.get_path_tokens(from_path)
+                if from_tokens and from_tokens[0] in empty_tables:
+                    from_tables.add(from_tokens[0])
+
     tables_to_rewrite = set()
     for table, table_ops in ops_by_table.items():
-        if table not in current_config or not table_ops:
+        if table not in current_config or not table_ops or table in from_tables:
             continue
         if all(op.get(OperationWrapper.OP_KEYWORD) == "remove" and len(tokens) == 2
                for op, tokens in table_ops):
@@ -489,6 +499,60 @@ def rewrite_patch_emptying_tables(patch, current_config, empty_tables, path_addr
         new_ops.append(dict(operation))
 
     return jsonpatch.JsonPatch(new_ops)
+
+
+def snapshot_table_keys(config, tables):
+    """Capture table keys from the ConfigDB snapshot used for a table-level rewrite."""
+    return {table: sorted((config.get(table) or {}).keys()) for table in tables}
+
+
+def table_level_remove_tables(patch, tables, path_addressing=None):
+    """Return tables that this patch removes at table level (/TABLE)."""
+    if not patch or not tables:
+        return []
+    if path_addressing is None:
+        path_addressing = PathAddressing()
+    table_set = set(tables)
+    found = []
+    for operation in patch:
+        try:
+            opd = dict(operation)
+        except (TypeError, ValueError):
+            continue
+        if opd.get(OperationWrapper.OP_KEYWORD) != "remove":
+            continue
+        path = opd.get(OperationWrapper.PATH_KEYWORD)
+        if not path:
+            continue
+        tokens = path_addressing.get_path_tokens(path)
+        if len(tokens) == 1 and tokens[0] in table_set:
+            found.append(tokens[0])
+    return found
+
+
+def validate_table_key_snapshot(config, table_key_snapshot, patch=None):
+    """Abort a table-level remove if live keys differ from the rewrite snapshot.
+
+    ConfigLock is a no-op, so remove /TABLE is only safe if the write-time
+    table keys still match the snapshot used to rewrite key-level removes.
+    When patch is given, only tables that this patch removes at table level
+    are checked, so later sequential changes are not compared against a
+    table that was already deleted.
+    """
+    if not table_key_snapshot:
+        return
+    tables = list(table_key_snapshot.keys())
+    if patch is not None:
+        tables = table_level_remove_tables(patch, tables)
+        if not tables:
+            return
+    for table in tables:
+        expected = set(table_key_snapshot.get(table, []))
+        live_keys = set((config.get(table) or {}).keys())
+        if live_keys != expected:
+            raise GenericConfigUpdaterError(
+                f"Refusing table-level remove of {table}: live keys "
+                f"{sorted(live_keys)} differ from rewrite snapshot {sorted(expected)}")
 
 
 class PatchWrapper:
@@ -563,6 +627,7 @@ class OperationWrapper:
     OP_KEYWORD = "op"
     PATH_KEYWORD = "path"
     VALUE_KEYWORD = "value"
+    FROM_KEYWORD = "from"
 
     def create(self, operation_type, path, value=None):
         op_type = operation_type.name.lower()
