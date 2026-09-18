@@ -33,6 +33,7 @@ class storm_control(object):
     def __init__(self):
         self.config_db = ConfigDBConnector()
         self.config_db.connect()
+
     def show_storm_config(self, port):
         header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
         storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
@@ -97,10 +98,11 @@ def main():
     parser  = argparse.ArgumentParser(description='Configure and Display storm-control configuration',
                                         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-l', '--list', action='store_true', help='show storm-control configuration', default=False)
-    parser.add_argument('-p', '--port', type=str, help='port name (e.g. Ethernet0)', required=True, default=None)
-    parser.add_argument('-t', '--storm-type', type=str, help='storm-type (broadcast, unknown-unicast, unknown-multicast)', required=True, default=None)
-    parser.add_argument('-r', '--rate-kbps', type=int, help='kbps value', required=True, default=None)
-    parser.add_argument('-d', '--delete', help='delete storm-control')
+    parser.add_argument('-p', '--port', type=str, help='port name (e.g. Ethernet0)', default=None)
+    parser.add_argument('-t', '--storm-type', type=str, help='storm-type',
+                        choices=['broadcast', 'unknown-unicast', 'unknown-multicast'], default=None)
+    parser.add_argument('-r', '--rate-kbps', type=int, help='kbps value', default=None)
+    parser.add_argument('-d', '--delete', action='store_true', help='delete storm-control', default=False)
     parser.add_argument('-f', '--filename', help='file used by mock test', type=str, default=None)
     args = parser.parse_args()
 
@@ -109,15 +111,11 @@ def main():
     try:
         storm = storm_control()
         if args.list:
-            input_port=""
-            if args.port:
-                input_port = args.port
-            storm.show_storm_config(input_port)
-        elif args.port and args.storm_type and args.rate_kbps:
-            if args.delete:
-                storm.del_storm_config(args.port, args.storm_type)
-            else:
-                storm.add_storm_config(args.port, args.storm_type, args.rate_kbps)
+            storm.show_storm_config(args.port)
+        elif args.port and args.storm_type and args.delete:
+            storm.del_storm_config(args.port, args.storm_type)
+        elif args.port and args.storm_type and args.rate_kbps is not None:
+            storm.add_storm_config(args.port, args.storm_type, args.rate_kbps)
         else:
             parser.print_help()
             sys.exit(1)
