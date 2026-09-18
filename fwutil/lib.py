@@ -540,9 +540,22 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
     FW_STATUS_UPDATE_REQUIRED = "update is required"
     FW_STATUS_UP_TO_DATE = "up-to-date"
+    FW_STATUS_NO_UPDATE_AVAILABLE = "no update is available"
+
+    # Values a platform's get_available_firmware_version() returns when the
+    # version cannot be determined (e.g. the firmware file is not on the
+    # switch). No update can be offered from an indeterminate version.
+    FW_VERSION_UNKNOWN_VALUES = (NA, "Unknown")
 
     SECTION_CHASSIS = "Chassis"
     SECTION_MODULE = "Module"
+
+    def __get_update_status(self, firmware_version_current, firmware_version_available):
+        if firmware_version_available in self.FW_VERSION_UNKNOWN_VALUES:
+            return self.FW_STATUS_NO_UPDATE_AVAILABLE
+        if firmware_version_current != firmware_version_available:
+            return self.FW_STATUS_UPDATE_REQUIRED
+        return self.FW_STATUS_UP_TO_DATE
 
     def __init__(self, root_path=None):
         PlatformDataProvider.__init__(self)
@@ -631,10 +644,7 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
                     firmware_version = "{} / {}".format(firmware_version_current, firmware_version_available)
 
-                    if firmware_version_current != firmware_version_available:
-                        status = self.FW_STATUS_UPDATE_REQUIRED
-                    else:
-                        status = self.FW_STATUS_UP_TO_DATE
+                    status = self.__get_update_status(firmware_version_current, firmware_version_available)
 
                     if self.__pcp.UTILITY_KEY in component:
                         update_utility = component[self.__pcp.UTILITY_KEY]
@@ -698,10 +708,7 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
                         firmware_version = "{} / {}".format(firmware_version_current, firmware_version_available)
 
-                        if firmware_version_current != firmware_version_available:
-                            status = self.FW_STATUS_UPDATE_REQUIRED
-                        else:
-                            status = self.FW_STATUS_UP_TO_DATE
+                        status = self.__get_update_status(firmware_version_current, firmware_version_available)
 
                         if self.__pcp.UTILITY_KEY in component:
                             update_utility = component[self.__pcp.UTILITY_KEY]
