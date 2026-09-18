@@ -24,7 +24,7 @@ except KeyError:
 
 from natsort import natsorted
 from tabulate import tabulate
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+from swsscommon.swsscommon import ConfigDBConnector
 from utilities_common.general import load_db_config
 
 STORM_TABLE_NAME = "PORT_STORM_CONTROL"
@@ -33,20 +33,18 @@ class storm_control(object):
     def __init__(self):
         self.config_db = ConfigDBConnector()
         self.config_db.connect()
-        self.db = SonicV2Connector(use_unix_socket_path=False)
-        self.db.connect(self.db.CONFIG_DB)
     def show_storm_config(self, port):
         header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
         storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
         body = []
-        configs = self.db.get_table(STORM_TABLE_NAME)
+        configs = self.config_db.get_table(STORM_TABLE_NAME)
         if not configs:
             return
         storm_configs = natsorted(configs)
         if port is not None:
             for storm_type in storm_type_list:
                 storm_key = port + '|' + storm_type
-                data = self.db.get_entry(STORM_TABLE_NAME, storm_key)
+                data = self.config_db.get_entry(STORM_TABLE_NAME, storm_key)
                 if data:
                     kbps = data['kbps']
                     body.append([port, storm_type, kbps])
@@ -54,7 +52,7 @@ class storm_control(object):
             for storm_key in storm_configs:
                 interface_name = storm_key[0]
                 storm_type = storm_key[1]
-                data = self.db.get_entry(STORM_TABLE_NAME, storm_key)
+                data = self.config_db.get_entry(STORM_TABLE_NAME, storm_key)
                 if data:
                     kbps = data['kbps']
                     body.append([interface_name, storm_type, kbps])
@@ -76,23 +74,23 @@ class storm_control(object):
             print ("Invalid kbps value:{}".format(kbps))
             return False
         key = port + '|' + storm_type
-        entry = self.db.get_entry(STORM_TABLE_NAME,key)
+        entry = self.config_db.get_entry(STORM_TABLE_NAME, key)
         if len(entry) == 0:
-            self.db.set_entry(STORM_TABLE_NAME, key, {'kbps':kbps})
+            self.config_db.set_entry(STORM_TABLE_NAME, key, {'kbps': kbps})
         else:
             kbps_value = int(entry.get('kbps',0))
             if kbps_value != kbps:
-                self.db.mod_entry(STORM_TABLE_NAME, key, {'kbps':kbps})
+                self.config_db.mod_entry(STORM_TABLE_NAME, key, {'kbps': kbps})
         return True
 
     def del_storm_config(self, port, storm_type):
-        if not validate_interface(port):
+        if not self.validate_interface(port):
             print ("Invalid Interface:{}".format(port))
             return False
         key = port + '|' + storm_type
-        entry = self.db.get_entry(STORM_TABLE_NAME, key)
+        entry = self.config_db.get_entry(STORM_TABLE_NAME, key)
         if len(entry):
-            self.db.set_entry(STORM_TABLE_NAME, key, None)
+            self.config_db.set_entry(STORM_TABLE_NAME, key, None)
         return True
 
 def main():
