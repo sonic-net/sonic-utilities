@@ -1,4 +1,5 @@
 import json
+import jsonpatch
 import os
 import shutil
 import unittest
@@ -10,6 +11,7 @@ from .gutest_helpers import create_side_effect_dict, create_side_effect_skipfirs
 import generic_config_updater.generic_updater as gu
 import generic_config_updater.patch_sorter as ps
 import generic_config_updater.change_applier as ca
+from generic_config_updater.gu_common import IllegalPatchOperationError
 
 # import sys
 # sys.path.insert(0,'../../generic_config_updater')
@@ -46,6 +48,100 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier.changeapplier.apply.assert_called()
         patch_applier.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
+
+    def test_apply__key_removes_emptying_table__rewrites_to_table_remove(self):
+        # Per-key VLAN deletes that empty the table must be rewritten to a
+        # table-level remove so an automation script does not have to inspect running config.
+        old_config = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+        emptying_ops = [
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+        ]
+        emptying_patch = jsonpatch.JsonPatch(emptying_ops)
+        rewritten_ops = [{"op": "remove", "path": "/VLAN"}]
+        target_with_empty_vlan = {
+            "VLAN": {},
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+        target_without_vlan = {
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.side_effect = [old_config, target_without_vlan]
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: (
+            ["VLAN"] if cfg.get("VLAN") == {} else []
+        )
+
+        patch_wrapper = Mock()
+
+        def simulate(p, cfg):
+            ops = [dict(op) for op in p]
+            if ops == emptying_ops:
+                return target_with_empty_vlan
+            return target_without_vlan
+
+        patch_wrapper.simulate_config_db_patch.side_effect = simulate
+        patch_wrapper.verify_same_json.return_value = True
+
+        changes = [Mock()]
+        patchsorter = Mock()
+        patchsorter.sort.return_value = changes
+        changeapplier = Mock()
+        changeapplier.apply.return_value = target_without_vlan
+
+        patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
+        patch_applier.apply(emptying_patch)
+
+        sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
+        self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
+        config_wrapper.validate_field_operation.assert_called_once_with(
+            old_config, target_with_empty_vlan)
+
+    def test_apply__emptying_protected_loopback0__validates_original_transition(self):
+        # Field-operation checks must run on the original simulated target.
+        # A table-level rewrite of /LOOPBACK_INTERFACE would hide
+        # /LOOPBACK_INTERFACE/Loopback0 from from_diff and bypass the illegal remove.
+        old_config = {
+            "LOOPBACK_INTERFACE": {
+                "Loopback0": {},
+                "Loopback0|10.1.0.32/32": {},
+            }
+        }
+        emptying_ops = [
+            {"op": "remove", "path": "/LOOPBACK_INTERFACE/Loopback0"},
+            {"op": "remove", "path": "/LOOPBACK_INTERFACE/Loopback0|10.1.0.32~132"},
+        ]
+        emptying_patch = jsonpatch.JsonPatch(emptying_ops)
+        target_with_empty_table = {"LOOPBACK_INTERFACE": {}}
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.return_value = old_config
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: (
+            ["LOOPBACK_INTERFACE"] if cfg.get("LOOPBACK_INTERFACE") == {} else []
+        )
+        config_wrapper.validate_field_operation.side_effect = IllegalPatchOperationError(
+            "Operation: remove is illegal on field: /LOOPBACK_INTERFACE/Loopback0")
+
+        patch_wrapper = Mock()
+        patch_wrapper.simulate_config_db_patch.return_value = target_with_empty_table
+
+        patch_applier = gu.PatchApplier(Mock(), Mock(), config_wrapper, patch_wrapper)
+
+        self.assertRaises(
+            IllegalPatchOperationError,
+            patch_applier.apply,
+            emptying_patch,
+        )
+        config_wrapper.validate_field_operation.assert_called_once_with(
+            old_config, target_with_empty_table)
+        patch_applier.changeapplier.apply.assert_not_called()
 
     def __create_patch_applier(self,
                                changes=None,

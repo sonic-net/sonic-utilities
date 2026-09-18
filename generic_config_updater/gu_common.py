@@ -435,6 +435,62 @@ def remove_empty_leaf_lists(config):
     return config
 
 
+def rewrite_patch_emptying_tables(patch, current_config, empty_tables, path_addressing=None):
+    """Rewrite key-level removes that empty a ConfigDB table into a table-level remove.
+
+    ConfigDB cannot store empty tables. Automation scripts may emit per-key
+    removes (for example /VLAN/Vlan10) without knowing whether those keys are
+    the last remaining entries. When every operation on an emptied table is a
+    key-level remove, replace those ops with {"op": "remove", "path": "/TABLE"}.
+
+    Any other operation (add, replace, table-level remove, field-level remove,
+    whole-config update) is left unchanged so existing apply-patch behavior is
+    preserved.
+    """
+    if not empty_tables:
+        return patch
+
+    if path_addressing is None:
+        path_addressing = PathAddressing()
+
+    empty_tables = set(empty_tables)
+    parsed_ops = []
+    ops_by_table = {table: [] for table in empty_tables}
+
+    for operation in patch:
+        path = operation.get(OperationWrapper.PATH_KEYWORD, "")
+        tokens = path_addressing.get_path_tokens(path) if path else []
+        parsed_ops.append((operation, tokens))
+        if tokens and tokens[0] in empty_tables:
+            ops_by_table[tokens[0]].append((operation, tokens))
+
+    tables_to_rewrite = set()
+    for table, table_ops in ops_by_table.items():
+        if table not in current_config or not table_ops:
+            continue
+        if all(op.get(OperationWrapper.OP_KEYWORD) == "remove" and len(tokens) == 2
+               for op, tokens in table_ops):
+            tables_to_rewrite.add(table)
+
+    if not tables_to_rewrite:
+        return patch
+
+    new_ops = []
+    rewritten_tables = set()
+    for operation, tokens in parsed_ops:
+        if tokens and tokens[0] in tables_to_rewrite:
+            if tokens[0] not in rewritten_tables:
+                new_ops.append({
+                    OperationWrapper.OP_KEYWORD: "remove",
+                    OperationWrapper.PATH_KEYWORD: path_addressing.create_path([tokens[0]]),
+                })
+                rewritten_tables.add(tokens[0])
+            continue
+        new_ops.append(dict(operation))
+
+    return jsonpatch.JsonPatch(new_ops)
+
+
 class PatchWrapper:
     def __init__(self, config_wrapper=None, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
