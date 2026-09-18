@@ -16,9 +16,11 @@ ROUTE_IDX = 1
 def get_connected_routes(namespace):
     if namespace:
         ns_name = multi_asic.get_asic_id_from_name(namespace)
-        cmd = ['sudo', 'vtysh', '-n', ns_name, '-c', "show ip route connected json"]
+        vtysh_cmd = ['sudo', 'vtysh', '-n', ns_name]
     else:
-        cmd = ['sudo', 'vtysh', '-c', "show ip route connected json"]
+        vtysh_cmd = ['sudo', 'vtysh']
+
+    cmd = vtysh_cmd + ['-c', "show ip route connected json"]
     connected_routes = []
     output, ret = clicommon.run_command(cmd, return_cmd=True)
     if ret != 0:
@@ -27,6 +29,14 @@ def get_connected_routes(namespace):
         route_info = json.loads(output)
         for route in route_info.keys():
             connected_routes.append(route)
+
+    cmd = vtysh_cmd + ['-c', "show ipv6 route connected json"]
+    output, ret = clicommon.run_command(cmd, return_cmd=True)
+    if ret != 0:
+        raise RuntimeError("Failed to execute {}: {}".format(" ".join(cmd), output.rstrip('\n')))
+    if output is not None:
+        route_info = json.loads(output)
+        connected_routes.extend(route_info)
 
     return connected_routes
 
