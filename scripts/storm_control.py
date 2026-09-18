@@ -69,10 +69,10 @@ class storm_control(object):
         return True
 
     def add_storm_config(self, port, storm_type, kbps):
-        if not validate_interface(port):
+        if not self.validate_interface(port):
             print ("Invalid Interface:{}".format(port))
             return False
-        if not validate_kbps(kbps):
+        if not self.validate_kbps(kbps):
             print ("Invalid kbps value:{}".format(kbps))
             return False
         key = port + '|' + storm_type
