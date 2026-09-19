@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import importlib.machinery
 import importlib.util
 import os
 
@@ -7,16 +7,16 @@ import os
 SCRIPT_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
     "scripts",
-    "efiread-var",
+    "efiread_var",
 )
 
-spec = importlib.util.spec_from_file_location(
+loader = importlib.machinery.SourceFileLoader(
     "efiread_var",
     SCRIPT_PATH,
 )
-
-efiread_var = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(efiread_var)
+spec = importlib.util.spec_from_loader("efiread_var", loader)
+efi_readvar = importlib.util.module_from_spec(spec)
+loader.exec_module(efi_readvar)
 
 
 def test_supported_variables():
