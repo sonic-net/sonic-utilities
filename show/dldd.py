@@ -119,6 +119,7 @@ def _decode_key(value):
 
 def _fault_document(key, fault):
     document = dict(fault, redis_key=key)
+    document.setdefault("component_name", document.pop("component", ""))
     for field, _unused_title, default in FAULT_NESTED_FIELDS:
         if field in document:
             document[field] = _json_value(document[field], default)
@@ -153,11 +154,6 @@ def _record_field(field, default="", transform=None):
         return transform(value) if transform else value
 
     return read
-
-
-def _component_name(record):
-    """Return the canonical component name with the legacy field fallback."""
-    return record.get("component_name", record.get("component", ""))
 
 
 def _record_value(record, accessor):
@@ -357,6 +353,7 @@ def status(db, detail):
     if source_status:
         click.echo("\nSource status")
         _print_record_table(source_status, SOURCE_STATUS_COLUMNS)
+
 
 @dldd.command("rules")
 @clicommon.pass_db

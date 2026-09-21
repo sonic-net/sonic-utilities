@@ -304,6 +304,20 @@ def test_show_faults_displays_and_filters_records():
     )
 
 
+def test_show_faults_normalizes_legacy_component_name():
+    fault = _detailed_fault_row()
+    fault["component"] = fault.pop("component_name")
+    db = _db_with_single_fault(fault)
+
+    result = _invoke_ok(
+        show_dldd, ("faults", "--component", "SENSOR0", "--json"), obj=db
+    )
+
+    document = json.loads(result.output)[0]
+    assert document["component_name"] == "SENSOR0"
+    assert "component" not in document
+
+
 def _detailed_fault_row():
     return {
         "producer": "dldd",
