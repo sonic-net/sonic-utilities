@@ -974,8 +974,8 @@ class TestInterfaces(object):
         )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code != 0
-        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+        assert result.exit_code == 0
+        assert "No PHY attribute data available" in result.output
 
     def test_phy_signal_no_data(self):
         runner = CliRunner()
@@ -1056,8 +1056,8 @@ class TestInterfaces(object):
         )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code != 0
-        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+        assert result.exit_code == 0
+        assert "No PHY SERDES data available" in result.output
 
     def test_phy_serdes_no_data(self):
         runner = CliRunner()

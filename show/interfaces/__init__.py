@@ -1325,17 +1325,100 @@ def display_phy_signal_attribute(attr_display_name, attr_json):
     click.echo("")
 
 
+def display_phy_pam4_eye_attribute(attr_display_name, attr_json):
+    """
+    Display PAM4 eye values per lane.
+
+    Expected format:
+      {"0": {"upper_ht": 100, "upper_wd": -1, "middle_ht": 80,
+             "middle_wd": -1, "lower_ht": 60, "lower_wd": -1}, ...}
+    """
+    if not attr_json:
+        click.echo("{}: No data available".format(attr_display_name))
+        click.echo("")
+        return
+
+    try:
+        lane_data = json.loads(attr_json)
+    except json.JSONDecodeError:
+        click.echo("{}: Invalid data format".format(attr_display_name))
+        return
+
+    click.echo("{}:".format(attr_display_name))
+    header = ['Lane', 'Upper Ht', 'Upper Wd', 'Middle Ht', 'Middle Wd', 'Lower Ht', 'Lower Wd']
+    body = []
+    for lane in sorted(lane_data.keys(), key=int):
+        eye = lane_data[lane]
+        if not isinstance(eye, dict):
+            continue
+        body.append([
+            lane,
+            eye.get('upper_ht', 'N/A'),
+            eye.get('upper_wd', 'N/A'),
+            eye.get('middle_ht', 'N/A'),
+            eye.get('middle_wd', 'N/A'),
+            eye.get('lower_ht', 'N/A'),
+            eye.get('lower_wd', 'N/A'),
+        ])
+
+    if not body:
+        click.echo("No data available")
+    else:
+        click.echo(tabulate(body, header, tablefmt='simple', numalign='left'))
+    click.echo("")
+
+
+def _get_port_phy_attr_datasets(db, namespace, interfacename):
+    """
+    Collect PORT_PHY_ATTR datasets for main ASIC and gearbox line/system sides.
+
+    Returns list of (side_label, data_dict). Main ASIC uses COUNTERS_DB;
+    gearbox sides use GB_COUNTERS_DB with {alias}_line / {alias}_system keys.
+    """
+    datasets = []
+
+    port_name_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP') or {}
+    if interfacename in port_name_map:
+        vid_str = port_name_map[interfacename]
+        table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
+        port_phy_data = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, table_key) or {}
+        if port_phy_data:
+            datasets.append(('ASIC', port_phy_data))
+
+    try:
+        gb_port_name_map = db.db_clients[namespace].get_all('GB_COUNTERS_DB', 'COUNTERS_PORT_NAME_MAP') or {}
+    except Exception:
+        gb_port_name_map = {}
+
+    for side in ('system', 'line'):
+        gb_name = '{}_{}'.format(interfacename, side)
+        if gb_name not in gb_port_name_map:
+            continue
+        vid_str = gb_port_name_map[gb_name]
+        table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
+        try:
+            gb_data = db.db_clients[namespace].get_all('GB_COUNTERS_DB', table_key) or {}
+        except Exception:
+            gb_data = {}
+        if gb_data:
+            datasets.append((side.capitalize(), gb_data))
+
+    return datasets
+
+
 @interfaces.command('phy-signal')
 @click.argument('interfacename', required=True)
 @multi_asic_util.multi_asic_click_options
 @click.option('--rxsig', is_flag=True, help='Show RX signal detect status')
 @click.option('--feclock', is_flag=True, help='Show FEC alignment lock status')
+@click.option('--rxlock', is_flag=True, help='Show RX lock status')
+@click.option('--rxpcs', is_flag=True, help='Show PCS RX link status')
 @click.pass_context
 @clicommon.pass_db
-def phy_signal(db, ctx, interfacename, namespace, display, rxsig, feclock):
+def phy_signal(db, ctx, interfacename, namespace, display, rxsig, feclock, rxlock, rxpcs):
     """Show PHY signal attributes status for interface"""
 
-    if not any([rxsig, feclock]):
+    if not any([rxsig, feclock, rxlock, rxpcs]):
         ctx.fail("At least one option must be specified.")
 
     if namespace is None:
@@ -1352,31 +1435,36 @@ def phy_signal(db, ctx, interfacename, namespace, display, rxsig, feclock):
     if interfacename not in port_dict:
         ctx.fail("Invalid interface name {}".format(interfacename))
 
-    # Get port OID from COUNTERS_PORT_NAME_MAP
-    port_name_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
-    if interfacename not in port_name_map:
-        ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
-
-    vid_str = port_name_map[interfacename]
-    table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
-    port_phy_data = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, table_key)
-
-    if not port_phy_data:
+    datasets = _get_port_phy_attr_datasets(db, namespace, interfacename)
+    if not datasets:
         click.echo("No PHY attribute data available for {}".format(display_name))
         click.echo("Ensure 'counterpoll phy enable' has been run")
         return
 
-    click.echo("Interface: {}".format(display_name))
-    click.echo("=" * 80)
+    for side_label, port_phy_data in datasets:
+        if len(datasets) == 1 and side_label == 'ASIC':
+            click.echo("Interface: {}".format(display_name))
+        else:
+            click.echo("Interface: {} ({})".format(display_name, side_label))
+        click.echo("=" * 80)
 
-    # Display all requested attributes
-    if rxsig:
-        attr_data = port_phy_data.get('phy_rx_signal_detect')
-        display_phy_signal_attribute('RX Signal Detect', attr_data)
+        if rxsig:
+            display_phy_signal_attribute('RX Signal Detect', port_phy_data.get('phy_rx_signal_detect'))
 
-    if feclock:
-        attr_data = port_phy_data.get('pcs_fec_lane_alignment_lock')
-        display_phy_signal_attribute('FEC Alignment Lock', attr_data)
+        if feclock:
+            display_phy_signal_attribute('FEC Alignment Lock', port_phy_data.get('pcs_fec_lane_alignment_lock'))
+
+        if rxlock:
+            display_phy_signal_attribute('RX Lock Status', port_phy_data.get('rx_lock_status'))
+
+        if rxpcs:
+            pcs_val = port_phy_data.get('pcs_rx_link_status')
+            if not pcs_val:
+                click.echo("PCS RX Link Status: No data available")
+                click.echo("")
+            else:
+                click.echo("PCS RX Link Status: {}".format(pcs_val))
+                click.echo("")
 
 
 def display_phy_numeric_attribute(attr_display_name, attr_json, val_header="Value"):
@@ -1470,12 +1558,14 @@ def display_phy_taps_attribute(attr_display_name, attr_json):
 @click.option('--snr', is_flag=True, help='Show RX SNR values')
 @click.option('--rxvga', is_flag=True, help='Show RX VGA values')
 @click.option('--txfir', is_flag=True, help='Show TX FIR tap values')
+@click.option('--rxffe', is_flag=True, help='Show RX FFE tap values')
+@click.option('--pam4eye', is_flag=True, help='Show PAM4 eye values')
 @click.pass_context
 @clicommon.pass_db
-def phy_serdes(db, ctx, interfacename, namespace, display, snr, rxvga, txfir):
+def phy_serdes(db, ctx, interfacename, namespace, display, snr, rxvga, txfir, rxffe, pam4eye):
     """Show PHY SERDES parameters for interface"""
 
-    if not any([snr, rxvga, txfir]):
+    if not any([snr, rxvga, txfir, rxffe, pam4eye]):
         ctx.fail("At least one option must be specified.")
 
     if namespace is None:
@@ -1492,32 +1582,26 @@ def phy_serdes(db, ctx, interfacename, namespace, display, snr, rxvga, txfir):
     if interfacename not in port_dict:
         ctx.fail("Invalid interface name {}".format(interfacename))
 
-    # Get port OID from COUNTERS_PORT_NAME_MAP
-    port_name_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
-    if interfacename not in port_name_map:
-        ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
-
-    vid_str = port_name_map[interfacename]
-    table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
-    port_phy_data = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, table_key)
-
-    if not port_phy_data:
+    datasets = _get_port_phy_attr_datasets(db, namespace, interfacename)
+    if not datasets:
         click.echo("No PHY SERDES data available for {}".format(display_name))
         click.echo("Ensure 'counterpoll phy enable' has been run")
         return
 
-    click.echo("Interface: {}".format(display_name))
-    click.echo("=" * 80)
+    for side_label, port_phy_data in datasets:
+        if len(datasets) == 1 and side_label == 'ASIC':
+            click.echo("Interface: {}".format(display_name))
+        else:
+            click.echo("Interface: {} ({})".format(display_name, side_label))
+        click.echo("=" * 80)
 
-    # Display all requested attributes
-    if snr:
-        attr_data = port_phy_data.get('rx_snr')
-        display_phy_numeric_attribute('RX SNR', attr_data, "SNR")
+        if snr:
+            display_phy_numeric_attribute('RX SNR', port_phy_data.get('rx_snr'), "SNR")
 
-    if rxvga:
-        attr_data = port_phy_data.get('rx_vga')
-        display_phy_numeric_attribute('RX VGA', attr_data, "VGA")
+        if rxvga:
+            display_phy_numeric_attribute('RX VGA', port_phy_data.get('rx_vga'), "VGA")
 
+<<<<<<< HEAD
     if txfir:
         attr_data = port_phy_data.get('tx_fir_taps_list')
         display_phy_taps_attribute('TX FIR Taps', attr_data)
@@ -1615,3 +1699,13 @@ def labelport_status():
         for labelport in sorted(labelport_map.keys(), key=int)
     ]
     click.echo(tabulate(body, header, tablefmt="outline"))
+=======
+        if txfir:
+            display_phy_taps_attribute('TX FIR Taps', port_phy_data.get('tx_fir_taps_list'))
+
+        if rxffe:
+            display_phy_taps_attribute('RX FFE Taps', port_phy_data.get('rx_ffe_taps_list'))
+
+        if pam4eye:
+            display_phy_pam4_eye_attribute('PAM4 Eye Values', port_phy_data.get('pam4_eye_values'))
+>>>>>>> eaa59985 (NOS-10909: Expose gearbox Phy attributes via CLI (#763))
