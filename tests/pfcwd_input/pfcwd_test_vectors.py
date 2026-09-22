@@ -66,6 +66,7 @@ Ethernet8      drop               600                 600    disable
 # so POLL_INTERVAL stays at the fixture's pre-existing 600ms.
 pfcwd_show_start_default_hw_mode = """\
 Changed polling interval to 600ms
+Recovery mode: hardware
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
 Ethernet0      drop               200                 200    disable
@@ -427,14 +428,15 @@ Changed polling interval to 199ms on asic0
 BIG_RED_SWITCH status is enable on asic0
 Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
-          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HW DETECTION    HW RESTORATION    HW STATUS    HISTORY
---------------  --------  ----------------  ------------------  --------------  ----------------  -----------  ---------
-     Ethernet0      drop               200                 200             200               200   configured    disable
-     Ethernet4      drop               200                 200             200               200   configured    disable
-  Ethernet-BP0      drop               200                 200             200               200   configured    disable
-  Ethernet-BP4      drop               200                 200             200               200   configured    disable
-Ethernet-BP256      drop               200                 200             200               200   configured    disable
-Ethernet-BP260      drop               200                 200             200               200   configured    disable
+Recovery mode: hardware
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               200                 200    disable
+     Ethernet4      drop               200                 200    disable
+  Ethernet-BP0      drop               200                 200    disable
+  Ethernet-BP4      drop               200                 200    disable
+Ethernet-BP256      drop               200                 200    disable
+Ethernet-BP260      drop               200                 200    disable
 """
 
 # Test vectors for global action validation

@@ -59,12 +59,6 @@ CONFIG_DESCRIPTION = [
 
 STATS_HEADER = ('QUEUE', 'STATUS',) + list(zip(*STATS_DESCRIPTION))[0]
 CONFIG_HEADER = ('PORT',) + list(zip(*CONFIG_DESCRIPTION))[0]
-# Hardware recovery mode: first four columns must stay frozen (community
-# parsers rely on their positions), new columns append, HISTORY moves last.
-CONFIG_HEADER_HW = (
-    'PORT', 'ACTION', 'DETECTION TIME', 'RESTORATION TIME',
-    'HW DETECTION', 'HW RESTORATION', 'HW STATUS', 'HISTORY'
-)
 
 CONFIG_DB_PFC_WD_TABLE_NAME = 'PFC_WD'
 STATE_DB_PFC_WD_STATE_TABLE = 'PFC_WD_STATE_TABLE'
@@ -258,22 +252,11 @@ class PfcwdCli(object):
                     self.db.STATE_DB,
                     STATE_DB_PFC_WD_HW_STATE_TABLE + '|' + port
                 ) or {}
-                table.append([
-                    port,
-                    config_entry.get('action', 'drop'),
-                    config_entry.get('detection_time', 'N/A'),
-                    config_entry.get('restoration_time', 'infinite'),
-                    hw_state.get('hw_detection_time', 'N/A'),
-                    hw_state.get('hw_restoration_time', 'N/A'),
-                    hw_state.get('status', 'N/A'),
-                    config_entry.get('pfc_stat_history', 'disable'),
-                ])
-            else:
-                config_list = []
-                for config in CONFIG_DESCRIPTION:
-                    line = config_entry.get(config[1], config[2])
-                    config_list.append(line)
-                table.append([port] + config_list)
+            config_list = []
+            for config in CONFIG_DESCRIPTION:
+                line = config_entry.get(config[1], config[2])
+                config_list.append(line)
+            table.append([port] + config_list)
 
             port_json = {
                 'action': config_entry.get('action'),
@@ -332,9 +315,13 @@ class PfcwdCli(object):
             result.update(self.json_globals)
             click.echo(json.dumps(result, indent=4, sort_keys=True))
             return
-        header = CONFIG_HEADER_HW if self.is_hardware_mode else CONFIG_HEADER
+        if self.is_hardware_mode:
+            # The only difference from software mode: name the recovery mode.
+            # Per-port hardware values stay in --json so the columns, and the
+            # parsers that depend on them, are untouched.
+            click.echo("Recovery mode: hardware")
         click.echo(tabulate(
-            self.table, header, stralign='right', numalign='right',
+            self.table, CONFIG_HEADER, stralign='right', numalign='right',
             tablefmt='simple'
         ))
 
