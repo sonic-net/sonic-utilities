@@ -1142,70 +1142,97 @@ class TestMultiAsicPfcwdShow(object):
         assert result.output == test_vectors.show_pfc_config_all
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
-    def test_pfcwd_show_status_hardware_mode(self):
-        """Test show pfcwd status command in hardware mode"""
+    def test_pfcwd_show_config_hardware_mode(self):
+        """HW mode: config table gains HW DETECTION/HW RESTORATION/HW STATUS,
+        HISTORY moves last, first four columns stay frozen, no prose
+        mode/range lines."""
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
 
         result = runner.invoke(
-            pfcwd.cli.commands["show"].commands["status"],
+            pfcwd.cli.commands["show"].commands["config"],
             obj=db
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == test_vectors.pfcwd_show_status_hardware_mode
+        assert result.output == test_vectors.pfcwd_show_config_hw_mode
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
-    def test_pfcwd_show_status_hardware_mode_single_port(self):
-        """Test show pfcwd status command with single port"""
-        import pfcwd.main as pfcwd
-        runner = CliRunner()
-        db = Db()
-
-        result = runner.invoke(
-            pfcwd.cli.commands["show"].commands["status"],
-            ["Ethernet0"],
-            obj=db
-        )
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == test_vectors.pfcwd_show_status_hardware_mode_single_port
-
-    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
-    def test_pfcwd_show_status_hardware_mode_multi_port(self):
-        """Test show pfcwd status command with multiple ports"""
-        import pfcwd.main as pfcwd
-        runner = CliRunner()
-        db = Db()
-
-        result = runner.invoke(
-            pfcwd.cli.commands["show"].commands["status"],
-            ["Ethernet0", "Ethernet4"],
-            obj=db
-        )
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == test_vectors.pfcwd_show_status_hardware_mode_multi_port
-
-    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
-    def test_pfcwd_show_status_hardware_mode_json(self):
-        """Test show pfcwd status --json in hardware mode"""
+    def test_pfcwd_show_config_hardware_mode_json(self):
+        """HW mode --json: mode, numeric ranges and per-port hw_* fields."""
         import pfcwd.main as pfcwd
         import json
         runner = CliRunner()
         db = Db()
 
         result = runner.invoke(
-            pfcwd.cli.commands["show"].commands["status"],
+            pfcwd.cli.commands["show"].commands["config"],
             ["--json"],
             obj=db
         )
         print(result.output)
         assert result.exit_code == 0
-        expected = json.loads(test_vectors.pfcwd_show_status_hardware_mode_json)
-        actual = json.loads(result.output)
-        assert actual == expected
+        data = json.loads(result.output)
+        assert data["mode"] == "hardware"
+        assert data["hw_detection_time_ms"] == {"min": 100, "max": 5000}
+        assert data["hw_restoration_time_ms"] == {"min": 100, "max": 60000}
+        assert data["poll_interval"] == "199"
+        assert data["big_red_switch"] == "enable"
+        port = data["ports"]["Ethernet0"]
+        assert port["action"] == "drop"
+        assert port["detection_time"] == "200"
+        assert port["restoration_time"] == "200"
+        assert port["hw_detection_time"] == "200"
+        assert port["hw_restoration_time"] == "200"
+        assert port["hw_status"] == "configured"
+
+    def test_pfcwd_show_config_software_mode_json(self):
+        """SW mode --json: mode=software and no hw_* keys anywhere."""
+        import pfcwd.main as pfcwd
+        import json
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            ["--json"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "software"
+        assert "hw_detection_time_ms" not in data
+        assert "hw_restoration_time_ms" not in data
+        assert data["poll_interval"] == "199"
+        for port_cfg in data["ports"].values():
+            assert "hw_status" not in port_cfg
+            assert "hw_detection_time" not in port_cfg
+
+    def test_pfcwd_status_command_removed(self):
+        """The standalone status CLI is gone; info lives in show config."""
+        import pfcwd.main as pfcwd
+        assert 'status' not in pfcwd.cli.commands['show'].commands
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_hint_points_to_config(self, mock_os):
+        """In HW mode the start hint references show pfcwd config."""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "drop", "--restoration-time", "600", "Ethernet0", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Run 'show pfcwd config' to verify hardware programming" in result.output
+        assert "show pfcwd status" not in result.output
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     @patch('pfcwd.main.os')

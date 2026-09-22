@@ -1266,18 +1266,15 @@ class TestShow(object):
         mock_run_command.assert_called_with(['pfcwd', 'show', 'stats', '-d', 'all'], display_cmd=True)
 
     @patch('show.main.run_command')
-    def test_show_pfcwd_status(self, mock_run_command):
+    def test_show_pfcwd_config_json(self, mock_run_command):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["pfcwd"].commands['status'], ['--verbose'])
+        result = runner.invoke(show.cli.commands["pfcwd"].commands['config'], ['--json'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['pfcwd', 'show', 'status', '-d', 'all'], display_cmd=True)
+        mock_run_command.assert_called_with(
+            ['pfcwd', 'show', 'config', '-d', 'all', '--json'], display_cmd=False)
 
-    @patch('show.main.run_command')
-    def test_show_pfcwd_status_json(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands["pfcwd"].commands['status'], ['--json'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['pfcwd', 'show', 'status', '-d', 'all', '--json'], display_cmd=False)
+    def test_show_pfcwd_status_removed(self):
+        assert 'status' not in show.cli.commands['pfcwd'].commands
 
     @patch('show.main.run_command')
     def test_show_watermark_telemetry_interval(self, mock_run_command):
