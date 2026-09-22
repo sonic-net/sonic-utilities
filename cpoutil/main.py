@@ -15,15 +15,13 @@ from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
 ERROR_INVALID_RESOURCE = 3
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
-# Keep the same process-wide platform objects used by sfputil.  A CPO OE or ELS
-# is represented by the first SFP/CPO object associated with that shared
-# device.
+# Keep one process-wide chassis, active port configuration, topology, and CPO
+# object table. A shared OE or ELS uses its first associated CPO object.
 platform_chassis = None
-platform_sfputil = None
 current_port_config = {}
 cpo_mapping = None
 cpo_oe_bank_counts = {}
-cpo_sfp_map = {
+cpo_object_map = {
     OPTICAL_ENGINE: {},
     EXTERNAL_LASER_SOURCE: {},
     PORT: {},
@@ -184,7 +182,7 @@ class CpoCommandError(RuntimeError):
 
 
 def load_platform_chassis():
-    """Instantiate the platform chassis in the same way as sfputil."""
+    """Instantiate the platform chassis used by CPO commands."""
     global platform_chassis
 
     try:
@@ -198,32 +196,8 @@ def load_platform_chassis():
         raise CpoCommandError("Platform chassis is unavailable")
 
 
-def load_sfputilhelper():
-    """Load SfpUtilHelper and its logical-to-physical port mappings."""
-    global platform_sfputil
-
-    from sonic_platform_base.sonic_sfp.sfputilhelper import SfpUtilHelper
-    from sonic_py_common import device_info, multi_asic
-
-    platform_sfputil = SfpUtilHelper()
-    try:
-        if multi_asic.is_multi_asic():
-            _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
-            platform_sfputil.read_all_porttab_mappings(
-                hwsku_path, multi_asic.get_num_asics()
-            )
-        else:
-            platform_sfputil.read_porttab_mappings(
-                device_info.get_path_to_port_config_file(), 0
-            )
-    except Exception as exc:
-        raise CpoCommandError(
-            "Failed to load port configuration: {}".format(exc)
-        ) from exc
-
-
 def load_current_port_config():
-    """Load the active PORT table without using sfputil helper functions."""
+    """Load the active PORT table used for CPO port resolution."""
     global current_port_config
 
     from portconfig import get_port_config
@@ -252,25 +226,24 @@ def load_current_port_config():
 
 def logical_port_name_to_physical_port_list(logical_port):
     """Convert a logical or numeric port name to physical port indices."""
-    if platform_sfputil is None:
-        raise CpoCommandError("SfpUtilHelper is unavailable")
-
     port_name = str(logical_port)
     if port_name.startswith("Ethernet"):
-        if not platform_sfputil.is_logical_port(port_name):
+        entry = current_port_config.get(port_name)
+        if entry is None:
             raise CpoCommandError(
-                "invalid port '{}'\nValid values for port: {}".format(
-                    port_name, platform_sfputil.logical
+                "Invalid port '{}'\nValid values for port: {}".format(
+                    port_name,
+                    sorted(current_port_config, key=_natural_sort_key),
                 )
             )
-        physical_ports = platform_sfputil.get_logical_to_physical(port_name)
+        physical_ports = _parse_port_indexes(entry.get("index"), port_name)
         if not physical_ports:
             raise CpoCommandError(
                 "No physical ports found for logical port '{}'".format(
                     port_name
                 )
             )
-        return list(dict.fromkeys(int(port) for port in physical_ports))
+        return list(dict.fromkeys(physical_ports))
 
     try:
         return [int(port_name)]
@@ -469,15 +442,15 @@ def get_interface_context(logical_port):
 
 
 def get_physical_port_name(logical_port, member_index, ganged):
-    """Return the sfputil-style display name for a physical port."""
+    """Return the display name for a physical port."""
     if ganged:
         return "{}:{} (ganged)".format(logical_port, member_index)
     return str(logical_port)
 
 
-def load_cpo_sfp_map():
-    """Build the global OE/ELS/port to SFP object mapping from cpo.json."""
-    global cpo_mapping, cpo_oe_bank_counts, cpo_sfp_map
+def load_cpo_object_map():
+    """Build the global OE/ELS/port to CPO object mapping from cpo.json."""
+    global cpo_mapping, cpo_oe_bank_counts, cpo_object_map
 
     from sonic_platform_base.sonic_xcvr.bailly_optoe_base import (
         CpoOptoeBase,
@@ -489,53 +462,52 @@ def load_cpo_sfp_map():
         raise CpoCommandError("CPO topology is unavailable for this platform")
     cpo_mapping = CpoMapping(cpo_data)
     cpo_oe_bank_counts = {}
-    cpo_sfp_map = {
+    cpo_object_map = {
         OPTICAL_ENGINE: {},
         EXTERNAL_LASER_SOURCE: {},
         PORT: {},
     }
 
     for interface in cpo_mapping.get_interfaces():
-        interface_sfp = None
+        interface_cpo = None
         for physical_port in interface.physical_ports:
             try:
-                sfp = platform_chassis.get_sfp(physical_port)
+                cpo = platform_chassis.get_cpo(physical_port)
             except Exception as exc:
                 raise CpoCommandError(
-                    "Failed to get SFP object for physical port {}: {}".format(
+                    "Failed to get CPO object for physical port {}: {}".format(
                         physical_port, exc
                     )
                 ) from exc
-            if not isinstance(sfp, CpoOptoeBase):
+            if not isinstance(cpo, CpoOptoeBase):
                 continue
-            cpo_sfp_map[PORT][physical_port] = sfp
-            if interface_sfp is None:
-                interface_sfp = sfp
+            cpo_object_map[PORT][physical_port] = cpo
+            if interface_cpo is None:
+                interface_cpo = cpo
 
-        if interface_sfp is None:
+        if interface_cpo is None:
             continue
-        cpo_sfp_map[OPTICAL_ENGINE].setdefault(
-            interface.oe_name, interface_sfp
+        cpo_object_map[OPTICAL_ENGINE].setdefault(
+            interface.oe_name, interface_cpo
         )
-        cpo_sfp_map[EXTERNAL_LASER_SOURCE].setdefault(
-            interface.els_name, interface_sfp
+        cpo_object_map[EXTERNAL_LASER_SOURCE].setdefault(
+            interface.els_name, interface_cpo
         )
 
-    if not cpo_sfp_map[PORT]:
-        raise CpoCommandError("No CPO SFP objects are available")
+    if not cpo_object_map[PORT]:
+        raise CpoCommandError("No CPO objects are available")
 
 
 def initialize_platform():
     load_platform_chassis()
-    load_sfputilhelper()
     load_current_port_config()
-    load_cpo_sfp_map()
+    load_cpo_object_map()
 
 
-def get_port_sfp_objects(logical_port=None):
-    """Return sfputil-style (name, physical port, SFP object) tuples."""
+def get_port_cpo_objects(logical_port=None):
+    """Return (name, physical port, CPO object) tuples."""
     if logical_port is None:
-        logical_ports = list(platform_sfputil.logical)
+        logical_ports = sorted(current_port_config, key=_natural_sort_key)
     else:
         logical_ports = [logical_port]
 
@@ -544,8 +516,8 @@ def get_port_sfp_objects(logical_port=None):
         physical_ports = logical_port_name_to_physical_port_list(port_name)
         ganged = len(physical_ports) > 1
         for member_index, physical_port in enumerate(physical_ports, start=1):
-            sfp = cpo_sfp_map[PORT].get(physical_port)
-            if sfp is None:
+            cpo = cpo_object_map[PORT].get(physical_port)
+            if cpo is None:
                 if logical_port is None:
                     continue
                 raise CpoCommandError(
@@ -554,13 +526,13 @@ def get_port_sfp_objects(logical_port=None):
             objects.append((
                 get_physical_port_name(port_name, member_index, ganged),
                 physical_port,
-                sfp,
+                cpo,
             ))
     return objects
 
 
-def get_resource_sfp_objects(resource_type, selector=None):
-    """Return shared OE or ELS objects from the global SFP table."""
+def get_resource_cpo_objects(resource_type, selector=None):
+    """Return shared OE or ELS objects from the global CPO table."""
     try:
         resource_ids = cpo_mapping.resolve_resource_ids(
             selector, resource_type
@@ -572,19 +544,19 @@ def get_resource_sfp_objects(resource_type, selector=None):
 
     objects = []
     for resource_id in resource_ids:
-        sfp = cpo_sfp_map[resource_type].get(resource_id)
-        if sfp is None:
+        cpo = cpo_object_map[resource_type].get(resource_id)
+        if cpo is None:
             raise CpoCommandError(
-                "No SFP object is available for '{}'".format(resource_id)
+                "No CPO object is available for '{}'".format(resource_id)
             )
-        objects.append((resource_id, sfp))
+        objects.append((resource_id, cpo))
     return objects
 
 
-def get_xcvr_api(sfp, label):
-    """Get the existing PI/PD transceiver API from a CPO SFP object."""
+def get_xcvr_api(cpo, label):
+    """Get the existing PI/PD transceiver API from a CPO object."""
     try:
-        api = sfp.get_xcvr_api()
+        api = cpo.get_xcvr_api()
     except NotImplementedError as exc:
         raise CpoCommandError(
             "{} API is not implemented".format(label)
@@ -810,6 +782,25 @@ def _format_cpo_dom(dom_values):
         ELS_THRESHOLD_MAP,
         ELS_THRESHOLD_UNIT_MAP,
     )
+
+    displayed_keys = set().union(
+        CMIS_DOM_CHANNEL_MONITOR_MAP,
+        DOM_CHANNEL_THRESHOLD_MAP,
+        DOM_MODULE_MONITOR_MAP,
+        DOM_MODULE_THRESHOLD_MAP,
+        els_monitor_map,
+        ELS_THRESHOLD_MAP,
+    )
+    additional_values = {
+        key: value for key, value in values.items()
+        if key not in displayed_keys and value != "N/A"
+    }
+    if additional_values:
+        lines.append("{}AdditionalValues:".format(indent))
+        for field, value in _flatten_record(additional_values):
+            lines.append("{}{}: {}".format(
+                " " * 16, _display_field(field), _display_value(value)
+            ))
     return lines
 
 
@@ -952,7 +943,7 @@ def _flatten_record(value, field=""):
 
 def print_records(records, json_output, headers=("Resource", "Value"),
                   boolean_values=None, field_header="Field"):
-    """Print platform values using sfputil-style simple tables."""
+    """Print platform values using SONiC-style simple tables."""
     if json_output:
         click.echo(json.dumps(records, indent=4, sort_keys=True))
         return
@@ -1113,12 +1104,12 @@ def show_interface_map(port, json_output):
             records = [_interface_mapping_record(port)]
         else:
             records = []
-            for logical_port in platform_sfputil.logical:
+            for logical_port in sorted(current_port_config, key=_natural_sort_key):
                 physical_ports = logical_port_name_to_physical_port_list(
                     logical_port
                 )
                 if not any(
-                        physical in cpo_sfp_map[PORT]
+                        physical in cpo_object_map[PORT]
                         for physical in physical_ports):
                     continue
                 records.append(_interface_mapping_record(logical_port))
@@ -1149,14 +1140,14 @@ def show_interface_dom(port, json_output):
     records = {}
     output = []
     try:
-        for port_name, _, sfp in get_port_sfp_objects(port):
-            present = sfp.get_presence()
+        for port_name, _, cpo in get_port_cpo_objects(port):
+            present = cpo.get_presence()
             values = {}
             info = dom = thresholds = None
             if present:
-                info = sfp.get_transceiver_info()
-                dom = sfp.get_transceiver_dom_real_value()
-                thresholds = sfp.get_transceiver_threshold_info()
+                info = cpo.get_transceiver_info()
+                dom = cpo.get_transceiver_dom_real_value()
+                thresholds = cpo.get_transceiver_threshold_info()
                 for result in (info, dom, thresholds):
                     if isinstance(result, dict):
                         values.update(result)
@@ -1176,18 +1167,19 @@ def show_interface_dom(port, json_output):
         click.echo("\n\n".join(output))
 
 
-@show_interface.command("tx-disable")
+@show_interface.command("tx_disable")
 @click.argument("port", required=False)
 @output_option
 def show_interface_tx_disable(port, json_output):
     """Display per-lane Tx output state."""
     records = {}
     try:
-        for port_name, _, sfp in get_port_sfp_objects(port):
+        for port_name, _, cpo in get_port_cpo_objects(port):
             logical_port = port if port is not None else port_name
             context = get_interface_context(logical_port)
+            api = get_xcvr_api(cpo, port_name)
             values = _select_lane_values(
-                sfp.get_tx_disable(), context["lane_positions"]
+                api.get_tx_disable(), context["lane_positions"]
             )
             records[port_name] = {
                 lane: "Tx output disable" if disabled else "Tx output enable"
@@ -1216,8 +1208,8 @@ def show_interface_speed(port, json_output):
 
     records = {}
     try:
-        for port_name, _, sfp in get_port_sfp_objects(port):
-            api = get_xcvr_api(sfp, port_name)
+        for port_name, _, cpo in get_port_cpo_objects(port):
+            api = get_xcvr_api(cpo, port_name)
             advertisements = api.get_application_advertisement()
             active_applications = api.get_active_apsel_hostlane()
             if not isinstance(advertisements, dict) or not isinstance(
@@ -1269,8 +1261,8 @@ def show_interface_lane_status(port, json_output):
     """Display OE datapath and ELS status."""
     records = {}
     try:
-        for port_name, _, sfp in get_port_sfp_objects(port):
-            api = get_xcvr_api(sfp, port_name)
+        for port_name, _, cpo in get_port_cpo_objects(port):
+            api = get_xcvr_api(cpo, port_name)
             logical_port = port if port is not None else port_name
             context = get_interface_context(logical_port)
             records[port_name] = {
@@ -1303,10 +1295,10 @@ def show_oe_lpmode(oe_index, json_output):
     """Display OE low-power mode."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
             records[resource_id] = get_xcvr_api(
-                sfp, resource_id
+                cpo, resource_id
             ).get_lpmode()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1323,10 +1315,10 @@ def show_oe_status(oe_index, json_output):
     """Display OE module state."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
             records[resource_id] = get_xcvr_api(
-                sfp, resource_id
+                cpo, resource_id
             ).get_module_state()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1340,10 +1332,10 @@ def show_oe_temperature(oe_index, json_output):
     """Display OE temperature."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
             records[resource_id] = get_xcvr_api(
-                sfp, resource_id
+                cpo, resource_id
             ).get_module_temperature()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1357,10 +1349,10 @@ def show_oe_input_power(oe_index, json_output):
     """Display OE input optical power."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
             records[resource_id] = get_xcvr_api(
-                sfp, resource_id
+                cpo, resource_id
             ).get_rx_power()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1384,9 +1376,9 @@ def show_els_presence(els_index, json_output):
     """Display ELS presence."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = sfp.get_els_presence()
+            records[resource_id] = cpo.get_els_presence()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1402,9 +1394,9 @@ def show_els_lpmode(els_index, json_output):
     """Display ELS low-power state."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            status = get_xcvr_api(sfp, resource_id).get_rlm_status()
+            status = get_xcvr_api(cpo, resource_id).get_rlm_status()
             value = (
                 status.get("els_module_low_power_state")
                 if isinstance(status, dict) else status
@@ -1422,10 +1414,10 @@ def show_els_status(els_index, json_output):
     """Display ELS module status."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
             records[resource_id] = get_xcvr_api(
-                sfp, resource_id
+                cpo, resource_id
             ).get_rlm_status()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1444,10 +1436,10 @@ def show_els_temperature(els_index, json_output):
     """Display ELS temperature."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
             records[resource_id] = get_xcvr_api(
-                sfp, resource_id
+                cpo, resource_id
             ).get_rlm_temperature()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1461,10 +1453,10 @@ def show_els_output_power(els_index, json_output):
     """Display ELS output optical power."""
     records = {}
     try:
-        for resource_id, sfp in get_resource_sfp_objects(
+        for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
             records[resource_id] = get_xcvr_api(
-                sfp, resource_id
+                cpo, resource_id
             ).get_rlm_laser_power()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1482,7 +1474,7 @@ def _require_success(result, action):
 
 
 def _run_action(message, operation):
-    """Run one control operation with sfputil-style progress output."""
+    """Run one control operation with SONiC-style progress output."""
     click.echo("{} ... ".format(message), nl=False)
     try:
         result = operation()
@@ -1497,7 +1489,7 @@ def _run_action(message, operation):
 
 
 def _single_resource(resource_type, index):
-    objects = get_resource_sfp_objects(resource_type, index)
+    objects = get_resource_cpo_objects(resource_type, index)
     if len(objects) != 1:
         raise CpoCommandError(
             "Exactly one {} index is required".format(resource_type)
@@ -1519,7 +1511,7 @@ def config_interface():
     """Control a front-panel CPO interface."""
 
 
-@config_interface.command("tx-disable")
+@config_interface.command("tx_disable")
 @click.argument("port")
 @click.argument("state", type=click.Choice(["enable", "disable"]))
 def config_interface_tx_disable(port, state):
@@ -1544,19 +1536,20 @@ def config_interface_tx_disable(port, state):
                 "No ELS laser mapping is available for '{}'".format(port)
             )
 
-        _, els_sfp = _single_resource(
+        _, els_cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, mapping.els_id
         )
-        api = get_xcvr_api(els_sfp, mapping.els_name)
+        api = get_xcvr_api(els_cpo, mapping.els_name)
         set_els_tx_disable = api.set_rlm_tx_disable_channel
 
         laser_mask = sum(1 << laser for laser in context["laser_ids"])
-        port_sfps = get_port_sfp_objects(port)
+        port_cpos = get_port_cpo_objects(port)
 
         def apply_tx_disable():
-            for _, _, sfp in port_sfps:
+            for _, _, cpo in port_cpos:
+                oe_api = get_xcvr_api(cpo, port)
                 _require_success(
-                    sfp.tx_disable_channel(
+                    oe_api.tx_disable_channel(
                         context["lane_mask"], disable
                     ),
                     "{} OE Tx-disable {}".format(port, state),
@@ -1588,14 +1581,15 @@ def config_oe():
 def config_oe_lpmode(oe_index, mode):
     """Set OE full-power or low-power mode."""
     try:
-        resource_id, sfp = _single_resource(OPTICAL_ENGINE, oe_index)
+        resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
+        api = get_xcvr_api(cpo, resource_id)
         low_power = mode == "low"
         _run_action(
             "{} low-power mode for {}".format(
                 "Enabling" if low_power else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: sfp.set_lpmode(low_power),
+            lambda: api.set_lpmode(low_power),
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1606,28 +1600,30 @@ def config_oe_lpmode(oe_index, mode):
 def config_oe_reset(oe_index):
     """Reset an Optical Engine through the platform API."""
     try:
-        resource_id, sfp = _single_resource(OPTICAL_ENGINE, oe_index)
+        resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
+        api = get_xcvr_api(cpo, resource_id)
         _run_action(
-            "Resetting {}".format(resource_id.upper()), sfp.reset
+            "Resetting {}".format(resource_id.upper()), api.reset
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
 
 
-@config_oe.command("tx-disable")
+@config_oe.command("tx_disable")
 @click.argument("oe_index")
 @click.argument("state", type=click.Choice(["enable", "disable"]))
 def config_oe_tx_disable(oe_index, state):
     """Enable or disable OE Tx-disable."""
     try:
-        resource_id, sfp = _single_resource(OPTICAL_ENGINE, oe_index)
+        resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
+        api = get_xcvr_api(cpo, resource_id)
         disable = state == "enable"
         _run_action(
             "{} Tx-disable for {}".format(
                 "Enabling" if disable else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: sfp.tx_disable(disable),
+            lambda: api.tx_disable(disable),
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1644,10 +1640,10 @@ def config_els():
 def config_els_lpmode(els_index, mode):
     """Set ELS full-power or low-power mode."""
     try:
-        resource_id, sfp = _single_resource(
+        resource_id, cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, els_index
         )
-        api = get_xcvr_api(sfp, resource_id)
+        api = get_xcvr_api(cpo, resource_id)
         low_power = mode == "low"
         _run_action(
             "{} low-power mode for {}".format(
@@ -1674,16 +1670,16 @@ def config_els_reset(els_index):
     )
 
 
-@config_els.command("tx-disable")
+@config_els.command("tx_disable")
 @click.argument("els_index")
 @click.argument("state", type=click.Choice(["enable", "disable"]))
 def config_els_tx_disable(els_index, state):
     """Enable or disable Tx-disable for every ELS laser."""
     try:
-        resource_id, sfp = _single_resource(
+        resource_id, cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, els_index
         )
-        api = get_xcvr_api(sfp, resource_id)
+        api = get_xcvr_api(cpo, resource_id)
         disable = state == "enable"
         _run_action(
             "{} Tx-disable for {}".format(
@@ -1721,11 +1717,11 @@ def _validate_eeprom_range(bank, page, offset, size):
         )
 
 
-def _physical_eeprom_page(resource_type, resource_id, sfp, page):
+def _physical_eeprom_page(resource_type, resource_id, cpo, page):
     physical_page = page
     if resource_type == EXTERNAL_LASER_SOURCE:
         try:
-            physical_page += sfp.get_els_base_page()
+            physical_page += cpo.get_els_base_page()
         except (NotImplementedError, AttributeError,
                 TypeError, ValueError) as exc:
             raise CpoCommandError(
@@ -1741,7 +1737,7 @@ def _physical_eeprom_page(resource_type, resource_id, sfp, page):
     return physical_page
 
 
-def _physical_eeprom_bank(resource_type, resource_id, sfp, bank):
+def _physical_eeprom_bank(resource_type, resource_id, cpo, bank):
     """Validate and return an OE-local CMIS bank."""
     if resource_type != OPTICAL_ENGINE:
         if bank != 0:
@@ -1754,7 +1750,7 @@ def _physical_eeprom_bank(resource_type, resource_id, sfp, bank):
 
     bank_count = cpo_oe_bank_counts.get(resource_id)
     if bank_count is None:
-        api = get_xcvr_api(sfp, str(resource_id).upper())
+        api = get_xcvr_api(cpo, str(resource_id).upper())
         try:
             bank_count = int(api.get_max_supported_banks())
         except (NotImplementedError, AttributeError, TypeError, ValueError) as exc:
@@ -1779,27 +1775,27 @@ def _physical_eeprom_bank(resource_type, resource_id, sfp, bank):
     return bank
 
 
-def _eeprom_linear_offset(resource_type, resource_id, sfp,
+def _eeprom_linear_offset(resource_type, resource_id, cpo,
                           bank, page, offset):
     from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import (
         CmisPage,
     )
 
     physical_page = _physical_eeprom_page(
-        resource_type, resource_id, sfp, page
+        resource_type, resource_id, cpo, page
     )
     physical_bank = _physical_eeprom_bank(
-        resource_type, resource_id, sfp, bank
+        resource_type, resource_id, cpo, bank
     )
     return CmisPage.linear_offset(physical_page, physical_bank, offset)
 
 
 def _read_resource_eeprom(resource_type, index, bank, page, offset, size):
-    """Read raw EEPROM bytes through mapped CPO SFP objects."""
+    """Read raw EEPROM bytes through mapped CPO objects."""
     results = []
-    for resource_id, sfp in get_resource_sfp_objects(resource_type, index):
+    for resource_id, cpo in get_resource_cpo_objects(resource_type, index):
         data = _read_one_eeprom(
-            resource_type, resource_id, sfp,
+            resource_type, resource_id, cpo,
             bank, page, offset, size
         )
         results.append((resource_id, data))
@@ -1819,16 +1815,16 @@ def _parse_hex_data(value):
 
 
 def _write_resource_eeprom(resource_type, index, bank, page, offset, data):
-    """Write raw EEPROM bytes through one mapped CPO SFP object."""
+    """Write raw EEPROM bytes through one mapped CPO object."""
     _validate_eeprom_range(bank, page, offset, len(data))
-    resource_id, sfp = _single_resource(resource_type, index)
+    resource_id, cpo = _single_resource(resource_type, index)
     linear_offset = _eeprom_linear_offset(
-        resource_type, resource_id, sfp, bank, page, offset
+        resource_type, resource_id, cpo, bank, page, offset
     )
     try:
         _run_action(
             "Writing EEPROM for {}".format(str(resource_id).upper()),
-            lambda: sfp.write_eeprom(linear_offset, len(data), data),
+            lambda: cpo.write_eeprom(linear_offset, len(data), data),
         )
     except (NotImplementedError, AttributeError, OSError) as exc:
         raise CpoCommandError(
@@ -1864,7 +1860,7 @@ def _eeprom_ascii(value):
 
 
 def _format_eeprom_hexdump(data, address, indent=EEPROM_DUMP_INDENT):
-    """Format bytes like sfputil show eeprom-hexdump."""
+    """Format bytes as a standard EEPROM hex dump."""
     lines = []
     for start in range(0, len(data), 16):
         chunk = data[start:start + 16]
@@ -1911,14 +1907,14 @@ def _resource_banks(resource_type, resource_id, requested_bank=None):
     return list(range(len(topology_banks))) or [0]
 
 
-def _read_one_eeprom(resource_type, resource_id, sfp,
+def _read_one_eeprom(resource_type, resource_id, cpo,
                      bank, page, offset, size):
     _validate_eeprom_range(bank, page, offset, size)
     linear_offset = _eeprom_linear_offset(
-        resource_type, resource_id, sfp, bank, page, offset
+        resource_type, resource_id, cpo, bank, page, offset
     )
     try:
-        data = sfp.read_eeprom(linear_offset, size)
+        data = cpo.read_eeprom(linear_offset, size)
     except (NotImplementedError, AttributeError, OSError) as exc:
         raise CpoCommandError(
             "Failed to read EEPROM for '{}': {}".format(resource_id, exc)
@@ -1963,7 +1959,7 @@ def _full_eeprom_sections(resource_type, banks):
     ]
 
 
-def _format_full_eeprom(resource_type, resource_id, sfp, banks,
+def _format_full_eeprom(resource_type, resource_id, cpo, banks,
                         display_name=None):
     label = display_name or str(resource_id).upper()
     lines = ["EEPROM hexdump for {}".format(label)]
@@ -1971,7 +1967,7 @@ def _format_full_eeprom(resource_type, resource_id, sfp, banks,
             resource_type, banks):
         lines.append("{}{}".format(EEPROM_DUMP_INDENT, title))
         data = _read_one_eeprom(
-            resource_type, resource_id, sfp,
+            resource_type, resource_id, cpo,
             bank, page, offset, size
         )
         lines.append(_format_eeprom_hexdump(data, offset))
@@ -1981,12 +1977,12 @@ def _format_full_eeprom(resource_type, resource_id, sfp, banks,
 
 def _print_full_resource_eeprom(resource_type, index=None, bank=None):
     outputs = []
-    resources = get_resource_sfp_objects(resource_type, index)
-    for resource_id, sfp in resources:
+    resources = get_resource_cpo_objects(resource_type, index)
+    for resource_id, cpo in resources:
         banks = _resource_banks(resource_type, resource_id, bank)
         try:
             outputs.append(_format_full_eeprom(
-                resource_type, resource_id, sfp, banks
+                resource_type, resource_id, cpo, banks
             ))
         except CpoCommandError as exc:
             if index is not None:
@@ -2060,9 +2056,9 @@ def read_eeprom_interface(port, oe, els, page, offset, size):
         target = _interface_target_option(oe, els)
         index, bank = _interface_eeprom_target(port, target)
         if not _eeprom_range_requested(page, offset, size):
-            resource_id, sfp = _single_resource(target, index)
+            resource_id, cpo = _single_resource(target, index)
             click.echo(_format_full_eeprom(
-                target, resource_id, sfp, [bank],
+                target, resource_id, cpo, [bank],
                 "port {} ({})".format(port, str(resource_id).upper()),
             ).rstrip())
             return
@@ -2215,6 +2211,7 @@ def write_eeprom_els(index, bank, page, offset, data):
         )
     except CpoCommandError as exc:
         raise click.ClickException(str(exc))
+
 
 def main():
     try:

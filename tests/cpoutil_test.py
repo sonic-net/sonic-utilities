@@ -12,9 +12,13 @@ test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
-from cpoutil import main as cpoutil
-from cpoutil.mapping import CpoMapping, CpoMappingError
-from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
+from cpoutil import main as cpoutil  # noqa: E402
+from cpoutil.mapping import CpoMapping, CpoMappingError  # noqa: E402
+from cpoutil.mapping import (  # noqa: E402
+    EXTERNAL_LASER_SOURCE,
+    OPTICAL_ENGINE,
+    PORT,
+)
 
 
 CPO_DATA = {
@@ -56,35 +60,19 @@ CPO_DATA = {
 }
 
 
-class FakeSfp(object):
+class FakeCpo(object):
     def __init__(self, name):
         self.name = name
 
 
 class FakeChassis(object):
-    def __init__(self, sfps):
-        self.sfps = sfps
+    def __init__(self, cpos):
+        self.cpos = cpos
         self.calls = []
 
-    def get_sfp(self, index):
+    def get_cpo(self, index):
         self.calls.append(index)
-        return self.sfps.get(index)
-
-
-class FakeSfpUtil(object):
-    logical = ["Ethernet0", "Ethernet1", "Ethernet8", "Ethernet16"]
-    mappings = {
-        "Ethernet0": [1],
-        "Ethernet1": [1],
-        "Ethernet8": [2],
-        "Ethernet16": [3],
-    }
-
-    def is_logical_port(self, port):
-        return port in self.mappings
-
-    def get_logical_to_physical(self, port):
-        return self.mappings.get(port)
+        return self.cpos.get(index)
 
 
 class TestCpoMapping(object):
@@ -121,38 +109,43 @@ class TestCpoMapping(object):
 class TestPlatformObjectMapping(object):
     def setup_method(self):
         cpoutil.platform_chassis = FakeChassis({
-            1: FakeSfp("sfp1"),
-            2: FakeSfp("sfp2"),
-            3: FakeSfp("sfp3"),
+            1: FakeCpo("cpo1"),
+            2: FakeCpo("cpo2"),
+            3: FakeCpo("cpo3"),
         })
-        cpoutil.platform_sfputil = FakeSfpUtil()
+        cpoutil.current_port_config = {
+            "Ethernet0": {"index": "1", "lanes": "1,2"},
+            "Ethernet1": {"index": "1", "lanes": "2", "subport": "2"},
+            "Ethernet8": {"index": "2", "lanes": "5,6,7,8"},
+            "Ethernet16": {"index": "3", "lanes": "9,10,11,12"},
+        }
 
     def test_builds_global_oe_els_port_map(self):
         module_name = (
             "sonic_platform_base.sonic_xcvr.bailly_optoe_base"
         )
         fake_module = types.SimpleNamespace(
-            CpoOptoeBase=FakeSfp,
+            CpoOptoeBase=FakeCpo,
             get_cpo_json_data=lambda: CPO_DATA,
         )
         with mock.patch.dict(sys.modules, {module_name: fake_module}):
-            cpoutil.load_cpo_sfp_map()
+            cpoutil.load_cpo_object_map()
 
-        sfp1 = cpoutil.platform_chassis.sfps[1]
-        assert cpoutil.cpo_sfp_map[PORT][1] is sfp1
-        assert cpoutil.cpo_sfp_map[OPTICAL_ENGINE]["oe0"] is sfp1
-        assert cpoutil.cpo_sfp_map[EXTERNAL_LASER_SOURCE]["els0"] is sfp1
-        assert cpoutil.cpo_sfp_map[OPTICAL_ENGINE]["oe1"].name == "sfp3"
+        cpo1 = cpoutil.platform_chassis.cpos[1]
+        assert cpoutil.cpo_object_map[PORT][1] is cpo1
+        assert cpoutil.cpo_object_map[OPTICAL_ENGINE]["oe0"] is cpo1
+        assert cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"] is cpo1
+        assert cpoutil.cpo_object_map[OPTICAL_ENGINE]["oe1"].name == "cpo3"
 
-    def test_breakout_names_resolve_to_same_physical_sfp(self):
-        cpoutil.cpo_sfp_map = {
+    def test_breakout_names_resolve_to_same_physical_cpo(self):
+        cpoutil.cpo_object_map = {
             OPTICAL_ENGINE: {},
             EXTERNAL_LASER_SOURCE: {},
-            PORT: {1: cpoutil.platform_chassis.sfps[1]},
+            PORT: {1: cpoutil.platform_chassis.cpos[1]},
         }
-        objects = cpoutil.get_port_sfp_objects("Ethernet1")
+        objects = cpoutil.get_port_cpo_objects("Ethernet1")
         assert objects[0][1] == 1
-        assert objects[0][2].name == "sfp1"
+        assert objects[0][2].name == "cpo1"
 
     def test_invalid_logical_port_is_rejected(self):
         with pytest.raises(cpoutil.CpoCommandError, match="Invalid port"):
@@ -162,6 +155,9 @@ class TestPlatformObjectMapping(object):
 class TestMappingCommand(object):
     def test_show_single_interface_as_json(self):
         cpoutil.cpo_mapping = CpoMapping(CPO_DATA)
+        cpoutil.current_port_config = {
+            "Ethernet8": {"index": "2", "lanes": "5,6,7,8"},
+        }
         with mock.patch("cpoutil.main.initialize_platform"):
             result = CliRunner().invoke(
                 cpoutil.cli,
@@ -169,5 +165,6 @@ class TestMappingCommand(object):
             )
         assert result.exit_code == 0
         payload = json.loads(result.output)
-        assert payload["Ethernet8"]["physical_ports"] == [2]
+        assert set(payload["Ethernet8"]) == {"oe", "els"}
         assert payload["Ethernet8"]["oe"]["bank"] == 1
+        assert payload["Ethernet8"]["els"] == {"id": "ELS0"}

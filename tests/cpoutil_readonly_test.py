@@ -10,9 +10,13 @@ test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
-import cpoutil.main as cpoutil
-from cpoutil.mapping import CpoMapping
-from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
+import cpoutil.main as cpoutil  # noqa: E402
+from cpoutil.mapping import CpoMapping  # noqa: E402
+from cpoutil.mapping import (  # noqa: E402
+    EXTERNAL_LASER_SOURCE,
+    OPTICAL_ENGINE,
+    PORT,
+)
 
 
 CPO_DATA = {
@@ -64,6 +68,9 @@ class FakeApi(object):
             "DP2State": "DataPathDeactivated",
         }
 
+    def get_tx_disable(self):
+        return [False, True]
+
     def get_rlm_status(self):
         return {
             "els_module_low_power_state": False,
@@ -80,12 +87,15 @@ class FakeApi(object):
         }
 
 
-class FakeSfp(object):
+class FakeCpo(object):
     def __init__(self):
         self.api = FakeApi()
 
     def get_xcvr_api(self):
         return self.api
+
+    def get_presence(self):
+        return True
 
     def get_els_presence(self):
         return True
@@ -99,19 +109,6 @@ class FakeSfp(object):
     def get_transceiver_threshold_info(self):
         return {"temphighalarm": 90.0}
 
-    def get_tx_disable(self):
-        return [False, True]
-
-
-class FakeSfpUtil(object):
-    logical = ["Ethernet0", "Ethernet1"]
-
-    def is_logical_port(self, port):
-        return port in self.logical
-
-    def get_logical_to_physical(self, port):
-        return [1] if port in self.logical else None
-
 
 def invoke(command):
     with mock.patch("cpoutil.main.initialize_platform"):
@@ -120,13 +117,16 @@ def invoke(command):
 
 class TestDirectPlatformApiCommands(object):
     def setup_method(self):
-        sfp = FakeSfp()
+        cpo = FakeCpo()
         cpoutil.cpo_mapping = CpoMapping(CPO_DATA)
-        cpoutil.platform_sfputil = FakeSfpUtil()
-        cpoutil.cpo_sfp_map = {
-            OPTICAL_ENGINE: {"oe0": sfp},
-            EXTERNAL_LASER_SOURCE: {"els0": sfp},
-            PORT: {1: sfp},
+        cpoutil.current_port_config = {
+            "Ethernet0": {"index": "1", "lanes": "1,2"},
+            "Ethernet1": {"index": "1", "lanes": "2", "subport": "2"},
+        }
+        cpoutil.cpo_object_map = {
+            OPTICAL_ENGINE: {"oe0": cpo},
+            EXTERNAL_LASER_SOURCE: {"els0": cpo},
+            PORT: {1: cpo},
         }
 
     def test_oe_status_calls_existing_xcvr_api(self):
@@ -146,11 +146,11 @@ class TestDirectPlatformApiCommands(object):
             "Laser0OpticalPowerMonitor"
         ] == 9.1
 
-    def test_els_presence_calls_sfp_object(self):
+    def test_els_presence_calls_cpo_object(self):
         result = invoke(["show", "els", "presence", "0", "--json"])
         assert json.loads(result.output) == {"els0": True}
 
-    def test_interface_dom_calls_sfp_methods(self):
+    def test_interface_dom_calls_cpo_methods(self):
         result = invoke([
             "show", "interface", "dom", "Ethernet0", "--json"
         ])
@@ -161,11 +161,10 @@ class TestDirectPlatformApiCommands(object):
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([
-            "show", "interface", "tx-disable", "Ethernet1", "--json"
+            "show", "interface", "tx_disable", "Ethernet1", "--json"
         ])
         assert json.loads(result.output) == {
             "Ethernet1": {
-                "lane00": "Tx output enable",
                 "lane01": "Tx output disable",
             }
         }
