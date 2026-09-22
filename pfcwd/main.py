@@ -60,6 +60,12 @@ CONFIG_DESCRIPTION = [
 
 STATS_HEADER = ('QUEUE', 'STATUS',) + list(zip(*STATS_DESCRIPTION))[0]
 CONFIG_HEADER = ('PORT',) + list(zip(*CONFIG_DESCRIPTION))[0]
+# Hardware recovery mode: first four columns must stay frozen (community
+# parsers rely on their positions), new columns append, HISTORY moves last.
+CONFIG_HEADER_HW = (
+    'PORT', 'ACTION', 'DETECTION TIME', 'RESTORATION TIME',
+    'HW DETECTION', 'HW RESTORATION', 'HW STATUS', 'HISTORY'
+)
 STATUS_HEADER = (
     'PORT',
     'STATUS',
@@ -218,19 +224,43 @@ class PfcwdCli(object):
                 self.multi_asic.display_option
             )
 
+        hw_global = self.db.get_all(
+            self.db.STATE_DB, STATE_DB_PFC_WD_STATE_TABLE + '|PFC_WD'
+        )
+        hw_mode = bool(hw_global) and \
+            hw_global.get('RECOVERY_MECHANISM', '').upper() == 'HARDWARE'
+        if hw_mode:
+            self.is_hardware_mode = True
+
         ports_found = False
         for port in ports:
-            config_list = []
             config_entry = self.config_db.get_entry(
                 CONFIG_DB_PFC_WD_TABLE_NAME, port
             )
             if config_entry is None or config_entry == {}:
                 continue
             ports_found = True
-            for config in CONFIG_DESCRIPTION:
-                line = config_entry.get(config[1], config[2])
-                config_list.append(line)
-            table.append([port] + config_list)
+            if hw_mode:
+                hw_state = self.db.get_all(
+                    self.db.STATE_DB,
+                    STATE_DB_PFC_WD_HW_STATE_TABLE + '|' + port
+                ) or {}
+                table.append([
+                    port,
+                    config_entry.get('action', 'drop'),
+                    config_entry.get('detection_time', 'N/A'),
+                    config_entry.get('restoration_time', 'infinite'),
+                    hw_state.get('hw_detection_time', 'N/A'),
+                    hw_state.get('hw_restoration_time', 'N/A'),
+                    hw_state.get('status', 'N/A'),
+                    config_entry.get('pfc_stat_history', 'disable'),
+                ])
+            else:
+                config_list = []
+                for config in CONFIG_DESCRIPTION:
+                    line = config_entry.get(config[1], config[2])
+                    config_list.append(line)
+                table.append([port] + config_list)
 
         if not ports_found:
             return
@@ -264,9 +294,11 @@ class PfcwdCli(object):
 
     def config(self, ports):
         del self.table[:]
+        self.is_hardware_mode = False
         self.collect_config(ports)
+        header = CONFIG_HEADER_HW if self.is_hardware_mode else CONFIG_HEADER
         click.echo(tabulate(
-            self.table, CONFIG_HEADER, stralign='right', numalign='right',
+            self.table, header, stralign='right', numalign='right',
             tablefmt='simple'
         ))
 
