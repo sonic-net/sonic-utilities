@@ -38,7 +38,7 @@ class TestArpNeighShowCommandBuilding(TestCase):
     def test_arpshow_injection_payload_stays_a_single_argv_element(self):
         cmd = self._built_cmd(nbrshow.ArpShow, INJECTION_PAYLOAD, "eth0")
         self.assertIsInstance(cmd, list)
-        self.assertEqual(cmd, ["/usr/sbin/arp", "-n", INJECTION_PAYLOAD, "-i", "eth0"])
+        self.assertEqual(cmd, ["/usr/sbin/arp", "-n", "-i", "eth0", "--", INJECTION_PAYLOAD])
 
     def test_neighshow_injection_payload_stays_a_single_argv_element(self):
         cmd = self._built_cmd(nbrshow.NeighShow, INJECTION_PAYLOAD, "Ethernet0")
@@ -47,7 +47,7 @@ class TestArpNeighShowCommandBuilding(TestCase):
 
     def test_arpshow_clean_arguments_render_unchanged(self):
         cmd = self._built_cmd(nbrshow.ArpShow, "10.0.0.1", "Ethernet0")
-        self.assertEqual(cmd, ["/usr/sbin/arp", "-n", "10.0.0.1", "-i", "Ethernet0"])
+        self.assertEqual(cmd, ["/usr/sbin/arp", "-n", "-i", "Ethernet0", "--", "10.0.0.1"])
 
     def test_neighshow_clean_arguments_render_unchanged(self):
         cmd = self._built_cmd(nbrshow.NeighShow, "fc00::72", "PortChannel0001")
@@ -56,6 +56,16 @@ class TestArpNeighShowCommandBuilding(TestCase):
     def test_arpshow_omitted_arguments_are_omitted(self):
         cmd = self._built_cmd(nbrshow.ArpShow, None, None)
         self.assertEqual(cmd, ["/usr/sbin/arp", "-n"])
+
+    def test_arpshow_ipaddr_looking_like_an_option_cannot_change_arp_mode(self):
+        # arp(8) treats a bare "--file" as its -f/--file option (switches from
+        # display mode to reading /etc/ethers) unless option parsing has already
+        # been ended with "--". ipaddr must always land after "--", and iface's
+        # "-i" flag must always land before it, or -i stops being parsed as an option.
+        cmd = self._built_cmd(nbrshow.ArpShow, "--file", "eth0")
+        self.assertEqual(cmd, ["/usr/sbin/arp", "-n", "-i", "eth0", "--", "--file"])
+        self.assertLess(cmd.index("-i"), cmd.index("--"))
+        self.assertEqual(cmd.index("--") + 1, cmd.index("--file"))
 
 
 class TestFetchNbrDataNeverUsesShell(TestCase):

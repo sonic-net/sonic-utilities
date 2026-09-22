@@ -191,11 +191,11 @@ class ArpShow(NbrBase):
     def __init__(self, ipaddr, iface, namespace=None):
 
         cmd = list(self.CMD)
-        if ipaddr is not None:
-            cmd.append(ipaddr)
-
         if iface is not None:
             cmd += ['-i', iface]
+
+        if ipaddr is not None:
+            cmd += ['--', ipaddr]
 
         NbrBase.__init__(self, cmd, namespace)
         return
