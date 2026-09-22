@@ -1143,9 +1143,9 @@ class TestMultiAsicPfcwdShow(object):
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     def test_pfcwd_show_config_hardware_mode(self):
-        """HW mode: config table gains HW DETECTION/HW RESTORATION/HW STATUS,
-        HISTORY moves last, first four columns stay frozen, no prose
-        mode/range lines."""
+        """HW mode: the config table is identical to software mode; the only
+        difference is the recovery mode line above it. Per-port hardware
+        values are reported by --json, not by new columns."""
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
