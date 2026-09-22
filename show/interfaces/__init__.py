@@ -1601,10 +1601,14 @@ def phy_serdes(db, ctx, interfacename, namespace, display, snr, rxvga, txfir, rx
         if rxvga:
             display_phy_numeric_attribute('RX VGA', port_phy_data.get('rx_vga'), "VGA")
 
-<<<<<<< HEAD
-    if txfir:
-        attr_data = port_phy_data.get('tx_fir_taps_list')
-        display_phy_taps_attribute('TX FIR Taps', attr_data)
+        if txfir:
+            display_phy_taps_attribute('TX FIR Taps', port_phy_data.get('tx_fir_taps_list'))
+
+        if rxffe:
+            display_phy_taps_attribute('RX FFE Taps', port_phy_data.get('rx_ffe_taps_list'))
+
+        if pam4eye:
+            display_phy_pam4_eye_attribute('PAM4 Eye Values', port_phy_data.get('pam4_eye_values'))
 
 
 @interfaces.group(name='label-port', cls=clicommon.AliasedGroup)
@@ -1699,13 +1703,3 @@ def labelport_status():
         for labelport in sorted(labelport_map.keys(), key=int)
     ]
     click.echo(tabulate(body, header, tablefmt="outline"))
-=======
-        if txfir:
-            display_phy_taps_attribute('TX FIR Taps', port_phy_data.get('tx_fir_taps_list'))
-
-        if rxffe:
-            display_phy_taps_attribute('RX FFE Taps', port_phy_data.get('rx_ffe_taps_list'))
-
-        if pam4eye:
-            display_phy_pam4_eye_attribute('PAM4 Eye Values', port_phy_data.get('pam4_eye_values'))
->>>>>>> eaa59985 (NOS-10909: Expose gearbox Phy attributes via CLI (#763))
