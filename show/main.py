@@ -727,13 +727,16 @@ def pfcwd():
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def config(namespace, display, verbose):
+def config(namespace, display, json_output, verbose):
     """Show pfc watchdog config"""
 
     cmd = ['pfcwd', 'show', 'config', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if json_output:
+        cmd += ['--json']
 
     run_command(cmd, display_cmd=verbose)
 

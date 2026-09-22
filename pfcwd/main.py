@@ -149,6 +149,9 @@ class PfcwdCli(object):
         self.detection_range = None
         self.restoration_range = None
         self.is_hardware_mode = False
+        self.json_ports = {}
+        self.json_globals = {}
+        self.json_output_mode = False
 
     @multi_asic_util.run_on_multi_asic
     def collect_stats(self, empty, queues):
@@ -232,6 +235,25 @@ class PfcwdCli(object):
         if hw_mode:
             self.is_hardware_mode = True
 
+        if 'poll_interval' not in self.json_globals:
+            glob_entry = self.config_db.get_entry(
+                CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
+            )
+            self.json_globals['poll_interval'] = glob_entry.get('POLL_INTERVAL')
+            self.json_globals['big_red_switch'] = glob_entry.get('BIG_RED_SWITCH')
+        if hw_mode and 'hw_detection_time_ms' not in self.json_globals:
+            try:
+                self.json_globals['hw_detection_time_ms'] = {
+                    'min': int(hw_global['DETECTION_TIME_MIN']),
+                    'max': int(hw_global['DETECTION_TIME_MAX']),
+                }
+                self.json_globals['hw_restoration_time_ms'] = {
+                    'min': int(hw_global['RESTORATION_TIME_MIN']),
+                    'max': int(hw_global['RESTORATION_TIME_MAX']),
+                }
+            except (KeyError, ValueError):
+                pass
+
         ports_found = False
         for port in ports:
             config_entry = self.config_db.get_entry(
@@ -262,6 +284,18 @@ class PfcwdCli(object):
                     config_list.append(line)
                 table.append([port] + config_list)
 
+            port_json = {
+                'action': config_entry.get('action'),
+                'detection_time': config_entry.get('detection_time'),
+                'restoration_time': config_entry.get('restoration_time'),
+                'pfc_stat_history': config_entry.get('pfc_stat_history'),
+            }
+            if hw_mode:
+                port_json['hw_detection_time'] = hw_state.get('hw_detection_time')
+                port_json['hw_restoration_time'] = hw_state.get('hw_restoration_time')
+                port_json['hw_status'] = hw_state.get('status')
+            self.json_ports[port] = port_json
+
         if not ports_found:
             return
 
@@ -274,7 +308,7 @@ class PfcwdCli(object):
             "" if current_ns is None or current_ns == "" else " on {}".format(
                 current_ns
             )
-        if poll_interval is not None:
+        if poll_interval is not None and not self.json_output_mode:
             click.echo(
                 "Changed polling interval to {}ms{}".format(
                     poll_interval, asic_namesapce
@@ -285,17 +319,28 @@ class PfcwdCli(object):
             CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
         ).get('BIG_RED_SWITCH')
 
-        if big_red_switch is not None:
+        if big_red_switch is not None and not self.json_output_mode:
             click.echo("BIG_RED_SWITCH status is {}{}".format(
                 big_red_switch, asic_namesapce
             ))
 
         self.table += table
 
-    def config(self, ports):
+    def config(self, ports, json_output=False):
         del self.table[:]
         self.is_hardware_mode = False
+        self.json_ports = {}
+        self.json_globals = {}
+        self.json_output_mode = json_output
         self.collect_config(ports)
+        if json_output:
+            result = {
+                'mode': 'hardware' if self.is_hardware_mode else 'software',
+                'ports': self.json_ports,
+            }
+            result.update(self.json_globals)
+            click.echo(json.dumps(result, indent=4, sort_keys=True))
+            return
         header = CONFIG_HEADER_HW if self.is_hardware_mode else CONFIG_HEADER
         click.echo(tabulate(
             self.table, header, stralign='right', numalign='right',
@@ -860,11 +905,12 @@ class Show(object):
     # Show config
     @show.command()
     @multi_asic_util.multi_asic_click_options
+    @click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
     @click.argument('ports', nargs=-1)
     @clicommon.pass_db
-    def config(db, namespace, display, ports):
+    def config(db, namespace, display, ports, json_output):
         """ Show PFC Watchdog configuration """
-        PfcwdCli(db, namespace, display).config(ports)
+        PfcwdCli(db, namespace, display).config(ports, json_output)
 
     # Show status
     @show.command()
