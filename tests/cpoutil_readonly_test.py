@@ -71,16 +71,16 @@ class FakeApi(object):
     def get_tx_disable(self):
         return [False, True]
 
-    def get_rlm_status(self):
+    def get_elsfp_status(self):
         return {
             "els_module_low_power_state": False,
             "els_interrupt_status": True,
         }
 
-    def get_rlm_temperature(self):
-        return 32.5
+    def get_elsfp_dom_real_value(self):
+        return {"temperature": 32.5, "voltage": 3.3}
 
-    def get_rlm_laser_power(self):
+    def get_per_lane_opt_power_monitor(self):
         return {
             "Laser0OpticalPowerMonitor": 9.1,
             "Laser1OpticalPowerMonitor": 9.2,
@@ -134,7 +134,7 @@ class TestDirectPlatformApiCommands(object):
         assert result.exit_code == 0
         assert json.loads(result.output) == {"oe0": "ModuleReady"}
 
-    def test_els_commands_call_bailly_rlm_api(self):
+    def test_els_commands_call_public_elsfp_api(self):
         temperature = invoke([
             "show", "els", "temperature", "els0", "--json"
         ])
@@ -183,7 +183,7 @@ class TestDirectPlatformApiCommands(object):
             "lane01": 400000,
         }
 
-    def test_interface_lane_status_uses_existing_bailly_api(self):
+    def test_interface_lane_status_uses_public_elsfp_api(self):
         result = invoke([
             "show", "interface", "lane-status", "Ethernet0", "--json"
         ])
