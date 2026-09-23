@@ -7030,11 +7030,11 @@ This show command displays the port auto negotiation status for all interfaces i
 
 **show interfaces breakout (Versions >= 202006)**
 
-This show command displays the port capability for all interfaces i.e. index, lanes, default_brkout_mode, breakout_modes(i.e. available breakout modes) and brkout_mode (i.e. current breakout mode). To display current breakout mode, "current-mode" subcommand can be used.For a single interface, provide the interface name with the sub-command.
+This show command displays port capability information including index, lanes, default breakout mode, available breakout modes, and current breakout mode. Use `-i` or `--interface` to display detailed information for a single interface. To display only the current breakout mode, use the `current-mode` subcommand.
 
 - Usage:
   ```
-  show interfaces breakout
+  show interfaces breakout [-i <interface_name> | --interface <interface_name>]
   show interfaces breakout current-mode
   show interfaces breakout current-mode <interface_name>
   ```
@@ -7053,6 +7053,36 @@ This show command displays the port capability for all interfaces i.e. index, la
           "lanes": "65,66,67,68",
           "alias_at_lanes": "Eth1/1, Eth1/2, Eth1/3, Eth1/4"
       },... continue
+  }
+  ```
+To display detailed breakout information for a single interface:
+  ```
+  admin@lnos-x1-a-fab01:~$ show interfaces breakout -i Ethernet0
+  {
+      "Ethernet0": {
+          "index": "1,1,1,1",
+          "default_brkout_mode": "1x100G[40G]",
+          "child ports": "Ethernet0",
+          "child port speeds": "100G",
+          "breakout_modes": {
+              "1x100G[40G]": [
+                  "Eth1"
+              ],
+              "2x50G": [
+                  "Eth1/1",
+                  "Eth1/3"
+              ],
+              "4x25G[10G]": [
+                  "Eth1/1",
+                  "Eth1/2",
+                  "Eth1/3",
+                  "Eth1/4"
+              ]
+          },
+          "Current Breakout Mode": "1x100G[40G]",
+          "lanes": "65,66,67,68",
+          "alias_at_lanes": "Eth1/1, Eth1/2, Eth1/3, Eth1/4"
+      }
   }
   ```
 The "current-mode" subcommand is used to display current breakout mode for all interfaces.
