@@ -21,6 +21,17 @@ sonic_dependencies = [
     'sonic-yang-mgmt',
 ]
 
+testing_dependencies = [
+    'pyfakefs',
+    'responses',
+    'pytest',
+    'pytest-cov',
+    'pytest-xdist',
+    'mockredispy>=2.9.3',
+    'deepdiff>=6.2.2',
+    'xcvr-emu @ git+https://github.com/az-pz/xcvr-emu.git@3aca04f89de6dfecf33bea29509234164d917a81',
+]
+
 for package in sonic_dependencies:
     try:
         package_dist = pkg_resources.get_distribution(package.split(">=")[0])
@@ -283,22 +294,9 @@ setup(
         'pytest-runner',
         'wheel'
     ],
-    tests_require = [
-        'pyfakefs',
-        'responses',
-        'pytest',
-        'mockredispy>=2.9.3',
-        'deepdiff>=6.2.2'
-    ],
+    tests_require=testing_dependencies,
     extras_require = {
-        'testing': [
-            'pyfakefs',
-            'responses',
-            'pytest',
-            'pytest-xdist',
-            'mockredispy>=2.9.3',
-            'deepdiff>=6.2.2'
-        ],
+        'testing': testing_dependencies,
     },
     classifiers=[
         'Development Status :: 3 - Alpha',
