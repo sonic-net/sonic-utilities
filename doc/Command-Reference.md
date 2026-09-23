@@ -7887,6 +7887,8 @@ This command is already explained [here](#Transceivers)
 
 This command displays a standardized mapping of front-panel label ports to SONiC interface names, their lanes, and operational status under the current breakout configuration. Each table cell shows the mapped interface name and status for the corresponding lane (for example, `Ethernet0(UP)`). On multi-ASIC systems, the interface name also includes the ASIC namespace (for example, `Ethernet0|asic0(UP)`).
 
+The purpose of this command is to correlate the fibers of a passive connector (such as MPO or MMC) with the SONiC ports wired through that connector, and to report the status of each one. In this context a label port identifies the panel position where such a connector is plugged in, and its lanes are the fibers inside it. Each lane column corresponds to a fiber of the connector, so the table tells which interface a given fiber carries, and the operational status of the port.
+
 - Usage:
   ```
   show interfaces label-port status
