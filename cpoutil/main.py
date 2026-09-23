@@ -570,6 +570,51 @@ def get_xcvr_api(cpo, label):
     return api
 
 
+def get_els_api(cpo, label):
+    """Get the public ELSFP API from a CPO object."""
+    try:
+        elsfp = getattr(cpo, "elsfp", None)
+        api = elsfp.get_api() if elsfp is not None else cpo.get_xcvr_api()
+    except NotImplementedError as exc:
+        raise CpoCommandError(
+            "{} ELSFP API is not implemented".format(label)
+        ) from exc
+    except Exception as exc:
+        raise CpoCommandError(
+            "Failed to get {} ELSFP API: {}".format(label, exc)
+        ) from exc
+    if api is None:
+        raise CpoCommandError("{} ELSFP API is unavailable".format(label))
+    return api
+
+
+def get_els_presence(cpo):
+    """Read ELS presence from a public or legacy CPO object."""
+    elsfp = getattr(cpo, "elsfp", None)
+    if elsfp is not None:
+        return elsfp.get_presence()
+    return cpo.get_els_presence()
+
+
+def get_els_lpmode(_api):
+    # TODO: The public ELSFP low-power getter is not implemented yet.
+    raise NotImplementedError(
+        "The public ELSFP low-power API is not implemented"
+    )
+
+
+def set_els_lpmode(_api, _low_power):
+    # TODO: The public ELSFP low-power setter is not implemented yet.
+    raise NotImplementedError(
+        "The public ELSFP low-power API is not implemented"
+    )
+
+
+def reset_els(_api):
+    # TODO: The public ELSFP reset API is not implemented yet.
+    raise NotImplementedError("The public ELSFP reset API is not implemented")
+
+
 def _normalize_lane_values(values):
     if isinstance(values, (list, tuple)):
         ordered = list(values)
@@ -1262,15 +1307,16 @@ def show_interface_lane_status(port, json_output):
     records = {}
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
-            api = get_xcvr_api(cpo, port_name)
+            oe_api = get_xcvr_api(cpo, port_name)
+            els_api = get_els_api(cpo, port_name)
             logical_port = port if port is not None else port_name
             context = get_interface_context(logical_port)
             records[port_name] = {
                 "Data Path State Indicator": _select_lane_values(
-                    api.get_datapath_state(), context["lane_positions"]
+                    oe_api.get_datapath_state(), context["lane_positions"]
                 ),
                 "ELS": context["mapping"].els_name.upper(),
-                "ELS Status": api.get_rlm_status(),
+                "ELS Status": els_api.get_elsfp_status(),
                 "ELS Lasers": list(context["laser_ids"]),
                 "Shared ELS Lasers": list(context["shared_laser_ids"]),
             }
@@ -1378,7 +1424,7 @@ def show_els_presence(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = cpo.get_els_presence()
+            records[resource_id] = get_els_presence(cpo)
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1396,12 +1442,10 @@ def show_els_lpmode(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            status = get_xcvr_api(cpo, resource_id).get_rlm_status()
-            value = (
-                status.get("els_module_low_power_state")
-                if isinstance(status, dict) else status
+            api = get_els_api(cpo, resource_id)
+            records[resource_id] = _display_lpmode(
+                get_els_lpmode(api)
             )
-            records[resource_id] = _display_lpmode(value)
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Low-power Mode"))
@@ -1416,9 +1460,9 @@ def show_els_status(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = get_xcvr_api(
+            records[resource_id] = get_els_api(
                 cpo, resource_id
-            ).get_rlm_status()
+            ).get_elsfp_status()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1438,9 +1482,15 @@ def show_els_temperature(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = get_xcvr_api(
-                cpo, resource_id
-            ).get_rlm_temperature()
+            api = get_els_api(cpo, resource_id)
+            dom = api.get_elsfp_dom_real_value()
+            if not isinstance(dom, dict) or "temperature" not in dom:
+                raise CpoCommandError(
+                    "ELSFP temperature is unavailable for '{}'".format(
+                        resource_id
+                    )
+                )
+            records[resource_id] = dom["temperature"]
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Temperature (C)"))
@@ -1455,9 +1505,9 @@ def show_els_output_power(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = get_xcvr_api(
+            records[resource_id] = get_els_api(
                 cpo, resource_id
-            ).get_rlm_laser_power()
+            ).get_per_lane_opt_power_monitor()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1539,8 +1589,7 @@ def config_interface_tx_disable(port, state):
         _, els_cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, mapping.els_id
         )
-        api = get_xcvr_api(els_cpo, mapping.els_name)
-        set_els_tx_disable = api.set_rlm_tx_disable_channel
+        api = get_els_api(els_cpo, mapping.els_name)
 
         laser_mask = sum(1 << laser for laser in context["laser_ids"])
         port_cpos = get_port_cpo_objects(port)
@@ -1555,7 +1604,7 @@ def config_interface_tx_disable(port, state):
                     "{} OE Tx-disable {}".format(port, state),
                 )
             _require_success(
-                set_els_tx_disable(laser_mask, disable),
+                api.set_per_lane_enable(laser_mask, not disable),
                 "{} ELS Tx-disable {}".format(port, state),
             )
             return True
@@ -1643,14 +1692,14 @@ def config_els_lpmode(els_index, mode):
         resource_id, cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, els_index
         )
-        api = get_xcvr_api(cpo, resource_id)
+        api = get_els_api(cpo, resource_id)
         low_power = mode == "low"
         _run_action(
             "{} low-power mode for {}".format(
                 "Enabling" if low_power else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: api.set_rlm_lpmode(low_power),
+            lambda: set_els_lpmode(api, low_power),
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -1659,15 +1708,18 @@ def config_els_lpmode(els_index, mode):
 @config_els.command("reset")
 @click.argument("els_index")
 def config_els_reset(els_index):
-    """Report the missing platform ELS reset API."""
+    """Reset an External Laser Source."""
     try:
-        resource_id, _ = _single_resource(EXTERNAL_LASER_SOURCE, els_index)
-    except CpoCommandError as exc:
+        resource_id, cpo = _single_resource(
+            EXTERNAL_LASER_SOURCE, els_index
+        )
+        api = get_els_api(cpo, resource_id)
+        _run_action(
+            "Resetting {}".format(resource_id.upper()),
+            lambda: reset_els(api),
+        )
+    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
-    raise click.ClickException(
-        "{} reset: This functionality is currently not implemented for "
-        "this platform".format(resource_id.upper())
-    )
 
 
 @config_els.command("tx_disable")
@@ -1679,14 +1731,14 @@ def config_els_tx_disable(els_index, state):
         resource_id, cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, els_index
         )
-        api = get_xcvr_api(cpo, resource_id)
+        api = get_els_api(cpo, resource_id)
         disable = state == "enable"
         _run_action(
             "{} Tx-disable for {}".format(
                 "Enabling" if disable else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: api.set_rlm_tx_disable(disable),
+            lambda: api.set_per_lane_enable(0xFFFF, not disable),
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
