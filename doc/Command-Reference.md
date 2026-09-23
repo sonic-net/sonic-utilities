@@ -207,6 +207,7 @@
   * [sFlow Config commands](#sflow-config-commands)
 * [SED](#sed)
   * [SED Config commands](#sed-config-commands)
+  * [SED Erase command](#sed-erase-command)
 * [SNMP](#snmp)
   * [SNMP Show commands](#snmp-show-commands)
   * [SNMP Config commands](#snmp-config-commands)
@@ -13384,7 +13385,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#sflow)
 
 ## SED
 
-SED (Self-Encrypting Drive) commands are used to manage password changes for self-encrypting drives in the system.
+SED (Self-Encrypting Drive) commands are used to manage passwords for self-encrypting drives in the system, and to securely erase the boot drive.
 
 ### SED Config commands
 
@@ -13420,6 +13421,42 @@ This command resets the SED password to the default value.
   Handling SED password reset started...
   SED password reset process completed successfully
   ```
+
+### SED Erase command
+
+**ssd-erase**
+
+This command performs a graceful SSD erase: SED PSID revert (crypto erase) followed by NVMe sanitize (block erase). The operation is **irreversible** - after erase the switch cannot boot until re-imaged (ONIE / rescue image).
+
+It is a standalone one-shot command rather than a `config` subcommand, because it does not change configuration; it destroys the contents of the boot drive.
+
+The erase runs from a RAM-disk after the OS root is pivoted, so it survives an SSH disconnect. Follow progress in syslog via `journalctl -f -t ssd_erase.sh`.
+
+- Usage:
+
+  ```console
+  ssd-erase [-y | --yes]
+  ```
+
+- Options:
+  - `-y, --yes` : skip the interactive confirmation prompt (for automation).
+
+- Example (interactive):
+
+  ```console
+  admin@sonic:~$ sudo ssd-erase
+  This will PERMANENTLY erase the SSD. Continue? [y/N]: y
+  =========================================================================
+   SSD ERASE STARTED
+     * Do NOT power off the switch or interrupt this session.
+     * The erase runs from a RAM-disk and will keep going even if SSH drops.
+     * Follow progress in syslog: journalctl -f -t ssd_erase.sh
+     * When it finishes, reboot with: sudo /sbin/reboot
+  =========================================================================
+  SSD erase completed successfully. Reboot now with `sudo /sbin/reboot`.
+  ```
+
+After the erase completes, reboot with `sudo /sbin/reboot` (or via BMC / power cycle). The full SONiC `/usr/local/bin/reboot` script is not supported after erase because it depends on `/host` and Redis, which no longer exist.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#sed)
 
