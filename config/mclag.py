@@ -92,6 +92,20 @@ def check_if_interface_is_valid(db, interface_name):
     from .main import interface_name_is_valid
     return interface_name_is_valid(db,interface_name)
 
+
+def is_mclag_unique_ip_vlan_valid(interface_name):
+    """Return whether interface_name is a canonical VLAN name in range."""
+    if not interface_name.startswith("Vlan"):
+        return False
+
+    vlan_id = interface_name[4:]
+    if not vlan_id.isdigit():
+        return False
+
+    vlan_id_value = int(vlan_id)
+    return vlan_id == str(vlan_id_value) and 1 <= vlan_id_value <= 4094
+
+
 def get_intf_vrf_bind_unique_ip(db, interface_name, interface_type):
     intfvrf = db.get_table(interface_type)
     if interface_name in intfvrf:
@@ -120,30 +134,31 @@ def mclag(ctx):
 @click.argument('domain_id', metavar='<domain_id>', required=True, type=int)
 @click.argument('source_ip_addr', metavar='<source_ip_addr>', required=True)
 @click.argument('peer_ip_addr', metavar='<peer_ip_addr>', required=True)
-@click.argument('peer_ifname', metavar='<peer_ifname>', required=False)
+@click.argument('peer_ifname', metavar='<peer_ifname>', required=True)
 @click.pass_context
 def add_mclag_domain(ctx, domain_id, source_ip_addr, peer_ip_addr, peer_ifname):
     """Add MCLAG Domain"""
-    if ADHOC_VALIDATION:
-        if not mclag_domain_id_valid(domain_id):
-            ctx.fail("{} invalid domain ID, valid range is 1 to 4095".format(domain_id))  
-        if not is_ipv4_addr_valid(source_ip_addr):
-            ctx.fail("{} invalid local ip address".format(source_ip_addr))
-        if not is_ipv4_addr_valid(peer_ip_addr):
-            ctx.fail("{} invalid peer ip address".format(peer_ip_addr))
+    if not mclag_domain_id_valid(domain_id):
+        ctx.fail("{} invalid domain ID, valid range is 1 to 4095".format(domain_id))
+    if not is_ipv4_addr_valid(source_ip_addr):
+        ctx.fail("{} invalid local ip address".format(source_ip_addr))
+    if not is_ipv4_addr_valid(peer_ip_addr):
+        ctx.fail("{} invalid peer ip address".format(peer_ip_addr))
 
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     fvs = {}
     fvs['source_ip'] = str(source_ip_addr)
     fvs['peer_ip'] = str(peer_ip_addr)
-    if ADHOC_VALIDATION:
-        if peer_ifname is not None:
-            if (peer_ifname.startswith("Ethernet") is False) and (peer_ifname.startswith("PortChannel") is False):
-                ctx.fail("peer interface is invalid, should be Ethernet interface or portChannel !!")
-            if (peer_ifname.startswith("Ethernet") is True) and (check_if_interface_is_valid(db, peer_ifname) is False):
-                ctx.fail("peer Ethernet interface name is invalid. it is not present in port table of configDb!!")
-            if (peer_ifname.startswith("PortChannel")) and (is_portchannel_name_valid(peer_ifname) is False):
-                ctx.fail("peer PortChannel interface name is invalid !!")
+    if peer_ifname.startswith("Ethernet"):
+        if peer_ifname not in db.get_table('PORT'):
+            ctx.fail("peer Ethernet interface does not exist in CONFIG_DB")
+    elif peer_ifname.startswith("PortChannel"):
+        if (not is_portchannel_name_valid(peer_ifname) or
+                peer_ifname not in db.get_table('PORTCHANNEL')):
+            ctx.fail("peer PortChannel interface is invalid or does not exist in CONFIG_DB")
+    else:
+        ctx.fail("peer interface must be an existing Ethernet or PortChannel")
+
     fvs['peer_link'] = str(peer_ifname)
     mclag_domain_keys = db.get_table('MCLAG_DOMAIN').keys()
     if len(mclag_domain_keys) == 0:
@@ -171,14 +186,13 @@ def del_mclag_domain(ctx, domain_id):
     """Delete MCLAG Domain"""
     
     db = ValidatedConfigDBConnector(ctx.obj['db'])
-    
-    if ADHOC_VALIDATION:
-        if not mclag_domain_id_valid(domain_id):
-            ctx.fail("{} invalid domain ID, valid range is 1 to 4095".format(domain_id))  
-        
-        entry = db.get_entry('MCLAG_DOMAIN', domain_id)
-        if entry is None:
-            ctx.fail("MCLAG Domain {} not configured ".format(domain_id))  
+
+    if not mclag_domain_id_valid(domain_id):
+        ctx.fail("{} invalid domain ID, valid range is 1 to 4095".format(domain_id))
+
+    entry = db.get_entry('MCLAG_DOMAIN', domain_id)
+    if not entry:
+        ctx.fail("MCLAG Domain {} not configured".format(domain_id))
 
     click.echo("MCLAG Domain delete takes care of deleting all associated MCLAG Interfaces")
 
@@ -279,16 +293,21 @@ def mclag_member(ctx):
 def add_mclag_member(ctx, domain_id, portchannel_names):
     """Add member MCLAG interfaces from MCLAG Domain"""
     db = ValidatedConfigDBConnector(ctx.obj['db'])
-    if ADHOC_VALIDATION:
-        entry = db.get_entry('MCLAG_DOMAIN', domain_id)
-        if len(entry) == 0:
-            ctx.fail("MCLAG Domain " + domain_id + " not configured, configure mclag domain first")
+    entry = db.get_entry('MCLAG_DOMAIN', domain_id)
+    if not entry:
+        ctx.fail("MCLAG Domain " + domain_id + " not configured, configure mclag domain first")
 
     portchannel_list = portchannel_names.split(",")
+    portchannel_table = db.get_table('PORTCHANNEL')
+
+    # Validate the complete request before changing CONFIG_DB.
     for portchannel_name in portchannel_list:
-        if ADHOC_VALIDATION:
-            if is_portchannel_name_valid(portchannel_name) != True:
-                ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'" .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+        if (portchannel_name != portchannel_name.strip() or
+                not is_portchannel_name_valid(portchannel_name) or
+                portchannel_name not in portchannel_table):
+            ctx.fail("'{}' is not an existing valid PortChannel".format(portchannel_name))
+
+    for portchannel_name in portchannel_list:
         try:
             db.set_entry('MCLAG_INTERFACE', (domain_id, portchannel_name), {'if_type':"PortChannel"} )
         except ValueError as e:
@@ -301,12 +320,21 @@ def add_mclag_member(ctx, domain_id, portchannel_names):
 def del_mclag_member(ctx, domain_id, portchannel_names):
     """Delete member MCLAG interfaces from MCLAG Domain"""
     db = ValidatedConfigDBConnector(ctx.obj['db'])
+
+    domain_entry = db.get_entry('MCLAG_DOMAIN', domain_id)
+    if not domain_entry:
+        ctx.fail("MCLAG Domain {} not configured".format(domain_id))
+
     # split comma separated portchannel names
     portchannel_list = portchannel_names.split(",")
+
+    # Validate the complete request before changing CONFIG_DB.
     for portchannel_name in portchannel_list:
-        if ADHOC_VALIDATION:
-            if is_portchannel_name_valid(portchannel_name) != True:
-                ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'" .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+        member_entry = db.get_entry('MCLAG_INTERFACE', (domain_id, portchannel_name))
+        if not member_entry:
+            ctx.fail("MCLAG member {} is not configured in domain {}".format(portchannel_name, domain_id))
+
+    for portchannel_name in portchannel_list:
         try:
             db.set_entry('MCLAG_INTERFACE', (domain_id, portchannel_name), None )
         except (JsonPatchConflict, JsonPointerException) as e:
@@ -331,9 +359,11 @@ def add_mclag_unique_ip(ctx, interface_names):
 
     # split comma separated interface names
     interface_list = interface_names.split(",")
+
+    # Validate the complete request before changing CONFIG_DB.
     for interface_name in interface_list:
-        if not interface_name.startswith("Vlan"):
-            ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'" .format(interface_name, "Vlan", "vlan id"))
+        if not is_mclag_unique_ip_vlan_valid(interface_name):
+            ctx.fail("{} is invalid; expected Vlan followed by an ID from 1 to 4094".format(interface_name))
         #VRF should be configured after unique IP configuration
         intf_vrf = get_intf_vrf_bind_unique_ip(db, interface_name, "VLAN_INTERFACE")
         if intf_vrf:
@@ -345,6 +375,8 @@ def add_mclag_unique_ip(ctx, interface_names):
                 (intf_name, ip) = k
                 if intf_name == interface_name and ip != 0:
                     ctx.fail("%s is configured with IP %s, remove the IP configuration and reconfigure after enabling unique IP configuration."%(str(intf_name), str(ip)))
+
+    for interface_name in interface_list:
         try:
             db.set_entry('MCLAG_UNIQUE_IP', (interface_name), {'unique_ip':"enable"} )
         except ValueError as e:
@@ -358,9 +390,16 @@ def del_mclag_unique_ip(ctx, interface_names):
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     # split comma separated interface names
     interface_list = interface_names.split(",")
+
+    # Validate the complete request before changing CONFIG_DB.
     for interface_name in interface_list:
         if not interface_name.startswith("Vlan"):
             ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'" .format(interface_name, "Vlan", "vlan id"))
+
+        unique_ip_entry = db.get_entry('MCLAG_UNIQUE_IP', interface_name)
+        if not unique_ip_entry:
+            ctx.fail("MCLAG unique IP is not configured for {}".format(interface_name))
+
         #VRF should be configured after removing unique IP configuration
         intf_vrf = get_intf_vrf_bind_unique_ip(db, interface_name, "VLAN_INTERFACE")
         if intf_vrf:
@@ -371,6 +410,8 @@ def del_mclag_unique_ip(ctx, interface_names):
                 (intf_name, ip) = k
                 if intf_name == interface_name and ip != 0:
                     ctx.fail("%s is configured with IP %s, remove the IP configuration and reconfigure after disabling unique IP configuration."%(str(intf_name), str(ip)))
+
+    for interface_name in interface_list:
         try:
             db.set_entry('MCLAG_UNIQUE_IP', (interface_name), None )
         except (JsonPatchConflict, JsonPointerException) as e:
