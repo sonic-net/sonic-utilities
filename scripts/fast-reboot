@@ -560,11 +560,11 @@ function check_mirror_session_acls()
 	    continue
 	fi
         for ACL_ENTRY in ${ACL_ENTRIES[@]}; do
-            ACL_PRIORITY=$(sonic-db-cli ASIC_DB HGET ${ACL_ENTRY} SAI_ACL_ENTRY_ATTR_PRIORITY)
-            if [[ ${ACL_PRIORITY} -eq 8888 ]]; then
+            ACL_PRIORITY=$(sonic-db-cli ASIC_DB HGET "${ACL_ENTRY}" SAI_ACL_ENTRY_ATTR_PRIORITY)
+            if [[ "${ACL_PRIORITY}" == "8888" ]]; then
                 ACL_ARP="found"
             fi
-            if [[ ${ACL_PRIORITY} -eq 8887 ]]; then
+            if [[ "${ACL_PRIORITY}" == "8887" ]]; then
                 ACL_ND="found"
             fi
         done
