@@ -1,11 +1,27 @@
 import os
 import pytest
+import re
 import shutil
 import subprocess
 import tempfile
 
 
 class TestFastReboot:
+    def test_mirror_acl_priority_comparison(self):
+        test_path = os.path.dirname(os.path.abspath(__file__))
+        fast_reboot = os.path.join(test_path, '..', 'scripts', 'fast-reboot')
+        with open(fast_reboot) as script_file:
+            script = script_file.read()
+
+        function_start = script.index('function check_mirror_session_acls()')
+        function_end = script.index('\nfunction ', function_start + 1)
+        function_body = script[function_start:function_end]
+
+        assert 'HGET "${ACL_ENTRY}" SAI_ACL_ENTRY_ATTR_PRIORITY' in function_body
+        assert '[[ "${ACL_PRIORITY}" == "8888" ]]' in function_body
+        assert '[[ "${ACL_PRIORITY}" == "8887" ]]' in function_body
+        assert re.search(r'\[\[.*ACL_PRIORITY.*-(?:eq|ne|lt|le|gt|ge)\b', function_body) is None
+
     @pytest.mark.parametrize(
         "working_script,failing_script", [
             pytest.param('whoami', 'logname', id='without_logname'),
