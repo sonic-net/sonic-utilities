@@ -615,6 +615,13 @@ def reset_els(_api):
     raise NotImplementedError("The public ELSFP reset API is not implemented")
 
 
+def set_els_tx_disable(_api, _lane_mask, _disable):
+    # TODO: The active CPO backend does not implement ELS Tx-disable yet.
+    raise NotImplementedError(
+        "The ELS Tx-disable API is not implemented by the active CPO backend"
+    )
+
+
 def _normalize_lane_values(values):
     if isinstance(values, (list, tuple)):
         ordered = list(values)
@@ -1604,7 +1611,7 @@ def config_interface_tx_disable(port, state):
                     "{} OE Tx-disable {}".format(port, state),
                 )
             _require_success(
-                api.set_per_lane_enable(laser_mask, not disable),
+                set_els_tx_disable(api, laser_mask, disable),
                 "{} ELS Tx-disable {}".format(port, state),
             )
             return True
@@ -1738,7 +1745,7 @@ def config_els_tx_disable(els_index, state):
                 "Enabling" if disable else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: api.set_per_lane_enable(0xFFFF, not disable),
+            lambda: set_els_tx_disable(api, 0xFFFF, disable),
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
