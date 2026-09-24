@@ -45,10 +45,10 @@ class FakeApi(object):
         return "ModuleReady"
 
     def get_module_temperature(self):
-        return 71.25
+        return 53.125
 
     def get_rx_power(self):
-        return [1.1, 1.2]
+        return [1.5238, 1.1324]
 
     def get_application_advertisement(self):
         return {
@@ -71,19 +71,45 @@ class FakeApi(object):
     def get_tx_disable(self):
         return [False, True]
 
+    def get_transceiver_info(self):
+        return {"manufacturer": "Example OE"}
+
+    def get_transceiver_dom_real_value(self):
+        return {"temperature": 71.25}
+
+    def get_transceiver_threshold_info(self):
+        return {"temphighalarm": 90.0}
+
+    def get_elsfp_info(self):
+        return {"manufacturer": "Example ELS"}
+
     def get_elsfp_status(self):
-        return {
+        status = {
             "els_module_low_power_state": False,
             "els_interrupt_status": True,
+        }
+        if getattr(self, "els_module_state", None) is not None:
+            status["module_state"] = self.els_module_state
+        return status
+
+    def get_per_lane_state(self):
+        return {
+            "Laser0State": "Active",
+            "Laser1State": "Inactive",
+            "Laser2State": "Active",
+            "Laser3State": "Inactive",
         }
 
     def get_elsfp_dom_real_value(self):
         return {"temperature": 32.5, "voltage": 3.3}
 
+    def get_elsfp_threshold_info(self):
+        return {"temperature_alarm_high": 75.0}
+
     def get_per_lane_opt_power_monitor(self):
         return {
             "Laser0OpticalPowerMonitor": 9.1,
-            "Laser1OpticalPowerMonitor": 9.2,
+            "Laser1OpticalPowerMonitor": 70.8,
         }
 
 
@@ -118,6 +144,7 @@ def invoke(command):
 class TestDirectPlatformApiCommands(object):
     def setup_method(self):
         cpo = FakeCpo()
+        self.cpo = cpo
         cpoutil.cpo_mapping = CpoMapping(CPO_DATA)
         cpoutil.current_port_config = {
             "Ethernet0": {"index": "1", "lanes": "1,2"},
@@ -146,18 +173,52 @@ class TestDirectPlatformApiCommands(object):
             "Laser0OpticalPowerMonitor"
         ] == 9.1
 
+    def test_els_output_power_table_uses_measurement_precision(self):
+        result = invoke(["show", "els", "output-power", "0"])
+        assert result.exit_code == 0
+        assert "9.10" in result.output
+        assert "70.80" in result.output
+
+        json_result = invoke([
+            "show", "els", "output-power", "0", "--json"
+        ])
+        assert json.loads(json_result.output)["els0"][
+            "Laser1OpticalPowerMonitor"
+        ] == 70.8
+
     def test_els_presence_calls_cpo_object(self):
         result = invoke(["show", "els", "presence", "0", "--json"])
         assert json.loads(result.output) == {"els0": True}
 
-    def test_interface_dom_calls_cpo_methods(self):
+        table = invoke(["show", "els", "presence", "0"])
+        assert "Present" in table.output
+
+    def test_els_lpmode_has_boolean_json_and_readable_table(self):
+        result = invoke(["show", "els", "lpmode", "0", "--json"])
+        assert json.loads(result.output) == {"els0": False}
+
+        table = invoke(["show", "els", "lpmode", "0"])
+        assert "Off" in table.output
+
+    def test_els_lpmode_normalizes_vendor_decoder_strings(self):
+        with mock.patch.object(
+                self.cpo.api,
+                "get_elsfp_status",
+                return_value={"module_low_power_state": "Low power mode"}):
+            result = invoke(["show", "els", "lpmode", "0", "--json"])
+        assert json.loads(result.output) == {"els0": True}
+
+    def test_interface_dom_calls_public_oe_and_els_apis(self):
         result = invoke([
             "show", "interface", "dom", "Ethernet0", "--json"
         ])
         values = json.loads(result.output)["Ethernet0"]
         assert values["manufacturer"] == "Example OE"
-        assert values["RLM0_temperature"] == 32.5
+        assert values["els_vendor_name"] == "Example ELS"
+        assert values["els_temperature"] == 32.5
         assert values["temphighalarm"] == 90.0
+        assert values["els_temperature_alarm_high"] == 75.0
+        assert isinstance(values["temperature"], float)
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([
@@ -165,9 +226,14 @@ class TestDirectPlatformApiCommands(object):
         ])
         assert json.loads(result.output) == {
             "Ethernet1": {
-                "lane01": "Tx output disable",
+                "lane01": True,
             }
         }
+
+        table = invoke([
+            "show", "interface", "tx_disable", "Ethernet1"
+        ])
+        assert "Tx output disable" in table.output
 
     def test_interface_speed_uses_existing_cmis_methods(self):
         result = invoke([
@@ -190,7 +256,64 @@ class TestDirectPlatformApiCommands(object):
         values = json.loads(result.output)["Ethernet0"]
         assert values["Data Path State Indicator"]["lane00"] == \
             "DataPathActivated"
-        assert values["ELS Status"]["els_interrupt_status"] is True
+        assert values["ELS Status"] == {
+            "low_power_mode": False,
+            "interrupt_event": True,
+        }
+        assert values["ELS Lane State"] == {
+            "lane00": "Active",
+            "lane01": "Inactive",
+        }
+
+    def test_interrupt_event_normalizes_bailly_polarity(self):
+        with mock.patch.object(
+                self.cpo.api,
+                "get_elsfp_status",
+                return_value={
+                    "module_low_power_state": "High power mode",
+                    "interrupt_status": "Interrupt event cleared",
+                }):
+            result = invoke([
+                "show", "interface", "lane-status", "Ethernet0", "--json"
+            ])
+        status = json.loads(result.output)["Ethernet0"]["ELS Status"]
+        assert status == {
+            "low_power_mode": False,
+            "interrupt_event": False,
+        }
+
+    def test_els_status_requires_independent_module_state(self):
+        missing = invoke(["show", "els", "status", "0", "--json"])
+        assert missing.exit_code != 0
+        assert (
+            "does not report an independent ELS module state"
+            in missing.output
+        )
+
+        self.cpo.api.els_module_state = "ModuleReady"
+        result = invoke(["show", "els", "status", "0", "--json"])
+        assert json.loads(result.output) == {"els0": "ModuleReady"}
+
+    def test_measurements_keep_command_specific_precision(self):
+        input_power = invoke(["show", "oe", "input-power", "0"])
+        temperature = invoke(["show", "oe", "temperature", "0"])
+        assert "1.5238" in input_power.output
+        assert "53.125" in temperature.output
+
+    def test_json_records_use_natural_top_level_order(self, capsys):
+        cpoutil.print_records(
+            {"els10": True, "els2": True, "els1": True}, True
+        )
+        output = capsys.readouterr().out
+        assert output.index('"els1"') < output.index('"els2"')
+        assert output.index('"els2"') < output.index('"els10"')
+
+        cpoutil.print_records(
+            {"Ethernet12": 1, "Ethernet4": 1, "Ethernet0": 1}, True
+        )
+        output = capsys.readouterr().out
+        assert output.index('"Ethernet0"') < output.index('"Ethernet4"')
+        assert output.index('"Ethernet4"') < output.index('"Ethernet12"')
 
     def test_unknown_resource_is_rejected(self):
         result = invoke(["show", "oe", "status", "99"])

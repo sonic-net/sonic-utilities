@@ -71,9 +71,13 @@ class InterfaceMapping:
 class CpoMapping(object):
     """Validated view of the current platform ``cpo.json`` schema."""
 
-    def __init__(self, cpo_data):
+    def __init__(self, cpo_data, port_config=None):
         if not isinstance(cpo_data, dict):
             raise CpoMappingError("cpo.json root must be an object")
+
+        self._port_config = port_config or {}
+        if isinstance(cpo_data.get("devices"), dict):
+            cpo_data = self._normalize_community_schema(cpo_data)
 
         self._oes = cpo_data.get("oes")
         self._elss = cpo_data.get("elss")
@@ -95,6 +99,160 @@ class CpoMapping(object):
         self._validate_resources(self._oes, OPTICAL_ENGINE)
         self._validate_resources(self._elss, EXTERNAL_LASER_SOURCE)
         self._validate_interfaces()
+
+    @staticmethod
+    def _resource_index(resource_name, resource_type):
+        match = re.fullmatch(
+            r"{}(\d+)".format(resource_type),
+            str(resource_name),
+            re.IGNORECASE,
+        )
+        if not match:
+            raise CpoMappingError(
+                "invalid {} device id '{}'".format(
+                    resource_type, resource_name
+                )
+            )
+        return int(match.group(1))
+
+    def _normalize_community_schema(self, cpo_data):
+        """Translate devices/associated_devices into the internal schema."""
+        devices = cpo_data.get("devices", {})
+        interfaces = cpo_data.get("interfaces", {})
+        normalized_devices = {
+            str(name).lower(): dict(device)
+            for name, device in devices.items()
+            if isinstance(device, dict)
+        }
+
+        oes = {}
+        elss = {}
+        for name, device in normalized_devices.items():
+            device_type = device.get("device_type")
+            if device_type == "optical_engine":
+                resource_type = OPTICAL_ENGINE
+                resources = oes
+            elif device_type == "external_laser_source":
+                resource_type = EXTERNAL_LASER_SOURCE
+                resources = elss
+            else:
+                continue
+            device["index"] = self._resource_index(name, resource_type)
+            resources[name] = device
+
+        normalized_interfaces = {}
+        for port, interface in interfaces.items():
+            if not isinstance(interface, dict):
+                raise CpoMappingError(
+                    "interface {} must be an object".format(port)
+                )
+
+            associated = interface.get("associated_devices")
+            if not isinstance(associated, list):
+                raise CpoMappingError(
+                    "interface {} has no associated_devices".format(port)
+                )
+
+            oe_association = None
+            els_association = None
+            for association in associated:
+                if not isinstance(association, dict):
+                    continue
+                device_name = str(
+                    association.get("device_id", "")
+                ).lower()
+                device = normalized_devices.get(device_name)
+                if device is None:
+                    raise CpoMappingError(
+                        "interface {} references unknown device '{}'".format(
+                            port, association.get("device_id")
+                        )
+                    )
+                if device.get("device_type") == "optical_engine":
+                    oe_association = (device_name, association)
+                elif device.get("device_type") == \
+                        "external_laser_source":
+                    els_association = (device_name, association)
+
+            if oe_association is None or els_association is None:
+                raise CpoMappingError(
+                    "interface {} must reference one OE and one ELS".format(
+                        port
+                    )
+                )
+
+            oe_name, oe_data = oe_association
+            els_name, els_data = els_association
+            oe_device = normalized_devices[oe_name]
+            oe_lanes = _parse_integer_list(
+                oe_device.get("asic_lanes"),
+                "{} asic_lanes".format(oe_name),
+            )
+            oe_bank = int(oe_data.get("bank", 0))
+            max_oe_banks = int(oe_device.get("max_banks", 1))
+            if oe_lanes and len(oe_lanes) % max_oe_banks == 0:
+                lanes_per_bank = len(oe_lanes) // max_oe_banks
+                first_lane = oe_bank * lanes_per_bank
+                parsed_lanes = oe_lanes[
+                    first_lane:first_lane + lanes_per_bank
+                ]
+            else:
+                port_entry = self._port_config.get(port, {})
+                parsed_lanes = _parse_integer_list(
+                    port_entry.get("lanes", interface.get("lanes")),
+                    "interface {} lanes".format(port),
+                )
+
+            port_entry = self._port_config.get(port, {})
+            physical_ports = port_entry.get(
+                "index", interface.get("index")
+            )
+            if physical_ports is None and parsed_lanes:
+                matching_ports = []
+                for active_port, active_entry in self._port_config.items():
+                    active_lanes = _parse_integer_list(
+                        active_entry.get("lanes"),
+                        "interface {} lanes".format(active_port),
+                    )
+                    if set(parsed_lanes).intersection(active_lanes):
+                        matching_ports.extend(_parse_integer_list(
+                            active_entry.get("index"),
+                            "interface {} index".format(active_port),
+                        ))
+                physical_ports = tuple(dict.fromkeys(matching_ports))
+
+            laser_map = normalized_devices[els_name].get(
+                "laser_to_asic_lane_mapping", {}
+            )
+            selected_lasers = []
+            for laser_id, laser_lanes in laser_map.items():
+                parsed_laser_lanes = _parse_integer_list(
+                    laser_lanes,
+                    "{} laser {} lanes".format(els_name, laser_id),
+                )
+                if not parsed_lanes or set(parsed_lanes).intersection(
+                        parsed_laser_lanes):
+                    selected_lasers.append(int(laser_id) - 1)
+
+            normalized_interfaces[port] = {
+                "index": physical_ports,
+                "lanes": parsed_lanes,
+                "oe_id": self._resource_index(
+                    oe_name, OPTICAL_ENGINE
+                ),
+                "oe_bank_id": oe_bank,
+                "els_id": self._resource_index(
+                    els_name, EXTERNAL_LASER_SOURCE
+                ),
+                "els_bank_id": els_data.get("bank", "N/A"),
+                "laser_ids": selected_lasers,
+            }
+
+        return {
+            "oes": oes,
+            "elss": elss,
+            "interfaces": normalized_interfaces,
+        }
 
     @staticmethod
     def _validate_resources(resources, resource_type):
