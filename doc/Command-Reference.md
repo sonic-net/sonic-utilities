@@ -7463,9 +7463,13 @@ At least one option must be specified for each subcommand.
 
 - Usage:
   ```
-  show interfaces phy-signal <interface_name> [rxsig] [feclock] [rxpcs] [rxlock]
-  show interfaces phy-serdes <interface_name> [snr] [txfir] [rxffe] [rxdfe] [rxvga]
+  show interfaces phy-signal <interface_name> [--rxsig] [--feclock] [--rxpcs] [--rxlock]
+  show interfaces phy-serdes <interface_name> [--snr] [--txfir] [--rxffe] [--rxvga] [--pam4eye]
   ```
+
+On gearbox platforms, when `GB_COUNTERS_DB` contains `{port}_line` / `{port}_system`
+entries, the same commands also print line-side and system-side PHY attribute
+sections after the main ASIC section.
 
 - Example (status with RX signal detect and FEC alignment lock):
   ```
