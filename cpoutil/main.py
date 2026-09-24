@@ -2,6 +2,7 @@
 
 import ast
 import json
+import os
 import re
 import sys
 
@@ -77,6 +78,29 @@ CPO_INFO_FIELD_MAP = {
     "els_max_power": "ELS Maximum Power Consumption",
     "rlm_laser_lpmode_control": "RLM Laser Lpower Mode Control",
     "rlm_laser_wavelength_grid": "RLM Laser Wavelength Grid",
+    "els_connector": "ELS Connector",
+    "els_cmis_rev": "ELS CMIS Revision",
+    "els_media_interface_technology": "ELS Media Interface Technology",
+    "els_control_mode": "ELS Control Mode",
+    "els_max_optical_power": "ELS Maximum Optical Power",
+    "els_min_optical_power": "ELS Minimum Optical Power",
+    "els_max_laser_bias": "ELS Maximum Laser Bias",
+    "els_min_laser_bias": "ELS Minimum Laser Bias",
+    "els_max_power_consumption": "ELS Maximum Power Consumption",
+    "els_laser_wavelength_grid": "ELS Laser Wavelength Grid",
+    "els_low_power_control": "ELS Low-power Control",
+}
+
+ELS_INFO_KEY_MAP = {
+    "type": "els_identifier",
+    "hardware_rev": "els_revision",
+    "lane_count": "els_laser_count",
+    "manufacturer": "els_vendor_name",
+    "vendor_oui": "els_vendor_oui",
+    "model": "els_vendor_pn",
+    "vendor_rev": "els_vendor_rev",
+    "serial": "els_vendor_sn",
+    "vendor_date": "els_date_code",
 }
 
 CMIS_DOM_CHANNEL_MONITOR_MAP = {
@@ -119,6 +143,8 @@ DOM_MODULE_THRESHOLD_MAP = {
 ELS_DOM_MONITOR_MAP = {
     "els_temperature": "ELS Temperature",
     "els_voltage": "ELS Vcc",
+    "els_icc": "ELS Icc",
+    "els_tec_current": "ELS TEC Current",
 }
 
 ELS_THRESHOLD_MAP = {
@@ -136,6 +162,22 @@ ELS_THRESHOLD_MAP = {
     "els_txpowerlowwarning": "ELS TxPowerLowWarning",
     "els_txbiashighalarm": "ELS TxBiasHighAlarm",
     "els_txbiashighwarning": "ELS TxBiasHighWarning",
+    "els_temperature_alarm_high": "ELS TempHighAlarm",
+    "els_temperature_alarm_low": "ELS TempLowAlarm",
+    "els_temperature_warn_high": "ELS TempHighWarning",
+    "els_temperature_warn_low": "ELS TempLowWarning",
+    "els_voltage_alarm_high": "ELS VccHighAlarm",
+    "els_voltage_alarm_low": "ELS VccLowAlarm",
+    "els_voltage_warn_high": "ELS VccHighWarning",
+    "els_voltage_warn_low": "ELS VccLowWarning",
+    "els_optical_power_alarm_high": "ELS TxPowerHighAlarm",
+    "els_optical_power_alarm_low": "ELS TxPowerLowAlarm",
+    "els_optical_power_warn_high": "ELS TxPowerHighWarning",
+    "els_optical_power_warn_low": "ELS TxPowerLowWarning",
+    "els_laser_bias_alarm_high": "ELS TxBiasHighAlarm",
+    "els_laser_bias_alarm_low": "ELS TxBiasLowAlarm",
+    "els_laser_bias_warn_high": "ELS TxBiasHighWarning",
+    "els_laser_bias_warn_low": "ELS TxBiasLowWarning",
 }
 
 DOM_VALUE_UNIT_MAP = {
@@ -159,14 +201,16 @@ DOM_MODULE_THRESHOLD_UNIT_MAP = {
 ELS_DOM_MONITOR_UNIT_MAP = {
     "els_temperature": "C",
     "els_voltage": "Volts",
+    "els_icc": "A",
+    "els_tec_current": "",
 }
 
 ELS_THRESHOLD_UNIT_MAP = {
     key: (
-        "C" if key.startswith("els_temp") else
-        "Volts" if key.startswith("els_vcc") else
-        "mA" if key.startswith("els_txbias") else
-        "mW"
+        "C" if "temp" in key else
+        "Volts" if "voltage" in key or "vcc" in key else
+        "mA" if "laser_bias" in key or "txbias" in key else
+        "dBm"
     )
     for key in ELS_THRESHOLD_MAP
 }
@@ -452,15 +496,27 @@ def load_cpo_object_map():
     """Build the global OE/ELS/port to CPO object mapping from cpo.json."""
     global cpo_mapping, cpo_oe_bank_counts, cpo_object_map
 
-    from sonic_platform_base.sonic_xcvr.bailly_optoe_base import (
-        CpoOptoeBase,
-        get_cpo_json_data,
-    )
+    from sonic_py_common import device_info
 
-    cpo_data = get_cpo_json_data()
+    cpo_data_loader = getattr(device_info, "get_cpo_data", None)
+    if callable(cpo_data_loader):
+        cpo_data = cpo_data_loader()
+    else:
+        platform_dir = device_info.get_path_to_platform_dir()
+        cpo_path = os.path.join(platform_dir, "cpo.json")
+        try:
+            with open(cpo_path, "r") as cpo_file:
+                cpo_data = json.load(cpo_file)
+        except (OSError, ValueError) as exc:
+            raise CpoCommandError(
+                "Failed to load CPO topology from '{}': {}".format(
+                    cpo_path, exc
+                )
+            ) from exc
+
     if cpo_data is None:
         raise CpoCommandError("CPO topology is unavailable for this platform")
-    cpo_mapping = CpoMapping(cpo_data)
+    cpo_mapping = CpoMapping(cpo_data, current_port_config)
     cpo_oe_bank_counts = {}
     cpo_object_map = {
         OPTICAL_ENGINE: {},
@@ -479,7 +535,8 @@ def load_cpo_object_map():
                         physical_port, exc
                     )
                 ) from exc
-            if not isinstance(cpo, CpoOptoeBase):
+            if cpo is None or not callable(
+                    getattr(cpo, "get_xcvr_api", None)):
                 continue
             cpo_object_map[PORT][physical_port] = cpo
             if interface_cpo is None:
@@ -553,8 +610,8 @@ def get_resource_cpo_objects(resource_type, selector=None):
     return objects
 
 
-def get_xcvr_api(cpo, label):
-    """Get the existing PI/PD transceiver API from a CPO object."""
+def get_oe_api(cpo, label):
+    """Get the public OE API from a CPO object."""
     try:
         api = cpo.get_xcvr_api()
     except NotImplementedError as exc:
@@ -570,11 +627,20 @@ def get_xcvr_api(cpo, label):
     return api
 
 
+def get_oe_presence(cpo):
+    """Read OE presence from a public or legacy CPO object."""
+    if getattr(cpo, "oe", None) is not None:
+        return cpo.oe.get_presence()
+    return cpo.get_presence()
+
+
 def get_els_api(cpo, label):
     """Get the public ELSFP API from a CPO object."""
+    if getattr(cpo, "elsfp", None) is None:
+        return get_oe_api(cpo, label)
+
     try:
-        elsfp = getattr(cpo, "elsfp", None)
-        api = elsfp.get_api() if elsfp is not None else cpo.get_xcvr_api()
+        api = cpo.elsfp.get_api()
     except NotImplementedError as exc:
         raise CpoCommandError(
             "{} ELSFP API is not implemented".format(label)
@@ -590,24 +656,48 @@ def get_els_api(cpo, label):
 
 def get_els_presence(cpo):
     """Read ELS presence from a public or legacy CPO object."""
-    elsfp = getattr(cpo, "elsfp", None)
-    if elsfp is not None:
-        return elsfp.get_presence()
+    if getattr(cpo, "elsfp", None) is not None:
+        return cpo.elsfp.get_presence()
     return cpo.get_els_presence()
 
 
 def get_els_lpmode(_api):
-    # TODO: The public ELSFP low-power getter is not implemented yet.
+    """Derive ELS low-power state from the public ELSFP status API."""
+    status = _api.get_elsfp_status()
+    if not isinstance(status, dict):
+        raise CpoCommandError("The ELSFP status API returned no data")
+
+    for key in ("module_low_power_state", "els_module_low_power_state"):
+        if key in status:
+            return _normalize_lpmode(status[key])
+
+    module_state = status.get("module_state")
+    if module_state is not None:
+        normalized = str(module_state).strip().lower()
+        if normalized == "modulelowpwr":
+            return True
+        if normalized == "moduleready":
+            return False
+        raise CpoCommandError(
+            "Unable to normalize ELS module state {!r} as low-power "
+            "mode".format(
+                module_state
+            )
+        )
+
     raise NotImplementedError(
-        "The public ELSFP low-power API is not implemented"
+        "The active CPO backend does not report ELS low-power state"
     )
 
 
-def set_els_lpmode(_api, _low_power):
-    # TODO: The public ELSFP low-power setter is not implemented yet.
-    raise NotImplementedError(
-        "The public ELSFP low-power API is not implemented"
-    )
+def set_els_lpmode(api, low_power):
+    """Set ELS low-power mode through the active ELSFP backend."""
+    operation = getattr(api, "set_elsfp_lpmode", None)
+    if not callable(operation):
+        raise NotImplementedError(
+            "The active CPO backend does not implement ELS low-power mode"
+        )
+    return operation(low_power)
 
 
 def reset_els(_api):
@@ -616,10 +706,126 @@ def reset_els(_api):
 
 
 def set_els_tx_disable(_api, _lane_mask, _disable):
-    # TODO: The active CPO backend does not implement ELS Tx-disable yet.
-    raise NotImplementedError(
-        "The ELS Tx-disable API is not implemented by the active CPO backend"
-    )
+    """Control ELS output through the public per-lane enable API."""
+    operation = getattr(_api, "set_per_lane_enable", None)
+    if not callable(operation):
+        raise NotImplementedError(
+            "The active CPO backend does not implement ELS Tx-disable"
+        )
+    return operation(_lane_mask, not _disable)
+
+
+def require_els_tx_disable_api(api):
+    """Fail before changing OE state when ELS control is unavailable."""
+    if not callable(getattr(api, "set_per_lane_enable", None)):
+        raise NotImplementedError(
+            "The active CPO backend does not implement ELS Tx-disable"
+        )
+
+
+def get_els_control_targets(resource_id):
+    """Return one ELS API and combined lane mask for each ELS bank."""
+    targets = {}
+    for mapping in cpo_mapping.get_interfaces():
+        if mapping.els_name != resource_id:
+            continue
+        local_mask = sum(1 << (laser % 8) for laser in mapping.laser_ids)
+        if not local_mask:
+            continue
+        bank = mapping.els_bank
+        target = targets.get(bank)
+        if target is not None:
+            target[1] |= local_mask
+            continue
+        for physical_port in mapping.physical_ports:
+            cpo = cpo_object_map[PORT].get(physical_port)
+            if cpo is None:
+                continue
+            api = get_els_api(cpo, resource_id)
+            targets[bank] = [api, local_mask]
+            break
+
+    if not targets:
+        raise CpoCommandError(
+            "No ELS laser mapping is available for '{}'".format(resource_id)
+        )
+    return [tuple(target) for target in targets.values()]
+
+
+def _namespace_els_values(values, key_map=None):
+    """Keep ELS fields distinct when OE and ELS results are combined."""
+    if not isinstance(values, dict):
+        return {}
+
+    key_map = key_map or {}
+    namespaced = {}
+    for key, value in values.items():
+        key = str(key)
+        if key in key_map:
+            output_key = key_map[key]
+        elif key.startswith("els_"):
+            output_key = key
+        else:
+            output_key = "els_{}".format(key)
+        namespaced[output_key] = value
+    return namespaced
+
+
+def _get_els_lane_count(info):
+    """Return the number of lasers reported by the public ELSFP API."""
+    if not isinstance(info, dict):
+        return None
+    for key in ("lane_count", "laser_count"):
+        try:
+            count = int(info.get(key))
+        except (TypeError, ValueError):
+            continue
+        if count > 0:
+            return count
+    return None
+
+
+def _filter_els_dom_lanes(values, lane_count):
+    """Remove per-lane ELS values outside the reported laser count."""
+    if not isinstance(values, dict) or lane_count is None:
+        return values
+
+    filtered = {}
+    for key, value in values.items():
+        match = re.search(r"lane(\d+)$", str(key), re.IGNORECASE)
+        if match and int(match.group(1)) > lane_count:
+            continue
+        filtered[key] = value
+    return filtered
+
+
+def _filter_els_monitor_lanes(values, lane_count):
+    """Remove zero-based legacy monitor fields outside the ELS lane count."""
+    if lane_count is None:
+        return values
+    if isinstance(values, (list, tuple)):
+        return values[:lane_count]
+    if not isinstance(values, dict):
+        return values
+
+    filtered = {}
+    for key, value in values.items():
+        match = re.search(r"Laser(\d+)", str(key), re.IGNORECASE)
+        if match and int(match.group(1)) >= lane_count:
+            continue
+        filtered[key] = value
+    return filtered
+
+
+def _drop_legacy_els_fields(values):
+    """Keep OE results separate from ELS values returned by older backends."""
+    if not isinstance(values, dict):
+        return values
+    return {
+        key: value
+        for key, value in values.items()
+        if not str(key).startswith(("els_", "rlm_"))
+    }
 
 
 def _normalize_lane_values(values):
@@ -655,11 +861,41 @@ def _select_lane_values(values, lane_positions):
     return selected
 
 
+def _select_els_laser_values(values, laser_ids):
+    """Select ELS lane states assigned to one logical interface."""
+    normalized = _normalize_lane_values(values)
+    selected = {}
+    for laser in laser_ids:
+        source_key = "lane{:02d}".format(laser % 8)
+        if source_key not in normalized:
+            raise CpoCommandError(
+                "Platform API did not return data for ELS laser {}".format(
+                    laser
+                )
+            )
+        selected["lane{:02d}".format(laser)] = normalized[source_key]
+    return selected
+
+
 def _natural_sort_key(value):
     return [
         int(part) if part.isdigit() else part.lower()
         for part in re.split(r"(\d+)", str(value))
     ]
+
+
+def _ordered_top_level(records):
+    """Naturally order record identifiers without reordering nested fields."""
+    if not isinstance(records, dict):
+        return records
+    return {
+        key: records[key]
+        for key in sorted(records, key=_natural_sort_key)
+    }
+
+
+def _json_records(records):
+    return json.dumps(_ordered_top_level(records), indent=4)
 
 
 def _case_sensitive_natural_sort_key(value):
@@ -747,11 +983,15 @@ def _format_cpo_info(info):
             label = CPO_INFO_FIELD_MAP.get(key, key)
             value = info.get(key, "N/A")
 
-        if key in ("supported_max_tx_power", "supported_min_tx_power"):
+        if key in (
+                "supported_max_tx_power", "supported_min_tx_power",
+                "els_max_optical_power", "els_min_optical_power"):
             value = _value_with_unit(value, "dBm")
         elif key in (
                 "supported_max_laser_freq", "supported_min_laser_freq"):
             value = _value_with_unit(value, "GHz")
+        elif key in ("els_max_laser_bias", "els_min_laser_bias"):
+            value = _value_with_unit(value, "mA")
         lines.append("{}{}: {}".format(indent, label, value))
     return lines
 
@@ -811,14 +1051,31 @@ def _format_cpo_dom(dom_values):
         alignment=15,
     )
 
-    laser_keys = [
+    legacy_laser_keys = [
         key for key in values
         if str(key).startswith("RLM") and "Laser" in str(key)
     ]
     els_monitor_map = dict(ELS_DOM_MONITOR_MAP)
-    els_monitor_map.update({key: key for key in laser_keys})
     els_monitor_units = dict(ELS_DOM_MONITOR_UNIT_MAP)
-    els_monitor_units.update({key: "" for key in laser_keys})
+    els_monitor_map.update({key: key for key in legacy_laser_keys})
+    els_monitor_units.update({key: "" for key in legacy_laser_keys})
+
+    lane_monitor_fields = {
+        "laser_bias_current": ("Bias Current", "mA"),
+        "optical_power": ("Optical Power", "dBm"),
+        "voltage": ("Voltage", "Volts"),
+    }
+    for key in values:
+        match = re.fullmatch(
+            r"els_(laser_bias_current|optical_power|voltage)_lane(\d+)",
+            str(key),
+        )
+        if not match:
+            continue
+        field, lane = match.groups()
+        label, unit = lane_monitor_fields[field]
+        els_monitor_map[key] = "ELS Laser {} {}".format(lane, label)
+        els_monitor_units[key] = unit
     lines.append("{}ELSMonitorValues:".format(indent))
     _append_dom_values(
         lines,
@@ -888,16 +1145,23 @@ def _local_oe_bank(mapping):
 
 
 def _interface_mapping_record(logical_port):
-    mapping = get_cpo_interface_mapping(logical_port)
+    context = get_interface_context(logical_port)
+    mapping = context["mapping"]
+    oe_lanes = [mapping.lanes[index] for index in context["lane_positions"]]
+    els = {
+        "id": mapping.els_name.upper(),
+        "lasers": list(context["laser_ids"]),
+    }
+    if mapping.els_bank not in (None, "N/A"):
+        els["bank"] = mapping.els_bank
     return {
         "port": str(logical_port),
         "oe": {
             "id": mapping.oe_name.upper(),
             "bank": _local_oe_bank(mapping),
+            "lanes": oe_lanes,
         },
-        "els": {
-            "id": mapping.els_name.upper(),
-        },
+        "els": els,
     }
 
 
@@ -917,15 +1181,21 @@ def _application_speed(advertisements, application):
 
 
 def _format_map_table(mappings):
-    headers = ("Interface", "OE", "ELS")
+    headers = ("Interface", "OE", "OE Lanes", "ELS", "ELS Lasers")
     rows = []
     for record in mappings:
+        els = record["els"]
+        els_name = els["id"]
+        if "bank" in els:
+            els_name = "{} bank{}".format(els_name, els["bank"])
         rows.append((
             record["port"],
             "{} bank{}".format(
                 record["oe"]["id"], record["oe"]["bank"]
             ),
-            record["els"]["id"],
+            ",".join(str(lane) for lane in record["oe"]["lanes"]),
+            els_name,
+            ",".join(str(laser) for laser in els["lasers"]),
         ))
     return tabulate(rows, headers, tablefmt="simple")
 
@@ -945,16 +1215,55 @@ def _display_value(value, boolean_values=None):
     return value
 
 
-def _display_lpmode(value):
+def _normalize_lpmode(value):
     if isinstance(value, bool):
-        return "On" if value else "Off"
-    text = str(value)
-    normalized = text.lower()
-    if "low power" in normalized or "low-power" in normalized:
-        return "On"
-    if "high power" in normalized or "full power" in normalized:
-        return "Off"
-    return text
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in ("low power mode", "low-power mode"):
+        return True
+    if normalized in ("high power mode", "full power mode"):
+        return False
+    raise CpoCommandError(
+        "Unable to normalize low-power mode value {!r}".format(value)
+    )
+
+
+def _normalize_interrupt_event(value):
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in ("interrupt event occurred", "interrupt asserted"):
+        return True
+    if normalized in (
+            "interrupt event cleared", "interrupt cleared",
+            "interrupt not asserted"):
+        return False
+    raise CpoCommandError(
+        "Unable to normalize interrupt event value {!r}".format(value)
+    )
+
+
+def _normalize_els_status(status):
+    """Convert vendor ELS status fields to the cpoutil semantic contract."""
+    if not isinstance(status, dict):
+        raise CpoCommandError("The ELSFP status API returned no data")
+
+    normalized = {}
+    if status.get("module_state") is not None:
+        normalized["module_state"] = status["module_state"]
+    for key in ("module_low_power_state", "els_module_low_power_state"):
+        if key in status:
+            normalized["low_power_mode"] = _normalize_lpmode(status[key])
+            break
+    for key in ("interrupt_status", "els_interrupt_status"):
+        if key in status:
+            normalized["interrupt_event"] = _normalize_interrupt_event(
+                status[key]
+            )
+            break
+    if not normalized:
+        raise CpoCommandError("The ELSFP status API returned no known fields")
+    return normalized
 
 
 def _display_field(field):
@@ -994,10 +1303,10 @@ def _flatten_record(value, field=""):
 
 
 def print_records(records, json_output, headers=("Resource", "Value"),
-                  boolean_values=None, field_header="Field"):
+                  boolean_values=None, field_header="Field", floatfmt=None):
     """Print platform values using SONiC-style simple tables."""
     if json_output:
-        click.echo(json.dumps(records, indent=4, sort_keys=True))
+        click.echo(_json_records(records))
         return
 
     nested = any(
@@ -1023,12 +1332,15 @@ def print_records(records, json_output, headers=("Resource", "Value"),
             for resource_id, value in records.items()
         ]
         table_headers = headers
-    click.echo(tabulate(rows, table_headers, tablefmt="simple"))
+    options = {"tablefmt": "simple"}
+    if floatfmt is not None:
+        options["floatfmt"] = floatfmt
+    click.echo(tabulate(rows, table_headers, **options))
 
 
 def print_speed_records(records, json_output):
     if json_output:
-        click.echo(json.dumps(records, indent=4, sort_keys=True))
+        click.echo(_json_records(records))
         return
 
     rows = []
@@ -1059,7 +1371,7 @@ def print_speed_records(records, json_output):
 
 def print_lane_status_records(records, json_output):
     if json_output:
-        click.echo(json.dumps(records, indent=4, sort_keys=True))
+        click.echo(_json_records(records))
         return
 
     lane_rows = []
@@ -1068,21 +1380,27 @@ def print_lane_status_records(records, json_output):
         lane_states = values.get("Data Path State Indicator", {})
         lanes = sorted(lane_states, key=_natural_sort_key)
         lasers = values.get("ELS Lasers", [])
+        els_lane_states = values.get("ELS Lane State", {})
         shared = set(values.get("Shared ELS Lasers", []))
         els_id = values.get("ELS", "N/A")
         for index, lane in enumerate(lanes):
             laser = "N/A"
+            laser_state = "N/A"
             if lasers:
                 laser_index = min(
                     index * len(lasers) // len(lanes), len(lasers) - 1
                 )
                 laser = lasers[laser_index]
+                laser_state = els_lane_states.get(
+                    "lane{:02d}".format(laser), "N/A"
+                )
             lane_rows.append((
                 interface,
                 _display_field(lane),
                 lane_states[lane],
                 els_id,
                 laser,
+                laser_state,
                 "Yes" if laser in shared else "No",
             ))
 
@@ -1093,7 +1411,10 @@ def print_lane_status_records(records, json_output):
                     interface,
                     els_id,
                     _display_field(field),
-                    status[field],
+                    _display_value(
+                        status[field],
+                        ("On", "Off") if field == "low_power_mode" else None,
+                    ),
                 ))
         elif status is not None:
             status_rows.append((interface, els_id, "Status", status))
@@ -1106,6 +1427,7 @@ def print_lane_status_records(records, json_output):
             "Data Path State",
             "ELS",
             "Laser",
+            "ELS Lane State",
             "Shared",
         ),
         tablefmt="simple",
@@ -1169,17 +1491,13 @@ def show_interface_map(port, json_output):
         raise click.ClickException(str(exc))
 
     if json_output:
-        click.echo(json.dumps(
-            {
-                record["port"]: {
-                    "oe": record["oe"],
-                    "els": record["els"],
-                }
-                for record in records
-            },
-            indent=4,
-            sort_keys=True,
-        ))
+        click.echo(_json_records({
+            record["port"]: {
+                "oe": record["oe"],
+                "els": record["els"],
+            }
+            for record in records
+        }))
     else:
         click.echo(_format_map_table(records))
 
@@ -1193,13 +1511,38 @@ def show_interface_dom(port, json_output):
     output = []
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
-            present = cpo.get_presence()
+            present = get_oe_presence(cpo)
             values = {}
             info = dom = thresholds = None
             if present:
-                info = cpo.get_transceiver_info()
-                dom = cpo.get_transceiver_dom_real_value()
-                thresholds = cpo.get_transceiver_threshold_info()
+                oe_api = get_oe_api(cpo, port_name)
+                els_api = get_els_api(cpo, port_name)
+
+                info = oe_api.get_transceiver_info()
+                dom = oe_api.get_transceiver_dom_real_value()
+                thresholds = oe_api.get_transceiver_threshold_info()
+
+                els_info_values = els_api.get_elsfp_info()
+                els_lane_count = _get_els_lane_count(els_info_values)
+                els_info = _namespace_els_values(
+                    els_info_values, ELS_INFO_KEY_MAP
+                )
+                els_dom = _namespace_els_values(
+                    _filter_els_dom_lanes(
+                        els_api.get_elsfp_dom_real_value(),
+                        els_lane_count,
+                    )
+                )
+                els_thresholds = _namespace_els_values(
+                    els_api.get_elsfp_threshold_info()
+                )
+
+                info = _drop_legacy_els_fields(info) or {}
+                dom = _drop_legacy_els_fields(dom) or {}
+                thresholds = _drop_legacy_els_fields(thresholds) or {}
+                info.update(els_info)
+                dom.update(els_dom)
+                thresholds.update(els_thresholds)
                 for result in (info, dom, thresholds):
                     if isinstance(result, dict):
                         values.update(result)
@@ -1214,7 +1557,7 @@ def show_interface_dom(port, json_output):
     except CpoCommandError as exc:
         raise click.ClickException(str(exc))
     if json_output:
-        click.echo(json.dumps(records, indent=4, sort_keys=True))
+        click.echo(_json_records(records))
     else:
         click.echo("\n\n".join(output))
 
@@ -1229,14 +1572,11 @@ def show_interface_tx_disable(port, json_output):
         for port_name, _, cpo in get_port_cpo_objects(port):
             logical_port = port if port is not None else port_name
             context = get_interface_context(logical_port)
-            api = get_xcvr_api(cpo, port_name)
+            api = get_oe_api(cpo, port_name)
             values = _select_lane_values(
                 api.get_tx_disable(), context["lane_positions"]
             )
-            records[port_name] = {
-                lane: "Tx output disable" if disabled else "Tx output enable"
-                for lane, disabled in values.items()
-            }
+            records[port_name] = values
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
@@ -1247,6 +1587,7 @@ def show_interface_tx_disable(port, json_output):
         records,
         json_output,
         ("Interface", "Tx Output State"),
+        boolean_values=("Tx output disable", "Tx output enable"),
         field_header="Lane",
     )
 
@@ -1261,7 +1602,7 @@ def show_interface_speed(port, json_output):
     records = {}
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
-            api = get_xcvr_api(cpo, port_name)
+            api = get_oe_api(cpo, port_name)
             advertisements = api.get_application_advertisement()
             active_applications = api.get_active_apsel_hostlane()
             if not isinstance(advertisements, dict) or not isinstance(
@@ -1314,7 +1655,7 @@ def show_interface_lane_status(port, json_output):
     records = {}
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
-            oe_api = get_xcvr_api(cpo, port_name)
+            oe_api = get_oe_api(cpo, port_name)
             els_api = get_els_api(cpo, port_name)
             logical_port = port if port is not None else port_name
             context = get_interface_context(logical_port)
@@ -1323,7 +1664,12 @@ def show_interface_lane_status(port, json_output):
                     oe_api.get_datapath_state(), context["lane_positions"]
                 ),
                 "ELS": context["mapping"].els_name.upper(),
-                "ELS Status": els_api.get_elsfp_status(),
+                "ELS Status": _normalize_els_status(
+                    els_api.get_elsfp_status()
+                ),
+                "ELS Lane State": _select_els_laser_values(
+                    els_api.get_per_lane_state(), context["laser_ids"]
+                ),
                 "ELS Lasers": list(context["laser_ids"]),
                 "Shared ELS Lasers": list(context["shared_laser_ids"]),
             }
@@ -1350,7 +1696,7 @@ def show_oe_lpmode(oe_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
-            records[resource_id] = get_xcvr_api(
+            records[resource_id] = get_oe_api(
                 cpo, resource_id
             ).get_lpmode()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
@@ -1370,7 +1716,7 @@ def show_oe_status(oe_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
-            records[resource_id] = get_xcvr_api(
+            records[resource_id] = get_oe_api(
                 cpo, resource_id
             ).get_module_state()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
@@ -1387,7 +1733,7 @@ def show_oe_temperature(oe_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
-            records[resource_id] = get_xcvr_api(
+            records[resource_id] = get_oe_api(
                 cpo, resource_id
             ).get_module_temperature()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
@@ -1404,7 +1750,7 @@ def show_oe_input_power(oe_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
-            records[resource_id] = get_xcvr_api(
+            records[resource_id] = get_oe_api(
                 cpo, resource_id
             ).get_rx_power()
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
@@ -1450,33 +1796,39 @@ def show_els_lpmode(els_index, json_output):
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
             api = get_els_api(cpo, resource_id)
-            records[resource_id] = _display_lpmode(
-                get_els_lpmode(api)
-            )
+            records[resource_id] = get_els_lpmode(api)
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
-    print_records(records, json_output, ("ELS", "Low-power Mode"))
+    print_records(
+        records, json_output, ("ELS", "Low-power Mode"),
+        boolean_values=("On", "Off"),
+    )
 
 
 @show_els.command("status")
 @click.argument("els_index", required=False)
 @output_option
 def show_els_status(els_index, json_output):
-    """Display ELS module status."""
+    """Display the independent ELS module state."""
     records = {}
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = get_els_api(
-                cpo, resource_id
-            ).get_elsfp_status()
+            status = _normalize_els_status(
+                get_els_api(cpo, resource_id).get_elsfp_status()
+            )
+            if "module_state" not in status:
+                raise NotImplementedError(
+                    "The active CPO backend does not report an independent "
+                    "ELS module state"
+                )
+            records[resource_id] = status["module_state"]
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records,
         json_output,
         ("ELS", "Status"),
-        field_header="Status field",
     )
 
 
@@ -1512,9 +1864,12 @@ def show_els_output_power(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = get_els_api(
-                cpo, resource_id
-            ).get_per_lane_opt_power_monitor()
+            api = get_els_api(cpo, resource_id)
+            lane_count = _get_els_lane_count(api.get_elsfp_info())
+            records[resource_id] = _filter_els_monitor_lanes(
+                api.get_per_lane_opt_power_monitor(),
+                lane_count,
+            )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1522,6 +1877,7 @@ def show_els_output_power(els_index, json_output):
         json_output,
         ("ELS", "Output Power (mW)"),
         field_header="Laser",
+        floatfmt=".2f",
     )
 
 
@@ -1593,17 +1949,17 @@ def config_interface_tx_disable(port, state):
                 "No ELS laser mapping is available for '{}'".format(port)
             )
 
-        _, els_cpo = _single_resource(
-            EXTERNAL_LASER_SOURCE, mapping.els_id
-        )
-        api = get_els_api(els_cpo, mapping.els_name)
-
-        laser_mask = sum(1 << laser for laser in context["laser_ids"])
         port_cpos = get_port_cpo_objects(port)
+        els_api = get_els_api(port_cpos[0][2], mapping.els_name)
+        require_els_tx_disable_api(els_api)
+
+        laser_mask = sum(
+            1 << (laser % 8) for laser in context["laser_ids"]
+        )
 
         def apply_tx_disable():
             for _, _, cpo in port_cpos:
-                oe_api = get_xcvr_api(cpo, port)
+                oe_api = get_oe_api(cpo, port)
                 _require_success(
                     oe_api.tx_disable_channel(
                         context["lane_mask"], disable
@@ -1611,7 +1967,7 @@ def config_interface_tx_disable(port, state):
                     "{} OE Tx-disable {}".format(port, state),
                 )
             _require_success(
-                set_els_tx_disable(api, laser_mask, disable),
+                set_els_tx_disable(els_api, laser_mask, disable),
                 "{} ELS Tx-disable {}".format(port, state),
             )
             return True
@@ -1638,7 +1994,7 @@ def config_oe_lpmode(oe_index, mode):
     """Set OE full-power or low-power mode."""
     try:
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
-        api = get_xcvr_api(cpo, resource_id)
+        api = get_oe_api(cpo, resource_id)
         low_power = mode == "low"
         _run_action(
             "{} low-power mode for {}".format(
@@ -1657,7 +2013,7 @@ def config_oe_reset(oe_index):
     """Reset an Optical Engine through the platform API."""
     try:
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
-        api = get_xcvr_api(cpo, resource_id)
+        api = get_oe_api(cpo, resource_id)
         _run_action(
             "Resetting {}".format(resource_id.upper()), api.reset
         )
@@ -1672,7 +2028,7 @@ def config_oe_tx_disable(oe_index, state):
     """Enable or disable OE Tx-disable."""
     try:
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
-        api = get_xcvr_api(cpo, resource_id)
+        api = get_oe_api(cpo, resource_id)
         disable = state == "enable"
         _run_action(
             "{} Tx-disable for {}".format(
@@ -1735,19 +2091,34 @@ def config_els_reset(els_index):
 def config_els_tx_disable(els_index, state):
     """Enable or disable Tx-disable for every ELS laser."""
     try:
-        resource_id, cpo = _single_resource(
-            EXTERNAL_LASER_SOURCE, els_index
+        resource_ids = cpo_mapping.resolve_resource_ids(
+            els_index, EXTERNAL_LASER_SOURCE
         )
-        api = get_els_api(cpo, resource_id)
+        if len(resource_ids) != 1:
+            raise CpoCommandError("Exactly one els index is required")
+        resource_id = resource_ids[0]
+        targets = get_els_control_targets(resource_id)
+        for api, _ in targets:
+            require_els_tx_disable_api(api)
         disable = state == "enable"
+
+        def apply_tx_disable():
+            for api, laser_mask in targets:
+                _require_success(
+                    set_els_tx_disable(api, laser_mask, disable),
+                    "{} ELS Tx-disable {}".format(resource_id, state),
+                )
+            return True
+
         _run_action(
             "{} Tx-disable for {}".format(
                 "Enabling" if disable else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: set_els_tx_disable(api, 0xFFFF, disable),
+            apply_tx_disable,
         )
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except (CpoCommandError, CpoMappingError, KeyError,
+            NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -1809,7 +2180,7 @@ def _physical_eeprom_bank(resource_type, resource_id, cpo, bank):
 
     bank_count = cpo_oe_bank_counts.get(resource_id)
     if bank_count is None:
-        api = get_xcvr_api(cpo, str(resource_id).upper())
+        api = get_oe_api(cpo, str(resource_id).upper())
         try:
             bank_count = int(api.get_max_supported_banks())
         except (NotImplementedError, AttributeError, TypeError, ValueError) as exc:

@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-import types
 from unittest import mock
 
 import pytest
@@ -121,14 +120,9 @@ class TestPlatformObjectMapping(object):
         }
 
     def test_builds_global_oe_els_port_map(self):
-        module_name = (
-            "sonic_platform_base.sonic_xcvr.bailly_optoe_base"
-        )
-        fake_module = types.SimpleNamespace(
-            CpoOptoeBase=FakeCpo,
-            get_cpo_json_data=lambda: CPO_DATA,
-        )
-        with mock.patch.dict(sys.modules, {module_name: fake_module}):
+        with mock.patch(
+                "sonic_py_common.device_info.get_cpo_data",
+                return_value=CPO_DATA):
             cpoutil.load_cpo_object_map()
 
         cpo1 = cpoutil.platform_chassis.cpos[1]
@@ -167,4 +161,8 @@ class TestMappingCommand(object):
         payload = json.loads(result.output)
         assert set(payload["Ethernet8"]) == {"oe", "els"}
         assert payload["Ethernet8"]["oe"]["bank"] == 1
-        assert payload["Ethernet8"]["els"] == {"id": "ELS0"}
+        assert payload["Ethernet8"]["oe"]["lanes"] == [5, 6, 7, 8]
+        assert payload["Ethernet8"]["els"] == {
+            "id": "ELS0",
+            "lasers": [4, 5, 6, 7],
+        }
