@@ -453,6 +453,7 @@ class TestChassisModules(object):
     def test_shutdown_smartswitch_module(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
+             mock.patch("config.chassis_modules.persist_dpu_reboot_user") as mock_persist, \
              mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
 
             runner = CliRunner()
@@ -467,11 +468,29 @@ class TestChassisModules(object):
             assert result.exit_code == 0
             assert "Shutting down chassis module DPU0" in result.output
 
+            # The operator who shut down the DPU must be recorded so chassisd can
+            # populate the DPU reboot-cause "user" field.
+            mock_persist.assert_called_once_with("DPU0")
+
             # Check CONFIG_DB for admin_status
             cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
             admin_status = cfg_fvs.get("admin_status")
             print(f"admin_status: {admin_status}")
             assert admin_status == "down"
+
+    def test_persist_dpu_reboot_user(self):
+        """persist_dpu_reboot_user records the operator (SUDO_USER/login) to the
+        per-DPU prev_reboot_user.txt marker that chassisd reads to populate the
+        DPU reboot-cause 'user' field."""
+        m = mock.mock_open()
+        with mock.patch("config.chassis_modules.os.makedirs") as mock_makedirs, \
+             mock.patch("builtins.open", m), \
+             mock.patch.dict("os.environ", {"SUDO_USER": "admin"}):
+            config.chassis_modules.persist_dpu_reboot_user("DPU0")
+
+        mock_makedirs.assert_called_once_with("/host/reboot-cause/module/dpu0", exist_ok=True)
+        m.assert_called_once_with("/host/reboot-cause/module/dpu0/prev_reboot_user.txt", "w")
+        m().write.assert_called_once_with("admin")
 
     def test_shutdown_smartswitch_transition_in_progress(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
