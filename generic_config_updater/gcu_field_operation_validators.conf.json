@@ -139,7 +139,9 @@
                     },
                     "PG headroom modification": {
                         "fields": [
-                            "xoff"
+                            "xoff",
+                            "xon",
+                            "xon_offset"
                         ],
                         "operations": [
                             "replace"
