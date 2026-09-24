@@ -63,6 +63,9 @@ class FakeCpo(object):
     def __init__(self, name):
         self.name = name
 
+    def get_xcvr_api(self):
+        return self
+
 
 class FakeChassis(object):
     def __init__(self, cpos):
