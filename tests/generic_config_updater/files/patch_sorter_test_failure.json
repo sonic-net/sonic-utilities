@@ -22,7 +22,10 @@
             }
         },
         "patch": [
-            {"op": "remove", "path": "/ACL_TABLE/EVERFLOW"}
+            {
+                "op": "remove",
+                "path": "/ACL_TABLE/EVERFLOW"
+            }
         ],
         "expected_error_substrings": [
             "There is no possible sorting"
@@ -32,7 +35,11 @@
         "desc": "Adding an empty configdb table fail because empty tables are not allowed in configdb.",
         "current_config": {},
         "patch": [
-            {"op": "add", "path": "/VLAN", "value": {}}
+            {
+                "op": "add",
+                "path": "/VLAN",
+                "value": {}
+            }
         ],
         "expected_error_substrings": [
             "There is no possible sorting"
@@ -61,8 +68,14 @@
             }
         },
         "patch": [
-            {"op": "remove", "path": "/ACL_TABLE/EVERFLOW"},
-            {"op": "remove", "path": "/PORT/Ethernet0"}
+            {
+                "op": "remove",
+                "path": "/ACL_TABLE/EVERFLOW"
+            },
+            {
+                "op": "remove",
+                "path": "/PORT/Ethernet0"
+            }
         ],
         "expected_error_substrings": [
             "There is no possible sorting"
@@ -100,10 +113,55 @@
             }
         },
         "patch": [
-            {"op": "remove", "path": "/ACL_TABLE/EVERFLOW"}
+            {
+                "op": "remove",
+                "path": "/ACL_TABLE/EVERFLOW"
+            }
         ],
         "expected_error_substrings": [
             "There is no possible sorting"
+        ]
+    },
+    "PORT_CRITICAL_CHANGE_WITHOUT_ADMIN_STATUS_DOWN__YANG_INCOMPLETE": {
+        "desc": "Port critical change while port is admin up, but patch does not include admin_status=down. The sorter should reject this as the patch is YANG-incomplete \u2014 the caller must include admin_status=down when modifying port-critical config.",
+        "current_config": {
+            "PORT": {
+                "Ethernet4": {
+                    "admin_status": "up",
+                    "alias": "fortyGigE0/4",
+                    "description": "Servers0:eth0",
+                    "index": "1",
+                    "lanes": "29,30,31,32",
+                    "mtu": "9100",
+                    "pfc_asym": "off",
+                    "speed": "40000"
+                }
+            },
+            "BUFFER_PROFILE": {
+                "egress_lossy_profile": {
+                    "dynamic_th": "3",
+                    "pool": "egress_lossy_pool",
+                    "size": "1518"
+                }
+            },
+            "BUFFER_POOL": {
+                "egress_lossy_pool": {
+                    "mode": "dynamic",
+                    "size": "7326924",
+                    "type": "egress"
+                }
+            }
+        },
+        "patch": [
+            {
+                "op": "add",
+                "path": "/BUFFER_PG",
+                "value": {
+                    "Ethernet4|0": {
+                        "profile": "egress_lossy_profile"
+                    }
+                }
+            }
         ]
     }
 }
