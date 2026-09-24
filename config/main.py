@@ -439,6 +439,39 @@ def get_interface_ipaddresses(config_db, interface_name):
 
     return ipaddresses
 
+
+def get_vlan_routing_domain(vlan_interface_table, vlan_name):
+    """Return the VRF or VNET associated with a VLAN interface."""
+    entry = vlan_interface_table.get(vlan_name, {})
+    if entry.get("vnet_name"):
+        return "vnet", entry["vnet_name"]
+
+    return "vrf", entry.get("vrf_name", "default")
+
+
+def find_vlan_ip_conflict(config_db, interface_name, ip_address):
+    """Return a VLAN in the same routing domain that uses ip_address."""
+    vlan_interface_table = config_db.get_table("VLAN_INTERFACE")
+    requested_domain = get_vlan_routing_domain(vlan_interface_table, interface_name)
+
+    for key in vlan_interface_table:
+        if not isinstance(key, tuple) or len(key) != 2:
+            continue
+
+        vlan_name, existing_prefix = key
+        if vlan_name == interface_name:
+            continue
+
+        existing_domain = get_vlan_routing_domain(vlan_interface_table, vlan_name)
+        if existing_domain != requested_domain:
+            continue
+
+        if ipaddress.ip_interface(existing_prefix).ip == ip_address.ip:
+            return vlan_name
+
+    return None
+
+
 def is_vrf_exists(config_db, vrf_name):
     """Check if VRF exists
     """
@@ -6337,6 +6370,10 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
         if not validate_vlan_exists(config_db, interface_name):
             ctx.fail(f"Error: {interface_name} does not exist. Vlan must be created before adding an IP address")
             return
+
+        conflicting_vlan = find_vlan_ip_conflict(config_db, interface_name, ip_address)
+        if conflicting_vlan:
+            ctx.fail("IP address {} is already configured on {}".format(ip_address.ip, conflicting_vlan))
 
     interface_entry = config_db.get_entry(table_name, interface_name)
     if len(interface_entry) == 0:
