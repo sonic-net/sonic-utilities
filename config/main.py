@@ -3071,15 +3071,21 @@ def portchannel(db, ctx, namespace):
     config_db.connect()
     ctx.obj = {'db': config_db, 'namespace': str(namespace), 'db_wrap': db}
 
+
 @portchannel.command('add')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
-@click.option('--min-links', default=1, type=click.IntRange(1,1024))
-@click.option('--fallback', default='false')
+@click.option('--min-links', default=1, type=click.IntRange(1, 1024))
+@click.option('--fallback', default='false',
+              type=click.Choice(['true', 'false'],
+                                case_sensitive=False))
+@click.option('--fallback-mode', default='single',
+              type=click.Choice(['single', 'static'],
+                                case_sensitive=False))
 @click.option('--fast-rate', default='false',
               type=click.Choice(['true', 'false'],
                                 case_sensitive=False))
 @click.pass_context
-def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
+def add_portchannel(ctx, portchannel_name, min_links, fallback, fallback_mode, fast_rate):
     """Add port channel"""
 
     fvs = {
@@ -3091,12 +3097,14 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
 
     if min_links != 0:
         fvs['min_links'] = str(min_links)
-    if fallback != 'false':
-        fvs['fallback'] = 'true'
+
+    if fallback == "true":
+        fvs['fallback'] = fallback
+        fvs['fallback_method'] = fallback_mode
 
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
-        if is_portchannel_name_valid(portchannel_name) != True:
+        if not is_portchannel_name_valid(portchannel_name):
             ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}' "
                      "and its length should not exceed {} characters"
                      .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO, IFACE_NAME_MAX_LEN))
@@ -3106,7 +3114,9 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
     try:
         db.set_entry('PORTCHANNEL', portchannel_name, fvs)
     except ValueError:
-        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'".format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'".format(portchannel_name,
+                                                                                       CFG_PORTCHANNEL_PREFIX,
+                                                                                       CFG_PORTCHANNEL_NO))
 
 @portchannel.command('del')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
