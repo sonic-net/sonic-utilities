@@ -1,0 +1,269 @@
+#!/usr/bin/python3
+"""cli-server: pre-fork server for instant Python CLI startup.
+
+Started automatically by the cli-client bash wrapper.  Loads a CLI script's
+entry point once, then fork()s for each request — skipping ~1 s of
+Python startup and module imports every time.
+
+Architecture:
+  1. Server starts, imports the CLI script's code (e.g. show.main:cli).
+  2. Binds a TCP socket on 127.0.0.1 (random port), writes port to a file.
+  3. On each connection: fork() → child handles the request with
+     everything already imported; parent keeps listening.
+  4. After CLI_SERVER_TIMEOUT seconds of inactivity the server exits.
+
+Protocol  (server → client):
+  P<pid>\n    child PID  (for signal forwarding)
+  O<text>\n   stdout line
+  E<text>\n   stderr line
+  X<code>\n   exit code  (terminates session)
+
+Protocol  (client → server):
+  Three length-prefixed blocks: argv, cwd, env.
+  Each block: <byte_count>\n<raw_bytes>
+"""
+import importlib.metadata, io, os, shlex, shutil
+import signal, socket, sys, syslog, time
+from pathlib import Path
+
+IDLE_TIMEOUT = int(os.environ.get("CLI_SERVER_TIMEOUT", "14400"))
+RUNTIME_DIR = Path("/tmp/cli-server")
+
+
+def server_state_paths(script):
+    """Return (pid_path, port_path) for the given CLI script.
+
+    Uses the script name directly (e.g. show.pid, show.port).
+    """
+    if not shutil.which(script):
+        raise SystemExit(f"cli-server: CLI script not found: {script}")
+    RUNTIME_DIR.mkdir(exist_ok=True, mode=0o755)
+    base = RUNTIME_DIR / script
+    return base.with_suffix(".pid"), base.with_suffix(".port")
+
+
+def preload_entry_point(script):
+    """Find and import the console_scripts entry point for *script*.
+
+    Returns the callable that runs the CLI script (e.g. show.main:cli).
+    """
+    entry_points = list(importlib.metadata.entry_points(group="console_scripts", name=script))
+    if not entry_points:
+        raise SystemExit(f"cli-server: no entry point for '{script}'")
+    return entry_points[0].load()
+
+
+# ── Tagged I/O (server → bash client) ────────────────────────────
+#   O<text>\n  stdout    E<text>\n  stderr    X<code>\n  exit code
+
+class TaggedOutput(io.TextIOBase):
+    """Drop-in replacement for sys.stdout / sys.stderr that prefixes
+    every output line with a single-character tag ('O' or 'E') and
+    sends it over a socket to the cli-client.
+
+    Text accumulates in a string buffer.  Complete lines are tagged
+    and sent in one sendall() call when EITHER BLOCK_SIZE bytes have
+    accumulated OR MAX_DELAY has elapsed since the previous send —
+    batching many small writes into a handful of syscalls while still
+    keeping latency low for slow-producing commands.  Partial lines
+    (no trailing newline yet) are held back until more text arrives
+    or flush() forces them out.
+    """
+
+    BLOCK_SIZE = 8192
+    MAX_DELAY = 0.05   # 50 ms
+
+    def __init__(self, sock, tag):
+        self._sock = sock
+        self._tag = tag
+        self._buf = ""
+        self._last_send = 0.0
+
+    def _send(self, incomplete_line=False):
+        """Tag complete lines and send them.  If *incomplete_line*, also
+        send any trailing unterminated text (used by flush())."""
+        out = ""
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            out += self._tag + line + "\n"
+        if incomplete_line and self._buf:
+            out += self._tag + self._buf + "\n"
+            self._buf = ""
+        if out:
+            self._sock.sendall(out.encode())
+
+    def write(self, text):
+        """Append text and send when either BLOCK_SIZE bytes have
+        accumulated or MAX_DELAY has elapsed since the previous send."""
+        self._buf += text
+        now = time.monotonic()
+        if (len(self._buf) >= self.BLOCK_SIZE
+                or now - self._last_send >= self.MAX_DELAY):
+            self._send()
+            self._last_send = now
+        return len(text)
+
+    def flush(self):
+        self._send(incomplete_line=True)
+
+    @property
+    def encoding(self):
+        return "utf-8"
+
+    def writable(self):
+        return True
+
+
+def read_block(reader):
+    """Read a length-prefixed block from the client: <byte_count>\\n<data>."""
+    length = int(reader.readline())
+    return reader.read(length) if length > 0 else b""
+
+
+def handle(connection, script, runner):
+    """Handle a single client connection in a forked child process.
+
+    Reads argv/cwd/env from the client, redirects stdout/stderr through
+    the tagged socket protocol, invokes the pre-loaded CLI script runner, and
+    sends back the exit code.
+    """
+    try:
+        connection.sendall(f"P{os.getpid()}\n".encode())
+        reader = connection.makefile("rb", 0)
+
+        # Restore argv from client
+        raw_argv = read_block(reader).decode()
+        sys.argv = [script] + (shlex.split(raw_argv) if raw_argv else [])
+
+        # Restore working directory from client
+        cwd = read_block(reader).decode()
+        if cwd:
+            os.chdir(cwd)
+
+        # Restore environment from client (null-separated KEY=VALUE pairs)
+        env_data = read_block(reader)
+        if env_data:
+            os.environ.clear()
+            os.environ.update(
+                dict(pair.split("=", 1) for pair in env_data.decode().split("\0") if "=" in pair))
+            os.environ.pop("_", None)
+
+        # Wire stdout/stderr through tagged socket writers
+        sys.stdout = TaggedOutput(connection, "O")
+        sys.stderr = TaggedOutput(connection, "E")
+
+        exit_code = 0
+        try:
+            result = runner()
+            if isinstance(result, int):
+                exit_code = result
+        except SystemExit as exc:
+            exit_code = exc.code if isinstance(exc.code, int) else (1 if exc.code else 0)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            exit_code = 1
+
+        sys.stdout.flush()
+        sys.stderr.flush()
+        connection.sendall(f"X{exit_code}\n".encode())
+    except Exception:
+        try:
+            connection.sendall(b"X1\n")
+        except Exception:
+            pass
+    finally:
+        try:
+            connection.shutdown(socket.SHUT_WR)
+        except Exception:
+            pass
+        connection.close()
+
+
+def main():
+    """Entry point: detach into background, pre-load the CLI script, and serve requests.
+
+    If a server for this CLI script is already running (pid file exists and
+    process is alive), exits immediately.  Otherwise double-forks to
+    detach from the terminal, loads the CLI script's entry point, and
+    enters the accept/fork loop.  Lifecycle events go to syslog.
+    """
+    script = sys.argv[1]
+    pid_path, port_path = server_state_paths(script)
+
+    # Exit if a server is already running for this CLI script
+    if pid_path.exists():
+        try:
+            os.kill(int(pid_path.read_text().strip()), 0)
+            sys.exit(0)
+        except (ProcessLookupError, PermissionError, ValueError):
+            pid_path.unlink(missing_ok=True)
+            port_path.unlink(missing_ok=True)
+
+    # Double-fork to fully detach from the controlling terminal
+    if os.fork() > 0:
+        sys.exit(0)
+    os.setsid()
+    if os.fork() > 0:
+        os._exit(0)
+
+    # Close stdin; redirect stdout/stderr to /dev/null (logs go to syslog)
+    os.close(0)
+    devnull = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull, 1)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+
+    syslog.openlog(f"cli-server[{script}]", syslog.LOG_PID, syslog.LOG_DAEMON)
+    syslog.syslog(f"Loading '{script}' ...")
+    runner = preload_entry_point(script)
+
+    # Bind TCP on localhost with a kernel-assigned port
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(5)
+    listener.settimeout(IDLE_TIMEOUT)
+    server_port = listener.getsockname()[1]
+
+    # Publish pid and port so the bash client can find us
+    server_pid = os.getpid()
+    pid_path.write_text(str(server_pid))
+    port_path.write_text(str(server_port))
+    syslog.syslog(f"Ready 127.0.0.1:{server_port}  pid={server_pid}")
+
+    # Auto-reap child processes; clean exit on SIGTERM
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
+    try:
+        while True:
+            try:
+                connection, _ = listener.accept()
+            except socket.timeout:
+                syslog.syslog("Idle timeout, exiting")
+                break
+            # Fork a child to handle the request — the child inherits
+            # the pre-loaded CLI script so there is no import overhead.
+            child_pid = os.fork()
+            if child_pid == 0:
+                listener.close()
+                handle(connection, script, runner)
+                os._exit(0)
+            connection.close()
+    except (SystemExit, KeyboardInterrupt):
+        pass
+    finally:
+        listener.close()
+        # Clean up pid/port files only if they still belong to us
+        try:
+            if pid_path.exists() and int(pid_path.read_text().strip()) == server_pid:
+                pid_path.unlink(missing_ok=True)
+                port_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        syslog.syslog("Stopped")
+
+
+if __name__ == "__main__":
+    main()
