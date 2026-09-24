@@ -523,6 +523,38 @@ class TestCounterpoll(object):
         assert test_interval == table["PORT_PHY_ATTR"]["POLL_INTERVAL"]
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_gbport_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["gbport"].commands[status], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["GBPORT"]["FLEX_COUNTER_STATUS"]
+
+    def test_update_gbport_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "30000"
+
+        result = runner.invoke(counterpoll.cli.commands["gbport"].commands["interval"], [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["GBPORT"]["POLL_INTERVAL"]
+
+    def test_update_gbport_interval_out_of_range(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["gbport"].commands["interval"], ["500"], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 2
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_queue_status(self, status):
         runner = CliRunner()
         db = Db()
