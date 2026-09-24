@@ -692,6 +692,8 @@ def get_els_lpmode(_api):
 
 def set_els_lpmode(api, low_power):
     """Set ELS low-power mode through the active ELSFP backend."""
+    # TODO: API is not implemented: the public ELSFP interface does not
+    # currently define a low-power setter.
     operation = getattr(api, "set_elsfp_lpmode", None)
     if not callable(operation):
         raise NotImplementedError(
@@ -701,12 +703,15 @@ def set_els_lpmode(api, low_power):
 
 
 def reset_els(_api):
-    # TODO: The public ELSFP reset API is not implemented yet.
+    # TODO: API is not implemented: the public ELSFP interface does not
+    # currently define a reset operation.
     raise NotImplementedError("The public ELSFP reset API is not implemented")
 
 
 def set_els_tx_disable(_api, _lane_mask, _disable):
     """Control ELS output through the public per-lane enable API."""
+    # TODO: API is not implemented by the Bailly backend: there is no
+    # existing RLM Tx-disable method that can be exposed by a name wrapper.
     operation = getattr(_api, "set_per_lane_enable", None)
     if not callable(operation):
         raise NotImplementedError(
@@ -1667,6 +1672,8 @@ def show_interface_lane_status(port, json_output):
                 "ELS Status": _normalize_els_status(
                     els_api.get_elsfp_status()
                 ),
+                # TODO: API is not implemented by the Bailly backend: no
+                # existing RLM per-laser state method is available to wrap.
                 "ELS Lane State": _select_els_laser_values(
                     els_api.get_per_lane_state(), context["laser_ids"]
                 ),
@@ -1817,6 +1824,9 @@ def show_els_status(els_index, json_output):
             status = _normalize_els_status(
                 get_els_api(cpo, resource_id).get_elsfp_status()
             )
+            # TODO: API is not implemented by the Bailly backend:
+            # get_rlm_status() does not expose an independent ELS module
+            # state that can be returned through this command.
             if "module_state" not in status:
                 raise NotImplementedError(
                     "The active CPO backend does not report an independent "
