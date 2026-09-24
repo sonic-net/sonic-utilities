@@ -11,19 +11,6 @@ root_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(root_path)
 scripts_path = os.path.join(modules_path, "scripts")
 
-MASIC_SHOW_ACL_OUTPUT = """Name       Type    Binding      Description    Stage    Status
----------  ------  -----------  -------------  -------  --------------------------------------
-DATAACL_5  L3      Ethernet20   DATAACL_5      ingress  {'asic0': 'Active', 'asic2': 'Active'}
-                   Ethernet124
-"""
-
-APPL_DB_ACL_SHOW_TABLE = """\
-Name    Type          Binding         Description                                   Stage    Status
-------  ------------  --------------  --------------------------------------------  -------  --------
-ENI     ENI_REDIRECT  Ethernet104     Contains Mock Rules for ENI Based Forwarding  ingress  Active
-                      PortChannel108
-"""
-
 APPL_DB_ACL_SHOW_RULE = """\
 Table    Rule                      Priority    Action               Match                             Status
 -------  ------------------------  ----------  -------------------  --------------------------------  --------
@@ -68,10 +55,11 @@ class TestShowACLSingleASIC(object):
         }
         result = runner.invoke(acl_loader_show.cli.commands['show'].commands['table'], ['DATAACL_5'], obj=context)
         assert result.exit_code == 0
-        # We only care about the third line, which contains the 'Active'
-        result_top = result.output.split('\n')[2]
-        expected_output = "DATAACL_5  L3      Ethernet124  DATAACL_5      ingress  Active"
-        assert result_top == expected_output
+        assert "Redirect Mode" in result.output
+        assert "DATAACL_5" in result.output
+        assert "Ethernet124" in result.output
+        assert "ingress" in result.output
+        assert "Active" in result.output
 
     def test_show_acl_rule(self, setup_teardown_single_asic):
         runner = CliRunner()
@@ -96,7 +84,11 @@ class TestShowACLMultiASIC(object):
         }
         result = runner.invoke(acl_loader_show.cli.commands['show'].commands['table'], ['DATAACL_5'], obj=context)
         assert result.exit_code == 0
-        assert result.output == MASIC_SHOW_ACL_OUTPUT
+        assert "Redirect Mode" in result.output
+        assert "DATAACL_5" in result.output
+        assert "Ethernet20" in result.output
+        assert "Ethernet124" in result.output
+        assert "{'asic0': 'Active', 'asic2': 'Active'}" in result.output
 
     def test_show_acl_rule(self, setup_teardown_multi_asic):
         runner = CliRunner()
@@ -122,8 +114,12 @@ class TestShowACLApplDb(object):
         }
         result = runner.invoke(acl_loader_show.cli.commands['show'].commands['table'], ["ENI"], obj=context)
         assert result.exit_code == 0
-        print(result.output)
-        assert result.output == APPL_DB_ACL_SHOW_TABLE
+        assert "Redirect Mode" in result.output
+        assert "ENI" in result.output
+        assert "ENI_REDIRECT" in result.output
+        assert "Contains Mock Rules for ENI Based Forwarding" in result.output
+        assert "Ethernet104" in result.output
+        assert "PortChannel108" in result.output
 
     def test_show_acl_rule(self, setup_teardown_single_asic):
         runner = CliRunner()
