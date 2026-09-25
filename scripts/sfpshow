@@ -292,7 +292,12 @@ ZR_PM_INFO_MAP = {
     'SOP ROC': ['krad/s', 'soproc'],
     'Pre-FEC BER': ['N/A', 'prefec_ber'],
     'Post-FEC BER': ['N/A', 'uncorr_frames'],
-    'EVM': ['%', 'evm']
+    'EVM': ['%', 'evm'],
+    'Clock Recovery Loop': ['%', 'clockrec'],
+    'LG-SOPMD': ['ps^2', 'lg_sopmd'],
+    'SNR Margin': ['dB', 'snr_margin'],
+    'Q-Factor': ['dB', 'qfactor'],
+    'Q-Margin': ['dB', 'qmargin']
 }
 
 ZR_PM_NOT_APPLICABLE_STR = 'Transceiver performance monitoring not applicable'
