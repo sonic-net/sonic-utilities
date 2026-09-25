@@ -40,7 +40,7 @@
                 "j2c+": [ "Nokia-IXR7250E-36x100G", "Nokia-IXR7250E-36x400G", "Nokia-IXR7250-X3B", "Arista-7800R3A-36DM2-D36" ],
                 "q2c+": [ "Nokia-IXR7250-X1B" ],
                 "jr2": [ "Arista-7800R3-48CQ2-C48", "Arista-7800R3-48CQM2-C48", "Arista-7808R3A-FM" ],
-                "q3d": [ "Arista-7280R4-32QF-32DF-64O", "Arista-7280R4K-32QF-32DF-64O" ]
+                "q3d": [ "Arista-7280R4-32QF-32DF-64O", "Arista-7280R4K-32QF-32DF-64O", "NH-5010-F-O64", "NH-5010-F-O32-C32" ]
             }
 	}
     },
