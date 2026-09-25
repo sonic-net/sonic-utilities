@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import IO, Optional
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
-                    DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging
+                    DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging, \
+                    PathAddressing, rewrite_patch_emptying_tables
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
@@ -116,9 +117,29 @@ class PatchApplier:
         self.logger.log_notice(f"{scope}: simulating the target full config after applying the patch.")
         target_config = self.patch_wrapper.simulate_config_db_patch(patch, old_config)
 
-        # Validate all JsonPatch operations on specified fields
+        # Validate all JsonPatch operations on specified fields using the original
+        # simulated transition. Rewriting emptying key-removes to a table-level
+        # remove first would drop protected child paths (for example
+        # /LOOPBACK_INTERFACE/Loopback0) from the diff used by this check.
         self.logger.log_notice(f"{scope}: validating all JsonPatch operations are permitted on the specified fields")
         self.config_wrapper.validate_field_operation(old_config, target_config)
+
+        # ConfigDB cannot store empty tables. Automation scripts may emit per-key
+        # removes (for example /VLAN/Vlan10) without knowing they delete the last
+        # remaining entries. Only those key-level removes are rewritten to a
+        # table-level remove; other operations are left unchanged.
+        empty_tables = self.config_wrapper.get_empty_tables(target_config)
+        if empty_tables:
+            rewritten_patch = rewrite_patch_emptying_tables(
+                patch, old_config, empty_tables, PathAddressing())
+            if [dict(op) for op in rewritten_patch] != [dict(op) for op in patch]:
+                empty_tables_txt = ", ".join(empty_tables)
+                self.logger.log_notice(
+                    f"{scope}: key-level removes would empty table"
+                    f"{'s' if len(empty_tables) != 1 else ''} {empty_tables_txt}; "
+                    f"rewriting to table-level remove. Rewritten patch: {rewritten_patch}")
+                patch = rewritten_patch
+                target_config = self.patch_wrapper.simulate_config_db_patch(patch, old_config)
 
         # Validate target config does not have empty tables since they do not show up in ConfigDb
         self.logger.log_notice(f"""{scope}: validating target config does not have empty tables,
