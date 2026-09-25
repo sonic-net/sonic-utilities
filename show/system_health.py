@@ -31,10 +31,6 @@ def get_system_health_status():
 
 
     manager = HealthCheckerManager()
-    if not manager.config.config_file_exists():
-        click.echo("System health configuration file not found, exit...")
-        exit(1)
-
     chassis = Chassis()
     stat = manager.check(chassis)
     chassis.initizalize_system_led()
