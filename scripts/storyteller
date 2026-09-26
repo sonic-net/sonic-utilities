@@ -27,6 +27,19 @@ regex_dict = {
 
 reference_file = '/tmp/storyteller_time_reference'
 
+ALLOWED_LOG_DIR = '/var/log'
+
+
+def validate_log_args(logpath, log):
+    real_logpath = os.path.realpath(logpath)
+    real_allowed = os.path.realpath(ALLOWED_LOG_DIR)
+    if real_logpath != real_allowed and not real_logpath.startswith(real_allowed + os.sep):
+        raise ValueError("--logpath must be '{}' or a subdirectory of it".format(ALLOWED_LOG_DIR))
+    if os.sep in log or log in ('', '.', '..'):
+        raise ValueError("--log must be a nonempty file-name prefix without path separators")
+    return real_logpath
+
+
 def exec_cmd(cmd):
     # Use universal_newlines (instead of text) so that this tool can work with any python versions.
     out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
@@ -109,9 +122,13 @@ def main():
 
     args = parser.parse_args()
 
+    try:
+        log_path = validate_log_args(args.logpath, args.log)
+    except ValueError as err:
+        parser.error(str(err))
+
     # sanitize all string inputs
     log = quote(args.log)
-    log_path = quote(args.logpath)
     category = quote(args.category)
     since = quote(args.since)
 
