@@ -4,6 +4,7 @@ import re
 import subprocess
 import unittest
 from unittest.mock import Mock, call, patch, mock_open, MagicMock
+import paramiko
 import pytest
 
 import sonic_package_manager
@@ -581,6 +582,18 @@ def test_download_file_http(package_manager):
     mock_file.assert_called_once_with("local_path", "wb")
 
 
+def test_download_file_http_with_credentials_does_not_use_ssh(package_manager):
+    url = "https://admin:test_password@www.example.com/index.html"
+    with patch("requests.get") as mock_requests_get, \
+            patch("paramiko.SSHClient") as mock_ssh_client, \
+            patch("builtins.open", mock_open()):
+        package_manager.download_file(url, "local_path")
+
+    mock_ssh_client.assert_not_called()
+    mock_requests_get.assert_called_once_with(
+        url, stream=True, auth=("admin", "test_password"))
+
+
 def test_download_file_scp(package_manager):
     fake_remote_url = "scp://admin@10.x.x.x:/home/admin/sec_update.json"
     fake_local_path = "local_path"
@@ -591,7 +604,9 @@ def test_download_file_scp(package_manager):
                 package_manager.download_file(fake_remote_url, fake_local_path)
 
     mock_ssh_client.assert_called_once()
-    mock_ssh_client.return_value.set_missing_host_key_policy.assert_called_once()
+    mock_ssh_client.return_value.load_system_host_keys.assert_called_once_with()
+    policy = mock_ssh_client.return_value.set_missing_host_key_policy.call_args.args[0]
+    assert isinstance(policy, paramiko.RejectPolicy)
     mock_ssh_client.return_value.connect.assert_called_once_with(
         "10.x.x.x",
         username="admin",
@@ -609,12 +624,27 @@ def test_download_file_sftp(package_manager):
                 package_manager.download_file(fake_remote_url, fake_local_path)
 
     mock_ssh_client.assert_called_once()
-    mock_ssh_client.return_value.set_missing_host_key_policy.assert_called_once()
+    mock_ssh_client.return_value.load_system_host_keys.assert_called_once_with()
+    policy = mock_ssh_client.return_value.set_missing_host_key_policy.call_args.args[0]
+    assert isinstance(policy, paramiko.RejectPolicy)
     mock_ssh_client.return_value.connect.assert_called_once_with(
         "10.x.x.x",
         username="admin",
         password="test_password"
     )
+
+
+def test_download_file_rejects_untrusted_ssh_host(package_manager):
+    with patch("paramiko.SSHClient") as mock_ssh_client, \
+            patch("getpass.getpass", return_value="test_password"), \
+            patch("scp.SCPClient") as mock_scp:
+        mock_ssh_client.return_value.connect.side_effect = paramiko.SSHException("untrusted host")
+        assert package_manager.download_file("scp://admin@10.x.x.x:/manifest.json", "local_path") is False
+
+    policy = mock_ssh_client.return_value.set_missing_host_key_policy.call_args.args[0]
+    assert isinstance(policy, paramiko.RejectPolicy)
+    mock_scp.assert_not_called()
+    mock_ssh_client.return_value.close.assert_called_once_with()
 
 
 def test_installation_from_file_no_tags(package_manager, mock_docker_api, sonic_fs):
