@@ -6,7 +6,6 @@ import copy
 from unittest.mock import Mock, MagicMock, call, patch
 
 import pytest
-
 from sonic_package_manager.database import PackageEntry
 from sonic_package_manager.manifest import Manifest
 from sonic_package_manager.metadata import Metadata
@@ -16,6 +15,36 @@ from sonic_package_manager.service_creator.creator import ETC_SYSTEMD_LOCATION
 from sonic_package_manager.service_creator.feature import FeatureRegistry
 from sonic_package_manager.service_creator.creator import DOCKER_CTL_SCRIPT_LOCATION, DOCKER_CTL_SCRIPT_TEMPLATE
 from sonic_package_manager.service_creator.creator import TEMPLATES_PATH
+from sonic_package_manager.service_creator.creator import SERVICE_FILE_TEMPLATE, SERVICE_MGMT_SCRIPT_TEMPLATE
+from sonic_package_manager.service_creator.creator import SYSTEMD_LOCATION
+
+test_path = os.path.dirname(os.path.abspath(__file__))
+_SHIPPED_TEMPLATES_DIR = os.path.join(test_path, '../..', 'sonic-utilities-data', 'templates')
+
+
+@pytest.fixture(scope='session')
+def shipped_service_templates():
+    """The shipped templates, read before pyfakefs hides the real filesystem.
+
+    Session scope, because the `fs` fixture is function scoped.
+    """
+    templates = {}
+    for name in (SERVICE_FILE_TEMPLATE, SERVICE_MGMT_SCRIPT_TEMPLATE):
+        with open(os.path.join(_SHIPPED_TEMPLATES_DIR, name)) as f:
+            templates[name] = f.read()
+    return templates
+
+
+@pytest.fixture
+def sonic_shipped_templates(sonic_fs, shipped_service_templates):
+    """Put the real templates where the creator will render them.
+
+    sonic_fs creates the template files empty, which would make any assertion on
+    the generated unit vacuous.
+    """
+    for name, content in shipped_service_templates.items():
+        with open(os.path.join(TEMPLATES_PATH, name), 'w') as f:
+            f.write(content)
 
 
 @pytest.fixture
@@ -177,6 +206,43 @@ def test_service_creator_container_hardening_opts(sonic_fs, manifest, service_cr
     assert '--ulimit=nofile=65536:65536' in run_opt
     assert '--device=/dev/mem' in run_opt
     assert '-v /etc/sonic:/etc/sonic:ro' in run_opt
+
+
+def test_service_creator_execstoppost_covers_cancelled_start(
+        sonic_fs, sonic_shipped_templates, manifest, service_creator):
+    """The generated unit must clean up a start that was cancelled mid-activation.
+
+    systemd only runs ExecStop= on a unit that finished starting, so a stop
+    during ExecStartPre= orphans the container it already brought up (#29702).
+    """
+    entry = PackageEntry('test', 'azure/sonic-test')
+    package = Package(entry, Metadata(manifest))
+    service_creator.create(package)
+
+    with open(os.path.join(SYSTEMD_LOCATION, 'test.service')) as f:
+        lines = [line.rstrip('\n') for line in f]
+
+    stop = [i for i, line in enumerate(lines) if line.startswith('ExecStop=')]
+    stop_post = [i for i, line in enumerate(lines) if line.startswith('ExecStopPost=')]
+
+    assert len(stop) == 1
+    assert len(stop_post) == 1
+    assert stop_post[0] == stop[0] + 1
+    assert lines[stop_post[0]] == 'ExecStopPost=/usr/local/bin/test.sh stop_post'
+
+
+def test_service_creator_execstoppost_multi_instance(
+        sonic_fs, sonic_shipped_templates, manifest, service_creator):
+    """The templated instance unit must pass its instance through the stop hook too."""
+    entry = PackageEntry('test', 'azure/sonic-test')
+    manifest['service']['asic-service'] = True
+    package = Package(entry, Metadata(manifest))
+    service_creator.create(package)
+
+    with open(os.path.join(SYSTEMD_LOCATION, 'test@.service')) as f:
+        content = f.read()
+
+    assert 'ExecStopPost=/usr/local/bin/test.sh stop_post %i\n' in content
 
 
 def test_service_creator_yang(sonic_fs, manifest, mock_sonic_db,

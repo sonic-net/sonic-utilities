@@ -5,6 +5,9 @@
 #             auto-generated from {{ source }} by sonic-package-manager
 #
 
+OP=$1
+DEV=$2
+
 SERVICE="{{ manifest.service.name }}"
 NAMESPACE_PREFIX="asic"
 SONIC_DB_CLI="sonic-db-cli"
@@ -90,6 +93,10 @@ function stop_dependent_services() {
 }
 
 function start() {
+    if [[ -n "${RUNTIME_DIRECTORY:-}" ]]; then
+        : > "${RUNTIME_DIRECTORY}/start-entered" || return
+    fi
+
     debug "Starting ${SERVICE}$DEV service..."
 
     # start service docker
@@ -112,6 +119,10 @@ function wait() {
 }
 
 function stop() {
+    if [[ -n "${RUNTIME_DIRECTORY:-}" ]]; then
+        : > "${RUNTIME_DIRECTORY}/stop-called"
+    fi
+
     debug "Stopping ${SERVICE}$DEV service..."
 
 {%- if manifest.service["pre-shutdown-action"] %}
@@ -130,21 +141,33 @@ function stop() {
     stop_dependent_services
 }
 
-OP=$1
-DEV=$2
+function stop_post() {
+    # ExecStop is skipped when activation is cancelled.
+    if [[ -n "${RUNTIME_DIRECTORY:-}" && -e "${RUNTIME_DIRECTORY}/start-entered" &&
+          ! -e "${RUNTIME_DIRECTORY}/stop-called" ]]; then
+        check_warm_boot
+        check_fast_boot
+        SONIC_STOP_POST=1 stop
+    fi
+    # Other ExecStopPost commands must still run if cleanup fails.
+    return 0
+}
 
-check_warm_boot
-check_fast_boot
+# Read restart flags only when the operation needs them.
+if [[ "$OP" != "stop_post" ]]; then
+    check_warm_boot
+    check_fast_boot
 
-debug "Fast boot flag: ${SERVICE}$DEV ${FAST_BOOT}."
-debug "Warm boot flag: ${SERVICE}$DEV ${WARM_BOOT}."
+    debug "Fast boot flag: ${SERVICE}$DEV ${FAST_BOOT}."
+    debug "Warm boot flag: ${SERVICE}$DEV ${WARM_BOOT}."
+fi
 
 case "$OP" in
-    start|wait|stop)
+    start|wait|stop|stop_post)
         $1
         ;;
     *)
-        echo "Usage: $0 {start|wait|stop}"
+        echo "Usage: $0 {start|wait|stop|stop_post}"
         exit 1
         ;;
 esac
