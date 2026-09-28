@@ -277,9 +277,6 @@ def detailed(_db, trapid, group):
 def stats(namespace):
     """Show copp policer statistics with per-color breakdown"""
 
-    # Capability is published by swss/CoppOrch to
-    # STATE_DB:SWITCH_CAPABILITY|switch:COPP_POLICER_STATS_CAPABLE after
-    # probing SAI at boot. No platform-substring assumptions here.
     if not is_copp_policer_stats_supported(namespace):
         click.echo("COPP policer per-color statistics are not supported on "
                    "this platform (SAI does not advertise SAI_OBJECT_TYPE_POLICER "

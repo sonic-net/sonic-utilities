@@ -59,9 +59,7 @@ class CoppStats(object):
 
     POLICER_NAME_MAP = "COUNTERS_POLICER_NAME_MAP"
 
-    # COUNTERS_DB field per data column, in HEADERS order. The same names are
-    # published by CoppOrch in COPP_POLICER_STATS_SUPPORTED, so column
-    # filtering is a direct membership test.
+    # COUNTERS_DB field per column, in HEADERS order; same names as COPP_POLICER_STATS_SUPPORTED.
     STAT_FIELDS = [
         "SAI_POLICER_STAT_PACKETS",
         "SAI_POLICER_STAT_ATTR_BYTES",
@@ -112,9 +110,7 @@ class CoppStats(object):
         policer_name_map = self.db.get_all(self.db.COUNTERS_DB, self.POLICER_NAME_MAP)
         data = {ns: {}}
 
-        # CoppOrch publishes the SAI-advertised stat subset per namespace.
-        # None (field absent: orchagent predates it) => unknown, fall back to
-        # per-field absence in COUNTERS_DB below.
+        # None means an older orchagent that doesn't publish the list.
         capability = self.db.get_all(self.db.STATE_DB, "SWITCH_CAPABILITY|switch")
         supported_csv = capability.get("COPP_POLICER_STATS_SUPPORTED") if capability else None
         supported = None if supported_csv is None else {s for s in supported_csv.split(",") if s}
@@ -127,11 +123,8 @@ class CoppStats(object):
             counter_data = self.db.get_all(self.db.COUNTERS_DB, counter_key)
             
             if counter_data:
-                # A stat the SAI does not advertise renders as N/A. With an
-                # older orchagent (supported is None) infer the same from the
-                # field's absence in COUNTERS_DB: flexcounter never polls
-                # unsupported stats, while supported ones are always written
-                # once polled, including as literal "0".
+                # Unadvertised stats render as N/A. Without the published list, infer it
+                # from the field's absence: flexcounter never writes stats it doesn't poll.
                 values = []
                 for field in self.STAT_FIELDS:
                     if supported is not None and field not in supported:

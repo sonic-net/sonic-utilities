@@ -88,7 +88,6 @@ show_copp_detailed_invalid_no_option_output = """\
 Either trapid or group must be provided.
 """
 
-# show copp stats output
 show_copp_stats_expected_output = """\
 Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes  Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
 -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
@@ -98,7 +97,6 @@ queue4_group2            32           2464            16           1232  0      
 queue4_group3            64           4928            64           4928  N/A            N/A             N/A         N/A
 """  # noqa: E501
 
-# Multi-ASIC expected outputs for show copp stats
 show_copp_stats_multi_asic_expected_output = """\
 ASIC ID    Trap Group       Total Pkts    Total Bytes    Green Pkts    Green Bytes  Yellow Pkts    Yellow Bytes    Red Pkts    Red Bytes
 ---------  -------------  ------------  -------------  ------------  -------------  -------------  --------------  ----------  -----------
@@ -263,7 +261,6 @@ class TestCoPP:
         assert result.exit_code == 0
         assert result.output == show_copp_detailed_invalid_no_option_output
 
-    # ----------- show copp stats --------
     def test_show_copp_stats(self):
         return_code, result = get_result_and_return_code(['coppstat'])
         print(result)
@@ -333,13 +330,6 @@ class TestCoppMultiAsic:
         assert return_code == 0
         assert result == show_copp_stats_expected_output_after_clear
 
-
-# ----------- show/clear copp stats capability gate --------------------------
-# `show copp stats` and `sonic-clear copp` now gate on the STATE_DB
-# SWITCH_CAPABILITY|switch:COPP_POLICER_STATS_CAPABLE flag published by
-# swss/CoppOrch after probing SAI. These tests exercise both branches with
-# the helper patched directly — keeps the test focused on the CLI gate
-# rather than rebuilding the STATE_DB mock for each scenario.
 
 from unittest.mock import patch as _patch  # noqa: E402 (after class for clarity)
 import clear.main as _clear_main           # noqa: E402

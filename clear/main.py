@@ -770,9 +770,6 @@ def flowcnt_trap(namespace):
 @cli.command()
 def copp():
     """ Clear COPP statistics """
-    # Capability is published by swss/CoppOrch to
-    # STATE_DB:SWITCH_CAPABILITY|switch:COPP_POLICER_STATS_CAPABLE after
-    # probing SAI at boot. No platform-substring assumptions here.
     from utilities_common.general import is_copp_policer_stats_supported
     if not is_copp_policer_stats_supported():
         click.echo("COPP policer per-color statistics are not supported on "
