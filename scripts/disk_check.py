@@ -98,13 +98,21 @@ def test_disk_full(dirs):
 
 def test_writable(dirs): 
     for d in dirs:
-        rw = os.access(d, os.W_OK)
-        if not rw:
-            log_err("{} is not read-write".format(d))
+        rw_marker = os.path.join(d, ".monit_diskCheck_rw_marker")
+        try:
+            with open(rw_marker, "w") as f:
+                f.write("testing")
+                f.flush()
+                os.fsync(f.fileno())
+        except OSError as e:
+            log_err("{} is not read-write. Monit diskCheck write marker failed: {}".format(d, e))
             event_pub(DISK_RO_EVENT)
             return False
-        else:
-            log_debug("{} is Read-Write".format(d))
+        finally:
+            if os.path.exists(rw_marker):
+                os.unlink(rw_marker)
+
+        log_debug("{} is Read-Write".format(d))
 
     return True
 
