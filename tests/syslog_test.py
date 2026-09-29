@@ -34,7 +34,7 @@ ERROR_PATTERN_PROHIBITED_IP = "is a loopback/multicast/link-local IP address"
 ERROR_PATTERN_IP_FAMILY_MISMATCH = "IP address family mismatch"
 
 ERROR_PATTERN_INVALID_PORT = "is not a valid integer"
-ERROR_PATTERN_INVALID_PORT_RANGE = "is not in the range 0<=x<=65535"
+ERROR_PATTERN_INVALID_PORT_RANGE = "is not in the range 1<=x<=65535"
 
 ERROR_PATTERN_INVALID_VRF = "is not one of"
 ERROR_PATTERN_NONEXISTENT_VRF = "VRF doesn't exist in Linux"
@@ -180,7 +180,7 @@ class TestSyslog:
         assert ERROR_PATTERN_INVALID_PORT in result.output
         assert result.exit_code == ERROR2
 
-    @pytest.mark.parametrize("port", ["-1", "65536"])
+    @pytest.mark.parametrize("port", ["-1", "0", "65536"])
     def test_config_syslog_invalid_port_range(self, port):
         db = Db()
         runner = CliRunner()
