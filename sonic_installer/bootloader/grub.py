@@ -213,7 +213,12 @@ class GrubBootloader(OnieInstallerBootloader):
             click.echo("Unable to find Secure Boot enrollment script in path " + script_path)
             return False
         enroll_result = subprocess.run([script_path, image_path], capture_output=True)
-        click.echo(enroll_result.stdout.decode())
+        stdout = enroll_result.stdout.decode()
+        stderr = enroll_result.stderr.decode()
+        if stdout:
+            click.echo(stdout)
+        if stderr:
+            click.echo(stderr, err=True)
         return enroll_result.returncode == 0
 
     @classmethod
