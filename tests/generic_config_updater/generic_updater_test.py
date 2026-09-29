@@ -12,7 +12,7 @@ from .gutest_helpers import create_side_effect_dict, create_side_effect_skipfirs
 import generic_config_updater.generic_updater as gu
 import generic_config_updater.patch_sorter as ps
 import generic_config_updater.change_applier as ca
-from generic_config_updater.gu_common import EmptyTableError, IllegalPatchOperationError, PatchWrapper
+from generic_config_updater.gu_common import EmptyTableError, IllegalPatchOperationError, JsonChange, PatchWrapper
 
 # import sys
 # sys.path.insert(0,'../../generic_config_updater')
@@ -92,22 +92,162 @@ class TestPatchApplier(unittest.TestCase):
         patch_wrapper.simulate_config_db_patch.side_effect = simulate
         patch_wrapper.verify_same_json.return_value = True
 
-        changes = [Mock()]
+        # sort() can split remove /VLAN into a key remove plus a later table
+        # remove. Those must be applied as one snapshot-guarded remove /VLAN.
+        split_changes = [
+            JsonChange(jsonpatch.JsonPatch(
+                [{"op": "remove", "path": "/VLAN/Vlan10"}])),
+            JsonChange(jsonpatch.JsonPatch(
+                [{"op": "remove", "path": "/VLAN"}])),
+        ]
         patchsorter = Mock()
-        patchsorter.sort.return_value = changes
+        patchsorter.sort.return_value = split_changes
         changeapplier = Mock()
         changeapplier.apply.return_value = target_without_vlan
 
         patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
         patch_applier.apply(emptying_patch, rewrite_emptying_tables=True)
 
-        sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
-        self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
+        self.assertEqual(1, patch_applier.changeapplier.apply.call_count)
+        applied_change = patch_applier.changeapplier.apply.call_args[0][1]
+        self.assertEqual(rewritten_ops, [dict(op) for op in applied_change.patch])
         self.assertEqual(
             {"VLAN": ["Vlan10", "Vlan20"]},
             patch_applier.changeapplier.apply.call_args.kwargs.get("table_key_snapshot"))
+        sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
+        self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
         config_wrapper.validate_field_operation.assert_called_once_with(
             old_config, target_with_empty_vlan)
+
+    def test_apply__emptying_rewrite_sequential__keeps_sorted_other_ops(self):
+        old_config = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "PORT": {"Ethernet0": {"admin_status": "up"}},
+        }
+        emptying_ops = [
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]
+        emptying_patch = jsonpatch.JsonPatch(emptying_ops)
+        rewritten_ops = [
+            {"op": "remove", "path": "/VLAN"},
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]
+        target_with_empty_vlan = {
+            "VLAN": {},
+            "PORT": {"Ethernet0": {"admin_status": "down"}},
+        }
+        target_without_vlan = {
+            "PORT": {"Ethernet0": {"admin_status": "down"}},
+        }
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.side_effect = [
+            old_config, old_config, target_without_vlan]
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: (
+            ["VLAN"] if cfg.get("VLAN") == {} else []
+        )
+
+        patch_wrapper = Mock()
+
+        def simulate(p, cfg):
+            ops = [dict(op) for op in p]
+            if ops == emptying_ops:
+                return target_with_empty_vlan
+            return target_without_vlan
+
+        patch_wrapper.simulate_config_db_patch.side_effect = simulate
+        patch_wrapper.verify_same_json.return_value = True
+
+        port_down = JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        vlan_key = JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+        ]))
+        vlan_table = JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN"},
+        ]))
+        port_create = JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/mtu", "value": "9100"},
+        ]))
+        patchsorter = Mock()
+        patchsorter.sort.return_value = [port_down, vlan_key, vlan_table, port_create]
+        changeapplier = Mock()
+        changeapplier.apply.return_value = target_without_vlan
+
+        patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
+        patch_applier.apply(emptying_patch, rewrite_emptying_tables=True)
+
+        apply_calls = patch_applier.changeapplier.apply.call_args_list
+        self.assertEqual(3, len(apply_calls))
+        self.assertIs(port_down, apply_calls[0][0][1])
+        self.assertIsNone(apply_calls[0].kwargs.get("table_key_snapshot"))
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in apply_calls[1][0][1].patch])
+        self.assertEqual(
+            {"VLAN": ["Vlan10", "Vlan20"]},
+            apply_calls[1].kwargs.get("table_key_snapshot"))
+        self.assertIs(port_create, apply_calls[2][0][1])
+        self.assertIsNone(apply_calls[2].kwargs.get("table_key_snapshot"))
+        sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
+        self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
+
+    def test_apply__emptying_rewrite_sort_rejects_invalid_target__fails_before_write(self):
+        old_config = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+        }
+        emptying_ops = [
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+            {"op": "replace", "path": "/PORT/Ethernet0/speed", "value": "bad"},
+        ]
+        emptying_patch = jsonpatch.JsonPatch(emptying_ops)
+        target_with_empty_vlan = {
+            "VLAN": {},
+            "PORT": {"Ethernet0": {"speed": "bad"}},
+        }
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.side_effect = [old_config, old_config]
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: (
+            ["VLAN"] if cfg.get("VLAN") == {} else []
+        )
+
+        patch_wrapper = Mock()
+
+        def simulate(p, cfg):
+            ops = [dict(op) for op in p]
+            if ops == emptying_ops:
+                return target_with_empty_vlan
+            return {"PORT": {"Ethernet0": {"speed": "bad"}}}
+
+        patch_wrapper.simulate_config_db_patch.side_effect = simulate
+
+        patchsorter = Mock()
+        patchsorter.sort.side_effect = ValueError(
+            "Given patch will produce invalid config. Error: invalid speed")
+        changeapplier = Mock()
+
+        patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
+
+        self.assertRaises(
+            ValueError,
+            patch_applier.apply,
+            emptying_patch,
+            rewrite_emptying_tables=True,
+        )
+        patch_applier.patchsorter.sort.assert_called_once()
+        patch_applier.changeapplier.apply.assert_not_called()
 
     def test_apply__emptying_rewrite_skips_if_live_table_gained_key(self):
         # Table-level remove would delete a key added after the first snapshot.

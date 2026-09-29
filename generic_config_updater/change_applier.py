@@ -145,12 +145,14 @@ class ChangeApplier:
     def apply(self, current_configdb: dict, change: JsonChange,
               table_key_snapshot=None) -> dict:
         if table_key_snapshot:
-            # Recheck live Redis, not the in-memory apply snapshot, so a
-            # concurrent key add is visible before remove /TABLE is written.
-            live_data = get_config_db_as_json(self.scope)
+            # Check and write from one ConfigDB read. The in-memory chain can
+            # be older than Redis, and a separate check read would not be the
+            # set of keys actually deleted.
+            run_data = get_config_db_as_json(self.scope)
             validate_table_key_snapshot(
-                live_data, table_key_snapshot, getattr(change, "patch", None))
-        run_data = current_configdb
+                run_data, table_key_snapshot, getattr(change, "patch", None))
+        else:
+            run_data = current_configdb
         upd_data = prune_empty_table(change.apply(run_data, in_place=False))
         upd_keys = defaultdict(dict)
 

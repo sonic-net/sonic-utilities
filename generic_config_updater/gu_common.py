@@ -555,6 +555,83 @@ def validate_table_key_snapshot(config, table_key_snapshot, patch=None):
                 f"{sorted(live_keys)} differ from rewrite snapshot {sorted(expected)}")
 
 
+def replace_rewritten_table_changes(changes, table_key_snapshot, path_addressing=None):
+    """Keep sorted changes, but apply rewritten tables as one table-level remove.
+
+    The sorter can split remove /TABLE into per-key removes plus a later table
+    remove, and can also emit required moves on other tables. Replace ops on
+    rewritten tables with a single remove /TABLE at the first position those
+    tables appear; leave other operations in sorter order.
+    """
+    if not table_key_snapshot:
+        return [(change, None) for change in changes]
+    if path_addressing is None:
+        path_addressing = PathAddressing()
+
+    rewritten_tables = set(table_key_snapshot.keys())
+    emitted = set()
+    result = []
+
+    def _append_ops(ops):
+        if ops:
+            result.append((JsonChange(jsonpatch.JsonPatch(ops)), None))
+
+    def _append_atomic(tables):
+        atomic_ops = [{
+            OperationWrapper.OP_KEYWORD: "remove",
+            OperationWrapper.PATH_KEYWORD: path_addressing.create_path([table]),
+        } for table in tables]
+        snapshot = {table: table_key_snapshot[table] for table in tables}
+        result.append((JsonChange(jsonpatch.JsonPatch(atomic_ops)), snapshot))
+
+    for change in changes:
+        patch = getattr(change, "patch", None)
+        try:
+            operations = list(patch) if patch is not None else None
+        except TypeError:
+            operations = None
+        if operations is None:
+            result.append((change, None))
+            continue
+
+        prefix = []
+        pending = []
+        suffix = []
+        seen_rewritten = False
+        for operation in operations:
+            try:
+                opd = dict(operation)
+            except (TypeError, ValueError):
+                (suffix if seen_rewritten else prefix).append(operation)
+                continue
+            path = opd.get(OperationWrapper.PATH_KEYWORD)
+            tokens = path_addressing.get_path_tokens(path) if path else []
+            table = tokens[0] if tokens else None
+            if table in rewritten_tables:
+                seen_rewritten = True
+                if table not in emitted and table not in pending:
+                    pending.append(table)
+                continue
+            if seen_rewritten:
+                suffix.append(dict(opd))
+            else:
+                prefix.append(dict(opd))
+
+        if not pending and not seen_rewritten:
+            result.append((change, None))
+            continue
+        _append_ops(prefix)
+        if pending:
+            _append_atomic(pending)
+            emitted.update(pending)
+        _append_ops(suffix)
+
+    missing = [table for table in table_key_snapshot if table not in emitted]
+    if missing:
+        _append_atomic(missing)
+    return result
+
+
 class PatchWrapper:
     def __init__(self, config_wrapper=None, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope

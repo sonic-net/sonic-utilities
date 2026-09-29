@@ -9,8 +9,8 @@ from enum import Enum
 from typing import IO, Optional
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
                     DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging, \
-                    PathAddressing, rewrite_patch_emptying_tables, snapshot_table_keys, \
-                    table_level_remove_tables
+                    PathAddressing, rewrite_patch_emptying_tables, replace_rewritten_table_changes, \
+                    snapshot_table_keys, table_level_remove_tables
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
@@ -187,17 +187,27 @@ class PatchApplier:
         self.logger.log_notice(f"The {scope} patch was converted into {changes_len} " \
                           f"change{'s' if changes_len != 1 else ''}{':' if changes_len > 0 else '.'}")
 
-        apply_kwargs = {}
-        if table_key_snapshot:
-            apply_kwargs["table_key_snapshot"] = table_key_snapshot
-
-        # Apply changes in order
-        self.logger.log_notice(f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} " \
-                               f"in order{':' if changes_len > 0 else '.'}")
+        # Apply changes in order. A rewritten table is one remove /TABLE at the
+        # first sorter step that touched it, checked against the same ConfigDB
+        # read used for that write. Other tables stay in sorter order.
         current_config = old_config
-        for change in changes:
+        if table_key_snapshot:
+            self.logger.log_notice(
+                f"{scope}: applying rewritten table-level remove atomically "
+                f"in the sorted sequence.")
+            steps = replace_rewritten_table_changes(
+                changes, table_key_snapshot, PathAddressing())
+        else:
+            self.logger.log_notice(f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} " \
+                                   f"in order{':' if changes_len > 0 else '.'}")
+            steps = [(change, None) for change in changes]
+        for change, snapshot in steps:
             self.logger.log_notice(f"  * {change}")
-            current_config = self.changeapplier.apply(current_config, change, **apply_kwargs)
+            if snapshot:
+                current_config = self.changeapplier.apply(
+                    current_config, change, table_key_snapshot=snapshot)
+            else:
+                current_config = self.changeapplier.apply(current_config, change)
 
         # Validate config updated successfully
         self.logger.log_notice(f"{scope}: verifying patch updates are reflected on ConfigDB.")

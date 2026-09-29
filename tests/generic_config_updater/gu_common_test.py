@@ -1078,6 +1078,34 @@ class TestValidateTableKeySnapshot(unittest.TestCase):
                 {"VLAN": ["Vlan10", "Vlan20"]},
                 patch)
 
+    def test_replace_rewritten_table_changes__splits_and_keeps_other_ops(self):
+        port_down = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        vlan_key = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+        ]))
+        vlan_table = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN"},
+        ]))
+        port_create = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/mtu", "value": "9100"},
+        ]))
+        snapshot = {"VLAN": ["Vlan10", "Vlan20"]}
+
+        steps = gu_common.replace_rewritten_table_changes(
+            [port_down, vlan_key, vlan_table, port_create], snapshot)
+
+        self.assertEqual(3, len(steps))
+        self.assertIs(port_down, steps[0][0])
+        self.assertIsNone(steps[0][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in steps[1][0].patch])
+        self.assertEqual(snapshot, steps[1][1])
+        self.assertIs(port_create, steps[2][0])
+        self.assertIsNone(steps[2][1])
+
 
 class TestPathAddressing(unittest.TestCase):
     def setUp(self):
