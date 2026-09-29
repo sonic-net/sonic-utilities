@@ -2255,6 +2255,11 @@ echo CT_TABLE_DUMP_ENABLE=true >> "$profile"
 ###############################################################################
 collect_nvidia_bmc_dump() {
     trap 'handle_error $? $LINENO' ERR
+    # BMC component firmware versions (BMC image, etc.). Captured before the
+    # hw-management dump so they are collected even if that script is absent or
+    # times out. save_cmd tolerates fwutil failures without aborting the dump.
+    save_cmd "fwutil show status"  "fwutil.status"
+    save_cmd "fwutil show version" "fwutil.version"
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local HW_BMC_DUMP_FILE=/usr/bin/hw-management-bmc-generate-dump.sh
 
