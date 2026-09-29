@@ -6,9 +6,6 @@ import subprocess
 import sys
 import time
 import utilities_common.cli as clicommon
-from utilities_common.image_disk_space import (
-    check_image_install_free_disk_space,
-)
 from urllib.request import urlopen, urlretrieve
 
 import click
@@ -29,6 +26,9 @@ SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
 LOG_WARN = logger.Logger.LOG_PRIORITY_WARNING
 LOG_NOTICE = logger.Logger.LOG_PRIORITY_NOTICE
+SECURE_BOOT_KEY_UPDATE_SCRIPT = "/usr/local/bin/secure_boot_enroll_key.sh"
+EFI_GLOBAL_GUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+EFI_PK_PATH = "/sys/firmware/efi/efivars/PK-{}".format(EFI_GLOBAL_GUID)
 
 # Global Config object
 _config = None
@@ -390,20 +390,13 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             # Inject host DNS into chroot for sonic-package-manager to resolve hostnames.
             chroot_resolv = os.path.join(new_image_mount, RESOLV_CONF_FILE)
             if os.path.islink(chroot_resolv):
-                # Symlink: populate its target inside the chroot ("cp" over the link
-                # would write through it, outside the overlay mount).
+                # Symlink: populate the target inside the chroot so the symlink resolves.
+                # Cannot cp over the symlink because the absolute target path escapes
+                # the overlay mount to the host filesystem ("are the same file" error).
                 resolv_target = os.readlink(chroot_resolv)
-                if not os.path.isabs(resolv_target):
-                    # Relative target resolves against the symlink's directory
-                    resolv_target = os.path.join("/", os.path.dirname(RESOLV_CONF_FILE), resolv_target)
-                # Leading "/" makes normpath clamp ".." at the chroot root
-                resolv_target = os.path.normpath(resolv_target)
                 chroot_target = os.path.join(new_image_mount, resolv_target.lstrip("/"))
                 run_command_or_raise(["mkdir", "-p", os.path.dirname(chroot_target)])
-                # --remove-destination: if the target is itself a symlink, replace it
-                # instead of writing through it (could escape the mount again)
-                run_command_or_raise(["cp", "-L", "--remove-destination",
-                                      os.path.join("/", RESOLV_CONF_FILE), chroot_target])
+                run_command_or_raise(["cp", "-L", os.path.join("/", RESOLV_CONF_FILE), chroot_target])
             else:
                 # Regular file: overwrite with host DNS content.
                 run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE), chroot_resolv])
@@ -521,6 +514,43 @@ def validate_positive_int(ctx, param, value):
     raise click.BadParameter("Must be a positive integer")
 
 
+def validate_remove_pk_dir(ctx, param, value):
+    """Validate a directory containing signed empty KEK and PK updates."""
+    if value is None:
+        return value
+
+    required_files = ("remove-all-kek.auth", "remove-all-pk.auth")
+    missing_files = [
+        filename for filename in required_files
+        if not os.path.isfile(os.path.join(value, filename))
+    ]
+    if missing_files:
+        raise click.BadParameter(
+            "directory must contain {}".format(" and ".join(required_files))
+        )
+    return value
+
+
+def remove_secure_boot_platform_keys(auth_dir):
+    """Remove the UEFI Secure Boot KEK and PK using signed empty updates."""
+    updates = (
+        ("KEK", os.path.join(auth_dir, "remove-all-kek.auth")),
+        ("PK", os.path.join(auth_dir, "remove-all-pk.auth")),
+    )
+
+    for var_name, auth_file in updates:
+        echo_and_log("Removing UEFI Secure Boot {} using {}...".format(var_name, auth_file))
+        run_command_or_raise(
+            [SECURE_BOOT_KEY_UPDATE_SCRIPT, var_name, auth_file],
+            capture=False,
+        )
+
+
+def is_secure_boot_pk_enrolled():
+    """Return whether the UEFI Platform Key variable is present."""
+    return os.path.isfile(EFI_PK_PATH)
+
+
 # Main entrypoint
 @click.group(cls=AliasedGroup)
 def sonic_installer():
@@ -559,9 +589,14 @@ def sonic_installer():
               help='If system available memory is lower than threshold, setup SWAP memory',
               cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
+@click.option('--remove-pk', type=click.Path(exists=True, file_okay=False, readable=True,
+              resolve_path=True), callback=validate_remove_pk_dir, metavar='DIRECTORY',
+              help='After installation, remove KEK and PK using remove-all-kek.auth and '
+              'remove-all-pk.auth from DIRECTORY')
 @click.argument('url')
 def install(url, force, skip_platform_check=False, skip_migration=False, skip_package_migration=False,
-            skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None, available_mem_threshold=None):
+            skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None,
+            available_mem_threshold=None, remove_pk=None):
     """ Install image from local binary or URL"""
     bootloader = get_bootloader()
 
@@ -583,6 +618,16 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
         echo_and_log("Image file does not exist or is not a valid SONiC image file", LOG_ERR)
         raise click.Abort()
 
+    if (is_secure_boot_pk_enrolled() and not remove_pk
+            and not bootloader.image_has_secure_boot_db_auth(image_path)):
+        echo_and_log(
+            "The device has an enrolled UEFI Secure Boot PK, but the image does not "
+            "contain boot/DB.auth. Use an image with DB.auth or provide "
+            "--remove-pk=<directory>. Aborting...",
+            LOG_ERR,
+        )
+        raise click.Abort()
+
     # Is this version already installed?
     if binary_image_version in bootloader.get_installed_images():
         echo_and_log("Image {} is already installed. Setting it as default...".format(binary_image_version))
@@ -590,16 +635,6 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             echo_and_log('Error: Failed to set image as default', LOG_ERR)
             raise click.Abort()
     else:
-        # Validate that enough disk space is available before modifying the
-        # installed image state. The helper automatically applies the NPU or
-        # DPU threshold based on the system on which this command is running.
-        if not check_image_install_free_disk_space():
-            echo_and_log(
-                "Insufficient free disk space to install the image. Aborting...",
-                LOG_ERR,
-            )
-            raise click.Abort()
-
         # Verify not installing non-secure image in a secure running image
         if not force and not bootloader.verify_secureboot_image(image_path):
             echo_and_log("Image file '{}' is of a different type than running image.\n".format(url) +
@@ -616,7 +651,12 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 
         if bootloader.is_secure_upgrade_image_verification_supported():
             echo_and_log("Enrolling image {} Secure Boot db certificate...".format(binary_image_version))
-            bootloader.enroll_image_secure_boot_keys(image_path)
+            if not bootloader.enroll_image_secure_boot_keys(image_path):
+                echo_and_log(
+                    "Warning: Failed to enroll image Secure Boot db certificate; "
+                    "continuing to signature verification",
+                    LOG_WARN,
+                )
             echo_and_log("Verifying image {} signature...".format(binary_image_version))
             if not bootloader.verify_image_sign(image_path):
                 echo_and_log('Error: Failed verify image signature', LOG_ERR)
@@ -652,6 +692,9 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 
         if not skip_package_migration:
             migrate_sonic_packages(bootloader, binary_image_version)
+
+    if remove_pk:
+        remove_secure_boot_platform_keys(remove_pk)
 
     # Finally, sync filesystem
     run_command(["sync"])
