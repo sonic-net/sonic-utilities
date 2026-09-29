@@ -122,6 +122,46 @@ class TestValidateFieldOperation:
             assert generic_config_updater.field_operation_validators.\
                 port_config_update_validator(scope, patch_element) is False
 
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.get_breakout_speeds",
+           mock.Mock(return_value={800000, 400000, 200000, 100000}))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="400000,800000"))
+    def test_port_config_update_validator_breakout_speed_from_platform_json(self):
+        # A breakout speed (200000) the full-lane parent's STATE_DB
+        # supported_speeds (400000,800000) doesn't list, but platform.json's
+        # breakout modes do — must be accepted.
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": "200000"}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.get_breakout_speeds",
+           mock.Mock(return_value={800000, 400000, 200000, 100000}))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="400000,800000"))
+    def test_port_config_update_validator_speed_in_neither_source_rejected(self):
+        # A speed in neither platform.json breakout modes nor STATE_DB is still
+        # rejected.
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": "333000"}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is False
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.get_breakout_speeds",
+           mock.Mock(return_value=set()))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value=""))
+    def test_port_config_update_validator_no_speed_info_is_permissive(self):
+        # Legacy platform: no platform.json breakout info and no STATE_DB
+        # supported_speeds — don't block.
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": "200000"}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
     def test_port_config_update_validator_remove(self):
         patch_element = {"path": "/PORT/Ethernet3", "op": "remove"}
         for scope in ["localhost", "asic0"]:
