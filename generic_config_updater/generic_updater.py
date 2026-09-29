@@ -198,8 +198,9 @@ class PatchApplier:
             steps = replace_rewritten_table_changes(
                 changes, table_key_snapshot, PathAddressing())
         else:
-            self.logger.log_notice(f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} " \
-                                   f"in order{':' if changes_len > 0 else '.'}")
+            self.logger.log_notice(
+                f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} "
+                f"in order{':' if changes_len > 0 else '.'}")
             steps = [(change, None) for change in changes]
         for change, snapshot in steps:
             self.logger.log_notice(f"  * {change}")
