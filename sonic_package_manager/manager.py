@@ -1171,8 +1171,11 @@ class PackageManager:
         if protocol == 'http' or protocol == 'https':
             request_args = {'stream': True}
             if username or password:
+                username = urllib.parse.unquote(username) if username is not None else None
                 if password is None:
                     password = getpass.getpass(prompt=f"Enter password for {username}@{hostname}: ")
+                else:
+                    password = urllib.parse.unquote(password)
                 request_args['auth'] = (username, password)
             try:
                 with requests.get(url, **request_args) as response:
@@ -1181,8 +1184,8 @@ class PackageManager:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
-            except requests.exceptions.RequestException as e:
-                click.echo("Download error", e)
+            except requests.exceptions.RequestException:
+                click.echo("Download error")
                 return False
         elif protocol == 'scp' or protocol == 'sftp':
             # If password is not provided, prompt the user for it securely
