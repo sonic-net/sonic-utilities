@@ -23,6 +23,7 @@ savings disappear.
 """
 
 import array
+import grp
 import json
 import os
 import select
@@ -391,6 +392,23 @@ def _watch_mtimes_changed():
     return False
 
 
+def _set_socket_permissions(sock_path):
+    """Group-restrict the socket as defense-in-depth on top of the real
+    authorization mechanism (SO_PEERCRED + setuid in the child, see
+    cli-daemon.md). 0660 + a group instead of 0666 also keeps a generic
+    "insecure file permissions" scanner from treating this like a normal
+    world-writable file it isn't -- Unix sockets need write access to
+    connect() at all, so 0644 would break every non-root client outright.
+    """
+    os.chmod(sock_path, 0o660)
+    group = os.environ.get("SONIC_CLI_SOCKET_GROUP", "admin")
+    try:
+        gid = grp.getgrnam(group).gr_gid
+        os.chown(sock_path, os.getuid(), gid)
+    except (KeyError, OSError):
+        pass
+
+
 def _reexec_self():
     """Re-exec the daemon process in place.
 
@@ -422,10 +440,7 @@ def run_daemon_main():
 
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(SOCKET_PATH)
-    # Authorization is enforced via SO_PEERCRED + setuid in the forked
-    # child, not via filesystem permissions on the socket itself -- see
-    # cli-daemon.md for the full rationale.
-    os.chmod(SOCKET_PATH, 0o666)
+    _set_socket_permissions(SOCKET_PATH)
     server.listen(64)
 
     with open(PID_PATH, "w") as pid_file:
