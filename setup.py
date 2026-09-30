@@ -6,12 +6,51 @@
 #
 # https://stackoverflow.com/questions/18787036/difference-between-entry-points-console-scripts-and-scripts-in-setup-py
 from __future__ import print_function
+import os
 import sys
 import fastentrypoints
 
 from setuptools import setup
+from setuptools.command.build_py import build_py as _build_py
 import pkg_resources
 from packaging import version
+
+# OPTIMIZE_CLI - opt-in flag (see rules/config in sonic-buildimage) for the
+# warm fork-server daemon that accelerates `show`/`config` execution and
+# Tab completion. Defaults to disabled ("no"): when off, `show`/`config`
+# keep their original console_scripts targets and the feature's modules
+# (cli_entry.py x2, cli_server.py, its test module) are excluded from the
+# build below -- not shipped at all, not merely unused.
+OPTIMIZE_CLI = os.environ.get('OPTIMIZE_CLI', 'no').strip().lower() in ('y', 'yes', '1', 'true', 'on')
+
+# (package, module) pairs that exist solely to support the OPTIMIZE_CLI
+# fork-server daemon. Kept in one place so both the build-exclusion logic
+# and the console_scripts wiring below stay in sync.
+_OPTIMIZE_CLI_ONLY_MODULES = {
+    ('show', 'cli_entry'),
+    ('config', 'cli_entry'),
+    ('utilities_common', 'cli_server'),
+    ('tests', 'test_cli_server'),
+}
+
+
+def _exclude_optimize_cli_modules(modules):
+    if OPTIMIZE_CLI:
+        return modules
+    return [m for m in modules if (m[0], m[1]) not in _OPTIMIZE_CLI_ONLY_MODULES]
+
+
+class BuildPyExcludingOptimizeCli(_build_py):
+    """When OPTIMIZE_CLI is off, drop its modules from the build output
+    instead of merely leaving them unused -- they must not ship at all.
+    ``sdist`` also delegates module discovery to this same command (via
+    ``get_finalized_command('build_py')``), so overriding it here is
+    sufficient to exclude these files from both the wheel and the sdist.
+    """
+
+    def find_package_modules(self, package, package_dir):
+        return _exclude_optimize_cli_modules(super().find_package_modules(package, package_dir))
+
 
 # sonic_dependencies, version requirement only supports '>='
 sonic_dependencies = [
@@ -44,6 +83,9 @@ setup(
     url='https://github.com/Azure/sonic-utilities',
     maintainer='Joe LeVeque',
     maintainer_email='jolevequ@microsoft.com',
+    cmdclass={
+        'build_py': BuildPyExcludingOptimizeCli,
+    },
     packages=[
         'acl_loader',
         'clear',
@@ -208,7 +250,7 @@ setup(
     entry_points={
         'console_scripts': [
             'acl-loader = acl_loader.main:cli',
-            'config = config.cli_entry:main',
+            'config = config.cli_entry:main' if OPTIMIZE_CLI else 'config = config.main:config',
             'connect = connect.main:connect',
             'consutil = consutil.main:consutil',
             'counterpoll = counterpoll.main:cli',
@@ -229,8 +271,7 @@ setup(
             'pddf_ledutil = pddf_ledutil.main:cli',
             'rexec = rcli.rexec:cli',
             'rshell = rcli.rshell:cli',
-            'show = show.cli_entry:main',
-            'sonic-cli-daemon = utilities_common.cli_server:run_daemon_main',
+            'show = show.cli_entry:main' if OPTIMIZE_CLI else 'show = show.main:cli',
             'sonic-clear = clear.main:cli',
             'sonic-installer = sonic_installer.main:sonic_installer',
             'sonic_installer = sonic_installer.main:sonic_installer',  # Deprecated
@@ -239,7 +280,9 @@ setup(
             'undebug = undebug.main:cli',
             'watchdogutil = watchdogutil.main:watchdogutil',
             'sonic-cli-gen = sonic_cli_gen.main:cli',
-        ]
+        ] + ([
+            'sonic-cli-daemon = utilities_common.cli_server:run_daemon_main',
+        ] if OPTIMIZE_CLI else [])
     },
     install_requires=[
         'bcrypt>=3.2.2',
