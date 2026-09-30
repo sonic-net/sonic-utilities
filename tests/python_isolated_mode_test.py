@@ -6,7 +6,7 @@ import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / 'scripts'
 INLINE_PYTHON = re.compile(
-    r'\bpython(?:3)?\b(?P<options>[^\n]*?)(?:(?<!\S)-c\b|<<)'
+    r'\bpython(?:3)?\b(?P<options>(?:[^\n]|\\\n)*?)(?:(?<!\S)-c\b|<<)'
 )
 ISOLATED_OPTION = re.compile(r'(?<!\S)-I(?!\S)')
 
@@ -35,6 +35,8 @@ def test_inline_python_uses_isolated_mode(script_name):
     'python3 -B -E -c "import sys"',
     'python3 <<EOF',
     'python3 - "$file" <<EOF',
+    'python3 \\\n  -c "import sys"',
+    'python3 \\\n  <<EOF',
 ])
 def test_non_isolated_inline_python_pattern_catches_intervening_flags(command):
     match = INLINE_PYTHON.search(command)
@@ -48,6 +50,7 @@ def test_non_isolated_inline_python_pattern_catches_intervening_flags(command):
     'python3 -E -I -c "import sys"',
     'python3 -I <<EOF',
     'python3 -I - "$file" <<EOF',
+    'python3 \\\n  -I -c "import sys"',
 ])
 def test_isolated_inline_python_pattern_accepts_isolated_mode(command):
     match = INLINE_PYTHON.search(command)
