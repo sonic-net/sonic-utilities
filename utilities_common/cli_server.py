@@ -91,6 +91,14 @@ def _try_run_with_fds(prog, fds):
         # safe to fall back to the cold path.
         return None
 
+    # settimeout() applies to every subsequent operation on this socket,
+    # not just connect() -- clear it immediately so the short connect
+    # deadline doesn't also apply to sendmsg()/sendall() below (a large
+    # forwarded environment, or a daemon that's briefly not reading,
+    # could otherwise time out mid-send and be treated the same as an
+    # outright failure) or to the response-wait loop further down.
+    sock.settimeout(None)
+
     req = json.dumps({
         "prog": prog,
         "argv": sys.argv[1:],
@@ -124,7 +132,6 @@ def _try_run_with_fds(prog, fds):
     # legitimately take, and if the client's connection to it dies from
     # here on, returning 1 (not None) is the only safe behavior anyway
     # (see the empty-response handling below).
-    sock.settimeout(None)
 
     prev_handlers = {}
 
@@ -453,10 +460,16 @@ def _relay_signals(buf, data, child):
         if not line:
             continue
         try:
-            sig = json.loads(line).get("signal")
+            parsed = json.loads(line)
         except ValueError:
             continue
-        if sig:
+        # The client is untrusted after the request is accepted: a valid
+        # JSON scalar/list (not a dict), or a non-integer "signal" value,
+        # must not raise -- an uncaught AttributeError/TypeError here
+        # would kill this supervisor without ever sending a response,
+        # while the already-forked command child keeps running unwatched.
+        sig = parsed.get("signal") if isinstance(parsed, dict) else None
+        if isinstance(sig, int) and sig > 0:
             try:
                 # _run_child calls setsid(), making the child its own
                 # process-group leader -- signal the whole group so

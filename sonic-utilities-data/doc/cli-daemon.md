@@ -6,13 +6,12 @@ and accelerates **both** command execution and Tab completion:
 - **Service:** `sonic-cli-daemon.service` (enabled with `sonic.target`)
 - **Socket:** `/run/sonic/cli.sock`
 - **Disable client:** `SONIC_CLI_DAEMON=0` for a single shell session
-- **Fallback:** only available before or while the client is still
-  connecting to / transmitting the request to the daemon (daemon stopped,
-  socket unreachable, connection dropped mid-send) -- in those cases the
-  client uses the normal cold Python path. Once the request has been sent,
-  the client never falls back: an EOF, malformed response, or a dropped
-  connection instead returns exit code `1`. A request that has been sent
-  is never re-run -- `config` commands are not idempotent and must never
+- **Fallback:** only available if `connect()` itself fails (daemon
+  stopped or socket missing) -- in that case the client uses the normal
+  cold Python path. Any failure from that point on, including a
+  connection drop *during* transmission, is fatal: it returns exit code
+  `1` rather than falling back. A request that has started being sent is
+  never re-run -- `config` commands are not idempotent and must never
   run twice.
 
 ## What actually gets faster
