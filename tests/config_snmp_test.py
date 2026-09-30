@@ -589,7 +589,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_over_64_characters(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", 
+                               ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES",
                  "superlongencryptionpasswordtotestbeingoverthesixtyfourcharacterlimit"])
         print(result.exit_code)
         assert result.exit_code == 13
@@ -598,7 +598,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_excluded_special_characters(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                 ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", "testencrypt@pass"])
+                               ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", "testencrypt@pass"])
         print(result.exit_code)
         assert result.exit_code == 13
         assert "FAILED: SNMP user password should not have any of these special symbols" in result.output
@@ -606,7 +606,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_not_long_enough(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                              ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", "test1"])
+                               ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", "test1"])
         print(result.exit_code)
         assert result.exit_code == 13
         assert "FAILED: SNMP user password length should be at least 8 characters" in result.output
@@ -680,7 +680,7 @@ class TestSNMPConfigCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                    ["test_authnopriv_RO_md5", "authnopriv", "ro", "MD5", "user_auth_pass"], obj=db)
+                                   ["test_authnopriv_RO_md5", "authnopriv", "ro", "MD5", "user_auth_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 6
         assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
@@ -692,8 +692,8 @@ class TestSNMPConfigCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                    ["test_priv_RO_md5_lower", "priv", "ro", "md5", "user_auth_pass", "DES", "user_encrypt_pass"],
-                    obj=db)
+                                   ["test_priv_RO_md5_lower", "priv", "ro", "md5", "user_auth_pass",
+                                    "DES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 6
         assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
@@ -775,7 +775,7 @@ class TestSNMPConfigCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                    ["test_authnopriv_RW_md5", "authnopriv", "rw", "MD5", "user_auth_pass"], obj=db)
+                                   ["test_authnopriv_RW_md5", "authnopriv", "rw", "MD5", "user_auth_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 6
         assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
