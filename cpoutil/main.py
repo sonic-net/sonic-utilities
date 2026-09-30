@@ -583,7 +583,8 @@ def get_els_presence(cpo):
     """Read ELS presence from a public or legacy CPO object."""
     if isinstance(cpo, CpoBase):
         return cpo.elsfp.get_presence()
-    return cpo.get_els_presence()
+    # Legacy combined CPO objects expose ELS presence through DeviceBase.
+    return cpo.get_presence()
 
 
 def get_els_lpmode(_api):
@@ -617,39 +618,24 @@ def get_els_lpmode(_api):
 
 def set_els_lpmode(api, low_power):
     """Set ELS low-power mode through the active ELSFP backend."""
-    # TODO: API is not implemented: the public ELSFP interface does not
-    # currently define a low-power setter.
-    operation = getattr(api, "set_elsfp_lpmode", None)
-    if not callable(operation):
-        raise NotImplementedError(
-            "The active CPO backend does not implement ELS low-power mode"
-        )
-    return operation(low_power)
+    return api.set_elsfp_lpmode(low_power)
 
 
-def reset_els(_api):
-    # TODO: API is not implemented: the public ELSFP interface does not
-    # currently define a reset operation.
-    raise NotImplementedError("The public ELSFP reset API is not implemented")
+def reset_els(api):
+    """Reset the ELS through its public API, independently of the OE."""
+    return api.reset_elsfp()
 
 
-def set_els_tx_disable(_api, _lane_mask, _disable):
+def set_els_tx_disable(api, lane_mask, disable):
     """Control ELS output through the public per-lane enable API."""
-    # TODO: API is not implemented by the Bailly backend: there is no
-    # existing RLM Tx-disable method that can be exposed by a name wrapper.
-    operation = getattr(_api, "set_per_lane_enable", None)
-    if not callable(operation):
-        raise NotImplementedError(
-            "The active CPO backend does not implement ELS Tx-disable"
-        )
-    return operation(_lane_mask, not _disable)
+    return api.set_per_lane_enable(lane_mask, not disable)
 
 
 def require_els_tx_disable_api(api):
     """Fail before changing OE state when ELS control is unavailable."""
-    if not callable(getattr(api, "set_per_lane_enable", None)):
+    if not api.supports_per_lane_enable():
         raise NotImplementedError(
-            "The active CPO backend does not implement ELS Tx-disable"
+            "ELS per-lane enable control is not implemented"
         )
 
 
@@ -1602,8 +1588,6 @@ def show_interface_lane_status(port, json_output):
                 "ELS Status": _normalize_els_status(
                     els_api.get_elsfp_status()
                 ),
-                # TODO: API is not implemented by the Bailly backend: no
-                # existing RLM per-laser state method is available to wrap.
                 "ELS Lane State": _select_els_laser_values(
                     els_api.get_per_lane_state(), context["laser_ids"]
                 ),
@@ -1751,18 +1735,10 @@ def show_els_status(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            status = _normalize_els_status(
-                get_els_api(cpo, resource_id).get_elsfp_status()
-            )
-            # TODO: API is not implemented by the Bailly backend:
-            # get_rlm_status() does not expose an independent ELS module
-            # state that can be returned through this command.
-            if "module_state" not in status:
-                raise NotImplementedError(
-                    "The active CPO backend does not report an independent "
-                    "ELS module state"
-                )
-            records[resource_id] = status["module_state"]
+            state = get_els_api(cpo, resource_id).get_elsfp_module_state()
+            if state is None:
+                raise CpoCommandError("The ELSFP module state API returned no data")
+            records[resource_id] = state
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -2183,6 +2159,13 @@ def _read_resource_eeprom(resource_type, index, bank, page, offset, size):
     return results
 
 
+def _get_eeprom_device(cpo, resource_type):
+    """Use public endpoint EEPROM accessors, or the legacy combined device."""
+    if isinstance(cpo, CpoBase):
+        return cpo.oe if resource_type == OPTICAL_ENGINE else cpo.elsfp
+    return cpo
+
+
 def _parse_hex_data(value):
     try:
         data = bytearray.fromhex(value)
@@ -2202,10 +2185,11 @@ def _write_resource_eeprom(resource_type, index, bank, page, offset, data):
     linear_offset = _eeprom_linear_offset(
         resource_type, resource_id, cpo, bank, page, offset
     )
+    device = _get_eeprom_device(cpo, resource_type)
     try:
         _run_action(
             "Writing EEPROM for {}".format(str(resource_id).upper()),
-            lambda: cpo.write_eeprom(linear_offset, len(data), data),
+            lambda: device.write_eeprom(linear_offset, len(data), data),
         )
     except (NotImplementedError, AttributeError, OSError) as exc:
         raise CpoCommandError(
@@ -2270,8 +2254,9 @@ def _read_one_eeprom(resource_type, resource_id, cpo,
     linear_offset = _eeprom_linear_offset(
         resource_type, resource_id, cpo, bank, page, offset
     )
+    device = _get_eeprom_device(cpo, resource_type)
     try:
-        data = cpo.read_eeprom(linear_offset, size)
+        data = device.read_eeprom(linear_offset, size)
     except (NotImplementedError, AttributeError, OSError) as exc:
         raise CpoCommandError(
             "Failed to read EEPROM for '{}': {}".format(resource_id, exc)

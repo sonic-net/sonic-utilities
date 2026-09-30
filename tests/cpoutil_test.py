@@ -13,6 +13,7 @@ modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
 from cpoutil import main as cpoutil  # noqa: E402
+from sonic_platform_base.sonic_xcvr.api.public.elsfp_base import ElsfpApiBase  # noqa: E402
 from cpoutil.mapping import CpoMapping, CpoMappingError  # noqa: E402
 from cpoutil.mapping import (  # noqa: E402
     EXTERNAL_LASER_SOURCE,
@@ -254,7 +255,7 @@ COVERAGE_PORT_CONFIG = {
 }
 
 
-class CoverageFakeApi(object):
+class CoverageFakeApi(ElsfpApiBase):
     NUM_CHANNELS = 2
 
     def __init__(self):
@@ -336,6 +337,9 @@ class CoverageFakeApi(object):
             "module_low_power_state": False,
             "interrupt_status": False,
         }
+
+    def get_elsfp_module_state(self):
+        return "ModuleReady"
 
     def get_elsfp_dom_real_value(self):
         return {
@@ -805,6 +809,82 @@ class TestSharedPlatformHelpers:
         assert cpoutil.get_oe_presence(cpo) is True
         assert cpoutil.get_els_presence(cpo) is False
         assert cpoutil.get_els_api(cpo, "els0") is els.get_api.return_value
+
+
+class TestOptionalElsApis:
+    @pytest.mark.parametrize("backend", ["public", "bailly"])
+    @pytest.mark.parametrize("arguments", [
+        ["config", "els", "lpmode", "0", "low"],
+        ["config", "els", "reset", "0"],
+        ["config", "els", "tx_disable", "0", "enable"],
+        ["config", "interface", "tx_disable", "Ethernet0", "enable"],
+        ["show", "els", "status", "0"],
+        ["show", "interface", "lane-status", "Ethernet0"],
+    ])
+    def test_unsupported_els_commands_do_not_change_oe(
+            self, coverage_environment, monkeypatch, backend, arguments):
+        from sonic_platform_base.sonic_xcvr.api.broadcom.bailly import BaillyApi
+
+        eeprom = mock.Mock()
+        els_api = BaillyApi(eeprom) if backend == "bailly" else ElsfpApiBase(eeprom)
+        eeprom.read.reset_mock()  # Ignore the CMIS constructor's Flat_mem read.
+        # Allow lane-status to reach the inherited per-lane state placeholder.
+        els_api.get_elsfp_status = mock.Mock(return_value={"module_low_power_state": False})
+        oe_api = CoverageFakeApi()
+        cpo = cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpo},
+            EXTERNAL_LASER_SOURCE: {"els0": cpo},
+            PORT: {1: cpo},
+        })
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert "not implemented" in result.output
+        assert "has no attribute" not in result.output
+        assert "OK" not in result.output
+        assert oe_api.calls == []
+        eeprom.read.assert_not_called()
+        eeprom.write.assert_not_called()
+
+    def test_supported_els_reset_is_dispatched_without_resetting_oe(self, coverage_environment):
+        cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
+        cpo.api.reset_elsfp = mock.Mock(return_value=True)
+        result = invoke_coverage(["config", "els", "reset", "0"])
+        assert result.exit_code == 0, result.output
+        cpo.api.reset_elsfp.assert_called_once_with()
+        assert cpo.api.calls == []
+
+    def test_els_module_state_read_failure_is_not_reported_as_success(self, coverage_environment):
+        cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
+        cpo.api.get_elsfp_module_state = mock.Mock(return_value=None)
+        result = invoke_coverage(["show", "els", "status", "0", "--json"])
+        assert result.exit_code != 0
+        assert "module state API returned no data" in result.output
+
+    def test_public_eeprom_uses_the_selected_endpoint(self, coverage_environment, monkeypatch):
+        oe = CoverageFakeCpo()
+        els = CoverageFakeCpo()
+        cpo = cpoutil.CpoBase(None, oe, els)
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpo}, EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo}})
+        for resource_type, endpoint in ((OPTICAL_ENGINE, oe), (EXTERNAL_LASER_SOURCE, els)):
+            cpoutil._read_one_eeprom(resource_type, "{}0".format(resource_type), cpo, 0, 0, 0, 2)
+            cpoutil._write_resource_eeprom(resource_type, "0", 0, 0, 0, bytearray([1, 2]))
+            assert len(endpoint.reads) == len(endpoint.writes) == 1
+
+    def test_unmapped_public_els_eeprom_has_a_clear_error(self):
+        cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
+        with pytest.raises(cpoutil.CpoCommandError, match="ELS EEPROM page mapping is not implemented"):
+            cpoutil._physical_eeprom_page(EXTERNAL_LASER_SOURCE, "els0", cpo, 0)
+        cpo.elsfp.read_eeprom.assert_not_called()
+
+    def test_legacy_presence_uses_public_device_method(self):
+        class LegacyDevice:
+            def get_presence(self):
+                return False
+
+        assert cpoutil.get_els_presence(LegacyDevice()) is False
 
 
 class TestExplicitLaserMapping:
