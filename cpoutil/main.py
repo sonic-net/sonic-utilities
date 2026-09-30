@@ -2,12 +2,14 @@
 
 import ast
 import json
-import os
 import re
 import sys
 
 import click
 from tabulate import tabulate
+
+from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
+from utilities_common import platform_sfputil_helper
 
 from cpoutil.mapping import CpoMapping, CpoMappingError
 from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
@@ -226,73 +228,46 @@ class CpoCommandError(RuntimeError):
 
 
 def load_platform_chassis():
-    """Instantiate the platform chassis used by CPO commands."""
+    """Reuse the platform chassis shared by SONiC CLI helpers."""
     global platform_chassis
 
-    try:
-        import sonic_platform
-        platform_chassis = sonic_platform.platform.Platform().get_chassis()
-    except Exception as exc:
-        raise CpoCommandError(
-            "Failed to instantiate platform chassis: {}".format(exc)
-        ) from exc
+    platform_chassis = platform_sfputil_helper.load_chassis()
     if platform_chassis is None:
         raise CpoCommandError("Platform chassis is unavailable")
 
 
 def load_current_port_config():
-    """Load the active PORT table used for CPO port resolution."""
+    """Load shared port mappings and snapshot active ASIC lanes for CPO."""
     global current_port_config
 
-    from portconfig import get_port_config
-    from sonic_py_common import device_info, multi_asic
-
+    if platform_sfputil_helper.platform_sfputil is None:
+        platform_sfputil_helper.load_platform_sfputil()
+    platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
     current_port_config = {}
-    try:
-        platform, hwsku = device_info.get_platform_and_hwsku()
-        if multi_asic.is_multi_asic():
-            for asic_id in range(multi_asic.get_num_asics()):
-                ports, _, _ = get_port_config(
-                    hwsku, platform, asic_name="asic{}".format(asic_id)
-                )
-                current_port_config.update(ports or {})
-        else:
-            ports, _, _ = get_port_config(hwsku, platform)
-            current_port_config.update(ports or {})
-    except Exception as exc:
-        raise CpoCommandError(
-            "Failed to load active PORT configuration: {}".format(exc)
-        ) from exc
+    for port in platform_sfputil_helper.get_logical_list():
+        lanes = platform_sfputil_helper.get_value_from_db_by_field(
+            "CONFIG_DB", "PORT", "lanes", port
+        )
+        current_port_config[port] = {
+            "index": logical_port_name_to_physical_port_list(port),
+            "lanes": _parse_port_lanes(lanes, port),
+        }
 
     if not current_port_config:
         raise CpoCommandError("Active PORT configuration is unavailable")
 
 
 def logical_port_name_to_physical_port_list(logical_port):
-    """Convert a logical or numeric port name to physical port indices."""
+    """Resolve a port through the shared SONiC port mapping helper."""
     port_name = str(logical_port)
-    if port_name.startswith("Ethernet"):
-        entry = current_port_config.get(port_name)
-        if entry is None:
-            raise CpoCommandError(
-                "Invalid port '{}'\nValid values for port: {}".format(
-                    port_name,
-                    sorted(current_port_config, key=_natural_sort_key),
-                )
-            )
-        physical_ports = _parse_port_indexes(entry.get("index"), port_name)
-        if not physical_ports:
-            raise CpoCommandError(
-                "No physical ports found for logical port '{}'".format(
-                    port_name
-                )
-            )
-        return list(dict.fromkeys(physical_ports))
-
-    try:
-        return [int(port_name)]
-    except ValueError as exc:
-        raise CpoCommandError("Invalid port '{}'".format(port_name)) from exc
+    physical_ports = (
+        platform_sfputil_helper.logical_port_name_to_physical_port_list(
+            port_name
+        )
+    )
+    if not physical_ports:
+        raise CpoCommandError("Invalid port '{}'".format(port_name))
+    return list(dict.fromkeys(physical_ports))
 
 
 def _parse_port_integer_list(value, port_name, field):
@@ -320,10 +295,6 @@ def _parse_port_lanes(value, port_name):
     return _parse_port_integer_list(value, port_name, "lanes")
 
 
-def _parse_port_indexes(value, port_name):
-    return _parse_port_integer_list(value, port_name, "index")
-
-
 def get_port_config_entry(logical_port):
     """Return one active PORT entry from the cpoutil-owned configuration."""
     port_name = str(logical_port)
@@ -333,43 +304,6 @@ def get_port_config_entry(logical_port):
             "No active PORT configuration found for '{}'".format(port_name)
         )
     return entry
-
-
-def get_subport(logical_port):
-    """Return the active breakout subport number; zero means unsplit."""
-    entry = get_port_config_entry(logical_port)
-    try:
-        return int(entry.get("subport") or 0)
-    except (TypeError, ValueError) as exc:
-        raise CpoCommandError(
-            "PORT '{}' has invalid subport configuration".format(logical_port)
-        ) from exc
-
-
-def get_first_subport(logical_port):
-    """Return the first active logical port sharing the physical CPO port."""
-    physical_ports = set(
-        logical_port_name_to_physical_port_list(logical_port)
-    )
-    logical_ports = []
-    for port_name, entry in current_port_config.items():
-        indexes = _parse_port_indexes(entry.get("index"), port_name)
-        if physical_ports.intersection(indexes):
-            logical_ports.append(port_name)
-    if not logical_ports:
-        raise CpoCommandError(
-            "No logical ports share physical port(s) {}".format(
-                ",".join(str(port) for port in sorted(physical_ports))
-            )
-        )
-
-    def natural_key(value):
-        return [
-            int(part) if part.isdigit() else part.lower()
-            for part in re.split(r"(\d+)", value)
-        ]
-
-    return sorted(logical_ports, key=natural_key)[0]
 
 
 def get_port_lanes(logical_port):
@@ -439,30 +373,38 @@ def get_cpo_lane_mask(logical_port, mapping=None):
 
 
 def get_cpo_laser_ids(logical_port, mapping=None):
-    """Return ELS lasers and any lasers shared with sibling subports."""
+    """Resolve ELS lasers using the explicit ASIC lane topology."""
     mapping = mapping or get_cpo_interface_mapping(logical_port)
     lane_positions = get_cpo_lane_positions(logical_port, mapping)
     if not mapping.laser_ids:
         return (), ()
-    if len(mapping.lanes) % len(mapping.laser_ids):
-        raise CpoCommandError(
-            "CPO interface '{}' cannot map {} lanes to {} ELS lasers".format(
-                mapping.port, len(mapping.lanes), len(mapping.laser_ids)
+    selected_lanes = {mapping.lanes[index] for index in lane_positions}
+    if not mapping.laser_to_asic_lane_mapping:
+        # Legacy topologies list lasers for a whole interface, but cannot
+        # safely identify which lasers serve a breakout subport.
+        if selected_lanes == set(mapping.lanes):
+            shared = {
+                laser for other in cpo_mapping.get_interfaces()
+                if other.port != mapping.port and other.els_id == mapping.els_id
+                for laser in other.laser_ids
+            }
+            return mapping.laser_ids, tuple(
+                laser for laser in mapping.laser_ids if laser in shared
             )
+        raise CpoCommandError(
+            "CPO interface '{}' needs laser_to_asic_lane_mapping to resolve "
+            "breakout port '{}'".format(mapping.port, logical_port)
         )
 
-    selected_positions = set(lane_positions)
-    lanes_per_laser = len(mapping.lanes) // len(mapping.laser_ids)
     selected = []
     shared = []
-    for index, laser_id in enumerate(mapping.laser_ids):
-        first = index * lanes_per_laser
-        laser_positions = set(range(first, first + lanes_per_laser))
-        overlap = selected_positions.intersection(laser_positions)
+    for laser_id in mapping.laser_ids:
+        laser_lanes = set(mapping.laser_to_asic_lane_mapping[laser_id])
+        overlap = selected_lanes.intersection(laser_lanes)
         if not overlap:
             continue
         selected.append(laser_id)
-        if overlap != laser_positions:
+        if overlap != laser_lanes:
             shared.append(laser_id)
     return tuple(selected), tuple(shared)
 
@@ -472,12 +414,8 @@ def get_interface_context(logical_port):
     mapping = get_cpo_interface_mapping(logical_port)
     lane_positions = get_cpo_lane_positions(logical_port, mapping)
     laser_ids, shared_laser_ids = get_cpo_laser_ids(logical_port, mapping)
-    port_name = str(logical_port)
     return {
         "mapping": mapping,
-        "subport": get_subport(port_name)
-        if port_name.startswith("Ethernet") else 0,
-        "first_subport": get_first_subport(logical_port),
         "lane_positions": lane_positions,
         "lane_mask": sum(1 << lane for lane in lane_positions),
         "laser_ids": laser_ids,
@@ -498,21 +436,7 @@ def load_cpo_object_map():
 
     from sonic_py_common import device_info
 
-    cpo_data_loader = getattr(device_info, "get_cpo_data", None)
-    if callable(cpo_data_loader):
-        cpo_data = cpo_data_loader()
-    else:
-        platform_dir = device_info.get_path_to_platform_dir()
-        cpo_path = os.path.join(platform_dir, "cpo.json")
-        try:
-            with open(cpo_path, "r") as cpo_file:
-                cpo_data = json.load(cpo_file)
-        except (OSError, ValueError) as exc:
-            raise CpoCommandError(
-                "Failed to load CPO topology from '{}': {}".format(
-                    cpo_path, exc
-                )
-            ) from exc
+    cpo_data = device_info.get_cpo_data()
 
     if cpo_data is None:
         raise CpoCommandError("CPO topology is unavailable for this platform")
@@ -629,14 +553,16 @@ def get_oe_api(cpo, label):
 
 def get_oe_presence(cpo):
     """Read OE presence from a public or legacy CPO object."""
-    if getattr(cpo, "oe", None) is not None:
+    # CpoBase owns separate OE/ELSFP endpoints. Legacy CPO implementations
+    # expose presence and the combined API directly on the CPO object.
+    if isinstance(cpo, CpoBase):
         return cpo.oe.get_presence()
     return cpo.get_presence()
 
 
 def get_els_api(cpo, label):
     """Get the public ELSFP API from a CPO object."""
-    if getattr(cpo, "elsfp", None) is None:
+    if not isinstance(cpo, CpoBase):
         return get_oe_api(cpo, label)
 
     try:
@@ -656,7 +582,7 @@ def get_els_api(cpo, label):
 
 def get_els_presence(cpo):
     """Read ELS presence from a public or legacy CPO object."""
-    if getattr(cpo, "elsfp", None) is not None:
+    if isinstance(cpo, CpoBase):
         return cpo.elsfp.get_presence()
     return cpo.get_els_presence()
 
@@ -726,6 +652,32 @@ def require_els_tx_disable_api(api):
         raise NotImplementedError(
             "The active CPO backend does not implement ELS Tx-disable"
         )
+
+
+def get_oe_control_targets(resource_id):
+    """Resolve one bank-bound API per mapped OE bank before any writes."""
+    bank_ports = {}
+    for mapping in cpo_mapping.get_interfaces():
+        if mapping.oe_name == resource_id:
+            bank_ports.setdefault(mapping.oe_bank, []).extend(mapping.physical_ports)
+    targets = []
+    for bank, physical_ports in sorted(bank_ports.items()):
+        for physical_port in dict.fromkeys(physical_ports):
+            cpo = cpo_object_map[PORT].get(physical_port)
+            if cpo is not None:
+                targets.append((bank, get_oe_api(cpo, resource_id)))
+                break
+        else:
+            raise CpoCommandError(
+                "No CPO object is available for '{}' bank {}".format(
+                    resource_id, bank
+                )
+            )
+    if not targets:
+        raise CpoCommandError(
+            "No OE bank mapping is available for '{}'".format(resource_id)
+        )
+    return targets
 
 
 def get_els_control_targets(resource_id):
@@ -1576,10 +1528,10 @@ def show_interface_tx_disable(port, json_output):
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
             logical_port = port if port is not None else port_name
-            context = get_interface_context(logical_port)
+            lane_positions = get_cpo_lane_positions(logical_port)
             api = get_oe_api(cpo, port_name)
             values = _select_lane_values(
-                api.get_tx_disable(), context["lane_positions"]
+                api.get_tx_disable(), lane_positions
             )
             records[port_name] = values
     except (NotImplementedError, AttributeError) as exc:
@@ -1632,9 +1584,7 @@ def show_interface_speed(port, json_output):
                     advertisements, active_application
                 ))
             logical_port = port if port is not None else port_name
-            lane_positions = get_interface_context(
-                logical_port
-            )["lane_positions"]
+            lane_positions = get_cpo_lane_positions(logical_port)
             records[port_name] = {
                 "Application Select Controls": _select_lane_values(
                     configured, lane_positions
@@ -2035,17 +1985,28 @@ def config_oe_reset(oe_index):
 @click.argument("oe_index")
 @click.argument("state", type=click.Choice(["enable", "disable"]))
 def config_oe_tx_disable(oe_index, state):
-    """Enable or disable OE Tx-disable."""
+    """Enable or disable Tx-disable across every mapped OE bank."""
     try:
-        resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
-        api = get_oe_api(cpo, resource_id)
+        resource_id, _ = _single_resource(OPTICAL_ENGINE, oe_index)
+        targets = get_oe_control_targets(resource_id)
         disable = state == "enable"
+
+        def apply_tx_disable():
+            # CMIS tx_disable() writes the bank bound to this CPO's API,
+            # so an OE-wide command must visit each bank explicitly.
+            for bank, api in targets:
+                _require_success(
+                    api.tx_disable(disable),
+                    "{} bank {} Tx-disable {}".format(resource_id, bank, state),
+                )
+            return True
+
         _run_action(
             "{} Tx-disable for {}".format(
                 "Enabling" if disable else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: api.tx_disable(disable),
+            apply_tx_disable,
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))

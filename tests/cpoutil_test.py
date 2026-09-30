@@ -21,6 +21,24 @@ from cpoutil.mapping import (  # noqa: E402
 )
 
 
+@pytest.fixture(autouse=True)
+def shared_port_mapping(monkeypatch):
+    """Provide port data to the real shared logical-port resolver."""
+    ports = mock.Mock()
+    ports.is_logical_port.side_effect = (
+        lambda port: port in cpoutil.current_port_config
+    )
+    def physical_ports(port):
+        indexes = cpoutil.current_port_config[port]["index"]
+        if isinstance(indexes, (list, tuple)):
+            return list(indexes)
+        return [int(index) for index in str(indexes).split(",")]
+
+    ports.get_logical_to_physical.side_effect = physical_ports
+    monkeypatch.setattr(cpoutil.platform_sfputil_helper, "platform_sfputil", ports)
+    return ports
+
+
 CPO_DATA = {
     "cpo_eeprom_mode": "joint",
     "oes": {
@@ -391,22 +409,6 @@ class CoverageFakeCpo(object):
 
 @pytest.fixture
 def coverage_environment(monkeypatch):
-    fields = types.ModuleType("sonic_platform_base.sonic_xcvr.fields")
-    fields.consts = types.SimpleNamespace(
-        ACTIVE_APSEL_HOSTLANE="ActiveAppSelLane"
-    )
-    platform_base = types.ModuleType("sonic_platform_base")
-    sonic_xcvr = types.ModuleType("sonic_platform_base.sonic_xcvr")
-    platform_base.sonic_xcvr = sonic_xcvr
-    sonic_xcvr.fields = fields
-    monkeypatch.setitem(sys.modules, "sonic_platform_base", platform_base)
-    monkeypatch.setitem(
-        sys.modules, "sonic_platform_base.sonic_xcvr", sonic_xcvr
-    )
-    monkeypatch.setitem(
-        sys.modules, "sonic_platform_base.sonic_xcvr.fields", fields
-    )
-
     cpo = CoverageFakeCpo()
     cpoutil.cpo_mapping = CpoMapping(COVERAGE_CPO_DATA, COVERAGE_PORT_CONFIG)
     cpoutil.current_port_config = dict(COVERAGE_PORT_CONFIG)
@@ -508,8 +510,6 @@ class TestHelperCoverage(object):
     def test_port_and_lane_helpers(self, coverage_environment):
         assert cpoutil.logical_port_name_to_physical_port_list("Ethernet0") == [1]
         assert cpoutil.logical_port_name_to_physical_port_list("7") == [7]
-        assert cpoutil.get_subport("Ethernet0") == 0
-        assert cpoutil.get_first_subport("Ethernet0") == "Ethernet0"
         assert cpoutil.get_port_lanes("Ethernet0") == (1, 2)
         assert cpoutil.get_cpo_lane_positions("Ethernet0") == (0, 1)
         assert cpoutil.get_cpo_lane_mask("Ethernet0") == 3
@@ -530,11 +530,12 @@ class TestHelperCoverage(object):
         assert cpoutil.get_els_api(cpo, "els0") is cpo.api
         assert cpoutil.get_els_presence(cpo)
 
-        cpo.oe = CoverageFakeEndpoint(cpo.api)
-        cpo.elsfp = CoverageFakeEndpoint(cpo.api)
-        assert cpoutil.get_oe_presence(cpo)
-        assert cpoutil.get_els_api(cpo, "els0") is cpo.api
-        assert cpoutil.get_els_presence(cpo)
+        public_cpo = cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(cpo.api), CoverageFakeEndpoint(cpo.api)
+        )
+        assert cpoutil.get_oe_presence(public_cpo)
+        assert cpoutil.get_els_api(public_cpo, "els0") is cpo.api
+        assert cpoutil.get_els_presence(public_cpo)
 
     def test_normalizers_and_filters(self):
         assert cpoutil.get_els_lpmode(
@@ -722,3 +723,229 @@ class TestCommandCoverage(object):
         assert cpoutil._resource_banks(EXTERNAL_LASER_SOURCE, "els0") == [0]
         assert cpoutil._resource_banks(OPTICAL_ENGINE, "oe0") == [0]
         assert cpoutil._format_eeprom_hexdump(b"ABC", 0).endswith("|ABC|")
+
+
+class TestSharedPlatformHelpers:
+    def test_reuses_cached_chassis(self, monkeypatch):
+        chassis = FakeChassis({})
+        monkeypatch.setattr(cpoutil.platform_sfputil_helper, "platform_chassis", chassis)
+        with mock.patch.dict(sys.modules, {"sonic_platform": None}):
+            cpoutil.load_platform_chassis()
+            cpoutil.load_platform_chassis()
+        assert cpoutil.platform_chassis is chassis
+
+    def test_chassis_load_failure_is_reported(self, monkeypatch, capsys):
+        monkeypatch.setattr(cpoutil.platform_sfputil_helper, "platform_chassis", None)
+        with mock.patch.dict(sys.modules, {"sonic_platform": None}):
+            with pytest.raises(SystemExit):
+                cpoutil.load_platform_chassis()
+        assert "Failed to load platform chassis" in capsys.readouterr().out
+
+    def test_port_configuration_uses_shared_helpers(self, monkeypatch, shared_port_mapping):
+        helper = cpoutil.platform_sfputil_helper
+        shared_port_mapping.logical = ["Ethernet0", "Ethernet2"]
+        shared_port_mapping.get_logical_to_physical.side_effect = lambda port: [1]
+        lane_fields = {"Ethernet0": "41,43", "Ethernet2": "42,44"}
+        shared_port_mapping.is_logical_port.side_effect = lambda port: port in lane_fields
+        monkeypatch.setattr(helper, "platform_sfputil", None)
+        load = mock.Mock(side_effect=lambda: setattr(helper, "platform_sfputil", shared_port_mapping))
+        read_mappings = mock.Mock()
+        read_lanes = mock.Mock(side_effect=lambda db, table, field, port: lane_fields[port])
+        monkeypatch.setattr(helper, "load_platform_sfputil", load)
+        monkeypatch.setattr(helper, "platform_sfputil_read_porttab_mappings", read_mappings)
+        monkeypatch.setattr(helper, "get_value_from_db_by_field", read_lanes)
+        cpoutil.load_current_port_config()
+        load.assert_called_once_with()
+        read_mappings.assert_called_once_with()
+        assert cpoutil.current_port_config == {
+            "Ethernet0": {"index": [1], "lanes": (41, 43)},
+            "Ethernet2": {"index": [1], "lanes": (42, 44)},
+        }
+        assert read_lanes.call_args_list == [
+            mock.call("CONFIG_DB", "PORT", "lanes", "Ethernet0"),
+            mock.call("CONFIG_DB", "PORT", "lanes", "Ethernet2"),
+        ]
+        cpoutil.load_current_port_config()
+        load.assert_called_once_with()
+
+    def test_missing_topology_is_reported_without_file_fallback(self, monkeypatch):
+        from sonic_py_common import device_info
+
+        loader = mock.Mock(return_value=None)
+        monkeypatch.setattr(device_info, "get_cpo_data", loader)
+        with mock.patch("builtins.open", side_effect=AssertionError("unexpected file read")):
+            with pytest.raises(cpoutil.CpoCommandError, match="topology is unavailable"):
+                cpoutil.load_cpo_object_map()
+        loader.assert_called_once_with()
+
+    def test_public_presence_uses_independent_endpoints(self):
+        oe = mock.Mock(get_presence=mock.Mock(return_value=True))
+        els = mock.Mock(get_presence=mock.Mock(return_value=False))
+        cpo = cpoutil.CpoBase(None, oe, els)
+        assert cpoutil.get_oe_presence(cpo) is True
+        assert cpoutil.get_els_presence(cpo) is False
+        assert cpoutil.get_els_api(cpo, "els0") is els.get_api.return_value
+
+
+class TestExplicitLaserMapping:
+    @staticmethod
+    def configure(monkeypatch, data, ports):
+        mapping = CpoMapping(data, ports)
+        monkeypatch.setattr(cpoutil, "cpo_mapping", mapping)
+        monkeypatch.setattr(cpoutil, "current_port_config", ports)
+        return mapping
+
+    @staticmethod
+    def nonuniform_topology():
+        data = json.loads(json.dumps(COMMUNITY_DATA))
+        data["devices"]["oe0"].update(asic_lanes=[1, 2, 3, 4, 5, 6], max_banks=1)
+        # The first laser owns noncontiguous lanes; the groups have unequal sizes.
+        data["devices"]["els0"]["laser_to_asic_lane_mapping"] = {
+            "1": [1, 3, 5], "2": [2], "3": [4, 6],
+        }
+        del data["interfaces"]["Ethernet4"]
+        return data
+
+    def test_noncontiguous_unequal_groups_select_exact_lasers(self, monkeypatch):
+        self.configure(monkeypatch, self.nonuniform_topology(), {
+            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
+            "Ethernet1": {"index": "1", "lanes": "1,3,5"},
+            "Ethernet2": {"index": "1", "lanes": "2,4,6"},
+        })
+        assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
+        assert cpoutil.get_cpo_laser_ids("Ethernet2") == ((1, 2), ())
+
+    def test_explicit_mapping_controls_only_selected_lanes(self, monkeypatch, coverage_environment):
+        self.configure(monkeypatch, self.nonuniform_topology(), {
+            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
+            "Ethernet1": {"index": "1", "lanes": "1,3,5"},
+        })
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
+        assert result.exit_code == 0, result.output
+        assert coverage_environment.api.calls == [
+            ("tx_disable_channel", 0b010101, True),
+            ("set_per_lane_enable", 0b001, False),
+        ]
+
+    def test_shared_laser_across_banks_blocks_all_writes(self, monkeypatch, coverage_environment):
+        data = json.loads(json.dumps(COMMUNITY_DATA))
+        data["devices"]["els0"]["laser_to_asic_lane_mapping"] = {
+            "1": [1, 3], "2": [2], "3": [4],
+        }
+        self.configure(monkeypatch, data, COVERAGE_PORT_CONFIG)
+        assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), (0,))
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", "enable"])
+        assert result.exit_code != 0
+        assert "shares ELS laser(s) 0" in result.output
+        assert coverage_environment.api.calls == []
+
+    def test_shared_laser_within_bank_blocks_all_writes(self, monkeypatch, coverage_environment):
+        self.configure(monkeypatch, self.nonuniform_topology(), {
+            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
+            "Ethernet1": {"index": "1", "lanes": "1,3"},
+        })
+        assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), (0,))
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
+        assert result.exit_code != 0
+        assert coverage_environment.api.calls == []
+
+    def test_legacy_breakout_without_lane_mapping_is_rejected(self, monkeypatch, coverage_environment):
+        self.configure(monkeypatch, COVERAGE_CPO_DATA, {
+            "Ethernet0": {"index": "1", "lanes": "1,2"},
+            "Ethernet1": {"index": "1", "lanes": "2"},
+        })
+        assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), ())
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
+        assert result.exit_code != 0
+        assert "needs laser_to_asic_lane_mapping" in result.output
+        assert coverage_environment.api.calls == []
+
+    def test_incomplete_explicit_lane_mapping_is_rejected(self):
+        data = self.nonuniform_topology()
+        del data["devices"]["els0"]["laser_to_asic_lane_mapping"]["3"]
+        with pytest.raises(CpoMappingError, match="ASIC lanes without an ELS laser mapping"):
+            CpoMapping(data, {"Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"}})
+
+    @pytest.mark.parametrize("laser_map", [{"0": [1, 2]}, {"bad": [1, 2]}, {"1": []}, []])
+    def test_invalid_explicit_mapping_is_rejected(self, laser_map):
+        data = self.nonuniform_topology()
+        data["devices"]["els0"]["laser_to_asic_lane_mapping"] = laser_map
+        with pytest.raises(CpoMappingError):
+            CpoMapping(data, {"Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"}})
+
+    def test_normalized_integer_laser_ids_and_string_lanes(self, monkeypatch):
+        data = self.nonuniform_topology()
+        data["devices"]["els0"]["laser_to_asic_lane_mapping"] = {
+            1: "1,3,5", 2: "2", 3: "4,6",
+        }
+        self.configure(monkeypatch, data, {
+            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
+            "Ethernet1": {"index": "1", "lanes": "1,3,5"},
+        })
+        assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
+
+
+class TestOeBankControls:
+    @pytest.fixture
+    def bank_cpos(self, monkeypatch):
+        cpos = {1: CoverageFakeCpo(), 2: CoverageFakeCpo(), 3: CoverageFakeCpo()}
+        data = json.loads(json.dumps(CPO_DATA))
+        # A second interface in the same bank must not cause a duplicate write.
+        data["interfaces"]["Ethernet4"] = dict(data["interfaces"]["Ethernet0"])
+        monkeypatch.setattr(cpoutil, "cpo_mapping", CpoMapping(data))
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpos[1], "oe1": cpos[3]},
+            EXTERNAL_LASER_SOURCE: {"els0": cpos[1], "els1": cpos[3]},
+            PORT: dict(cpos),
+        })
+        monkeypatch.setattr(cpoutil, "initialize_platform", lambda: None)
+        return cpos
+
+    @pytest.mark.parametrize("state,disabled", [("enable", True), ("disable", False)])
+    def test_operates_once_per_bank_and_leaves_other_oes_alone(self, bank_cpos, state, disabled):
+        result = invoke_coverage(["config", "oe", "tx_disable", "0", state])
+        assert result.exit_code == 0, result.output
+        assert bank_cpos[1].api.calls == [("tx_disable", disabled)]
+        assert bank_cpos[2].api.calls == [("tx_disable", disabled)]
+        assert bank_cpos[3].api.calls == []
+
+    def test_missing_bank_is_detected_before_any_write(self, bank_cpos):
+        del cpoutil.cpo_object_map[PORT][2]
+        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
+        assert result.exit_code != 0
+        assert "bank 1" in result.output
+        assert all(not cpo.api.calls for cpo in bank_cpos.values())
+
+    def test_unavailable_api_is_detected_before_any_write(self, bank_cpos):
+        bank_cpos[2].api = None
+        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
+        assert result.exit_code != 0
+        assert "API is unavailable" in result.output
+        assert bank_cpos[1].api.calls == []
+
+    def test_failed_bank_does_not_report_success(self, bank_cpos, monkeypatch):
+        monkeypatch.setattr(bank_cpos[2].api, "tx_disable", lambda disabled: False)
+        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
+        assert result.exit_code != 0
+        assert "oe0 bank 1 Tx-disable enable failed" in result.output
+        assert "OK" not in result.output
+
+    def test_bailly_apis_write_distinct_bank_addresses(self, bank_cpos):
+        from sonic_platform_base.sonic_xcvr.api.broadcom.bailly import BaillyApi
+        from sonic_platform_base.sonic_xcvr.codes.broadcom.bailly import BaillyCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.broadcom.bailly import BaillyMemMap
+        from sonic_platform_base.sonic_xcvr.xcvr_eeprom import XcvrEeprom
+
+        writer = mock.Mock(return_value=True)
+        for bank, physical_port in enumerate([1, 2]):
+            eeprom = XcvrEeprom(
+                lambda offset, size: bytearray(size), writer,
+                BaillyMemMap(BaillyCodes, bank=bank),
+            )
+            bank_cpos[physical_port].api = BaillyApi(eeprom)
+        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
+        assert result.exit_code == 0, result.output
+        assert writer.call_count == 2
+        first, second = [call.args for call in writer.call_args_list]
+        assert first[0] != second[0]
+        assert first[1:] == second[1:] == (1, bytearray([0xff]))

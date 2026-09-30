@@ -1,6 +1,6 @@
 """Helpers for interpreting the CPO topology used by the platform API."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 
@@ -38,6 +38,33 @@ def _resource_name(resource_type, resource_id):
     return "{}{}".format(resource_type, int(resource_id))
 
 
+def _parse_laser_lane_mapping(value, resource_name):
+    """Normalize one-based JSON laser IDs to zero-based CLI/API IDs."""
+    if not isinstance(value, dict):
+        raise CpoMappingError(
+            "{} laser_to_asic_lane_mapping must be an object".format(
+                resource_name
+            )
+        )
+    parsed = {}
+    for laser, lanes in value.items():
+        try:
+            laser_id = int(laser) - 1
+        except (TypeError, ValueError) as exc:
+            raise CpoMappingError("laser IDs must be positive integers") from exc
+        if laser_id < 0 or laser_id in parsed:
+            raise CpoMappingError("laser IDs must be unique positive integers")
+        parsed_lanes = _parse_integer_list(
+            lanes, "{} laser {} lanes".format(resource_name, laser)
+        )
+        if not parsed_lanes:
+            raise CpoMappingError(
+                "{} laser {} must map to ASIC lanes".format(resource_name, laser)
+            )
+        parsed[laser_id] = parsed_lanes
+    return parsed
+
+
 @dataclass(frozen=True)
 class InterfaceMapping:
     port: str
@@ -48,6 +75,7 @@ class InterfaceMapping:
     els_id: int
     els_bank: object
     laser_ids: tuple
+    laser_to_asic_lane_mapping: dict = field(default_factory=dict)
 
     @property
     def oe_name(self):
@@ -221,18 +249,14 @@ class CpoMapping(object):
                         ))
                 physical_ports = tuple(dict.fromkeys(matching_ports))
 
-            laser_map = normalized_devices[els_name].get(
-                "laser_to_asic_lane_mapping", {}
+            laser_map = _parse_laser_lane_mapping(
+                normalized_devices[els_name].get("laser_to_asic_lane_mapping", {}),
+                els_name,
             )
-            selected_lasers = []
-            for laser_id, laser_lanes in laser_map.items():
-                parsed_laser_lanes = _parse_integer_list(
-                    laser_lanes,
-                    "{} laser {} lanes".format(els_name, laser_id),
-                )
-                if not parsed_lanes or set(parsed_lanes).intersection(
-                        parsed_laser_lanes):
-                    selected_lasers.append(int(laser_id) - 1)
+            selected_lasers = [
+                laser_id for laser_id, laser_lanes in sorted(laser_map.items())
+                if set(parsed_lanes).intersection(laser_lanes)
+            ]
 
             normalized_interfaces[port] = {
                 "index": physical_ports,
@@ -320,21 +344,38 @@ class CpoMapping(object):
                         "interface {} has invalid ELS bank".format(port)
                     ) from exc
 
+            lanes = _parse_integer_list(
+                interface.get("lanes"), "interface {} lanes".format(port)
+            )
+            laser_ids = _parse_integer_list(
+                interface.get("laser_ids"), "interface {} laser_ids".format(port)
+            )
+            laser_map = _parse_laser_lane_mapping(
+                self._elss[els_name].get("laser_to_asic_lane_mapping", {}), els_name
+            )
+            if laser_map:
+                if any(laser not in laser_map for laser in laser_ids):
+                    raise CpoMappingError(
+                        "interface {} references an unmapped ELS laser".format(port)
+                    )
+                covered_lanes = {
+                    lane for laser in laser_ids for lane in laser_map[laser]
+                }
+                if not set(lanes).issubset(covered_lanes):
+                    raise CpoMappingError(
+                        "interface {} has ASIC lanes without an ELS laser mapping".format(port)
+                    )
+
             self._parsed_interfaces[port] = InterfaceMapping(
                 port=port,
                 physical_ports=physical_ports,
-                lanes=_parse_integer_list(
-                    interface.get("lanes"),
-                    "interface {} lanes".format(port),
-                ),
+                lanes=lanes,
                 oe_id=oe_id,
                 oe_bank=oe_bank,
                 els_id=els_id,
                 els_bank=els_bank,
-                laser_ids=_parse_integer_list(
-                    interface.get("laser_ids"),
-                    "interface {} laser_ids".format(port),
-                ),
+                laser_ids=laser_ids,
+                laser_to_asic_lane_mapping=laser_map,
             )
 
     def ports(self):

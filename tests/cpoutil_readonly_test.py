@@ -5,6 +5,8 @@ from unittest import mock
 
 from click.testing import CliRunner
 
+from .cpoutil_test import shared_port_mapping  # noqa: F401
+
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -247,6 +249,16 @@ class TestDirectPlatformApiCommands(object):
         assert values["Active Application Control Set"] == {
             "lane00": 200000,
             "lane01": 400000,
+        }
+
+    def test_breakout_speed_does_not_require_els_lane_mapping(self):
+        result = invoke([
+            "show", "interface", "speed", "Ethernet1", "--json"
+        ])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["Ethernet1"] == {
+            "Application Select Controls": {"lane01": 200000},
+            "Active Application Control Set": {"lane01": 400000},
         }
 
     def test_interface_lane_status_uses_public_elsfp_api(self):
