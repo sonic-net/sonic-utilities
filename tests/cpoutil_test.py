@@ -28,6 +28,7 @@ def shared_port_mapping(monkeypatch):
     ports.is_logical_port.side_effect = (
         lambda port: port in cpoutil.current_port_config
     )
+
     def physical_ports(port):
         indexes = cpoutil.current_port_config[port]["index"]
         if isinstance(indexes, (list, tuple)):
