@@ -726,6 +726,25 @@ class TestCommandCoverage(object):
 
 
 class TestSharedPlatformHelpers:
+    def test_shared_eeprom_and_dom_formatting(self):
+        assert cpoutil._format_eeprom_hexdump(b"", 128) == ""
+        assert cpoutil._format_eeprom_hexdump(b"ABCDEFGHIJKLMNOPQ", 128) == (
+            "        00000080 41 42 43 44 45 46 47 48  49 4a 4b 4c 4d 4e 4f 50 |ABCDEFGHIJKLMNOP|\n"
+            "        00000090 51                                               |Q|"
+        )
+        lines = ["ChannelMonitorValues:"]
+        cpoutil._append_dom_values(
+            lines,
+            {"rx10power": "Unknown", "rx2power": "-2.1dBm", "rx1power": "N/A"},
+            {"rx10power": "Rx10", "rx2power": "Rx2", "rx1power": "Rx1"},
+            {"rx10power": "dBm", "rx2power": "dBm", "rx1power": "dBm"},
+        )
+        assert lines == [
+            "ChannelMonitorValues:",
+            "                Rx2: -2.1dBm",
+            "                Rx10: Unknown",
+        ]
+
     def test_reuses_cached_chassis(self, monkeypatch):
         chassis = FakeChassis({})
         monkeypatch.setattr(cpoutil.platform_sfputil_helper, "platform_chassis", chassis)

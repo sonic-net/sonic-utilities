@@ -473,6 +473,19 @@ class TestSfputil(object):
         output = sfputil.get_physical_port_name('Ethernet0', 0, True)
         assert output == 'Ethernet0:0 (ganged)'
 
+    def test_shared_port_lookup_uses_sfputil_mapping(self, monkeypatch, capsys):
+        mapping = MagicMock()
+        mapping.is_logical_port.side_effect = lambda port: port == 'Ethernet0'
+        mapping.get_logical_to_physical.return_value = [1, 2]
+        monkeypatch.setattr(sfputil, 'platform_sfputil', mapping)
+        # The sfputil CLI owns its mapping independently of the helper cache.
+        monkeypatch.setattr(sfputil.platform_sfputil_helper, 'platform_sfputil', None)
+        assert sfputil.logical_port_name_to_physical_port_list('Ethernet0') == [1, 2]
+        assert sfputil.logical_port_name_to_physical_port_list('7') == [7]
+        assert sfputil.logical_port_name_to_physical_port_list('Ethernet999') is None
+        assert sfputil.logical_port_name_to_physical_port_list('invalid') is None
+        assert capsys.readouterr().out == "Invalid port 'Ethernet999'\nInvalid port 'invalid'\n"
+
     def test_version(self):
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['version'], [])

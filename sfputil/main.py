@@ -29,6 +29,7 @@ from utilities_common.platform_sfputil_helper import (
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import QSFP_DATA_MAP
 from utilities_common.sfp_helper import is_transceiver_cmis, get_data_map_sort_key
+from utilities_common.sfp_helper import format_dict_value_to_string, get_physical_port_name, hexdump
 from tabulate import tabulate
 from utilities_common.general import load_db_config
 
@@ -368,27 +369,6 @@ def is_port_type_rj45(port_name):
     return False
 # ========================== Methods for formatting output ==========================
 
-# Convert dict values to cli output string
-def format_dict_value_to_string(sorted_key_table,
-                                dom_info_dict, dom_value_map,
-                                dom_unit_map, alignment=0):
-    output = ''
-    indent = ' ' * 8
-    separator = ": "
-    for key in sorted_key_table:
-        if dom_info_dict is not None and key in dom_info_dict and dom_info_dict[key] != 'N/A':
-            value = dom_info_dict[key]
-            units = ''
-            if type(value) != str or (value != 'Unknown' and not value.endswith(dom_unit_map[key])):
-                units = dom_unit_map[key]
-            output += '{}{}{}{}{}\n'.format((indent * 2),
-                                            dom_value_map[key],
-                                            separator.rjust(len(separator) + alignment - len(dom_value_map[key])),
-                                            value,
-                                            units)
-    return output
-
-
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
@@ -575,31 +555,10 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
 # =============== Getting and printing SFP data ===============
 
 
-#
-def get_physical_port_name(logical_port, physical_port, ganged):
-    """
-        Returns:
-          port_num if physical
-          logical_port:port_num if logical port and is a ganged port
-          logical_port if logical and not ganged
-    """
-    if logical_port == physical_port:
-        return str(logical_port)
-    elif ganged:
-        return "{}:{} (ganged)".format(logical_port, physical_port)
-    else:
-        return logical_port
-
-
 def logical_port_name_to_physical_port_list(port_name):
-    if port_name.startswith("Ethernet"):
-        if platform_sfputil.is_logical_port(port_name):
-            return platform_sfputil.get_logical_to_physical(port_name)
-        else:
-            click.echo("Error: Invalid port '{}'".format(port_name))
-            return None
-    else:
-        return [int(port_name)]
+    return platform_sfputil_helper.logical_port_name_to_physical_port_list(
+        port_name, sfputil=platform_sfputil)
+
 
 def logical_port_to_physical_port_index(port_name):
     if not platform_sfputil.is_logical_port(port_name):
@@ -1038,43 +997,6 @@ def eeprom_dump_general(physical_port, page, flat_offset, size, page_offset, no_
         return 0, hexdump(EEPROM_DUMP_INDENT, page_dump, page_offset, start_newline=False)
     else:
         return 0, ''.join('{:02x}'.format(x) for x in page_dump)
-
-
-def convert_byte_to_valid_ascii_char(byte):
-    if byte < 32 or 126 < byte:
-        return '.'
-    else:
-        return chr(byte)
-
-
-def hexdump(indent, data, mem_address, start_newline=True):
-    size = len(data)
-    offset = 0
-    lines = [''] if start_newline else []
-    while size > 0:
-        offset_str = "{}{:08x}".format(indent, mem_address)
-        if size >= 16:
-            first_half = ' '.join("{:02x}".format(x) for x in data[offset:offset + 8])
-            second_half = ' '.join("{:02x}".format(x) for x in data[offset + 8:offset + 16])
-            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + 16])
-            lines.append(f'{offset_str} {first_half}  {second_half} |{ascii_str}|')
-        elif size > 8:
-            first_half = ' '.join("{:02x}".format(x) for x in data[offset:offset + 8])
-            second_half = ' '.join("{:02x}".format(x) for x in data[offset + 8:offset + size])
-            padding = '   ' * (16 - size)
-            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + size])
-            lines.append(f'{offset_str} {first_half}  {second_half}{padding} |{ascii_str}|')
-            break
-        else:
-            hex_part = ' '.join("{:02x}".format(x) for x in data[offset:offset + size])
-            padding = '   ' * (16 - size)
-            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + size])
-            lines.append(f'{offset_str} {hex_part} {padding} |{ascii_str}|')
-            break
-        size -= 16
-        offset += 16
-        mem_address += 16
-    return '\n'.join(lines)
 
 
 # 'presence' subcommand

@@ -10,6 +10,12 @@ from tabulate import tabulate
 
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from utilities_common import platform_sfputil_helper
+from utilities_common.sfp_helper import (
+    format_dict_value_to_string,
+    format_value_with_unit as _value_with_unit,
+    get_physical_port_name,
+    hexdump,
+)
 
 from cpoutil.mapping import CpoMapping, CpoMappingError
 from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
@@ -421,13 +427,6 @@ def get_interface_context(logical_port):
         "laser_ids": laser_ids,
         "shared_laser_ids": shared_laser_ids,
     }
-
-
-def get_physical_port_name(logical_port, member_index, ganged):
-    """Return the display name for a physical port."""
-    if ganged:
-        return "{}:{} (ganged)".format(logical_port, member_index)
-    return str(logical_port)
 
 
 def load_cpo_object_map():
@@ -862,13 +861,6 @@ def _case_sensitive_natural_sort_key(value):
     ]
 
 
-def _value_with_unit(value, unit):
-    if isinstance(value, str):
-        if value == "Unknown" or not unit or value.endswith(unit):
-            return value
-    return "{}{}".format(value, unit)
-
-
 def _format_application_advertisement(advertisements):
     if isinstance(advertisements, str):
         try:
@@ -954,21 +946,9 @@ def _format_cpo_info(info):
 
 
 def _append_dom_values(lines, values, value_map, unit_map, alignment=0):
-    indent = " " * 16
-    separator = ": "
-    for key in sorted(value_map, key=_case_sensitive_natural_sort_key):
-        if key not in values or values[key] == "N/A":
-            continue
-        label = value_map[key]
-        aligned_separator = separator.rjust(
-            len(separator) + alignment - len(label)
-        )
-        lines.append("{}{}{}{}".format(
-            indent,
-            label,
-            aligned_separator,
-            _value_with_unit(values[key], unit_map[key]),
-        ))
+    sorted_keys = sorted(value_map, key=_case_sensitive_natural_sort_key)
+    lines.extend(format_dict_value_to_string(
+        sorted_keys, values, value_map, unit_map, alignment).splitlines())
 
 
 def _format_cpo_dom(dom_values):
@@ -2256,32 +2236,8 @@ EEPROM_DUMP_INDENT = " " * 8
 ELS_FULL_DUMP_PAGES = (0xB0, 0xB1, 0xB2)
 
 
-def _eeprom_ascii(value):
-    return chr(value) if 32 <= value <= 126 else "."
-
-
 def _format_eeprom_hexdump(data, address, indent=EEPROM_DUMP_INDENT):
-    """Format bytes as a standard EEPROM hex dump."""
-    lines = []
-    for start in range(0, len(data), 16):
-        chunk = data[start:start + 16]
-        first_half = " ".join(
-            "{:02x}".format(value) for value in chunk[:8]
-        )
-        second_half = " ".join(
-            "{:02x}".format(value) for value in chunk[8:]
-        )
-        if len(chunk) > 8:
-            hex_text = "{}  {}".format(first_half, second_half)
-        else:
-            hex_text = first_half
-        ascii_text = "".join(_eeprom_ascii(value) for value in chunk)
-        lines.append(
-            "{}{:08x} {:<48} |{}|".format(
-                indent, address + start, hex_text, ascii_text
-            )
-        )
-    return "\n".join(lines)
+    return hexdump(indent, data, address, start_newline=False)
 
 
 def _resource_banks(resource_type, resource_id, requested_bank=None):
