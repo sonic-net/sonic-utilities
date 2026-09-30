@@ -60,6 +60,13 @@ test_data = {
         "desc": "Test another code path for good case",
         "args": ["", "-d", "/tmp"],
         "upperdir": "/tmp"
+    },
+    "7": {
+        "desc": "Marker write with ENOSPC does not trigger read-only overlay",
+        "args": ["", "-d", "/tmpx"],
+        "trigger_errno": errno.ENOSPC,
+        "err": "/tmpx write marker check failed with a non-read-only error: ",
+        "cmds": []
     }
 }
 
@@ -75,7 +82,8 @@ def mount_file(d):
 
 def mock_disk_open(file, *args, **kwargs):
     if file == "/tmpx/.monit_diskCheck_rw_marker":
-        raise OSError(errno.EROFS, os.strerror(errno.EROFS), file)
+        error_number = current_tc.get("trigger_errno", errno.EROFS)
+        raise OSError(error_number, os.strerror(error_number), file)
 
     return real_open(file, *args, **kwargs)
 

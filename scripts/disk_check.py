@@ -35,6 +35,7 @@ Tidbit:
 """
 
 import argparse
+import errno
 import os
 import shutil
 import sys
@@ -105,9 +106,12 @@ def test_writable(dirs):
                 f.flush()
                 os.fsync(f.fileno())
         except OSError as e:
-            log_err("{} is not read-write. Monit diskCheck write marker failed: {}".format(d, e))
-            event_pub(DISK_RO_EVENT)
-            return False
+            if e.errno == errno.EROFS:
+                log_err("{} is not read-write. Monit diskCheck write marker failed: {}".format(d, e))
+                event_pub(DISK_RO_EVENT)
+                return False
+            log_err("{} write marker check failed with a non-read-only error: {}".format(d, e))
+            continue
         finally:
             if os.path.exists(rw_marker):
                 os.unlink(rw_marker)
