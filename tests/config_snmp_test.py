@@ -37,18 +37,6 @@ expected_snmp_community_add_new_community_ro_output = {"TYPE": "RO"}
 expected_snmp_community_add_new_community_rw_output = {"TYPE": "RW"}
 expected_snmp_community_replace_existing_community_with_new_community_output = {'TYPE': 'RW'}
 
-expected_snmp_user_priv_ro_md5_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
-                                                       'SNMP_USER_AUTH_TYPE': 'MD5',
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'DES',
-                                                       'SNMP_USER_PERMISSION': 'RO',
-                                                       'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_ro_md5_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
-                                                       'SNMP_USER_AUTH_TYPE': 'MD5',
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'AES',
-                                                       'SNMP_USER_PERMISSION': 'RO',
-                                                       'SNMP_USER_TYPE': 'Priv'}
 expected_snmp_user_priv_ro_sha_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
                                                        'SNMP_USER_AUTH_TYPE': 'SHA', 
                                                        'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
@@ -73,18 +61,6 @@ expected_snmp_user_priv_ro_hmac_sha_2_aes_config_db_output = {'SNMP_USER_AUTH_PA
                                                               'SNMP_USER_ENCRYPTION_TYPE': 'AES', 
                                                               'SNMP_USER_PERMISSION': 'RO', 
                                                               'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_rw_md5_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                       'SNMP_USER_AUTH_TYPE': 'MD5', 
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'DES', 
-                                                       'SNMP_USER_PERMISSION': 'RW', 
-                                                       'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_rw_md5_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                       'SNMP_USER_AUTH_TYPE': 'MD5', 
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'AES', 
-                                                       'SNMP_USER_PERMISSION': 'RW', 
-                                                       'SNMP_USER_TYPE': 'Priv'}
 expected_snmp_user_priv_rw_sha_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
                                                        'SNMP_USER_AUTH_TYPE': 'SHA', 
                                                        'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
@@ -568,7 +544,7 @@ class TestSNMPConfigCommands(object):
                                                      ["test_nopriv_RO_3", "authnopriv", "ro"])
         print(result.exit_code)
         assert result.exit_code == 5
-        assert "User auth type is missing.  Must be MD5, SHA, or HMAC-SHA-2" in result.output
+        assert "User auth type is missing.  Must be SHA or HMAC-SHA-2" in result.output
 
     def test_config_snmp_user_add_user_type_authnopriv_missing_auth_password(self):
         runner = CliRunner()
@@ -592,12 +568,12 @@ class TestSNMPConfigCommands(object):
                                                      ["test_nopriv_RO_3", "priv", "ro"])
         print(result.exit_code)
         assert result.exit_code == 5
-        assert "User auth type is missing.  Must be MD5, SHA, or HMAC-SHA-2" in result.output
+        assert "User auth type is missing.  Must be SHA or HMAC-SHA-2" in result.output
 
     def test_config_snmp_user_add_user_type_priv_missing_auth_password(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                                                     ["test_nopriv_RO_3", "priv", "ro", "md5"])
+                                                     ["test_nopriv_RO_3", "priv", "ro", "sha"])
         print(result.exit_code)
         assert result.exit_code == 7
         assert "User auth password is missing" in result.output
@@ -605,7 +581,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_missing_encrypt_type(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                                                     ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass"])
+                                                     ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass"])
         print(result.exit_code)
         assert result.exit_code == 10
         assert "User encrypt type is missing.  Must be DES or AES" in result.output
@@ -613,7 +589,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_over_64_characters(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", 
+                ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", 
                  "superlongencryptionpasswordtotestbeingoverthesixtyfourcharacterlimit"])
         print(result.exit_code)
         assert result.exit_code == 13
@@ -622,7 +598,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_excluded_special_characters(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                 ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", "testencrypt@pass"])
+                 ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", "testencrypt@pass"])
         print(result.exit_code)
         assert result.exit_code == 13
         assert "FAILED: SNMP user password should not have any of these special symbols" in result.output
@@ -630,7 +606,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_not_long_enough(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                              ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", "test1"])
+                              ["test_nopriv_RO_3", "priv", "ro", "sha", "testauthpass", "DES", "test1"])
         print(result.exit_code)
         assert result.exit_code == 13
         assert "FAILED: SNMP user password length should be at least 8 characters" in result.output
@@ -641,7 +617,7 @@ class TestSNMPConfigCommands(object):
                               ["test_nopriv_RO_3", "authnopriv", "ro", "DM5", "user_auth_pass"])
         print(result.exit_code)
         assert result.exit_code == 6
-        assert "Invalid user authentication type. Must be one of these 'MD5', 'SHA', or 'HMAC-SHA-2'" in result.output
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
 
     def test_config_snmp_user_add_missing_auth_password(self):
         runner = CliRunner()
@@ -675,27 +651,54 @@ class TestSNMPConfigCommands(object):
         assert result.exit_code == 14
         assert 'SNMP user test_nopriv_RO_1 is already configured' in result.output
 
-    def test_config_snmp_user_add_valid_user_priv_ro_md5_des(self):
+    def test_config_snmp_user_add_rejects_md5_user_priv_ro_des(self):
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
                     ["test_priv_RO_7", "priv", "ro", "MD5", "user_auth_pass", "DES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
-        assert result.exit_code == 0
-        assert 'SNMP user test_priv_RO_7 added to configuration' in result.output
-        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_7") == expected_snmp_user_priv_ro_md5_des_config_db_output
+        assert result.exit_code == 6
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_7") == {}
+        mock_run_command.assert_not_called()
 
-    def test_config_snmp_user_add_valid_user_priv_ro_md5_aes(self):
+    def test_config_snmp_user_add_rejects_md5_user_priv_ro_aes(self):
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
                     ["test_priv_RO_8", "priv", "ro", "MD5", "user_auth_pass", "AES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
-        assert result.exit_code == 0
-        assert 'SNMP user test_priv_RO_8 added to configuration' in result.output
-        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_8") == expected_snmp_user_priv_ro_md5_aes_config_db_output
+        assert result.exit_code == 6
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_8") == {}
+        mock_run_command.assert_not_called()
+
+    def test_config_snmp_user_add_rejects_md5_user_authnopriv(self):
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
+                    ["test_authnopriv_RO_md5", "authnopriv", "ro", "MD5", "user_auth_pass"], obj=db)
+        print(result.exit_code)
+        assert result.exit_code == 6
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_authnopriv_RO_md5") == {}
+        mock_run_command.assert_not_called()
+
+    def test_config_snmp_user_add_rejects_lowercase_md5_user_priv(self):
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
+                    ["test_priv_RO_md5_lower", "priv", "ro", "md5", "user_auth_pass", "DES", "user_encrypt_pass"],
+                    obj=db)
+        print(result.exit_code)
+        assert result.exit_code == 6
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_md5_lower") == {}
+        mock_run_command.assert_not_called()
 
     def test_config_snmp_user_add_valid_user_priv_ro_sha_des(self):
         db = Db()
@@ -743,27 +746,41 @@ class TestSNMPConfigCommands(object):
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_12") == \
                expected_snmp_user_priv_ro_hmac_sha_2_aes_config_db_output
 
-    def test_config_snmp_user_add_valid_user_priv_rw_md5_des(self):
+    def test_config_snmp_user_add_rejects_md5_user_priv_rw_des(self):
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
                     ["test_priv_RW_7", "priv", "rw", "MD5", "user_auth_pass", "DES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
-        assert result.exit_code == 0
-        assert 'SNMP user test_priv_RW_7 added to configuration' in result.output
-        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_7") == expected_snmp_user_priv_rw_md5_des_config_db_output
+        assert result.exit_code == 6
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_7") == {}
+        mock_run_command.assert_not_called()
 
-    def test_config_snmp_user_add_valid_user_priv_rw_md5_aes(self):
+    def test_config_snmp_user_add_rejects_md5_user_priv_rw_aes(self):
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
                     ["test_priv_RW_8", "priv", "rw", "MD5", "user_auth_pass", "AES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
-        assert result.exit_code == 0
-        assert 'SNMP user test_priv_RW_8 added to configuration' in result.output
-        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_8") == expected_snmp_user_priv_rw_md5_aes_config_db_output
+        assert result.exit_code == 6
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_8") == {}
+        mock_run_command.assert_not_called()
+
+    def test_config_snmp_user_add_rejects_md5_user_authnopriv_rw(self):
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
+                    ["test_authnopriv_RW_md5", "authnopriv", "rw", "MD5", "user_auth_pass"], obj=db)
+        print(result.exit_code)
+        assert result.exit_code == 6
+        assert "Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'" in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_authnopriv_RW_md5") == {}
+        mock_run_command.assert_not_called()
 
     def test_config_snmp_user_add_valid_user_priv_rw_sha_des(self):
         db = Db()
