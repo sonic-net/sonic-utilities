@@ -3067,6 +3067,20 @@ This command resets the BMC root password to default
 
 ### BMC chassis module commands
 
+**config chassis modules shutdown-timeout**
+
+Set the switch-host graceful shutdown/restart timeout in seconds. The default
+is 120; 0 skips the graceful wait and requests forced power-off. Existing
+configured values are preserved. The command accepts nonnegative integers
+without an upper limit, but a larger value is not necessarily safe: the
+deployment must allow power removal before the host watchdog expires and
+within the reboot backend's wait.
+
+- Usage:
+  ```bash
+  config chassis modules shutdown-timeout SWITCH-HOST <seconds>
+  ```
+
 **show chassis modules status**
 
 On a BMC, this command appends `Result` and `Request-Id` after the existing

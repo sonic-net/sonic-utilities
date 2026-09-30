@@ -427,7 +427,7 @@ def test_switch_host_runs_existing_teardown_without_dpu_helper(
     assert result.returncode == 0
     assert not any("get_num_dpus" in call for call in calls)
     timeout_call = next(call for call in calls if call.startswith("timeout "))
-    assert timeout_call.startswith("timeout --kill-after=10 60 ")
+    assert timeout_call.startswith("timeout --kill-after=10 10 ")
     assert timeout_call.endswith("/pre_reboot_hook")
     ordered_calls = [
         "docker exec -i syncd /usr/bin/syncd_request_shutdown --cold",
@@ -441,7 +441,7 @@ def test_switch_host_runs_existing_teardown_without_dpu_helper(
         "platform-update-reboot-cause",
         timeout_call,
         "pre-reboot-hook marker=1",
-        "watchdogutil arm",
+        "watchdogutil arm -s 180",
     ]
     assert [calls.index(call) for call in ordered_calls] == sorted(
         calls.index(call) for call in ordered_calls
@@ -651,8 +651,7 @@ def test_strict_sync_failure_is_fatal(full_reboot_sandbox):
         (
             {
                 "REBOOT_TEST_HOOK_MODE": "sleep",
-                "REBOOT_TEST_HOOK_SLEEP_SECS": 3,
-                "REBOOT_TEST_HOOK_TIMEOUT": 1,
+                "REBOOT_TEST_HOOK_SLEEP_SECS": 30,
             },
             124,
         ),
@@ -674,7 +673,7 @@ def test_strict_hook_failure_is_fatal(
     ) in result.stdout
     assert "pre-reboot-hook marker=1" in calls
     assert any(call.startswith("timeout --kill-after=10 ") for call in calls)
-    assert "watchdogutil arm" not in calls
+    assert not any(call.startswith("watchdogutil arm") for call in calls)
 
 
 def test_strict_hook_ignoring_term_is_killed_with_no_surviving_child(
@@ -688,116 +687,42 @@ def test_strict_hook_ignoring_term_is_killed_with_no_surviving_child(
         full_reboot_sandbox,
         ["-p"],
         **SWITCH_HOST_ENV,
-        REBOOT_TEST_HOOK_MODE="ignore-term",
-        REBOOT_TEST_HOOK_TIMEOUT=1
+        REBOOT_TEST_HOOK_MODE="ignore-term"
     )
     elapsed = time.monotonic() - started
 
     assert result.returncode != 0
     assert "PRE-SHUTDOWN FAILED: pre-reboot hook rc=137" in result.stdout
     assert "pre-reboot-hook marker=1" in calls
-    assert 10.0 <= elapsed < 16.0
+    assert 20.0 <= elapsed < 27.0
     child_proc = Path("/proc") / child_pid_file.read_text().strip()
     child_exit_deadline = time.monotonic() + 2
     while child_proc.exists() and time.monotonic() < child_exit_deadline:
         time.sleep(0.05)
     assert not child_proc.exists()
-    assert "watchdogutil arm" not in calls
+    assert not any(call.startswith("watchdogutil arm") for call in calls)
 
 
 @pytest.mark.parametrize(
-    "hook_timeout,expected_value",
-    [
-        ("0", "0"),
-        ("-5", "-5"),
-        ("1.5", "1.5"),
-        ('"abc"', '"abc"'),
-        ('"30s"', '"30s"'),
-        ('"60"', '"60"'),
-        ("false", "false"),
-        ("null", "null"),
-    ],
-    ids=[
-        "zero",
-        "negative",
-        "fractional",
-        "nonnumeric-string",
-        "suffixed-string",
-        "numeric-string",
-        "boolean",
-        "null",
-    ],
+    "old_value", ["0", "1", "300", "-1", '"invalid"', "false", "null"],
 )
-def test_strict_hook_timeout_rejects_invalid_values(
-        full_reboot_sandbox, hook_timeout, expected_value):
+def test_retired_platform_timing_keys_do_not_change_fixed_limits(
+        full_reboot_sandbox, old_value):
     result, calls = _run_reboot(
         full_reboot_sandbox,
         ["-p"],
         **SWITCH_HOST_ENV,
-        REBOOT_TEST_HOOK_TIMEOUT=hook_timeout
-    )
-
-    assert result.returncode != 0
-    assert (
-        "PRE-SHUTDOWN FAILED: invalid pre_shutdown_hook_timeout_secs "
-        "'{}'".format(expected_value)
-    ) in result.stdout
-    assert not any(call.startswith("timeout ") for call in calls)
-    assert "pre-reboot-hook marker=1" not in calls
-    assert "watchdogutil arm" not in calls
-
-
-def test_strict_hook_timeout_accepts_one_second_boundary(full_reboot_sandbox):
-    result, calls = _run_reboot(
-        full_reboot_sandbox,
-        ["-p"],
-        **SWITCH_HOST_ENV,
-        REBOOT_TEST_HOOK_TIMEOUT=1
+        REBOOT_TEST_HOOK_TIMEOUT=old_value,
+        REBOOT_TEST_WATCHDOG_MIN=old_value
     )
 
     assert result.returncode == 0
     assert any(
-        call.startswith("timeout --kill-after=10 1 ") for call in calls
+        call.startswith("timeout --kill-after=10 10 ") for call in calls
     )
     assert "pre-reboot-hook marker=1" in calls
-    assert "watchdogutil arm" in calls
-
-
-@pytest.mark.parametrize(
-    "watchdog_minimum,expected_value",
-    [
-        ("-1", "-1"),
-        ('"abc"', '"abc"'),
-        ('"0140"', '"0140"'),
-        ('"140"', '"140"'),
-        ("false", "false"),
-        ("null", "null"),
-    ],
-    ids=[
-        "negative",
-        "nonnumeric-string",
-        "leading-zero-string",
-        "numeric-string",
-        "boolean",
-        "null",
-    ],
-)
-def test_strict_watchdog_minimum_rejects_invalid_values(
-        full_reboot_sandbox, watchdog_minimum, expected_value):
-    result, calls = _run_reboot(
-        full_reboot_sandbox,
-        ["-p"],
-        **SWITCH_HOST_ENV,
-        REBOOT_TEST_WATCHDOG_MIN=watchdog_minimum
-    )
-
-    assert result.returncode != 0
-    assert (
-        "PRE-SHUTDOWN FAILED: invalid pre_shutdown_min_watchdog_secs "
-        "'{}'".format(expected_value)
-    ) in result.stdout
-    assert "pre-reboot-hook marker=1" in calls
-    assert "watchdogutil arm" not in calls
+    assert "watchdogutil arm -s 180" in calls
+    assert not any(call.startswith("jq ") for call in calls)
 
 
 @pytest.mark.parametrize(
@@ -826,68 +751,46 @@ def test_strict_watchdog_rejects_unproved_output(
 
     assert result.returncode != 0
     assert "PRE-SHUTDOWN FAILED: watchdog arm/readback" in result.stdout
-    assert "watchdogutil arm" in calls
+    assert "watchdogutil arm -s 180" in calls
 
 
-def test_strict_watchdog_rejects_readback_below_minimum(full_reboot_sandbox):
+@pytest.mark.parametrize("seconds", [0, 100, 179])
+def test_strict_watchdog_rejects_readback_below_minimum(full_reboot_sandbox, seconds):
     result, calls = _run_reboot(
         full_reboot_sandbox,
         ["-p"],
         **SWITCH_HOST_ENV,
-        REBOOT_TEST_WATCHDOG_MIN=140,
-        REBOOT_TEST_WATCHDOG_OUTPUT="Watchdog armed for 100 seconds"
+        REBOOT_TEST_WATCHDOG_OUTPUT="Watchdog armed for {} seconds".format(seconds)
     )
 
     assert result.returncode != 0
     assert (
-        "PRE-SHUTDOWN FAILED: watchdog readback 100s below required 140s"
+        "PRE-SHUTDOWN FAILED: watchdog readback {}s below required 180s".format(seconds)
         in result.stdout
     )
-    assert "watchdogutil arm" in calls
-
-
-def test_strict_watchdog_compares_above_int64_without_overflow(
-        full_reboot_sandbox):
-    watchdog_minimum = "9223372036854776000"
-    result, calls = _run_reboot(
-        full_reboot_sandbox,
-        ["-p"],
-        **SWITCH_HOST_ENV,
-        REBOOT_TEST_WATCHDOG_MIN=watchdog_minimum,
-        REBOOT_TEST_WATCHDOG_OUTPUT="Watchdog armed for 100 seconds"
-    )
-
-    assert result.returncode != 0
-    assert (
-        "PRE-SHUTDOWN FAILED: watchdog readback 100s below required {}s".format(
-            watchdog_minimum
-        ) in result.stdout
-    )
-    assert "watchdogutil arm" in calls
+    assert "watchdogutil arm -s 180" in calls
 
 
 @pytest.mark.parametrize(
-    "watchdog_minimum,watchdog_seconds",
-    [("0", 1), ("140", 200)],
-    ids=["zero-minimum", "above-minimum"],
+    "watchdog_seconds", [180, 181, 9223372036854776000],
+    ids=["minimum", "above-minimum", "above-int64"],
 )
 def test_strict_watchdog_accepts_proved_readback(
-        full_reboot_sandbox, watchdog_minimum, watchdog_seconds):
+        full_reboot_sandbox, watchdog_seconds):
     result, calls = _run_reboot(
         full_reboot_sandbox,
         ["-v", "-p"],
         **SWITCH_HOST_ENV,
-        REBOOT_TEST_WATCHDOG_MIN=watchdog_minimum,
         REBOOT_TEST_WATCHDOG_OUTPUT=(
             "Watchdog armed for {} seconds".format(watchdog_seconds)
         )
     )
 
     assert result.returncode == 0
-    assert "watchdog armed: {}s (required minimum {}s)".format(
-        watchdog_seconds, watchdog_minimum
+    assert "watchdog armed: {}s (required minimum 180s)".format(
+        watchdog_seconds
     ) in result.stdout
-    assert "watchdogutil arm" in calls
+    assert "watchdogutil arm -s 180" in calls
 
 
 def test_strict_watchdog_requires_executable_utility(full_reboot_sandbox):
@@ -902,7 +805,7 @@ def test_strict_watchdog_requires_executable_utility(full_reboot_sandbox):
 
     assert result.returncode != 0
     assert "PRE-SHUTDOWN FAILED: watchdog utility unavailable" in result.stdout
-    assert "watchdogutil arm" not in calls
+    assert not any(call.startswith("watchdogutil arm") for call in calls)
 
 
 def test_strict_path_retains_named_best_effort_steps(full_reboot_sandbox):

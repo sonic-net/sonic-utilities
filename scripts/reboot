@@ -5,6 +5,8 @@ declare -r EXIT_ERROR=1
 declare -r EXIT_TIMEOUT=2
 declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
+declare -r PRE_SHUTDOWN_HOOK_TIMEOUT=10
+declare -r PRE_SHUTDOWN_WATCHDOG_SECS=180
 
 source reboot_smartswitch_helper
 
@@ -441,19 +443,7 @@ fi
 if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
     debug "Executing the pre-reboot script"
     if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" ]]; then
-        HOOK_TIMEOUT=$(jq -c '
-            if has("pre_shutdown_hook_timeout_secs") then
-                .pre_shutdown_hook_timeout_secs
-            else
-                60
-            end
-        ' "${PLATFORM_JSON_PATH}")
-        if ! [[ "${HOOK_TIMEOUT}" =~ ^[1-9][0-9]*$ ]]; then
-            VERBOSE=yes debug "PRE-SHUTDOWN FAILED: invalid pre_shutdown_hook_timeout_secs '${HOOK_TIMEOUT}'"
-            exit ${EXIT_ERROR}
-        fi
-
-        SONIC_PRE_SHUTDOWN=1 timeout --kill-after=10 "${HOOK_TIMEOUT}" \
+        SONIC_PRE_SHUTDOWN=1 timeout --kill-after=10 "${PRE_SHUTDOWN_HOOK_TIMEOUT}" \
             "${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}"
         EXIT_CODE=$?
         if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
@@ -470,37 +460,26 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
 fi
 
 if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" ]]; then
-    WD_MIN=$(jq -c '
-        if has("pre_shutdown_min_watchdog_secs") then
-            .pre_shutdown_min_watchdog_secs
-        else
-            0
-        end
-    ' "${PLATFORM_JSON_PATH}")
-    if ! [[ "${WD_MIN}" =~ ^(0|[1-9][0-9]*)$ ]]; then
-        VERBOSE=yes debug "PRE-SHUTDOWN FAILED: invalid pre_shutdown_min_watchdog_secs '${WD_MIN}'"
-        exit ${EXIT_ERROR}
-    fi
     if [[ ! -x ${WATCHDOG_UTIL} ]]; then
         VERBOSE=yes debug "PRE-SHUTDOWN FAILED: watchdog utility unavailable"
         exit ${EXIT_ERROR}
     fi
 
     debug "Enabling the Watchdog before reboot"
-    WD_OUT=$(${WATCHDOG_UTIL} arm)
+    WD_OUT=$(${WATCHDOG_UTIL} arm -s "${PRE_SHUTDOWN_WATCHDOG_SECS}")
     if [[ "${WD_OUT}" =~ ^Watchdog\ armed\ for\ (0|[1-9][0-9]*)\ seconds$ ]]; then
         WD_ARMED_SECS="${BASH_REMATCH[1]}"
     else
         VERBOSE=yes debug "PRE-SHUTDOWN FAILED: watchdog arm/readback"
         exit ${EXIT_ERROR}
     fi
-    if [[ ${#WD_ARMED_SECS} -lt ${#WD_MIN} ||
-          ( ${#WD_ARMED_SECS} -eq ${#WD_MIN} &&
-            "${WD_ARMED_SECS}" < "${WD_MIN}" ) ]]; then
-        VERBOSE=yes debug "PRE-SHUTDOWN FAILED: watchdog readback ${WD_ARMED_SECS}s below required ${WD_MIN}s"
+    if [[ ${#WD_ARMED_SECS} -lt ${#PRE_SHUTDOWN_WATCHDOG_SECS} ||
+          ( ${#WD_ARMED_SECS} -eq ${#PRE_SHUTDOWN_WATCHDOG_SECS} &&
+            "${WD_ARMED_SECS}" < "${PRE_SHUTDOWN_WATCHDOG_SECS}" ) ]]; then
+        VERBOSE=yes debug "PRE-SHUTDOWN FAILED: watchdog readback ${WD_ARMED_SECS}s below required ${PRE_SHUTDOWN_WATCHDOG_SECS}s"
         exit ${EXIT_ERROR}
     fi
-    debug "watchdog armed: ${WD_ARMED_SECS}s (required minimum ${WD_MIN}s)"
+    debug "watchdog armed: ${WD_ARMED_SECS}s (required minimum ${PRE_SHUTDOWN_WATCHDOG_SECS}s)"
 elif [ -x ${WATCHDOG_UTIL} ]; then
     debug "Enabling the Watchdog before reboot"
     ${WATCHDOG_UTIL} arm

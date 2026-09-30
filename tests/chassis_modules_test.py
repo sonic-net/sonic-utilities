@@ -640,19 +640,20 @@ class TestChassisModuleTimingConfig(object):
         assert result.exit_code != 0
         assert "SWITCH-HOST" in result.output
 
-    def test_shutdown_timeout_switch_host(self):
+    @pytest.mark.parametrize("seconds", ["120", "300", "2147483648"])
+    def test_shutdown_timeout_switch_host(self, seconds):
         runner = CliRunner()
         db = Db()
         result = runner.invoke(
             self.modules.commands["shutdown-timeout"],
-            ["SWITCH-HOST", "120"],
+            ["SWITCH-HOST", seconds],
             obj=db
         )
         print(result.output)
         assert result.exit_code == 0
-        assert "120" in result.output
+        assert seconds in result.output
         entry = db.cfgdb.get_entry("CHASSIS_MODULE", "SWITCH-HOST")
-        assert entry.get("graceful_shutdown_timeout") == "120"
+        assert entry.get("graceful_shutdown_timeout") == seconds
 
     def test_shutdown_timeout_zero_immediate_poweroff(self):
         runner = CliRunner()
