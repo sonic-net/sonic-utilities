@@ -15622,12 +15622,12 @@ This command displays all the configuration related to warm_restart.
 - Example:
   ```
   admin@sonic:~$ show warm_restart config
-  name    enable    timer_name        timer_duration
-  ------  --------  ----------------  ----------------
-  bgp     true      bgp_timer         100
-  teamd   false     teamsyncd_timer   300
-  swss    false     neighsyncd_timer  200
-  system  true      NULL              NULL
+  name    enable    timer_name        timer_duration    eoiu_enable    eoiu_hold_timer
+  ------  --------  ----------------  ----------------  -------------  -----------------
+  bgp     true      bgp_timer         100               true           5
+  teamd   false     teamsyncd_timer   300               NULL           NULL
+  swss    false     neighsyncd_timer  200               NULL           NULL
+  system  true      NULL              NULL              NULL           NULL
   ```
 
 **show warm_restart state**
@@ -15660,11 +15660,13 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#warm-r
 ### Warm Restart Config commands
 
 This sub-section explains the various configuration related to warm restart feature. Following parameters can be configured using this command.
-1) bgp_timer
-2) disable
-3) enable
-4) neighsyncd_timer
-5) teamsyncd_timer
+1) bgp_eoiu
+2) bgp_eoiu_hold_timer
+3) bgp_timer
+4) disable
+5) enable
+6) neighsyncd_timer
+7) teamsyncd_timer
 Each of these sub-commands are explained in the following section.
 
 Users can use an optional parameter "-s" to use the unix domain socket for communicating with the RedisDB which will be faster when compared to using the default network sockets.
@@ -15770,6 +15772,57 @@ Valid value is 1-9999. 0 is invalid.
 - Example:
   ```
   admin@sonic:~$ sudo config warm_restart bgp_timer 2000
+  ```
+
+**config warm_restart bgp_eoiu**
+
+This command is used to enable or disable the use of the BGP End-of-Initial-Update (EOIU) signal
+during warm restart of the "bgp" service.
+When enabled, bgp_eoiu_marker watches every BGP neighbor for its End-of-RIB and records an eoiu
+flag in STATE_DB once every neighbor of an address family has reported one.
+fpmsyncd uses that flag to start route reconciliation as soon as BGP has converged, instead of
+waiting out the full bgp_timer.
+The bgp container must be restarted for a change to take effect.
+
+- Usage:
+  ```
+  config warm_restart [-s|--redis-unix-socket-path <socket_path>] bgp_eoiu <true|false>
+  ```
+
+  - Parameters:
+    - enable: "true" or "false". Defaults to "true" when omitted.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config warm_restart bgp_eoiu true
+  ```
+
+**config warm_restart bgp_eoiu_hold_timer**
+
+This command is used to set the EOIU hold timer for warm_restart of the "bgp" service.
+It is the time fpmsyncd waits after the EOIU signal has been reached for both the
+ipv4-unicast and ipv6-unicast address families, before it starts route reconciliation.
+The delay gives the last routes time to reach fpmsyncd from bgp.
+It is only used when bgp_eoiu is enabled, and it should be well below bgp_timer, otherwise
+bgp_timer expires first and the EOIU shortcut never takes effect.
+When not configured, fpmsyncd uses a default of 3 seconds.
+Supported range: 1-3600.
+
+Note that the command writes the CONFIG_DB field `eoiu_hold_timer` under `WARM_RESTART|bgp`,
+without the `bgp_` prefix the command name carries. The field name matches the yang leaf in
+sonic-warm-restart.yang and is what fpmsyncd reads.
+
+- Usage:
+  ```
+  config warm_restart [-s|--redis-unix-socket-path <socket_path>] bgp_eoiu_hold_timer <seconds>
+  ```
+
+  - Parameters:
+    - seconds: Range from 1 to 3600
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config warm_restart bgp_eoiu_hold_timer 5
   ```
 
 **config warm_restart teamsyncd_timer**
