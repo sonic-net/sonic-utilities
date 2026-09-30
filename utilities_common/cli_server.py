@@ -400,6 +400,14 @@ def _set_socket_permissions(sock_path):
     world-writable file it isn't -- Unix sockets need write access to
     connect() at all, so 0644 would break every non-root client outright.
     """
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    # This is a Unix domain socket, not a regular file: connect() requires
+    # write permission on the path, so any mode that lets non-root clients
+    # reach the daemon at all necessarily sets a group/other write bit,
+    # which this generic rule can't distinguish from an unsafe world-
+    # writable data file. The real authorization check is SO_PEERCRED +
+    # setuid in the forked child (see cli-daemon.md); this chmod is
+    # defense-in-depth, not the security boundary.
     os.chmod(sock_path, 0o660)
     group = os.environ.get("SONIC_CLI_SOCKET_GROUP", "admin")
     try:
