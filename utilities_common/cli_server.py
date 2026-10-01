@@ -247,10 +247,21 @@ def _drop_privileges(uid, gid):
 
 
 def _acquire_controlling_tty():
-    """Best-effort: claim the inherited stdin as our controlling terminal so
-    pagers/prompts that open ``/dev/tty`` directly (e.g. ``less``) work.
-    No-op for non-interactive/piped invocations, matching normal shell
-    behavior for those cases.
+    """Best-effort only -- see the "Known limitations" note in
+    cli-daemon.md. ``setsid()`` leaves this child with no controlling
+    terminal of its own; ``TIOCSCTTY`` with arg ``0`` claims the inherited
+    stdin as one, but *only* succeeds if that terminal isn't already the
+    controlling terminal of another session. For a normal interactive
+    SSH/console session it always already is -- the caller's own login
+    shell -- so this reliably no-ops (``EPERM``, caught below) for the
+    primary use case, not just for piped/non-interactive invocations.
+
+    Passing arg ``1`` would force the steal and make it "work", but that
+    forcibly evicts the *caller's own shell* as that terminal's
+    controlling session -- actively breaking the user's own login
+    session's job control just to make one warm command's pager slightly
+    more correct. That tradeoff is not worth it, so this stays a
+    best-effort no-op rather than "fixed" via a steal.
     """
     try:
         import fcntl
@@ -290,8 +301,19 @@ def _run_child(req, fds, uid, gid):
     os.environ.update(req["env"])
     try:
         os.chdir(req["cwd"])
-    except OSError:
-        pass
+    except OSError as exc:
+        # Unlike the cold path (which just inherits the shell's real cwd
+        # by virtue of a normal fork+exec and never hits this), this
+        # warm child starts in the *daemon's* directory and must
+        # explicitly switch. Continuing on failure would silently run
+        # the command against the wrong directory -- any relative file
+        # argument could then read or write a different path than the
+        # caller intended. Fail loudly instead.
+        os.write(
+            2,
+            ("cli daemon: cannot chdir to %r: %s\n" % (req["cwd"], exc)).encode("utf-8", "replace"),
+        )
+        os._exit(1)
 
     sys.stdin = open(0, "r", closefd=False)
     sys.stdout = open(1, "w", buffering=1, closefd=False)

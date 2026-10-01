@@ -29,8 +29,10 @@ The daemon runs as root and forks a child per request. That child:
 
 1. Receives the caller's real stdin/stdout/stderr file descriptors via
    `SCM_RIGHTS`, so output streams to the caller's actual terminal
-   (colors, `isatty()`, interactive prompts, `less`/pagers via
-   `TIOCSCTTY` all work as they do today).
+   (colors, `isatty()`, and prompts that just read/write those fds all
+   work as they do today). `less`/pagers that open `/dev/tty` directly
+   for job control are a partial exception -- see "Known limitations"
+   below.
 2. Reads the caller's real uid/gid from `SO_PEERCRED` -- this is filled in
    by the kernel from the actual connecting process's credentials and
    **cannot be spoofed** by anything in the request payload.
@@ -67,3 +69,16 @@ runs.
   the daemon restarts/reloads, for the same reason.
 - **Zombie reaping** relies on a `SIGCHLD` handler in the top-level daemon
   process; if you extend this code, keep that handler in place.
+- **Pagers/prompts that open `/dev/tty` directly** (e.g. `less`) don't
+  reliably get real job control. After `setsid()`, the command child has
+  no controlling terminal of its own, and claiming the inherited one
+  (`TIOCSCTTY`) only succeeds if it isn't already the controlling
+  terminal of another session -- for a normal interactive SSH/console
+  invocation it always already is (the caller's own login shell), so
+  this is a best-effort no-op for exactly the common case. Forcibly
+  stealing it (`TIOCSCTTY` with a nonzero arg) would "fix" this by
+  evicting the caller's own shell as that terminal's controlling
+  session, breaking their login session's job control to make one
+  command's pager slightly more correct -- not a trade worth making. If
+  a pager's behavior matters for a given invocation, disable the daemon
+  for it with `SONIC_CLI_DAEMON=0`.

@@ -412,6 +412,26 @@ def test_keyboard_interrupt_maps_to_130():
     assert code == 130
 
 
+def test_chdir_failure_reports_error_instead_of_running_in_wrong_directory():
+    """The cold path never hits this: a normal fork+exec just inherits
+    the shell's real cwd. This warm child starts in the *daemon's*
+    directory and must explicitly switch to the caller's -- silently
+    continuing on failure would run the command against the wrong
+    directory, and a relative file argument could then read or write a
+    different path than the caller intended.
+    """
+    def action(args, prog_name):
+        # Must never be reached: the chdir failure has to short-circuit
+        # before the CLI action runs.
+        sys.stdout.write("ran-anyway")
+        sys.exit(0)
+
+    code, out = _run_round_trip("show", action, argv=[], cwd="/no/such/directory")
+    assert code == 1
+    assert b"ran-anyway" not in out
+    assert b"no/such/directory" in out
+
+
 def test_child_resets_signal_dispositions_before_setup_work():
     """The forked command child inherits the *daemon's* SIGHUP (re-exec
     self) and SIGTERM/SIGINT (unlink the shared socket + exit) handlers
