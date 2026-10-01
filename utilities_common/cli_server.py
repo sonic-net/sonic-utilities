@@ -31,10 +31,27 @@ import signal
 import socket
 import struct
 import sys
+import syslog
 
 SOCKET_PATH = os.environ.get("SONIC_CLI_SOCKET", "/run/sonic/cli.sock")
 PID_PATH = os.environ.get("SONIC_CLI_DAEMON_PID", "/run/sonic/cli-daemon.pid")
-CLIENT_TIMEOUT_SEC = float(os.environ.get("SONIC_CLI_DAEMON_TIMEOUT", "60.0"))
+
+# Only bounds connecting to the (local, already-running) daemon socket --
+# never how long a command is allowed to run. Some commands (e.g. `config`
+# operations) legitimately take well past a minute; once the request has
+# been handed to the daemon, the client blocks indefinitely for the real
+# result instead of guessing a deadline and reporting a false failure
+# while the daemon is still correctly executing the command.
+CONNECT_TIMEOUT_SEC = float(os.environ.get("SONIC_CLI_DAEMON_CONNECT_TIMEOUT", "2.0"))
+
+# Daemon side: bounds how large a single request may declare itself to be
+# (generous headroom over a real argv/env/cwd payload) and how long the
+# supervisor will wait for the rest of it to arrive. Neither applies once
+# the request has been fully received -- forwarding signals to an
+# in-flight command has no deadline, since the command may run
+# indefinitely.
+MAX_REQUEST_BYTES = 8 * 1024 * 1024
+REQUEST_RECV_TIMEOUT_SEC = 5.0
 
 PROG_LOADERS = {
     "show": ("show.main", "cli"),
@@ -67,7 +84,7 @@ def _try_run_with_fds(prog, fds):
 
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(CLIENT_TIMEOUT_SEC)
+        sock.settimeout(CONNECT_TIMEOUT_SEC)
         sock.connect(SOCKET_PATH)
     except OSError:
         # Daemon not running / socket missing -- nothing has executed yet,
@@ -80,16 +97,34 @@ def _try_run_with_fds(prog, fds):
         "env": dict(os.environ),
         "cwd": os.getcwd(),
     }).encode("utf-8")
+    frame = struct.pack("!I", len(req)) + req
 
     try:
-        sock.sendmsg(
-            [struct.pack("!I", len(req)) + req],
+        # sendmsg() on a stream socket may write only part of the frame;
+        # the ancillary (SCM_RIGHTS) data is delivered together with
+        # whichever bytes this call actually sends, so any remainder is
+        # just ordinary bytes that a plain send finishes.
+        sent = sock.sendmsg(
+            [frame],
             [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", fds))],
         )
+        if sent < len(frame):
+            sock.sendall(frame[sent:])
     except OSError:
-        # Request never reached the daemon -- safe to fall back.
+        # An error here does not prove the daemon received zero bytes --
+        # it may have already accepted a partial request and started
+        # executing. config is not idempotent, so once we've attempted to
+        # connect and send, falling back to re-run on the cold path is
+        # not an option; report failure instead.
         sock.close()
-        return None
+        return 1
+
+    # The request is now fully on the wire; there is nothing further to
+    # time out into -- only the daemon knows how long this command may
+    # legitimately take, and if the client's connection to it dies from
+    # here on, returning 1 (not None) is the only safe behavior anyway
+    # (see the empty-response handling below).
+    sock.settimeout(None)
 
     prev_handlers = {}
 
@@ -137,7 +172,15 @@ def _try_run_with_fds(prog, fds):
 # =============================================================== daemon side
 
 def _recv_request(conn):
-    """Receive a length-prefixed JSON request plus stdio fds via SCM_RIGHTS."""
+    """Receive a length-prefixed JSON request plus stdio fds via SCM_RIGHTS.
+
+    Returns ``(request_dict, fds, leftover)``. ``leftover`` is any bytes
+    the client had already queued past the declared request length (for
+    example an early-forwarded signal frame) so the caller can feed it
+    back into the signal-relay buffer instead of silently dropping it or
+    letting it corrupt the JSON parse below.
+    """
+    conn.settimeout(REQUEST_RECV_TIMEOUT_SEC)
     fds = array.array("i")
     cmsg_space = socket.CMSG_SPACE(3 * fds.itemsize)
     msg, anc, _flags, _addr = conn.recvmsg(65536, cmsg_space)
@@ -147,13 +190,26 @@ def _recv_request(conn):
     if len(msg) < 4:
         raise ValueError("short request header")
     (length,) = struct.unpack("!I", msg[:4])
-    body = msg[4:]
+    if length > MAX_REQUEST_BYTES:
+        # A caller can connect and send an arbitrary length prefix (e.g.
+        # 0xffffffff) with no body. Without this bound the forked
+        # supervisor blocks in recv() for a body that may never arrive,
+        # tying up process resources indefinitely.
+        raise ValueError("request too large (%d bytes)" % length)
+    # `msg` can contain more than just the declared request: a client
+    # that forwards a signal immediately after sending the request can
+    # have both queued together in the same recvmsg() read. Cap `body` to
+    # exactly `length` bytes so trailing signal-frame bytes don't get
+    # parsed as (invalid) JSON, and return them as `leftover` instead.
+    body = msg[4:4 + length]
     while len(body) < length:
         more = conn.recv(length - len(body))
         if not more:
             raise ValueError("client closed before sending full request")
         body += more
-    return json.loads(body.decode("utf-8")), list(fds)
+    leftover = msg[4 + length:]
+    conn.settimeout(None)
+    return json.loads(body.decode("utf-8")), list(fds), leftover
 
 
 def _peer_creds(conn):
@@ -207,6 +263,19 @@ def _acquire_controlling_tty():
 
 def _run_child(req, fds, uid, gid):
     """Runs inside the forked command child. Never returns normally."""
+    # Reset signal dispositions *first*, before any other setup. This
+    # process inherited the daemon's SIGHUP (re-exec self) and
+    # SIGTERM/SIGINT (unlink the shared socket + exit) handlers via
+    # fork(). A signal forwarded by the client and delivered before these
+    # are reset would run those daemon-level actions -- re-exec or
+    # unlinking the one shared socket -- inside what must behave as an
+    # ordinary command process.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    signal.signal(signal.SIGQUIT, signal.SIG_DFL)
+    signal.signal(signal.SIGHUP, signal.SIG_DFL)
+    signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+
     for target, fd in enumerate(fds[:3]):
         os.dup2(fd, target)
     for fd in fds:
@@ -223,11 +292,6 @@ def _run_child(req, fds, uid, gid):
         os.chdir(req["cwd"])
     except OSError:
         pass
-
-    signal.signal(signal.SIGINT, signal.default_int_handler)
-    signal.signal(signal.SIGTERM, signal.SIG_DFL)
-    signal.signal(signal.SIGQUIT, signal.SIG_DFL)
-    signal.signal(signal.SIGHUP, signal.SIG_DFL)
 
     sys.stdin = open(0, "r", closefd=False)
     sys.stdout = open(1, "w", buffering=1, closefd=False)
@@ -268,7 +332,7 @@ def _run_child(req, fds, uid, gid):
 def _serve_request(conn):
     """Runs inside the per-request supervisor process."""
     try:
-        req, fds = _recv_request(conn)
+        req, fds, sig_buf = _recv_request(conn)
     except (ValueError, OSError, json.JSONDecodeError):
         _reply_fallback(conn)
         return
@@ -289,6 +353,15 @@ def _serve_request(conn):
         except OSError:
             pass
 
+    # Install the handler *before* forking. A child that exits quickly
+    # (e.g. `show --help`) can otherwise deliver SIGCHLD into the gap
+    # between fork() and installing the handler; with no handler
+    # registered yet, that delivery is lost (default disposition for
+    # SIGCHLD is to discard it) and the select() loop below would wait
+    # forever even though waitpid() could reap the already-dead child
+    # right away.
+    prev_sigchld = signal.signal(signal.SIGCHLD, _on_sigchld)
+
     child = os.fork()
     if child == 0:
         os.close(pipe_r)
@@ -299,7 +372,12 @@ def _serve_request(conn):
 
     for fd in fds:
         _safe_close(fd)
-    prev_sigchld = signal.signal(signal.SIGCHLD, _on_sigchld)
+
+    # Flush any signal frame the client had already queued right behind
+    # the request itself (see `_recv_request`'s `leftover`) now that the
+    # child exists to receive it -- otherwise it sits in the buffer
+    # unprocessed until the connection eventually closes.
+    sig_buf = _relay_signals(sig_buf, b"", child)
 
     exit_code = 1
     watch_conn = True
@@ -322,7 +400,7 @@ def _serve_request(conn):
                     # connection to avoid spinning on repeated EOF.
                     watch_conn = False
                     continue
-                _relay_signals(data, child)
+                sig_buf = _relay_signals(sig_buf, data, child)
     finally:
         signal.signal(signal.SIGCHLD, prev_sigchld)
         os.close(pipe_r)
@@ -335,8 +413,20 @@ def _serve_request(conn):
     conn.close()
 
 
-def _relay_signals(data, child):
-    for line in data.splitlines():
+def _relay_signals(buf, data, child):
+    """Parse complete newline-delimited signal frames out of ``buf + data``,
+    forwarding each to the child. Returns the remaining buffer, which may
+    hold a not-yet-complete trailing frame.
+
+    ``recv()`` may split a frame at any byte boundary; parsing each
+    received chunk independently (with no buffer carried across reads)
+    and discarding whatever doesn't parse as complete JSON can silently
+    drop a forwarded Ctrl-C, leaving the command running until the
+    client's own timeout.
+    """
+    buf += data
+    *complete, buf = buf.split(b"\n")
+    for line in complete:
         line = line.strip()
         if not line:
             continue
@@ -346,9 +436,14 @@ def _relay_signals(data, child):
             continue
         if sig:
             try:
-                os.kill(child, sig)
+                # _run_child calls setsid(), making the child its own
+                # process-group leader -- signal the whole group so
+                # subprocesses it spawns (e.g. commands it shells out to)
+                # are terminated/interrupted too, not just the leader.
+                os.killpg(child, sig)
             except OSError:
                 pass
+    return buf
 
 
 def _reply_fallback(conn):
@@ -412,8 +507,19 @@ def _set_socket_permissions(sock_path):
     try:
         gid = grp.getgrnam(group).gr_gid
         os.chown(sock_path, os.getuid(), gid)
-    except (KeyError, OSError):
-        pass
+    except (KeyError, OSError) as exc:
+        # If the group doesn't exist on this image (or chown fails for
+        # any other reason), the socket is left owned by root:root at
+        # 0660 -- unreachable by any non-root caller. That's safe (a
+        # client just sees connect() fail and falls back to the cold
+        # path), but silently swallowing it here means the daemon stops
+        # accelerating anything for regular users with zero diagnostic.
+        syslog.syslog(
+            syslog.LOG_WARNING,
+            "sonic-cli-daemon: could not restrict socket %s to group %r (%s); "
+            "non-root clients will be unable to reach the daemon and will "
+            "always use the cold-start path" % (sock_path, group, exc),
+        )
 
 
 def _reexec_self():

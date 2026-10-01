@@ -7,12 +7,15 @@ exercised here with a minimal fake "cli" object instead.
 """
 
 import array
+import ast
+import inspect
 import json
 import os
 import signal
 import socket
 import struct
 import sys
+import textwrap
 from unittest import mock
 
 import pytest
@@ -92,6 +95,106 @@ def test_try_run_never_falls_back_after_daemon_dies_mid_command(sock_paths):
         server.close()
 
     assert rc == 1
+
+
+def test_client_does_not_retry_on_post_connect_send_failure(sock_paths, monkeypatch):
+    """An OSError from sendmsg() does not prove the daemon received zero
+    bytes -- it may have already accepted a partial request and started
+    executing. Once connect() has succeeded, a send failure must report
+    failure (1), not fall back to the cold path and risk re-running a
+    non-idempotent config command.
+    """
+    server = _listen(sock_paths)
+    try:
+        monkeypatch.setattr(
+            socket.socket, "sendmsg",
+            mock.Mock(side_effect=OSError("simulated send failure")),
+        )
+        rc = cli_server.try_run("config")
+    finally:
+        server.close()
+
+    assert rc == 1
+
+
+def test_client_completes_partial_sendmsg_write(sock_paths):
+    """sendmsg() on a stream socket may write only part of the buffer;
+    the client must send the remainder itself rather than assuming the
+    daemon received a complete frame.
+    """
+    import threading
+
+    server = _listen(sock_paths)
+    received = bytearray()
+    try:
+        def fake_daemon():
+            conn, _ = server.accept()
+            while len(received) < 4 or len(received) < 4 + struct.unpack("!I", bytes(received[:4]))[0]:
+                chunk = conn.recv(65536)
+                if not chunk:
+                    break
+                received.extend(chunk)
+            conn.close()
+
+        t = threading.Thread(target=fake_daemon)
+        t.start()
+
+        real_sendmsg = socket.socket.sendmsg
+
+        def half_sendmsg(self, buffers, ancdata=(), *a, **kw):
+            data = buffers[0]
+            half = max(1, len(data) // 2)
+            return real_sendmsg(self, [data[:half]], ancdata, *a, **kw)
+
+        r, w = os.pipe()
+        try:
+            with mock.patch.object(socket.socket, "sendmsg", half_sendmsg):
+                cli_server._try_run_with_fds("show", (r, w, w))
+        finally:
+            os.close(r)
+            os.close(w)
+        t.join(timeout=5)
+    finally:
+        server.close()
+
+    assert len(received) >= 4
+    (length,) = struct.unpack("!I", bytes(received[:4]))
+    assert len(received) == 4 + length
+    req = json.loads(bytes(received[4:4 + length]).decode("utf-8"))
+    assert req["prog"] == "show"
+
+
+def test_client_waits_past_connect_timeout_for_a_slow_command(sock_paths, monkeypatch):
+    """The connect timeout must not leak into how long the client waits
+    for the daemon's response: commands (especially `config`) can
+    legitimately run far longer than any reasonable connect deadline.
+    """
+    import threading
+    import time
+
+    monkeypatch.setattr(cli_server, "CONNECT_TIMEOUT_SEC", 0.05)
+    server = _listen(sock_paths)
+    try:
+        def fake_daemon():
+            conn, _ = server.accept()
+            conn.recv(4)
+            time.sleep(0.3)  # much longer than CONNECT_TIMEOUT_SEC above
+            conn.sendall(json.dumps({"exit_code": 7}).encode("utf-8") + b"\n")
+            conn.close()
+
+        t = threading.Thread(target=fake_daemon)
+        t.start()
+        r, w = os.pipe()
+        try:
+            rc = cli_server._try_run_with_fds("show", (r, w, w))
+        finally:
+            os.close(r)
+            os.close(w)
+        t.join(timeout=5)
+    finally:
+        server.close()
+
+    assert rc == 7
 
 
 # --------------------------------------------------------------------------- #
@@ -309,6 +412,149 @@ def test_keyboard_interrupt_maps_to_130():
     assert code == 130
 
 
+def test_child_resets_signal_dispositions_before_setup_work():
+    """The forked command child inherits the *daemon's* SIGHUP (re-exec
+    self) and SIGTERM/SIGINT (unlink the shared socket + exit) handlers
+    via fork(). Those resets must be the first thing ``_run_child`` does
+    -- before dup2/setsid/tty-claim/privilege-drop -- or a signal
+    forwarded by the client early enough in that window runs daemon-level
+    logic (re-exec, or unlinking the one shared socket every other
+    connection depends on) inside what must behave as an isolated command
+    process.
+
+    A full fork+signal-delivery-race reproduction is inherently
+    non-deterministic, so this pins the required source ordering instead.
+    """
+    source = inspect.getsource(cli_server._run_child)
+    first_signal_reset = source.index("signal.signal(signal.SIGINT")
+    first_setup_call = min(
+        source.index(needle) for needle in ("os.dup2(", "os.setsid()", "_drop_privileges(")
+    )
+    assert first_signal_reset < first_setup_call
+
+    tree = ast.parse(textwrap.dedent(source))
+    func = tree.body[0]
+    assert isinstance(func, ast.FunctionDef)
+    body_stmts = func.body
+    if isinstance(body_stmts[0], ast.Expr) and isinstance(body_stmts[0].value, ast.Constant):
+        body_stmts = body_stmts[1:]  # skip the docstring
+
+    resets = {"SIGINT", "SIGTERM", "SIGQUIT", "SIGHUP", "SIGCHLD"}
+    for stmt in body_stmts:
+        call = stmt.value if isinstance(stmt, ast.Expr) else None
+        if not (isinstance(call, ast.Call) and getattr(call.func, "attr", None) == "signal"):
+            break
+        resets.discard(call.args[0].attr)
+    assert not resets, "not reset before other setup work: %s" % resets
+
+
+def test_sigchld_handler_installed_before_fork_in_serve_request():
+    """If the SIGCHLD handler is installed *after* ``os.fork()``, a child
+    that exits quickly (``show --help``) can deliver SIGCHLD into the gap
+    between fork() and the handler install. With no handler registered
+    yet, that delivery is simply discarded (SIGCHLD's default disposition
+    is Ignore) and the later select() loop waits forever even though
+    waitpid() could reap the already-dead child immediately.
+    """
+    source = inspect.getsource(cli_server._serve_request)
+    handler_install = source.index("signal.signal(signal.SIGCHLD, _on_sigchld)")
+    fork_call = source.index("os.fork()")
+    assert handler_install < fork_call
+
+
+# --------------------------------------------------------------------------- #
+# Signal forwarding
+# --------------------------------------------------------------------------- #
+
+def test_relay_signals_targets_process_group_not_just_leader(monkeypatch):
+    """``_run_child`` calls ``setsid()``, so the forked command is its own
+    process-group leader. Signaling only the leader pid (``os.kill``)
+    leaves any subprocess it spawns running after Ctrl-C/termination;
+    signaling the group (``os.killpg``) reaches those descendants too.
+    """
+    calls = []
+    monkeypatch.setattr(os, "killpg", lambda pgid, sig: calls.append((pgid, sig)))
+    monkeypatch.setattr(os, "kill", mock.Mock(side_effect=AssertionError("must use killpg, not kill")))
+
+    remaining = cli_server._relay_signals(
+        b"", json.dumps({"signal": signal.SIGINT}).encode("utf-8") + b"\n", 4321,
+    )
+
+    assert calls == [(4321, signal.SIGINT)]
+    assert remaining == b""
+
+
+def test_relay_signals_buffers_partial_frame_across_reads(monkeypatch):
+    """recv() may split a signal frame at any byte boundary; a frame
+    delivered in two pieces must still be forwarded once complete, not
+    silently dropped because neither individual chunk parses as JSON.
+    """
+    calls = []
+    monkeypatch.setattr(os, "killpg", lambda pgid, sig: calls.append((pgid, sig)))
+
+    frame = json.dumps({"signal": signal.SIGINT}).encode("utf-8") + b"\n"
+    split_at = len(frame) - 3
+    buf = cli_server._relay_signals(b"", frame[:split_at], 4321)
+    assert calls == []  # incomplete frame -- must not be dropped or misparsed
+
+    buf = cli_server._relay_signals(buf, frame[split_at:], 4321)
+    assert calls == [(4321, signal.SIGINT)]
+    assert buf == b""
+
+
+def test_recv_request_rejects_oversized_length_header(sock_paths):
+    """A caller can send an arbitrary length prefix (e.g. 0xffffffff) with
+    no body. Without an upper bound, the forked supervisor would block in
+    recv() waiting for a body that may never arrive, tying up process
+    resources indefinitely.
+    """
+    server = _listen(sock_paths)
+    try:
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(sock_paths)
+        client.sendall(struct.pack("!I", 0xFFFFFFFF))
+        conn, _ = server.accept()
+        try:
+            with pytest.raises(ValueError):
+                cli_server._recv_request(conn)
+        finally:
+            conn.close()
+            client.close()
+    finally:
+        server.close()
+
+
+def test_recv_request_separates_trailing_bytes_from_declared_body(sock_paths):
+    """The initial recvmsg() can return the length-prefixed request and
+    already-queued signal bytes together. `body` must be capped to the
+    declared length; anything past it belongs to the caller as leftover,
+    not to the JSON payload.
+    """
+    server = _listen(sock_paths)
+    try:
+        req = json.dumps({"prog": "show", "argv": [], "env": {}, "cwd": "/"}).encode("utf-8")
+        trailing = json.dumps({"signal": signal.SIGINT}).encode("utf-8") + b"\n"
+
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(sock_paths)
+        client.sendmsg(
+            [struct.pack("!I", len(req)) + req + trailing],
+            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [0, 1, 2]))],
+        )
+        conn, _ = server.accept()
+        try:
+            parsed, fds, leftover = cli_server._recv_request(conn)
+        finally:
+            conn.close()
+            client.close()
+    finally:
+        server.close()
+
+    assert parsed == {"prog": "show", "argv": [], "env": {}, "cwd": "/"}
+    assert len(fds) == 3
+    assert leftover == trailing
+
+
 # --------------------------------------------------------------------------- #
 # Socket permissions (defense-in-depth on top of SO_PEERCRED + setuid)
 # --------------------------------------------------------------------------- #
@@ -323,6 +569,32 @@ def test_set_socket_permissions_is_group_restricted_not_world_writable(tmp_path)
         assert mode == 0o660
     finally:
         server.close()
+
+
+def test_set_socket_permissions_logs_when_group_is_missing(tmp_path, monkeypatch):
+    """If the configured group doesn't exist, the socket silently stays
+    root-only (safe -- clients just fall back) but nothing would tell an
+    operator why the daemon stopped accelerating anything for non-root
+    users. This must be surfaced, not swallowed.
+    """
+    sock_path = tmp_path / "cli.sock"
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        server.bind(str(sock_path))
+        monkeypatch.setenv("SONIC_CLI_SOCKET_GROUP", "no-such-group")
+        logged = []
+        monkeypatch.setattr(
+            cli_server.syslog, "syslog",
+            lambda priority, message: logged.append((priority, message)),
+        )
+        cli_server._set_socket_permissions(str(sock_path))
+    finally:
+        server.close()
+
+    assert len(logged) == 1
+    priority, message = logged[0]
+    assert priority == cli_server.syslog.LOG_WARNING
+    assert "no-such-group" in message
 
 
 # --------------------------------------------------------------------------- #
