@@ -3,9 +3,20 @@
 Optional `systemd` service that keeps `show` and `config` Click trees loaded
 and accelerates **both** command execution and Tab completion:
 
+- **Enable switch:** `OPTIMIZE_CLI` -- a sonic-buildimage build flag
+  (`rules/config`, default `n`). It is read at **package build time**, not
+  runtime: when not `y`, `setup.py` excludes `show/cli_entry.py`,
+  `config/cli_entry.py`, `utilities_common/cli_server.py` and their test
+  module from the build entirely, `show`/`config` console scripts point
+  straight at `show.main:cli` / `config.main:config` as before this
+  feature existed, and `sonic-utilities-data/debian/rules` drops the
+  `sonic-cli-daemon.service` unit and this doc from the data package. A
+  default build therefore ships none of this code. Set `OPTIMIZE_CLI = y`
+  in a profile (e.g. `rules/config.EMBEDDED`) to build it in.
 - **Service:** `sonic-cli-daemon.service` (enabled with `sonic.target`)
 - **Socket:** `/run/sonic/cli.sock`
-- **Disable client:** `SONIC_CLI_DAEMON=0` for a single shell session
+- **Disable client for one session:** `SONIC_CLI_DAEMON=0`, even when
+  `OPTIMIZE_CLI` is on fleet-wide
 - **Fallback:** only available if `connect()` itself fails (daemon
   stopped or socket missing) -- in that case the client uses the normal
   cold Python path. Any failure from that point on, including a
