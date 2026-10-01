@@ -537,7 +537,8 @@ def _set_socket_permissions(sock_path):
     # writable data file. The real authorization check is SO_PEERCRED +
     # setuid in the forked child (see cli-daemon.md); this chmod is
     # defense-in-depth, not the security boundary.
-    os.chmod(sock_path, 0o660)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        sock_path, 0o660)
     group = os.environ.get("SONIC_CLI_SOCKET_GROUP", "admin")
     try:
         gid = grp.getgrnam(group).gr_gid
