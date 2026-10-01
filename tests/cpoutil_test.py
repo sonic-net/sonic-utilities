@@ -13,7 +13,6 @@ modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
 from cpoutil import main as cpoutil  # noqa: E402
-from sonic_platform_base.sonic_xcvr.api.public.elsfp_base import ElsfpApiBase  # noqa: E402
 from cpoutil.mapping import CpoMapping, CpoMappingError  # noqa: E402
 from cpoutil.mapping import (  # noqa: E402
     EXTERNAL_LASER_SOURCE,
@@ -255,7 +254,9 @@ COVERAGE_PORT_CONFIG = {
 }
 
 
-class CoverageFakeApi(ElsfpApiBase):
+class CoverageFakeApi:
+    """CLI test double independent of the installed platform-common version."""
+
     NUM_CHANNELS = 2
 
     def __init__(self):
@@ -364,6 +365,12 @@ class CoverageFakeApi(ElsfpApiBase):
 
     def set_elsfp_lpmode(self, value):
         self.calls.append(("set_elsfp_lpmode", value))
+        return True
+
+    def reset_elsfp(self):
+        raise NotImplementedError("ELS reset is not implemented")
+
+    def supports_per_lane_enable(self):
         return True
 
     def set_per_lane_enable(self, mask, enabled):
@@ -812,7 +819,7 @@ class TestSharedPlatformHelpers:
 
 
 class TestOptionalElsApis:
-    @pytest.mark.parametrize("backend", ["public", "bailly"])
+    @pytest.mark.parametrize("backend", ["public", "legacy"])
     @pytest.mark.parametrize("arguments", [
         ["config", "els", "lpmode", "0", "low"],
         ["config", "els", "reset", "0"],
@@ -823,16 +830,23 @@ class TestOptionalElsApis:
     ])
     def test_unsupported_els_commands_do_not_change_oe(
             self, coverage_environment, monkeypatch, backend, arguments):
-        from sonic_platform_base.sonic_xcvr.api.broadcom.bailly import BaillyApi
-
-        eeprom = mock.Mock()
-        els_api = BaillyApi(eeprom) if backend == "bailly" else ElsfpApiBase(eeprom)
-        eeprom.read.reset_mock()  # Ignore the CMIS constructor's Flat_mem read.
-        # Allow lane-status to reach the inherited per-lane state placeholder.
-        els_api.get_elsfp_status = mock.Mock(return_value={"module_low_power_state": False})
+        # Exercise the CLI's handling of the optional API contract here.
+        # Real base/Bailly inheritance is tested in sonic-platform-common;
+        # utilities CI may install a wheel from before that contract existed.
+        els_api = CoverageFakeApi()
+        for method in (
+                "set_elsfp_lpmode", "reset_elsfp", "set_per_lane_enable",
+                "get_elsfp_module_state", "get_per_lane_state"):
+            monkeypatch.setattr(els_api, method, mock.Mock(
+                side_effect=NotImplementedError("ELS operation is not implemented")))
+        monkeypatch.setattr(els_api, "supports_per_lane_enable", lambda: False)
         oe_api = CoverageFakeApi()
-        cpo = cpoutil.CpoBase(
-            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
+        if backend == "public":
+            cpo = cpoutil.CpoBase(
+                None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
+        else:
+            cpo = CoverageFakeCpo()
+            cpo.api = els_api
         monkeypatch.setattr(cpoutil, "cpo_object_map", {
             OPTICAL_ENGINE: {"oe0": cpo},
             EXTERNAL_LASER_SOURCE: {"els0": cpo},
@@ -844,8 +858,8 @@ class TestOptionalElsApis:
         assert "has no attribute" not in result.output
         assert "OK" not in result.output
         assert oe_api.calls == []
-        eeprom.read.assert_not_called()
-        eeprom.write.assert_not_called()
+        assert els_api.calls == []
+        els_api.set_per_lane_enable.assert_not_called()
 
     def test_supported_els_reset_is_dispatched_without_resetting_oe(self, coverage_environment):
         cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
@@ -873,11 +887,19 @@ class TestOptionalElsApis:
             cpoutil._write_resource_eeprom(resource_type, "0", 0, 0, 0, bytearray([1, 2]))
             assert len(endpoint.reads) == len(endpoint.writes) == 1
 
-    def test_unmapped_public_els_eeprom_has_a_clear_error(self):
+    @pytest.mark.parametrize("placeholder", [False, True])
+    def test_unmapped_public_els_eeprom_has_a_clear_error(self, monkeypatch, placeholder):
+        # Older platform-common has no method; newer versions expose an
+        # optional placeholder. Both must fail before attempting EEPROM I/O.
+        monkeypatch.delattr(cpoutil.CpoBase, "get_els_base_page", raising=False)
         cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
-        with pytest.raises(cpoutil.CpoCommandError, match="ELS EEPROM page mapping is not implemented"):
+        if placeholder:
+            cpo.get_els_base_page = mock.Mock(side_effect=NotImplementedError(
+                "ELS EEPROM page mapping is not implemented"))
+        with pytest.raises(cpoutil.CpoCommandError, match="Failed to resolve ELS EEPROM page"):
             cpoutil._physical_eeprom_page(EXTERNAL_LASER_SOURCE, "els0", cpo, 0)
         cpo.elsfp.read_eeprom.assert_not_called()
+        cpo.elsfp.write_eeprom.assert_not_called()
 
     def test_legacy_presence_uses_public_device_method(self):
         class LegacyDevice:

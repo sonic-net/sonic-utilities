@@ -13,7 +13,6 @@ modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
 import cpoutil.main as cpoutil  # noqa: E402
-from sonic_platform_base.sonic_xcvr.api.public.elsfp_base import ElsfpApiBase  # noqa: E402
 from cpoutil.mapping import CpoMapping  # noqa: E402
 from cpoutil.mapping import (  # noqa: E402
     EXTERNAL_LASER_SOURCE,
@@ -38,11 +37,8 @@ CPO_DATA = {
 }
 
 
-class FakeApi(ElsfpApiBase):
+class FakeApi:
     NUM_CHANNELS = 2
-
-    def __init__(self):
-        super().__init__(None)
 
     def get_lpmode(self):
         return False
@@ -100,7 +96,7 @@ class FakeApi(ElsfpApiBase):
 
     def get_elsfp_module_state(self):
         if getattr(self, "els_module_state", None) is None:
-            return super().get_elsfp_module_state()
+            raise NotImplementedError("Independent ELS module state is not implemented")
         return self.els_module_state
 
     def get_per_lane_state(self):
