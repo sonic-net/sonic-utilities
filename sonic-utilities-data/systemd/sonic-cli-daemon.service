@@ -1,0 +1,22 @@
+[Unit]
+Description=SONiC CLI warm fork-server (show/config execution + Tab completion)
+Documentation=file:///usr/share/doc/sonic-utilities-data/cli-daemon.md
+After=sonic.target
+PartOf=sonic.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sonic-cli-daemon
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=sonic
+RuntimeDirectoryMode=0755
+# Commands run in forked children that outlive the top-level daemon process
+# once forked. KillMode=process (rather than the default "control-group")
+# stops only the accept loop on restart/reload, so in-flight `show`/`config`
+# invocations are not killed mid-command.
+KillMode=process
+
+[Install]
+WantedBy=sonic.target
