@@ -616,11 +616,11 @@ function abort_reboot_if_cpa_tunnel_is_leftover()
 
 function setup_control_plane_assistant()
 {
-    abort_reboot_if_cpa_tunnel_is_leftover
-
     if [[ -n "${ASSISTANT_IP_LIST}" && -x ${ASSISTANT_SCRIPT} ]]; then
         # TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
         if [[ "${HWSKU}" != "DellEMC-Z9332f-M-O16C64" && "${HWSKU}" != "DellEMC-Z9332f-M-O16C64-lab" ]]; then
+            # The check cannot tell a leftover CPA tunnel from user VxLAN config, so run it only when setting up CPA
+            abort_reboot_if_cpa_tunnel_is_leftover
             debug "Setting up control plane assistant: ${ASSISTANT_IP_LIST} ..."
             ${ASSISTANT_SCRIPT} -s ${ASSISTANT_IP_LIST} -m set
 	    check_mirror_session_acls
