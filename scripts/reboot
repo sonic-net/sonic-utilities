@@ -189,6 +189,25 @@ function reboot_pre_check()
     fi
 }
 
+
+function check_local_reboot_disk_space()
+{
+    python3 - "$PLATFORM_JSON_PATH" <<'PYCODE'
+import sys
+
+from utilities_common.image_disk_space import (
+    check_local_reboot_free_disk_space,
+)
+
+platform_json_path = sys.argv[1] or None
+
+result = check_local_reboot_free_disk_space(
+    platform_json_path=platform_json_path,
+)
+sys.exit(0 if result else 1)
+PYCODE
+}
+
 function check_conflict_boot_in_fw_update()
 {
     # Make sure firmware auto update is not scheduled for a different reboot
@@ -286,6 +305,16 @@ if [[ "$EUID" -ne 0 ]]; then
 fi
 
 debug "User requested rebooting device ..."
+
+# Validate local disk space before beginning reboot side effects.
+# The remote DPU path is validated separately by reboot_smartswitch_helper.
+if [[ "$REBOOT_DPU" == "no" && "$PRE_SHUTDOWN" == "no" ]]; then
+    check_local_reboot_disk_space
+    if [ $? -ne 0 ]; then
+        VERBOSE=yes debug "Reboot aborted due to insufficient free disk space"
+        exit ${EXIT_ERROR}
+    fi
+fi
 
 # SmartSwitch NPU only: close the DHCP gate so DPUs that come back up during
 # the NPU reboot window cannot acquire midplane IPs and therefore cannot bring
