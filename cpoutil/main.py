@@ -1371,13 +1371,32 @@ def output_option(function):
     )(function)
 
 
-@click.group(context_settings=CONTEXT_SETTINGS)
-def cli():
-    """Debug and manually provision Co-Packaged Optics devices."""
+def initialize_command_platform():
+    """Translate initialization failures when a hardware command executes."""
     try:
         initialize_platform()
     except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
+
+
+class CpoCommand(click.Command):
+    """Load the platform after command arguments and help have been parsed."""
+
+    def invoke(self, ctx):
+        initialize_command_platform()
+        return super().invoke(ctx)
+
+
+class CpoGroup(click.Group):
+    """Apply deferred platform loading to commands at every nesting level."""
+
+    command_class = CpoCommand
+    group_class = type
+
+
+@click.group(cls=CpoGroup, context_settings=CONTEXT_SETTINGS)
+def cli():
+    """Debug and manually provision Co-Packaged Optics devices."""
 
 
 @cli.group()
@@ -2376,6 +2395,7 @@ def _print_all_eeprom():
 def read_eeprom(ctx):
     """Read raw CMIS EEPROM data; omit a target to dump all CPO EEPROMs."""
     if ctx.invoked_subcommand is None:
+        initialize_command_platform()
         try:
             _print_all_eeprom()
         except CpoCommandError as exc:

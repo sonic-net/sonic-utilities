@@ -444,6 +444,93 @@ def invoke_coverage(arguments):
     return CliRunner().invoke(cpoutil.cli, arguments)
 
 
+def command_paths(command, path=()):
+    yield path
+    for name, child in getattr(command, "commands", {}).items():
+        yield from command_paths(child, path + (name,))
+
+
+HARDWARE_COMMANDS = [
+    ["show", "interface", name] for name in
+    ("map", "dom", "tx_disable", "speed", "lane-status")
+] + [
+    ["show", "oe", name] for name in
+    ("lpmode", "status", "temperature", "input-power")
+] + [
+    ["show", "els", name] for name in
+    ("presence", "lpmode", "status", "temperature", "output-power")
+] + [
+    ["config", "interface", "tx_disable", "Ethernet0", "enable"],
+    ["config", "oe", "lpmode", "0", "full"],
+    ["config", "oe", "reset", "0"],
+    ["config", "oe", "tx_disable", "0", "enable"],
+    ["config", "els", "lpmode", "0", "full"],
+    ["config", "els", "reset", "0"],
+    ["config", "els", "tx_disable", "0", "enable"],
+    ["read-eeprom"],
+    ["read-eeprom", "interface", "Ethernet0", "--oe"],
+    ["read-eeprom", "oe"],
+    ["read-eeprom", "els"],
+    ["write-eeprom", "interface", "Ethernet0", "--oe", "-n", "0", "-o", "0", "-d", "00"],
+    ["write-eeprom", "oe", "-i", "0", "-n", "0", "-o", "0", "-d", "00"],
+    ["write-eeprom", "els", "-i", "0", "-n", "0", "-o", "0", "-d", "00"],
+]
+
+
+class TestCommandInitialization:
+    @pytest.mark.parametrize("path", list(command_paths(cpoutil.cli)))
+    @pytest.mark.parametrize("help_option", ["-h", "--help"])
+    def test_help_does_not_load_platform(self, monkeypatch, path, help_option):
+        initialize = mock.Mock(side_effect=AssertionError("help accessed hardware"))
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage([*path, help_option])
+        assert result.exit_code == 0, result.output
+        assert "Usage:" in result.output
+        initialize.assert_not_called()
+
+    @pytest.mark.parametrize("arguments", HARDWARE_COMMANDS)
+    def test_hardware_commands_require_topology(self, monkeypatch, arguments):
+        initialize = mock.Mock(side_effect=cpoutil.CpoCommandError(
+            "CPO topology is unavailable for this platform"))
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert "Error: CPO topology is unavailable for this platform" in result.output
+        initialize.assert_called_once_with()
+
+    @pytest.mark.parametrize("arguments", [
+        ["config", "oe", "reset"],
+        ["config", "oe", "lpmode", "0", "invalid"],
+        ["read-eeprom", "oe", "--page", "invalid"],
+    ])
+    def test_invalid_arguments_do_not_load_platform(self, monkeypatch, arguments):
+        initialize = mock.Mock(side_effect=AssertionError("invalid arguments accessed hardware"))
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 2
+        initialize.assert_not_called()
+
+    @pytest.mark.parametrize("arguments", [
+        ["show", "oe", "status", "0"],
+        ["read-eeprom", "oe", "-i", "0", "-n", "0", "-o", "0", "-s", "1"],
+        ["read-eeprom"],
+    ])
+    def test_successful_commands_initialize_once(self, coverage_environment, monkeypatch, arguments):
+        initialize = mock.Mock()
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
+        initialize.assert_called_once_with()
+        assert result.output
+
+    @pytest.mark.parametrize("error", [cpoutil.CpoCommandError, CpoMappingError])
+    def test_entry_point_preserves_initialization_error_code(self, monkeypatch, capsys, error):
+        monkeypatch.setattr(cpoutil, "initialize_platform", mock.Mock(side_effect=error("unavailable")))
+        monkeypatch.setattr(sys, "argv", ["cpoutil", "show", "oe", "status"])
+        assert cpoutil.main() == cpoutil.ERROR_INVALID_RESOURCE
+        assert "Error: unavailable" in capsys.readouterr().err
+
+
 class TestCommunityMappingCoverage(object):
     def test_normalizes_community_schema(self):
         mapping = CpoMapping(COMMUNITY_DATA, COVERAGE_PORT_CONFIG)
