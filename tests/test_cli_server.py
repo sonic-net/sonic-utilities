@@ -164,6 +164,20 @@ def test_client_completes_partial_sendmsg_write(sock_paths):
     assert req["prog"] == "show"
 
 
+def test_client_clears_connect_timeout_before_sending():
+    """``settimeout()`` applies to every subsequent operation on the
+    socket, not just ``connect()`` -- the short connect deadline must be
+    cleared before ``sendmsg()``/``sendall()`` run, or it also limits
+    those: a large forwarded environment, or a daemon that's briefly not
+    reading, could time out mid-send and be treated the same as an
+    outright failure.
+    """
+    source = inspect.getsource(cli_server._try_run_with_fds)
+    clear_timeout = source.index("sock.settimeout(None)")
+    first_send = source.index("sock.sendmsg(")
+    assert clear_timeout < first_send
+
+
 def test_client_waits_past_connect_timeout_for_a_slow_command(sock_paths, monkeypatch):
     """The connect timeout must not leak into how long the client waits
     for the daemon's response: commands (especially `config`) can
@@ -519,6 +533,30 @@ def test_relay_signals_buffers_partial_frame_across_reads(monkeypatch):
 
     buf = cli_server._relay_signals(buf, frame[split_at:], 4321)
     assert calls == [(4321, signal.SIGINT)]
+    assert buf == b""
+
+
+@pytest.mark.parametrize("payload", [
+    b"42",                                  # valid JSON, not a dict
+    b"[1, 2, 3]",                           # valid JSON, not a dict
+    b'{"signal": "SIGINT"}',                # dict, but non-integer signal
+    b'{"signal": -5}',                      # dict, but non-positive signal
+    b'{"signal": null}',                    # dict, but missing/null signal
+])
+def test_relay_signals_ignores_malformed_frames_without_crashing(monkeypatch, payload):
+    """Signal frames are client-controlled after the request is accepted.
+    A valid JSON scalar/list, or a dict with a non-integer/non-positive
+    "signal", must be ignored rather than raising out of .get() or
+    os.killpg() -- an uncaught exception here would kill the supervisor
+    without ever sending a response, while the already-forked command
+    child keeps running unwatched.
+    """
+    calls = []
+    monkeypatch.setattr(os, "killpg", lambda pgid, sig: calls.append((pgid, sig)))
+
+    buf = cli_server._relay_signals(b"", payload + b"\n", 4321)
+
+    assert calls == []
     assert buf == b""
 
 
