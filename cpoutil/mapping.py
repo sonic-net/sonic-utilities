@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 import re
 
+from utilities_common.cpo_helper import natural_sort_key
 
 OPTICAL_ENGINE = "oe"
 EXTERNAL_LASER_SOURCE = "els"
@@ -12,11 +13,6 @@ SUPPORTED_RESOURCE_TYPES = {OPTICAL_ENGINE, EXTERNAL_LASER_SOURCE}
 
 class CpoMappingError(ValueError):
     """Raised when cpo.json does not describe a usable CPO topology."""
-
-
-def _natural_key(value):
-    return [int(part) if part.isdigit() else part.lower()
-            for part in re.split(r"(\d+)", str(value))]
 
 
 def _parse_integer_list(value, field_name):
@@ -379,7 +375,7 @@ class CpoMapping(object):
             )
 
     def ports(self):
-        return sorted(self._parsed_interfaces, key=_natural_key)
+        return sorted(self._parsed_interfaces, key=natural_sort_key)
 
     def resource_ids(self, resource_type):
         resources = {
@@ -390,7 +386,7 @@ class CpoMapping(object):
             raise CpoMappingError(
                 "unsupported CPO resource type '{}'".format(resource_type)
             )
-        return sorted(resources, key=_natural_key)
+        return sorted(resources, key=natural_sort_key)
 
     def resolve_resource_ids(self, selector, resource_type):
         resource_ids = self.resource_ids(resource_type)

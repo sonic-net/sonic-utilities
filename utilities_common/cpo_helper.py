@@ -1,4 +1,15 @@
-"""Output helpers for the CPO command-line utility."""
+"""Helpers for the CPO command-line utility."""
+
+import re
+
+
+def natural_sort_key(value, case_sensitive=False):
+    """Order numeric parts naturally, optionally preserving letter case."""
+    text = str(value)
+    if not case_sensitive:
+        text = text.lower()
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r"(\d+)", text)]
 
 
 def get_physical_port_name(logical_port, physical_port, ganged):

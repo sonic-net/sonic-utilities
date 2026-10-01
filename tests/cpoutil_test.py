@@ -405,6 +405,7 @@ class CoverageFakeCpo(cpoutil.CpoBase):
     def __init__(self):
         super().__init__(None, self, self)
         self.api = CoverageFakeApi()
+        self.api.xcvr_eeprom = mock.Mock(reader=self.read_eeprom)
         self.reads = []
         self.writes = []
 
@@ -610,6 +611,14 @@ class TestCommunityMappingCoverage(object):
 
 
 class TestHelperCoverage(object):
+    @pytest.mark.parametrize("port_name", ["Ethernet999", "not-a-port"])
+    def test_invalid_port_error_is_printed_once(self, coverage_environment, port_name):
+        result = CliRunner().invoke(
+            cpoutil.cli, ["show", "interface", "map", port_name]
+        )
+        assert result.exit_code != 0
+        assert result.output.count("Invalid port '{}'".format(port_name)) == 1
+
     def test_port_and_lane_helpers(self, coverage_environment):
         assert cpoutil.logical_port_name_to_physical_port_list("Ethernet0") == [1]
         assert cpoutil.logical_port_name_to_physical_port_list("7") == [7]
@@ -836,7 +845,8 @@ class TestCommandCoverage(object):
         )
 
         coverage_environment.api.xcvr_eeprom = mock.Mock(
-            mem_map=ElsfpMemMap(ElsfpCodes)
+            mem_map=ElsfpMemMap(ElsfpCodes),
+            reader=coverage_environment.read_eeprom,
         )
         for arguments in (
             ["read-eeprom", "interface", "Ethernet0", "--oe"],
@@ -860,7 +870,10 @@ class TestCommandCoverage(object):
         mem_map = ElsfpMemMap(ElsfpCodes)
         for index, page in enumerate(mem_map.pages):
             page._page = 0xB0 + index
-        coverage_environment.api.xcvr_eeprom = mock.Mock(mem_map=mem_map)
+        coverage_environment.api.xcvr_eeprom = mock.Mock(
+            mem_map=mem_map,
+            reader=coverage_environment.read_eeprom,
+        )
 
         result = invoke_coverage(["read-eeprom", "els", "-i", "0"])
         assert result.exit_code == 0, result.output
@@ -870,6 +883,67 @@ class TestCommandCoverage(object):
             (page.getaddr(0 if index == 0 else 128), 128)
             for index, page in enumerate(mem_map.pages)
         ]
+
+    @pytest.mark.parametrize("page_offset", (0, 4))
+    def test_els_dump_pairs_selected_pages_with_api_reader(
+            self, coverage_environment, page_offset):
+        from sonic_platform_base.sonic_xcvr.codes.public.elsfp import ElsfpCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.elsfp.elsfp import (
+            ElsfpMemMap,
+        )
+
+        mem_map = ElsfpMemMap(ElsfpCodes)
+        mem_map.pages = mem_map.pages[:3]
+        for index, page in enumerate(mem_map.pages):
+            page._page = 0xB0 + page_offset + index
+
+        api_reads = []
+
+        def api_reader(offset, size):
+            api_reads.append((offset, size))
+            return bytearray([0x41 + page_offset] * size)
+
+        coverage_environment.api.xcvr_eeprom = mock.Mock(
+            mem_map=mem_map, reader=api_reader,
+        )
+        coverage_environment.read_eeprom = mock.Mock(
+            side_effect=AssertionError("ELS endpoint bypassed selected API reader")
+        )
+
+        result = invoke_coverage(["read-eeprom", "els", "-i", "0"])
+        assert result.exit_code == 0, result.output
+        assert "Lower page {:x}h".format(0xB0 + page_offset) in result.output
+        assert "Upper page {:x}h".format(0xB2 + page_offset) in result.output
+        assert api_reads == [
+            (page.getaddr(0 if index == 0 else 128), 128)
+            for index, page in enumerate(mem_map.pages)
+        ]
+        coverage_environment.read_eeprom.assert_not_called()
+
+    def test_els_explicit_page_uses_selected_api_reader(self):
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import (
+            CmisPage,
+        )
+
+        reads = []
+
+        def api_reader(offset, size):
+            reads.append((offset, size))
+            return bytes([0x42] * size)
+
+        api = mock.Mock(xcvr_eeprom=mock.Mock(reader=api_reader))
+        els = CoverageFakeEndpoint(api)
+        els.read_eeprom = mock.Mock(
+            side_effect=AssertionError("ELS endpoint bypassed selected API reader")
+        )
+        cpo = cpoutil.CpoBase(None, mock.Mock(), els)
+
+        data = cpoutil._read_one_eeprom(
+            EXTERNAL_LASER_SOURCE, "els1", cpo, 0, 0xB4, 0x80, 2
+        )
+        assert data == bytearray([0x42, 0x42])
+        assert reads == [(CmisPage.linear_offset(0xB4, 0, 0x80), 2)]
+        els.read_eeprom.assert_not_called()
 
     def test_eeprom_validation_errors(self, coverage_environment):
         with pytest.raises(cpoutil.CpoCommandError):
@@ -886,6 +960,17 @@ class TestCommandCoverage(object):
 
 
 class TestCpoHelpers:
+    @pytest.mark.parametrize("case_sensitive, expected", [
+        (False, ["lane1", "Lane2", "lane2", "Lane10"]),
+        (True, ["Lane2", "Lane10", "lane1", "lane2"]),
+    ])
+    def test_natural_sort_case_sensitivity(self, case_sensitive, expected):
+        names = ["Lane10", "lane1", "Lane2", "lane2"]
+        assert sorted(
+            names, key=lambda name: cpoutil._natural_sort_key(name, case_sensitive)
+        ) == expected
+        assert cpoutil._natural_sort_key("Lane2") == cpoutil._natural_sort_key("lane2")
+
     def test_shared_eeprom_and_dom_formatting(self):
         assert cpoutil._format_eeprom_hexdump(b"", 128) == ""
         assert cpoutil._format_eeprom_hexdump(b"ABCDEFGHIJKLMNOPQ", 128) == (

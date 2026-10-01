@@ -15,6 +15,7 @@ from utilities_common.cpo_helper import (
     format_value_with_unit as _value_with_unit,
     get_physical_port_name,
     hexdump,
+    natural_sort_key as _natural_sort_key,
 )
 
 from cpoutil.mapping import CpoMapping, CpoMappingError
@@ -245,6 +246,15 @@ def load_current_port_config():
 def logical_port_name_to_physical_port_list(logical_port):
     """Resolve a port through the shared SONiC port mapping helper."""
     port_name = str(logical_port)
+    # Reject invalid names before the shared helper prints its own error.
+    if port_name.startswith("Ethernet"):
+        if not platform_sfputil_helper.platform_sfputil.is_logical_port(port_name):
+            raise CpoCommandError("Invalid port '{}'".format(port_name))
+    else:
+        try:
+            int(port_name)
+        except ValueError:
+            raise CpoCommandError("Invalid port '{}'".format(port_name))
     physical_ports = (
         platform_sfputil_helper.logical_port_name_to_physical_port_list(
             port_name
@@ -776,13 +786,6 @@ def _select_els_laser_values(values, laser_ids):
     return selected
 
 
-def _natural_sort_key(value):
-    return [
-        int(part) if part.isdigit() else part.lower()
-        for part in re.split(r"(\d+)", str(value))
-    ]
-
-
 def _ordered_top_level(records):
     """Naturally order record identifiers without reordering nested fields."""
     if not isinstance(records, dict):
@@ -795,13 +798,6 @@ def _ordered_top_level(records):
 
 def _json_records(records):
     return json.dumps(_ordered_top_level(records), indent=4)
-
-
-def _case_sensitive_natural_sort_key(value):
-    return [
-        int(part) if part.isdigit() else part
-        for part in re.split(r"(\d+)", str(value))
-    ]
 
 
 def _format_application_advertisement(advertisements):
@@ -889,7 +885,9 @@ def _format_cpo_info(info):
 
 
 def _append_dom_values(lines, values, value_map, unit_map, alignment=0):
-    sorted_keys = sorted(value_map, key=_case_sensitive_natural_sort_key)
+    sorted_keys = sorted(
+        value_map, key=lambda key: _natural_sort_key(key, case_sensitive=True)
+    )
     lines.extend(format_dict_value_to_string(
         sorted_keys, values, value_map, unit_map, alignment).splitlines())
 
@@ -2109,6 +2107,17 @@ def _get_eeprom_device(cpo, resource_type):
     return cpo.oe if resource_type == OPTICAL_ENGINE else cpo.elsfp
 
 
+def _get_els_eeprom(cpo, resource_id):
+    """Keep ELS page addresses and reads on the same selected API."""
+    api = get_els_api(cpo, str(resource_id).upper())
+    eeprom = getattr(api, "xcvr_eeprom", None)
+    if not callable(getattr(eeprom, "reader", None)):
+        raise CpoCommandError(
+            "ELS EEPROM reader is unavailable for '{}'".format(resource_id)
+        )
+    return eeprom
+
+
 def _parse_hex_data(value):
     try:
         data = bytearray.fromhex(value)
@@ -2196,14 +2205,17 @@ def _read_one_eeprom(resource_type, resource_id, cpo,
     linear_offset = _eeprom_linear_offset(
         resource_type, resource_id, cpo, bank, page, offset
     )
-    device = _get_eeprom_device(cpo, resource_type)
-    return _read_eeprom_at(device, resource_id, linear_offset, size)
+    if resource_type == EXTERNAL_LASER_SOURCE:
+        reader = _get_els_eeprom(cpo, resource_id).reader
+    else:
+        reader = _get_eeprom_device(cpo, resource_type).read_eeprom
+    return _read_eeprom_at(reader, resource_id, linear_offset, size)
 
 
-def _read_eeprom_at(device, resource_id, linear_offset, size):
+def _read_eeprom_at(reader, resource_id, linear_offset, size):
     """Read one range at the address selected by a CPO memory map."""
     try:
-        data = device.read_eeprom(linear_offset, size)
+        data = reader(linear_offset, size)
     except (NotImplementedError, AttributeError, OSError) as exc:
         raise CpoCommandError(
             "Failed to read EEPROM for '{}': {}".format(resource_id, exc)
@@ -2239,14 +2251,12 @@ def _full_eeprom_sections(banks):
     return sections
 
 
-def _els_eeprom_sections(cpo, resource_id):
-    """Use the selected ELS API's memory map, including platform page remaps."""
+def _els_eeprom_sections(eeprom, resource_id):
+    """Read physical pages already resolved by the selected ELS API map."""
     from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import (
         CmisAdministrativeLowerPage,
     )
 
-    api = get_els_api(cpo, str(resource_id).upper())
-    eeprom = getattr(api, "xcvr_eeprom", None)
     mem_map = getattr(eeprom, "mem_map", None)
     if mem_map is None or not getattr(mem_map, "pages", None):
         raise CpoCommandError(
@@ -2273,12 +2283,12 @@ def _format_full_eeprom(resource_type, resource_id, cpo, banks,
     label = display_name or str(resource_id).upper()
     lines = ["EEPROM hexdump for {}".format(label)]
     if resource_type == EXTERNAL_LASER_SOURCE:
-        device = _get_eeprom_device(cpo, resource_type)
+        eeprom = _get_els_eeprom(cpo, resource_id)
         for title, linear_offset, offset in _els_eeprom_sections(
-                cpo, resource_id):
+                eeprom, resource_id):
             lines.append("{}{}".format(EEPROM_DUMP_INDENT, title))
             data = _read_eeprom_at(
-                device, resource_id, linear_offset, EEPROM_PAGE_SIZE
+                eeprom.reader, resource_id, linear_offset, EEPROM_PAGE_SIZE
             )
             lines.append(_format_eeprom_hexdump(data, offset))
             lines.append("")
