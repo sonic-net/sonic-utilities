@@ -368,7 +368,6 @@ def is_port_type_rj45(port_name):
     return False
 # ========================== Methods for formatting output ==========================
 
-
 # Convert dict values to cli output string
 def format_dict_value_to_string(sorted_key_table,
                                 dom_info_dict, dom_value_map,
