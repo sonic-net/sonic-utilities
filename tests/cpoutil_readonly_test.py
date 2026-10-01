@@ -23,7 +23,7 @@ from cpoutil.mapping import (  # noqa: E402
 
 CPO_DATA = {
     "oes": {"oe0": {"index": 0, "oe_cmis_path": "/sys/oe0/"}},
-    "elss": {"els0": {"index": 0, "base_page": 0}},
+    "elss": {"els0": {"index": 0}},
     "interfaces": {
         "Ethernet0": {
             "index": "1,1",
@@ -87,8 +87,8 @@ class FakeApi:
 
     def get_elsfp_status(self):
         status = {
-            "els_module_low_power_state": False,
-            "els_interrupt_status": True,
+            "module_low_power_state": False,
+            "interrupt_status": True,
         }
         if getattr(self, "els_module_state", None) is not None:
             status["module_state"] = self.els_module_state
@@ -120,24 +120,22 @@ class FakeApi:
         }
 
 
-class FakeCpo(object):
+class FakeCpo(cpoutil.CpoBase):
     def __init__(self):
+        super().__init__(None, self, self)
         self.api = FakeApi()
 
-    def get_xcvr_api(self):
+    def get_api(self):
         return self.api
 
     def get_presence(self):
-        return True
-
-    def get_els_presence(self):
         return True
 
     def get_transceiver_info(self):
         return {"manufacturer": "Example OE"}
 
     def get_transceiver_dom_real_value(self):
-        return {"temperature": 71.25, "RLM0_temperature": 32.5}
+        return {"temperature": 71.25}
 
     def get_transceiver_threshold_info(self):
         return {"temphighalarm": 90.0}
@@ -193,7 +191,7 @@ class TestDirectPlatformApiCommands(object):
             "Laser1OpticalPowerMonitor"
         ] == 70.8
 
-    def test_els_presence_calls_cpo_object(self):
+    def test_els_presence_calls_elsfp_endpoint(self):
         result = invoke(["show", "els", "presence", "0", "--json"])
         assert json.loads(result.output) == {"els0": True}
 
@@ -226,6 +224,13 @@ class TestDirectPlatformApiCommands(object):
         assert values["temphighalarm"] == 90.0
         assert values["els_temperature_alarm_high"] == 75.0
         assert isinstance(values["temperature"], float)
+
+    def test_interface_dom_does_not_query_oe_presence(self):
+        with mock.patch.object(
+                self.cpo, "get_presence",
+                side_effect=AssertionError("OE presence must not be read")):
+            result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([
@@ -282,7 +287,7 @@ class TestDirectPlatformApiCommands(object):
             "lane01": "Inactive",
         }
 
-    def test_interrupt_event_normalizes_bailly_polarity(self):
+    def test_interrupt_event_normalizes_public_status(self):
         with mock.patch.object(
                 self.cpo.api,
                 "get_elsfp_status",

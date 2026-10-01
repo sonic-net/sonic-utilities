@@ -1,10 +1,8 @@
-"""Regression coverage for formatting and port lookup shared by SFP and CPO."""
-
-from unittest import mock
+"""Regression coverage for CPO output formatting."""
 
 import pytest
 
-from utilities_common import platform_sfputil_helper, sfp_helper
+from utilities_common import cpo_helper
 
 
 @pytest.mark.parametrize("data, expected", [
@@ -23,7 +21,7 @@ def test_eeprom_hexdump_layout(data, expected, start_newline):
     expected = "\n".join(indent + line for line in expected.splitlines())
     if start_newline and data:
         expected = "\n" + expected
-    assert sfp_helper.hexdump(indent, data, 128, start_newline) == expected
+    assert cpo_helper.hexdump(indent, data, 128, start_newline) == expected
 
 
 @pytest.mark.parametrize("logical, physical, ganged, expected", [
@@ -33,36 +31,16 @@ def test_eeprom_hexdump_layout(data, expected, start_newline):
     ("Ethernet0", 2, True, "Ethernet0:2 (ganged)"),
 ])
 def test_physical_port_labels(logical, physical, ganged, expected):
-    assert sfp_helper.get_physical_port_name(logical, physical, ganged) == expected
+    assert cpo_helper.get_physical_port_name(logical, physical, ganged) == expected
 
 
 def test_dom_units_missing_values_and_alignment():
     labels = {"temp": "Temperature", "rx": "Rx", "tx": "Tx", "bias": "Bias", "missing": "Missing"}
     units = {"temp": "C", "rx": "dBm", "tx": "dBm", "bias": "mA"}
     values = {"temp": 32.5, "rx": "-2.1dBm", "tx": "Unknown", "bias": "N/A"}
-    assert sfp_helper.format_dict_value_to_string(labels, values, labels, units, 12) == (
+    assert cpo_helper.format_dict_value_to_string(labels, values, labels, units, 12) == (
         "                Temperature : 32.5C\n"
         "                Rx          : -2.1dBm\n"
         "                Tx          : Unknown\n"
     )
-    assert sfp_helper.format_dict_value_to_string(labels, None, labels, units) == ""
-
-
-@pytest.mark.parametrize("explicit_mapping", [False, True])
-def test_logical_and_numeric_ports(monkeypatch, capsys, explicit_mapping):
-    mapping = mock.Mock()
-    mapping.is_logical_port.side_effect = lambda port: port in ("Ethernet0", "Ethernet2")
-    mapping.get_logical_to_physical.side_effect = lambda port: {"Ethernet0": [1, 2], "Ethernet2": [1]}[port]
-    other_mapping = mock.Mock(side_effect=AssertionError("wrong port mapping"))
-    monkeypatch.setattr(platform_sfputil_helper, "platform_sfputil", other_mapping if explicit_mapping else mapping)
-    kwargs = {"sfputil": mapping} if explicit_mapping else {}
-    resolve = platform_sfputil_helper.logical_port_name_to_physical_port_list
-    assert resolve("Ethernet0", **kwargs) == [1, 2]
-    assert resolve("Ethernet2", **kwargs) == [1]
-    assert resolve("7", **kwargs) == [7]
-    assert capsys.readouterr().out == ""
-    for port in ("Ethernet999", "not-a-port", ""):
-        assert resolve(port, **kwargs) is None
-        assert capsys.readouterr().out == "Invalid port '{}'\n".format(port)
-    other_mapping.is_logical_port.assert_not_called()
-    other_mapping.get_logical_to_physical.assert_not_called()
+    assert cpo_helper.format_dict_value_to_string(labels, None, labels, units) == ""

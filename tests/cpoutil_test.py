@@ -41,14 +41,13 @@ def shared_port_mapping(monkeypatch):
 
 
 CPO_DATA = {
-    "cpo_eeprom_mode": "joint",
     "oes": {
         "oe0": {"index": 0, "oe_cmis_path": "/sys/oe0/"},
         "oe1": {"index": 1, "oe_cmis_path": "/sys/oe1/"},
     },
     "elss": {
-        "els0": {"index": 0, "base_page": 0},
-        "els1": {"index": 1, "base_page": 4},
+        "els0": {"index": 0},
+        "els1": {"index": 1},
     },
     "interfaces": {
         "Ethernet8": {
@@ -79,12 +78,10 @@ CPO_DATA = {
 }
 
 
-class FakeCpo(object):
+class FakeCpo(cpoutil.CpoBase):
     def __init__(self, name):
+        super().__init__(None, mock.Mock(), mock.Mock())
         self.name = name
-
-    def get_xcvr_api(self):
-        return self
 
 
 class FakeChassis(object):
@@ -158,6 +155,19 @@ class TestPlatformObjectMapping(object):
         assert cpoutil.cpo_object_map[OPTICAL_ENGINE]["oe0"] is cpo1
         assert cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"] is cpo1
         assert cpoutil.cpo_object_map[OPTICAL_ENGINE]["oe1"].name == "cpo3"
+
+    def test_rejects_non_cpo_platform_object(self):
+        cpoutil.platform_chassis.cpos[1] = object()
+        device_info = types.ModuleType("sonic_py_common.device_info")
+        device_info.get_cpo_data = lambda: CPO_DATA
+        sonic_py_common = types.ModuleType("sonic_py_common")
+        sonic_py_common.device_info = device_info
+        with mock.patch.dict(sys.modules, {
+                "sonic_py_common": sonic_py_common,
+                "sonic_py_common.device_info": device_info,
+        }):
+            with pytest.raises(cpoutil.CpoCommandError, match="CpoBase"):
+                cpoutil.load_cpo_object_map()
 
     def test_breakout_names_resolve_to_same_physical_cpo(self):
         cpoutil.cpo_object_map = {
@@ -323,7 +333,6 @@ class CoverageFakeApi:
             "temperature": 45.25,
             "voltage": 3.3,
             "rx1power": 1.2,
-            "els_legacy": "drop",
         }
 
     def get_transceiver_threshold_info(self):
@@ -392,23 +401,18 @@ class CoverageFakeEndpoint(object):
         return True
 
 
-class CoverageFakeCpo(object):
+class CoverageFakeCpo(cpoutil.CpoBase):
     def __init__(self):
+        super().__init__(None, self, self)
         self.api = CoverageFakeApi()
         self.reads = []
         self.writes = []
 
-    def get_xcvr_api(self):
+    def get_api(self):
         return self.api
 
     def get_presence(self):
         return True
-
-    def get_els_presence(self):
-        return True
-
-    def get_els_base_page(self):
-        return 0
 
     def read_eeprom(self, offset, size):
         self.reads.append((offset, size))
@@ -622,18 +626,18 @@ class TestHelperCoverage(object):
         assert cpoutil.get_resource_cpo_objects(OPTICAL_ENGINE, "0")[0][0] == \
             "oe0"
 
-    def test_api_fallback_and_endpoint_paths(self, coverage_environment):
+    def test_public_api_endpoint_paths(self, coverage_environment):
         cpo = coverage_environment
         assert cpoutil.get_oe_api(cpo, "oe0") is cpo.api
-        assert cpoutil.get_oe_presence(cpo)
         assert cpoutil.get_els_api(cpo, "els0") is cpo.api
         assert cpoutil.get_els_presence(cpo)
 
+        oe_api, els_api = object(), object()
         public_cpo = cpoutil.CpoBase(
-            None, CoverageFakeEndpoint(cpo.api), CoverageFakeEndpoint(cpo.api)
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api)
         )
-        assert cpoutil.get_oe_presence(public_cpo)
-        assert cpoutil.get_els_api(public_cpo, "els0") is cpo.api
+        assert cpoutil.get_oe_api(public_cpo, "oe0") is oe_api
+        assert cpoutil.get_els_api(public_cpo, "els0") is els_api
         assert cpoutil.get_els_presence(public_cpo)
 
     def test_normalizers_and_filters(self):
@@ -655,9 +659,6 @@ class TestHelperCoverage(object):
         assert cpoutil._filter_els_monitor_lanes(
             {"Laser0State": 1, "Laser2State": 2}, 2
         ) == {"Laser0State": 1}
-        assert cpoutil._drop_legacy_els_fields(
-            {"temperature": 1, "els_temperature": 2, "rlm_x": 3}
-        ) == {"temperature": 1}
         assert cpoutil._select_lane_values({"DP2": 2, "DP1": 1}, (1,)) == {
             "lane01": 2
         }
@@ -699,13 +700,12 @@ class TestHelperCoverage(object):
             "els_temperature": 30.0,
             "els_temperature_alarm_high": 75.0,
             "els_optical_power_lane1": -1.0,
-            "RLM0Laser0": 2.0,
             "extra": {"nested": True},
         }
         lines = cpoutil._format_cpo_dom(dom)
         assert any("AdditionalValues" in line for line in lines)
-        assert "not detected" in cpoutil._format_interface_dom(
-            "Ethernet0", False, None, None, None
+        assert "CPO EEPROM detected" in cpoutil._format_interface_dom(
+            "Ethernet0", None, None, None
         )
         cpoutil.print_records({"oe0": [1, 2]}, False, field_header="Lane")
         cpoutil.print_speed_records(
@@ -810,19 +810,19 @@ class TestCommandCoverage(object):
             ["read-eeprom", "interface", "Ethernet0", "--oe",
              "-n", "0", "-o", "0", "-s", "16"],
             ["read-eeprom", "interface", "Ethernet0", "--els",
-             "-n", "0xb2", "-o", "0x80", "-s", "16"],
+             "-n", "0x1a", "-o", "0x80", "-s", "16"],
             ["read-eeprom", "oe", "-i", "0", "-b", "0",
              "-n", "0", "-o", "0", "-s", "16"],
             ["read-eeprom", "els", "-i", "0",
-             "-n", "0xb2", "-o", "0x80", "-s", "16"],
+             "-n", "0x1a", "-o", "0x80", "-s", "16"],
             ["write-eeprom", "interface", "Ethernet0", "--oe",
              "-n", "0", "-o", "0x80", "-d", "01 02"],
             ["write-eeprom", "interface", "Ethernet0", "--els",
-             "-n", "0xb2", "-o", "0x80", "-d", "01 02"],
+             "-n", "0x1a", "-o", "0x80", "-d", "01 02"],
             ["write-eeprom", "oe", "-i", "0", "-b", "0",
              "-n", "0", "-o", "0x80", "-d", "01 02"],
             ["write-eeprom", "els", "-i", "0", "-b", "0",
-             "-n", "0xb2", "-o", "0x80", "-d", "01 02"],
+             "-n", "0x1a", "-o", "0x80", "-d", "01 02"],
         ],
     )
     def test_eeprom_ranges_and_writes(self, coverage_environment, arguments):
@@ -853,7 +853,7 @@ class TestCommandCoverage(object):
         assert cpoutil._format_eeprom_hexdump(b"ABC", 0).endswith("|ABC|")
 
 
-class TestSharedPlatformHelpers:
+class TestCpoHelpers:
     def test_shared_eeprom_and_dom_formatting(self):
         assert cpoutil._format_eeprom_hexdump(b"", 128) == ""
         assert cpoutil._format_eeprom_hexdump(b"ABCDEFGHIJKLMNOPQ", 128) == (
@@ -925,17 +925,16 @@ class TestSharedPlatformHelpers:
                 cpoutil.load_cpo_object_map()
         loader.assert_called_once_with()
 
-    def test_public_presence_uses_independent_endpoints(self):
+    def test_only_els_presence_is_read(self):
         oe = mock.Mock(get_presence=mock.Mock(return_value=True))
         els = mock.Mock(get_presence=mock.Mock(return_value=False))
         cpo = cpoutil.CpoBase(None, oe, els)
-        assert cpoutil.get_oe_presence(cpo) is True
         assert cpoutil.get_els_presence(cpo) is False
+        oe.get_presence.assert_not_called()
         assert cpoutil.get_els_api(cpo, "els0") is els.get_api.return_value
 
 
 class TestOptionalElsApis:
-    @pytest.mark.parametrize("backend", ["public", "legacy"])
     @pytest.mark.parametrize("arguments", [
         ["config", "els", "lpmode", "0", "low"],
         ["config", "els", "reset", "0"],
@@ -945,10 +944,9 @@ class TestOptionalElsApis:
         ["show", "interface", "lane-status", "Ethernet0"],
     ])
     def test_unsupported_els_commands_do_not_change_oe(
-            self, coverage_environment, monkeypatch, backend, arguments):
+            self, coverage_environment, monkeypatch, arguments):
         # Exercise the CLI's handling of the optional API contract here.
-        # Real base/Bailly inheritance is tested in sonic-platform-common;
-        # utilities CI may install a wheel from before that contract existed.
+        # The companion platform-common PR defines the optional ELS API stubs.
         els_api = CoverageFakeApi()
         for method in (
                 "set_elsfp_lpmode", "reset_elsfp", "set_per_lane_enable",
@@ -957,12 +955,8 @@ class TestOptionalElsApis:
                 side_effect=NotImplementedError("ELS operation is not implemented")))
         monkeypatch.setattr(els_api, "supports_per_lane_enable", lambda: False)
         oe_api = CoverageFakeApi()
-        if backend == "public":
-            cpo = cpoutil.CpoBase(
-                None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
-        else:
-            cpo = CoverageFakeCpo()
-            cpo.api = els_api
+        cpo = cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
         monkeypatch.setattr(cpoutil, "cpo_object_map", {
             OPTICAL_ENGINE: {"oe0": cpo},
             EXTERNAL_LASER_SOURCE: {"els0": cpo},
@@ -996,6 +990,7 @@ class TestOptionalElsApis:
         oe = CoverageFakeCpo()
         els = CoverageFakeCpo()
         cpo = cpoutil.CpoBase(None, oe, els)
+        cpo.get_els_base_page = mock.Mock(return_value=0)
         monkeypatch.setattr(cpoutil, "cpo_object_map", {
             OPTICAL_ENGINE: {"oe0": cpo}, EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo}})
         for resource_type, endpoint in ((OPTICAL_ENGINE, oe), (EXTERNAL_LASER_SOURCE, els)):
@@ -1004,25 +999,24 @@ class TestOptionalElsApis:
             assert len(endpoint.reads) == len(endpoint.writes) == 1
 
     @pytest.mark.parametrize("placeholder", [False, True])
-    def test_unmapped_public_els_eeprom_has_a_clear_error(self, monkeypatch, placeholder):
-        # Older platform-common has no method; newer versions expose an
-        # optional placeholder. Both must fail before attempting EEPROM I/O.
+    def test_unmapped_public_els_eeprom_is_not_implemented(
+            self, monkeypatch, placeholder):
         monkeypatch.delattr(cpoutil.CpoBase, "get_els_base_page", raising=False)
         cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
         if placeholder:
-            cpo.get_els_base_page = mock.Mock(side_effect=NotImplementedError(
-                "ELS EEPROM page mapping is not implemented"))
-        with pytest.raises(cpoutil.CpoCommandError, match="Failed to resolve ELS EEPROM page"):
+            cpo.get_els_base_page = mock.Mock(side_effect=NotImplementedError())
+        with pytest.raises(
+                cpoutil.CpoCommandError,
+                match="ELS EEPROM page mapping is not implemented"):
             cpoutil._physical_eeprom_page(EXTERNAL_LASER_SOURCE, "els0", cpo, 0)
         cpo.elsfp.read_eeprom.assert_not_called()
         cpo.elsfp.write_eeprom.assert_not_called()
 
-    def test_legacy_presence_uses_public_device_method(self):
-        class LegacyDevice:
-            def get_presence(self):
-                return False
-
-        assert cpoutil.get_els_presence(LegacyDevice()) is False
+    def test_public_els_eeprom_uses_platform_page_mapping(self):
+        cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
+        cpo.get_els_base_page = mock.Mock(return_value=0xB0)
+        assert cpoutil._physical_eeprom_page(
+            EXTERNAL_LASER_SOURCE, "els0", cpo, 2) == 0xB2
 
 
 class TestExplicitLaserMapping:
@@ -1087,7 +1081,7 @@ class TestExplicitLaserMapping:
         assert result.exit_code != 0
         assert coverage_environment.api.calls == []
 
-    def test_legacy_breakout_without_lane_mapping_is_rejected(self, monkeypatch, coverage_environment):
+    def test_breakout_without_lane_mapping_is_rejected(self, monkeypatch, coverage_environment):
         self.configure(monkeypatch, COVERAGE_CPO_DATA, {
             "Ethernet0": {"index": "1", "lanes": "1,2"},
             "Ethernet1": {"index": "1", "lanes": "2"},
@@ -1167,23 +1161,3 @@ class TestOeBankControls:
         assert result.exit_code != 0
         assert "oe0 bank 1 Tx-disable enable failed" in result.output
         assert "OK" not in result.output
-
-    def test_bailly_apis_write_distinct_bank_addresses(self, bank_cpos):
-        from sonic_platform_base.sonic_xcvr.api.broadcom.bailly import BaillyApi
-        from sonic_platform_base.sonic_xcvr.codes.broadcom.bailly import BaillyCodes
-        from sonic_platform_base.sonic_xcvr.mem_maps.broadcom.bailly import BaillyMemMap
-        from sonic_platform_base.sonic_xcvr.xcvr_eeprom import XcvrEeprom
-
-        writer = mock.Mock(return_value=True)
-        for bank, physical_port in enumerate([1, 2]):
-            eeprom = XcvrEeprom(
-                lambda offset, size: bytearray(size), writer,
-                BaillyMemMap(BaillyCodes, bank=bank),
-            )
-            bank_cpos[physical_port].api = BaillyApi(eeprom)
-        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
-        assert result.exit_code == 0, result.output
-        assert writer.call_count == 2
-        first, second = [call.args for call in writer.call_args_list]
-        assert first[0] != second[0]
-        assert first[1:] == second[1:] == (1, bytearray([0xff]))

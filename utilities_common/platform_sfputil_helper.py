@@ -84,14 +84,11 @@ def logical_port_to_physical_port_index(port_name):
     return physical_port
 
 
-def logical_port_name_to_physical_port_list(port_name, sfputil=None):
-    """Resolve a logical or numeric port using the supplied or shared mapping."""
-    if sfputil is None:
-        sfputil = platform_sfputil
+def logical_port_name_to_physical_port_list(port_name):
     try:
         if port_name.startswith("Ethernet"):
-            if sfputil.is_logical_port(port_name):
-                return sfputil.get_logical_to_physical(port_name)
+            if platform_sfputil.is_logical_port(port_name):
+                return platform_sfputil.get_logical_to_physical(port_name)
         else:
             return [int(port_name)]
     except ValueError:

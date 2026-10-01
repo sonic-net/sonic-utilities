@@ -10,7 +10,7 @@ from tabulate import tabulate
 
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from utilities_common import platform_sfputil_helper
-from utilities_common.sfp_helper import (
+from utilities_common.cpo_helper import (
     format_dict_value_to_string,
     format_value_with_unit as _value_with_unit,
     get_physical_port_name,
@@ -84,8 +84,6 @@ CPO_INFO_FIELD_MAP = {
     "els_vendor_sn": "ELS Vendor SN",
     "els_date_code": "ELS Vendor Date Code(YYYY-MM-DD Lot)",
     "els_max_power": "ELS Maximum Power Consumption",
-    "rlm_laser_lpmode_control": "RLM Laser Lpower Mode Control",
-    "rlm_laser_wavelength_grid": "RLM Laser Wavelength Grid",
     "els_connector": "ELS Connector",
     "els_cmis_rev": "ELS CMIS Revision",
     "els_media_interface_technology": "ELS Media Interface Technology",
@@ -156,20 +154,6 @@ ELS_DOM_MONITOR_MAP = {
 }
 
 ELS_THRESHOLD_MAP = {
-    "els_temphighalarm": "ELS TempHighAlarm",
-    "els_templowalarm": "ELS TempLowAlarm",
-    "els_temphighwarning": "ELS TempHighWarning",
-    "els_templowwarning": "ELS TempLowWarning",
-    "els_vcchighalarm": "ELS VccHighAlarm",
-    "els_vcclowalarm": "ELS VccLowAlarm",
-    "els_vcchighwarning": "ELS VccHighWarning",
-    "els_vcclowwarning": "ELS VccLowWarning",
-    "els_txpowerhighalarm": "ELS TxPowerHighAlarm",
-    "els_txpowerlowalarm": "ELS TxPowerLowAlarm",
-    "els_txpowerhighwarning": "ELS TxPowerHighWarning",
-    "els_txpowerlowwarning": "ELS TxPowerLowWarning",
-    "els_txbiashighalarm": "ELS TxBiasHighAlarm",
-    "els_txbiashighwarning": "ELS TxBiasHighWarning",
     "els_temperature_alarm_high": "ELS TempHighAlarm",
     "els_temperature_alarm_low": "ELS TempLowAlarm",
     "els_temperature_warn_high": "ELS TempHighWarning",
@@ -221,11 +205,6 @@ ELS_THRESHOLD_UNIT_MAP = {
         "dBm"
     )
     for key in ELS_THRESHOLD_MAP
-}
-
-DISPLAY_FIELD_MAP = {
-    "els_interrupt_status": "Interrupt Status",
-    "els_module_low_power_state": "Module Low-power State",
 }
 
 
@@ -458,9 +437,14 @@ def load_cpo_object_map():
                         physical_port, exc
                     )
                 ) from exc
-            if cpo is None or not callable(
-                    getattr(cpo, "get_xcvr_api", None)):
+            if cpo is None:
                 continue
+            if not isinstance(cpo, CpoBase):
+                raise CpoCommandError(
+                    "Physical port {} did not return a CpoBase object".format(
+                        physical_port
+                    )
+                )
             cpo_object_map[PORT][physical_port] = cpo
             if interface_cpo is None:
                 interface_cpo = cpo
@@ -536,7 +520,7 @@ def get_resource_cpo_objects(resource_type, selector=None):
 def get_oe_api(cpo, label):
     """Get the public OE API from a CPO object."""
     try:
-        api = cpo.get_xcvr_api()
+        api = cpo.oe.get_api()
     except NotImplementedError as exc:
         raise CpoCommandError(
             "{} API is not implemented".format(label)
@@ -550,20 +534,8 @@ def get_oe_api(cpo, label):
     return api
 
 
-def get_oe_presence(cpo):
-    """Read OE presence from a public or legacy CPO object."""
-    # CpoBase owns separate OE/ELSFP endpoints. Legacy CPO implementations
-    # expose presence and the combined API directly on the CPO object.
-    if isinstance(cpo, CpoBase):
-        return cpo.oe.get_presence()
-    return cpo.get_presence()
-
-
 def get_els_api(cpo, label):
     """Get the public ELSFP API from a CPO object."""
-    if not isinstance(cpo, CpoBase):
-        return get_oe_api(cpo, label)
-
     try:
         api = cpo.elsfp.get_api()
     except NotImplementedError as exc:
@@ -580,11 +552,8 @@ def get_els_api(cpo, label):
 
 
 def get_els_presence(cpo):
-    """Read ELS presence from a public or legacy CPO object."""
-    if isinstance(cpo, CpoBase):
-        return cpo.elsfp.get_presence()
-    # Legacy combined CPO objects expose ELS presence through DeviceBase.
-    return cpo.get_presence()
+    """Read presence from the public ELSFP device."""
+    return cpo.elsfp.get_presence()
 
 
 def get_els_lpmode(_api):
@@ -593,9 +562,8 @@ def get_els_lpmode(_api):
     if not isinstance(status, dict):
         raise CpoCommandError("The ELSFP status API returned no data")
 
-    for key in ("module_low_power_state", "els_module_low_power_state"):
-        if key in status:
-            return _normalize_lpmode(status[key])
+    if "module_low_power_state" in status:
+        return _normalize_lpmode(status["module_low_power_state"])
 
     module_state = status.get("module_state")
     if module_state is not None:
@@ -742,7 +710,7 @@ def _filter_els_dom_lanes(values, lane_count):
 
 
 def _filter_els_monitor_lanes(values, lane_count):
-    """Remove zero-based legacy monitor fields outside the ELS lane count."""
+    """Remove zero-based laser monitor fields outside the ELS lane count."""
     if lane_count is None:
         return values
     if isinstance(values, (list, tuple)):
@@ -757,17 +725,6 @@ def _filter_els_monitor_lanes(values, lane_count):
             continue
         filtered[key] = value
     return filtered
-
-
-def _drop_legacy_els_fields(values):
-    """Keep OE results separate from ELS values returned by older backends."""
-    if not isinstance(values, dict):
-        return values
-    return {
-        key: value
-        for key, value in values.items()
-        if not str(key).startswith(("els_", "rlm_"))
-    }
 
 
 def _normalize_lane_values(values):
@@ -974,14 +931,8 @@ def _format_cpo_dom(dom_values):
         alignment=15,
     )
 
-    legacy_laser_keys = [
-        key for key in values
-        if str(key).startswith("RLM") and "Laser" in str(key)
-    ]
     els_monitor_map = dict(ELS_DOM_MONITOR_MAP)
     els_monitor_units = dict(ELS_DOM_MONITOR_UNIT_MAP)
-    els_monitor_map.update({key: key for key in legacy_laser_keys})
-    els_monitor_units.update({key: "" for key in legacy_laser_keys})
 
     lane_monitor_fields = {
         "laser_bias_current": ("Bias Current", "mA"),
@@ -1036,10 +987,7 @@ def _format_cpo_dom(dom_values):
     return lines
 
 
-def _format_interface_dom(port_name, present, info, dom, thresholds):
-    if not present:
-        return "{}: CPO EEPROM not detected".format(port_name)
-
+def _format_interface_dom(port_name, info, dom, thresholds):
     lines = ["{}: CPO EEPROM detected".format(port_name)]
     lines.extend(_format_cpo_info(info))
     values = {}
@@ -1174,16 +1122,14 @@ def _normalize_els_status(status):
     normalized = {}
     if status.get("module_state") is not None:
         normalized["module_state"] = status["module_state"]
-    for key in ("module_low_power_state", "els_module_low_power_state"):
-        if key in status:
-            normalized["low_power_mode"] = _normalize_lpmode(status[key])
-            break
-    for key in ("interrupt_status", "els_interrupt_status"):
-        if key in status:
-            normalized["interrupt_event"] = _normalize_interrupt_event(
-                status[key]
-            )
-            break
+    if "module_low_power_state" in status:
+        normalized["low_power_mode"] = _normalize_lpmode(
+            status["module_low_power_state"]
+        )
+    if "interrupt_status" in status:
+        normalized["interrupt_event"] = _normalize_interrupt_event(
+            status["interrupt_status"]
+        )
     if not normalized:
         raise CpoCommandError("The ELSFP status API returned no known fields")
     return normalized
@@ -1202,9 +1148,7 @@ def _display_field(field):
         elif laser_match:
             output.append("Laser {}".format(int(laser_match.group(1))))
         else:
-            output.append(
-                DISPLAY_FIELD_MAP.get(part, part.replace("_", " "))
-            )
+            output.append(part.replace("_", " "))
     return " / ".join(output)
 
 
@@ -1453,44 +1397,41 @@ def show_interface_dom(port, json_output):
     output = []
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
-            present = get_oe_presence(cpo)
+            oe_api = get_oe_api(cpo, port_name)
+            els_api = get_els_api(cpo, port_name)
+
+            info = oe_api.get_transceiver_info()
+            dom = oe_api.get_transceiver_dom_real_value()
+            thresholds = oe_api.get_transceiver_threshold_info()
+
+            els_info_values = els_api.get_elsfp_info()
+            els_lane_count = _get_els_lane_count(els_info_values)
+            els_info = _namespace_els_values(
+                els_info_values, ELS_INFO_KEY_MAP
+            )
+            els_dom = _namespace_els_values(
+                _filter_els_dom_lanes(
+                    els_api.get_elsfp_dom_real_value(), els_lane_count
+                )
+            )
+            els_thresholds = _namespace_els_values(
+                els_api.get_elsfp_threshold_info()
+            )
+
+            info = dict(info) if isinstance(info, dict) else {}
+            dom = dict(dom) if isinstance(dom, dict) else {}
+            thresholds = (
+                dict(thresholds) if isinstance(thresholds, dict) else {}
+            )
+            info.update(els_info)
+            dom.update(els_dom)
+            thresholds.update(els_thresholds)
             values = {}
-            info = dom = thresholds = None
-            if present:
-                oe_api = get_oe_api(cpo, port_name)
-                els_api = get_els_api(cpo, port_name)
-
-                info = oe_api.get_transceiver_info()
-                dom = oe_api.get_transceiver_dom_real_value()
-                thresholds = oe_api.get_transceiver_threshold_info()
-
-                els_info_values = els_api.get_elsfp_info()
-                els_lane_count = _get_els_lane_count(els_info_values)
-                els_info = _namespace_els_values(
-                    els_info_values, ELS_INFO_KEY_MAP
-                )
-                els_dom = _namespace_els_values(
-                    _filter_els_dom_lanes(
-                        els_api.get_elsfp_dom_real_value(),
-                        els_lane_count,
-                    )
-                )
-                els_thresholds = _namespace_els_values(
-                    els_api.get_elsfp_threshold_info()
-                )
-
-                info = _drop_legacy_els_fields(info) or {}
-                dom = _drop_legacy_els_fields(dom) or {}
-                thresholds = _drop_legacy_els_fields(thresholds) or {}
-                info.update(els_info)
-                dom.update(els_dom)
-                thresholds.update(els_thresholds)
-                for result in (info, dom, thresholds):
-                    if isinstance(result, dict):
-                        values.update(result)
+            for result in (info, dom, thresholds):
+                values.update(result)
             records[port_name] = values
             output.append(_format_interface_dom(
-                port_name, present, info, dom, thresholds
+                port_name, info, dom, thresholds
             ))
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
@@ -2106,10 +2047,15 @@ def _physical_eeprom_page(resource_type, resource_id, cpo, page):
     if resource_type == EXTERNAL_LASER_SOURCE:
         try:
             physical_page += cpo.get_els_base_page()
-        except (NotImplementedError, AttributeError,
-                TypeError, ValueError) as exc:
+        except (NotImplementedError, AttributeError) as exc:
             raise CpoCommandError(
-                "Failed to resolve ELS EEPROM page for '{}': {}".format(
+                "ELS EEPROM page mapping is not implemented for '{}'".format(
+                    resource_id
+                )
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise CpoCommandError(
+                "Invalid ELS EEPROM page mapping for '{}': {}".format(
                     resource_id, exc
                 )
             ) from exc
@@ -2187,10 +2133,8 @@ def _read_resource_eeprom(resource_type, index, bank, page, offset, size):
 
 
 def _get_eeprom_device(cpo, resource_type):
-    """Use public endpoint EEPROM accessors, or the legacy combined device."""
-    if isinstance(cpo, CpoBase):
-        return cpo.oe if resource_type == OPTICAL_ENGINE else cpo.elsfp
-    return cpo
+    """Return the public OE or ELSFP EEPROM endpoint."""
+    return cpo.oe if resource_type == OPTICAL_ENGINE else cpo.elsfp
 
 
 def _parse_hex_data(value):
