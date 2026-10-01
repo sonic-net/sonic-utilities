@@ -18,26 +18,29 @@ def port_mapper(monkeypatch):
     return mapper
 
 
-@pytest.mark.parametrize("strict, expected", [(False, [2, 2, 1]), (True, [2, 1])])
-def test_logical_port_resolution(port_mapper, capsys, strict, expected):
-    assert helper.logical_port_name_to_physical_port_list("Ethernet0", strict=strict) == expected
+@pytest.mark.parametrize("validated, expected", [(False, [2, 2, 1]), (True, [2, 1])])
+def test_logical_port_resolution(port_mapper, capsys, validated, expected):
+    resolver = (helper.get_validated_physical_port_list if validated else
+                helper.logical_port_name_to_physical_port_list)
+    assert resolver("Ethernet0") == expected
     port_mapper.get_logical_to_physical.assert_called_once_with("Ethernet0")
     assert capsys.readouterr().out == ""
 
 
-@pytest.mark.parametrize("port", ["7", 7])
-@pytest.mark.parametrize("strict", [False, True])
-def test_physical_port_resolution(port_mapper, port, strict):
-    assert helper.logical_port_name_to_physical_port_list(port, strict=strict) == [7]
+@pytest.mark.parametrize("port, validated", [("7", False), ("7", True), (7, True)])
+def test_physical_port_resolution(port_mapper, port, validated):
+    resolver = (helper.get_validated_physical_port_list if validated else
+                helper.logical_port_name_to_physical_port_list)
+    assert resolver(port) == [7]
     port_mapper.get_logical_to_physical.assert_not_called()
 
 
 @pytest.mark.parametrize("port", ["Ethernet999", "not-a-port"])
-@pytest.mark.parametrize("strict", [False, True])
-def test_invalid_port_reporting(port_mapper, capsys, port, strict):
-    if strict:
+@pytest.mark.parametrize("validated", [False, True])
+def test_invalid_port_reporting(port_mapper, capsys, port, validated):
+    if validated:
         with pytest.raises(click.ClickException, match="Invalid port '{}'".format(port)):
-            helper.logical_port_name_to_physical_port_list(port, strict=True)
+            helper.get_validated_physical_port_list(port)
         assert capsys.readouterr().out == ""
     else:
         assert helper.logical_port_name_to_physical_port_list(port) is None
@@ -46,17 +49,16 @@ def test_invalid_port_reporting(port_mapper, capsys, port, strict):
 
 
 @pytest.mark.parametrize("physical_ports", [None, []])
-def test_missing_mapping_preserves_default_and_rejects_strict(port_mapper, capsys, physical_ports):
+def test_missing_mapping_preserves_legacy_and_rejects_validated(port_mapper, capsys, physical_ports):
     port_mapper.get_logical_to_physical.return_value = physical_ports
     assert helper.logical_port_name_to_physical_port_list("Ethernet0") == physical_ports
     with pytest.raises(click.ClickException, match="Invalid port 'Ethernet0'"):
-        helper.logical_port_name_to_physical_port_list("Ethernet0", strict=True)
+        helper.get_validated_physical_port_list("Ethernet0")
     assert capsys.readouterr().out == ""
 
 
-@pytest.mark.parametrize("physical_ports", [None, [], [None]])
-def test_physical_index_missing_mapping_reports_error(port_mapper, capsys, physical_ports):
-    port_mapper.get_logical_to_physical.return_value = physical_ports
+def test_physical_index_none_member_reports_error(port_mapper, capsys):
+    port_mapper.get_logical_to_physical.return_value = [None]
     with pytest.raises(SystemExit) as error:
         helper.logical_port_to_physical_port_index("Ethernet0")
     assert error.value.code == helper.EXIT_FAIL

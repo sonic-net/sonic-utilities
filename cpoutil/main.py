@@ -125,7 +125,7 @@ def load_current_port_config():
             "CONFIG_DB", "PORT", "lanes", port
         )
         current_port_config[port] = {
-            "index": platform_sfputil_helper.logical_port_name_to_physical_port_list(port, strict=True),
+            "index": platform_sfputil_helper.get_validated_physical_port_list(port),
             "lanes": _parse_port_lanes(lanes, port),
         }
 
@@ -184,7 +184,7 @@ def get_cpo_interface_mapping(logical_port):
         pass
 
     physical_ports = set(
-        platform_sfputil_helper.logical_port_name_to_physical_port_list(logical_port, strict=True)
+        platform_sfputil_helper.get_validated_physical_port_list(logical_port)
     )
     matches = [
         mapping for mapping in cpo_mapping.get_interfaces()
@@ -355,7 +355,7 @@ def get_port_cpo_objects(logical_port=None):
 
     objects = []
     for port_name in logical_ports:
-        physical_ports = platform_sfputil_helper.logical_port_name_to_physical_port_list(port_name, strict=True)
+        physical_ports = platform_sfputil_helper.get_validated_physical_port_list(port_name)
         ganged = len(physical_ports) > 1
         for member_index, physical_port in enumerate(physical_ports, start=1):
             cpo = cpo_object_map[PORT].get(physical_port)
@@ -1219,8 +1219,8 @@ def show_interface_map(port, json_output):
         else:
             records = []
             for logical_port in sorted(current_port_config, key=_natural_sort_key):
-                physical_ports = platform_sfputil_helper.logical_port_name_to_physical_port_list(
-                    logical_port, strict=True
+                physical_ports = platform_sfputil_helper.get_validated_physical_port_list(
+                    logical_port
                 )
                 if not any(
                         physical in cpo_object_map[PORT]

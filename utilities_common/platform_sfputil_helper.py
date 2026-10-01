@@ -117,12 +117,6 @@ def natural_sort_key(value, case_sensitive=False):
             for part in re.split(r"(\d+)", text)]
 
 
-def format_application_advertisement_row(host, host_assignment, media, media_assignment):
-    """Render one advertised application using already formatted assignments."""
-    return ' - '.join((host, 'Host Assign ({})'.format(host_assignment),
-                       media, 'Media Assign ({})'.format(media_assignment)))
-
-
 def format_application_advertisement(advertisements):
     """Render API application dictionaries or serialized values in natural order."""
     if isinstance(advertisements, str):
@@ -151,10 +145,10 @@ def format_application_advertisement(advertisements):
                 return str(value) if value is not None else "N/A"
 
         output.append(
-            format_application_advertisement_row(
-                str(host),
+            "{} - Host Assign ({}) - {} - Media Assign ({})".format(
+                host,
                 assignment(host_assignment),
-                str(media),
+                media,
                 assignment(media_assignment),
             )
         )
@@ -229,6 +223,28 @@ def format_dict_value_to_string(sorted_key_table, dom_info_dict, dom_value_map,
     return output
 
 
+def get_validated_physical_port_list(port_name):
+    """Resolve a port to unique physical indexes or raise one CLI error.
+
+    Keep validation separate so existing callers retain the legacy resolver's
+    signature, return values and printed diagnostics.
+    """
+    port_name = str(port_name)
+    # Reject invalid names before the legacy resolver prints its own error.
+    if port_name.startswith("Ethernet"):
+        if not platform_sfputil.is_logical_port(port_name):
+            raise click.ClickException("Invalid port '{}'".format(port_name))
+    else:
+        try:
+            int(port_name)
+        except ValueError as exc:
+            raise click.ClickException("Invalid port '{}'".format(port_name)) from exc
+    physical_ports = logical_port_name_to_physical_port_list(port_name)
+    if not physical_ports:
+        raise click.ClickException("Invalid port '{}'".format(port_name))
+    return list(dict.fromkeys(physical_ports))
+
+
 def load_chassis():
     """Load the platform chassis if not already loaded"""
     global platform_chassis
@@ -282,40 +298,26 @@ def logical_port_to_physical_port_index(port_name):
         click.echo("Error: invalid port {} ".format(port_name))
         sys.exit(ERROR_INVALID_PORT)
 
-    physical_ports = logical_port_name_to_physical_port_list(port_name)
-    if not physical_ports or physical_ports[0] is None:
+    physical_port = logical_port_name_to_physical_port_list(port_name)[0]
+    if physical_port is None:
         click.echo("Error: No physical port found for logical port '{}'".format(port_name))
         sys.exit(EXIT_FAIL)
 
-    return physical_ports[0]
+    return physical_port
 
 
-def logical_port_name_to_physical_port_list(port_name, *, strict=False):
-    """Resolve a logical name or numeric physical index.
-
-    Strict callers receive a nonempty list with duplicate indexes removed,
-    or a ClickException without an extra diagnostic printed by this helper.
-    Default callers retain the existing return values and error reporting.
-    """
-    port_name = str(port_name)
+def logical_port_name_to_physical_port_list(port_name):
     try:
         if port_name.startswith("Ethernet"):
             if platform_sfputil.is_logical_port(port_name):
-                physical_ports = platform_sfputil.get_logical_to_physical(port_name)
-                if not strict:
-                    return physical_ports
-                if physical_ports:
-                    return list(dict.fromkeys(physical_ports))
+                return platform_sfputil.get_logical_to_physical(port_name)
         else:
             return [int(port_name)]
     except ValueError:
         pass
 
-    if strict:
-        raise click.ClickException("Invalid port '{}'".format(port_name))
     click.echo("Invalid port '{}'".format(port_name))
     return None
-
 
 def get_logical_list():
 
