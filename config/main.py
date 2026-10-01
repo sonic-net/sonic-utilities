@@ -8323,8 +8323,8 @@ def add_vrf_vni_map(ctx, vrfname, vni):
     if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
         ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
-    found = 0
-    if vrfname not in config_db.get_table('VRF').keys():
+    vrf_table = config_db.get_table('VRF')
+    if vrfname != 'default' and vrfname not in vrf_table:
         ctx.fail("vrf {} doesn't exist".format(vrfname))
     if not vni.isdigit():
         ctx.fail("Invalid VNI {}. Only valid VNI is accepted".format(vni))
@@ -8332,6 +8332,14 @@ def add_vrf_vni_map(ctx, vrfname, vni):
     if clicommon.vni_id_is_valid(int(vni)) is False:
         ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
 
+    current_vni = vrf_table.get(vrfname, {}).get('vni')
+    if current_vni is not None and str(current_vni) != '0':
+        if str(current_vni) == vni:
+            return
+        ctx.fail("VRF {} is already mapped to VNI {}. Delete the existing mapping before assigning VNI {}"
+                 .format(vrfname, current_vni, vni))
+
+    found = 0
     vxlan_table = config_db.get_table('VXLAN_TUNNEL_MAP')
     vxlan_keys = vxlan_table.keys()
     if vxlan_keys is not None:
@@ -8344,11 +8352,11 @@ def add_vrf_vni_map(ctx, vrfname, vni):
         ctx.fail("VLAN VNI not mapped. Please create VLAN VNI map entry first")
 
     found = 0
-    vrf_table = config_db.get_table('VRF')
     vrf_keys = vrf_table.keys()
     if vrf_keys is not None:
         for vrf_key in vrf_keys:
-            if ('vni' in vrf_table[vrf_key] and vrf_table[vrf_key]['vni'] == vni):
+            if (vrf_key != vrfname and 'vni' in vrf_table[vrf_key] and
+                    str(vrf_table[vrf_key]['vni']) == vni):
                 found = 1
                 break
 
@@ -8364,8 +8372,13 @@ def del_vrf_vni_map(ctx, vrfname):
     if multi_asic.is_multi_asic() and ctx.obj['namespace'] is None:
         ctx.fail("-n/--namespace is required on multi-ASIC platforms.")
     config_db = ctx.obj['config_db']
-    if vrfname not in config_db.get_table('VRF').keys():
+    vrf_table = config_db.get_table('VRF')
+    if vrfname != 'default' and vrfname not in vrf_table:
         ctx.fail("vrf {} doesn't exist".format(vrfname))
+
+    current_vni = vrf_table.get(vrfname, {}).get('vni')
+    if current_vni is None or str(current_vni) == '0':
+        ctx.fail("VRF {} has no VNI mapping".format(vrfname))
 
     config_db.mod_entry('VRF', vrfname, {"vni": 0})
 
