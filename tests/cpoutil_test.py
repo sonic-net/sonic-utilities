@@ -4,6 +4,7 @@ import sys
 import types
 from unittest import mock
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -180,8 +181,8 @@ class TestPlatformObjectMapping(object):
         assert objects[0][2].name == "cpo1"
 
     def test_invalid_logical_port_is_rejected(self):
-        with pytest.raises(cpoutil.CpoCommandError, match="Invalid port"):
-            cpoutil.logical_port_name_to_physical_port_list("Ethernet999")
+        with pytest.raises(click.ClickException, match="Invalid port"):
+            cpoutil.get_port_cpo_objects("Ethernet999")
 
 
 class TestMappingCommand(object):
@@ -625,8 +626,7 @@ class TestHelperCoverage(object):
         assert result.output.count("Invalid port '{}'".format(port_name)) == 1
 
     def test_port_and_lane_helpers(self, coverage_environment):
-        assert cpoutil.logical_port_name_to_physical_port_list("Ethernet0") == [1]
-        assert cpoutil.logical_port_name_to_physical_port_list("7") == [7]
+        assert cpoutil.get_cpo_interface_mapping("Ethernet0").physical_ports == (1,)
         assert cpoutil.get_port_lanes("Ethernet0") == (1, 2)
         assert cpoutil.get_cpo_lane_positions("Ethernet0") == (0, 1)
         assert cpoutil.get_cpo_lane_mask("Ethernet0") == 3
@@ -687,10 +687,10 @@ class TestHelperCoverage(object):
             },
             2: "legacy",
         }
-        assert "Host Assign" in cpoutil._format_application_advertisement(
+        assert "Host Assign" in cpoutil.format_application_advertisement(
             advertisements
         )[0]
-        assert cpoutil._format_application_advertisement("not-a-dict") == [
+        assert cpoutil.format_application_advertisement("not-a-dict") == [
             "not-a-dict"
         ]
         info = {

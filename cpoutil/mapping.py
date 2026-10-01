@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 import re
 
-from utilities_common.cpo_helper import natural_sort_key
+from utilities_common.platform_sfputil_helper import natural_sort_key
 
 OPTICAL_ENGINE = "oe"
 EXTERNAL_LASER_SOURCE = "els"

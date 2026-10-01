@@ -1,6 +1,5 @@
 """Command-line utility for Co-Packaged Optics devices."""
 
-import ast
 import json
 import re
 import sys
@@ -10,7 +9,16 @@ from tabulate import tabulate
 
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from utilities_common import platform_sfputil_helper
-from utilities_common.cpo_helper import (
+from utilities_common.platform_sfputil_helper import (
+    CMIS_INFO_FIELD_MAP,
+    CMIS_DOM_CHANNEL_MONITOR_MAP,
+    DOM_CHANNEL_THRESHOLD_MAP,
+    DOM_MODULE_MONITOR_MAP,
+    DOM_MODULE_THRESHOLD_MAP,
+    CMIS_DOM_VALUE_UNIT_MAP as DOM_VALUE_UNIT_MAP,
+    DOM_CHANNEL_THRESHOLD_UNIT_MAP,
+    DOM_MODULE_THRESHOLD_UNIT_MAP,
+    format_application_advertisement,
     format_dict_value_to_string,
     format_value_with_unit as _value_with_unit,
     get_physical_port_name,
@@ -38,87 +46,15 @@ cpo_object_map = {
 }
 
 CPO_INFO_FIELD_MAP = {
-    "model": "Vendor PN",
-    "vendor_oui": "Vendor OUI",
-    "vendor_date": "Vendor Date Code(YYYY-MM-DD Lot)",
-    "manufacturer": "Vendor Name",
-    "vendor_rev": "Vendor Rev",
-    "serial": "Vendor SN",
-    "type": "Identifier",
-    "ext_identifier": "Extended Identifier",
-    "ext_rateselect_compliance": "Extended RateSelect Compliance",
-    "cable_length": "cable_length",
-    "cable_type": "Length",
-    "nominal_bit_rate": "Nominal Bit Rate(100Mbs)",
-    "specification_compliance": "Specification compliance",
-    "encoding": "Encoding",
-    "connector": "Connector",
-    "application_advertisement": "Application Advertisement",
-    "hardware_rev": "Hardware Revision",
-    "media_interface_code": "Media Interface Code",
-    "host_electrical_interface": "Host Electrical Interface",
-    "host_lane_count": "Host Lane Count",
-    "media_lane_count": "Media Lane Count",
-    "host_lane_assignment_option": "Host Lane Assignment Options",
-    "media_lane_assignment_option": "Media Lane Assignment Options",
-    "active_apsel_hostlane1": "Active App Selection Host Lane 1",
-    "active_apsel_hostlane2": "Active App Selection Host Lane 2",
-    "active_apsel_hostlane3": "Active App Selection Host Lane 3",
-    "active_apsel_hostlane4": "Active App Selection Host Lane 4",
-    "active_apsel_hostlane5": "Active App Selection Host Lane 5",
-    "active_apsel_hostlane6": "Active App Selection Host Lane 6",
-    "active_apsel_hostlane7": "Active App Selection Host Lane 7",
-    "active_apsel_hostlane8": "Active App Selection Host Lane 8",
-    "media_interface_technology": "Media Interface Technology",
-    "cmis_rev": "CMIS Revision",
-    "supported_max_tx_power": "Supported Max TX Power",
-    "supported_min_tx_power": "Supported Min TX Power",
-    "supported_max_laser_freq": "Supported Max Laser Frequency",
-    "supported_min_laser_freq": "Supported Min Laser Frequency",
-    "lane_count": "Laser Count",
-    "control_mode": "Control Mode",
-    "max_optical_power": "Maximum Optical Power",
-    "min_optical_power": "Minimum Optical Power",
-    "max_laser_bias": "Maximum Laser Bias",
-    "min_laser_bias": "Minimum Laser Bias",
+    **CMIS_INFO_FIELD_MAP,
+    'lane_count': 'Laser Count',
+    'control_mode': 'Control Mode',
+    'max_optical_power': 'Maximum Optical Power',
+    'min_optical_power': 'Minimum Optical Power',
+    'max_laser_bias': 'Maximum Laser Bias',
+    'min_laser_bias': 'Minimum Laser Bias',
 }
 
-CMIS_DOM_CHANNEL_MONITOR_MAP = {
-    **{"rx{}power".format(i): "RX{}Power".format(i) for i in range(1, 9)},
-    **{"tx{}bias".format(i): "TX{}Bias".format(i) for i in range(1, 9)},
-    **{"tx{}power".format(i): "TX{}Power".format(i) for i in range(1, 9)},
-}
-
-DOM_CHANNEL_THRESHOLD_MAP = {
-    "txpowerhighalarm": "TxPowerHighAlarm",
-    "txpowerlowalarm": "TxPowerLowAlarm",
-    "txpowerhighwarning": "TxPowerHighWarning",
-    "txpowerlowwarning": "TxPowerLowWarning",
-    "rxpowerhighalarm": "RxPowerHighAlarm",
-    "rxpowerlowalarm": "RxPowerLowAlarm",
-    "rxpowerhighwarning": "RxPowerHighWarning",
-    "rxpowerlowwarning": "RxPowerLowWarning",
-    "txbiashighalarm": "TxBiasHighAlarm",
-    "txbiaslowalarm": "TxBiasLowAlarm",
-    "txbiashighwarning": "TxBiasHighWarning",
-    "txbiaslowwarning": "TxBiasLowWarning",
-}
-
-DOM_MODULE_MONITOR_MAP = {
-    "temperature": "Temperature",
-    "voltage": "Vcc",
-}
-
-DOM_MODULE_THRESHOLD_MAP = {
-    "temphighalarm": "TempHighAlarm",
-    "templowalarm": "TempLowAlarm",
-    "temphighwarning": "TempHighWarning",
-    "templowwarning": "TempLowWarning",
-    "vcchighalarm": "VccHighAlarm",
-    "vcclowalarm": "VccLowAlarm",
-    "vcchighwarning": "VccHighWarning",
-    "vcclowwarning": "VccLowWarning",
-}
 
 ELS_DOM_MONITOR_MAP = {
     "temperature": "Temperature",
@@ -145,23 +81,6 @@ ELS_THRESHOLD_MAP = {
     "laser_bias_warn_low": "TxBiasLowWarning",
 }
 
-DOM_VALUE_UNIT_MAP = {
-    **{"rx{}power".format(i): "dBm" for i in range(1, 9)},
-    **{"tx{}bias".format(i): "mA" for i in range(1, 9)},
-    **{"tx{}power".format(i): "dBm" for i in range(1, 9)},
-    "temperature": "C",
-    "voltage": "Volts",
-}
-
-DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
-    key: "mA" if key.startswith("txbias") else "dBm"
-    for key in DOM_CHANNEL_THRESHOLD_MAP
-}
-
-DOM_MODULE_THRESHOLD_UNIT_MAP = {
-    key: "C" if key.startswith("temp") else "Volts"
-    for key in DOM_MODULE_THRESHOLD_MAP
-}
 
 ELS_DOM_MONITOR_UNIT_MAP = {
     "temperature": "C",
@@ -206,34 +125,12 @@ def load_current_port_config():
             "CONFIG_DB", "PORT", "lanes", port
         )
         current_port_config[port] = {
-            "index": logical_port_name_to_physical_port_list(port),
+            "index": platform_sfputil_helper.logical_port_name_to_physical_port_list(port, strict=True),
             "lanes": _parse_port_lanes(lanes, port),
         }
 
     if not current_port_config:
         raise CpoCommandError("Active PORT configuration is unavailable")
-
-
-def logical_port_name_to_physical_port_list(logical_port):
-    """Resolve a port through the shared SONiC port mapping helper."""
-    port_name = str(logical_port)
-    # Reject invalid names before the shared helper prints its own error.
-    if port_name.startswith("Ethernet"):
-        if not platform_sfputil_helper.platform_sfputil.is_logical_port(port_name):
-            raise CpoCommandError("Invalid port '{}'".format(port_name))
-    else:
-        try:
-            int(port_name)
-        except ValueError:
-            raise CpoCommandError("Invalid port '{}'".format(port_name))
-    physical_ports = (
-        platform_sfputil_helper.logical_port_name_to_physical_port_list(
-            port_name
-        )
-    )
-    if not physical_ports:
-        raise CpoCommandError("Invalid port '{}'".format(port_name))
-    return list(dict.fromkeys(physical_ports))
 
 
 def _parse_port_integer_list(value, port_name, field):
@@ -287,7 +184,7 @@ def get_cpo_interface_mapping(logical_port):
         pass
 
     physical_ports = set(
-        logical_port_name_to_physical_port_list(logical_port)
+        platform_sfputil_helper.logical_port_name_to_physical_port_list(logical_port, strict=True)
     )
     matches = [
         mapping for mapping in cpo_mapping.get_interfaces()
@@ -458,7 +355,7 @@ def get_port_cpo_objects(logical_port=None):
 
     objects = []
     for port_name in logical_ports:
-        physical_ports = logical_port_name_to_physical_port_list(port_name)
+        physical_ports = platform_sfputil_helper.logical_port_name_to_physical_port_list(port_name, strict=True)
         ganged = len(physical_ports) > 1
         for member_index, physical_port in enumerate(physical_ports, start=1):
             cpo = cpo_object_map[PORT].get(physical_port)
@@ -768,43 +665,6 @@ def _json_records(records):
     return json.dumps(_ordered_top_level(records), indent=4)
 
 
-def _format_application_advertisement(advertisements):
-    if isinstance(advertisements, str):
-        try:
-            advertisements = ast.literal_eval(advertisements)
-        except (SyntaxError, ValueError):
-            return [advertisements]
-    if not isinstance(advertisements, dict):
-        return [str(advertisements)]
-
-    output = []
-    for application in sorted(advertisements, key=_natural_sort_key):
-        details = advertisements[application]
-        if not isinstance(details, dict):
-            output.append(str(details))
-            continue
-        host = details.get("host_electrical_interface_id", "N/A")
-        media = details.get("module_media_interface_id", "N/A")
-        host_assignment = details.get("host_lane_assignment_options")
-        media_assignment = details.get("media_lane_assignment_options")
-
-        def assignment(value):
-            try:
-                return "0x{:02x}".format(int(value))
-            except (TypeError, ValueError):
-                return str(value) if value is not None else "N/A"
-
-        output.append(
-            "{} - Host Assign ({}) - {} - Media Assign ({})".format(
-                host,
-                assignment(host_assignment),
-                media,
-                assignment(media_assignment),
-            )
-        )
-    return output or ["N/A"]
-
-
 def _format_cpo_info(info):
     indent = " " * 8
     if not isinstance(info, dict):
@@ -826,7 +686,7 @@ def _format_cpo_info(info):
             value = info.get("cable_length", "N/A")
         elif key == "application_advertisement":
             label = CPO_INFO_FIELD_MAP[key]
-            values = _format_application_advertisement(info[key])
+            values = format_application_advertisement(info[key])
             prefix = "{}{}: ".format(indent, label)
             lines.append("{}{}".format(prefix, values[0]))
             continuation = " " * len(prefix)
@@ -1359,8 +1219,8 @@ def show_interface_map(port, json_output):
         else:
             records = []
             for logical_port in sorted(current_port_config, key=_natural_sort_key):
-                physical_ports = logical_port_name_to_physical_port_list(
-                    logical_port
+                physical_ports = platform_sfputil_helper.logical_port_name_to_physical_port_list(
+                    logical_port, strict=True
                 )
                 if not any(
                         physical in cpo_object_map[PORT]

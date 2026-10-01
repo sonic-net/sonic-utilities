@@ -24,10 +24,21 @@ from natsort import natsorted
 from sonic_py_common import device_info, logger, multi_asic
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
-    get_first_subport
+    CMIS_INFO_FIELD_MAP,
+    CMIS_DOM_CHANNEL_MONITOR_MAP,
+    DOM_CHANNEL_THRESHOLD_MAP as SFP_DOM_CHANNEL_THRESHOLD_MAP,
+    DOM_MODULE_MONITOR_MAP,
+    DOM_MODULE_THRESHOLD_MAP,
+    CMIS_DOM_VALUE_UNIT_MAP as QSFP_DD_DOM_VALUE_UNIT_MAP,
+    DOM_CHANNEL_THRESHOLD_UNIT_MAP,
+    DOM_MODULE_THRESHOLD_UNIT_MAP,
+    format_dict_value_to_string,
+    get_first_subport,
+    get_physical_port_name,
+    hexdump,
 )
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
-from utilities_common.sfp_helper import QSFP_DATA_MAP
+from utilities_common.sfp_helper import QSFP_DATA_MAP, ELSFP_DATA_MAP, BAILLY_RLM_DATA_MAP
 from utilities_common.sfp_helper import is_transceiver_cmis, get_data_map_sort_key
 from tabulate import tabulate
 from utilities_common.general import load_db_config
@@ -73,58 +84,7 @@ CMIS_COHERENT_MODULE_PAGES = [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x38, 0x39, 0x
 
 EEPROM_DUMP_INDENT = ' ' * 8
 
-# TODO: We should share these maps and the formatting functions between sfputil and sfpshow
-QSFP_DD_DATA_MAP = {
-    'model': 'Vendor PN',
-    'vendor_oui': 'Vendor OUI',
-    'vendor_date': 'Vendor Date Code(YYYY-MM-DD Lot)',
-    'manufacturer': 'Vendor Name',
-    'vendor_rev': 'Vendor Rev',
-    'serial': 'Vendor SN',
-    'type': 'Identifier',
-    'ext_identifier': 'Extended Identifier',
-    'ext_rateselect_compliance': 'Extended RateSelect Compliance',
-    'cable_length': 'cable_length',
-    'cable_type': 'Length',
-    'nominal_bit_rate': 'Nominal Bit Rate(100Mbs)',
-    'specification_compliance': 'Specification compliance',
-    'encoding': 'Encoding',
-    'connector': 'Connector',
-    'application_advertisement': 'Application Advertisement',
-    'hardware_rev': 'Hardware Revision',
-    'media_interface_code': 'Media Interface Code',
-    'host_electrical_interface': 'Host Electrical Interface',
-    'host_lane_count': 'Host Lane Count',
-    'media_lane_count': 'Media Lane Count',
-    'host_lane_assignment_option': 'Host Lane Assignment Options',
-    'media_lane_assignment_option': 'Media Lane Assignment Options',
-    'active_apsel_hostlane1': 'Active App Selection Host Lane 1',
-    'active_apsel_hostlane2': 'Active App Selection Host Lane 2',
-    'active_apsel_hostlane3': 'Active App Selection Host Lane 3',
-    'active_apsel_hostlane4': 'Active App Selection Host Lane 4',
-    'active_apsel_hostlane5': 'Active App Selection Host Lane 5',
-    'active_apsel_hostlane6': 'Active App Selection Host Lane 6',
-    'active_apsel_hostlane7': 'Active App Selection Host Lane 7',
-    'active_apsel_hostlane8': 'Active App Selection Host Lane 8',
-    'media_interface_technology': 'Media Interface Technology',
-    'cmis_rev': 'CMIS Revision',
-    'supported_max_tx_power': 'Supported Max TX Power',
-    'supported_min_tx_power': 'Supported Min TX Power',
-    'supported_max_laser_freq': 'Supported Max Laser Frequency',
-    'supported_min_laser_freq': 'Supported Min Laser Frequency',
-    'els_identifier': 'ELS Identifier',
-    'els_revision': 'ELS Revision',
-    'els_laser_count': 'ELS Laser Count',
-    'els_vendor_name': 'ELS Vendor Name',
-    'els_vendor_oui': 'ELS Vendor OUI',
-    'els_vendor_pn': 'ELS Vendor PN',
-    'els_vendor_rev': 'ELS Vendor Rev',
-    'els_vendor_sn': 'ELS Vendor SN',
-    'els_date_code': 'ELS Vendor Date Code(YYYY-MM-DD Lot)',
-    'els_max_power': 'ELS Maximum Power Consumption',
-    'rlm_laser_lpmode_control': 'RLM Laser Lpower Mode Control',
-    'rlm_laser_wavelength_grid': 'RLM Laser Wavelength Grid',
-}
+QSFP_DD_DATA_MAP = {**CMIS_INFO_FIELD_MAP, **ELSFP_DATA_MAP, **BAILLY_RLM_DATA_MAP}
 
 SFP_DOM_CHANNEL_MONITOR_MAP = {
     'rx1power': 'RXPower',
@@ -132,20 +92,6 @@ SFP_DOM_CHANNEL_MONITOR_MAP = {
     'tx1power': 'TXPower'
 }
 
-SFP_DOM_CHANNEL_THRESHOLD_MAP = {
-    'txpowerhighalarm':   'TxPowerHighAlarm',
-    'txpowerlowalarm':    'TxPowerLowAlarm',
-    'txpowerhighwarning': 'TxPowerHighWarning',
-    'txpowerlowwarning':  'TxPowerLowWarning',
-    'rxpowerhighalarm':   'RxPowerHighAlarm',
-    'rxpowerlowalarm':    'RxPowerLowAlarm',
-    'rxpowerhighwarning': 'RxPowerHighWarning',
-    'rxpowerlowwarning':  'RxPowerLowWarning',
-    'txbiashighalarm':    'TxBiasHighAlarm',
-    'txbiaslowalarm':     'TxBiasLowAlarm',
-    'txbiashighwarning':  'TxBiasHighWarning',
-    'txbiaslowwarning':   'TxBiasLowWarning'
-}
 
 QSFP_DOM_CHANNEL_THRESHOLD_MAP = {
     'rxpowerhighalarm':   'RxPowerHighAlarm',
@@ -158,16 +104,6 @@ QSFP_DOM_CHANNEL_THRESHOLD_MAP = {
     'txbiaslowwarning':   'TxBiasLowWarning'
 }
 
-DOM_MODULE_THRESHOLD_MAP = {
-    'temphighalarm':  'TempHighAlarm',
-    'templowalarm':   'TempLowAlarm',
-    'temphighwarning': 'TempHighWarning',
-    'templowwarning': 'TempLowWarning',
-    'vcchighalarm':   'VccHighAlarm',
-    'vcclowalarm':    'VccLowAlarm',
-    'vcchighwarning': 'VccHighWarning',
-    'vcclowwarning':  'VccLowWarning'
-}
 
 QSFP_DOM_CHANNEL_MONITOR_MAP = {
     'rx1power': 'RX1Power',
@@ -184,37 +120,6 @@ QSFP_DOM_CHANNEL_MONITOR_MAP = {
     'tx4power': 'TX4Power'
 }
 
-CMIS_DOM_CHANNEL_MONITOR_MAP = {
-    'rx1power': 'RX1Power',
-    'rx2power': 'RX2Power',
-    'rx3power': 'RX3Power',
-    'rx4power': 'RX4Power',
-    'rx5power': 'RX5Power',
-    'rx6power': 'RX6Power',
-    'rx7power': 'RX7Power',
-    'rx8power': 'RX8Power',
-    'tx1bias':  'TX1Bias',
-    'tx2bias':  'TX2Bias',
-    'tx3bias':  'TX3Bias',
-    'tx4bias':  'TX4Bias',
-    'tx5bias':  'TX5Bias',
-    'tx6bias':  'TX6Bias',
-    'tx7bias':  'TX7Bias',
-    'tx8bias':  'TX8Bias',
-    'tx1power': 'TX1Power',
-    'tx2power': 'TX2Power',
-    'tx3power': 'TX3Power',
-    'tx4power': 'TX4Power',
-    'tx5power': 'TX5Power',
-    'tx6power': 'TX6Power',
-    'tx7power': 'TX7Power',
-    'tx8power': 'TX8Power'
-}
-
-DOM_MODULE_MONITOR_MAP = {
-    'temperature': 'Temperature',
-    'voltage': 'Vcc'
-}
 
 ELS_DOM_MONITOR_MAP = {
     'els_temperature': 'ELS Temperature',
@@ -238,31 +143,6 @@ ELS_THRESHOLD_MAP = {
     'els_txbiashighwarning': 'ELS TxBiasHighWarning'
 }
 
-DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
-    'txpowerhighalarm':   'dBm',
-    'txpowerlowalarm':    'dBm',
-    'txpowerhighwarning': 'dBm',
-    'txpowerlowwarning':  'dBm',
-    'rxpowerhighalarm':   'dBm',
-    'rxpowerlowalarm':    'dBm',
-    'rxpowerhighwarning': 'dBm',
-    'rxpowerlowwarning':  'dBm',
-    'txbiashighalarm':    'mA',
-    'txbiaslowalarm':     'mA',
-    'txbiashighwarning':  'mA',
-    'txbiaslowwarning':   'mA'
-}
-
-DOM_MODULE_THRESHOLD_UNIT_MAP = {
-    'temphighalarm':   'C',
-    'templowalarm':    'C',
-    'temphighwarning': 'C',
-    'templowwarning':  'C',
-    'vcchighalarm':    'Volts',
-    'vcclowalarm':     'Volts',
-    'vcchighwarning':  'Volts',
-    'vcclowwarning':   'Volts'
-}
 
 ELS_DOM_MONITOR_UNIT_MAP = {
     'els_temperature': 'C',
@@ -303,34 +183,6 @@ DOM_VALUE_UNIT_MAP = {
     'voltage': 'Volts'
 }
 
-QSFP_DD_DOM_VALUE_UNIT_MAP = {
-    'rx1power': 'dBm',
-    'rx2power': 'dBm',
-    'rx3power': 'dBm',
-    'rx4power': 'dBm',
-    'rx5power': 'dBm',
-    'rx6power': 'dBm',
-    'rx7power': 'dBm',
-    'rx8power': 'dBm',
-    'tx1bias': 'mA',
-    'tx2bias': 'mA',
-    'tx3bias': 'mA',
-    'tx4bias': 'mA',
-    'tx5bias': 'mA',
-    'tx6bias': 'mA',
-    'tx7bias': 'mA',
-    'tx8bias': 'mA',
-    'tx1power': 'dBm',
-    'tx2power': 'dBm',
-    'tx3power': 'dBm',
-    'tx4power': 'dBm',
-    'tx5power': 'dBm',
-    'tx6power': 'dBm',
-    'tx7power': 'dBm',
-    'tx8power': 'dBm',
-    'temperature': 'C',
-    'voltage': 'Volts'
-}
 
 RJ45_PORT_TYPE = 'RJ45'
 
@@ -367,26 +219,6 @@ def is_port_type_rj45(port_name):
 
     return False
 # ========================== Methods for formatting output ==========================
-
-# Convert dict values to cli output string
-def format_dict_value_to_string(sorted_key_table,
-                                dom_info_dict, dom_value_map,
-                                dom_unit_map, alignment=0):
-    output = ''
-    indent = ' ' * 8
-    separator = ": "
-    for key in sorted_key_table:
-        if dom_info_dict is not None and key in dom_info_dict and dom_info_dict[key] != 'N/A':
-            value = dom_info_dict[key]
-            units = ''
-            if type(value) != str or (value != 'Unknown' and not value.endswith(dom_unit_map[key])):
-                units = dom_unit_map[key]
-            output += '{}{}{}{}{}\n'.format((indent * 2),
-                                            dom_value_map[key],
-                                            separator.rjust(len(separator) + alignment - len(dom_value_map[key])),
-                                            value,
-                                            units)
-    return output
 
 
 def convert_sfp_info_to_output_string(sfp_info_dict):
@@ -576,19 +408,6 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
 
 
 #
-def get_physical_port_name(logical_port, physical_port, ganged):
-    """
-        Returns:
-          port_num if physical
-          logical_port:port_num if logical port and is a ganged port
-          logical_port if logical and not ganged
-    """
-    if logical_port == physical_port:
-        return str(logical_port)
-    elif ganged:
-        return "{}:{} (ganged)".format(logical_port, physical_port)
-    else:
-        return logical_port
 
 
 def logical_port_name_to_physical_port_list(port_name):
@@ -1038,43 +857,6 @@ def eeprom_dump_general(physical_port, page, flat_offset, size, page_offset, no_
         return 0, hexdump(EEPROM_DUMP_INDENT, page_dump, page_offset, start_newline=False)
     else:
         return 0, ''.join('{:02x}'.format(x) for x in page_dump)
-
-
-def convert_byte_to_valid_ascii_char(byte):
-    if byte < 32 or 126 < byte:
-        return '.'
-    else:
-        return chr(byte)
-
-
-def hexdump(indent, data, mem_address, start_newline=True):
-    size = len(data)
-    offset = 0
-    lines = [''] if start_newline else []
-    while size > 0:
-        offset_str = "{}{:08x}".format(indent, mem_address)
-        if size >= 16:
-            first_half = ' '.join("{:02x}".format(x) for x in data[offset:offset + 8])
-            second_half = ' '.join("{:02x}".format(x) for x in data[offset + 8:offset + 16])
-            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + 16])
-            lines.append(f'{offset_str} {first_half}  {second_half} |{ascii_str}|')
-        elif size > 8:
-            first_half = ' '.join("{:02x}".format(x) for x in data[offset:offset + 8])
-            second_half = ' '.join("{:02x}".format(x) for x in data[offset + 8:offset + size])
-            padding = '   ' * (16 - size)
-            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + size])
-            lines.append(f'{offset_str} {first_half}  {second_half}{padding} |{ascii_str}|')
-            break
-        else:
-            hex_part = ' '.join("{:02x}".format(x) for x in data[offset:offset + size])
-            padding = '   ' * (16 - size)
-            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + size])
-            lines.append(f'{offset_str} {hex_part} {padding} |{ascii_str}|')
-            break
-        size -= 16
-        offset += 16
-        mem_address += 16
-    return '\n'.join(lines)
 
 
 # 'presence' subcommand

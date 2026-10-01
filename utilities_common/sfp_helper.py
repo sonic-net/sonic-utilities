@@ -423,6 +423,9 @@ CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP = {
 }
 
 def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
+    # Import lazily: platform_sfputil_helper also reuses the field maps here.
+    from .platform_sfputil_helper import format_application_advertisement_row
+
     key = 'application_advertisement'
     field_name = '{}{}: '.format(indent, QSFP_DATA_MAP[key])
     output = field_name
@@ -437,16 +440,13 @@ def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
                 host_interface_id = item.get('host_electrical_interface_id')
                 if not host_interface_id:
                     continue
-                elements = []
-                elements.append(host_interface_id)
                 host_assign_options = item.get('host_lane_assignment_options')
                 host_assign_options = hex(host_assign_options) if host_assign_options else 'Unknown'
-                elements.append(f'Host Assign ({host_assign_options})')
-                elements.append(item.get('module_media_interface_id', 'Unknown'))
                 media_assign_options = item.get('media_lane_assignment_options')
                 media_assign_options = hex(media_assign_options) if media_assign_options else 'Unknown'
-                elements.append(f'Media Assign ({media_assign_options})')
-                lines.append(' - '.join(elements))
+                lines.append(format_application_advertisement_row(
+                    host_interface_id, host_assign_options,
+                    item.get('module_media_interface_id', 'Unknown'), media_assign_options))
             sep = '\n' + ' ' * len(field_name)
             output += sep.join(lines)
             output += '\n'

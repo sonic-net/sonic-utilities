@@ -1,8 +1,11 @@
+import ast
+import re
 import sys
 
 import click
 
 from . import cli as clicommon
+from .sfp_helper import QSFP_DATA_MAP
 from sonic_py_common import multi_asic, device_info
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
@@ -21,6 +24,209 @@ ERROR_NOT_IMPLEMENTED = 5
 ERROR_INVALID_PORT = 6
 
 RJ45_PORT_TYPE = 'RJ45'
+
+
+CMIS_INFO_FIELD_MAP = {
+    **QSFP_DATA_MAP,
+    'hardware_rev': 'Hardware Revision',
+    'media_interface_code': 'Media Interface Code',
+    'host_electrical_interface': 'Host Electrical Interface',
+    'host_lane_count': 'Host Lane Count',
+    'media_lane_count': 'Media Lane Count',
+    'host_lane_assignment_option': 'Host Lane Assignment Options',
+    'media_lane_assignment_option': 'Media Lane Assignment Options',
+    'active_apsel_hostlane1': 'Active App Selection Host Lane 1',
+    'active_apsel_hostlane2': 'Active App Selection Host Lane 2',
+    'active_apsel_hostlane3': 'Active App Selection Host Lane 3',
+    'active_apsel_hostlane4': 'Active App Selection Host Lane 4',
+    'active_apsel_hostlane5': 'Active App Selection Host Lane 5',
+    'active_apsel_hostlane6': 'Active App Selection Host Lane 6',
+    'active_apsel_hostlane7': 'Active App Selection Host Lane 7',
+    'active_apsel_hostlane8': 'Active App Selection Host Lane 8',
+    'media_interface_technology': 'Media Interface Technology',
+    'cmis_rev': 'CMIS Revision',
+    'supported_max_tx_power': 'Supported Max TX Power',
+    'supported_min_tx_power': 'Supported Min TX Power',
+    'supported_max_laser_freq': 'Supported Max Laser Frequency',
+    'supported_min_laser_freq': 'Supported Min Laser Frequency',
+}
+
+
+CMIS_DOM_CHANNEL_MONITOR_MAP = {
+    **{"rx{}power".format(i): "RX{}Power".format(i) for i in range(1, 9)},
+    **{"tx{}bias".format(i): "TX{}Bias".format(i) for i in range(1, 9)},
+    **{"tx{}power".format(i): "TX{}Power".format(i) for i in range(1, 9)},
+}
+
+DOM_CHANNEL_THRESHOLD_MAP = {
+    "txpowerhighalarm": "TxPowerHighAlarm",
+    "txpowerlowalarm": "TxPowerLowAlarm",
+    "txpowerhighwarning": "TxPowerHighWarning",
+    "txpowerlowwarning": "TxPowerLowWarning",
+    "rxpowerhighalarm": "RxPowerHighAlarm",
+    "rxpowerlowalarm": "RxPowerLowAlarm",
+    "rxpowerhighwarning": "RxPowerHighWarning",
+    "rxpowerlowwarning": "RxPowerLowWarning",
+    "txbiashighalarm": "TxBiasHighAlarm",
+    "txbiaslowalarm": "TxBiasLowAlarm",
+    "txbiashighwarning": "TxBiasHighWarning",
+    "txbiaslowwarning": "TxBiasLowWarning",
+}
+
+DOM_MODULE_MONITOR_MAP = {
+    "temperature": "Temperature",
+    "voltage": "Vcc",
+}
+
+DOM_MODULE_THRESHOLD_MAP = {
+    "temphighalarm": "TempHighAlarm",
+    "templowalarm": "TempLowAlarm",
+    "temphighwarning": "TempHighWarning",
+    "templowwarning": "TempLowWarning",
+    "vcchighalarm": "VccHighAlarm",
+    "vcclowalarm": "VccLowAlarm",
+    "vcchighwarning": "VccHighWarning",
+    "vcclowwarning": "VccLowWarning",
+}
+
+CMIS_DOM_VALUE_UNIT_MAP = {
+    **{"rx{}power".format(i): "dBm" for i in range(1, 9)},
+    **{"tx{}bias".format(i): "mA" for i in range(1, 9)},
+    **{"tx{}power".format(i): "dBm" for i in range(1, 9)},
+    "temperature": "C",
+    "voltage": "Volts",
+}
+
+DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
+    key: "mA" if key.startswith("txbias") else "dBm"
+    for key in DOM_CHANNEL_THRESHOLD_MAP
+}
+
+DOM_MODULE_THRESHOLD_UNIT_MAP = {
+    key: "C" if key.startswith("temp") else "Volts"
+    for key in DOM_MODULE_THRESHOLD_MAP
+}
+
+
+def natural_sort_key(value, case_sensitive=False):
+    """Order numeric parts naturally, optionally preserving letter case."""
+    text = str(value)
+    if not case_sensitive:
+        text = text.lower()
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r"(\d+)", text)]
+
+
+def format_application_advertisement_row(host, host_assignment, media, media_assignment):
+    """Render one advertised application using already formatted assignments."""
+    return ' - '.join((host, 'Host Assign ({})'.format(host_assignment),
+                       media, 'Media Assign ({})'.format(media_assignment)))
+
+
+def format_application_advertisement(advertisements):
+    """Render API application dictionaries or serialized values in natural order."""
+    if isinstance(advertisements, str):
+        try:
+            advertisements = ast.literal_eval(advertisements)
+        except (SyntaxError, ValueError):
+            return [advertisements]
+    if not isinstance(advertisements, dict):
+        return [str(advertisements)]
+
+    output = []
+    for application in sorted(advertisements, key=natural_sort_key):
+        details = advertisements[application]
+        if not isinstance(details, dict):
+            output.append(str(details))
+            continue
+        host = details.get("host_electrical_interface_id", "N/A")
+        media = details.get("module_media_interface_id", "N/A")
+        host_assignment = details.get("host_lane_assignment_options")
+        media_assignment = details.get("media_lane_assignment_options")
+
+        def assignment(value):
+            try:
+                return "0x{:02x}".format(int(value))
+            except (TypeError, ValueError):
+                return str(value) if value is not None else "N/A"
+
+        output.append(
+            format_application_advertisement_row(
+                str(host),
+                assignment(host_assignment),
+                str(media),
+                assignment(media_assignment),
+            )
+        )
+    return output or ["N/A"]
+
+
+def get_physical_port_name(logical_port, physical_port, ganged):
+    """Return a physical port label, including its member index when ganged."""
+    if logical_port == physical_port:
+        return str(logical_port)
+    if ganged:
+        return "{}:{} (ganged)".format(logical_port, physical_port)
+    return str(logical_port)
+
+
+def convert_byte_to_valid_ascii_char(byte):
+    """Render non-printable EEPROM bytes as dots."""
+    return chr(byte) if 32 <= byte <= 126 else '.'
+
+
+def hexdump(indent, data, mem_address, start_newline=True):
+    """Format EEPROM bytes in rows of sixteen with an ASCII column."""
+    size = len(data)
+    offset = 0
+    lines = [''] if start_newline else []
+    while size > 0:
+        offset_str = "{}{:08x}".format(indent, mem_address)
+        if size >= 16:
+            first_half = ' '.join("{:02x}".format(x) for x in data[offset:offset + 8])
+            second_half = ' '.join("{:02x}".format(x) for x in data[offset + 8:offset + 16])
+            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + 16])
+            lines.append(f'{offset_str} {first_half}  {second_half} |{ascii_str}|')
+        elif size > 8:
+            first_half = ' '.join("{:02x}".format(x) for x in data[offset:offset + 8])
+            second_half = ' '.join("{:02x}".format(x) for x in data[offset + 8:offset + size])
+            padding = '   ' * (16 - size)
+            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + size])
+            lines.append(f'{offset_str} {first_half}  {second_half}{padding} |{ascii_str}|')
+            break
+        else:
+            hex_part = ' '.join("{:02x}".format(x) for x in data[offset:offset + size])
+            padding = '   ' * (16 - size)
+            ascii_str = ''.join(convert_byte_to_valid_ascii_char(x) for x in data[offset:offset + size])
+            lines.append(f'{offset_str} {hex_part} {padding} |{ascii_str}|')
+            break
+        size -= 16
+        offset += 16
+        mem_address += 16
+    return '\n'.join(lines)
+
+
+def format_value_with_unit(value, unit):
+    """Append a DOM unit without duplicating it or changing Unknown values."""
+    if isinstance(value, str) and (value == 'Unknown' or not unit or value.endswith(unit)):
+        return value
+    return "{}{}".format(value, unit)
+
+
+def format_dict_value_to_string(sorted_key_table, dom_info_dict, dom_value_map,
+                                dom_unit_map, alignment=0):
+    """Format available DOM fields in the caller's order and alignment."""
+    output = ''
+    indent = ' ' * 16
+    separator = ': '
+    for key in sorted_key_table:
+        if dom_info_dict is not None and key in dom_info_dict and dom_info_dict[key] != 'N/A':
+            label = dom_value_map[key]
+            output += '{}{}{}{}\n'.format(
+                indent, label,
+                separator.rjust(len(separator) + alignment - len(label)),
+                format_value_with_unit(dom_info_dict[key], dom_unit_map[key]))
+    return output
 
 
 def load_chassis():
@@ -76,26 +282,40 @@ def logical_port_to_physical_port_index(port_name):
         click.echo("Error: invalid port {} ".format(port_name))
         sys.exit(ERROR_INVALID_PORT)
 
-    physical_port = logical_port_name_to_physical_port_list(port_name)[0]
-    if physical_port is None:
+    physical_ports = logical_port_name_to_physical_port_list(port_name)
+    if not physical_ports or physical_ports[0] is None:
         click.echo("Error: No physical port found for logical port '{}'".format(port_name))
         sys.exit(EXIT_FAIL)
 
-    return physical_port
+    return physical_ports[0]
 
 
-def logical_port_name_to_physical_port_list(port_name):
+def logical_port_name_to_physical_port_list(port_name, *, strict=False):
+    """Resolve a logical name or numeric physical index.
+
+    Strict callers receive a nonempty list with duplicate indexes removed,
+    or a ClickException without an extra diagnostic printed by this helper.
+    Default callers retain the existing return values and error reporting.
+    """
+    port_name = str(port_name)
     try:
         if port_name.startswith("Ethernet"):
             if platform_sfputil.is_logical_port(port_name):
-                return platform_sfputil.get_logical_to_physical(port_name)
+                physical_ports = platform_sfputil.get_logical_to_physical(port_name)
+                if not strict:
+                    return physical_ports
+                if physical_ports:
+                    return list(dict.fromkeys(physical_ports))
         else:
             return [int(port_name)]
     except ValueError:
         pass
 
+    if strict:
+        raise click.ClickException("Invalid port '{}'".format(port_name))
     click.echo("Invalid port '{}'".format(port_name))
     return None
+
 
 def get_logical_list():
 
