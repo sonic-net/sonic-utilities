@@ -339,6 +339,36 @@ class PfcwdCli(object):
         if pfc_stat_history:
             pfcwd_info["pfc_stat_history"] = "enable"
 
+        # Detection and restoration times must not be smaller than the
+        # currently configured polling interval.
+        poll_interval_value = self.config_db.get_entry(
+            CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
+        ).get('POLL_INTERVAL')
+        if poll_interval_value is not None:
+            try:
+                poll_interval_int = int(poll_interval_value)
+            except (ValueError, TypeError):
+                poll_interval_int = None
+            if poll_interval_int is not None:
+                if detection_time < poll_interval_int:
+                    click.echo(
+                        "unable to use detection time = {}ms, value is "
+                        "smaller than the configured polling interval "
+                        "({}ms), please choose a larger detection time".format(
+                            detection_time, poll_interval_int
+                        ), err=True
+                    )
+                    sys.exit(1)
+                if pfcwd_info['restoration_time'] < poll_interval_int:
+                    click.echo(
+                        "unable to use restoration time = {}ms, value is "
+                        "smaller than the configured polling interval "
+                        "({}ms), please choose a larger restoration time".format(
+                            pfcwd_info['restoration_time'], poll_interval_int
+                        ), err=True
+                    )
+                    sys.exit(1)
+
         self.configure_ports(ports, pfcwd_info, overwrite=True)
 
     @multi_asic_util.run_on_multi_asic
