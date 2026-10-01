@@ -310,6 +310,22 @@ def test_keyboard_interrupt_maps_to_130():
 
 
 # --------------------------------------------------------------------------- #
+# Socket permissions (defense-in-depth on top of SO_PEERCRED + setuid)
+# --------------------------------------------------------------------------- #
+
+def test_set_socket_permissions_is_group_restricted_not_world_writable(tmp_path):
+    sock_path = tmp_path / "cli.sock"
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        server.bind(str(sock_path))
+        cli_server._set_socket_permissions(str(sock_path))
+        mode = os.stat(sock_path).st_mode & 0o777
+        assert mode == 0o660
+    finally:
+        server.close()
+
+
+# --------------------------------------------------------------------------- #
 # Staleness detection
 # --------------------------------------------------------------------------- #
 

@@ -42,9 +42,12 @@ existing check; `sudo config …` still works because the connecting
 process already has uid 0 by the time it talks to the daemon, so no
 privilege drop happens and the existing check passes.
 
-The socket itself is `0666` -- access control is enforced by
-`SO_PEERCRED` + `setuid` in the child, not by filesystem permissions on
-the socket.
+The socket itself is `0660`, owned by group `admin` (override via
+`SONIC_CLI_SOCKET_GROUP`). This is defense-in-depth on top of the real
+authorization mechanism, which is `SO_PEERCRED` + `setuid` in the child,
+not the socket's filesystem permissions -- a caller connecting at all
+still gets checked and dropped to their real uid/gid before anything
+runs.
 
 ## Known limitations
 
