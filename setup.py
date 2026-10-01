@@ -208,7 +208,7 @@ setup(
     entry_points={
         'console_scripts': [
             'acl-loader = acl_loader.main:cli',
-            'config = config.main:config',
+            'config = config.cli_entry:main',
             'connect = connect.main:connect',
             'consutil = consutil.main:consutil',
             'counterpoll = counterpoll.main:cli',
@@ -229,7 +229,8 @@ setup(
             'pddf_ledutil = pddf_ledutil.main:cli',
             'rexec = rcli.rexec:cli',
             'rshell = rcli.rshell:cli',
-            'show = show.main:cli',
+            'show = show.cli_entry:main',
+            'sonic-cli-daemon = utilities_common.cli_server:run_daemon_main',
             'sonic-clear = clear.main:cli',
             'sonic-installer = sonic_installer.main:sonic_installer',
             'sonic_installer = sonic_installer.main:sonic_installer',  # Deprecated
