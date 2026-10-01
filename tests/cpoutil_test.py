@@ -403,9 +403,14 @@ class CoverageFakeEndpoint(object):
 
 class CoverageFakeCpo(cpoutil.CpoBase):
     def __init__(self):
+        from sonic_platform_base.sonic_xcvr.codes.public.elsfp import ElsfpCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.elsfp.elsfp import ElsfpMemMap
+
         super().__init__(None, self, self)
         self.api = CoverageFakeApi()
-        self.api.xcvr_eeprom = mock.Mock(reader=self.read_eeprom)
+        self.api.xcvr_eeprom = mock.Mock(
+            mem_map=ElsfpMemMap(ElsfpCodes), reader=self.read_eeprom,
+        )
         self.reads = []
         self.writes = []
 
@@ -1219,21 +1224,96 @@ class TestExplicitLaserMapping:
         assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
 
 
-class TestOeBankControls:
-    @pytest.fixture
-    def bank_cpos(self, monkeypatch):
-        cpos = {1: CoverageFakeCpo(), 2: CoverageFakeCpo(), 3: CoverageFakeCpo()}
+@pytest.fixture
+def bank_cpos(monkeypatch):
+    cpos = {1: CoverageFakeCpo(), 2: CoverageFakeCpo(), 3: CoverageFakeCpo()}
+    data = json.loads(json.dumps(CPO_DATA))
+    # A second interface in the same bank must not duplicate reads or writes.
+    data["interfaces"]["Ethernet4"] = dict(data["interfaces"]["Ethernet0"])
+    monkeypatch.setattr(cpoutil, "cpo_mapping", CpoMapping(data))
+    monkeypatch.setattr(cpoutil, "cpo_object_map", {
+        OPTICAL_ENGINE: {"oe0": cpos[1], "oe1": cpos[3]},
+        EXTERNAL_LASER_SOURCE: {"els0": cpos[1], "els1": cpos[3]},
+        PORT: dict(cpos),
+    })
+    monkeypatch.setattr(cpoutil, "initialize_platform", lambda: None)
+    for port, cpo in cpos.items():
+        cpo.api.get_rx_power = mock.Mock(return_value=[port + lane / 10 for lane in range(8)])
+    return cpos
+
+
+class TestOeInputPower:
+    @pytest.mark.parametrize("selector", [[], ["0"], ["oe0"]])
+    def test_reads_each_bank_once_and_preserves_oe_ownership(self, bank_cpos, selector):
+        result = invoke_coverage(["show", "oe", "input-power", *selector, "--json"])
+        assert result.exit_code == 0, result.output
+        expected = {"oe0": {
+            "bank_0": bank_cpos[1].api.get_rx_power.return_value,
+            "bank_1": bank_cpos[2].api.get_rx_power.return_value,
+        }}
+        if not selector:
+            expected["oe1"] = {"bank_0": bank_cpos[3].api.get_rx_power.return_value}
+            bank_cpos[3].api.get_rx_power.assert_called_once_with()
+        else:
+            bank_cpos[3].api.get_rx_power.assert_not_called()
+        assert json.loads(result.output) == expected
+        bank_cpos[1].api.get_rx_power.assert_called_once_with()
+        bank_cpos[2].api.get_rx_power.assert_called_once_with()
+
+    def test_table_identifies_each_bank_and_its_local_media_lanes(self, bank_cpos):
+        result = invoke_coverage(["show", "oe", "input-power", "0"])
+        assert result.exit_code == 0, result.output
+        assert "Bank / Media Lane" in result.output
+        for bank, port in [(0, 1), (1, 2)]:
+            for lane, power in enumerate(bank_cpos[port].api.get_rx_power.return_value, 1):
+                assert "OE0 bank {} / Lane {} {:g}".format(bank, lane, power) in [
+                    " ".join(line.split()) for line in result.output.splitlines()
+                ]
+
+    def test_preserves_nonzero_topology_bank_ids(self, bank_cpos, monkeypatch):
         data = json.loads(json.dumps(CPO_DATA))
-        # A second interface in the same bank must not cause a duplicate write.
-        data["interfaces"]["Ethernet4"] = dict(data["interfaces"]["Ethernet0"])
+        data["interfaces"]["Ethernet0"]["oe_bank_id"] = 56
+        data["interfaces"]["Ethernet8"]["oe_bank_id"] = 63
         monkeypatch.setattr(cpoutil, "cpo_mapping", CpoMapping(data))
-        monkeypatch.setattr(cpoutil, "cpo_object_map", {
-            OPTICAL_ENGINE: {"oe0": cpos[1], "oe1": cpos[3]},
-            EXTERNAL_LASER_SOURCE: {"els0": cpos[1], "els1": cpos[3]},
-            PORT: dict(cpos),
-        })
-        monkeypatch.setattr(cpoutil, "initialize_platform", lambda: None)
-        return cpos
+        result = invoke_coverage(["show", "oe", "input-power", "0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"oe0": {
+            "bank_56": bank_cpos[1].api.get_rx_power.return_value,
+            "bank_63": bank_cpos[2].api.get_rx_power.return_value,
+        }}
+
+    @pytest.mark.parametrize("json_option", [[], ["--json"]])
+    @pytest.mark.parametrize("missing", ["object", "api"])
+    def test_missing_bank_fails_without_partial_output(self, bank_cpos, json_option, missing):
+        if missing == "object":
+            del cpoutil.cpo_object_map[PORT][2]
+        else:
+            bank_cpos[2].api = None
+        result = invoke_coverage(["show", "oe", "input-power", "0", *json_option])
+        assert result.exit_code != 0
+        assert "oe0" in result.output and "bank 1" in result.output
+        assert "Input Power (mW)" not in result.output
+        assert "bank_0" not in result.output
+        bank_cpos[1].api.get_rx_power.assert_not_called()
+
+    @pytest.mark.parametrize("values", [None, [], {}])
+    def test_empty_bank_read_is_reported_as_failure(self, bank_cpos, values):
+        bank_cpos[2].api.get_rx_power.return_value = values
+        result = invoke_coverage(["show", "oe", "input-power", "0", "--json"])
+        assert result.exit_code != 0
+        assert "oe0 bank 1 input-power API returned no lane data" in result.output
+        assert "bank_0" not in result.output
+
+    @pytest.mark.parametrize("error", [NotImplementedError("unsupported"), AttributeError("missing")])
+    def test_bank_read_error_is_reported_with_bank_context(self, bank_cpos, error):
+        bank_cpos[2].api.get_rx_power.side_effect = error
+        result = invoke_coverage(["show", "oe", "input-power", "0", "--json"])
+        assert result.exit_code != 0
+        assert "oe0 bank 1 input-power read failed" in result.output
+        assert "bank_0" not in result.output
+
+
+class TestOeBankControls:
 
     @pytest.mark.parametrize("state,disabled", [("enable", True), ("disable", False)])
     def test_operates_once_per_bank_and_leaves_other_oes_alone(self, bank_cpos, state, disabled):

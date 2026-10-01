@@ -617,8 +617,8 @@ def require_els_tx_disable_api(api):
         )
 
 
-def get_oe_control_targets(resource_id):
-    """Resolve one bank-bound API per mapped OE bank before any writes."""
+def get_oe_bank_apis(resource_id):
+    """Resolve one API per mapped OE bank before any reads or writes."""
     bank_ports = {}
     for mapping in cpo_mapping.get_interfaces():
         if mapping.oe_name == resource_id:
@@ -628,7 +628,9 @@ def get_oe_control_targets(resource_id):
         for physical_port in dict.fromkeys(physical_ports):
             cpo = cpo_object_map[PORT].get(physical_port)
             if cpo is not None:
-                targets.append((bank, get_oe_api(cpo, resource_id)))
+                targets.append((bank, get_oe_api(
+                    cpo, "{} bank {}".format(resource_id, bank)
+                )))
                 break
         else:
             raise CpoCommandError(
@@ -1624,21 +1626,34 @@ def show_oe_temperature(oe_index, json_output):
 @click.argument("oe_index", required=False)
 @output_option
 def show_oe_input_power(oe_index, json_output):
-    """Display OE input optical power."""
+    """Display input optical power for every mapped OE bank.
+
+    Bank IDs come from the topology; media lanes are local to each bank.
+    """
     records = {}
     try:
-        for resource_id, cpo in get_resource_cpo_objects(
+        for resource_id, _ in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
-            records[resource_id] = get_oe_api(
-                cpo, resource_id
-            ).get_rx_power()
+            records[resource_id] = {}
+            for bank, api in get_oe_bank_apis(resource_id):
+                try:
+                    values = api.get_rx_power()
+                except (NotImplementedError, AttributeError) as exc:
+                    raise CpoCommandError(
+                        "{} bank {} input-power read failed: {}".format(resource_id, bank, exc)
+                    ) from exc
+                if not isinstance(values, (list, tuple, dict)) or not values:
+                    raise CpoCommandError(
+                        "{} bank {} input-power API returned no lane data".format(resource_id, bank)
+                    )
+                records[resource_id]["bank_{}".format(bank)] = values
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records,
         json_output,
         ("OE", "Input Power (mW)"),
-        field_header="Media Lane",
+        field_header="Bank / Media Lane",
     )
 
 
@@ -1910,7 +1925,7 @@ def config_oe_tx_disable(oe_index, state):
     """Enable or disable Tx-disable across every mapped OE bank."""
     try:
         resource_id, _ = _single_resource(OPTICAL_ENGINE, oe_index)
-        targets = get_oe_control_targets(resource_id)
+        targets = get_oe_bank_apis(resource_id)
         disable = state == "enable"
 
         def apply_tx_disable():
