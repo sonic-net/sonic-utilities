@@ -3,6 +3,7 @@ import os
 import sys
 from unittest import mock
 
+import pytest
 from click.testing import CliRunner
 
 from .cpoutil_test import shared_port_mapping  # noqa: F401
@@ -191,12 +192,47 @@ class TestDirectPlatformApiCommands(object):
             "Laser1OpticalPowerMonitor"
         ] == 70.8
 
-    def test_els_presence_calls_elsfp_endpoint(self):
-        result = invoke(["show", "els", "presence", "0", "--json"])
-        assert json.loads(result.output) == {"els0": True}
+    @pytest.mark.parametrize("present", [True, False])
+    def test_interface_presence_calls_cpo_instead_of_endpoints(self, present):
+        self.cpo.oe = mock.Mock(get_presence=mock.Mock(return_value=not present))
+        self.cpo.elsfp = mock.Mock(get_presence=mock.Mock(return_value=not present))
+        self.cpo.get_presence = mock.Mock(return_value=present)
+        result = invoke(["show", "interface", "presence", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"Ethernet0": present}
+        self.cpo.get_presence.assert_called_once_with()
+        self.cpo.oe.get_presence.assert_not_called()
+        self.cpo.elsfp.get_presence.assert_not_called()
 
-        table = invoke(["show", "els", "presence", "0"])
-        assert "Present" in table.output
+        table = invoke(["show", "interface", "presence", "Ethernet0"])
+        assert ("Present" if present else "Not present") in table.output
+        assert "Interface" in table.output
+
+    def test_presence_lists_all_interfaces_and_breakouts(self):
+        result = invoke(["show", "interface", "presence", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"Ethernet0": True, "Ethernet1": True}
+        result = invoke(["show", "interface", "presence", "Ethernet1", "--json"])
+        assert json.loads(result.output) == {"Ethernet1": True}
+
+    @pytest.mark.parametrize("command", ["presence", "dom"])
+    @pytest.mark.parametrize("error", [NotImplementedError(), AttributeError(), OSError("read failed")])
+    def test_presence_failures_are_reported_without_endpoint_fallback(self, command, error):
+        self.cpo.oe = mock.Mock()
+        self.cpo.elsfp = mock.Mock()
+        self.cpo.get_presence = mock.Mock(side_effect=error)
+        result = invoke(["show", "interface", command, "Ethernet0", "--json"])
+        assert result.exit_code != 0
+        assert "CPO presence" in result.output and "Ethernet0" in result.output
+        assert not self.cpo.oe.mock_calls
+        assert not self.cpo.elsfp.mock_calls
+
+    @pytest.mark.parametrize("value", [None, 1, "False"])
+    def test_invalid_presence_result_is_not_reported_as_present(self, value):
+        self.cpo.get_presence = mock.Mock(return_value=value)
+        result = invoke(["show", "interface", "presence", "Ethernet0"])
+        assert result.exit_code != 0
+        assert "CPO presence API returned invalid data" in result.output
 
     def test_els_lpmode_has_boolean_json_and_readable_table(self):
         result = invoke(["show", "els", "lpmode", "0", "--json"])
@@ -217,20 +253,85 @@ class TestDirectPlatformApiCommands(object):
         result = invoke([
             "show", "interface", "dom", "Ethernet0", "--json"
         ])
-        values = json.loads(result.output)["Ethernet0"]
-        assert values["manufacturer"] == "Example OE"
-        assert values["els_vendor_name"] == "Example ELS"
-        assert values["els_temperature"] == 32.5
-        assert values["temphighalarm"] == 90.0
-        assert values["els_temperature_alarm_high"] == 75.0
-        assert isinstance(values["temperature"], float)
-
-    def test_interface_dom_does_not_query_oe_presence(self):
-        with mock.patch.object(
-                self.cpo, "get_presence",
-                side_effect=AssertionError("OE presence must not be read")):
-            result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
+        values = json.loads(result.output)["Ethernet0"]
+        assert values["present"] is True
+        assert values["oe"]["info"]["manufacturer"] == "Example OE"
+        assert values["els"]["info"]["manufacturer"] == "Example ELS"
+        assert values["oe"]["dom"]["temperature"] == 71.25
+        assert values["els"]["dom"]["temperature"] == 32.5
+        assert values["oe"]["thresholds"]["temphighalarm"] == 90.0
+        assert values["els"]["thresholds"]["temperature_alarm_high"] == 75.0
+        assert isinstance(values["oe"]["dom"]["temperature"], float)
+        for section in values["els"].values():
+            assert not any(key.startswith("els_") for key in section)
+
+    def test_interface_dom_queries_cpo_presence_before_endpoint_apis(self):
+        self.cpo.get_presence = mock.Mock(return_value=True)
+        self.cpo.oe = mock.Mock()
+        self.cpo.elsfp = mock.Mock()
+        self.cpo.oe.get_api.return_value = self.cpo.api
+        self.cpo.elsfp.get_api.return_value = self.cpo.api
+        result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        self.cpo.get_presence.assert_called_once_with()
+        self.cpo.oe.get_presence.assert_not_called()
+        self.cpo.elsfp.get_presence.assert_not_called()
+
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_absent_cpo_does_not_read_either_endpoint(self, json_output):
+        self.cpo.get_presence = mock.Mock(return_value=False)
+        self.cpo.oe = mock.Mock()
+        self.cpo.elsfp = mock.Mock()
+        args = ["show", "interface", "dom", "Ethernet0"] + (["--json"] if json_output else [])
+        result = invoke(args)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            assert json.loads(result.output) == {"Ethernet0": {"present": False, "oe": {}, "els": {}}}
+        else:
+            assert result.output.strip() == "Ethernet0: CPO EEPROM not detected"
+        assert not self.cpo.oe.mock_calls
+        assert not self.cpo.elsfp.mock_calls
+
+    def test_dom_table_separates_endpoint_values_and_preserves_units(self):
+        self.cpo.api.get_elsfp_info = mock.Mock(return_value={
+            "manufacturer": "Example ELS", "lane_count": 2, "max_optical_power": 3.5, "max_laser_bias": 20,
+        })
+        self.cpo.api.get_elsfp_dom_real_value = mock.Mock(return_value={
+            "temperature": 32.5, "optical_power_lane1": -1.2, "optical_power_lane3": -8.0,
+        })
+        result = invoke(["show", "interface", "dom", "Ethernet0"])
+        assert result.exit_code == 0, result.output
+        oe_section, els_section = result.output.split("    ELS:\n")
+        assert "    OE:\n" in oe_section and "Example OE" in oe_section
+        assert "71.25C" in oe_section and "32.5C" not in oe_section
+        assert "Example ELS" in els_section and "32.5C" in els_section
+        assert "71.25C" not in els_section
+        assert "Maximum Optical Power: 3.5dBm" in els_section
+        assert "Maximum Laser Bias: 20mA" in els_section
+        assert "Laser 1 Optical Power: -1.2dBm" in els_section
+        assert "Laser 3" not in els_section
+        assert els_section.count("TempHighAlarm:") == 1
+
+    def test_dom_json_preserves_api_fields_without_mutating_or_overwriting(self):
+        source_values = {}
+        for endpoint, methods in {
+                "oe": ("get_transceiver_info", "get_transceiver_dom_real_value", "get_transceiver_threshold_info"),
+                "els": ("get_elsfp_info", "get_elsfp_dom_real_value", "get_elsfp_threshold_info"),
+        }.items():
+            source_values[endpoint] = {}
+            for section, method in zip(("info", "dom", "thresholds"), methods):
+                values = {"shared_name": "{} {}".format(endpoint, section)}
+                source_values[endpoint][section] = values
+                setattr(self.cpo.api, method, mock.Mock(return_value=values))
+        result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        values = json.loads(result.output)["Ethernet0"]
+        for endpoint in ("oe", "els"):
+            for section in ("info", "dom", "thresholds"):
+                expected = {"shared_name": "{} {}".format(endpoint, section)}
+                assert values[endpoint][section] == expected
+                assert source_values[endpoint][section] == expected
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([

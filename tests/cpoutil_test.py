@@ -462,13 +462,13 @@ def command_paths(command, path=()):
 
 HARDWARE_COMMANDS = [
     ["show", "interface", name] for name in
-    ("map", "dom", "tx_disable", "speed", "lane-status")
+    ("map", "presence", "dom", "tx_disable", "speed", "lane-status")
 ] + [
     ["show", "oe", name] for name in
     ("lpmode", "status", "temperature", "input-power")
 ] + [
     ["show", "els", name] for name in
-    ("presence", "lpmode", "status", "temperature", "output-power")
+    ("lpmode", "status", "temperature", "output-power")
 ] + [
     ["config", "interface", "tx_disable", "Ethernet0", "enable"],
     ["config", "oe", "lpmode", "0", "full"],
@@ -644,7 +644,7 @@ class TestHelperCoverage(object):
         cpo = coverage_environment
         assert cpoutil.get_oe_api(cpo, "oe0") is cpo.api
         assert cpoutil.get_els_api(cpo, "els0") is cpo.api
-        assert cpoutil.get_els_presence(cpo)
+        assert cpoutil.get_cpo_presence(cpo, "Ethernet0")
 
         oe_api, els_api = object(), object()
         public_cpo = cpoutil.CpoBase(
@@ -652,7 +652,8 @@ class TestHelperCoverage(object):
         )
         assert cpoutil.get_oe_api(public_cpo, "oe0") is oe_api
         assert cpoutil.get_els_api(public_cpo, "els0") is els_api
-        assert cpoutil.get_els_presence(public_cpo)
+        with pytest.raises(cpoutil.CpoCommandError, match="CPO presence is not implemented"):
+            cpoutil.get_cpo_presence(public_cpo, "Ethernet0")
 
     def test_normalizers_and_filters(self):
         assert cpoutil.get_els_lpmode(
@@ -661,10 +662,6 @@ class TestHelperCoverage(object):
         assert cpoutil.get_els_lpmode(
             mock.Mock(get_elsfp_status=lambda: {"module_state": "ModuleReady"})
         ) is False
-        assert cpoutil._namespace_els_values({"temperature": 1, "els_x": 2}) == {
-            "els_temperature": 1,
-            "els_x": 2,
-        }
         assert cpoutil._get_els_lane_count({"laser_count": "2"}) == 2
         assert "optical_power_lane3" not in cpoutil._filter_els_dom_lanes(
             {"optical_power_lane1": 1, "optical_power_lane3": 3}, 2
@@ -703,7 +700,7 @@ class TestHelperCoverage(object):
             "cable_length": 2,
             "supported_max_tx_power": 4,
             "supported_max_laser_freq": 195000,
-            "els_max_laser_bias": 20,
+            "max_laser_bias": 20,
         }
         assert any("Vendor" in line for line in cpoutil._format_cpo_info(info))
         dom = {
@@ -711,15 +708,14 @@ class TestHelperCoverage(object):
             "txpowerhighalarm": 3.0,
             "temperature": 40.0,
             "temphighalarm": 90.0,
-            "els_temperature": 30.0,
-            "els_temperature_alarm_high": 75.0,
-            "els_optical_power_lane1": -1.0,
             "extra": {"nested": True},
         }
-        lines = cpoutil._format_cpo_dom(dom)
+        lines = cpoutil._format_oe_dom(dom)
         assert any("AdditionalValues" in line for line in lines)
         assert "CPO EEPROM detected" in cpoutil._format_interface_dom(
-            "Ethernet0", None, None, None
+            "Ethernet0", {"present": True,
+                          "oe": {"info": None, "dom": None, "thresholds": None},
+                          "els": {"info": None, "dom": None, "thresholds": None}}
         )
         cpoutil.print_records({"oe0": [1, 2]}, False, field_header="Lane")
         cpoutil.print_speed_records(
@@ -756,7 +752,7 @@ class TestCommandCoverage(object):
             ["show", "oe", "status"],
             ["show", "oe", "temperature"],
             ["show", "oe", "input-power"],
-            ["show", "els", "presence"],
+            ["show", "interface", "presence"],
             ["show", "els", "lpmode"],
             ["show", "els", "status"],
             ["show", "els", "temperature"],
@@ -1047,12 +1043,15 @@ class TestCpoHelpers:
                 cpoutil.load_cpo_object_map()
         loader.assert_called_once_with()
 
-    def test_only_els_presence_is_read(self):
+    def test_only_cpo_presence_is_read(self):
         oe = mock.Mock(get_presence=mock.Mock(return_value=True))
         els = mock.Mock(get_presence=mock.Mock(return_value=False))
         cpo = cpoutil.CpoBase(None, oe, els)
-        assert cpoutil.get_els_presence(cpo) is False
+        cpo.get_presence = mock.Mock(return_value=True)
+        assert cpoutil.get_cpo_presence(cpo, "Ethernet0") is True
+        cpo.get_presence.assert_called_once_with()
         oe.get_presence.assert_not_called()
+        els.get_presence.assert_not_called()
         assert cpoutil.get_els_api(cpo, "els0") is els.get_api.return_value
 
 

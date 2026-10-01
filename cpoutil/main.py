@@ -75,39 +75,12 @@ CPO_INFO_FIELD_MAP = {
     "supported_min_tx_power": "Supported Min TX Power",
     "supported_max_laser_freq": "Supported Max Laser Frequency",
     "supported_min_laser_freq": "Supported Min Laser Frequency",
-    "els_identifier": "ELS Identifier",
-    "els_revision": "ELS Revision",
-    "els_laser_count": "ELS Laser Count",
-    "els_vendor_name": "ELS Vendor Name",
-    "els_vendor_oui": "ELS Vendor OUI",
-    "els_vendor_pn": "ELS Vendor PN",
-    "els_vendor_rev": "ELS Vendor Rev",
-    "els_vendor_sn": "ELS Vendor SN",
-    "els_date_code": "ELS Vendor Date Code(YYYY-MM-DD Lot)",
-    "els_max_power": "ELS Maximum Power Consumption",
-    "els_connector": "ELS Connector",
-    "els_cmis_rev": "ELS CMIS Revision",
-    "els_media_interface_technology": "ELS Media Interface Technology",
-    "els_control_mode": "ELS Control Mode",
-    "els_max_optical_power": "ELS Maximum Optical Power",
-    "els_min_optical_power": "ELS Minimum Optical Power",
-    "els_max_laser_bias": "ELS Maximum Laser Bias",
-    "els_min_laser_bias": "ELS Minimum Laser Bias",
-    "els_max_power_consumption": "ELS Maximum Power Consumption",
-    "els_laser_wavelength_grid": "ELS Laser Wavelength Grid",
-    "els_low_power_control": "ELS Low-power Control",
-}
-
-ELS_INFO_KEY_MAP = {
-    "type": "els_identifier",
-    "hardware_rev": "els_revision",
-    "lane_count": "els_laser_count",
-    "manufacturer": "els_vendor_name",
-    "vendor_oui": "els_vendor_oui",
-    "model": "els_vendor_pn",
-    "vendor_rev": "els_vendor_rev",
-    "serial": "els_vendor_sn",
-    "vendor_date": "els_date_code",
+    "lane_count": "Laser Count",
+    "control_mode": "Control Mode",
+    "max_optical_power": "Maximum Optical Power",
+    "min_optical_power": "Minimum Optical Power",
+    "max_laser_bias": "Maximum Laser Bias",
+    "min_laser_bias": "Minimum Laser Bias",
 }
 
 CMIS_DOM_CHANNEL_MONITOR_MAP = {
@@ -148,29 +121,28 @@ DOM_MODULE_THRESHOLD_MAP = {
 }
 
 ELS_DOM_MONITOR_MAP = {
-    "els_temperature": "ELS Temperature",
-    "els_voltage": "ELS Vcc",
-    "els_icc": "ELS Icc",
-    "els_tec_current": "ELS TEC Current",
+    "temperature": "Temperature",
+    "voltage": "Vcc",
+    "icc": "Icc",
 }
 
 ELS_THRESHOLD_MAP = {
-    "els_temperature_alarm_high": "ELS TempHighAlarm",
-    "els_temperature_alarm_low": "ELS TempLowAlarm",
-    "els_temperature_warn_high": "ELS TempHighWarning",
-    "els_temperature_warn_low": "ELS TempLowWarning",
-    "els_voltage_alarm_high": "ELS VccHighAlarm",
-    "els_voltage_alarm_low": "ELS VccLowAlarm",
-    "els_voltage_warn_high": "ELS VccHighWarning",
-    "els_voltage_warn_low": "ELS VccLowWarning",
-    "els_optical_power_alarm_high": "ELS TxPowerHighAlarm",
-    "els_optical_power_alarm_low": "ELS TxPowerLowAlarm",
-    "els_optical_power_warn_high": "ELS TxPowerHighWarning",
-    "els_optical_power_warn_low": "ELS TxPowerLowWarning",
-    "els_laser_bias_alarm_high": "ELS TxBiasHighAlarm",
-    "els_laser_bias_alarm_low": "ELS TxBiasLowAlarm",
-    "els_laser_bias_warn_high": "ELS TxBiasHighWarning",
-    "els_laser_bias_warn_low": "ELS TxBiasLowWarning",
+    "temperature_alarm_high": "TempHighAlarm",
+    "temperature_alarm_low": "TempLowAlarm",
+    "temperature_warn_high": "TempHighWarning",
+    "temperature_warn_low": "TempLowWarning",
+    "voltage_alarm_high": "VccHighAlarm",
+    "voltage_alarm_low": "VccLowAlarm",
+    "voltage_warn_high": "VccHighWarning",
+    "voltage_warn_low": "VccLowWarning",
+    "optical_power_alarm_high": "TxPowerHighAlarm",
+    "optical_power_alarm_low": "TxPowerLowAlarm",
+    "optical_power_warn_high": "TxPowerHighWarning",
+    "optical_power_warn_low": "TxPowerLowWarning",
+    "laser_bias_alarm_high": "TxBiasHighAlarm",
+    "laser_bias_alarm_low": "TxBiasLowAlarm",
+    "laser_bias_warn_high": "TxBiasHighWarning",
+    "laser_bias_warn_low": "TxBiasLowWarning",
 }
 
 DOM_VALUE_UNIT_MAP = {
@@ -192,10 +164,9 @@ DOM_MODULE_THRESHOLD_UNIT_MAP = {
 }
 
 ELS_DOM_MONITOR_UNIT_MAP = {
-    "els_temperature": "C",
-    "els_voltage": "Volts",
-    "els_icc": "A",
-    "els_tec_current": "",
+    "temperature": "C",
+    "voltage": "Volts",
+    "icc": "A",
 }
 
 ELS_THRESHOLD_UNIT_MAP = {
@@ -561,9 +532,23 @@ def get_els_api(cpo, label):
     return api
 
 
-def get_els_presence(cpo):
-    """Read presence from the public ELSFP device."""
-    return cpo.elsfp.get_presence()
+def get_cpo_presence(cpo, label):
+    """Read virtual-module presence without inferring it from an endpoint."""
+    try:
+        present = cpo.get_presence()
+    except (NotImplementedError, AttributeError) as exc:
+        raise CpoCommandError(
+            "CPO presence is not implemented for '{}'".format(label)
+        ) from exc
+    except Exception as exc:
+        raise CpoCommandError(
+            "Failed to read CPO presence for '{}': {}".format(label, exc)
+        ) from exc
+    if not isinstance(present, bool):
+        raise CpoCommandError(
+            "CPO presence API returned invalid data for '{}'".format(label)
+        )
+    return present
 
 
 def get_els_lpmode(_api):
@@ -672,25 +657,6 @@ def get_els_control_targets(resource_id):
             "No ELS laser mapping is available for '{}'".format(resource_id)
         )
     return [tuple(target) for target in targets.values()]
-
-
-def _namespace_els_values(values, key_map=None):
-    """Keep ELS fields distinct when OE and ELS results are combined."""
-    if not isinstance(values, dict):
-        return {}
-
-    key_map = key_map or {}
-    namespaced = {}
-    for key, value in values.items():
-        key = str(key)
-        if key in key_map:
-            output_key = key_map[key]
-        elif key.startswith("els_"):
-            output_key = key
-        else:
-            output_key = "els_{}".format(key)
-        namespaced[output_key] = value
-    return namespaced
 
 
 def _get_els_lane_count(info):
@@ -875,12 +841,12 @@ def _format_cpo_info(info):
 
         if key in (
                 "supported_max_tx_power", "supported_min_tx_power",
-                "els_max_optical_power", "els_min_optical_power"):
+                "max_optical_power", "min_optical_power"):
             value = _value_with_unit(value, "dBm")
         elif key in (
                 "supported_max_laser_freq", "supported_min_laser_freq"):
             value = _value_with_unit(value, "GHz")
-        elif key in ("els_max_laser_bias", "els_min_laser_bias"):
+        elif key in ("max_laser_bias", "min_laser_bias"):
             value = _value_with_unit(value, "mA")
         lines.append("{}{}: {}".format(indent, label, value))
     return lines
@@ -894,7 +860,7 @@ def _append_dom_values(lines, values, value_map, unit_map, alignment=0):
         sorted_keys, values, value_map, unit_map, alignment).splitlines())
 
 
-def _format_cpo_dom(dom_values):
+def _format_oe_dom(dom_values):
     indent = " " * 8
     values = dom_values if isinstance(dom_values, dict) else {}
     lines = ["{}ChannelMonitorValues:".format(indent)]
@@ -931,6 +897,22 @@ def _format_cpo_dom(dom_values):
         alignment=15,
     )
 
+    displayed_keys = set().union(
+        CMIS_DOM_CHANNEL_MONITOR_MAP,
+        DOM_CHANNEL_THRESHOLD_MAP,
+        DOM_MODULE_MONITOR_MAP,
+        DOM_MODULE_THRESHOLD_MAP,
+    )
+    _append_additional_dom_values(lines, values, displayed_keys)
+    return lines
+
+
+def _format_els_dom(dom_values):
+    """Format public ELSFP fields within their own endpoint section."""
+    values = dom_values if isinstance(dom_values, dict) else {}
+    indent = " " * 8
+    lines = []
+
     els_monitor_map = dict(ELS_DOM_MONITOR_MAP)
     els_monitor_units = dict(ELS_DOM_MONITOR_UNIT_MAP)
 
@@ -941,16 +923,16 @@ def _format_cpo_dom(dom_values):
     }
     for key in values:
         match = re.fullmatch(
-            r"els_(laser_bias_current|optical_power|voltage)_lane(\d+)",
+            r"(laser_bias_current|optical_power|voltage)_lane(\d+)",
             str(key),
         )
         if not match:
             continue
         field, lane = match.groups()
         label, unit = lane_monitor_fields[field]
-        els_monitor_map[key] = "ELS Laser {} {}".format(lane, label)
+        els_monitor_map[key] = "Laser {} {}".format(lane, label)
         els_monitor_units[key] = unit
-    lines.append("{}ELSMonitorValues:".format(indent))
+    lines.append("{}MonitorValues:".format(indent))
     _append_dom_values(
         lines,
         values,
@@ -958,7 +940,7 @@ def _format_cpo_dom(dom_values):
         els_monitor_units,
     )
 
-    lines.append("{}ELSThresholdValues:".format(indent))
+    lines.append("{}ThresholdValues:".format(indent))
     _append_dom_values(
         lines,
         values,
@@ -966,36 +948,36 @@ def _format_cpo_dom(dom_values):
         ELS_THRESHOLD_UNIT_MAP,
     )
 
-    displayed_keys = set().union(
-        CMIS_DOM_CHANNEL_MONITOR_MAP,
-        DOM_CHANNEL_THRESHOLD_MAP,
-        DOM_MODULE_MONITOR_MAP,
-        DOM_MODULE_THRESHOLD_MAP,
-        els_monitor_map,
-        ELS_THRESHOLD_MAP,
-    )
+    _append_additional_dom_values(lines, values, set(els_monitor_map).union(ELS_THRESHOLD_MAP))
+    return lines
+
+
+def _append_additional_dom_values(lines, values, displayed_keys):
     additional_values = {
         key: value for key, value in values.items()
         if key not in displayed_keys and value != "N/A"
     }
     if additional_values:
-        lines.append("{}AdditionalValues:".format(indent))
+        lines.append("        AdditionalValues:")
         for field, value in _flatten_record(additional_values):
             lines.append("{}{}: {}".format(
                 " " * 16, _display_field(field), _display_value(value)
             ))
-    return lines
 
 
-def _format_interface_dom(port_name, info, dom, thresholds):
+def _format_interface_dom(port_name, record):
+    if not record["present"]:
+        return "{}: CPO EEPROM not detected".format(port_name)
     lines = ["{}: CPO EEPROM detected".format(port_name)]
-    lines.extend(_format_cpo_info(info))
-    values = {}
-    if isinstance(dom, dict):
-        values.update(dom)
-    if isinstance(thresholds, dict):
-        values.update(thresholds)
-    lines.extend(_format_cpo_dom(values))
+    for endpoint, formatter in (("oe", _format_oe_dom), ("els", _format_els_dom)):
+        data = record[endpoint]
+        lines.append("    {}:".format(endpoint.upper()))
+        lines.extend(_format_cpo_info(data["info"]))
+        values = {}
+        for section in ("dom", "thresholds"):
+            if isinstance(data[section], dict):
+                values.update(data[section])
+        lines.extend(formatter(values))
     return "\n".join(lines)
 
 
@@ -1388,51 +1370,59 @@ def show_interface_map(port, json_output):
         click.echo(_format_map_table(records))
 
 
+@show_interface.command("presence")
+@click.argument("port", required=False)
+@output_option
+def show_interface_presence(port, json_output):
+    """Display CPO virtual-module presence for each interface."""
+    records = {}
+    try:
+        for port_name, _, cpo in get_port_cpo_objects(port):
+            records[port_name] = get_cpo_presence(cpo, port_name)
+    except CpoCommandError as exc:
+        raise click.ClickException(str(exc))
+    print_records(
+        records, json_output, ("Interface", "Presence"),
+        boolean_values=("Present", "Not present"),
+    )
+
+
 @show_interface.command("dom")
 @click.argument("port", required=False)
 @output_option
 def show_interface_dom(port, json_output):
-    """Display CPO EEPROM information and monitoring data."""
+    """Display CPO EEPROM information and monitoring data.
+
+    OE and ELS data retain public API field names in separate sections.
+    JSON includes presence and each endpoint's info, dom and thresholds.
+    """
     records = {}
     output = []
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
+            present = get_cpo_presence(cpo, port_name)
+            record = {"present": present, "oe": {}, "els": {}}
+            records[port_name] = record
+            if not present:
+                output.append(_format_interface_dom(port_name, record))
+                continue
             oe_api = get_oe_api(cpo, port_name)
             els_api = get_els_api(cpo, port_name)
 
-            info = oe_api.get_transceiver_info()
-            dom = oe_api.get_transceiver_dom_real_value()
-            thresholds = oe_api.get_transceiver_threshold_info()
-
-            els_info_values = els_api.get_elsfp_info()
-            els_lane_count = _get_els_lane_count(els_info_values)
-            els_info = _namespace_els_values(
-                els_info_values, ELS_INFO_KEY_MAP
-            )
-            els_dom = _namespace_els_values(
-                _filter_els_dom_lanes(
-                    els_api.get_elsfp_dom_real_value(), els_lane_count
-                )
-            )
-            els_thresholds = _namespace_els_values(
-                els_api.get_elsfp_threshold_info()
-            )
-
-            info = dict(info) if isinstance(info, dict) else {}
-            dom = dict(dom) if isinstance(dom, dict) else {}
-            thresholds = (
-                dict(thresholds) if isinstance(thresholds, dict) else {}
-            )
-            info.update(els_info)
-            dom.update(els_dom)
-            thresholds.update(els_thresholds)
-            values = {}
-            for result in (info, dom, thresholds):
-                values.update(result)
-            records[port_name] = values
-            output.append(_format_interface_dom(
-                port_name, info, dom, thresholds
-            ))
+            record["oe"] = {
+                "info": oe_api.get_transceiver_info(),
+                "dom": oe_api.get_transceiver_dom_real_value(),
+                "thresholds": oe_api.get_transceiver_threshold_info(),
+            }
+            els_info = els_api.get_elsfp_info()
+            record["els"] = {
+                "info": els_info,
+                "dom": _filter_els_dom_lanes(
+                    els_api.get_elsfp_dom_real_value(), _get_els_lane_count(els_info)
+                ),
+                "thresholds": els_api.get_elsfp_threshold_info(),
+            }
+            output.append(_format_interface_dom(port_name, record))
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
@@ -1660,24 +1650,6 @@ def show_oe_input_power(oe_index, json_output):
 @show.group("els")
 def show_els():
     """Display External Laser Source status."""
-
-
-@show_els.command("presence")
-@click.argument("els_index", required=False)
-@output_option
-def show_els_presence(els_index, json_output):
-    """Display ELS presence."""
-    records = {}
-    try:
-        for resource_id, cpo in get_resource_cpo_objects(
-                EXTERNAL_LASER_SOURCE, els_index):
-            records[resource_id] = get_els_presence(cpo)
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(str(exc))
-    print_records(
-        records, json_output, ("ELS", "Presence"),
-        boolean_values=("Present", "Not present"),
-    )
 
 
 @show_els.command("lpmode")
