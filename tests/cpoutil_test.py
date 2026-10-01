@@ -770,6 +770,35 @@ class TestCommandCoverage(object):
         assert result.exit_code == 0, result.output
         assert "OK" in result.output
 
+    def test_oe_reset_reports_reprovisioning_requirement(self, coverage_environment):
+        result = invoke_coverage(["config", "oe", "reset", "0"])
+        assert result.exit_code == 0, result.output
+        assert "Resetting OE0 ... OK" in result.output
+        assert "Affected ports may require application and datapath reprovisioning" in result.output
+        assert coverage_environment.api.calls == [("reset",)]
+        assert not coverage_environment.writes
+
+    @pytest.mark.parametrize("unsupported", [False, True])
+    def test_oe_reset_failure_is_reported(self, coverage_environment, monkeypatch, unsupported):
+        reset = mock.Mock(return_value=False)
+        if unsupported:
+            reset.side_effect = NotImplementedError("OE reset is not implemented")
+        monkeypatch.setattr(coverage_environment.api, "reset", reset)
+        result = invoke_coverage(["config", "oe", "reset", "0"])
+        assert result.exit_code != 0
+        assert "Resetting OE0 ... Failed" in result.output
+        assert "reprovisioning" not in result.output
+        error = "OE reset is not implemented" if unsupported else "Resetting OE0 failed"
+        assert error in result.output
+        reset.assert_called_once_with()
+
+    def test_oe_reset_help_describes_module_defaults(self):
+        result = invoke_coverage(["config", "oe", "reset", "--help"])
+        assert result.exit_code == 0, result.output
+        help_text = " ".join(result.output.split())
+        assert "Module settings may return to defaults" in help_text
+        assert "application and datapath reprovisioning" in help_text
+
     def test_unimplemented_els_reset(self, coverage_environment):
         result = invoke_coverage(["config", "els", "reset", "0"])
         assert result.exit_code != 0

@@ -1,205 +1,117 @@
-# cpoutil development plan
+# cpoutil development and validation
 
-The functional source of truth is CPO-cpoutil-CLI-HLD.md.
-The implementation follows the current master platform interface and platform
-driver path. On the target platform this path is `Chassis.get_sfp()` ->
-`CPO(CpoOptoeBase)` -> `BaillyApi`.
+## Current implementation
 
-The existing sfputil source is not modified. cpoutil follows its initialization
-and port-resolution style and calls the existing SFP/CPO object APIs directly.
+The common `cpoutil` command lives in sonic-utilities. It obtains the chassis
+through `utilities_common.platform_sfputil_helper.load_chassis()` and resolves
+physical ports through `Chassis.get_cpo()`. Platforms can return a public
+`CpoBase` with separate OE/ELS endpoints or a supported legacy combined object.
+The Micas adapter exposes its existing CPO objects through this interface.
 
-## Version 0
+Topology comes from `sonic_py_common.device_info.get_cpo_data()`. Active PORT
+configuration and logical-to-physical mapping use the shared sfputil helper.
+Common physical-port names, DOM formatting, and hex dumps are shared with
+sfputil through `utilities_common.sfp_helper`; CPO topology resolution remains
+in `cpoutil.mapping` and `cpoutil.main`.
 
-Version 0 established the CLI and topology foundation:
+Platform initialization runs only when an actual hardware command executes.
+All command and group `-h`/`--help` paths work without loading the chassis,
+ConfigDB, or CPO topology. The default `cpoutil read-eeprom` operation still
+initializes the platform before dumping EEPROMs. Operations on a non-CPO
+platform fail clearly when topology is unavailable.
 
-- Added the `cpoutil` Python package and console entry point.
-- Parsed and validated the current `cpo.json` `oes`, `elss`, and `interfaces`
-  model returned by `get_cpo_json_data()`.
-- Implemented `cpoutil show interface map [PORT]`.
-- Added human-readable table and JSON output.
-- Kept `mapping.py` limited to topology parsing and validation.
+## Topology and control boundaries
 
-## Version 0.1
+- Resolve active logical ports and breakout children through physical port
+  indexes and ASIC lanes in the topology.
+- Use explicit `laser_to_asic_lane_mapping` for breakout laser ownership. Do not
+  infer equal contiguous lane groups. Legacy topology without this information
+  cannot resolve every breakout command.
+- Reject interface Tx-disable when selected lasers are shared with another
+  interface, or when the required independent ELS control is unavailable.
+- Apply OE-wide Tx-disable to every mapped bank. A single CMIS API object is
+  bank-bound, so one call does not establish that every OE bank was changed.
+- Treat EEPROM command banks as OE-local and validate the requested range.
+  Translate topology-wide bank IDs through the API-reported bank count.
+- Keep OE and ELS controls separate. An unsupported ELS operation must not
+  accidentally call the combined object's inherited OE control method.
 
-Version 0.1 establishes sfputil-style platform access:
+## Platform API capabilities
 
-- Maintain process-wide `platform_chassis` and `platform_sfputil` objects.
-- Load logical-to-physical mappings through `SfpUtilHelper`.
-- Convert a logical port, including a breakout port, through
-  `logical_port_name_to_physical_port_list()`.
-- Build one global `oe`/`els`/`port` to SFP object table.
-- Use the first associated CPO SFP object as the representative object for a
-  shared OE or ELS.
-- Validate CPO objects against `CpoOptoeBase`.
+The public optional ELS contract is provided by platform-common's
+`ElsfpApiBase`. Platforms implement supported operations; remaining methods
+raise `NotImplementedError`, which cpoutil reports as a command failure.
+The placeholder contract does not implement missing hardware behavior.
 
-## Version 0.2
+The current Bailly adapter has the following boundaries:
 
-Version 0.2 provides the first read-only commands through existing PI/PD APIs:
+| Operation | Behavior |
+| --- | --- |
+| OE state, low-power read/control, temperature, input power, reset, and Tx-disable | Uses the existing CMIS API. |
+| ELS presence, low-power read, temperature, and output power | Uses the supported ELS/RLM read APIs. |
+| Independent ELS module state and per-laser state | Unsupported placeholders; the corresponding show commands report an error. |
+| ELS low-power control, reset, and Tx-disable | Unsupported placeholders. |
+| Interface Tx-disable | Requires complete laser ownership and independent ELS control support before writes. |
+| OE/ELS/interface raw EEPROM access | Uses the resource's EEPROM access and bank/base-page mapping APIs; availability depends on the platform. |
 
-- OE `lpmode`, `status`, `temperature`, and `input-power`.
-- ELS `presence`, `lpmode`, `status`, `temperature`, and `output-power` through
-  the existing Bailly RLM methods.
-- Interface `dom`, `tx-disable`, `speed`, and `lane-status`.
-- Interface commands obtain each SFP object from the physical port list and
-  call SFP or `get_xcvr_api()` methods directly.
-- The CLI contains no resource manager, `query_*` layer, or CPO-specific public
-  API added solely for command output.
+In particular, `show els lpmode` support does not imply that
+`config els lpmode` is supported. `get_elsfp_status()` monitor fields are not a
+substitute for an independent ELS module-state API.
 
-## Version 0.2.1
+## OE reset semantics
 
-Version 0.2.1 aligns the implementation with the current master platform:
+`cpoutil config oe reset <index>` calls the selected OE platform API's `reset()`.
+The existing CMIS implementation resets module settings to defaults and can
+return success in either `ModuleReady` or `ModuleLowPwr`.
 
-- Replaced `Chassis.get_cpo()` and `.oe`/`.elsfp` lookup with
-  `Chassis.get_sfp()`.
-- Replaced the community draft `devices/associated_devices` parser with the
-  current platform `oes/elss/interfaces` schema.
-- Removed `CpoCmisApi.get_per_lane_speed()`; the speed command calls the
-  existing CMIS application APIs directly.
-- Added tests for global object mapping, breakout port conversion, direct
-  SFP/CMIS/Bailly calls, and invalid resources.
+A successful reset does not establish that previous application selections,
+datapath configuration, or links have recovered. On the tested Bailly device,
+reset changed application selection and left datapaths deactivated. Affected
+ports may require application and datapath reprovisioning after the reset.
+The CLI reports this after a successful reset; it does not restore those settings
+or change the platform API's reset contract. A false return or an unsupported
+reset is still reported as a failure.
 
-## Version 0.2.2
+## EEPROM and output behavior
 
-Version 0.2.2 added low-level read access through existing SFP objects:
+- Show commands provide human-readable output and JSON through `--json`.
+- Bare `read-eeprom` dumps all mapped OE and ELS EEPROMs.
+- Resource reads without an index iterate over resources of that type.
+- Omitting page/offset/size selects the default full-page dump; explicit ranges
+  support targeted reads and are checked before access.
+- Hex dumps use the common 16-byte-row and ASCII formatter.
+- Raw writes validate their target, page, offset, and payload. Successful
+  dispatch in unit tests is not evidence that every hardware write was exercised.
 
-- Added OE and ELS raw EEPROM reads.
-- Used CMIS bank/page/offset translation from sonic-platform-common.
-- Applied the platform ELS base-page mapping before reading.
+## Validation requirements
 
-## Version 0.2.3
+- Enumerate all help paths with both help flags while platform initialization
+  is forbidden. Check that actual commands, including the default EEPROM dump,
+  initialize once and reject missing topology.
+- Exercise successful, failed, and unsupported reset responses without assuming
+  that application selection survives reset.
+- Test utilities against both unmodified upstream platform-common and the
+  companion ELS API changes. Utilities test doubles must not import an API class
+  that exists only in an unmerged companion PR.
+- Test the real ELS base/Bailly inheritance and optional-method contracts in
+  platform-common's own suite.
+- Cover shared sfputil formatting/port helpers, explicit laser mapping, bank
+  selection, unsupported operations, and preflight rejection before writes.
+- Run the repository's configured pre-commit hook and lint the full PR diff.
 
-Version 0.2.3 made read operations consistent with show commands:
+Hardware evidence must distinguish successful reads and controls, unsupported
+operations, missing-module/invalid-input guards, and help-only coverage. Record
+before/after state and reset effects. Focused unit tests and CLI checks do not
+establish full CI, forwarding, firmware-update, or reboot-persistence coverage.
 
-- Made the OE/ELS index optional for reads.
-- Reads without `-i` iterate over every mapped resource of that type.
-- Kept indexed reads for targeted diagnostics.
+## Separate platform integration work
 
-## Version 0.2.4
+The Micas platform package currently provides its own executable and Python
+module named `cpoutil`. Coexistence with the common utility requires a separate
+packaging change; this utilities PR does not rename vendor files or claim that
+such a migration is complete.
 
-Version 0.2.4 completes the implementable HLD control and EEPROM commands:
-
-- Added interface, OE, and ELS control command groups.
-- Added OE low-power, reset, and Tx-disable through the existing SFP API.
-- Added ELS low-power and Tx-disable through new Bailly PI/PD API methods.
-- Added OE, ELS, and interface raw EEPROM writes through `Sfp.write_eeprom()`.
-- Added interface EEPROM read/write target resolution from the CPO mapping.
-- Kept ELS reset as an explicit unsupported result because the current topology,
-  `CpoOptoeBase`, and Bailly memory map expose no ELS reset signal or register.
-
-## Version 0.2.5
-
-Version 0.2.5 adds active breakout/subport resolution owned by cpoutil:
-
-- Loads the current PORT configuration through `portconfig.get_port_config()`.
-- Implements cpoutil-local subport, first-subport, lane, parent-interface, and
-  lane-mask helpers without importing sfputil utility helper functions.
-- Resolves dynamic logical subports back to the static parent in `cpo.json` by
-  physical port index.
-- Filters interface Tx-disable, speed, and lane-status output to the subport's
-  OE lanes.
-- Uses `Sfp.tx_disable_channel()` with the subport OE lane mask.
-- Selects the ELS lasers belonging to the subport from the ordered CPO lane and
-  laser mapping.
-- Rejects interface Tx-disable when an ELS laser is shared with another subport,
-  preventing an operation on one child port from disabling its sibling.
-
-## Version 0.2.6
-
-Version 0.2.6 aligns raw EEPROM reads with sfputil dump behavior:
-
-- Makes bare `read-eeprom` dump all mapped OE and ELS EEPROMs.
-- Makes `read-eeprom oe/els` dump all resources when `--index` is omitted.
-- Dumps the complete default OE or ELS page set when page/offset/size are omitted.
-- Preserves explicit bank/page/offset/size reads for targeted diagnostics.
-- Uses sfputil-style page headings, 16-byte rows, and ASCII columns.
-- Dumps OE non-banked CMIS pages once and pages 10h/11h for every mapped bank.
-- Converts topology-wide OE bank IDs to OE-local CMIS banks using the existing API-reported bank count.
-- Continues across unreadable resources during an all-resource dump.
-
-## Version 0.3
-
-Version 0.3 separates the public command from the existing platform implementation
-and validates the transition on a W6940 CPO device:
-
-- Rename the platform-specific command from `/usr/local/bin/cpoutil` to
-  `/usr/local/bin/platformcpoutil` in both the normal and pure-PD W6940 platform
-  packages.
-- Rename the platform-specific Python module from `cpoutil.py` to `platformcpoutil.py` and
-  update every platform consumer, including the legacy CLI, CPO daemon, voltage
-  setting utility, and `platform_e2.py`.
-- Install the sonic-utilities command as `/usr/local/bin/cpoutil` and retain the
-  platform implementation only as `/usr/local/bin/platformcpoutil`.
-- Add Bailly ELS low-power and Tx-disable control APIs to the common PI/PD path.
-- Migrate one W6940 device with a rollback backup at
-  `/home/admin/cpoutil-migration-backup-v0.3`.
-- Verify all 14 public `show` commands, the 8-OE/16-ELS full EEPROM dump, the
-  public and legacy imports, and representative legacy read-only commands.
-- Keep `config els reset` explicitly unsupported: the platform exposes no
-  per-ELS reset signal, and using the shared module reset would reset OE0 and
-  every ELS associated with it.
-
-## Version 0.3.1
-
-Version 0.3.1 aligns human-readable output with sfputil conventions:
-
-- Render show results as `tabulate(..., tablefmt="simple")` tables while
-  preserving structured JSON output.
-- Render boolean operating states as `On`/`Off` or
-  `Present`/`Not present` instead of Python boolean literals.
-- Render control operations with sfputil-style progress and `OK`/`Failed`
-  completion text.
-- Limit `show interface map` to the interface's OE and ELS relationship.
-- Display an OE bank as an OE-local value such as `OE2 bank1`. The current
-  `cpo.json` has topology-wide `oe_bank_id` values but no separate global-ID
-  field, so the CLI does not label any value as a global ID.
-- Display ELS resources as `ELS<n>` without a bank because the current
-  topology contains no `els_bank_id`.
-
-## Version 0.3.2
-
-Version 0.3.2 aligns detailed CPO status output with sfputil:
-
-- Format `show interface dom` as sfputil-style EEPROM and DOM sections instead
-  of a flattened raw-key table.
-- Translate transceiver fields to the same user-facing labels used by sfputil,
-  format application advertisements, and append the correct DOM units.
-- Group channel monitors, channel thresholds, module monitors, module
-  thresholds, ELS monitors, and ELS thresholds in a stable natural order.
-- Give interface speed and lane-status commands explicit lane-oriented columns.
-- Give OE/ELS power and temperature output explicit channel/laser columns and
-  units.
-- Keep all formatting code inside cpoutil; sfputil source and helper functions
-  remain unchanged and are not imported.
-
-## Version 0.3.3
-
-Version 0.3.3 completes the device-side sfputil output alignment:
-
-- Normalize ELS low-power state to sfputil-style `On`/`Off` values.
-- Use human-readable ELS status field names and consistent capitalization.
-- Treat every OE EEPROM bank as OE-local. For example, Ethernet136 is shown
-  as `OE2 bank1` instead of exposing topology-wide `oe_bank_id` 17.
-- Reject out-of-range OE-local banks instead of silently applying modulo
-  translation.
-- Do not display or accept non-zero ELS banks because the current `cpo.json`
-  defines no ELS bank identifier.
-- Format EEPROM write progress as an sfputil-style action followed by
-  `OK`/`Failed`.
-- Preserve the detailed DOM, lane, speed, power, temperature, map, and EEPROM
-  formatting introduced in 0.3.1 and 0.3.2.
-
-## Next plan
-
-Version 0.4 will complete package and image validation:
-
-- Build the sonic-utilities wheel, sonic-platform-common wheel, and renamed
-  W6940 platform package from the same source revision.
-- Inspect the artifacts to confirm that only sonic-utilities owns `cpoutil`,
-  while the platform package owns `platformcpoutil` and no longer contains
-  `cpoutil.py` or a `cpoutil` executable.
-- Install the packages through the normal package manager and confirm upgrade
-  and rollback behavior without leaving shadowed Python modules or scripts.
-- Run control, EEPROM write, negative, breakout, and concurrency tests on the
-  packaged installation.
-- Define a portable ELS reset API only after a platform reset signal/register is
-  available; then connect `cpoutil config els reset` to that API.
+Current master also requires the platform's chassis construction hook to be
+implemented. That adapter belongs in the buildimage platform package. Accurate
+breakout laser mappings must come from verified hardware topology; the common
+CLI retains its safety checks when those mappings are unavailable.

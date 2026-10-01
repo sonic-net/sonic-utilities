@@ -1945,12 +1945,20 @@ def config_oe_lpmode(oe_index, mode):
 @config_oe.command("reset")
 @click.argument("oe_index")
 def config_oe_reset(oe_index):
-    """Reset an Optical Engine through the platform API."""
+    """Reset an Optical Engine through the platform API.
+
+    Module settings may return to defaults. Affected ports may require
+    application and datapath reprovisioning after the reset.
+    """
     try:
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
         api = get_oe_api(cpo, resource_id)
         _run_action(
             "Resetting {}".format(resource_id.upper()), api.reset
+        )
+        click.echo(
+            "Affected ports may require application and datapath "
+            "reprovisioning after the reset."
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
