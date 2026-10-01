@@ -2042,31 +2042,6 @@ def _validate_eeprom_range(bank, page, offset, size):
         )
 
 
-def _physical_eeprom_page(resource_type, resource_id, cpo, page):
-    physical_page = page
-    if resource_type == EXTERNAL_LASER_SOURCE:
-        try:
-            physical_page += cpo.get_els_base_page()
-        except (NotImplementedError, AttributeError) as exc:
-            raise CpoCommandError(
-                "ELS EEPROM page mapping is not implemented for '{}'".format(
-                    resource_id
-                )
-            ) from exc
-        except (TypeError, ValueError) as exc:
-            raise CpoCommandError(
-                "Invalid ELS EEPROM page mapping for '{}': {}".format(
-                    resource_id, exc
-                )
-            ) from exc
-        if physical_page > 0xFF:
-            raise CpoCommandError(
-                "ELS page 0x{:02x} exceeds the CMIS page range after "
-                "platform mapping".format(page)
-            )
-    return physical_page
-
-
 def _physical_eeprom_bank(resource_type, resource_id, cpo, bank):
     """Validate and return an OE-local CMIS bank."""
     if resource_type != OPTICAL_ENGINE:
@@ -2111,13 +2086,10 @@ def _eeprom_linear_offset(resource_type, resource_id, cpo,
         CmisPage,
     )
 
-    physical_page = _physical_eeprom_page(
-        resource_type, resource_id, cpo, page
-    )
     physical_bank = _physical_eeprom_bank(
         resource_type, resource_id, cpo, bank
     )
-    return CmisPage.linear_offset(physical_page, physical_bank, offset)
+    return CmisPage.linear_offset(page, physical_bank, offset)
 
 
 def _read_resource_eeprom(resource_type, index, bank, page, offset, size):
@@ -2188,7 +2160,6 @@ def _interface_target_option(oe, els):
 EEPROM_PAGE_SIZE = 128
 EEPROM_PAGE_OFFSET = 128
 EEPROM_DUMP_INDENT = " " * 8
-ELS_FULL_DUMP_PAGES = (0xB0, 0xB1, 0xB2)
 
 
 def _format_eeprom_hexdump(data, address, indent=EEPROM_DUMP_INDENT):
@@ -2226,6 +2197,11 @@ def _read_one_eeprom(resource_type, resource_id, cpo,
         resource_type, resource_id, cpo, bank, page, offset
     )
     device = _get_eeprom_device(cpo, resource_type)
+    return _read_eeprom_at(device, resource_id, linear_offset, size)
+
+
+def _read_eeprom_at(device, resource_id, linear_offset, size):
+    """Read one range at the address selected by a CPO memory map."""
     try:
         data = device.read_eeprom(linear_offset, size)
     except (NotImplementedError, AttributeError, OSError) as exc:
@@ -2241,43 +2217,74 @@ def _read_one_eeprom(resource_type, resource_id, cpo,
     return bytearray(data)
 
 
-def _full_eeprom_sections(resource_type, banks):
-    if resource_type == OPTICAL_ENGINE:
-        # CMIS lower and non-banked upper pages are printed once. Banked
-        # pages 10h/11h are printed for every bank mapped to this OE.
-        common_bank = banks[0]
-        sections = [
-            ("Lower page 0h", common_bank, 0, 0, EEPROM_PAGE_SIZE),
-            ("Upper page 0h", common_bank, 0,
-             EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
-            ("Upper page 1h", common_bank, 1,
-             EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
-            ("Upper page 2h", common_bank, 2,
-             EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
-        ]
-        for bank in banks:
-            sections.extend((
-                ("Upper page 10h bank {:x}h".format(bank), bank,
-                 0x10, EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
-                ("Upper page 11h bank {:x}h".format(bank), bank,
-                 0x11, EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
-            ))
-        return sections
-
-    return [
-        ("Upper page {:x}h".format(page), bank,
-         page, EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE)
-        for bank in banks
-        for page in ELS_FULL_DUMP_PAGES
+def _full_eeprom_sections(banks):
+    """Return the standard OE pages printed by a full dump."""
+    common_bank = banks[0]
+    sections = [
+        ("Lower page 0h", common_bank, 0, 0, EEPROM_PAGE_SIZE),
+        ("Upper page 0h", common_bank, 0,
+         EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
+        ("Upper page 1h", common_bank, 1,
+         EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
+        ("Upper page 2h", common_bank, 2,
+         EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
     ]
+    for bank in banks:
+        sections.extend((
+            ("Upper page 10h bank {:x}h".format(bank), bank,
+             0x10, EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
+            ("Upper page 11h bank {:x}h".format(bank), bank,
+             0x11, EEPROM_PAGE_OFFSET, EEPROM_PAGE_SIZE),
+        ))
+    return sections
+
+
+def _els_eeprom_sections(cpo, resource_id):
+    """Use the selected ELS API's memory map, including platform page remaps."""
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import (
+        CmisAdministrativeLowerPage,
+    )
+
+    api = get_els_api(cpo, str(resource_id).upper())
+    eeprom = getattr(api, "xcvr_eeprom", None)
+    mem_map = getattr(eeprom, "mem_map", None)
+    if mem_map is None or not getattr(mem_map, "pages", None):
+        raise CpoCommandError(
+            "ELS EEPROM memory map is unavailable for '{}'".format(
+                resource_id
+            )
+        )
+
+    sections = []
+    for page in mem_map.pages:
+        lower = isinstance(page, CmisAdministrativeLowerPage)
+        offset = 0 if lower else EEPROM_PAGE_OFFSET
+        title = "{} page {:x}h".format(
+            "Lower" if lower else "Upper", page.page
+        )
+        if page.bank:
+            title += " bank {:x}h".format(page.bank)
+        sections.append((title, page.getaddr(offset), offset))
+    return sections
 
 
 def _format_full_eeprom(resource_type, resource_id, cpo, banks,
                         display_name=None):
     label = display_name or str(resource_id).upper()
     lines = ["EEPROM hexdump for {}".format(label)]
-    for title, bank, page, offset, size in _full_eeprom_sections(
-            resource_type, banks):
+    if resource_type == EXTERNAL_LASER_SOURCE:
+        device = _get_eeprom_device(cpo, resource_type)
+        for title, linear_offset, offset in _els_eeprom_sections(
+                cpo, resource_id):
+            lines.append("{}{}".format(EEPROM_DUMP_INDENT, title))
+            data = _read_eeprom_at(
+                device, resource_id, linear_offset, EEPROM_PAGE_SIZE
+            )
+            lines.append(_format_eeprom_hexdump(data, offset))
+            lines.append("")
+        return "\n".join(lines)
+
+    for title, bank, page, offset, size in _full_eeprom_sections(banks):
         lines.append("{}{}".format(EEPROM_DUMP_INDENT, title))
         data = _read_one_eeprom(
             resource_type, resource_id, cpo,
@@ -2428,7 +2435,7 @@ def read_eeprom_oe(index, bank, page, offset, size):
               help="EEPROM bank; omit to use mapped banks in a full dump.")
 @click.option("-n", "--page", required=False, type=_parse_integer,
               metavar="INTEGER",
-              help="CMIS page number before platform ELS mapping.")
+              help="Physical CMIS page number on the ELS device.")
 @click.option("-o", "--offset", required=False, type=_parse_integer,
               metavar="INTEGER", help="Offset within the CMIS page.")
 @click.option("-s", "--size", required=False, type=_parse_integer,
@@ -2511,7 +2518,7 @@ def write_eeprom_oe(index, bank, page, offset, data):
               type=_parse_integer, metavar="INTEGER", help="EEPROM bank.")
 @click.option("-n", "--page", required=True, type=_parse_integer,
               metavar="INTEGER",
-              help="CMIS page number before platform ELS mapping.")
+              help="Physical CMIS page number on the ELS device.")
 @click.option("-o", "--offset", required=True, type=_parse_integer,
               metavar="INTEGER", help="Offset within the CMIS page.")
 @click.option("-d", "--data", required=True,

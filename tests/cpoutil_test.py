@@ -830,6 +830,14 @@ class TestCommandCoverage(object):
         assert result.exit_code == 0, result.output
 
     def test_full_eeprom_commands(self, coverage_environment):
+        from sonic_platform_base.sonic_xcvr.codes.public.elsfp import ElsfpCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.elsfp.elsfp import (
+            ElsfpMemMap,
+        )
+
+        coverage_environment.api.xcvr_eeprom = mock.Mock(
+            mem_map=ElsfpMemMap(ElsfpCodes)
+        )
         for arguments in (
             ["read-eeprom", "interface", "Ethernet0", "--oe"],
             ["read-eeprom", "oe", "-i", "0"],
@@ -838,6 +846,30 @@ class TestCommandCoverage(object):
             result = invoke_coverage(arguments)
             assert result.exit_code == 0, result.output
             assert "EEPROM hexdump" in result.output
+            if arguments[1] == "els":
+                for page in ("0h", "1h", "2h", "1ah", "1bh", "2fh", "9fh"):
+                    assert "Upper page {}".format(page) in result.output
+                assert "Lower page 0h" in result.output
+
+    def test_els_full_eeprom_uses_selected_memory_map(self, coverage_environment):
+        from sonic_platform_base.sonic_xcvr.codes.public.elsfp import ElsfpCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.elsfp.elsfp import (
+            ElsfpMemMap,
+        )
+
+        mem_map = ElsfpMemMap(ElsfpCodes)
+        for index, page in enumerate(mem_map.pages):
+            page._page = 0xB0 + index
+        coverage_environment.api.xcvr_eeprom = mock.Mock(mem_map=mem_map)
+
+        result = invoke_coverage(["read-eeprom", "els", "-i", "0"])
+        assert result.exit_code == 0, result.output
+        assert "Lower page b0h" in result.output
+        assert "Upper page b7h" in result.output
+        assert coverage_environment.reads == [
+            (page.getaddr(0 if index == 0 else 128), 128)
+            for index, page in enumerate(mem_map.pages)
+        ]
 
     def test_eeprom_validation_errors(self, coverage_environment):
         with pytest.raises(cpoutil.CpoCommandError):
@@ -990,7 +1022,6 @@ class TestOptionalElsApis:
         oe = CoverageFakeCpo()
         els = CoverageFakeCpo()
         cpo = cpoutil.CpoBase(None, oe, els)
-        cpo.get_els_base_page = mock.Mock(return_value=0)
         monkeypatch.setattr(cpoutil, "cpo_object_map", {
             OPTICAL_ENGINE: {"oe0": cpo}, EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo}})
         for resource_type, endpoint in ((OPTICAL_ENGINE, oe), (EXTERNAL_LASER_SOURCE, els)):
@@ -998,25 +1029,11 @@ class TestOptionalElsApis:
             cpoutil._write_resource_eeprom(resource_type, "0", 0, 0, 0, bytearray([1, 2]))
             assert len(endpoint.reads) == len(endpoint.writes) == 1
 
-    @pytest.mark.parametrize("placeholder", [False, True])
-    def test_unmapped_public_els_eeprom_is_not_implemented(
-            self, monkeypatch, placeholder):
-        monkeypatch.delattr(cpoutil.CpoBase, "get_els_base_page", raising=False)
+    def test_public_els_range_uses_physical_page_without_base_mapping(self):
         cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
-        if placeholder:
-            cpo.get_els_base_page = mock.Mock(side_effect=NotImplementedError())
-        with pytest.raises(
-                cpoutil.CpoCommandError,
-                match="ELS EEPROM page mapping is not implemented"):
-            cpoutil._physical_eeprom_page(EXTERNAL_LASER_SOURCE, "els0", cpo, 0)
-        cpo.elsfp.read_eeprom.assert_not_called()
-        cpo.elsfp.write_eeprom.assert_not_called()
-
-    def test_public_els_eeprom_uses_platform_page_mapping(self):
-        cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
-        cpo.get_els_base_page = mock.Mock(return_value=0xB0)
-        assert cpoutil._physical_eeprom_page(
-            EXTERNAL_LASER_SOURCE, "els0", cpo, 2) == 0xB2
+        assert cpoutil._eeprom_linear_offset(
+            EXTERNAL_LASER_SOURCE, "els0", cpo, 0, 0xB2, 0x80
+        ) == 0xB2 * 128 + 0x80
 
 
 class TestExplicitLaserMapping:
