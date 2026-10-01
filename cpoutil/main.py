@@ -940,7 +940,7 @@ def _format_els_dom(dom_values):
         els_monitor_units,
     )
 
-    lines.append("{}ThresholdValues:".format(indent))
+    lines.append("{}ELSFPThresholdValues:".format(indent))
     _append_dom_values(
         lines,
         values,
@@ -948,7 +948,19 @@ def _format_els_dom(dom_values):
         ELS_THRESHOLD_UNIT_MAP,
     )
 
-    _append_additional_dom_values(lines, values, set(els_monitor_map).union(ELS_THRESHOLD_MAP))
+    # The public ELSFP API also returns standard CMIS channel thresholds.
+    # These are distinct from the ELS laser limits; keep both sets visible.
+    if any(key in values and values[key] != "N/A" for key in DOM_CHANNEL_THRESHOLD_MAP):
+        lines.append("{}CMISChannelThresholdValues:".format(indent))
+        _append_dom_values(
+            lines,
+            values,
+            DOM_CHANNEL_THRESHOLD_MAP,
+            DOM_CHANNEL_THRESHOLD_UNIT_MAP,
+        )
+
+    displayed_keys = set(els_monitor_map).union(ELS_THRESHOLD_MAP, DOM_CHANNEL_THRESHOLD_MAP)
+    _append_additional_dom_values(lines, values, displayed_keys)
     return lines
 
 

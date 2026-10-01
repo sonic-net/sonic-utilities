@@ -20,6 +20,37 @@ from cpoutil.mapping import (  # noqa: E402
     OPTICAL_ENGINE,
     PORT,
 )
+from sonic_platform_base.sonic_xcvr.api.public.elsfp import ElsfpApi  # noqa: E402
+from sonic_platform_base.sonic_xcvr.fields import consts, elsfp_consts  # noqa: E402
+
+
+@pytest.fixture
+def public_els_threshold_api():
+    """Exercise the public aggregate API with decoded EEPROM register values."""
+    cmis_thresholds = {}
+    for field, values in (
+            ("TEMP", (75.0, -5.0, 70.0, 0.0)),
+            ("VOLTAGE", (3.6, 3.0, 3.5, 3.1)),
+            ("RX_POWER", (2.0, 0.1, 1.0, 0.2)),
+            ("TX_POWER", (2.0, 0.1, 1.0, 0.2)),
+            ("TX_BIAS", (10.0, 1.0, 9.0, 2.0))):
+        for limit, value in zip(("HIGH_ALARM", "LOW_ALARM", "HIGH_WARNING", "LOW_WARNING"), values):
+            cmis_thresholds[getattr(consts, "{}_{}_FIELD".format(field, limit))] = value
+    registers = {
+        consts.THRESHOLDS_FIELD: cmis_thresholds,
+        consts.TX_BIAS_SCALE: 1,
+        elsfp_consts.BIAS_HIGH_ALARM: 0.1,
+        elsfp_consts.BIAS_LOW_ALARM: 0.01,
+        elsfp_consts.BIAS_HIGH_WARN: 0.09,
+        elsfp_consts.BIAS_LOW_WARN: 0.02,
+        elsfp_consts.OPT_POWER_HIGH_ALARM: 10.0,
+        elsfp_consts.OPT_POWER_LOW_ALARM: 0.1,
+        elsfp_consts.OPT_POWER_HIGH_WARN: 9.0,
+        elsfp_consts.OPT_POWER_LOW_WARN: 0.2,
+    }
+    eeprom = mock.Mock()
+    eeprom.read.side_effect = registers.__getitem__
+    return ElsfpApi(eeprom)
 
 
 CPO_DATA = {
@@ -234,6 +265,16 @@ class TestDirectPlatformApiCommands(object):
         assert result.exit_code != 0
         assert "CPO presence API returned invalid data" in result.output
 
+    @pytest.mark.parametrize("command", ["presence", "dom"])
+    def test_inherited_presence_placeholder_is_reported_without_endpoint_reads(self, command):
+        cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
+        cpoutil.cpo_object_map[PORT][1] = cpo
+        result = invoke(["show", "interface", command, "Ethernet0"])
+        assert result.exit_code != 0
+        assert "CPO presence is not implemented for 'Ethernet0'" in result.output
+        assert not cpo.oe.mock_calls
+        assert not cpo.elsfp.mock_calls
+
     def test_els_lpmode_has_boolean_json_and_readable_table(self):
         result = invoke(["show", "els", "lpmode", "0", "--json"])
         assert json.loads(result.output) == {"els0": False}
@@ -332,6 +373,63 @@ class TestDirectPlatformApiCommands(object):
                 expected = {"shared_name": "{} {}".format(endpoint, section)}
                 assert values[endpoint][section] == expected
                 assert source_values[endpoint][section] == expected
+
+    def test_dom_formats_complete_public_els_thresholds(self, public_els_threshold_api):
+        self.cpo.api.get_elsfp_threshold_info = public_els_threshold_api.get_elsfp_threshold_info
+        result = invoke(["show", "interface", "dom", "Ethernet0"])
+        assert result.exit_code == 0, result.output
+        els_section = result.output.split("    ELS:\n")[1]
+        _, thresholds = els_section.split("ELSFPThresholdValues:\n")
+        els_thresholds, cmis_thresholds = thresholds.split("CMISChannelThresholdValues:\n")
+        assert [line.strip() for line in els_thresholds.strip().splitlines()] == [
+            "TxBiasHighAlarm: 100.0mA", "TxBiasLowAlarm: 10.0mA",
+            "TxBiasHighWarning: 90.0mA", "TxBiasLowWarning: 20.0mA",
+            "TxPowerHighAlarm: 10.0dBm", "TxPowerLowAlarm: -10.0dBm",
+            "TxPowerHighWarning: 9.542dBm", "TxPowerLowWarning: -6.99dBm",
+            "TempHighAlarm: 75.0C", "TempLowAlarm: -5.0C",
+            "TempHighWarning: 70.0C", "TempLowWarning: 0.0C",
+            "VccHighAlarm: 3.6Volts", "VccLowAlarm: 3.0Volts",
+            "VccHighWarning: 3.5Volts", "VccLowWarning: 3.1Volts",
+        ]
+        assert [line.strip() for line in cmis_thresholds.splitlines()] == [
+            "RxPowerHighAlarm: 3.01dBm", "RxPowerHighWarning: 0.0dBm",
+            "RxPowerLowAlarm: -10.0dBm", "RxPowerLowWarning: -6.99dBm",
+            "TxBiasHighAlarm: 20.0mA", "TxBiasHighWarning: 18.0mA",
+            "TxBiasLowAlarm: 2.0mA", "TxBiasLowWarning: 4.0mA",
+            "TxPowerHighAlarm: 3.01dBm", "TxPowerHighWarning: 0.0dBm",
+            "TxPowerLowAlarm: -10.0dBm", "TxPowerLowWarning: -6.99dBm",
+        ]
+        assert "AdditionalValues:" not in els_section
+        public_els_threshold_api.xcvr_eeprom.write.assert_not_called()
+
+    def test_dom_json_retains_distinct_public_els_thresholds(self, public_els_threshold_api):
+        self.cpo.api.get_elsfp_threshold_info = public_els_threshold_api.get_elsfp_threshold_info
+        result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        record = json.loads(result.output)["Ethernet0"]
+        thresholds = record["els"]["thresholds"]
+        assert thresholds == public_els_threshold_api.get_elsfp_threshold_info()
+        assert len(thresholds) == 28
+        assert thresholds["laser_bias_alarm_high"] == 100.0
+        assert thresholds["txbiashighalarm"] == 20.0
+        assert thresholds["optical_power_alarm_high"] == 10.0
+        assert thresholds["txpowerhighalarm"] == 3.01
+        assert record["oe"]["thresholds"] == {"temphighalarm": 90.0}
+        assert all(not key.startswith("els_") for key in thresholds)
+
+    def test_dom_cmis_thresholds_handle_unknown_missing_and_extra_fields(self):
+        self.cpo.api.get_elsfp_threshold_info = mock.Mock(return_value={
+            "txpowerhighalarm": "Unknown", "txpowerlowalarm": "N/A",
+            "txbiashighalarm": "20mA", "rxpowerhighalarm": "3.01dBm", "extra_limit": 7,
+        })
+        result = invoke(["show", "interface", "dom", "Ethernet0"])
+        assert result.exit_code == 0, result.output
+        els_section = result.output.split("    ELS:\n")[1]
+        assert "TxPowerHighAlarm: Unknown" in els_section
+        assert "TxPowerLowAlarm:" not in els_section
+        assert "TxBiasHighAlarm: 20mA\n" in els_section
+        assert "RxPowerHighAlarm: 3.01dBm\n" in els_section
+        assert "AdditionalValues:" in els_section and "extra limit: 7" in els_section
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([
