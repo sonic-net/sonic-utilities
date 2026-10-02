@@ -18,19 +18,19 @@ function log_message() {
 # Function to check if running on smart switch
 function is_smartswitch()
 {
-    python3 -c "from utilities_common.chassis import is_smartswitch; print(is_smartswitch())" | grep "True"
+    python3 -I -c "from utilities_common.chassis import is_smartswitch; print(is_smartswitch())" | grep "True"
 }
 
 # Function to check if running on DPU
 function is_dpu()
 {
-    python3 -c "from utilities_common.chassis import is_dpu; print(is_dpu())" | grep "True"
+    python3 -I -c "from utilities_common.chassis import is_dpu; print(is_dpu())" | grep "True"
 }
 
 # Function to retrieve number of DPUs
 function get_num_dpus()
 {
-    python3 -c "from utilities_common.chassis import get_num_dpus; print(get_num_dpus())"
+    python3 -I -c "from utilities_common.chassis import get_num_dpus; print(get_num_dpus())"
 }
 
 # Function to retrieve DPU IP from CONFIG_DB
@@ -99,7 +99,7 @@ function get_reboot_status()
 function module_pre_shutdown()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_pre_shutdown('${DPU_NAME}') else 1)"
+    python3 -I -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_pre_shutdown('${DPU_NAME}') else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module pre-shutdown vendor API failed"
@@ -111,7 +111,7 @@ function module_pre_shutdown()
 function module_post_startup()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_post_startup('${DPU_NAME}') else 1)"
+    python3 -I -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().module_post_startup('${DPU_NAME}') else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Module post-startup vendor API failed"
@@ -124,7 +124,7 @@ function set_module_state_transition_flag()
 {
     local DPU_NAME=$1
     local FLAG_VALUE=$2
-    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE}) else 1)"
+    python3 -I -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE}) else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Setting module state transition flag failed"
@@ -136,7 +136,7 @@ function set_module_state_transition_flag()
 function clear_module_state_transition_flag()
 {
     local DPU_NAME=$1
-    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().clear_module_state_transition('${DPU_NAME}') else 1)"
+    python3 -I -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().clear_module_state_transition('${DPU_NAME}') else 1)"
     local rc=$?
     if [ "$rc" -ne 0 ]; then
         log_message "ERROR: Clearing module state transition flag failed"
@@ -149,7 +149,7 @@ function get_module_state_transition_flag()
 {
     local DPU_NAME=$1
     local result
-    result=$(python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); print(helper.get_module_state_transition('${DPU_NAME}'))")
+    result=$(python3 -I -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); print(helper.get_module_state_transition('${DPU_NAME}'))")
     if [ "$result" == "True" ]; then
         return 0  # True in bash (success)
     else
@@ -164,7 +164,7 @@ function check_dpu_reboot_disk_space()
 {
     local DPU_NAME=$1
 
-    python3 - "$DPU_NAME" "$PLATFORM_JSON_PATH" <<'PYCODE'
+    python3 -I - "$DPU_NAME" "$PLATFORM_JSON_PATH" <<'PYCODE'
 import sys
 
 from utilities_common.image_disk_space import (
@@ -187,7 +187,7 @@ function reboot_dpu_platform()
 {
     local DPU_NAME=$1
     local REBOOT_TYPE=$2
-    python3 -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().reboot_module('${DPU_NAME}', '${REBOOT_TYPE}') else 1)"
+    python3 -I -c "from utilities_common.module import ModuleHelper; raise SystemExit(0 if ModuleHelper().reboot_module('${DPU_NAME}', '${REBOOT_TYPE}') else 1)"
     local rc=$?
     log_message "INFO: Rebooting ${DPU_NAME} with reboot_type:${REBOOT_TYPE}..."
     return "$rc"

@@ -1210,7 +1210,7 @@ get_route_table_size_by_asic_id_and_ipver() {
         return $RC
     fi
 
-    local route_tab_size=$(python3 -c "\
+    local route_tab_size=$(python3 -I -c "\
 import json
 with open('$filepath') as json_file:
     data = json.load(json_file)
@@ -1537,10 +1537,10 @@ collect_mellanox() {
     trap 'handle_error $? $LINENO' ERR
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
 
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local platform_folder="/usr/share/sonic/device/${platform}"
-    local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
-    local is_smartswitch=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
+    local hwsku=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local is_smartswitch=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
     local cmis_host_mgmt_files=(
         "pmon_daemon_control.json"
@@ -1664,8 +1664,8 @@ collect_mellanox() {
 ###############################################################################
 collect_nvidia_sdk_dumps() {
     trap 'handle_error $? $LINENO' ERR
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
-    local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local hwsku=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
     local def_dump_path="/var/log/mellanox/sdk-dumps"
     local sdk_dump_path=`cat /usr/share/sonic/device/${platform}/${hwsku}/sai.profile|grep "SAI_DUMP_STORE_PATH"|cut -d = -f2`
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
@@ -1828,9 +1828,9 @@ get_bcm_dnx_family() {
 collect_broadcom() {
     trap 'handle_error $? $LINENO' ERR
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
-    local hwsku=$(show platform summary --json | python -c 'import sys, json; \
+    local hwsku=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
     local hsdk=$(bcmcmd bsh -c SOC | grep 'Failed to execute')
 
@@ -2057,7 +2057,7 @@ collect_barefoot() {
 ###############################################################################
 collect_cisco_8000() {
     trap 'handle_error $? $LINENO' ERR
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
 
     if [ -d /usr/share/sonic/device/${platform} ]; then
@@ -2109,9 +2109,9 @@ collect_marvell_teralynx() {
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
 
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
-    local hwsku=$(show platform summary --json | python -c 'import sys, json; \
+    local hwsku=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
 
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
@@ -2389,7 +2389,7 @@ save_log_files() {
 #  0 if BMC is supported, 1 otherwise
 ###############################################################################
 is_bmc_supported() {
-    python3 -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
+    python3 -I -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
 }
 
 ###############################################################################
@@ -2606,7 +2606,7 @@ get_asic_count() {
     then
          redirect_eval=""
     fi
-    local cmd="python -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())'"
+    local cmd="python3 -I -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())'"
     echo `eval ${cmd} ${redirect_eval}`
 }
 
@@ -2757,7 +2757,7 @@ start_dpu_flow_dump() {
     fi
 
     local is_dpu
-    is_dpu=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_dpu())" 2>/dev/null) || is_dpu="False"
+    is_dpu=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.is_dpu())" 2>/dev/null) || is_dpu="False"
     if [[ "$is_dpu" != "True" ]]; then
         return
     fi
@@ -2875,7 +2875,7 @@ main() {
 
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
     local device_type=`sonic-db-cli CONFIG_DB hget 'DEVICE_METADATA|localhost' type`
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
 
     # 1st counter snapshot early (self-skips on a Switch-BMC); need 2 for a trend.
     save_counter_snapshot $asic 1
@@ -3338,7 +3338,7 @@ fi
 ##
 ## Attempt Locking
 ##
-platform_name=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
+platform_name=$(show platform summary --json | python3 -I -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
 supervisor=0
 switch_bmc=0
 PLATFORM_ENV_CONF=/usr/share/sonic/device/${platform_name}/platform_env.conf

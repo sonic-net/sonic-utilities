@@ -961,7 +961,7 @@ then
 fi
 
 if [[ $NUM_ASIC -gt 1 ]]; then
-    BACK_END_ASIC_COUNT=$(python3 <<EOF
+    BACK_END_ASIC_COUNT=$(python3 -I <<EOF
 from swsscommon.swsscommon import SonicDBConfig
 from sonic_py_common.multi_asic import *
 SonicDBConfig.initializeGlobalConfig()
