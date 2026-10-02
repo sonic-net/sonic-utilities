@@ -1,6 +1,8 @@
 import click
 import json
 import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
+from utilities_common.general import is_copp_policer_stats_supported
 from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
 from tabulate import tabulate
@@ -266,3 +268,22 @@ def detailed(_db, trapid, group):
         return
 
     print_single_copp_entry(copp_group, trapid, group)
+
+
+@copp.command('stats')
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              show_default=True, help='Namespace name or all')
+def stats(namespace):
+    """Show copp policer statistics with per-color breakdown"""
+
+    if not is_copp_policer_stats_supported(namespace):
+        click.echo("COPP policer per-color statistics are not supported on "
+                   "this platform (SAI does not advertise SAI_OBJECT_TYPE_POLICER "
+                   "stats capability).")
+        return
+
+    cmd = ['coppstat']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    clicommon.run_command(cmd)
