@@ -420,3 +420,198 @@ def leak_status():
             click.echo("No leak sensor data found")
     except Exception as e:
         click.echo(f"Error: Failed to retrieve leak sensor status: {e}", err=True)
+
+
+# PowerFence: Optics Power Budget Management
+# ==========================================
+
+def _get_state_db():
+    """Get STATE_DB connection"""
+    from swsscommon.swsscommon import SonicV2Connector
+    state_db = SonicV2Connector()
+    state_db.connect(state_db.STATE_DB)
+    return state_db
+
+@platform.group('power-budget', invoke_without_command=True)
+@click.pass_context
+def power_budget(ctx):
+    """Display PowerFence power budget information"""
+    if ctx.invoked_subcommand is None:
+        _show_power_budget_summary()
+
+def _show_power_budget_summary():
+    """Display PowerFence zone summary"""
+    try:
+        state_db = _get_state_db()
+        zone_keys = state_db.keys(state_db.STATE_DB, "POWERFENCE_ZONE_TABLE|*") or []
+        
+        if not zone_keys:
+            click.echo("PowerFence Status: Inactive (no power zones defined)")
+            click.echo("")
+            click.echo("To enable PowerFence, create a power_zones.json file in the hwsku directory")
+            click.echo("and restart the pmon container.")
+            return
+        
+        click.echo("PowerFence Status: Active")
+        click.echo("Source: power_zones.json")
+        click.echo("")
+        
+        header = ['Zone', 'Budget (W)', 'Allocated (W)', 'Headroom (W)', 'Admitted', 'Fenced', 'Status']
+        rows = []
+        total_fenced = 0
+        
+        for key in sorted(zone_keys):
+            zone_name = key.split('|')[1]
+            data = state_db.get_all(state_db.STATE_DB, key) or {}
+            budget = float(data.get('budget_watts', 0))
+            allocated = float(data.get('allocated_watts', 0))
+            headroom = float(data.get('headroom_watts', 0))
+            admitted = int(data.get('admitted_count', 0))
+            fenced = int(data.get('fenced_count', 0))
+            status = data.get('status', 'OK')
+            total_fenced += fenced
+            rows.append((zone_name, budget, allocated, headroom, admitted, fenced, status))
+        
+        click.echo(tabulate(rows, header, tablefmt='simple'))
+        
+        if total_fenced > 0:
+            click.echo("")
+            click.echo(f"WARNING: {total_fenced} port(s) are currently fenced due to insufficient zone power budget.")
+            click.echo("  Use 'show platform power-budget fenced' for details.")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+
+
+@power_budget.command('zone')
+@click.argument('zone_name')
+def power_budget_zone(zone_name):
+    """Display detailed info for a specific zone"""
+    try:
+        state_db = _get_state_db()
+        key = f"POWERFENCE_ZONE_TABLE|{zone_name}"
+        data = state_db.get_all(state_db.STATE_DB, key)
+        
+        if not data:
+            click.echo(f"Zone '{zone_name}' not found")
+            return
+        
+        click.echo(f"Zone: {zone_name}")
+        click.echo(f"Description: {data.get('description', 'N/A')}")
+        click.echo("-" * 80)
+        click.echo(f"Budget:     {float(data.get('budget_watts', 0)):.2f} W")
+        click.echo(f"Allocated:  {float(data.get('allocated_watts', 0)):.2f} W")
+        click.echo(f"Headroom:   {float(data.get('headroom_watts', 0)):.2f} W")
+        click.echo(f"Admitted:   {data.get('admitted_count', 0)} port(s)")
+        click.echo(f"Fenced:     {data.get('fenced_count', 0)} port(s)")
+        
+        # Get ports in this zone
+        port_keys = state_db.keys(state_db.STATE_DB, "POWERFENCE_PORT_TABLE|*") or []
+        admitted_ports = []
+        fenced_ports = []
+        
+        for pkey in sorted(port_keys):
+            port_data = state_db.get_all(state_db.STATE_DB, pkey) or {}
+            if port_data.get('zone') == zone_name:
+                port_name = pkey.split('|')[1]
+                port_info = {
+                    'port': port_name,
+                    'power': float(port_data.get('power_watts', 0)),
+                    'media_type': port_data.get('media_type', 'N/A'),
+                    'speed': port_data.get('speed', 'N/A'),
+                    'reason': port_data.get('reason', '')
+                }
+                if port_data.get('status') == 'admitted':
+                    admitted_ports.append(port_info)
+                else:
+                    fenced_ports.append(port_info)
+        
+        if admitted_ports:
+            click.echo("")
+            click.echo("Admitted Ports:")
+            click.echo("-" * 80)
+            header = ['Port', 'Power (W)', 'Media Type', 'Speed']
+            rows = [(p['port'], f"{p['power']:.2f}", p['media_type'], p['speed']) for p in admitted_ports]
+            click.echo(tabulate(rows, header, tablefmt='simple'))
+        
+        if fenced_ports:
+            click.echo("")
+            click.echo("Fenced Ports:")
+            click.echo("-" * 80)
+            header = ['Port', 'Power (W)', 'Reason']
+            rows = [(p['port'], f"{p['power']:.2f}", p['reason']) for p in fenced_ports]
+            click.echo(tabulate(rows, header, tablefmt='simple'))
+            
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+
+
+@power_budget.command('fenced')
+def power_budget_fenced():
+    """Display all fenced ports"""
+    try:
+        state_db = _get_state_db()
+        port_keys = state_db.keys(state_db.STATE_DB, "POWERFENCE_PORT_TABLE|*") or []
+        
+        fenced_ports = []
+        for key in sorted(port_keys):
+            data = state_db.get_all(state_db.STATE_DB, key) or {}
+            if data.get('status') == 'fenced':
+                port_name = key.split('|')[1]
+                fenced_ports.append({
+                    'port': port_name,
+                    'zone': data.get('zone', 'N/A'),
+                    'power': float(data.get('power_watts', 0)),
+                    'reason': data.get('reason', 'N/A')
+                })
+        
+        if not fenced_ports:
+            click.echo("No ports are currently fenced.")
+            return
+        
+        click.echo("Fenced Ports:")
+        click.echo("-" * 80)
+        header = ['Port', 'Zone', 'Power (W)', 'Reason']
+        rows = [(p['port'], p['zone'], f"{p['power']:.2f}", p['reason']) for p in fenced_ports]
+        click.echo(tabulate(rows, header, tablefmt='simple'))
+        click.echo("-" * 80)
+        click.echo(f"Total: {len(fenced_ports)} port(s) fenced")
+        
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+
+
+@power_budget.command('ports')
+@click.option('--zone', 'zone_filter', default=None, help='Filter by zone name')
+def power_budget_ports(zone_filter):
+    """Display all tracked ports"""
+    try:
+        state_db = _get_state_db()
+        port_keys = state_db.keys(state_db.STATE_DB, "POWERFENCE_PORT_TABLE|*") or []
+        
+        ports = []
+        for key in sorted(port_keys):
+            data = state_db.get_all(state_db.STATE_DB, key) or {}
+            zone = data.get('zone', 'N/A')
+            if zone_filter and zone != zone_filter:
+                continue
+            port_name = key.split('|')[1]
+            ports.append({
+                'port': port_name,
+                'zone': zone,
+                'media_type': data.get('media_type', 'N/A'),
+                'speed': data.get('speed', 'N/A'),
+                'power': float(data.get('power_watts', 0)),
+                'priority': int(data.get('priority', 128)),
+                'status': data.get('status', 'N/A')
+            })
+        
+        if not ports:
+            click.echo("No ports tracked by PowerFence.")
+            return
+        
+        header = ['Port', 'Zone', 'Media Type', 'Speed', 'Power (W)', 'Priority', 'Status']
+        rows = [(p['port'], p['zone'], p['media_type'], p['speed'], p['power'], p['priority'], p['status']) for p in ports]
+        click.echo(tabulate(rows, header, tablefmt='simple'))
+        
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
