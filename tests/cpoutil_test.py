@@ -349,9 +349,6 @@ class CoverageFakeApi:
             "interrupt_status": False,
         }
 
-    def get_elsfp_module_state(self):
-        return "ModuleReady"
-
     def get_elsfp_dom_real_value(self):
         return {
             "temperature": 30.5,
@@ -372,16 +369,6 @@ class CoverageFakeApi:
             "Laser1OpticalPowerMonitor": 9.2,
             "Laser2OpticalPowerMonitor": 9.3,
         }
-
-    def set_elsfp_lpmode(self, value):
-        self.calls.append(("set_elsfp_lpmode", value))
-        return True
-
-    def reset_elsfp(self):
-        raise NotImplementedError("ELS reset is not implemented")
-
-    def supports_per_lane_enable(self):
-        return True
 
     def set_per_lane_enable(self, mask, enabled):
         self.calls.append(("set_per_lane_enable", mask, enabled))
@@ -809,7 +796,9 @@ class TestCommandCoverage(object):
         assert "Module settings may return to defaults" in help_text
         assert "application and datapath reprovisioning" in help_text
 
-    def test_unimplemented_els_reset(self, coverage_environment):
+    def test_unimplemented_els_reset(self, coverage_environment, monkeypatch):
+        monkeypatch.setattr(coverage_environment.api, "reset", mock.Mock(
+            side_effect=NotImplementedError("ELS reset is not implemented")))
         result = invoke_coverage(["config", "els", "reset", "0"])
         assert result.exit_code != 0
         assert "not implemented" in result.output
@@ -1056,25 +1045,108 @@ class TestCpoHelpers:
 
 
 class TestOptionalElsApis:
+    def test_existing_public_els_api_controls_and_state(self, coverage_environment, monkeypatch):
+        from sonic_platform_base.sonic_xcvr.api.public.elsfp import ElsfpApi
+        from sonic_platform_base.sonic_xcvr.fields import consts, elsfp_consts
+
+        eeprom = mock.Mock()
+        eeprom.read.side_effect = lambda field: "ModuleReady" if field == consts.MODULE_STATE else 0
+        eeprom.write.return_value = True
+        els_api = ElsfpApi(eeprom)
+        oe_api = CoverageFakeApi()
+        cpo = cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpo},
+            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
+        })
+        status = invoke_coverage(["show", "els", "status", "0", "--json"])
+        assert status.exit_code == 0, status.output
+        assert json.loads(status.output) == {"els0": "ModuleReady"}
+        for state, expected in (("disable", 0b11), ("enable", 0)):
+            result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", state])
+            assert result.exit_code == 0, result.output
+            eeprom.write.assert_called_with(elsfp_consts.LANE_ENABLE_FIELD, expected)
+        eeprom.reset_mock()
+        for arguments in (["config", "els", "reset", "0"], ["config", "els", "lpmode", "0", "low"]):
+            result = invoke_coverage(arguments)
+            assert result.exit_code != 0
+            assert "not implemented" in result.output
+        eeprom.read.assert_not_called()
+        eeprom.write.assert_not_called()
+
+    @pytest.mark.parametrize("disable", [False, True])
+    @pytest.mark.parametrize("interface", [False, True])
+    def test_per_lane_enable_needs_no_support_query(
+            self, coverage_environment, monkeypatch, disable, interface):
+        oe_api = CoverageFakeApi()
+        els_api = mock.Mock(spec=["set_per_lane_enable"])
+        els_api.set_per_lane_enable.return_value = True
+        cpo = cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpo},
+            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
+        })
+        arguments = ["config", "interface", "tx_disable", "Ethernet0"] if interface else [
+            "config", "els", "tx_disable", "0"]
+        result = invoke_coverage(arguments + ["enable" if disable else "disable"])
+        assert result.exit_code == 0, result.output
+        els_api.set_per_lane_enable.assert_called_once_with(0b11, not disable)
+        assert oe_api.calls == ([("tx_disable_channel", 0b11, disable)] if interface else [])
+
+    @pytest.mark.parametrize("unsupported", [False, True])
+    def test_interface_els_failure_reports_completed_oe_write(
+            self, coverage_environment, monkeypatch, unsupported):
+        oe_api = CoverageFakeApi()
+        els_api = mock.Mock(spec=["set_per_lane_enable"])
+        els_api.set_per_lane_enable.return_value = False
+        if unsupported:
+            els_api.set_per_lane_enable.side_effect = NotImplementedError(
+                "ELS operation is not implemented")
+        cpo = cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpo},
+            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
+        })
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", "enable"])
+        assert result.exit_code != 0
+        assert "OE Tx-disable already applied to physical port(s) 1" in result.output
+        assert "configuration may be partially applied" in result.output
+        assert "OK" not in result.output
+        assert oe_api.calls == [("tx_disable_channel", 0b11, True)]
+        els_api.set_per_lane_enable.assert_called_once_with(0b11, False)
+
+    def test_missing_els_method_is_detected_before_oe_write(self, coverage_environment, monkeypatch):
+        oe_api = CoverageFakeApi()
+        cpo = cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(object()))
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpo},
+            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
+        })
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", "enable"])
+        assert result.exit_code != 0
+        assert "set_per_lane_enable" in result.output
+        assert oe_api.calls == []
+
     @pytest.mark.parametrize("arguments", [
         ["config", "els", "lpmode", "0", "low"],
         ["config", "els", "reset", "0"],
         ["config", "els", "tx_disable", "0", "enable"],
-        ["config", "interface", "tx_disable", "Ethernet0", "enable"],
         ["show", "els", "status", "0"],
         ["show", "interface", "lane-status", "Ethernet0"],
     ])
     def test_unsupported_els_commands_do_not_change_oe(
             self, coverage_environment, monkeypatch, arguments):
-        # Exercise the CLI's handling of the optional API contract here.
-        # The companion platform-common PR defines the optional ELS API stubs.
+        # A platform may leave optional controls or status reads unsupported.
         els_api = CoverageFakeApi()
         for method in (
-                "set_elsfp_lpmode", "reset_elsfp", "set_per_lane_enable",
-                "get_elsfp_module_state", "get_per_lane_state"):
+                "set_lpmode", "reset", "set_per_lane_enable",
+                "get_module_state", "get_per_lane_state"):
             monkeypatch.setattr(els_api, method, mock.Mock(
                 side_effect=NotImplementedError("ELS operation is not implemented")))
-        monkeypatch.setattr(els_api, "supports_per_lane_enable", lambda: False)
         oe_api = CoverageFakeApi()
         cpo = cpoutil.CpoBase(
             None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
@@ -1090,19 +1162,22 @@ class TestOptionalElsApis:
         assert "OK" not in result.output
         assert oe_api.calls == []
         assert els_api.calls == []
-        els_api.set_per_lane_enable.assert_not_called()
+        if arguments[2] == "tx_disable":
+            els_api.set_per_lane_enable.assert_called_once_with(0b11, False)
+        else:
+            els_api.set_per_lane_enable.assert_not_called()
 
     def test_supported_els_reset_is_dispatched_without_resetting_oe(self, coverage_environment):
         cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
-        cpo.api.reset_elsfp = mock.Mock(return_value=True)
+        cpo.api.reset = mock.Mock(return_value=True)
         result = invoke_coverage(["config", "els", "reset", "0"])
         assert result.exit_code == 0, result.output
-        cpo.api.reset_elsfp.assert_called_once_with()
+        cpo.api.reset.assert_called_once_with()
         assert cpo.api.calls == []
 
     def test_els_module_state_read_failure_is_not_reported_as_success(self, coverage_environment):
         cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
-        cpo.api.get_elsfp_module_state = mock.Mock(return_value=None)
+        cpo.api.get_module_state = mock.Mock(return_value=None)
         result = invoke_coverage(["show", "els", "status", "0", "--json"])
         assert result.exit_code != 0
         assert "module state API returned no data" in result.output

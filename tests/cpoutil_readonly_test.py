@@ -126,11 +126,6 @@ class FakeApi:
             status["module_state"] = self.els_module_state
         return status
 
-    def get_elsfp_module_state(self):
-        if getattr(self, "els_module_state", None) is None:
-            raise NotImplementedError("Independent ELS module state is not implemented")
-        return self.els_module_state
-
     def get_per_lane_state(self):
         return {
             "Laser0State": "Active",
@@ -504,6 +499,10 @@ class TestDirectPlatformApiCommands(object):
         }
 
     def test_els_status_requires_independent_module_state(self):
+        els_api = mock.Mock(spec=["get_module_state"])
+        els_api.get_module_state.side_effect = NotImplementedError(
+            "Independent ELS module state is not implemented")
+        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api))
         missing = invoke(["show", "els", "status", "0", "--json"])
         assert missing.exit_code != 0
         assert (
@@ -511,7 +510,8 @@ class TestDirectPlatformApiCommands(object):
             in missing.output
         )
 
-        self.cpo.api.els_module_state = "ModuleReady"
+        els_api.get_module_state.side_effect = None
+        els_api.get_module_state.return_value = "ModuleReady"
         result = invoke(["show", "els", "status", "0", "--json"])
         assert json.loads(result.output) == {"els0": "ModuleReady"}
 

@@ -478,25 +478,17 @@ def get_els_lpmode(_api):
 
 def set_els_lpmode(api, low_power):
     """Set ELS low-power mode through the active ELSFP backend."""
-    return api.set_elsfp_lpmode(low_power)
+    return api.set_lpmode(low_power)
 
 
 def reset_els(api):
     """Reset the ELS through its public API, independently of the OE."""
-    return api.reset_elsfp()
+    return api.reset()
 
 
 def set_els_tx_disable(api, lane_mask, disable):
     """Control ELS output through the public per-lane enable API."""
     return api.set_per_lane_enable(lane_mask, not disable)
-
-
-def require_els_tx_disable_api(api):
-    """Fail before changing OE state when ELS control is unavailable."""
-    if not api.supports_per_lane_enable():
-        raise NotImplementedError(
-            "ELS per-lane enable control is not implemented"
-        )
 
 
 def get_oe_bank_apis(resource_id):
@@ -1552,7 +1544,7 @@ def show_els_status(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            state = get_els_api(cpo, resource_id).get_elsfp_module_state()
+            state = get_els_api(cpo, resource_id).get_module_state()
             if state is None:
                 raise CpoCommandError("The ELSFP module state API returned no data")
             records[resource_id] = state
@@ -1684,25 +1676,40 @@ def config_interface_tx_disable(port, state):
 
         port_cpos = get_port_cpo_objects(port)
         els_api = get_els_api(port_cpos[0][2], mapping.els_name)
-        require_els_tx_disable_api(els_api)
+        # Resolve both endpoints before writing; an existing method may still
+        # raise NotImplementedError when invoked by a platform implementation.
+        els_operation = els_api.set_per_lane_enable
+        oe_targets = [
+            (physical_port, get_oe_api(cpo, port).tx_disable_channel)
+            for _, physical_port, cpo in port_cpos
+        ]
 
         laser_mask = sum(
             1 << (laser % 8) for laser in context["laser_ids"]
         )
 
         def apply_tx_disable():
-            for _, _, cpo in port_cpos:
-                oe_api = get_oe_api(cpo, port)
+            completed_oe_ports = []
+            try:
+                for physical_port, operation in oe_targets:
+                    _require_success(
+                        operation(context["lane_mask"], disable),
+                        "{} OE Tx-disable {}".format(port, state),
+                    )
+                    completed_oe_ports.append(str(physical_port))
                 _require_success(
-                    oe_api.tx_disable_channel(
-                        context["lane_mask"], disable
-                    ),
-                    "{} OE Tx-disable {}".format(port, state),
+                    els_operation(laser_mask, not disable),
+                    "{} ELS Tx-disable {}".format(port, state),
                 )
-            _require_success(
-                set_els_tx_disable(els_api, laser_mask, disable),
-                "{} ELS Tx-disable {}".format(port, state),
-            )
+            except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+                if completed_oe_ports:
+                    raise CpoCommandError(
+                        "{}; OE Tx-disable already applied to physical port(s) "
+                        "{}; configuration may be partially applied".format(
+                            exc, ", ".join(completed_oe_ports)
+                        )
+                    ) from exc
+                raise
             return True
 
         _run_action(
@@ -1850,8 +1857,6 @@ def config_els_tx_disable(els_index, state):
             raise CpoCommandError("Exactly one els index is required")
         resource_id = resource_ids[0]
         targets = get_els_control_targets(resource_id)
-        for api, _ in targets:
-            require_els_tx_disable_api(api)
         disable = state == "enable"
 
         def apply_tx_disable():
