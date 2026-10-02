@@ -184,6 +184,8 @@ class TestKube(object):
         # test invalid port
         result = runner.invoke(config.config.commands["kubernetes"].commands["server"], ["port", "10101011"], obj=db)
         assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit)
+        assert "Invalid port value 10101011" in result.output
 
 
 
