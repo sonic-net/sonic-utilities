@@ -4559,10 +4559,9 @@ def is_valid_auth_type(user_auth_type):
         click.echo("Invalid user authentication type. Must be one of these 'MD5', 'SHA', or 'HMAC-SHA-2'")
         return False
     if user_auth_type == 'MD5':
-        # MD5 (RFC 7860) is deprecated for usmUserAuthProtocol. Still accepted for backward
-        # compatibility, but operators should migrate to SHA or HMAC-SHA-2.
-        click.echo("Warning: MD5 authentication is deprecated (RFC 7860). "
-                   "Please use 'SHA' or 'HMAC-SHA-2' instead.")
+        # MD5 is a legacy choice; still accepted for backward compatibility.
+        click.echo("Warning: MD5 authentication is a legacy choice with known cryptographic "
+                   "weaknesses. Please use 'SHA' or 'HMAC-SHA-2' instead.")
     return True
 
 

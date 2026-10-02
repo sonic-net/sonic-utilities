@@ -683,7 +683,7 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RO_7", "priv", "ro", "MD5", "user_auth_pass", "DES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
-        assert "Warning: MD5 authentication is deprecated (RFC 7860)" in result.output
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RO_7 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_7") == expected_snmp_user_priv_ro_md5_des_config_db_output
 
@@ -695,7 +695,7 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RO_8", "priv", "ro", "MD5", "user_auth_pass", "AES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
-        assert "Warning: MD5 authentication is deprecated (RFC 7860)" in result.output
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RO_8 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_8") == expected_snmp_user_priv_ro_md5_aes_config_db_output
 
@@ -753,7 +753,7 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RW_7", "priv", "rw", "MD5", "user_auth_pass", "DES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
-        assert "Warning: MD5 authentication is deprecated (RFC 7860)" in result.output
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RW_7 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_7") == expected_snmp_user_priv_rw_md5_des_config_db_output
 
@@ -765,7 +765,7 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RW_8", "priv", "rw", "MD5", "user_auth_pass", "AES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
-        assert "Warning: MD5 authentication is deprecated (RFC 7860)" in result.output
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RW_8 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_8") == expected_snmp_user_priv_rw_md5_aes_config_db_output
 
@@ -779,7 +779,7 @@ class TestSNMPConfigCommands(object):
                 obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
-        assert "Warning: MD5 authentication is deprecated (RFC 7860)" in result.output
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RO_md5_lower added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_md5_lower") == \
             expected_snmp_user_priv_ro_md5_des_config_db_output
