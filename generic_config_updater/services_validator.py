@@ -221,10 +221,20 @@ def vlanintf_validator(old_config, upd_config, keys):
                        "vlanintf_validator: Invalid VLAN interface address",
                        print_to_console)
             continue
-        rc = command_wrapper(["ip", "neigh", "flush", "dev", iface, iface_ip])
-        if rc:
+        cmd = f"ip neigh flush dev {iface} {iface_ip}"
+        result = subprocess.run(
+            shlex.split(cmd), capture_output=True, check=False, text=True
+        )
+        if result.returncode != 0:
+            if "No such file or directory" in result.stderr:
+                continue
             logger.log(logger.LOG_PRIORITY_ERROR,
-                       f"vlanintf_validator: Failed to flush neighbors for {iface} {iface_ip}, returncode={rc}",
+                       f"vlanintf_validator: Failed to flush neighbors for "
+                       f"{iface} {iface_ip}, returncode={result.returncode}",
                        print_to_console)
+            if result.stderr:
+                logger.log(logger.LOG_PRIORITY_ERROR,
+                           f"stderr: {result.stderr}",
+                           print_to_console)
             return False
     return True
