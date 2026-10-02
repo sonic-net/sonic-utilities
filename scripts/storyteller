@@ -27,6 +27,19 @@ regex_dict = {
 
 reference_file = '/tmp/storyteller_time_reference'
 
+ALLOWED_LOG_DIR = '/var/log'
+
+
+def validate_log_args(logpath, log):
+    real_logpath = os.path.realpath(logpath)
+    real_allowed = os.path.realpath(ALLOWED_LOG_DIR)
+    if real_logpath != real_allowed and not real_logpath.startswith(real_allowed + os.sep):
+        raise ValueError("--logpath must be '{}' or a subdirectory of it".format(ALLOWED_LOG_DIR))
+    if os.sep in log or log in ('', '.', '..'):
+        raise ValueError("--log must be a nonempty file-name prefix without path separators")
+    return real_logpath
+
+
 def exec_cmd(cmd):
     # Use universal_newlines (instead of text) so that this tool can work with any python versions.
     out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
@@ -48,16 +61,23 @@ def build_options(after=0, before=0, context=0):
 
 def find_log(logpath, log, regex, after=0, before=0, context=0, field=0):
     options = build_options(after, before, context)
+    # Do not pass symlinked files to zgrep, and keep pathnames NUL-delimited
+    # throughout the pipeline so whitespace cannot introduce another file.
+    cmd0 = ['find', logpath, '-type', 'f', '-name', '{}*'.format(log),
+            '-newer', reference_file]
     if field <= 0:
-        cmd0 = ['find', logpath, "-name", "{}*".format(log), "-newer", reference_file]
-        cmd1 = ["xargs", "ls", "-rt"]
-        cmd2 = ["xargs", "zgrep", "-a"] + options + [regex]
+        cmd0 += ['-printf', '%T@ %p\\0']
+        cmd1 = ['sort', '-z', '-n', '-k', '1,1']
+        cmd2 = ['cut', '-z', '-d', ' ', '-f', '2-']
+        cmd3 = ['xargs', '-0', '-r', 'zgrep', '-a'] + options + ['-e', regex]
+        commands = (cmd0, cmd1, cmd2, cmd3)
     else:
-        cmd0 = ['find', logpath, "-name", "{}*".format(log), "-newer", reference_file]
-        cmd1 = ["sort", "-rn", "-t", ".", "-k", "{0},{0}".format(field)]
-        cmd2 = ["xargs", "zgrep", "-a"] + options + [regex]
+        cmd0 += ['-print0']
+        cmd1 = ['sort', '-z', '-rn', '-t', '.', '-k', '{0},{0}'.format(field)]
+        cmd2 = ['xargs', '-0', '-r', 'zgrep', '-a'] + options + ['-e', regex]
+        commands = (cmd0, cmd1, cmd2)
 
-    _, out = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2)
+    _, out = getstatusoutput_noshell_pipe(*commands)
     '''
         Opportunity to improve:
             output (out) can be split to lines and send to a filter to
@@ -109,9 +129,13 @@ def main():
 
     args = parser.parse_args()
 
+    try:
+        log_path = validate_log_args(args.logpath, args.log)
+    except ValueError as err:
+        parser.error(str(err))
+
     # sanitize all string inputs
     log = quote(args.log)
-    log_path = quote(args.logpath)
     category = quote(args.category)
     since = quote(args.since)
 
