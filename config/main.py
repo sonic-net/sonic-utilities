@@ -4558,6 +4558,10 @@ def is_valid_auth_type(user_auth_type):
     if user_auth_type not in user_auth_types:
         click.echo("Invalid user authentication type. Must be one of these 'MD5', 'SHA', or 'HMAC-SHA-2'")
         return False
+    if user_auth_type == 'MD5':
+        # MD5 is a legacy choice; still accepted for backward compatibility.
+        click.echo("Warning: MD5 authentication is a legacy choice with known cryptographic "
+                   "weaknesses. Please use 'SHA' or 'HMAC-SHA-2' instead.")
     return True
 
 
