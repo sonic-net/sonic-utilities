@@ -272,6 +272,18 @@ tacacs.add_command(passkey)
 default.add_command(passkey)
 
 
+@click.command()
+@click.argument('option', type=click.Choice(["enable", "disable", "default"]))
+@clicommon.pass_db
+def traceid_authorization(db, option):
+    """Send SSH_CLIENT_TRACEID in TACACS+ authorization [enable | disable | default]"""
+    if option == 'default':
+        del_table_key(db, 'TACPLUS', 'global', 'traceid_authorization')
+    else:
+        add_table_kv(db, 'TACPLUS', 'global', 'traceid_authorization', option == 'enable')
+tacacs.add_command(traceid_authorization)
+
+
 # cmd: tacacs add <ip_address> --timeout SECOND --key SECRET --type TYPE --port PORT --pri PRIORITY
 @click.command()
 @click.argument('address', metavar='<ip_address>')
