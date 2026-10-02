@@ -1067,13 +1067,25 @@ class TestOptionalElsApis:
             result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", state])
             assert result.exit_code == 0, result.output
             eeprom.write.assert_called_with(elsfp_consts.LANE_ENABLE_FIELD, expected)
-        eeprom.reset_mock()
-        for arguments in (["config", "els", "reset", "0"], ["config", "els", "lpmode", "0", "low"]):
-            result = invoke_coverage(arguments)
-            assert result.exit_code != 0
-            assert "not implemented" in result.output
-        eeprom.read.assert_not_called()
-        eeprom.write.assert_not_called()
+
+    @pytest.mark.parametrize("command, method", [
+        (["config", "els", "reset", "0"], "reset"),
+        (["config", "els", "lpmode", "0", "low"], "set_lpmode"),
+        (["config", "els", "lpmode", "0", "full"], "set_lpmode"),
+    ])
+    def test_missing_optional_els_control(self, coverage_environment, command, method):
+        # Older platform-common packages do not declare the optional controls.
+        # Placeholder implementations are tested in platform-common; utilities
+        # must handle their absence as well as NotImplementedError.
+        els_api = mock.Mock(spec=[])
+        coverage_environment.elsfp = CoverageFakeEndpoint(els_api)
+        result = invoke_coverage(command)
+        assert result.exit_code != 0
+        assert method in result.output
+        assert "has no attribute" in result.output
+        assert "OK" not in result.output
+        assert coverage_environment.api.calls == []
+        assert els_api.mock_calls == []
 
     @pytest.mark.parametrize("disable", [False, True])
     @pytest.mark.parametrize("interface", [False, True])
