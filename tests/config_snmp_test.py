@@ -783,6 +783,7 @@ class TestSNMPConfigCommands(object):
         assert 'SNMP user test_priv_RO_md5_lower added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_md5_lower") == \
             expected_snmp_user_priv_ro_md5_des_config_db_output
+        mock_run_command.assert_called()
 
     def test_config_snmp_user_add_valid_user_priv_rw_sha_des(self):
         db = Db()
