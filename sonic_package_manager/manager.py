@@ -1168,29 +1168,38 @@ class PackageManager:
             click.echo("Protocol not supported")
             return False
 
-        # If the protocol is HTTP and no username or password is provided, proceed with the download using requests
-        if (protocol == 'http' or protocol == 'https') and not username and not password:
+        if protocol == 'http' or protocol == 'https':
+            request_args = {'stream': True}
+            if username or password:
+                username = urllib.parse.unquote(username) if username is not None else None
+                if password is None:
+                    password = getpass.getpass(prompt=f"Enter password for {username}@{hostname}: ")
+                else:
+                    password = urllib.parse.unquote(password)
+                request_args['auth'] = (username, password)
             try:
-                with requests.get(url, stream=True) as response:
+                with requests.get(url, **request_args) as response:
                     response.raise_for_status()
                     with open(local_path, 'wb') as f:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
-            except requests.exceptions.RequestException as e:
-                click.echo("Download error", e)
+            except requests.exceptions.RequestException:
+                click.echo("Download error")
                 return False
-        else:
+        elif protocol == 'scp' or protocol == 'sftp':
             # If password is not provided, prompt the user for it securely
             if password is None:
                 password = getpass.getpass(prompt=f"Enter password for {username}@{hostname}: ")
 
             # Create an SSH client
             client = paramiko.SSHClient()
-            # Automatically add the server's host key (this is insecure and should be handled differently in production)
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
             try:
+                # Unknown or changed host keys must fail before credentials or
+                # package content are accepted from the remote endpoint.
+                client.load_system_host_keys()
+                client.set_missing_host_key_policy(paramiko.RejectPolicy())
                 # Connect to the SSH server
                 client.connect(hostname, username=username, password=password)
 
@@ -1204,21 +1213,9 @@ class PackageManager:
                     with client.open_sftp() as sftp:
                         # Download the file
                         sftp.get(remote_path, local_path)
-                elif protocol == 'http' or protocol == 'https':
-                    # Download using HTTP for URLs without credentials
-                    try:
-                        with requests.get(url, auth=(username, password), stream=True) as response:
-                            response.raise_for_status()  # Raise an exception if the request was not successful
-                            with open(local_path, 'wb') as f:
-                                for chunk in response.iter_content(chunk_size=8192):
-                                    if chunk:
-                                        f.write(chunk)
-                    except requests.exceptions.RequestException as e:
-                        click.echo("Download error", e)
-                        return False
-                else:
-                    click.echo(f"Error: Source file '{remote_path}' does not exist.")
-
+            except (paramiko.SSHException, OSError):
+                click.echo("SSH download failed: verify the host key and connection")
+                return False
             finally:
                 # Close the SSH connection
                 client.close()
