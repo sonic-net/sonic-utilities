@@ -1297,12 +1297,6 @@ execute_in_namespaces all backup_database
 # Stop the docker container engine. Otherwise we will have a broken docker storage
 systemctl stop docker.service || debug "Ignore stopping docker service error $?"
 
-# Stop kernel modules for Nephos platform
-if [[ "$sonic_asic_type" = 'nephos' ]];
-then
-  systemctl stop nps-modules-`uname -r`.service || debug "Ignore stopping nps service error $?"
-fi
-
 # Stop opennsl modules for Broadcom platform
 if [[ "$sonic_asic_type" = 'broadcom' ]];
 then
