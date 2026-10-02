@@ -4554,12 +4554,15 @@ def is_valid_user_type(user_type):
 
 
 def is_valid_auth_type(user_auth_type):
-    # MD5 (RFC 7860) is deprecated and not accepted for newly created SNMPv3 users.
-    # Existing MD5 users remain untouched and are still shown/deletable.
-    user_auth_types = ['SHA', 'HMAC-SHA-2']
+    user_auth_types = ['MD5', 'SHA', 'HMAC-SHA-2']
     if user_auth_type not in user_auth_types:
-        click.echo("Invalid user authentication type. Must be one of these 'SHA' or 'HMAC-SHA-2'")
+        click.echo("Invalid user authentication type. Must be one of these 'MD5', 'SHA', or 'HMAC-SHA-2'")
         return False
+    if user_auth_type == 'MD5':
+        # MD5 (RFC 7860) is deprecated for usmUserAuthProtocol. Still accepted for backward
+        # compatibility, but operators should migrate to SHA or HMAC-SHA-2.
+        click.echo("Warning: MD5 authentication is deprecated (RFC 7860). "
+                   "Please use 'SHA' or 'HMAC-SHA-2' instead.")
     return True
 
 
@@ -4974,7 +4977,7 @@ def user(db):
 @click.argument('user', metavar='<snmp_user>', required=True)
 @click.argument('user_type', metavar='<noAuthNoPriv|AuthNoPriv|Priv>', required=True)
 @click.argument('user_permission_type', metavar='<RO|RW>', required=True)
-@click.argument('user_auth_type', metavar='<SHA|HMAC-SHA-2>', required=False)
+@click.argument('user_auth_type', metavar='<MD5|SHA|HMAC-SHA-2>', required=False)
 @click.argument('user_auth_password', metavar='<auth_password>', required=False)
 @click.argument('user_encrypt_type', metavar='<DES|AES>', required=False)
 @click.argument('user_encrypt_password', metavar='<encrypt_password>', required=False)
@@ -4998,7 +5001,7 @@ def add_user(db, user, user_type, user_permission_type, user_auth_type, user_aut
             sys.exit(SnmpUserError.NoAuthNoPrivHasAuthType)
     else:
         if not user_auth_type:
-            click.echo("User auth type is missing.  Must be SHA or HMAC-SHA-2")
+            click.echo("User auth type is missing.  Must be MD5, SHA, or HMAC-SHA-2")
             sys.exit(SnmpUserError.AuthTypeMd5OrShaOrHmacsha2IsMissing)
         if user_auth_type:
             user_auth_type = user_auth_type.upper()
