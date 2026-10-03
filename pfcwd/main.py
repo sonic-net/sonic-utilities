@@ -350,24 +350,27 @@ class PfcwdCli(object):
             pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
             entry_min = MAX_POLL_INTERVAL_TIME
             for entry in pfcwd_table:
-                if("Ethernet" not in entry):
+                if "Ethernet" not in entry:
                     continue
-                detection_time_entry_value = int(self.config_db.get_entry(
+                entry_data = self.config_db.get_entry(
                     CONFIG_DB_PFC_WD_TABLE_NAME, entry
-                ).get('detection_time'))
-                restoration_time_entry_value = int(self.config_db.get_entry(
-                    CONFIG_DB_PFC_WD_TABLE_NAME, entry
-                ).get('restoration_time'))
-                if ((detection_time_entry_value is not None) and
-                    (detection_time_entry_value < entry_min)
-                ):
-                    entry_min = detection_time_entry_value
-                    entry_min_str = "detection time"
-                if ((restoration_time_entry_value is not None) and
-                    (restoration_time_entry_value < entry_min)
-                ):
-                    entry_min = restoration_time_entry_value
-                    entry_min_str = "restoration time"
+                )
+                detection_time_raw = entry_data.get('detection_time')
+                restoration_time_raw = entry_data.get('restoration_time')
+                # Skip entries missing both timing fields (e.g. partial entries
+                # created by pfc_stat_history_cmd on unconfigured ports).
+                if detection_time_raw is None and restoration_time_raw is None:
+                    continue
+                if detection_time_raw is not None:
+                    detection_time_entry_value = int(detection_time_raw)
+                    if detection_time_entry_value < entry_min:
+                        entry_min = detection_time_entry_value
+                        entry_min_str = "detection time"
+                if restoration_time_raw is not None:
+                    restoration_time_entry_value = int(restoration_time_raw)
+                    if restoration_time_entry_value < entry_min:
+                        entry_min = restoration_time_entry_value
+                        entry_min_str = "restoration time"
             if entry_min < poll_interval:
                 click.echo(
                    "unable to use polling interval = {}ms, value is "
