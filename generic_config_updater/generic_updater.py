@@ -187,9 +187,10 @@ class PatchApplier:
         self.logger.log_notice(f"The {scope} patch was converted into {changes_len} " \
                           f"change{'s' if changes_len != 1 else ''}{':' if changes_len > 0 else '.'}")
 
-        # Apply changes in order. A rewritten table is one remove /TABLE at the
-        # first sorter step that touched it, checked against the same ConfigDB
-        # read used for that write. Other tables stay in sorter order.
+        # Apply changes in sorter order. A rewritten table is one remove /TABLE
+        # at the last sorter step that removes it or its keys, so prerequisites
+        # such as admin-down and leafref removal run first. That remove is
+        # checked against the same ConfigDB read used for the write.
         current_config = old_config
         if table_key_snapshot:
             self.logger.log_notice(

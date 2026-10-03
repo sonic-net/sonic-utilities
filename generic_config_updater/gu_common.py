@@ -558,19 +558,54 @@ def validate_table_key_snapshot(config, table_key_snapshot, patch=None):
 def replace_rewritten_table_changes(changes, table_key_snapshot, path_addressing=None):
     """Keep sorted changes, but apply rewritten tables as one table-level remove.
 
-    The sorter can split remove /TABLE into per-key removes plus a later table
-    remove, and can also emit required moves on other tables. Replace ops on
-    rewritten tables with a single remove /TABLE at the first position those
-    tables appear; leave other operations in sorter order.
+    The sorter orders the removal of a rewritten table after its prerequisites,
+    for example PORT admin_status down and removal of BUFFER_PG entries that
+    reference PORT, and can split remove /TABLE into per-key removes plus a
+    later table remove. Every change stays in sorter order. Only the last
+    change that removes keys from, or removes, a rewritten table is altered:
+    its removes of that table become a single remove /TABLE, guarded by the
+    keys still present at that point.
     """
     if not table_key_snapshot:
         return [(change, None) for change in changes]
     if path_addressing is None:
         path_addressing = PathAddressing()
 
-    rewritten_tables = set(table_key_snapshot.keys())
-    emitted = set()
+    def _operations(change):
+        patch = getattr(change, "patch", None)
+        try:
+            return list(patch) if patch is not None else None
+        except TypeError:
+            return None
+
+    def _removal_tokens(operation):
+        """Return path tokens if operation removes a rewritten table or one of its keys."""
+        try:
+            opd = dict(operation)
+        except (TypeError, ValueError):
+            return None
+        if opd.get(OperationWrapper.OP_KEYWORD) != "remove":
+            return None
+        path = opd.get(OperationWrapper.PATH_KEYWORD)
+        tokens = path_addressing.get_path_tokens(path) if path else []
+        if 1 <= len(tokens) <= 2 and tokens[0] in table_key_snapshot:
+            return tokens
+        return None
+
+    operations_per_change = [_operations(change) for change in changes]
+    deletion_point = {}
+    for index, operations in enumerate(operations_per_change):
+        for operation in operations or []:
+            tokens = _removal_tokens(operation)
+            if tokens:
+                deletion_point[tokens[0]] = index
+
+    remaining_keys = {table: set(keys) for table, keys in table_key_snapshot.items()}
     result = []
+
+    def _forget_removed_key(tokens):
+        if tokens and len(tokens) == 2:
+            remaining_keys[tokens[0]].discard(tokens[1])
 
     def _append_ops(ops):
         if ops:
@@ -581,52 +616,37 @@ def replace_rewritten_table_changes(changes, table_key_snapshot, path_addressing
             OperationWrapper.OP_KEYWORD: "remove",
             OperationWrapper.PATH_KEYWORD: path_addressing.create_path([table]),
         } for table in tables]
-        snapshot = {table: table_key_snapshot[table] for table in tables}
+        snapshot = {table: sorted(remaining_keys[table]) for table in tables}
         result.append((JsonChange(jsonpatch.JsonPatch(atomic_ops)), snapshot))
 
-    for change in changes:
-        patch = getattr(change, "patch", None)
-        try:
-            operations = list(patch) if patch is not None else None
-        except TypeError:
-            operations = None
-        if operations is None:
+    for index, (change, operations) in enumerate(zip(changes, operations_per_change)):
+        finishing = [table for table in table_key_snapshot if deletion_point.get(table) == index]
+        if operations is None or not finishing:
+            for operation in operations or []:
+                _forget_removed_key(_removal_tokens(operation))
             result.append((change, None))
             continue
 
         prefix = []
-        pending = []
         suffix = []
-        seen_rewritten = False
+        seen_removal = False
         for operation in operations:
+            tokens = _removal_tokens(operation)
+            if tokens and tokens[0] in finishing:
+                seen_removal = True
+                continue
+            _forget_removed_key(tokens)
             try:
-                opd = dict(operation)
+                operation = dict(operation)
             except (TypeError, ValueError):
-                (suffix if seen_rewritten else prefix).append(operation)
-                continue
-            path = opd.get(OperationWrapper.PATH_KEYWORD)
-            tokens = path_addressing.get_path_tokens(path) if path else []
-            table = tokens[0] if tokens else None
-            if table in rewritten_tables:
-                seen_rewritten = True
-                if table not in emitted and table not in pending:
-                    pending.append(table)
-                continue
-            if seen_rewritten:
-                suffix.append(dict(opd))
-            else:
-                prefix.append(dict(opd))
+                pass
+            (suffix if seen_removal else prefix).append(operation)
 
-        if not pending and not seen_rewritten:
-            result.append((change, None))
-            continue
         _append_ops(prefix)
-        if pending:
-            _append_atomic(pending)
-            emitted.update(pending)
+        _append_atomic(finishing)
         _append_ops(suffix)
 
-    missing = [table for table in table_key_snapshot if table not in emitted]
+    missing = [table for table in table_key_snapshot if table not in deletion_point]
     if missing:
         _append_atomic(missing)
     return result

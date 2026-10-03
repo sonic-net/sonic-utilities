@@ -93,7 +93,8 @@ class TestPatchApplier(unittest.TestCase):
         patch_wrapper.verify_same_json.return_value = True
 
         # sort() can split remove /VLAN into a key remove plus a later table
-        # remove. Those must be applied as one snapshot-guarded remove /VLAN.
+        # remove. The key remove stays in sorter order, and the table remove is
+        # guarded by the keys still present at that point.
         split_changes = [
             JsonChange(jsonpatch.JsonPatch(
                 [{"op": "remove", "path": "/VLAN/Vlan10"}])),
@@ -108,12 +109,14 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
         patch_applier.apply(emptying_patch, rewrite_emptying_tables=True)
 
-        self.assertEqual(1, patch_applier.changeapplier.apply.call_count)
-        applied_change = patch_applier.changeapplier.apply.call_args[0][1]
-        self.assertEqual(rewritten_ops, [dict(op) for op in applied_change.patch])
+        apply_calls = patch_applier.changeapplier.apply.call_args_list
+        self.assertEqual(2, len(apply_calls))
+        self.assertIs(split_changes[0], apply_calls[0][0][1])
+        self.assertIsNone(apply_calls[0].kwargs.get("table_key_snapshot"))
+        self.assertEqual(rewritten_ops, [dict(op) for op in apply_calls[1][0][1].patch])
         self.assertEqual(
-            {"VLAN": ["Vlan10", "Vlan20"]},
-            patch_applier.changeapplier.apply.call_args.kwargs.get("table_key_snapshot"))
+            {"VLAN": ["Vlan20"]},
+            apply_calls[1].kwargs.get("table_key_snapshot"))
         sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
         self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
         config_wrapper.validate_field_operation.assert_called_once_with(
@@ -184,19 +187,88 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier.apply(emptying_patch, rewrite_emptying_tables=True)
 
         apply_calls = patch_applier.changeapplier.apply.call_args_list
+        self.assertEqual(4, len(apply_calls))
+        self.assertIs(port_down, apply_calls[0][0][1])
+        self.assertIsNone(apply_calls[0].kwargs.get("table_key_snapshot"))
+        self.assertIs(vlan_key, apply_calls[1][0][1])
+        self.assertIsNone(apply_calls[1].kwargs.get("table_key_snapshot"))
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in apply_calls[2][0][1].patch])
+        self.assertEqual(
+            {"VLAN": ["Vlan20"]},
+            apply_calls[2].kwargs.get("table_key_snapshot"))
+        self.assertIs(port_create, apply_calls[3][0][1])
+        self.assertIsNone(apply_calls[3].kwargs.get("table_key_snapshot"))
+        sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
+        self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
+
+    def test_apply__emptying_rewrite_keeps_sorter_prerequisites_before_table_remove(self):
+        # Emptying PORT and BUFFER_PG: the sorter sets admin-down, removes the
+        # BUFFER_PG leafrefs, then removes PORT. remove /PORT must not move ahead
+        # of those steps, and the admin-down step must not be dropped.
+        old_config = {
+            "PORT": {"Ethernet0": {"admin_status": "up"}},
+            "BUFFER_PG": {"Ethernet0|3-4": {"profile": "pg_lossless"}},
+        }
+        emptying_ops = [
+            {"op": "remove", "path": "/PORT/Ethernet0"},
+            {"op": "remove", "path": "/BUFFER_PG/Ethernet0|3-4"},
+        ]
+        emptying_patch = jsonpatch.JsonPatch(emptying_ops)
+        target_with_empty_tables = {"PORT": {}, "BUFFER_PG": {}}
+        target_without_tables = {}
+
+        config_wrapper = Mock()
+        config_wrapper.get_config_db_as_json.side_effect = [
+            old_config, old_config, target_without_tables]
+        config_wrapper.get_empty_tables.side_effect = lambda cfg: [
+            table for table, value in cfg.items() if value == {}]
+
+        patch_wrapper = Mock()
+
+        def simulate(p, cfg):
+            ops = [dict(op) for op in p]
+            if ops == emptying_ops:
+                return target_with_empty_tables
+            return target_without_tables
+
+        patch_wrapper.simulate_config_db_patch.side_effect = simulate
+        patch_wrapper.verify_same_json.return_value = True
+
+        port_down = JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        buffer_pg_table = JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/BUFFER_PG"},
+        ]))
+        port_table = JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/PORT"},
+        ]))
+        patchsorter = Mock()
+        patchsorter.sort.return_value = [port_down, buffer_pg_table, port_table]
+        changeapplier = Mock()
+        changeapplier.apply.return_value = target_without_tables
+
+        patch_applier = gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
+        patch_applier.apply(emptying_patch, rewrite_emptying_tables=True)
+
+        apply_calls = patch_applier.changeapplier.apply.call_args_list
         self.assertEqual(3, len(apply_calls))
         self.assertIs(port_down, apply_calls[0][0][1])
         self.assertIsNone(apply_calls[0].kwargs.get("table_key_snapshot"))
         self.assertEqual(
-            [{"op": "remove", "path": "/VLAN"}],
+            [{"op": "remove", "path": "/BUFFER_PG"}],
             [dict(op) for op in apply_calls[1][0][1].patch])
         self.assertEqual(
-            {"VLAN": ["Vlan10", "Vlan20"]},
+            {"BUFFER_PG": ["Ethernet0|3-4"]},
             apply_calls[1].kwargs.get("table_key_snapshot"))
-        self.assertIs(port_create, apply_calls[2][0][1])
-        self.assertIsNone(apply_calls[2].kwargs.get("table_key_snapshot"))
-        sorted_patch = patch_applier.patchsorter.sort.call_args[0][0]
-        self.assertEqual(rewritten_ops, [dict(op) for op in sorted_patch])
+        self.assertEqual(
+            [{"op": "remove", "path": "/PORT"}],
+            [dict(op) for op in apply_calls[2][0][1].patch])
+        self.assertEqual(
+            {"PORT": ["Ethernet0"]},
+            apply_calls[2].kwargs.get("table_key_snapshot"))
 
     def test_apply__emptying_rewrite_sort_rejects_invalid_target__fails_before_write(self):
         old_config = {

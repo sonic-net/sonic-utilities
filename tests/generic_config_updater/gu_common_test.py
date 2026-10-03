@@ -1096,15 +1096,90 @@ class TestValidateTableKeySnapshot(unittest.TestCase):
         steps = gu_common.replace_rewritten_table_changes(
             [port_down, vlan_key, vlan_table, port_create], snapshot)
 
+        self.assertEqual(4, len(steps))
+        self.assertIs(port_down, steps[0][0])
+        self.assertIsNone(steps[0][1])
+        self.assertIs(vlan_key, steps[1][0])
+        self.assertIsNone(steps[1][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in steps[2][0].patch])
+        self.assertEqual({"VLAN": ["Vlan20"]}, steps[2][1])
+        self.assertIs(port_create, steps[3][0])
+        self.assertIsNone(steps[3][1])
+
+    def test_replace_rewritten_table_changes__keeps_prerequisites_before_table_remove(self):
+        # The first change touching PORT is a field prerequisite, not its removal.
+        port_down = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        buffer_pg_table = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/BUFFER_PG"},
+        ]))
+        port_table = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/PORT"},
+        ]))
+        snapshot = {"PORT": ["Ethernet0"], "BUFFER_PG": ["Ethernet0|3-4"]}
+
+        steps = gu_common.replace_rewritten_table_changes(
+            [port_down, buffer_pg_table, port_table], snapshot)
+
         self.assertEqual(3, len(steps))
         self.assertIs(port_down, steps[0][0])
         self.assertIsNone(steps[0][1])
         self.assertEqual(
+            [{"op": "remove", "path": "/BUFFER_PG"}],
+            [dict(op) for op in steps[1][0].patch])
+        self.assertEqual({"BUFFER_PG": ["Ethernet0|3-4"]}, steps[1][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/PORT"}],
+            [dict(op) for op in steps[2][0].patch])
+        self.assertEqual({"PORT": ["Ethernet0"]}, steps[2][1])
+
+    def test_replace_rewritten_table_changes__splits_deletion_change_in_order(self):
+        vlan_key = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+        ]))
+        mixed = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/mtu", "value": "9100"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+            {"op": "remove", "path": "/VLAN/Vlan30"},
+            {"op": "replace", "path": "/PORT/Ethernet0/speed", "value": "100000"},
+        ]))
+        snapshot = {"VLAN": ["Vlan10", "Vlan20", "Vlan30"]}
+
+        steps = gu_common.replace_rewritten_table_changes([vlan_key, mixed], snapshot)
+
+        self.assertEqual(4, len(steps))
+        self.assertIs(vlan_key, steps[0][0])
+        self.assertIsNone(steps[0][1])
+        self.assertEqual(
+            [{"op": "replace", "path": "/PORT/Ethernet0/mtu", "value": "9100"}],
+            [dict(op) for op in steps[1][0].patch])
+        self.assertIsNone(steps[1][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in steps[2][0].patch])
+        self.assertEqual({"VLAN": ["Vlan20", "Vlan30"]}, steps[2][1])
+        self.assertEqual(
+            [{"op": "replace", "path": "/PORT/Ethernet0/speed", "value": "100000"}],
+            [dict(op) for op in steps[3][0].patch])
+        self.assertIsNone(steps[3][1])
+
+    def test_replace_rewritten_table_changes__table_not_removed_by_sorter__appends_remove(self):
+        port_down = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        snapshot = {"VLAN": ["Vlan10"]}
+
+        steps = gu_common.replace_rewritten_table_changes([port_down], snapshot)
+
+        self.assertEqual(2, len(steps))
+        self.assertIs(port_down, steps[0][0])
+        self.assertEqual(
             [{"op": "remove", "path": "/VLAN"}],
             [dict(op) for op in steps[1][0].patch])
         self.assertEqual(snapshot, steps[1][1])
-        self.assertIs(port_create, steps[2][0])
-        self.assertIsNone(steps[2][1])
 
 
 class TestPathAddressing(unittest.TestCase):
