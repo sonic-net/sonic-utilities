@@ -41,9 +41,12 @@ class TestShowPlatformLeakControlPolicy(object):
         mock_cfgdb.get_entry.return_value = {
             'system_leak_policy': 'enabled',
             'system_critical_leak_action': 'power_off',
+            'system_major_leak_action': 'syslog_only',
             'system_minor_leak_action': 'syslog_only',
+            'system_major_leak_num_min_sensors': '2',
             'rack_mgr_leak_policy': 'disabled',
             'rack_mgr_critical_alert_action': 'syslog_only',
+            'rack_mgr_major_alert_action': 'syslog_only',
             'rack_mgr_minor_alert_action': 'syslog_only',
         }
         mock_db = MagicMock()
@@ -59,6 +62,11 @@ class TestShowPlatformLeakControlPolicy(object):
         assert 'rack_mgr_leak_policy' in result.output
         assert 'disabled' in result.output
         assert 'power_off' in result.output
+        # MAJOR fields must be surfaced
+        assert 'system_major_leak_action' in result.output
+        assert 'rack_mgr_major_alert_action' in result.output
+        # MIN-N threshold is shown when present
+        assert 'system_major_leak_num_min_sensors' in result.output
 
     def test_leak_control_policy_empty_db(self):
         runner = CliRunner()
@@ -76,6 +84,10 @@ class TestShowPlatformLeakControlPolicy(object):
         assert 'enabled' in result.output
         assert 'power_off' in result.output
         assert 'syslog_only' in result.output
+        # MAJOR action defaults are shown, but the MIN-N threshold is omitted
+        # when absent (platform does not support MAJOR classification).
+        assert 'system_major_leak_action' in result.output
+        assert 'system_major_leak_num_min_sensors' not in result.output
 
 
 class TestShowPlatformLeakRackManagerAlerts(object):
