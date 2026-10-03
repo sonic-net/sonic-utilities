@@ -695,11 +695,20 @@ def test_strict_hook_ignoring_term_is_killed_with_no_surviving_child(
     assert "PRE-SHUTDOWN FAILED: pre-reboot hook rc=137" in result.stdout
     assert "pre-reboot-hook marker=1" in calls
     assert 20.0 <= elapsed < 27.0
-    child_proc = Path("/proc") / child_pid_file.read_text().strip()
+    child_stat = Path("/proc") / child_pid_file.read_text().strip() / "stat"
     child_exit_deadline = time.monotonic() + 2
-    while child_proc.exists() and time.monotonic() < child_exit_deadline:
+    while True:
+        try:
+            child_state = child_stat.read_text().rsplit(")", 1)[1].split()[0]
+        except (FileNotFoundError, ProcessLookupError):
+            break
+        # A zombie has exited; reaping it belongs to its parent or init.
+        if child_state == "Z":
+            break
+        assert time.monotonic() < child_exit_deadline, (
+            "Hook child is still alive (state={})".format(child_state)
+        )
         time.sleep(0.05)
-    assert not child_proc.exists()
     assert not any(call.startswith("watchdogutil arm") for call in calls)
 
 
