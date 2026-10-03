@@ -47,6 +47,7 @@ class AclAction:
     MIRROR         = "MIRROR_ACTION"
     MIRROR_INGRESS = "MIRROR_INGRESS_ACTION"
     MIRROR_EGRESS  = "MIRROR_EGRESS_ACTION"
+    ECN            = "ECN_ACTION"  # noqa: E221
 
 
 class PacketAction:
@@ -1118,6 +1119,8 @@ class AclLoader(object):
                     action = "MIRROR INGRESS: {}".format(val.pop(key))
                 elif key == AclAction.MIRROR_EGRESS:
                     action = "MIRROR EGRESS: {}".format(val.pop(key))
+                elif key == AclAction.ECN:
+                    action = "ECN: {}".format(val.pop(key))
                 else:
                     continue
 
