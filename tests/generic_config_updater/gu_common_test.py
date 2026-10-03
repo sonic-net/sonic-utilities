@@ -814,6 +814,374 @@ class TestPatchWrapper(unittest.TestCase):
 
         self.assertTrue(patch_wrapper.verify_same_json(after_update_config_db_cropped, after_update_sonic_yang_as_config_db))
 
+
+class TestRewritePatchEmptyingTables(unittest.TestCase):
+    def _ops(self, patch):
+        return [dict(op) for op in patch]
+
+    def test_rewrite__no_empty_tables__returns_original_patch(self):
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/VLAN/Vlan10"}])
+        current = {"VLAN": {"Vlan10": {}, "Vlan20": {}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, [])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__per_key_removes_empty_vlan_table__becomes_table_remove(self):
+        # An automation script only knows the VLAN set to delete, not whether the table empties.
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+            {"op": "remove", "path": "/VLAN/Vlan52"},
+        ])
+        current = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+                "Vlan52": {"vlanid": "52"},
+            }
+        }
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertEqual([{"op": "remove", "path": "/VLAN"}], self._ops(actual))
+
+    def test_rewrite__mixed_patch__only_emptied_table_is_rewritten(self):
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "replace", "path": "/PORT/Ethernet0/description", "value": "uplink"},
+        ])
+        current = {
+            "VLAN": {"Vlan10": {"vlanid": "10"}},
+            "PORT": {"Ethernet0": {"description": "old"}},
+        }
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        # Table-level remove is emitted at the first rewritten key's position;
+        # unrelated operations keep their original relative order.
+        self.assertEqual(
+            [
+                {"op": "remove", "path": "/VLAN"},
+                {"op": "replace", "path": "/PORT/Ethernet0/description", "value": "uplink"},
+            ],
+            self._ops(actual),
+        )
+
+    def test_rewrite__already_table_level_remove__unchanged(self):
+        patch = jsonpatch.JsonPatch([{"op": "remove", "path": "/VLAN"}])
+        current = {"VLAN": {"Vlan10": {"vlanid": "10"}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__add_empty_table__unchanged(self):
+        patch = jsonpatch.JsonPatch(
+            [{"op": "add", "path": "/VLAN", "value": {}}])
+        current = {"PORT": {"Ethernet0": {}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__replace_table_with_empty_object__unchanged(self):
+        patch = jsonpatch.JsonPatch(
+            [{"op": "replace", "path": "/VLAN", "value": {}}])
+        current = {"VLAN": {"Vlan10": {"vlanid": "10"}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__multiple_emptied_tables__rewrites_each(self):
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "remove", "path": "/ACL_TABLE/EVERFLOW"},
+        ])
+        current = {
+            "VLAN": {"Vlan10": {"vlanid": "10"}},
+            "ACL_TABLE": {"EVERFLOW": {"type": "MIRROR"}},
+        }
+
+        actual = gu_common.rewrite_patch_emptying_tables(
+            patch, current, ["VLAN", "ACL_TABLE"])
+
+        self.assertEqual(
+            [
+                {"op": "remove", "path": "/VLAN"},
+                {"op": "remove", "path": "/ACL_TABLE"},
+            ],
+            self._ops(actual),
+        )
+
+    def test_rewrite__whole_config_replace_with_empty_table__unchanged(self):
+        patch = jsonpatch.JsonPatch(
+            [{"op": "replace", "path": "", "value": {"VLAN": {}}}])
+        current = {"VLAN": {"Vlan10": {"vlanid": "10"}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__field_level_remove__unchanged(self):
+        patch = jsonpatch.JsonPatch(
+            [{"op": "remove", "path": "/VLAN/Vlan10/description"}])
+        current = {"VLAN": {"Vlan10": {"description": "old"}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__key_remove_mixed_with_replace_on_same_table__unchanged(self):
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "replace", "path": "/VLAN", "value": {}},
+        ])
+        current = {"VLAN": {"Vlan10": {"vlanid": "10"}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__copy_from_emptied_table__unchanged(self):
+        # RFC 6902 copy names the source in "from". Rewriting key-removes to
+        # remove /VLAN would delete that source before the copy runs.
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+            {"op": "copy", "from": "/VLAN/Vlan10", "path": "/OTHER/Y"},
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+        ])
+        current = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "OTHER": {},
+        }
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__move_from_emptied_table__unchanged(self):
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+            {"op": "move", "from": "/VLAN/Vlan10", "path": "/OTHER/Y"},
+        ])
+        current = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            },
+            "OTHER": {},
+        }
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertIs(actual, patch)
+
+    def test_rewrite__copy_from_other_table__still_rewrites_emptied_table(self):
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+            {"op": "copy", "from": "/PORT/Ethernet0", "path": "/OTHER/Y"},
+        ])
+        current = {
+            "VLAN": {"Vlan10": {"vlanid": "10"}},
+            "PORT": {"Ethernet0": {"speed": "100000"}},
+            "OTHER": {},
+        }
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertEqual(
+            [
+                {"op": "remove", "path": "/VLAN"},
+                {"op": "copy", "from": "/PORT/Ethernet0", "path": "/OTHER/Y"},
+            ],
+            self._ops(actual),
+        )
+
+    def test_rewrite__ignored_from_on_remove__still_rewrites(self):
+        # JSON Patch ignores extra members on remove. A leftover from must not
+        # skip the key-remove rewrite or raise while parsing.
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10", "from": "/VLAN/Vlan10"},
+        ])
+        current = {"VLAN": {"Vlan10": {"vlanid": "10"}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertEqual([{"op": "remove", "path": "/VLAN"}], self._ops(actual))
+
+    def test_rewrite__ignored_malformed_from_on_remove__still_rewrites(self):
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10", "from": "not a pointer"},
+        ])
+        current = {"VLAN": {"Vlan10": {"vlanid": "10"}}}
+
+        actual = gu_common.rewrite_patch_emptying_tables(patch, current, ["VLAN"])
+
+        self.assertEqual([{"op": "remove", "path": "/VLAN"}], self._ops(actual))
+
+
+class TestValidateTableKeySnapshot(unittest.TestCase):
+    def test_snapshot_table_keys__sorted_key_names(self):
+        config = {"VLAN": {"Vlan20": {}, "Vlan10": {}}}
+        self.assertEqual(
+            {"VLAN": ["Vlan10", "Vlan20"]},
+            gu_common.snapshot_table_keys(config, ["VLAN"]))
+
+    def test_table_level_remove_tables__only_table_path(self):
+        patch = jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN"},
+            {"op": "remove", "path": "/PORT/Ethernet0"},
+        ])
+        self.assertEqual(
+            ["VLAN"],
+            gu_common.table_level_remove_tables(patch, ["VLAN", "PORT"]))
+
+    def test_validate__matching_keys__ok(self):
+        gu_common.validate_table_key_snapshot(
+            {"VLAN": {"Vlan10": {}, "Vlan20": {}}},
+            {"VLAN": ["Vlan10", "Vlan20"]})
+
+    def test_validate__extra_live_key__raises(self):
+        with self.assertRaises(gu_common.GenericConfigUpdaterError) as ctx:
+            gu_common.validate_table_key_snapshot(
+                {"VLAN": {"Vlan10": {}, "Vlan20": {}, "Vlan30": {}}},
+                {"VLAN": ["Vlan10", "Vlan20"]})
+        self.assertIn("Vlan30", str(ctx.exception))
+
+    def test_validate__missing_live_key__raises(self):
+        with self.assertRaises(gu_common.GenericConfigUpdaterError):
+            gu_common.validate_table_key_snapshot(
+                {"VLAN": {"Vlan10": {}}},
+                {"VLAN": ["Vlan10", "Vlan20"]})
+
+    def test_validate__patch_without_table_remove__skips(self):
+        # Sequential later ops must not compare against a table already deleted.
+        patch = jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/speed", "value": "100000"},
+        ])
+        gu_common.validate_table_key_snapshot(
+            {"VLAN": {"Vlan10": {}, "Vlan30": {}}},
+            {"VLAN": ["Vlan10", "Vlan20"]},
+            patch)
+
+    def test_validate__patch_with_table_remove__checks(self):
+        patch = jsonpatch.JsonPatch([{"op": "remove", "path": "/VLAN"}])
+        with self.assertRaises(gu_common.GenericConfigUpdaterError):
+            gu_common.validate_table_key_snapshot(
+                {"VLAN": {"Vlan10": {}, "Vlan30": {}}},
+                {"VLAN": ["Vlan10", "Vlan20"]},
+                patch)
+
+    def test_replace_rewritten_table_changes__splits_and_keeps_other_ops(self):
+        port_down = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        vlan_key = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+        ]))
+        vlan_table = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN"},
+        ]))
+        port_create = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/mtu", "value": "9100"},
+        ]))
+        snapshot = {"VLAN": ["Vlan10", "Vlan20"]}
+
+        steps = gu_common.replace_rewritten_table_changes(
+            [port_down, vlan_key, vlan_table, port_create], snapshot)
+
+        self.assertEqual(4, len(steps))
+        self.assertIs(port_down, steps[0][0])
+        self.assertIsNone(steps[0][1])
+        self.assertIs(vlan_key, steps[1][0])
+        self.assertIsNone(steps[1][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in steps[2][0].patch])
+        self.assertEqual({"VLAN": ["Vlan20"]}, steps[2][1])
+        self.assertIs(port_create, steps[3][0])
+        self.assertIsNone(steps[3][1])
+
+    def test_replace_rewritten_table_changes__keeps_prerequisites_before_table_remove(self):
+        # The first change touching PORT is a field prerequisite, not its removal.
+        port_down = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        buffer_pg_table = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/BUFFER_PG"},
+        ]))
+        port_table = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/PORT"},
+        ]))
+        snapshot = {"PORT": ["Ethernet0"], "BUFFER_PG": ["Ethernet0|3-4"]}
+
+        steps = gu_common.replace_rewritten_table_changes(
+            [port_down, buffer_pg_table, port_table], snapshot)
+
+        self.assertEqual(3, len(steps))
+        self.assertIs(port_down, steps[0][0])
+        self.assertIsNone(steps[0][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/BUFFER_PG"}],
+            [dict(op) for op in steps[1][0].patch])
+        self.assertEqual({"BUFFER_PG": ["Ethernet0|3-4"]}, steps[1][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/PORT"}],
+            [dict(op) for op in steps[2][0].patch])
+        self.assertEqual({"PORT": ["Ethernet0"]}, steps[2][1])
+
+    def test_replace_rewritten_table_changes__splits_deletion_change_in_order(self):
+        vlan_key = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "remove", "path": "/VLAN/Vlan10"},
+        ]))
+        mixed = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/mtu", "value": "9100"},
+            {"op": "remove", "path": "/VLAN/Vlan20"},
+            {"op": "remove", "path": "/VLAN/Vlan30"},
+            {"op": "replace", "path": "/PORT/Ethernet0/speed", "value": "100000"},
+        ]))
+        snapshot = {"VLAN": ["Vlan10", "Vlan20", "Vlan30"]}
+
+        steps = gu_common.replace_rewritten_table_changes([vlan_key, mixed], snapshot)
+
+        self.assertEqual(4, len(steps))
+        self.assertIs(vlan_key, steps[0][0])
+        self.assertIsNone(steps[0][1])
+        self.assertEqual(
+            [{"op": "replace", "path": "/PORT/Ethernet0/mtu", "value": "9100"}],
+            [dict(op) for op in steps[1][0].patch])
+        self.assertIsNone(steps[1][1])
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in steps[2][0].patch])
+        self.assertEqual({"VLAN": ["Vlan20", "Vlan30"]}, steps[2][1])
+        self.assertEqual(
+            [{"op": "replace", "path": "/PORT/Ethernet0/speed", "value": "100000"}],
+            [dict(op) for op in steps[3][0].patch])
+        self.assertIsNone(steps[3][1])
+
+    def test_replace_rewritten_table_changes__table_not_removed_by_sorter__appends_remove(self):
+        port_down = gu_common.JsonChange(jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet0/admin_status", "value": "down"},
+        ]))
+        snapshot = {"VLAN": ["Vlan10"]}
+
+        steps = gu_common.replace_rewritten_table_changes([port_down], snapshot)
+
+        self.assertEqual(2, len(steps))
+        self.assertIs(port_down, steps[0][0])
+        self.assertEqual(
+            [{"op": "remove", "path": "/VLAN"}],
+            [dict(op) for op in steps[1][0].patch])
+        self.assertEqual(snapshot, steps[1][1])
+
+
 class TestPathAddressing(unittest.TestCase):
     def setUp(self):
         self.path_addressing = gu_common.PathAddressing(gu_common.ConfigWrapper())
