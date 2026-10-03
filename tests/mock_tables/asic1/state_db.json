@@ -1,4 +1,7 @@
 {
+    "PORT_OPERR_TABLE|Ethernet64": {
+        "oper_error_status": "2"
+    },
     "TRANSCEIVER_INFO|Ethernet64": {
         "type" : "QSFP-DD Double Density 8X Pluggable Transceiver",
         "hardware_rev" : "X.X",
