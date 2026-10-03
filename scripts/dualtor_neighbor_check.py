@@ -204,17 +204,68 @@ result['asic_nexthop_table'] = asic_nexthop_table
 return redis.status_reply(cjson.encode(result))
 """
 
+RECHECK_READ_SCRIPT = """
+-- ARGV contains an IP count, that many suspect IPs, then their MACs.
+local suspect_ip_count = tonumber(ARGV[1])
+local suspect_ips = {}
+for i = 2, suspect_ip_count + 1 do
+    suspect_ips[ARGV[i]] = true
+end
+local suspect_macs = {}
+for i = suspect_ip_count + 2, #ARGV do
+    suspect_macs[string.lower(ARGV[i])] = true
+end
+
+local neighbors = {}
+local asic_fdb = {}
+
+redis.call('SELECT', 0)
+local neighbor_prefix = 'NEIGH_TABLE:Vlan'
+local neighbor_keys = redis.call('KEYS', neighbor_prefix .. '*')
+for _, neighbor_key in ipairs(neighbor_keys) do
+    local separator_index = string.find(neighbor_key, ':', string.len(neighbor_prefix) + 1, true)
+    if separator_index then
+        local neighbor_ip = string.sub(neighbor_key, separator_index + 1)
+        if suspect_ips[neighbor_ip] then
+            local mac = redis.call('HGET', neighbor_key, 'neigh')
+            if mac then
+                neighbors[neighbor_ip] = string.lower(mac)
+            end
+        end
+    end
+end
+
+redis.call('SELECT', 1)
+local fdb_prefix = 'ASIC_STATE:SAI_OBJECT_TYPE_FDB_ENTRY:'
+local fdb_keys = redis.call('KEYS', fdb_prefix .. '*')
+for _, fdb_key in ipairs(fdb_keys) do
+    local fdb_details = cjson.decode(string.sub(fdb_key, string.len(fdb_prefix) + 1))
+    local mac = string.lower(fdb_details['mac'])
+    if suspect_macs[mac] then
+        local bridge_port_id = redis.call('HGET', fdb_key, 'SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID')
+        if bridge_port_id then
+            asic_fdb[mac] = bridge_port_id
+        end
+    end
+end
+
+return redis.status_reply(cjson.encode({neighbors=neighbors, asic_fdb=asic_fdb}))
+"""
+
 # Allow kernel ARP/ND and orchagent to converge before validating the
 # one-time automatic neighbor flush mitigation.
 POST_FLUSH_CHECK_DELAY_SEC = 10
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
+RECHECK_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_RECHECK_SCRIPT_SHA1"
 ZERO_MAC = "00:00:00:00:00:00"
 NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
                                   "TUNNEL_IN_ASIC", "HWSTATUS"]
 NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
                                     "PREFIX_ROUTE", "NEXTHOP_TYPE", "HWSTATUS"]
 NOT_AVAILABLE = "N/A"
+BOUNCING = "bouncing"
+DEFAULT_RECHECK_DELAY_MS = 300
 
 
 class LogOutput(enum.Enum):
@@ -270,6 +321,14 @@ def parse_args():
         default=None,
         help="stdout log level"
     )
+    parser.add_argument(
+        "--recheck-delay-ms",
+        type=int,
+        default=DEFAULT_RECHECK_DELAY_MS,
+        help=("Milliseconds to wait before re-reading APPL_DB/ASIC_DB to filter out "
+              "transient FDB/NEIGH races on suspect inconsistent neighbors. "
+              "Set to 0 to disable. Default: %d." % DEFAULT_RECHECK_DELAY_MS),
+    )
     args = parser.parse_args()
 
     if args.log_output == LogOutput.STDOUT:
@@ -288,6 +347,9 @@ def parse_args():
 
         if args.log_level is not None:
             parser.error("Received stdout log level with log output to syslog.")
+
+    if args.recheck_delay_ms < 0:
+        parser.error("--recheck-delay-ms must be non-negative.")
 
     return args
 
@@ -388,25 +450,29 @@ def flush_inconsistent_neighbors(failed_neighbors):
     return len(flushed_neighbors)
 
 
-def read_tables_from_db(appl_db):
-    """Reads required tables from db."""
-    # NOTE: let's cache the db read script sha1 in APPL_DB under
-    # key "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
+def load_db_read_script(appl_db, script, cache_key):
+    """Load a Redis read script if needed and cache its SHA1 in APPL_DB."""
     def _load_script():
-        redis_load_cmd = "SCRIPT LOAD \"%s\"" % DB_READ_SCRIPT
-        db_read_script_sha1 = redis_cli(redis_load_cmd).strip()
-        WRITE_LOG_INFO("loaded script sha1: %s", db_read_script_sha1)
-        appl_db.set(DB_READ_SCRIPT_CONFIG_DB_KEY, db_read_script_sha1)
-        return db_read_script_sha1
+        redis_load_cmd = "SCRIPT LOAD \"%s\"" % script
+        script_sha1 = redis_cli(redis_load_cmd).strip()
+        WRITE_LOG_INFO("loaded script sha1: %s", script_sha1)
+        appl_db.set(cache_key, script_sha1)
+        return script_sha1
 
     def _is_script_existed(script_sha1):
         redis_script_exists_cmd = "SCRIPT EXISTS %s" % script_sha1
         cmd_output = redis_cli(redis_script_exists_cmd).strip()
         return "1" in cmd_output
 
-    db_read_script_sha1 = appl_db.get(DB_READ_SCRIPT_CONFIG_DB_KEY)
-    if ((not db_read_script_sha1) or (not _is_script_existed(db_read_script_sha1))):
-        db_read_script_sha1 = _load_script()
+    script_sha1 = appl_db.get(cache_key)
+    if ((not script_sha1) or (not _is_script_existed(script_sha1))):
+        script_sha1 = _load_script()
+    return script_sha1
+
+
+def read_tables_from_db(appl_db):
+    """Reads required tables from db."""
+    db_read_script_sha1 = load_db_read_script(appl_db, DB_READ_SCRIPT, DB_READ_SCRIPT_CONFIG_DB_KEY)
 
     redis_run_cmd = "EVALSHA %s 0" % db_read_script_sha1
     result = redis_cli(redis_run_cmd).strip()
@@ -430,6 +496,26 @@ def read_tables_from_db(appl_db):
     WRITE_LOG_DEBUG("ASIC nexthop table: %s", json.dumps(asic_nexthop_table, indent=4))
     return neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, \
         asic_neigh_table, asic_nexthop_table
+
+
+def read_recheck_tables_from_db(appl_db, suspect_ips, suspect_macs):
+    """Read suspect NEIGH/FDB bindings without the mux or ASIC L3 tables."""
+    script_sha1 = load_db_read_script(appl_db, RECHECK_READ_SCRIPT, RECHECK_READ_SCRIPT_CONFIG_DB_KEY)
+    script_args = [str(len(suspect_ips))] + list(suspect_ips) + list(suspect_macs)
+    redis_run_cmd = "EVALSHA %s 0 %s" % (script_sha1, " ".join(shlex.quote(arg) for arg in script_args))
+    tables = json.loads(redis_cli(redis_run_cmd))
+
+    for table_name in ("neighbors", "asic_fdb"):
+        if tables[table_name] == []:
+            tables[table_name] = {}
+        if not isinstance(tables[table_name], dict):
+            raise TypeError("Invalid %s table in recheck response" % table_name)
+
+    neighbors = tables["neighbors"]
+    asic_fdb = {mac: bridge_port.lstrip("oid:0x") for mac, bridge_port in tables["asic_fdb"].items()}
+    WRITE_LOG_DEBUG("recheck neighbors: %s", json.dumps(neighbors, indent=4))
+    WRITE_LOG_DEBUG("recheck ASIC FDB: %s", json.dumps(asic_fdb, indent=4))
+    return neighbors, asic_fdb
 
 
 def get_if_br_oid_to_port_name_map():
@@ -625,11 +711,93 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
     return check_results
 
 
-def parse_check_results(check_results):
+def identify_suspect_neighbors(check_results):
+    """Return list of (neighbor_ip, mac, port) tuples for rows that would currently be
+    flagged as inconsistent and are eligible for a recheck.
+
+    Eligibility: non-zero MAC, port resolved (not N/A), mux not mid-toggle, HWSTATUS False.
+    Zero-MAC and in-toggle rows are intentionally excluded — they are handled (or
+    suppressed) by existing logic and rechecking them adds no signal.
+    """
+    suspects = []
+    for r in check_results:
+        if r.get("MAC") == ZERO_MAC:
+            continue
+        if r.get("PORT", NOT_AVAILABLE) == NOT_AVAILABLE:
+            continue
+        if r.get("IN_MUX_TOGGLE") is True:
+            continue
+        if r.get("HWSTATUS") is False:
+            suspects.append((r["NEIGHBOR"], r["MAC"], r["PORT"]))
+    return suspects
+
+
+def detect_bouncing(suspects, first_neighbors, first_mac_to_port,
+                    second_neighbors, second_mac_to_port):
+    """Return the set of neighbor IPs whose IP->MAC binding or MAC->port binding
+    changed between two reads of APPL_DB:NEIGH_TABLE / ASIC_DB FDB.
+
+    These are transient FDB / NEIGH races (a MAC moving between ports while
+    orchagent / dualtor_neighbor_check is reading) — the inconsistency is not a
+    real failure of mux/neighbor programming, just a snapshot caught mid-move.
+    """
+    bouncing = set()
+    for ip, mac, _port in suspects:
+        new_mac = second_neighbors.get(ip)
+        if new_mac is None or new_mac != mac:
+            # IP disappeared from NEIGH_TABLE or its MAC changed -> bouncing.
+            bouncing.add(ip)
+            continue
+
+        first_port = first_mac_to_port.get(mac)
+        new_port = second_mac_to_port.get(mac)
+        if new_port != first_port:
+            # MAC moved (or disappeared from) FDB between reads -> bouncing.
+            bouncing.add(ip)
+            continue
+    return bouncing
+
+
+def recheck_bouncing_neighbors(check_results, first_neighbors, first_mac_to_port,
+                               appl_db, if_oid_to_port_name_map, delay_ms):
+    """Re-read APPL_DB / ASIC_DB after `delay_ms` and identify suspect inconsistent
+    neighbors that are actually mid-bounce (transient FDB / NEIGH race).
+
+    Returns the set of bouncing neighbor IPs (subset of the suspect IPs). Empty
+    when delay_ms <= 0, when there are no suspects, or when none of the suspects
+    changed binding between reads.
+    """
+    if delay_ms <= 0:
+        return set()
+
+    suspects = identify_suspect_neighbors(check_results)
+    if not suspects:
+        return set()
+
+    WRITE_LOG_INFO("Found %d suspect inconsistent neighbor(s); re-reading after %d ms "
+                   "to filter transient FDB/NEIGH races.", len(suspects), delay_ms)
+    time.sleep(delay_ms / 1000.0)
+
+    suspect_ips = [ip for ip, _mac, _port in suspects]
+    suspect_macs = sorted({mac for _ip, mac, _port in suspects})
+    second_neighbors, second_asic_fdb = read_recheck_tables_from_db(appl_db, suspect_ips, suspect_macs)
+    second_mac_to_port = get_mac_to_port_name_map(second_asic_fdb, if_oid_to_port_name_map)
+
+    bouncing_ips = detect_bouncing(suspects, first_neighbors, first_mac_to_port,
+                                   second_neighbors, second_mac_to_port)
+    if bouncing_ips:
+        WRITE_LOG_WARN("Detected %d transient (bouncing) neighbor(s); these will be "
+                       "logged but not reported as inconsistent: %s",
+                       len(bouncing_ips), sorted(bouncing_ips))
+    return bouncing_ips
+
+
+def parse_check_results(check_results, bouncing_ips=None):
     """Parse the check results to see if there are neighbors that are inconsistent with mux state."""
     failed_neighbors = []
     bool_to_yes_no = ("no", "yes")
     bool_to_consistency = ("inconsistent", "consistent")
+    bouncing_ips = bouncing_ips or set()
 
     # Group check results by neighbor_mode
     prefix_route_results = []
@@ -639,6 +807,9 @@ def parse_check_results(check_results):
         port = check_result["PORT"]
         is_zero_mac = check_result["MAC"] == ZERO_MAC
         neighbor_mode = check_result.get("_NEIGHBOR_MODE", "host-route")
+        is_bouncing = (not is_zero_mac) and (
+            check_result.get("_BOUNCING", False) or check_result["NEIGHBOR"] in bouncing_ips
+        )
 
         if port == NOT_AVAILABLE and not is_zero_mac:
             host_route_results.append(check_result)
@@ -657,11 +828,14 @@ def parse_check_results(check_results):
             check_result["TUNNEL_IN_ASIC"] = bool_to_yes_no[check_result["TUNNEL_IN_ASIC"]]
             host_route_results.append(check_result)
 
-        check_result["HWSTATUS"] = bool_to_consistency[hwstatus]
+        if is_bouncing and not hwstatus:
+            check_result["HWSTATUS"] = BOUNCING
+        else:
+            check_result["HWSTATUS"] = bool_to_consistency[hwstatus]
         if (not hwstatus):
             if is_zero_mac:
                 failed_neighbors.append(check_result)
-            elif not in_toggle:
+            elif not in_toggle and not is_bouncing:
                 failed_neighbors.append(check_result)
 
     # Display prefix-route neighbors if any
@@ -722,13 +896,14 @@ def parse_check_results(check_results):
     return True, failed_neighbors
 
 
-def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map):
+def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map,
+                       recheck_delay_ms=DEFAULT_RECHECK_DELAY_MS):
     """Run the dualtor neighbor consistency check once."""
     neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, asic_neigh_table, \
         asic_nexthop_table = read_tables_from_db(appl_db)
     mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
 
-    return check_neighbor_consistency(
+    check_results = check_neighbor_consistency(
         neighbors,
         mux_states,
         hw_mux_states,
@@ -739,6 +914,20 @@ def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
         mux_server_to_port_map,
         port_neighbor_modes
     )
+
+    bouncing_ips = recheck_bouncing_neighbors(
+        check_results,
+        neighbors,
+        mac_to_port_name_map,
+        appl_db,
+        if_oid_to_port_name_map,
+        recheck_delay_ms,
+    )
+    for check_result in check_results:
+        if check_result["NEIGHBOR"] in bouncing_ips:
+            check_result["_BOUNCING"] = True
+
+    return check_results
 
 
 def main():
@@ -759,7 +948,9 @@ def main():
     mux_server_to_port_map = get_mux_server_to_port_map(mux_cables)
     if_oid_to_port_name_map = get_if_br_oid_to_port_name_map()
 
-    check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
+    check_results = run_neighbor_check(
+        appl_db, mux_server_to_port_map, if_oid_to_port_name_map, args.recheck_delay_ms
+    )
     res, failed_neighbors = parse_check_results(check_results)
 
     if not res:
@@ -771,7 +962,9 @@ def main():
                 POST_FLUSH_CHECK_DELAY_SEC
             )
             time.sleep(POST_FLUSH_CHECK_DELAY_SEC)
-            check_results = run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
+            check_results = run_neighbor_check(
+                appl_db, mux_server_to_port_map, if_oid_to_port_name_map, args.recheck_delay_ms
+            )
             res, _ = parse_check_results(check_results)
             if not res:
                 WRITE_LOG_ERROR("ALERT: post-flush dualtor neighbor check still found inconsistent neighbors.")
