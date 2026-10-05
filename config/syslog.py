@@ -254,7 +254,12 @@ def vrf_validator(ctx, db, value):
     vrf_list = ["default"]
     if is_mgmt_vrf_enabled(db):
         vrf_list.append("mgmt")
-    vrf_list.extend(db.get_keys(VRF_TABLE_CDB))
+    # VRF|default (and VRF|mgmt, when management VRF is enabled) are already
+    # seeded above. Skip names that are already present so Click does not
+    # print the same choice twice.
+    for vrf_name in db.get_keys(VRF_TABLE_CDB):
+        if vrf_name not in vrf_list:
+            vrf_list.append(vrf_name)
 
     return click.Choice(vrf_list).convert(value, get_param(ctx, "vrf"), ctx)
 
