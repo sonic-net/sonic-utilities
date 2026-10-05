@@ -2969,17 +2969,14 @@ def portchannel(db, ctx, namespace):
 @portchannel.command('add')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
 @click.option('--min-links', default=1, type=click.IntRange(1, 1024))
-@click.option('--fallback', default='false',
-              type=click.Choice(['true', 'false'],
-                                case_sensitive=False))
-@click.option('--fallback-mode', default='single',
-              type=click.Choice(['single', 'static'],
+@click.option('--fallback', default='none',
+              type=click.Choice(['none', 'single', 'static'],
                                 case_sensitive=False))
 @click.option('--fast-rate', default='false',
               type=click.Choice(['true', 'false'],
                                 case_sensitive=False))
 @click.pass_context
-def add_portchannel(ctx, portchannel_name, min_links, fallback, fallback_mode, fast_rate):
+def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
     """Add port channel"""
 
     fvs = {
@@ -2992,9 +2989,8 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fallback_mode, f
     if min_links != 0:
         fvs['min_links'] = str(min_links)
 
-    if fallback == "true":
+    if fallback != "none":
         fvs['fallback'] = fallback
-        fvs['fallback_method'] = fallback_mode
 
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
