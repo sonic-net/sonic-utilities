@@ -58,7 +58,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202605_01'
+        self.CURRENT_VERSION = 'version_202611_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -823,6 +823,19 @@ class DBMigrator():
             flex_counter.pop('FLEX_COUNTER_DELAY_STATUS', None)
             self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
 
+    def migrate_dtel_removal(self):
+        """
+        Remove DTEL tables and DTEL_FLOW_WATCHLIST ACL rules.
+        """
+
+        for table in ['DTEL', 'DTEL_REPORT_SESSION', 'DTEL_INT_SESSION',
+                      'DTEL_QUEUE_REPORT', 'DTEL_EVENT']:
+            self.configDB.delete_table(table)
+
+        for key in self.configDB.get_keys('ACL_RULE'):
+            if isinstance(key, tuple) and key[0] == 'DTEL_FLOW_WATCHLIST':
+                self.configDB.set_entry('ACL_RULE', key, None)
+
 
     def migrate_sflow_table(self):
         """
@@ -1438,6 +1451,15 @@ class DBMigrator():
         Version 202605_01
         """
         log.log_info('Handling version_202605_01')
+        self.migrate_dtel_removal()
+        self.set_version('version_202611_01')
+        return 'version_202611_01'
+
+    def version_202611_01(self):
+        """
+        Version 202611_01
+        """
+        log.log_info('Handling version_202611_01')
         return None
 
     def get_version(self):

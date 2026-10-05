@@ -95,6 +95,9 @@ class TestVersionComparison(object):
                                   {'v1': 'version_202505_01', 'v2': 'version_202511_01', 'result': False},
                                   {'v1': 'version_202511_01', 'v2': 'version_202505_01', 'result': True},
                                   {'v1': 'version_202511_01', 'v2': 'version_master_01', 'result': False},
+                                  {'v1': 'version_202605_01', 'v2': 'version_202611_01', 'result': False},
+                                  {'v1': 'version_202611_01', 'v2': 'version_202605_01', 'result': True},
+                                  {'v1': 'version_202611_01', 'v2': 'version_master_01', 'result': False},
                                   {'v1': 'version_202411_02', 'v2': 'version_master_01', 'result': False},
                                   {'v1': 'version_202311_01', 'v2': 'version_master_01', 'result': False},
                                   {'v1': 'version_master_01', 'v2': 'version_202311_01', 'result': True},
@@ -1149,3 +1152,23 @@ class TestIPinIPTunnelEcnModeMigrator(object):
         expected_state_db = SonicV2Connector(host='127.0.0.1')
         expected_state_db.connect(expected_state_db.STATE_DB)
         self.compare_keys(expected_state_db, dbmgtr.stateDB, 'STATE_DB')
+
+
+class TestDtelRemovalMigrator(object):
+    @classmethod
+    def teardown_class(cls):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def test_dtel_removal_migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dtel_removal_input')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.migrate()
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dtel_removal_expected')
+        expected_db = Db()
+
+        for table in ['DTEL', 'DTEL_REPORT_SESSION', 'DTEL_INT_SESSION', 'DTEL_QUEUE_REPORT', 'DTEL_EVENT']:
+            assert not dbmgtr.configDB.get_table(table)
+        assert dbmgtr.configDB.get_table('ACL_TABLE') == expected_db.cfgdb.get_table('ACL_TABLE')
+        assert dbmgtr.configDB.get_table('ACL_RULE') == expected_db.cfgdb.get_table('ACL_RULE')
+        assert dbmgtr.configDB.get_table('VERSIONS') == expected_db.cfgdb.get_table('VERSIONS')
