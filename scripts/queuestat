@@ -57,22 +57,30 @@ VoqStats = namedtuple(
 
 std_header = [
     'Port', 'TxQ',
-    'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes'
+    'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes',
+    'Pkts/s', 'Bytes/s', 'Bits/s'
 ]
 all_header = [
     'Port', 'TxQ',
     'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes',
-    'Trim/pkts', 'TrimSent/pkts', 'TrimDrop/pkts'
+    'Trim/pkts', 'TrimSent/pkts', 'TrimDrop/pkts',
+    'Pkts/s', 'Bytes/s', 'Bits/s'
 ]
 trim_header = [
     'Port', 'TxQ',
-    'Trim/pkts', 'TrimSent/pkts', 'TrimDrop/pkts'
+    'Trim/pkts', 'TrimSent/pkts', 'TrimDrop/pkts',
+    'Pkts/s', 'Bytes/s', 'Bits/s'
 ]
 voq_header = [
     'Port', 'Voq',
     'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes',
-    'Credit-WD-Del/pkts'
+    'Credit-WD-Del/pkts',
+    'Pkts/s', 'Bytes/s', 'Bits/s'
 ]
+
+rates_key_list = [ 'Q_PPS', 'Q_BPS', 'Q_bPS']
+ratestat = [ 'qpktsps', 'qbytesps', 'qbitsps']
+RateStats = namedtuple("RateStats", ratestat)
 
 counter_bucket_dict = {
     'SAI_QUEUE_STAT_PACKETS': 2,
@@ -101,6 +109,7 @@ SAI_QUEUE_TYPE_UNICAST = "SAI_QUEUE_TYPE_UNICAST"
 SAI_QUEUE_TYPE_UNICAST_VOQ = "SAI_QUEUE_TYPE_UNICAST_VOQ"
 SAI_QUEUE_TYPE_ALL = "SAI_QUEUE_TYPE_ALL"
 
+RATES_TABLE_PREFIX = "RATES:"
 COUNTER_TABLE_PREFIX = "COUNTERS:"
 COUNTERS_PORT_NAME_MAP = "COUNTERS_PORT_NAME_MAP"
 COUNTERS_SYSTEM_PORT_NAME_MAP = "COUNTERS_SYSTEM_PORT_NAME_MAP"
@@ -374,16 +383,33 @@ class Queuestat(object):
                cntr = QueueStats._make(fields)._asdict()
             return cntr
 
+        def get_rates(table_id):
+                """
+                Get the rates from specific table.
+                """
+                fields = ["0", "0", "0"]
+                for pos, name in enumerate(rates_key_list):
+                   full_table_id = RATES_TABLE_PREFIX + table_id
+                   counter_data =  self.db.get(self.db.COUNTERS_DB, full_table_id, name)
+                   if counter_data is None:
+                      fields[pos] = STATUS_NA
+                   elif fields[pos] != STATUS_NA:
+                      fields[pos] = float(counter_data)
+                cntr = RateStats._make(fields)
+                return cntr
+
         # Build a dictionary of the stats
         cnstat_dict = OrderedDict()
         cnstat_dict['time'] = datetime.datetime.now()
+        ratestat_dict = OrderedDict()
         if queue_map is None:
             return cnstat_dict
         for queue in natsorted(queue_map):
             cnstat_dict[queue] = get_counters(queue_map[queue])
-        return cnstat_dict
+            ratestat_dict[queue] = get_rates(queue_map[queue])
+        return cnstat_dict,ratestat_dict
 
-    def cnstat_print(self, port, cnstat_dict, json_opt, non_zero):
+    def cnstat_print(self, port, cnstat_dict, json_opt, non_zero,ratestat_dict):
         """
         Print the cnstat. If JSON option is True, return data in
         JSON format.
@@ -396,12 +422,23 @@ class Queuestat(object):
                 if json_opt:
                     json_output[port][key] = data
                 continue
+
+            qpktsps = qbytesps = qbitsps = STATUS_NA
+            rates = ratestat_dict.get(key, RateStats._make([STATUS_NA] * len(ratestat)))
+            if rates.qpktsps != STATUS_NA:
+                qpktsps = "{:,}".format(int(float(rates.qpktsps)))
+            if rates.qbytesps != STATUS_NA:
+                qbytesps = "{:,}".format(int(float(rates.qbytesps)))
+            if rates.qbitsps != STATUS_NA:
+                qbitsps = "{:,}".format(int(float(rates.qbitsps)))
+
             if self.voq:
                if not non_zero or data['totalpacket'] != '0' or  data['totalbytes'] != '0' or \
                   data['droppacket'] != '0' or data['dropbytes'] != '0' or data['creditWDpkts'] != '0':
                   table.append((port, data['queuetype'] + str(data['queueindex']),
                               data['totalpacket'], data['totalbytes'],
-                              data['droppacket'], data['dropbytes'], data['creditWDpkts']))
+                              data['droppacket'], data['dropbytes'], data['creditWDpkts'],
+                              qpktsps, qbytesps, qbitsps))
             else:
                 queuetag = data['queuetype'] + str(data['queueindex'])
 
@@ -414,14 +451,16 @@ class Queuestat(object):
                             port, queuetag,
                             data['totalpacket'], data['totalbytes'],
                             data['droppacket'], data['dropbytes'],
-                            data['trimpkt'], data['trimsentpkt'], data['trimdroppkt']
+                            data['trimpkt'], data['trimsentpkt'], data['trimdroppkt'],
+                            qpktsps, qbytesps, qbitsps
                         ))
                 elif self.trim: # Packet Trimming related statistics
                     if not non_zero or \
                             data['trimpkt'] != '0' or data['trimsentpkt'] != '0' or data['trimdroppkt'] != '0':
                         table.append((
                             port, queuetag,
-                            data['trimpkt'], data['trimsentpkt'], data['trimdroppkt']
+                            data['trimpkt'], data['trimsentpkt'], data['trimdroppkt'],
+                            qpktsps, qbytesps, qbitsps
                         ))
                 else: # Generic statistics
                     if not non_zero or \
@@ -430,7 +469,8 @@ class Queuestat(object):
                         table.append((
                             port, queuetag,
                             data['totalpacket'], data['totalbytes'],
-                            data['droppacket'], data['dropbytes']
+                            data['droppacket'], data['dropbytes'],
+                            qpktsps, qbytesps, qbitsps
                         ))
 
         if json_opt:
@@ -452,7 +492,7 @@ class Queuestat(object):
                 print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
                 print()
 
-    def cnstat_diff_print(self, port, cnstat_new_dict, cnstat_old_dict, json_opt, non_zero):
+    def cnstat_diff_print(self, port, cnstat_new_dict, cnstat_old_dict, json_opt, non_zero,ratestat_dict):
         """
         Print the difference between two cnstat results. If JSON
         option is True, return data in JSON format.
@@ -468,6 +508,16 @@ class Queuestat(object):
             old_cntr = None
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
+
+            qpktsps = qbytesps = qbitsps = STATUS_NA
+            rates = ratestat_dict.get(key, RateStats._make([STATUS_NA] * len(ratestat)))
+            if rates.qpktsps != STATUS_NA:
+                qpktsps = "{:,}".format(int(float(rates.qpktsps)))
+            if rates.qbytesps != STATUS_NA:
+                qbytesps = "{:,}".format(int(float(rates.qbytesps)))
+            if rates.qbitsps != STATUS_NA:
+                qbitsps = "{:,}".format(int(float(rates.qbitsps)))
+
             if old_cntr is not None:
                 if self.voq:
                     if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
@@ -480,7 +530,8 @@ class Queuestat(object):
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']),
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']),
-                                   ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts'])))
+                                   ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts']),
+                                   qpktsps, qbytesps, qbitsps))
                 else:
                     queuetag = cntr['queuetype'] + str(cntr['queueindex'])
 
@@ -501,7 +552,8 @@ class Queuestat(object):
                                 port, queuetag,
                                 totalpacket, totalbytes,
                                 droppacket, dropbytes,
-                                trimpkt, trimsentpkt, trimdroppkt
+                                trimpkt, trimsentpkt, trimdroppkt,
+                                qpktsps, qbytesps, qbitsps
                             ))
                     elif self.trim: # Packet Trimming related statistics
                         trimpkt = ns_diff(cntr['trimpkt'], old_cntr['trimpkt'])
@@ -512,7 +564,8 @@ class Queuestat(object):
                                 trimpkt != '0' or trimsentpkt != '0' or trimdroppkt != '0':
                             table.append((
                                 port, queuetag,
-                                trimpkt, trimsentpkt, trimdroppkt
+                                trimpkt, trimsentpkt, trimdroppkt,
+                                qpktsps, qbytesps, qbitsps
                             ))
                     else: # Generic statistics
                         totalpacket = ns_diff(cntr['totalpacket'], old_cntr['totalpacket'])
@@ -526,7 +579,8 @@ class Queuestat(object):
                             table.append((
                                 port, queuetag,
                                 totalpacket, totalbytes,
-                                droppacket, dropbytes
+                                droppacket, dropbytes,
+                                qpktsps, qbytesps, qbitsps
                             ))
         if json_opt:
             json_output[port].update(build_json(port, table, self.all, self.trim, self.voq))
@@ -569,16 +623,16 @@ class Queuestat(object):
                     cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
                     if json_opt:
                         json_output[port].update({"cached_time":cnstat_cached_dict.get('time')})
-                        json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero))
+                        json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero,ratestat_dict))
                     else:
-                        self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero)
+                        self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero,ratestat_dict)
                 except IOError as e:
                     print(e.errno, e)
             else:
                 if json_opt:
-                    json_output.update(self.cnstat_print(port, cnstat_dict, json_opt, non_zero))
+                    json_output.update(self.cnstat_print(port, cnstat_dict, json_opt, non_zero,ratestat_dict))
                 else:
-                    self.cnstat_print(port, cnstat_dict, json_opt, non_zero)
+                    self.cnstat_print(port, cnstat_dict, json_opt, non_zero,ratestat_dict)
 
         if json_opt:
             print(json_dump(json_output))
@@ -597,7 +651,7 @@ class Queuestat(object):
         if self.voq and device_info.is_supervisor():
             cnstat_dict = self.get_aggregate_port_stats(port)
         else:
-            cnstat_dict = self.get_cnstat(self.port_queues_map[port])
+            cnstat_dict,ratestat_dict = self.get_cnstat(self.port_queues_map[port])
         cache_ns = ''
         if self.voq and self.namespace is not None:
             cache_ns = '-' + self.namespace + '-'
@@ -609,17 +663,17 @@ class Queuestat(object):
                 cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
                 if json_opt:
                     json_output[port].update({"cached_time":cnstat_cached_dict.get('time')})
-                    json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero))
+                    json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero,ratestat_dict))
                 else:
                     print(f"Last cached time{self.namespace_str} was " + str(cnstat_cached_dict.get('time')))
-                    self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero)
+                    self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero,ratestat_dict)
             except IOError as e:
                 print(e.errno, e)
         else:
             if json_opt:
-                json_output.update(self.cnstat_print(port, cnstat_dict, json_opt, non_zero))
+                json_output.update(self.cnstat_print(port, cnstat_dict, json_opt, non_zero,ratestat_dict))
             else:
-                self.cnstat_print(port, cnstat_dict, json_opt, non_zero)
+                self.cnstat_print(port, cnstat_dict, json_opt, non_zero,ratestat_dict)
 
         if json_opt:
             print(json_dump(json_output))
@@ -633,7 +687,7 @@ class Queuestat(object):
             if device_info.is_supervisor():
                 cnstat_dict = self.get_aggregate_port_stats(port)
             else:
-                cnstat_dict = self.get_cnstat(self.port_queues_map[port])
+                cnstat_dict,ratestat_dict = self.get_cnstat(self.port_queues_map[port])
             try:
                 json.dump(cnstat_dict, open(cnstat_fqn_file + cache_ns + port, 'w'), default=json_serial)
             except IOError as e:
