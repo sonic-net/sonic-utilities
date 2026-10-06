@@ -2302,7 +2302,7 @@ This command displays the global configuration fields and the list of all tacacs
   TACPLUS global auth_type pap (default)
   TACPLUS global timeout 99
   TACPLUS global passkey <EMPTY_STRING> (default)
-  TACPLUS global traceid_authorization false (default)
+  TACPLUS global traceid_authorization False (default)
 
   TACPLUS_SERVER address 10.11.12.14
                          priority 9
@@ -2323,7 +2323,7 @@ Some of the parameters like authtype, passkey and timeout can be either configur
 
 1) Add/Delete the tacacs+ server details.
 2) authtype - global configuration that is applied to all servers if there is no server specific configuration.
-3) default - reset the authtype or passkey or timeout to the default values.
+3) default - reset the authtype, passkey, timeout or traceid-authorization to the default values.
 4) passkey - global configuration that is applied to all servers if there is no server specific configuration.
 5) timeout - global configuration that is applied to all servers if there is no server specific configuration.
 6) traceid-authorization - control whether validated SSH_CLIENT_TRACEID values are sent in TACACS+ command authorization requests.
@@ -2400,12 +2400,12 @@ When user has not configured server specific authtype, this global value shall b
 
 **config tacacs default**
 
-This command is used to reset the global value for authtype or passkey or timeout to default value.
-Default for authtype is "pap", default for passkey is EMPTY_STRING and default for timeout is 5 seconds.
+This command is used to reset the global value for authtype, passkey, timeout or traceid-authorization to default value.
+Default for authtype is "pap", default for passkey is EMPTY_STRING, default for timeout is 5 seconds and default for traceid-authorization is disabled.
 
 - Usage:
   ```
-  config tacacs default (authtype | passkey | timeout)
+  config tacacs default (authtype | passkey | timeout | traceid-authorization)
   ```
 
 - Example (This will reset the global authtype back to the default value "pap"):
@@ -2456,12 +2456,15 @@ This command controls whether validated `SSH_CLIENT_TRACEID` values are sent as 
 - Usage:
   ```
   config tacacs traceid-authorization (enable | disable | default)
+  config tacacs default traceid-authorization
   ```
 
   - Options:
     - `enable`: Send valid `SSH_CLIENT_TRACEID` values in TACACS+ command authorization requests.
     - `disable`: Explicitly disable sending `SSH_CLIENT_TRACEID` values.
     - `default`: Remove the explicit configuration and use the default value, which is disabled.
+
+  The `config tacacs default traceid-authorization` command also restores the disabled default.
 
 - Example:
   ```

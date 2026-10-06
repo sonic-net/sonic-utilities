@@ -273,15 +273,21 @@ default.add_command(passkey)
 
 
 @click.command()
-@click.argument('option', type=click.Choice(["enable", "disable", "default"]))
+@click.argument('option', type=click.Choice(["enable", "disable", "default"]), required=False)
+@click.pass_context
 @clicommon.pass_db
-def traceid_authorization(db, option):
+def traceid_authorization(db, ctx, option):
     """Send SSH_CLIENT_TRACEID in TACACS+ authorization [enable | disable | default]"""
-    if option == 'default':
+    if ctx.obj == 'default' or option == 'default':
         del_table_key(db, 'TACPLUS', 'global', 'traceid_authorization')
-    else:
+    elif option:
         add_table_kv(db, 'TACPLUS', 'global', 'traceid_authorization', option == 'enable')
+    else:
+        ctx.fail('Argument "option" is required')
+
+
 tacacs.add_command(traceid_authorization)
+default.add_command(traceid_authorization)
 
 
 # cmd: tacacs add <ip_address> --timeout SECOND --key SECRET --type TYPE --port PORT --pri PRIORITY

@@ -2371,7 +2371,7 @@ def tacacs():
             'auth_type': 'pap (default)',
             'timeout': '5 (default)',
             'passkey': '<EMPTY_STRING> (default)',
-            'traceid_authorization': 'false (default)'
+            'traceid_authorization': 'False (default)'
         }
     }
     if 'global' in data:

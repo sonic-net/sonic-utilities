@@ -2,6 +2,7 @@ import importlib
 import os
 import sys
 
+import pytest
 from click.testing import CliRunner
 from utilities_common.db import Db
 from jsonpatch import JsonPatchConflict
@@ -168,15 +169,15 @@ AAA accounting login disable (default)
 
 """
 
-show_tacacs_default_output="""\
+show_tacacs_default_output = """\
 TACPLUS global auth_type pap (default)
 TACPLUS global timeout 5 (default)
 TACPLUS global passkey <EMPTY_STRING> (default)
-TACPLUS global traceid_authorization false (default)
+TACPLUS global traceid_authorization False (default)
 
 """
 
-show_tacacs_traceid_enable_output="""\
+show_tacacs_traceid_enable_output = """\
 TACPLUS global auth_type pap (default)
 TACPLUS global timeout 5 (default)
 TACPLUS global passkey <EMPTY_STRING> (default)
@@ -184,13 +185,14 @@ TACPLUS global traceid_authorization True
 
 """
 
-show_tacacs_traceid_disable_output="""\
+show_tacacs_traceid_disable_output = """\
 TACPLUS global auth_type pap (default)
 TACPLUS global timeout 5 (default)
 TACPLUS global passkey <EMPTY_STRING> (default)
 TACPLUS global traceid_authorization False
 
 """
+
 
 class TestAaa(object):
     @classmethod
@@ -506,7 +508,11 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
-    def test_config_tacacs_traceid_authorization(self, get_cmd_module):
+    @pytest.mark.parametrize("reset_command", [
+        ["traceid-authorization", "default"],
+        ["default", "traceid-authorization"],
+    ])
+    def test_config_tacacs_traceid_authorization(self, get_cmd_module, reset_command):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
@@ -524,6 +530,15 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_tacacs_traceid_enable_output
 
+        result = runner.invoke(config.config.commands["tacacs"], reset_command, obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+        assert 'traceid_authorization' not in db.cfgdb.get_entry('TACPLUS', 'global')
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_default_output
+
         result = runner.invoke(config.config.commands["tacacs"],
                                ["traceid-authorization", "disable"], obj=db)
         assert result.exit_code == 0
@@ -533,14 +548,31 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_tacacs_traceid_disable_output
 
-        result = runner.invoke(config.config.commands["tacacs"],
-                               ["traceid-authorization", "default"], obj=db)
+        result = runner.invoke(config.config.commands["tacacs"], reset_command, obj=db)
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
+        assert 'traceid_authorization' not in db.cfgdb.get_entry('TACPLUS', 'global')
 
         result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
         assert result.exit_code == 0
         assert result.output == show_tacacs_default_output
+
+        result = runner.invoke(config.config.commands["tacacs"], reset_command, obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+        assert 'traceid_authorization' not in db.cfgdb.get_entry('TACPLUS', 'global')
+
+    @pytest.mark.parametrize("options", [[], ["invalid"]])
+    def test_config_tacacs_traceid_authorization_invalid(self, get_cmd_module, options):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+        original_entry = db.cfgdb.get_entry('TACPLUS', 'global')
+
+        result = runner.invoke(config.config.commands["tacacs"], ["traceid-authorization"] + options, obj=db)
+        assert result.exit_code != 0
+        assert "Error:" in result.output
+        assert db.cfgdb.get_entry('TACPLUS', 'global') == original_entry
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
