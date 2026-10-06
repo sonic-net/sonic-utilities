@@ -3,6 +3,47 @@ import pytest
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
+
+
+FAST_REBOOT = Path(__file__).parents[1] / "scripts" / "fast-reboot"
+
+
+def run_cpa_tunnel_check(tmp_path, tunnel_type="", tunnel_term_type=""):
+    command_log = tmp_path / "commands.log"
+    script = f'''
+EXIT_LEFTOVER_CPA_TUNNEL=30
+source <(sed -n '/^function abort_reboot_if_cpa_tunnel_is_leftover()/,/^}}/p' "{FAST_REBOOT}")
+
+debug() {{ :; }}
+error() {{ printf '%s\n' "$*" >&2; }}
+sonic-db-cli() {{
+    printf '%s\n' "$*" >> "$COMMAND_LOG"
+    if [[ "$3" == "KEYS" && "$4" == "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:*" ]]; then
+        if [[ -n "$TUNNEL_TYPE" ]]; then
+            printf 'ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:oid:0x1\n'
+        fi
+    elif [[ "$3" == "HGET" && "$5" == "SAI_TUNNEL_ATTR_TYPE" ]]; then
+        printf '%s\n' "$TUNNEL_TYPE"
+    elif [[ "$3" == "KEYS" && "$4" == "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:*" ]]; then
+        if [[ -n "$TUNNEL_TERM_TYPE" ]]; then
+            printf 'ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:oid:0x2\n'
+        fi
+    elif [[ "$3" == "HGET" && "$5" == "SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE" ]]; then
+        printf '%s\n' "$TUNNEL_TERM_TYPE"
+    fi
+}}
+
+abort_reboot_if_cpa_tunnel_is_leftover
+'''
+    env = os.environ.copy()
+    env["COMMAND_LOG"] = str(command_log)
+    env["TUNNEL_TYPE"] = tunnel_type
+    env["TUNNEL_TERM_TYPE"] = tunnel_term_type
+    result = subprocess.run(
+        ["bash", "-c", script], env=env, capture_output=True, text=True
+    )
+    return result, command_log.read_text().splitlines()
 
 
 class TestFastReboot:
@@ -28,13 +69,48 @@ class TestFastReboot:
             res = subprocess.run([fast_reboot, '-h'], env=env)
         assert res.returncode == 0
 
+    def test_cpa_tunnel_check_uses_uds_and_continues_without_vxlan(self, tmp_path):
+        result, commands = run_cpa_tunnel_check(
+            tmp_path,
+            tunnel_type="SAI_TUNNEL_TYPE_IPINIP",
+            tunnel_term_type="SAI_TUNNEL_TYPE_IPINIP",
+        )
+
+        assert result.returncode == 0
+        assert commands == [
+            "--unixsocket ASIC_DB KEYS ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:*",
+            "--unixsocket ASIC_DB HGET ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:oid:0x1 SAI_TUNNEL_ATTR_TYPE",
+            "--unixsocket ASIC_DB KEYS ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:*",
+            "--unixsocket ASIC_DB HGET ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:oid:0x2 SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE",
+        ]
+
+    @pytest.mark.parametrize(
+        "tunnel_type,tunnel_term_type",
+        [
+            ("SAI_TUNNEL_TYPE_VXLAN", ""),
+            ("", "SAI_TUNNEL_TYPE_VXLAN"),
+        ],
+    )
+    def test_cpa_tunnel_check_aborts_for_leftover_vxlan(
+        self, tmp_path, tunnel_type, tunnel_term_type
+    ):
+        result, commands = run_cpa_tunnel_check(
+            tmp_path,
+            tunnel_type=tunnel_type,
+            tunnel_term_type=tunnel_term_type,
+        )
+
+        assert result.returncode == 30
+        assert "Device has leftover CPA tunnel configuration" in result.stderr
+        assert commands
+        assert all(command.startswith("--unixsocket ASIC_DB ") for command in commands)
 
 # fast-reboot runs its main flow at the top level and cannot be sourced, so these
 # tests extract the CPA functions with sed and run them against stub commands.
 CPA_FUNCTIONS = ['debug', 'error', 'abort_reboot_if_cpa_tunnel_is_leftover', 'setup_control_plane_assistant']
 
 # KEYS returns one object of the requested type when FAKE_VXLAN_TUNNEL=yes; HGET reports it as VxLAN.
-REDIS_CLI_STUB = '''#!/bin/bash
+SONIC_DB_CLI_STUB = '''#!/bin/bash
 if [[ "$3" == "KEYS" && "${FAKE_VXLAN_TUNNEL}" == "yes" ]]; then
     echo "${4%\\*}oid:0x2a000000000001"
 elif [[ "$3" == "HGET" ]]; then
@@ -48,7 +124,7 @@ echo "assistant $*" >> "${CALL_LOG}"
 
 
 def run_setup_control_plane_assistant(tmp_path, vxlan_tunnel, assistant_ip_list, hwsku='Force10-S6000'):
-    for name, body in (('redis-cli', REDIS_CLI_STUB), ('neighbor_advertiser', ASSISTANT_STUB),
+    for name, body in (('sonic-db-cli', SONIC_DB_CLI_STUB), ('neighbor_advertiser', ASSISTANT_STUB),
                        ('logger', '#!/bin/bash\n')):
         stub = tmp_path / name
         stub.write_text(body)
