@@ -630,7 +630,7 @@ function save_counters_folder() {
             mkdir $counters_folder
         fi
         if [[ -d $counters_cache ]]; then
-           cp -rf $counters_cache $counters_folder
+           cp -rf $counters_cache/. $counters_folder/
         fi
     fi
 }
