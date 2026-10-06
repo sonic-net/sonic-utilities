@@ -17156,6 +17156,8 @@ Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS
 
 These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown.
 
+For a breakout subport, `map` and `lane-status` identify its ELS lasers only when `cpo.json` provides `laser_to_asic_lane_mapping`; otherwise the lasers are shown as `N/A (needs laser_to_asic_lane_mapping)`. `lane-status` shows a lane's laser and laser state only when the topology associates that lane with a laser.
+
 - Usage:
   ```
   cpoutil show interface map [PORT] [--json]          # OE, bank, lanes, ELS and lasers of each interface

@@ -103,6 +103,13 @@ class CpoCommandError(RuntimeError):
     """Raised when a CPO resource or platform API is unavailable."""
 
 
+class CpoLaserResolutionError(CpoCommandError):
+    """Raised when the topology cannot identify a subport's ELS lasers."""
+
+
+UNRESOLVED_LASERS = "N/A (needs laser_to_asic_lane_mapping)"
+
+
 def load_platform_chassis():
     """Reuse the platform chassis shared by SONiC CLI helpers."""
     global platform_chassis
@@ -254,7 +261,7 @@ def get_cpo_laser_ids(logical_port, mapping=None):
             return mapping.laser_ids, tuple(
                 laser for laser in mapping.laser_ids if laser in shared
             )
-        raise CpoCommandError(
+        raise CpoLaserResolutionError(
             "CPO interface '{}' needs laser_to_asic_lane_mapping to resolve "
             "breakout port '{}'".format(mapping.port, logical_port)
         )
@@ -272,11 +279,21 @@ def get_cpo_laser_ids(logical_port, mapping=None):
     return tuple(selected), tuple(shared)
 
 
-def get_interface_context(logical_port):
-    """Resolve static CPO mapping and active breakout data for one port."""
+def get_interface_context(logical_port, require_lasers=True):
+    """Resolve static CPO mapping and active breakout data for one port.
+
+    With require_lasers=False, a subport whose lasers the topology cannot
+    identify gets laser_ids None instead of an error. Only display paths may
+    use that; controls must know exactly which lasers they affect.
+    """
     mapping = get_cpo_interface_mapping(logical_port)
     lane_positions = get_cpo_lane_positions(logical_port, mapping)
-    laser_ids, shared_laser_ids = get_cpo_laser_ids(logical_port, mapping)
+    try:
+        laser_ids, shared_laser_ids = get_cpo_laser_ids(logical_port, mapping)
+    except CpoLaserResolutionError:
+        if require_lasers:
+            raise
+        laser_ids, shared_laser_ids = None, ()
     return {
         "mapping": mapping,
         "lane_positions": lane_positions,
@@ -875,12 +892,14 @@ def _local_oe_bank(mapping):
 
 
 def _interface_mapping_record(logical_port):
-    context = get_interface_context(logical_port)
+    context = get_interface_context(logical_port, require_lasers=False)
     mapping = context["mapping"]
     oe_lanes = [mapping.lanes[index] for index in context["lane_positions"]]
+    laser_ids = context["laser_ids"]
     els = {
         "id": mapping.els_name.upper(),
-        "lasers": list(context["laser_ids"]),
+        # None: the topology does not identify this subport's lasers.
+        "lasers": list(laser_ids) if laser_ids is not None else None,
     }
     if mapping.els_bank not in (None, "N/A"):
         els["bank"] = mapping.els_bank
@@ -925,7 +944,8 @@ def _format_map_table(mappings):
             ),
             ",".join(str(lane) for lane in record["oe"]["lanes"]),
             els_name,
-            ",".join(str(laser) for laser in els["lasers"]),
+            ",".join(str(laser) for laser in els["lasers"])
+            if els["lasers"] is not None else UNRESOLVED_LASERS,
         ))
     return tabulate(rows, headers, tablefmt="simple")
 
@@ -1104,11 +1124,12 @@ def _lane_lasers(context):
     """
     mapping = context["mapping"]
     laser_lanes = mapping.laser_to_asic_lane_mapping or {}
+    laser_ids = context["laser_ids"] or ()
     lane_lasers = {}
     for position in context["lane_positions"]:
         asic_lane = mapping.lanes[position]
         lasers = [
-            laser for laser in context["laser_ids"]
+            laser for laser in laser_ids
             if asic_lane in laser_lanes.get(laser, ())
         ]
         lane_lasers["lane{:02d}".format(position)] = (
@@ -1151,7 +1172,9 @@ def print_lane_status_records(records, json_output):
                 laser_state,
                 shared_display,
             ))
-        if lasers and any(lane_lasers.get(lane) is None for lane in lanes):
+        if lasers is None:
+            status_rows.append((interface, els_id, "Lasers", UNRESOLVED_LASERS))
+        elif lasers and any(lane_lasers.get(lane) is None for lane in lanes):
             status_rows.append((
                 interface, els_id, "Lasers (per-lane association unavailable)",
                 ", ".join(
@@ -1455,7 +1478,8 @@ def show_interface_lane_status(port, json_output):
         for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
             oe_api = get_oe_api(cpo, port_name)
             els_api = get_els_api(cpo, port_name)
-            context = get_interface_context(logical_port)
+            context = get_interface_context(logical_port, require_lasers=False)
+            laser_ids = context["laser_ids"]
             records[port_name] = {
                 "Data Path State Indicator": _select_lane_values(
                     oe_api.get_datapath_state(), context["lane_positions"]
@@ -1465,9 +1489,9 @@ def show_interface_lane_status(port, json_output):
                     els_api.get_elsfp_status()
                 ),
                 "ELS Lane State": _select_els_laser_values(
-                    els_api.get_per_lane_state(), context["laser_ids"]
-                ),
-                "ELS Lasers": list(context["laser_ids"]),
+                    els_api.get_per_lane_state(), laser_ids
+                ) if laser_ids is not None else {},
+                "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
                 "Lane Lasers": _lane_lasers(context),
                 "Shared ELS Lasers": list(context["shared_laser_ids"]),
             }

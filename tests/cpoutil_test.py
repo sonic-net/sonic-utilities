@@ -1758,3 +1758,64 @@ class TestLaneStatusLaserAssociation:
         assert lane_rows and all(row[-3:] == ["N/A", "N/A", "N/A"] for row in lane_rows)
         assert "per-lane association unavailable" in table.output
         assert "0: Active, 1: Inactive" in table.output
+
+
+class TestBreakoutWithoutLaneMapping:
+    """Display commands show unresolved lasers instead of aborting; controls still reject."""
+
+    PORTS = {
+        "Ethernet0": {"index": "1", "lanes": "1"},
+        "Ethernet1": {"index": "1", "lanes": "2"},
+    }
+
+    @pytest.fixture
+    def breakout(self, coverage_environment, monkeypatch):
+        TestExplicitLaserMapping.configure(monkeypatch, COVERAGE_CPO_DATA, self.PORTS)
+        api = coverage_environment.api
+        monkeypatch.setattr(api, "get_datapath_state", lambda: ["DataPathActivated"] * 2, raising=False)
+        monkeypatch.setattr(api, "get_per_lane_state",
+                            lambda: {"LaneState1": "Active", "LaneState2": "Inactive"}, raising=False)
+        return coverage_environment
+
+    def test_map_lists_every_port_with_unresolved_lasers(self, breakout):
+        result = invoke_coverage(["show", "interface", "map", "--json"])
+        assert result.exit_code == 0, result.output
+        records = json.loads(result.output)
+        assert sorted(records) == ["Ethernet0", "Ethernet1"]
+        assert records["Ethernet0"]["oe"]["lanes"] == [1]
+        assert records["Ethernet1"]["oe"]["lanes"] == [2]
+        assert all(record["els"]["lasers"] is None for record in records.values())
+
+        table = invoke_coverage(["show", "interface", "map", "Ethernet1"])
+        assert table.exit_code == 0, table.output
+        assert cpoutil.UNRESOLVED_LASERS in table.output
+
+    def test_lane_status_shows_no_guessed_laser_state(self, breakout):
+        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet1", "--json"])
+        assert result.exit_code == 0, result.output
+        record = json.loads(result.output)["Ethernet1"]
+        assert record["Data Path State Indicator"] == {"lane01": "DataPathActivated"}
+        assert record["ELS Lasers"] is None
+        assert record["ELS Lane State"] == {}
+        assert record["Lane Lasers"] == {"lane01": None}
+
+        table = invoke_coverage(["show", "interface", "lane-status"])
+        assert table.exit_code == 0, table.output
+        lane_rows = [line.split() for line in table.output.splitlines()
+                     if line.startswith("Ethernet") and "DataPathActivated" in line]
+        assert [row[0] for row in lane_rows] == ["Ethernet0", "Ethernet1"]
+        assert all(row[-3:] == ["N/A", "N/A", "N/A"] for row in lane_rows)
+        assert table.output.count(cpoutil.UNRESOLVED_LASERS) == 2
+
+    def test_full_port_on_same_topology_still_resolves_lasers(self, coverage_environment, monkeypatch):
+        TestExplicitLaserMapping.configure(
+            monkeypatch, COVERAGE_CPO_DATA, {"Ethernet0": {"index": "1", "lanes": "1,2"}})
+        result = invoke_coverage(["show", "interface", "map", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["Ethernet0"]["els"]["lasers"] == [0, 1]
+
+    def test_tx_disable_still_rejects_unresolved_subport(self, breakout):
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
+        assert result.exit_code != 0
+        assert "needs laser_to_asic_lane_mapping" in result.output
+        assert breakout.api.calls == []
