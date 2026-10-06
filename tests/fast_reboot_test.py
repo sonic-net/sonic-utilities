@@ -81,7 +81,9 @@ class TestFastReboot:
             "--unixsocket ASIC_DB KEYS ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:*",
             "--unixsocket ASIC_DB HGET ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:oid:0x1 SAI_TUNNEL_ATTR_TYPE",
             "--unixsocket ASIC_DB KEYS ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:*",
-            "--unixsocket ASIC_DB HGET ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:oid:0x2 SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE",
+            "--unixsocket ASIC_DB HGET "
+            "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:oid:0x2 "
+            "SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE",
         ]
 
     @pytest.mark.parametrize(
