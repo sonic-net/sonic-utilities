@@ -1095,6 +1095,28 @@ def print_speed_records(records, json_output):
     ))
 
 
+def _lane_lasers(context):
+    """Map each selected OE lane to the ELS laser that feeds its ASIC lane.
+
+    The OE lane position is translated to its ASIC lane ID, which is looked up
+    in the topology's laser_to_asic_lane_mapping. A lane maps to None when the
+    topology does not associate exactly one of the interface's lasers with it.
+    """
+    mapping = context["mapping"]
+    laser_lanes = mapping.laser_to_asic_lane_mapping or {}
+    lane_lasers = {}
+    for position in context["lane_positions"]:
+        asic_lane = mapping.lanes[position]
+        lasers = [
+            laser for laser in context["laser_ids"]
+            if asic_lane in laser_lanes.get(laser, ())
+        ]
+        lane_lasers["lane{:02d}".format(position)] = (
+            lasers[0] if len(lasers) == 1 else None
+        )
+    return lane_lasers
+
+
 def print_lane_status_records(records, json_output):
     if json_output:
         click.echo(_json_records(records))
@@ -1106,28 +1128,36 @@ def print_lane_status_records(records, json_output):
         lane_states = values.get("Data Path State Indicator", {})
         lanes = sorted(lane_states, key=_natural_sort_key)
         lasers = values.get("ELS Lasers", [])
+        lane_lasers = values.get("Lane Lasers", {})
         els_lane_states = values.get("ELS Lane State", {})
         shared = set(values.get("Shared ELS Lasers", []))
         els_id = values.get("ELS", "N/A")
-        for index, lane in enumerate(lanes):
-            laser = "N/A"
-            laser_state = "N/A"
-            if lasers:
-                laser_index = min(
-                    index * len(lasers) // len(lanes), len(lasers) - 1
-                )
-                laser = lasers[laser_index]
-                laser_state = els_lane_states.get(
-                    "lane{:02d}".format(laser), "N/A"
-                )
+        for lane in lanes:
+            # Use only the topology's lane-to-laser association; never infer
+            # it from row positions.
+            laser = lane_lasers.get(lane)
+            if laser is None:
+                laser_display, laser_state, shared_display = "N/A", "N/A", "N/A"
+            else:
+                laser_display = laser
+                laser_state = els_lane_states.get("lane{:02d}".format(laser), "N/A")
+                shared_display = "Yes" if laser in shared else "No"
             lane_rows.append((
                 interface,
                 _display_field(lane),
                 lane_states[lane],
                 els_id,
-                laser,
+                laser_display,
                 laser_state,
-                "Yes" if laser in shared else "No",
+                shared_display,
+            ))
+        if lasers and any(lane_lasers.get(lane) is None for lane in lanes):
+            status_rows.append((
+                interface, els_id, "Lasers (per-lane association unavailable)",
+                ", ".join(
+                    "{}: {}".format(laser, els_lane_states.get("lane{:02d}".format(laser), "N/A"))
+                    for laser in lasers
+                ),
             ))
 
         status = values.get("ELS Status")
@@ -1438,6 +1468,7 @@ def show_interface_lane_status(port, json_output):
                     els_api.get_per_lane_state(), context["laser_ids"]
                 ),
                 "ELS Lasers": list(context["laser_ids"]),
+                "Lane Lasers": _lane_lasers(context),
                 "Shared ELS Lasers": list(context["shared_laser_ids"]),
             }
     except (NotImplementedError, AttributeError) as exc:

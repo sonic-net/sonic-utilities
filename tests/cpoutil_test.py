@@ -1689,3 +1689,72 @@ class TestInterfaceElsEepromBank:
             ["write-eeprom", "interface", "Ethernet0", "--els", "-n", "0x1a", "-o", "0x80", "-d", "01"])
         assert result.exit_code == 0, result.output
         assert [offset for offset, _, _ in community.writes] == [0x1a * 0x100 + 0x80]
+
+
+class TestLaneStatusLaserAssociation:
+    """Each displayed OE lane must show the laser the topology associates with it."""
+
+    # Laser states chosen so that any wrong pairing changes the displayed state.
+    LASER_STATES = {"LaneState1": "Active", "LaneState2": "Inactive", "LaneState3": "Disabled"}
+
+    @pytest.fixture
+    def nonuniform(self, coverage_environment, monkeypatch):
+        # laser 0 -> ASIC lanes 1, 3, 5; laser 1 -> lane 2; laser 2 -> lanes 4, 6
+        TestExplicitLaserMapping.configure(
+            monkeypatch, TestExplicitLaserMapping.nonuniform_topology(),
+            {"Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"}})
+        api = coverage_environment.api
+        monkeypatch.setattr(api, "get_datapath_state", lambda: ["DataPathActivated"] * 6, raising=False)
+        monkeypatch.setattr(api, "get_per_lane_state", lambda: dict(self.LASER_STATES), raising=False)
+        return coverage_environment
+
+    EXPECTED = [  # (lane position, laser, state)
+        (0, 0, "Active"), (1, 1, "Inactive"), (2, 0, "Active"),
+        (3, 2, "Disabled"), (4, 0, "Active"), (5, 2, "Disabled"),
+    ]
+
+    def test_json_carries_the_topology_association(self, nonuniform):
+        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        record = json.loads(result.output)["Ethernet0"]
+        assert record["Lane Lasers"] == {
+            "lane{:02d}".format(position): laser for position, laser, _ in self.EXPECTED
+        }
+
+    def test_table_shows_the_correct_laser_and_state_in_every_row(self, nonuniform):
+        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet0"])
+        assert result.exit_code == 0, result.output
+        rows = [line.split() for line in result.output.splitlines() if line.startswith("Ethernet0")]
+        lane_rows = [row for row in rows if "DataPathActivated" in row]
+        assert len(lane_rows) == len(self.EXPECTED)
+        for row, (_, laser, state) in zip(lane_rows, self.EXPECTED):
+            # Columns end with: ELS, Laser, ELS Lane State, Shared
+            assert row[-4:] == ["ELS0", str(laser), state, "No"], row
+        assert "per-lane association unavailable" not in result.output
+
+    def test_asic_lane_ids_differ_from_lane_positions(self, monkeypatch, coverage_environment):
+        data = TestExplicitLaserMapping.nonuniform_topology()
+        data["devices"]["oe0"]["asic_lanes"] = [33, 34, 35, 36]
+        data["devices"]["els0"]["laser_to_asic_lane_mapping"] = {"1": [33, 35], "2": [34, 36]}
+        TestExplicitLaserMapping.configure(
+            monkeypatch, data, {"Ethernet0": {"index": "1", "lanes": "33,34,35,36"}})
+        context = cpoutil.get_interface_context("Ethernet0")
+        assert cpoutil._lane_lasers(context) == {"lane00": 0, "lane01": 1, "lane02": 0, "lane03": 1}
+
+    def test_no_explicit_mapping_is_not_guessed(self, coverage_environment, monkeypatch):
+        # The legacy topology lists the interface's lasers [0, 1] without a lane mapping.
+        api = coverage_environment.api
+        monkeypatch.setattr(api, "get_datapath_state", lambda: ["DataPathActivated"] * 2, raising=False)
+        monkeypatch.setattr(api, "get_per_lane_state",
+                            lambda: {"LaneState1": "Active", "LaneState2": "Inactive"}, raising=False)
+        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["Ethernet0"]["Lane Lasers"] == {"lane00": None, "lane01": None}
+
+        table = invoke_coverage(["show", "interface", "lane-status", "Ethernet0"])
+        assert table.exit_code == 0, table.output
+        lane_rows = [line.split() for line in table.output.splitlines()
+                     if line.startswith("Ethernet0") and "DataPathActivated" in line]
+        assert lane_rows and all(row[-3:] == ["N/A", "N/A", "N/A"] for row in lane_rows)
+        assert "per-lane association unavailable" in table.output
+        assert "0: Active, 1: Inactive" in table.output
