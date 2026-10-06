@@ -1,6 +1,7 @@
 #!/usr/sbin/env python
 
 import click
+from contextlib import contextmanager
 import datetime
 import ipaddress
 import json
@@ -8,6 +9,8 @@ import netaddr
 import netifaces
 import os
 import re
+import socket
+import stat
 import subprocess
 import sys
 import time
@@ -105,6 +108,8 @@ DEFAULT_GOLDEN_CONFIG_DB_FILE = '/etc/sonic/golden_config_db.json'
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 
 DEFAULT_NAMESPACE = ''
+DB_MIGRATION_SOURCE_AUTO = 'auto'
+DB_MIGRATION_SOURCE_GOLDEN = 'golden'
 CFG_LOOPBACK_PREFIX = "Loopback"
 CFG_LOOPBACK_PREFIX_LEN = len(CFG_LOOPBACK_PREFIX)
 CFG_LOOPBACK_NAME_TOTAL_LEN_MAX = 11
@@ -1770,18 +1775,32 @@ def delete_bgp_peer_table():
     state_db.delete_all_by_pattern(state_db.STATE_DB, "BGP_PEER_CONFIGURED_TABLE|*")
 
 
-def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
+def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE,
+                           config_source=DB_MIGRATION_SOURCE_AUTO,
+                           config_source_file=None,
+                           init_config_file=None):
     # Migrate DB contents to latest version
     db_migrator = '/usr/local/bin/db_migrator.py'
     if os.path.isfile(db_migrator) and os.access(db_migrator, os.X_OK):
+        command = [db_migrator, '-o', 'migrate']
         if namespace is DEFAULT_NAMESPACE:
-            command = [db_migrator, '-o', 'migrate']
+            pass
         else:
-            command = [db_migrator, '-o', 'migrate', '-n', namespace]
+            command += ['-n', namespace]
+
+        if config_source != DB_MIGRATION_SOURCE_AUTO:
+            command += ['--config-source', config_source]
+            if config_source_file:
+                command += ['--config-source-file', config_source_file]
+        if init_config_file:
+            command += ['--init-config-file', init_config_file]
+
         clicommon.run_command(command, display_cmd=True)
 
 
-def multiasic_write_to_db(filename, load_sysinfo):
+def multiasic_write_to_db(filename, load_sysinfo,
+                          migration_config_source=DB_MIGRATION_SOURCE_AUTO,
+                          init_config_file=INIT_CFG_FILE):
     file_input = read_json_file(filename)
     for ns in [DEFAULT_NAMESPACE, *multi_asic.get_namespace_list()]:
         asic_name = HOST_NAMESPACE if ns == DEFAULT_NAMESPACE else ns
@@ -1818,7 +1837,15 @@ def multiasic_write_to_db(filename, load_sysinfo):
         config_db.mod_config(sonic_cfggen.FormatConverter.output_to_db(data))
         client.set(config_db.INIT_INDICATOR, 1)
 
-        migrate_db_to_lastest(ns)
+        migration_config_source_file = (
+            filename if migration_config_source == DB_MIGRATION_SOURCE_GOLDEN else None
+        )
+        migrate_db_to_lastest(
+            ns,
+            migration_config_source,
+            migration_config_source_file,
+            init_config_file
+        )
 
 
 def config_file_yang_validation(filename):
@@ -2283,7 +2310,9 @@ def list_checkpoints(ctx, time, verbose):
 @click.argument('filename', required=False)
 @clicommon.pass_db
 @try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
-def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_format, bypass_lock):
+def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_format, bypass_lock,
+           migration_config_source=DB_MIGRATION_SOURCE_AUTO,
+           init_config_file=INIT_CFG_FILE):
     """Clear current configuration and import a previous saved config DB dump file.
        <filename> : Names of configuration file(s) to load, separated by comma with no spaces in between
     """
@@ -2404,7 +2433,12 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
         _stop_services()
 
     if multiasic_single_file_mode:
-        multiasic_write_to_db(cfg_files[0], load_sysinfo)
+        multiasic_write_to_db(
+            cfg_files[0],
+            load_sysinfo,
+            migration_config_source,
+            init_config_file
+        )
     else:
         # In Single ASIC platforms we have single DB service. In multi-ASIC platforms we have a global DB
         # service running in the host + DB services running in each ASIC namespace created per ASIC.
@@ -2483,8 +2517,8 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
             config_gen_opts = []
 
-            if os.path.isfile(INIT_CFG_FILE):
-                config_gen_opts += ['-j', str(INIT_CFG_FILE)]
+            if os.path.isfile(init_config_file):
+                config_gen_opts += ['-j', str(init_config_file)]
 
             if file_format == 'config_db':
                 config_gen_opts += ['-j', str(file)]
@@ -2507,7 +2541,15 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                     click.echo("An error occurred while removing the temporary file: {}".format(str(e)), err=True)
 
             # Migrate DB contents to latest version
-            migrate_db_to_lastest(namespace)
+            migration_config_source_file = (
+                file if migration_config_source == DB_MIGRATION_SOURCE_GOLDEN else None
+            )
+            migrate_db_to_lastest(
+                namespace,
+                migration_config_source,
+                migration_config_source_file,
+                init_config_file
+            )
 
     # Re-generate the environment variable in case config_db.json was edited
     update_sonic_environment()
@@ -2518,6 +2560,384 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
         _reset_failed_services()
         log.log_notice("'reload' restarting services...")
         _restart_services()
+
+
+def _read_config_dict(filename, description, display_filename=None):
+    display_filename = display_filename or filename
+    if not os.path.isfile(filename):
+        click.secho(
+            "Cannot find {} '{}'!".format(description, display_filename),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    try:
+        config_data = read_json_file(filename)
+    except Exception as e:
+        click.secho(
+            "Failed to read {} '{}': {}".format(
+                description, display_filename, str(e)
+            ),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    if not isinstance(config_data, dict):
+        click.secho(
+            "{} '{}' must contain a JSON object.".format(
+                description.capitalize(), display_filename
+            ),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    return config_data
+
+
+def _find_missing_config_paths(required_config, candidate_config, path=''):
+    missing_paths = []
+    if not isinstance(required_config, dict):
+        return missing_paths
+
+    if not isinstance(candidate_config, dict):
+        return [path or '<root>']
+
+    for key, value in required_config.items():
+        child_path = '{}.{}'.format(path, key) if path else key
+        if key not in candidate_config:
+            missing_paths.append(child_path)
+        elif isinstance(value, dict):
+            missing_paths.extend(_find_missing_config_paths(value, candidate_config[key], child_path))
+
+    return missing_paths
+
+
+def _read_hardware_config(hwsku):
+    command = [SONIC_CFGGEN_PATH, '-H', '-k', hwsku, '--print-data']
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+    except (OSError, subprocess.CalledProcessError) as e:
+        stderr = getattr(e, 'stderr', '') or ''
+        click.secho(
+            "Failed to generate HWSKU configuration for '{}': {}".format(
+                hwsku, stderr.strip() or str(e)
+            ),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    try:
+        hardware_config = json.loads(result.stdout)
+    except (TypeError, ValueError) as e:
+        click.secho(
+            "Failed to parse HWSKU configuration for '{}': {}".format(hwsku, str(e)),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    if not isinstance(hardware_config, dict):
+        click.secho(
+            "HWSKU configuration for '{}' must contain a JSON object.".format(hwsku),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    return hardware_config
+
+
+@contextmanager
+def _snapshot_golden_native_file(filename, description, prefix):
+    source_fd = None
+    snapshot_fd = None
+    snapshot_name = None
+    try:
+        source_fd = os.open(
+            filename,
+            os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
+        )
+        if not stat.S_ISREG(os.fstat(source_fd).st_mode):
+            raise ValueError("source is not a regular file")
+
+        snapshot_fd, snapshot_name = tempfile.mkstemp(
+            dir='/tmp',
+            prefix=prefix,
+            suffix='.json'
+        )
+        os.fchmod(snapshot_fd, 0o600)
+
+        with os.fdopen(source_fd, 'rb') as source:
+            source_fd = None
+            with os.fdopen(snapshot_fd, 'wb') as snapshot:
+                snapshot_fd = None
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    snapshot.write(chunk)
+                snapshot.flush()
+                os.fsync(snapshot.fileno())
+    except Exception as e:
+        if source_fd is not None:
+            os.close(source_fd)
+        if snapshot_fd is not None:
+            os.close(snapshot_fd)
+        if snapshot_name is not None:
+            try:
+                os.remove(snapshot_name)
+            except OSError:
+                pass
+        click.secho(
+            "Failed to snapshot {} '{}': {}".format(description, filename, str(e)),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    try:
+        yield snapshot_name
+    finally:
+        try:
+            os.remove(snapshot_name)
+        except OSError:
+            pass
+
+
+@contextmanager
+def _snapshot_golden_native_config(filename):
+    with _snapshot_golden_native_file(
+            filename, "golden config", "golden_config.") as snapshot_name:
+        yield snapshot_name
+
+
+@contextmanager
+def _snapshot_golden_native_init_config(filename):
+    with _snapshot_golden_native_file(
+            filename, "init config", "init_cfg.") as snapshot_name:
+        yield snapshot_name
+
+
+def _read_trusted_golden_native_identity():
+    try:
+        trusted_hostname = device_info.get_hostname() or socket.gethostname()
+        identity = {
+            'platform': device_info.get_platform(config_db=None),
+            'hwsku': device_info.get_hwsku(),
+            'mac': device_info.get_system_mac(hostname=trusted_hostname)
+        }
+    except Exception as e:
+        click.secho(
+            "Failed to read trusted local device identity: {}".format(str(e)),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    missing_identity = [
+        field for field in ('platform', 'mac') if not identity.get(field)
+    ]
+    if missing_identity:
+        click.secho(
+            "Unable to determine trusted local device identity fields: {}".format(
+                ', '.join(missing_identity)
+            ),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    return identity
+
+
+def _normalize_golden_native_identity(field, value):
+    normalized = str(value).strip()
+    if field == 'mac':
+        return normalized.replace('-', ':').lower()
+    return normalized
+
+
+def _validate_golden_native_config(
+        filename, display_filename=None, init_config_filename=INIT_CFG_FILE,
+        init_display_filename=None):
+    display_filename = display_filename or filename
+    init_config = _read_config_dict(
+        init_config_filename,
+        "init config",
+        init_display_filename or init_config_filename
+    )
+    golden_config = _read_config_dict(
+        filename, "golden config", display_filename
+    )
+
+    if not config_file_yang_validation(filename):
+        click.secho(
+            "Invalid golden config file '{}'!".format(display_filename),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    table_hard_dependency_check(golden_config)
+
+    metadata = golden_config.get('DEVICE_METADATA', {}).get('localhost', {})
+    required_metadata = ('platform', 'mac', 'hwsku', 'hostname', 'type')
+    missing_metadata = [
+        'DEVICE_METADATA.localhost.{}'.format(field)
+        for field in required_metadata
+        if not metadata.get(field)
+    ]
+    if missing_metadata:
+        click.secho(
+            "Golden config is missing required metadata: {}".format(', '.join(missing_metadata)),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    trusted_identity = _read_trusted_golden_native_identity()
+    identity_mismatches = []
+    for field in ('platform', 'mac', 'hwsku'):
+        trusted_value = trusted_identity.get(field)
+        if not trusted_value:
+            continue
+        if (_normalize_golden_native_identity(field, metadata[field])
+                != _normalize_golden_native_identity(field, trusted_value)):
+            identity_mismatches.append(
+                'DEVICE_METADATA.localhost.{} expected {!r}, got {!r}'.format(
+                    field, trusted_value, metadata[field]
+                )
+            )
+    if identity_mismatches:
+        click.secho(
+            "Golden config does not match trusted local device identity: {}".format(
+                '; '.join(identity_mismatches)
+            ),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    hardware_config = _read_hardware_config(metadata['hwsku'])
+    missing_hardware_paths = _find_missing_config_paths(
+        hardware_config, golden_config
+    )
+    if missing_hardware_paths:
+        displayed_paths = missing_hardware_paths[:10]
+        if len(missing_hardware_paths) > len(displayed_paths):
+            displayed_paths.append(
+                '... and {} more'.format(
+                    len(missing_hardware_paths) - len(displayed_paths)
+                )
+            )
+        click.secho(
+            "Golden config does not completely cover HWSKU config: {}".format(
+                ', '.join(displayed_paths)
+            ),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    missing_init_paths = _find_missing_config_paths(init_config, golden_config)
+    if missing_init_paths:
+        displayed_paths = missing_init_paths[:10]
+        if len(missing_init_paths) > len(displayed_paths):
+            displayed_paths.append('... and {} more'.format(len(missing_init_paths) - len(displayed_paths)))
+        click.secho(
+            "Golden config does not completely cover init config: {}".format(', '.join(displayed_paths)),
+            fg='magenta'
+        )
+        raise click.Abort()
+
+
+def _invoke_golden_native_reload(
+        ctx, filename, no_service_restart, force,
+        init_config_filename=INIT_CFG_FILE):
+    return ctx.invoke(
+        config.commands['reload'],
+        filename=filename,
+        yes=True,
+        load_sysinfo=False,
+        no_service_restart=no_service_restart,
+        force=force,
+        file_format='config_db',
+        bypass_lock=True,
+        migration_config_source=DB_MIGRATION_SOURCE_GOLDEN,
+        init_config_file=init_config_filename
+    )
+
+
+@config.command("load_golden_config")
+@click.option('-y', '--yes', is_flag=True, help='Confirm golden-native configuration reload')
+@click.option('-n', '--no_service_restart', default=False, is_flag=True,
+              help='Do not restart docker services')
+@click.option('-f', '--force', default=False, is_flag=True,
+              help='Force config reload without system checks')
+@click.option('--check-only', default=False, is_flag=True,
+              help='Validate the complete golden config without changing CONFIG_DB')
+@click.option('--migrate-only', default=False, is_flag=True,
+              help='Validate complete gold and migrate CONFIG_DB without reloading services')
+@click.option('-b', '--bypass-lock', default=False, is_flag=True,
+              help='Do golden-native validation/reload without acquiring lock')
+@click.argument('filename', required=False, default=DEFAULT_GOLDEN_CONFIG_DB_FILE)
+@click.pass_context
+@try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
+def load_golden_config(ctx, filename, yes, no_service_restart, force,
+                       check_only, migrate_only, bypass_lock):
+    """Validate and reload a complete golden CONFIG_DB without minigraph."""
+    argv_str = ' '.join(['config', *sys.argv[1:]])
+    log.log_notice(f"'load_golden_config' executing with command: {argv_str}")
+
+    if multi_asic.is_multi_asic():
+        click.secho(
+            "Golden-native configuration is not supported on multi-ASIC platforms.",
+            fg='magenta'
+        )
+        raise click.Abort()
+
+    if check_only and migrate_only:
+        raise click.UsageError(
+            "--check-only and --migrate-only cannot be used together"
+        )
+
+    with _snapshot_golden_native_config(filename) as snapshot_name, \
+            _snapshot_golden_native_init_config(INIT_CFG_FILE) as init_snapshot_name:
+        _validate_golden_native_config(
+            snapshot_name,
+            filename,
+            init_snapshot_name,
+            INIT_CFG_FILE
+        )
+
+        if check_only:
+            click.echo("Golden config validation succeeded.")
+            return
+
+        if not yes:
+            if migrate_only:
+                click.confirm(
+                    "Migrate CONFIG_DB from complete golden config {} ?".format(filename),
+                    abort=True
+                )
+            else:
+                click.confirm(
+                    "Clear current config and reload complete golden config from {} ?".format(filename),
+                    abort=True
+                )
+
+        if migrate_only:
+            return migrate_db_to_lastest(
+                DEFAULT_NAMESPACE,
+                DB_MIGRATION_SOURCE_GOLDEN,
+                snapshot_name,
+                init_snapshot_name
+            )
+
+        return _invoke_golden_native_reload(
+            ctx,
+            snapshot_name,
+            no_service_restart,
+            force,
+            init_snapshot_name
+        )
+
 
 @config.command("load_mgmt_config")
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false,
@@ -2572,9 +2992,12 @@ def load_mgmt_config(filename):
 @clicommon.pass_db
 @try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
 def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, golden_config_path, bypass_lock):
-    """Reconfigure based on minigraph."""
+    """Deprecated compatibility path: reconfigure based on minigraph."""
     argv_str = ' '.join(['config', *sys.argv[1:]])
     log.log_notice(f"'load_minigraph' executing with command: {argv_str}")
+    log.log_warning(
+        "'load_minigraph' is deprecated; use 'load_golden_config' for complete golden configuration"
+    )
 
     # check if golden_config exists if override flag is set
     if override_config:

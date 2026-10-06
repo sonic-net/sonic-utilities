@@ -32,6 +32,9 @@ except KeyError:
 
 SYSLOG_IDENTIFIER = 'db_migrator'
 DEFAULT_NAMESPACE = ''
+CONFIG_SOURCE_AUTO = 'auto'
+CONFIG_SOURCE_GOLDEN = 'golden'
+CONFIG_SOURCES = (CONFIG_SOURCE_AUTO, CONFIG_SOURCE_GOLDEN)
 
 
 # Global logger instance
@@ -39,7 +42,8 @@ log = logger.Logger(SYSLOG_IDENTIFIER)
 
 
 class DBMigrator():
-    def __init__(self, namespace, socket=None):
+    def __init__(self, namespace, socket=None, config_source=CONFIG_SOURCE_AUTO,
+                 config_source_file=None, init_config_file=None):
         """
         Version string format (202305 and above):
             version_<branch>_<build>
@@ -64,9 +68,15 @@ class DBMigrator():
         self.TABLE_KEY       = 'DATABASE'
         self.TABLE_FIELD     = 'VERSION'
 
+        if config_source not in CONFIG_SOURCES:
+            raise ValueError("Unsupported config source '{}'".format(config_source))
+
+        self.config_source = config_source
+        self.config_source_file = config_source_file or GOLDEN_CFG_FILE
+        self.init_config_file = init_config_file or INIT_CFG_FILE
         self.platform = device_info.get_platform_info().get('platform')
 
-        # Generate config_src_data from minigraph and golden config
+        # Generate config_src_data from the selected configuration source.
         self.generate_config_src(namespace)
 
         db_kwargs = {}
@@ -106,53 +116,71 @@ class DBMigrator():
             from mellanox_buffer_migrator import MellanoxBufferMigrator
             self.mellanox_buffer_migrator = MellanoxBufferMigrator(self.configDB, self.appDB, self.stateDB)
 
-    def generate_config_src(self, ns):
-        '''
-        Generate config_src_data from minigraph and golden config
-        This method uses golden_config_data and minigraph_data as local variables,
-        which means they are not accessible or modifiable from outside this method.
-        This way, this method ensures that these variables are not changed unintentionally.
-        Args:
-            ns: namespace
-        Returns:
-        '''
-        # load config data from golden_config_db.json
-        golden_config_data = None
+    def _load_golden_config(self, ns, required):
+        if not os.path.isfile(self.config_source_file):
+            if required:
+                raise RuntimeError(
+                    "Required golden config file '{}' does not exist".format(
+                        self.config_source_file
+                    )
+                )
+            return None
+
         try:
-            if os.path.isfile(GOLDEN_CFG_FILE):
-                with open(GOLDEN_CFG_FILE) as f:
-                    golden_data = json.load(f)
-                    if ns is None:
-                        golden_config_data = golden_data
-                    else:
-                        if ns == DEFAULT_NAMESPACE:
-                            config_namespace = "localhost"
-                        else:
-                            config_namespace = ns
-                        golden_config_data = golden_data.get(config_namespace, None)
+            with open(self.config_source_file) as f:
+                golden_data = json.load(f)
+
+            if not isinstance(golden_data, dict):
+                raise ValueError("top-level value must be a JSON object")
+
+            if ns is None:
+                return golden_data
+
+            config_namespace = "localhost" if ns == DEFAULT_NAMESPACE else ns
+            golden_config_data = golden_data.get(config_namespace)
+            if golden_config_data is not None and not isinstance(golden_config_data, dict):
+                raise ValueError(
+                    "namespace '{}' must contain a JSON object".format(config_namespace)
+                )
+            if required and golden_config_data is None:
+                raise ValueError(
+                    "namespace '{}' is missing".format(config_namespace)
+                )
+            return golden_config_data
         except Exception as e:
-            log.log_error('Caught exception while trying to load golden config: ' + str(e))
-            pass
-        # load config data from minigraph to get the default/hardcoded values from minigraph.py
+            message = "Failed to load golden config '{}': {}".format(
+                self.config_source_file, str(e)
+            )
+            if required:
+                raise RuntimeError(message) from e
+            log.log_error(message)
+            return None
+
+    def generate_config_src(self, ns):
+        """Generate config source data for database migration."""
+        golden_config_data = self._load_golden_config(
+            ns, required=self.config_source == CONFIG_SOURCE_GOLDEN
+        )
+
+        if self.config_source == CONFIG_SOURCE_GOLDEN:
+            self.config_src_data = golden_config_data
+            return
+
+        # Load minigraph defaults only for the legacy automatic source mode.
         minigraph_data = None
         try:
             if os.path.isfile(MINIGRAPH_FILE):
                 minigraph_data = parse_xml(MINIGRAPH_FILE, platform=self.platform)
         except Exception as e:
             log.log_error('Caught exception while trying to parse minigraph: ' + str(e))
-            pass
-        # When both golden config and minigraph exists, override minigraph config with golden config
-        # config_src_data is the source of truth for config data
-        # this is to avoid duplicating the hardcoded these values in db_migrator
+
+        # In automatic mode, golden configuration overrides minigraph defaults.
         self.config_src_data = None
         if minigraph_data:
-            # Shallow copy for better performance
             self.config_src_data = minigraph_data
             if golden_config_data:
-                # Shallow copy for better performance
                 self.config_src_data = update_config(minigraph_data, golden_config_data, False)
         elif golden_config_data:
-            # Shallow copy for better performance
             self.config_src_data = golden_config_data
 
     def migrate_pfc_wd_table(self):
@@ -730,7 +758,7 @@ class DBMigrator():
     def migrate_dns_nameserver(self):
         """
         Handle DNS_NAMESERVER table migration. Migrations handled:
-        If there's no DNS_NAMESERVER in config_DB, load DNS_NAMESERVER from minigraph
+        If CONFIG_DB has no DNS_NAMESERVER, load it from the selected config source.
         """
         if not self.config_src_data or 'DNS_NAMESERVER' not in self.config_src_data:
             return
@@ -745,7 +773,7 @@ class DBMigrator():
             return
         device_metadata_old = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
         device_metadata_new = self.config_src_data['DEVICE_METADATA']['localhost']
-        # overwrite the routing-config-mode as per minigraph parser
+        # Overwrite routing-config-mode using the selected config source.
         # Criteria for update:
         # if config mode is missing in base OS or if base and target modes are not same
         #  Eg. in 201811 mode is "unified", and in newer branches mode is "separated"
@@ -1456,7 +1484,7 @@ class DBMigrator():
 
     def common_migration_ops(self):
         try:
-            with open(INIT_CFG_FILE) as f:
+            with open(self.init_config_file) as f:
                 init_db = json.load(f)
         except Exception as e:
             raise Exception(str(e))
@@ -1486,7 +1514,7 @@ class DBMigrator():
 
         # Updating edgezone aggregator cable length config for T0 devices
         self.update_edgezone_aggregator_config()
-        # update FRR config mode based on minigraph parser on target image
+        # Update FRR config mode based on the selected source on the target image.
         self.migrate_routing_config_mode()
 
         self.migrate_tacplus()
@@ -1529,10 +1557,32 @@ def main():
                         required = False,
                         help = 'The asic namespace whose DB instance we need to connect',
                         default = None )
+        parser.add_argument('--config-source',
+                        dest='config_source',
+                        type=str,
+                        required=False,
+                        choices=CONFIG_SOURCES,
+                        help='configuration source used by migrations [default: auto]',
+                        default=CONFIG_SOURCE_AUTO)
+        parser.add_argument('--config-source-file',
+                        dest='config_source_file',
+                        type=str,
+                        required=False,
+                        help='golden config file used when --config-source=golden',
+                        default=None)
+        parser.add_argument('--init-config-file',
+                        dest='init_config_file',
+                        type=str,
+                        required=False,
+                        help='init config file used by common migration operations',
+                        default=None)
         args = parser.parse_args()
         operation = args.operation
         socket_path = args.socket
         namespace = args.namespace
+        config_source = getattr(args, 'config_source', CONFIG_SOURCE_AUTO)
+        config_source_file = getattr(args, 'config_source_file', None)
+        init_config_file = getattr(args, 'init_config_file', None)
 
         # Can't load global config base on the result of is_multi_asic(), because on multi-asic device, when db_migrate.py
         # run on the local database, ASIC instance will have not created the /var/run/redis0/sonic-db/database-config.json
@@ -1544,9 +1594,20 @@ def main():
                 SonicDBConfig.initialize()
 
         if socket_path:
-            dbmgtr = DBMigrator(namespace, socket=socket_path)
+            dbmgtr = DBMigrator(
+                namespace,
+                socket=socket_path,
+                config_source=config_source,
+                config_source_file=config_source_file,
+                init_config_file=init_config_file
+            )
         else:
-            dbmgtr = DBMigrator(namespace)
+            dbmgtr = DBMigrator(
+                namespace,
+                config_source=config_source,
+                config_source_file=config_source_file,
+                init_config_file=init_config_file
+            )
 
         result = getattr(dbmgtr, operation)()
         if result:

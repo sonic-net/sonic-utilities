@@ -1022,6 +1022,670 @@ class TestConfigReload(object):
         dbconnector.load_namespace_config()
 
 
+class TestLoadGoldenConfig(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        import config.main
+        importlib.reload(config.main)
+
+    @staticmethod
+    def _write_json(filename, data):
+        with open(filename, 'w') as config_file:
+            json.dump(data, config_file)
+
+    @staticmethod
+    def _valid_init_config():
+        return {
+            "FEATURE": {
+                "bgp": {
+                    "state": "enabled"
+                }
+            }
+        }
+
+    @staticmethod
+    def _valid_hardware_config():
+        return {
+            "PORT": {
+                "Ethernet0": {
+                    "alias": "Ethernet0",
+                    "index": "0",
+                    "lanes": "1,2,3,4",
+                    "speed": "100000"
+                }
+            }
+        }
+
+    @staticmethod
+    def _valid_golden_config():
+        return {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "x86_64-kvm_x86_64-r0",
+                    "mac": "00:01:02:03:04:05",
+                    "hwsku": "Force10-S6000",
+                    "hostname": "sonic",
+                    "type": "ToRRouter"
+                }
+            },
+            "FEATURE": {
+                "bgp": {
+                    "state": "enabled"
+                }
+            },
+            **TestLoadGoldenConfig._valid_hardware_config()
+        }
+
+    @pytest.fixture(autouse=True)
+    def _mock_hardware_config(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        with mock.patch.object(
+                config,
+                "_read_hardware_config",
+                return_value=self._valid_hardware_config()), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_hostname",
+                    return_value="sonic"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_platform",
+                    return_value="x86_64-kvm_x86_64-r0"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_hwsku",
+                    return_value="Force10-S6000"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_system_mac",
+                    return_value="00:01:02:03:04:05"):
+            yield
+
+    def test_check_only_validates_without_reloading(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True), \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+            assert result.exit_code == 0
+            assert "Golden config validation succeeded." in result.output
+            mock_reload.assert_not_called()
+
+    def test_check_only_and_migrate_only_are_mutually_exclusive(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "--migrate-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code == 2
+        assert "--check-only and --migrate-only cannot be used together" in result.output
+
+    def test_migrate_only_uses_validated_snapshots_without_reloading(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        original_config = self._valid_golden_config()
+        original_init_config = self._valid_init_config()
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", original_config)
+            self._write_json("init_cfg.json", original_init_config)
+
+            def validate_snapshot(
+                    snapshot_name, display_filename, init_snapshot_name,
+                    init_display_filename):
+                assert display_filename == "golden_config.json"
+                assert init_display_filename == "init_cfg.json"
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+                self._write_json("golden_config.json", {"replaced": True})
+                self._write_json("init_cfg.json", {"replaced": True})
+
+            def migrate_snapshot(
+                    namespace, config_source, snapshot_name, init_snapshot_name):
+                assert namespace == config.DEFAULT_NAMESPACE
+                assert config_source == config.DB_MIGRATION_SOURCE_GOLDEN
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_config",
+                        side_effect=validate_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest",
+                        side_effect=migrate_snapshot) as mock_migrate, \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "--migrate-only", "-b", "golden_config.json"]
+                )
+
+            snapshot_name = mock_migrate.call_args.args[2]
+            init_snapshot_name = mock_migrate.call_args.args[3]
+            assert result.exit_code == 0
+            assert not os.path.exists(snapshot_name)
+            assert not os.path.exists(init_snapshot_name)
+            mock_reload.assert_not_called()
+
+    def test_reload_delegates_without_sysinfo_or_nested_lock(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload",
+                        return_value=None) as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "-n", "-f", "golden_config.json"]
+                )
+
+            assert result.exit_code == 0
+            assert "Acquired lock on" in result.output
+            assert "Released lock on" in result.output
+            context, filename, no_service_restart, force, init_filename = \
+                mock_reload.call_args.args
+            assert isinstance(context, click.Context)
+            assert os.path.basename(filename).startswith("golden_config.")
+            assert filename.endswith(".json")
+            assert not os.path.exists(filename)
+            assert os.path.basename(init_filename).startswith("init_cfg.")
+            assert init_filename.endswith(".json")
+            assert not os.path.exists(init_filename)
+            assert no_service_restart is True
+            assert force is True
+
+    def test_reload_helper_disables_sysinfo_and_bypasses_nested_lock(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        context = mock.Mock()
+
+        config._invoke_golden_native_reload(
+            context,
+            "golden_config.json",
+            no_service_restart=True,
+            force=True
+        )
+
+        context.invoke.assert_called_once_with(
+            config.config.commands["reload"],
+            filename="golden_config.json",
+            yes=True,
+            load_sysinfo=False,
+            no_service_restart=True,
+            force=True,
+            file_format="config_db",
+            bypass_lock=True,
+            migration_config_source=config.DB_MIGRATION_SOURCE_GOLDEN,
+            init_config_file=config.INIT_CFG_FILE
+        )
+
+    def test_reload_helper_forwards_source_through_click_context(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        reload_command = config.config.commands["reload"]
+        callback = mock.Mock()
+        context = click.Context(config.config.commands["load_golden_config"])
+
+        with mock.patch.object(reload_command, "callback", callback):
+            config._invoke_golden_native_reload(
+                context,
+                "golden_config.json",
+                no_service_restart=True,
+                force=True
+            )
+
+        assert callback.call_args.kwargs["migration_config_source"] == \
+            config.DB_MIGRATION_SOURCE_GOLDEN
+        assert callback.call_args.kwargs["init_config_file"] == config.INIT_CFG_FILE
+
+    def test_reload_migrates_from_the_exact_loaded_gold(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True), \
+                    mock.patch.object(config, "migrate_db_to_lastest") as mock_migrate, \
+                    mock.patch(
+                        "utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)
+                    ):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "-n", "-f", "golden_config.json"],
+                    obj={"config_db": db.cfgdb}
+                )
+
+        assert result.exit_code == 0
+        migration_args = mock_migrate.call_args.args
+        assert migration_args[:2] == (
+            config.DEFAULT_NAMESPACE,
+            config.DB_MIGRATION_SOURCE_GOLDEN
+        )
+        assert os.path.basename(migration_args[2]).startswith("golden_config.")
+        assert migration_args[2].endswith(".json")
+        assert not os.path.exists(migration_args[2])
+        assert os.path.basename(migration_args[3]).startswith("init_cfg.")
+        assert migration_args[3].endswith(".json")
+        assert not os.path.exists(migration_args[3])
+
+    def test_reload_uses_snapshot_after_source_replacement(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        original_config = self._valid_golden_config()
+        original_init_config = self._valid_init_config()
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", original_config)
+            self._write_json("init_cfg.json", original_init_config)
+
+            def validate_snapshot(
+                    snapshot_name, display_filename, init_snapshot_name,
+                    init_display_filename):
+                assert display_filename == "golden_config.json"
+                assert init_display_filename == "init_cfg.json"
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+                self._write_json("golden_config.json", {"replaced": True})
+                self._write_json("init_cfg.json", {"replaced": True})
+
+            def invoke_snapshot(
+                    _ctx, snapshot_name, _no_restart, _force,
+                    init_snapshot_name):
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                    config,
+                    "_validate_golden_native_config",
+                    side_effect=validate_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload",
+                        side_effect=invoke_snapshot) as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "-b", "golden_config.json"]
+                )
+
+            snapshot_name = mock_reload.call_args.args[1]
+            init_snapshot_name = mock_reload.call_args.args[4]
+            assert result.exit_code == 0
+            assert not os.path.exists(snapshot_name)
+            assert not os.path.exists(init_snapshot_name)
+            with open("golden_config.json") as replaced:
+                assert json.load(replaced) == {"replaced": True}
+            with open("init_cfg.json") as replaced:
+                assert json.load(replaced) == {"replaced": True}
+
+    def test_db_migration_uses_exact_golden_source_file(self, get_cmd_module):
+        (config, _) = get_cmd_module
+
+        with mock.patch.object(config.os.path, "isfile", return_value=True), \
+                mock.patch.object(config.os, "access", return_value=True), \
+                mock.patch.object(config.clicommon, "run_command") as mock_run_command:
+            config.migrate_db_to_lastest(
+                config_source=config.DB_MIGRATION_SOURCE_GOLDEN,
+                config_source_file="golden_config.json",
+                init_config_file="init_cfg.json"
+            )
+
+        mock_run_command.assert_called_once_with(
+            [
+                "/usr/local/bin/db_migrator.py",
+                "-o",
+                "migrate",
+                "--config-source",
+                "golden",
+                "--config-source-file",
+                "golden_config.json",
+                "--init-config-file",
+                "init_cfg.json"
+            ],
+            display_cmd=True
+        )
+
+    def test_db_migration_preserves_automatic_source_by_default(self, get_cmd_module):
+        (config, _) = get_cmd_module
+
+        with mock.patch.object(config.os.path, "isfile", return_value=True), \
+                mock.patch.object(config.os, "access", return_value=True), \
+                mock.patch.object(config.clicommon, "run_command") as mock_run_command:
+            config.migrate_db_to_lastest()
+
+        mock_run_command.assert_called_once_with(
+            ["/usr/local/bin/db_migrator.py", "-o", "migrate"],
+            display_cmd=True
+        )
+
+    def test_missing_init_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", self._valid_golden_config())
+            with mock.patch.object(config, "INIT_CFG_FILE", "missing_init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Failed to snapshot init config 'missing_init_cfg.json'" in result.output
+
+    def test_malformed_init_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            with open("init_cfg.json", 'w') as init_file:
+                init_file.write("{")
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Failed to read init config 'init_cfg.json'" in result.output
+
+    def test_malformed_golden_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            with open("golden_config.json", 'w') as golden_file:
+                golden_file.write("{")
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Failed to read golden config 'golden_config.json'" in result.output
+
+    def test_yang_invalid_golden_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Invalid golden config file 'golden_config.json'" in result.output
+
+    def test_missing_required_metadata_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["DEVICE_METADATA"]["localhost"]["mac"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "DEVICE_METADATA.localhost.mac" in result.output
+
+    def test_missing_device_type_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["DEVICE_METADATA"]["localhost"]["type"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "DEVICE_METADATA.localhost.type" in result.output
+
+    def test_trusted_identity_uses_local_sources(self, get_cmd_module):
+        (config, _) = get_cmd_module
+
+        with mock.patch.object(
+                config.device_info, "get_hostname", return_value="trusted-host"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_platform",
+                    return_value="x86_64-kvm_x86_64-r0") as mock_get_platform, \
+                mock.patch.object(
+                    config.device_info,
+                    "get_hwsku",
+                    return_value="Force10-S6000"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_system_mac",
+                    return_value="00:01:02:03:04:05") as mock_get_system_mac:
+            identity = config._read_trusted_golden_native_identity()
+
+        assert identity == {
+            "platform": "x86_64-kvm_x86_64-r0",
+            "hwsku": "Force10-S6000",
+            "mac": "00:01:02:03:04:05",
+        }
+        mock_get_platform.assert_called_once_with(config_db=None)
+        mock_get_system_mac.assert_called_once_with(hostname="trusted-host")
+
+    @pytest.mark.parametrize("field,candidate_value,trusted_value", [
+        ("platform", "x86_64-other-r0", "x86_64-kvm_x86_64-r0"),
+        ("hwsku", "Other-HWSKU", "Force10-S6000"),
+        ("mac", "00:01:02:03:04:06", "00:01:02:03:04:05"),
+    ])
+    def test_mismatched_device_identity_fails_closed(
+            self, get_cmd_module, field, candidate_value, trusted_value):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        golden_config["DEVICE_METADATA"]["localhost"][field] = candidate_value
+        trusted_identity = {
+            "platform": "x86_64-kvm_x86_64-r0",
+            "mac": "00:01:02:03:04:05",
+            "hwsku": "Force10-S6000"
+        }
+        trusted_identity[field] = trusted_value
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_read_trusted_golden_native_identity",
+                        return_value=trusted_identity):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "does not match trusted local device identity" in result.output
+        assert "DEVICE_METADATA.localhost.{}".format(field) in result.output
+
+    def test_mac_identity_comparison_is_case_and_separator_insensitive(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_read_trusted_golden_native_identity",
+                        return_value={
+                            "platform": "x86_64-kvm_x86_64-r0",
+                            "mac": "00-01-02-03-04-05",
+                            "hwsku": "Force10-S6000"
+                        }):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+
+    def test_incomplete_golden_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["FEATURE"]["bgp"]["state"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "FEATURE.bgp.state" in result.output
+
+    def test_missing_hwsku_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["PORT"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "HWSKU config: PORT" in result.output
+
+    def test_hard_dependency_failure_is_propagated(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        golden_config["AAA"] = {"authentication": {"login": "tacacs+"}}
+        golden_config["TACPLUS"] = {"global": {}}
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "config_file_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Authentication with 'tacacs+' is not allowed" in result.output
+
+    def test_multi_asic_is_rejected(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(config.multi_asic, "is_multi_asic", return_value=True):
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code != 0
+        assert "not supported on multi-ASIC platforms" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+
+
 class TestBMPConfig(object):
     @classmethod
     def setup_class(cls):
@@ -1392,6 +2056,16 @@ class TestLoadMinigraph(object):
         print("SETUP")
         import config.main
         importlib.reload(config.main)
+
+    def test_help_marks_command_as_deprecated(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        result = CliRunner().invoke(
+            config.config.commands["load_minigraph"],
+            ["--help"]
+        )
+
+        assert result.exit_code == 0
+        assert "Deprecated compatibility path" in result.output
 
     def read_json_file_side_effect(self, filename):
         return {
