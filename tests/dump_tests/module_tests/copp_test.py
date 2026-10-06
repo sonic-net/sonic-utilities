@@ -209,6 +209,6 @@ class TestCoppModule:
         params = {}
         m_copp = Copp(match_engine)
         returned = m_copp.get_all_args("")
-        expect = ["bgp", "bgpv6", "lacp", "arp_req", "arp_resp", "neigh_discovery", "lldp", "dhcp", "dhcpv6", "udld", "ip2me", "src_nat_miss", "dest_nat_miss", "sample_packet", "snmp", "bfd", "vrrpv6", "ospf", "ospfv6"]
+        expect = ["bgp", "bgpv6", "lacp", "arp_req", "arp_resp", "neigh_discovery", "lldp", "dhcp", "dhcp_l2", "dhcpv6", "dhcpv6_l2", "udld", "ip2me", "src_nat_miss", "dest_nat_miss", "sample_packet", "snmp", "bfd", "vrrpv6", "ospf", "ospfv6"]
         ddiff = DeepDiff(expect, returned, ignore_order=True)
         assert not ddiff, ddiff
