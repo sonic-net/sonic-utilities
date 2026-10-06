@@ -760,6 +760,7 @@ class TestSflowSampleDirectionMigrator(object):
             diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
             assert not diff
 
+
 class TestConfigSourceSelection(object):
     @staticmethod
     def _write_json(filename, data):

@@ -1558,24 +1558,24 @@ def main():
                         help = 'The asic namespace whose DB instance we need to connect',
                         default = None )
         parser.add_argument('--config-source',
-                        dest='config_source',
-                        type=str,
-                        required=False,
-                        choices=CONFIG_SOURCES,
-                        help='configuration source used by migrations [default: auto]',
-                        default=CONFIG_SOURCE_AUTO)
+                            dest='config_source',
+                            type=str,
+                            required=False,
+                            choices=CONFIG_SOURCES,
+                            help='configuration source used by migrations [default: auto]',
+                            default=CONFIG_SOURCE_AUTO)
         parser.add_argument('--config-source-file',
-                        dest='config_source_file',
-                        type=str,
-                        required=False,
-                        help='golden config file used when --config-source=golden',
-                        default=None)
+                            dest='config_source_file',
+                            type=str,
+                            required=False,
+                            help='golden config file used when --config-source=golden',
+                            default=None)
         parser.add_argument('--init-config-file',
-                        dest='init_config_file',
-                        type=str,
-                        required=False,
-                        help='init config file used by common migration operations',
-                        default=None)
+                            dest='init_config_file',
+                            type=str,
+                            required=False,
+                            help='init config file used by common migration operations',
+                            default=None)
         args = parser.parse_args()
         operation = args.operation
         socket_path = args.socket

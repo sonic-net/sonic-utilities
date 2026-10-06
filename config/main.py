@@ -1775,10 +1775,11 @@ def delete_bgp_peer_table():
     state_db.delete_all_by_pattern(state_db.STATE_DB, "BGP_PEER_CONFIGURED_TABLE|*")
 
 
-def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE,
-                           config_source=DB_MIGRATION_SOURCE_AUTO,
-                           config_source_file=None,
-                           init_config_file=None):
+def migrate_db_to_lastest(
+        namespace=DEFAULT_NAMESPACE,
+        config_source=DB_MIGRATION_SOURCE_AUTO,
+        config_source_file=None,
+        init_config_file=None):
     # Migrate DB contents to latest version
     db_migrator = '/usr/local/bin/db_migrator.py'
     if os.path.isfile(db_migrator) and os.access(db_migrator, os.X_OK):
