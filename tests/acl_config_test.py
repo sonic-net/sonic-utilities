@@ -139,3 +139,76 @@ class TestConfigAcl(object):
 
         mock_cfg_connector.assert_called_once_with(namespace="asic0")
         mock_instance.set_entry.assert_called_once_with("ACL_TABLE", "DATAACL", None)
+
+    def test_parse_ctrlplane_table_with_services(self):
+        table_info = parse_acl_table_info("SNMP_ACL", "CTRLPLANE", None, None, "ingress", services="SNMP")
+        assert table_info["type"] == "CTRLPLANE"
+        assert table_info["policy_desc"] == "SNMP_ACL"
+        assert table_info["services"] == ["SNMP"]
+        assert "ports" not in table_info
+
+    def test_parse_ctrlplane_table_with_multiple_services(self):
+        table_info = parse_acl_table_info("ROUTER_ACL", "CTRLPLANE", None, None, "ingress", services="SNMP,SSH")
+        assert table_info["services"] == ["SNMP", "SSH"]
+        assert "ports" not in table_info
+
+    def test_parse_ctrlplane_table_without_services_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_acl_table_info("SNMP_ACL", "CTRLPLANE", None, None, "ingress")
+        assert "requires at least one service" in str(exc_info.value)
+
+    def test_parse_ctrlplane_table_with_invalid_service_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_acl_table_info("TEST_ACL", "CTRLPLANE", None, None, "ingress", services="INVALID_SVC")
+        assert "Invalid service(s)" in str(exc_info.value)
+        assert "INVALID_SVC" in str(exc_info.value)
+
+    def test_parse_ctrlplane_table_with_partial_invalid_services_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_acl_table_info("TEST_ACL", "CTRLPLANE", None, None, "ingress", services="SNMP,BADSERVICE")
+        assert "Invalid service(s)" in str(exc_info.value)
+        assert "BADSERVICE" in str(exc_info.value)
+
+    def test_parse_ctrlplane_table_with_ports_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_acl_table_info("SNMP_ACL", "CTRLPLANE", None, "Ethernet0", "ingress", services="SNMP")
+        assert "cannot bind to ports" in str(exc_info.value)
+
+    def test_parse_non_ctrlplane_table_with_services_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_acl_table_info("TEST", "L3", None, None, "ingress", services="SNMP")
+        assert "--services is only valid for CTRLPLANE" in str(exc_info.value)
+
+    def test_acl_add_ctrlplane_table_without_services(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["acl"].commands["add"].commands["table"],
+            ["SNMP_ACL", "CTRLPLANE"])
+        assert result.exit_code != 0
+        assert "requires at least one service" in result.output
+
+    @patch("config.main.ConfigDBConnector")
+    def test_acl_add_ctrlplane_table_with_services(self, mock_cfg_connector):
+        mock_instance = mock.Mock()
+        mock_cfg_connector.return_value = mock_instance
+        mock_instance.connect.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["acl"].commands["add"].commands["table"],
+            ["SNMP_ACL", "CTRLPLANE", "-S", "SNMP"])
+        assert result.exit_code == 0
+
+        mock_instance.set_entry.assert_called_once()
+        table_info = mock_instance.set_entry.call_args[0][2]
+        assert table_info["type"] == "CTRLPLANE"
+        assert table_info["services"] == ["SNMP"]
+        assert "ports" not in table_info
+
+    def test_acl_add_ctrlplane_table_with_ports_fails(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["acl"].commands["add"].commands["table"],
+            ["SNMP_ACL", "CTRLPLANE", "-S", "SNMP", "-p", "Ethernet0"])
+        assert result.exit_code != 0
+        assert "cannot bind to ports" in result.output
