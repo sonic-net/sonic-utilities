@@ -193,8 +193,6 @@ class Wredstat(object):
             fields = ["0","0","0","0","0","0"]
             fields[0] = get_queue_index(table_id)
             fields[1] = get_queue_type(table_id)
-            self.state_db = SonicV2Connector(use_unix_socket_path=False)
-            self.state_db.connect(self.state_db.STATE_DB)     
 
             for counter_name, pos in counter_bucket_dict.items():
                 full_table_id = COUNTER_TABLE_PREFIX + table_id
