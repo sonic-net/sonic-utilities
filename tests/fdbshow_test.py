@@ -634,3 +634,17 @@ class TestFdbshow():
         assert return_code == 0
         assert "192.168.1.1" not in result
         assert "10.0.0.1" not in result
+
+    def test_show_mac_zero_endpoint_ip(self):
+        """An all-zero endpoint address (MAC moved from a VTEP to a local port) is no endpoint"""
+        self.set_mock_variant("8")
+
+        for args in (['fdbshow'], ['fdbshow', '-l']):
+            return_code, result = get_result_and_return_code(args)
+            print("return_code: {}".format(return_code))
+            print("result = {}".format(result))
+            assert return_code == 0
+            for mac in ("aa:bb:cc:dd:ee:03", "aa:bb:cc:dd:ee:04"):
+                rows = [line.split() for line in result.splitlines() if mac in line.lower()]
+                assert len(rows) == 1
+                assert rows[0][3] == "Ethernet0"
