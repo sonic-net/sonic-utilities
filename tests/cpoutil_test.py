@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import sys
@@ -191,6 +192,10 @@ class TestMappingCommand(object):
         cpoutil.current_port_config = {
             "Ethernet8": {"index": "2", "lanes": "5,6,7,8"},
         }
+        oe = mock.Mock()
+        oe.oe.get_api.return_value.get_max_supported_banks.return_value = 8
+        cpoutil.cpo_object_map = {OPTICAL_ENGINE: {"oe0": oe}, EXTERNAL_LASER_SOURCE: {}, PORT: {}}
+        cpoutil.cpo_oe_bank_counts = {}
         with mock.patch("cpoutil.main.initialize_platform"):
             result = CliRunner().invoke(
                 cpoutil.cli,
@@ -205,6 +210,50 @@ class TestMappingCommand(object):
             "id": "ELS0",
             "lasers": [4, 5, 6, 7],
         }
+
+
+class TestOeLocalBank(object):
+    """Interface and full-dump EEPROM access must use the declared OE bank."""
+
+    @pytest.fixture
+    def sparse_bank(self, coverage_environment, monkeypatch):
+        def use_topology_bank(bank):
+            data = copy.deepcopy(COVERAGE_CPO_DATA)
+            data["interfaces"]["Ethernet0"]["oe_bank_id"] = bank
+            cpoutil.cpo_mapping = CpoMapping(data, COVERAGE_PORT_CONFIG)
+        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: 8)
+        return use_topology_bank
+
+    @pytest.mark.parametrize("topology_bank", [4, 12])
+    def test_sparse_or_global_bank_is_not_renumbered(self, coverage_environment, sparse_bank, topology_bank):
+        # Only bank 4 of the OE is mapped; 12 is the same bank numbered across OEs.
+        sparse_bank(topology_bank)
+        mapping = cpoutil.cpo_mapping.get_interface("Ethernet0")
+        assert cpoutil._local_oe_bank(mapping) == 4
+        assert cpoutil._resource_banks(OPTICAL_ENGINE, "oe0") == [4]
+
+        result = invoke_coverage(
+            ["write-eeprom", "interface", "Ethernet0", "--oe", "-n", "0x10", "-o", "0x82", "-d", "ff"])
+        assert result.exit_code == 0, result.output
+        assert [offset for offset, _, _ in coverage_environment.writes] == [4 * 0x10000 + 0x10 * 0x100 + 0x82]
+
+        coverage_environment.reads.clear()
+        result = invoke_coverage(["read-eeprom", "interface", "Ethernet0", "--oe"])
+        assert result.exit_code == 0, result.output
+        assert "Upper page 10h bank 4h" in result.output
+        assert "Upper page 10h bank 0h" not in result.output
+
+    def test_map_reports_local_bank(self, coverage_environment, sparse_bank):
+        sparse_bank(12)
+        result = invoke_coverage(["show", "interface", "map", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["Ethernet0"]["oe"]["bank"] == 4
+
+    def test_missing_oe_object_is_reported(self, coverage_environment):
+        cpoutil.cpo_object_map[OPTICAL_ENGINE] = {}
+        mapping = cpoutil.cpo_mapping.get_interface("Ethernet0")
+        with pytest.raises(cpoutil.CpoCommandError, match="No CPO object"):
+            cpoutil._local_oe_bank(mapping)
 
 
 # Additional cpoutil command and topology coverage.

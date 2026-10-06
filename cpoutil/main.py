@@ -846,19 +846,19 @@ def _format_interface_dom(port_name, record):
 
 
 def _local_oe_bank(mapping):
-    """Return an OE-local bank index for one topology interface."""
-    oe_banks = sorted({
-        item.oe_bank for item in cpo_mapping.get_interfaces()
-        if item.oe_name == mapping.oe_name
-    })
-    try:
-        return oe_banks.index(mapping.oe_bank)
-    except ValueError as exc:
+    """Return the OE-local CMIS bank of one topology interface.
+
+    Community topologies declare OE-local banks. Legacy topologies may number
+    banks across all OEs (OE n bank b as n * bank_count + b), so the declared
+    bank is reduced modulo the OE's advertised bank count. The declared bank is
+    never replaced by its position among the mapped banks.
+    """
+    cpo = cpo_object_map[OPTICAL_ENGINE].get(mapping.oe_name)
+    if cpo is None:
         raise CpoCommandError(
-            "Unable to resolve bank {} for '{}'".format(
-                mapping.oe_bank, mapping.oe_name.upper()
-            )
-        ) from exc
+            "No CPO object is available for '{}'".format(mapping.oe_name)
+        )
+    return mapping.oe_bank % _get_oe_bank_count(mapping.oe_name, cpo)
 
 
 def _interface_mapping_record(logical_port):
@@ -1904,6 +1904,30 @@ def _validate_eeprom_range(bank, page, offset, size):
         )
 
 
+def _get_oe_bank_count(resource_id, cpo):
+    """Return the number of CMIS banks advertised by one OE."""
+    bank_count = cpo_oe_bank_counts.get(resource_id)
+    if bank_count is not None:
+        return bank_count
+    api = get_oe_api(cpo, str(resource_id).upper())
+    try:
+        bank_count = int(api.get_max_supported_banks())
+    except (NotImplementedError, AttributeError, TypeError, ValueError) as exc:
+        raise CpoCommandError(
+            "Failed to determine the OE bank count for '{}': {}".format(
+                resource_id, exc
+            )
+        ) from exc
+    if bank_count <= 0:
+        raise CpoCommandError(
+            "Invalid OE bank count {} for '{}'".format(
+                bank_count, resource_id
+            )
+        )
+    cpo_oe_bank_counts[resource_id] = bank_count
+    return bank_count
+
+
 def _physical_eeprom_bank(resource_type, resource_id, cpo, bank):
     """Validate and return an OE-local CMIS bank."""
     if resource_type != OPTICAL_ENGINE:
@@ -1915,24 +1939,7 @@ def _physical_eeprom_bank(resource_type, resource_id, cpo, bank):
             )
         return 0
 
-    bank_count = cpo_oe_bank_counts.get(resource_id)
-    if bank_count is None:
-        api = get_oe_api(cpo, str(resource_id).upper())
-        try:
-            bank_count = int(api.get_max_supported_banks())
-        except (NotImplementedError, AttributeError, TypeError, ValueError) as exc:
-            raise CpoCommandError(
-                "Failed to determine the OE bank count for '{}': {}".format(
-                    resource_id, exc
-                )
-            ) from exc
-        if bank_count <= 0:
-            raise CpoCommandError(
-                "Invalid OE bank count {} for '{}'".format(
-                    bank_count, resource_id
-                )
-            )
-        cpo_oe_bank_counts[resource_id] = bank_count
+    bank_count = _get_oe_bank_count(resource_id, cpo)
     if bank >= bank_count:
         raise CpoCommandError(
             "OE bank {} is invalid for '{}'; valid banks are 0-{}".format(
@@ -2055,12 +2062,12 @@ def _resource_banks(resource_type, resource_id, requested_bank=None):
     if resource_type == EXTERNAL_LASER_SOURCE:
         return [0]
 
-    topology_banks = sorted({
-        interface.oe_bank
+    local_banks = sorted({
+        _local_oe_bank(interface)
         for interface in cpo_mapping.get_interfaces()
         if interface.oe_name == resource_id
     })
-    return list(range(len(topology_banks))) or [0]
+    return local_banks or [0]
 
 
 def _read_one_eeprom(resource_type, resource_id, cpo,
