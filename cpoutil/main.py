@@ -2062,6 +2062,14 @@ def _validate_eeprom_range(bank, page, offset, size):
             raise CpoCommandError(
                 "{} must be between 0 and 0x{:02x}".format(name, maximum)
             )
+    # Offsets 0-127 always address lower memory; a nonzero page only owns
+    # offsets 128-255. Accepting a lower offset would alias the previous page.
+    if page != 0 and offset < EEPROM_PAGE_OFFSET:
+        raise CpoCommandError(
+            "Invalid offset 0x{:02x} for page {:x}h; valid range: 80h-FFh".format(
+                offset, page
+            )
+        )
     if size <= 0:
         raise CpoCommandError("size must be greater than zero")
     if offset + size > 0x100:

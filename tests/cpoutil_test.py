@@ -1587,3 +1587,47 @@ class TestVmoduleControls:
         assert result.exit_code != 0
         assert "OE0 (Ethernet0, Ethernet4, Ethernet8) ... OK" in result.output
         assert "already applied to OE0" in result.output
+
+
+class TestEepromPageOffset:
+    """Offsets below 128 on a nonzero page alias the previous page's upper half."""
+
+    @pytest.mark.parametrize("arguments", [
+        ["read-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "2", "-s", "1"],
+        ["read-eeprom", "els", "-i", "0", "-n", "0x1a", "-o", "0x7f", "-s", "1"],
+        ["read-eeprom", "interface", "Ethernet0", "--oe", "-n", "0x11", "-o", "2", "-s", "1"],
+        ["write-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "2", "-d", "ff"],
+        ["write-eeprom", "els", "-i", "0", "-n", "0x1a", "-o", "0x7f", "-d", "ff"],
+        ["write-eeprom", "interface", "Ethernet0", "--oe", "-n", "0x11", "-o", "2", "-d", "ff"],
+    ])
+    def test_lower_offset_on_nonzero_page_is_rejected(self, coverage_environment, arguments):
+        page = int(arguments[arguments.index("-n") + 1], 0)
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert "valid range: 80h-FFh" in result.output
+        assert "for page {:x}h".format(page) in result.output
+        assert coverage_environment.reads == []
+        assert coverage_environment.writes == []
+
+    def test_page_11_offset_2_never_reaches_tx_disable(self, coverage_environment, monkeypatch):
+        # With real CMIS addressing, page 0x11 offset 2 equals page 0x10 offset 130.
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
+        monkeypatch.setattr(
+            cpoutil, "_eeprom_linear_offset",
+            lambda resource_type, resource_id, obj, bank, page, offset:
+            CmisPage.linear_offset(page, bank, offset))
+        assert CmisPage.linear_offset(0x11, 0, 2) == CmisPage.linear_offset(0x10, 0, 130)
+        result = invoke_coverage(
+            ["write-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "2", "-d", "ff"])
+        assert result.exit_code != 0
+        assert coverage_environment.writes == []
+
+    @pytest.mark.parametrize("arguments", [
+        ["read-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0", "-o", "2", "-s", "1"],
+        ["read-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "0x80", "-s", "1"],
+        ["write-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0", "-o", "2", "-d", "ff"],
+        ["write-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "0x80", "-d", "ff"],
+    ])
+    def test_page_zero_and_upper_offsets_are_accepted(self, coverage_environment, arguments):
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
