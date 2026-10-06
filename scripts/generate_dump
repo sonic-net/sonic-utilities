@@ -53,6 +53,7 @@ DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 IS_SUPERVISOR=false
 IS_CHASSIS_MODULE=false
+IS_VOQ_CHASSIS=false
 # True on a SONiC Switch-BMC (set below from switch_bmc=1 in platform_env.conf).
 # Switch data-plane collectors (ASIC/SDK, ports, FRR/BGP, STP, SAI) self-skip.
 # Distinct from is_bmc_supported() (Redfish debug-dump availability).
@@ -894,7 +895,7 @@ save_chassis_database_info() {
 ###############################################################################
 save_fabric_info() {
     trap 'handle_error $? $LINENO' ERR
-    if ! $IS_CHASSIS_MODULE; then
+    if ! $IS_VOQ_CHASSIS; then
         return
     fi
 
@@ -3346,6 +3347,12 @@ fi
 CHASSIS_DB_CONF=/usr/share/sonic/device/${platform_name}/chassisdb.conf
 if [ -f "$CHASSIS_DB_CONF" ]; then
     IS_CHASSIS_MODULE=true
+fi
+
+switch_type=$(sonic-db-cli CONFIG_DB hget "DEVICE_METADATA|localhost" "switch_type")
+
+if $IS_CHASSIS_MODULE && [[ x"$switch_type" == x"voq" || x"$switch_type" == x"fabric" ]]; then
+    IS_VOQ_CHASSIS=true
 fi
 
 if $MKDIR "${LOCKDIR}" &>/dev/null; then
