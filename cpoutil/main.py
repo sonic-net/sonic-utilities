@@ -1251,6 +1251,28 @@ def show_interface_presence(port, json_output):
     )
 
 
+@show_interface.command("lpmode")
+@click.argument("port", required=False)
+@output_option
+def show_interface_lpmode(port, json_output):
+    """Display the low-power mode of each interface's CPO virtual module."""
+    records = {}
+    try:
+        for port_name, _, cpo in get_port_cpo_objects(port):
+            lpmode = _call_vmodule(cpo, "get_lpmode")
+            if not isinstance(lpmode, bool):
+                raise CpoCommandError(
+                    "CPO low-power mode is unavailable for '{}'".format(port_name)
+                )
+            records[port_name] = lpmode
+    except CpoCommandError as exc:
+        raise click.ClickException(str(exc))
+    print_records(
+        records, json_output, ("Interface", "Low-power Mode"),
+        boolean_values=("On", "Off"),
+    )
+
+
 @show_interface.command("dom")
 @click.argument("port", required=False)
 @output_option
@@ -1639,6 +1661,94 @@ def _get_interface_mapping(port):
     return get_cpo_interface_mapping(port)
 
 
+def _call_vmodule(cpo, method, *args):
+    """Call a CPO virtual-module control, reporting unsupported platforms."""
+    function = getattr(cpo, method, None)
+    if not callable(function):
+        raise CpoCommandError(
+            "CPO {} is not implemented for this platform".format(method)
+        )
+    try:
+        return function(*args)
+    except NotImplementedError as exc:
+        raise CpoCommandError(
+            "CPO {} is not implemented for this platform".format(method)
+        ) from exc
+
+
+def _controller_ports(oe_name):
+    """Return the logical ports served by one OE controller in the topology."""
+    physical_ports = {
+        physical_port
+        for mapping in cpo_mapping.get_interfaces()
+        if mapping.oe_name == oe_name
+        for physical_port in mapping.physical_ports
+    }
+    return sorted(
+        (
+            port for port in current_port_config
+            if physical_ports.intersection(
+                platform_sfputil_helper.get_validated_physical_port_list(port)
+            )
+        ),
+        key=_natural_sort_key,
+    )
+
+
+def get_vmodule_targets(ports, all_ports):
+    """Resolve one CPO object per controller for comma-separated ports.
+
+    A controller can serve several ports, including breakout subports. Unless
+    all_ports is set, every port served by a selected controller must be
+    selected, so no port is affected without being named.
+    """
+    selected = [port.strip() for port in str(ports).split(",") if port.strip()]
+    if not selected:
+        raise CpoCommandError("At least one port is required")
+
+    targets = {}
+    for port in selected:
+        port_cpos = get_port_cpo_objects(port)
+        oe_name = get_cpo_interface_mapping(port).oe_name
+        if oe_name not in targets:
+            targets[oe_name] = (port_cpos[0][2], _controller_ports(oe_name))
+
+    unselected = sorted(
+        {port for _, controller_ports in targets.values() for port in controller_ports}
+        - set(selected),
+        key=_natural_sort_key,
+    )
+    if unselected and not all_ports:
+        raise CpoCommandError(
+            "The selected CPO controller(s) also serve {}; select all affected "
+            "ports or use --all-ports".format(", ".join(unselected))
+        )
+    return [
+        (oe_name, cpo, controller_ports)
+        for oe_name, (cpo, controller_ports) in sorted(
+            targets.items(), key=lambda item: _natural_sort_key(item[0])
+        )
+    ]
+
+
+def _run_vmodule_action(targets, verb, method, *args):
+    """Apply one virtual-module control to each selected controller."""
+    completed = []
+    for oe_name, cpo, controller_ports in targets:
+        message = "{} {} ({})".format(
+            verb, oe_name.upper(), ", ".join(controller_ports)
+        )
+        try:
+            _run_action(message, lambda cpo=cpo: _call_vmodule(cpo, method, *args))
+        except CpoCommandError as exc:
+            if completed:
+                raise CpoCommandError(
+                    "{}; already applied to {}".format(exc, ", ".join(completed))
+                ) from exc
+            raise
+        completed.append(oe_name.upper())
+
+
 @cli.group()
 def config():
     """Control CPO hardware."""
@@ -1720,6 +1830,54 @@ def config_interface_tx_disable(port, state):
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
+
+
+ALL_PORTS_HELP = "Apply to every port served by the selected CPO controller(s)."
+
+
+@config_interface.command("lpmode")
+@click.argument("port")
+@click.argument("mode", type=click.Choice(["full", "low"]))
+@click.option("--all-ports", is_flag=True, help=ALL_PORTS_HELP)
+def config_interface_lpmode(port, mode, all_ports):
+    """Set full-power or low-power mode of a CPO virtual module.
+
+    PORT is one or more comma-separated ports. The setting applies to the CPO
+    controller and every port it serves. It is not persistent: xcvrd restores
+    full power when it next provisions the ports.
+    """
+    low_power = mode == "low"
+    try:
+        targets = get_vmodule_targets(port, all_ports)
+        _run_vmodule_action(
+            targets,
+            "Enabling low-power mode for" if low_power else "Disabling low-power mode for",
+            "set_lpmode", low_power,
+        )
+    except CpoCommandError as exc:
+        raise click.ClickException(str(exc))
+
+
+@config_interface.command("reset")
+@click.argument("port")
+@click.option("--all-ports", is_flag=True, help=ALL_PORTS_HELP)
+def config_interface_reset(port, all_ports):
+    """Reset a CPO virtual module through its controller.
+
+    PORT is one or more comma-separated ports. The reset applies to the CPO
+    controller and every port it serves. The affected ports must be
+    re-provisioned (admin toggle) after the reset.
+    """
+    try:
+        targets = get_vmodule_targets(port, all_ports)
+        _run_vmodule_action(targets, "Resetting", "reset")
+    except CpoCommandError as exc:
+        raise click.ClickException(str(exc))
+    click.echo(
+        "Re-provision the affected ports (admin toggle): {}".format(
+            ", ".join(port for _, _, ports in targets for port in ports)
+        )
+    )
 
 
 @config.group("oe")
@@ -1809,7 +1967,11 @@ def config_els():
 @click.argument("els_index")
 @click.argument("mode", type=click.Choice(["full", "low"]))
 def config_els_lpmode(els_index, mode):
-    """Set ELS full-power or low-power mode."""
+    """Set ELS endpoint full-power or low-power mode.
+
+    For platforms that control the ELS independently (separate mode). Use
+    'config interface lpmode' for the CPO virtual module.
+    """
     try:
         resource_id, cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, els_index
@@ -1830,7 +1992,11 @@ def config_els_lpmode(els_index, mode):
 @config_els.command("reset")
 @click.argument("els_index")
 def config_els_reset(els_index):
-    """Reset an External Laser Source."""
+    """Reset an External Laser Source endpoint.
+
+    For platforms that control the ELS independently (separate mode). Use
+    'config interface reset' for the CPO virtual module.
+    """
     try:
         resource_id, cpo = _single_resource(
             EXTERNAL_LASER_SOURCE, els_index

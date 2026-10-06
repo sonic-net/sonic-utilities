@@ -1478,3 +1478,112 @@ class TestOeBankControls:
         assert result.exit_code != 0
         assert "oe0 bank 1 Tx-disable enable failed" in result.output
         assert "OK" not in result.output
+
+
+VMODULE_PORT_CONFIG = {
+    "Ethernet0": {"index": "1", "lanes": "1,2,3,4"},
+    "Ethernet4": {"index": "1", "lanes": "1,2,3,4"},
+    "Ethernet8": {"index": "2", "lanes": "5,6,7,8"},
+    "Ethernet16": {"index": "3", "lanes": "9,10,11,12"},
+}
+
+
+@pytest.fixture
+def vmodules(bank_cpos, monkeypatch):
+    # OE0 serves Ethernet0 and its breakout sibling Ethernet4 (physical port 1)
+    # and Ethernet8 (port 2); OE1 serves Ethernet16 (port 3). The fakes define
+    # their own controls instead of relying on CpoBase defaults.
+    monkeypatch.setattr(cpoutil, "current_port_config", dict(VMODULE_PORT_CONFIG))
+    for port, cpo in bank_cpos.items():
+        cpo.get_lpmode = mock.Mock(return_value=port == 3)
+        cpo.set_lpmode = mock.Mock(return_value=True)
+        cpo.reset = mock.Mock(return_value=True)
+    return bank_cpos
+
+
+class TestVmoduleControls:
+    def test_show_lpmode_per_interface(self, vmodules):
+        result = invoke_coverage(["show", "interface", "lpmode", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {
+            "Ethernet0": False, "Ethernet4": False, "Ethernet8": False, "Ethernet16": True,
+        }
+        table = invoke_coverage(["show", "interface", "lpmode", "Ethernet16"])
+        assert table.exit_code == 0, table.output
+        assert "Ethernet16" in table.output and "On" in table.output
+
+    def test_show_lpmode_rejects_unavailable_state(self, vmodules):
+        vmodules[2].get_lpmode.return_value = None
+        result = invoke_coverage(["show", "interface", "lpmode", "Ethernet8"])
+        assert result.exit_code != 0
+        assert "unavailable for 'Ethernet8'" in result.output
+
+    def test_dedicated_controller(self, vmodules):
+        result = invoke_coverage(["config", "interface", "lpmode", "Ethernet16", "low"])
+        assert result.exit_code == 0, result.output
+        assert "Enabling low-power mode for OE1 (Ethernet16) ... OK" in result.output
+        vmodules[3].set_lpmode.assert_called_once_with(True)
+        vmodules[1].set_lpmode.assert_not_called()
+
+    @pytest.mark.parametrize("ports", ["Ethernet8", "Ethernet0", "Ethernet0,Ethernet8"])
+    def test_shared_controller_requires_every_affected_port(self, vmodules, ports):
+        result = invoke_coverage(["config", "interface", "lpmode", ports, "low"])
+        assert result.exit_code != 0
+        assert "--all-ports" in result.output
+        missing = {"Ethernet0", "Ethernet4", "Ethernet8"} - set(ports.split(","))
+        for port in missing:
+            assert port in result.output
+        for cpo in vmodules.values():
+            cpo.set_lpmode.assert_not_called()
+
+    @pytest.mark.parametrize("arguments", [
+        ["Ethernet0,Ethernet4,Ethernet8"],
+        ["Ethernet8", "--all-ports"],
+    ])
+    def test_shared_controller_is_controlled_once(self, vmodules, arguments):
+        port, *flags = arguments
+        result = invoke_coverage(["config", "interface", "lpmode", port, "full", *flags])
+        assert result.exit_code == 0, result.output
+        assert "Disabling low-power mode for OE0 (Ethernet0, Ethernet4, Ethernet8) ... OK" in result.output
+        calls = [cpo.set_lpmode.call_args_list for cpo in vmodules.values()]
+        assert sum(len(call) for call in calls) == 1
+        assert mock.call(False) in calls[0] + calls[1]
+
+    def test_reset_reports_ports_to_reprovision(self, vmodules):
+        result = invoke_coverage(["config", "interface", "reset", "Ethernet16"])
+        assert result.exit_code == 0, result.output
+        assert "Resetting OE1 (Ethernet16) ... OK" in result.output
+        assert "Re-provision the affected ports (admin toggle): Ethernet16" in result.output
+        vmodules[3].reset.assert_called_once_with()
+
+    @pytest.mark.parametrize("command", [
+        ["config", "interface", "lpmode", "Ethernet16", "low"],
+        ["config", "interface", "reset", "Ethernet16"],
+        ["show", "interface", "lpmode", "Ethernet16"],
+    ])
+    @pytest.mark.parametrize("unsupported", ["missing", "not_implemented"])
+    def test_unsupported_platform(self, vmodules, command, unsupported):
+        method = {"lpmode": "set_lpmode", "reset": "reset"}[command[2]] if command[0] == "config" \
+            else "get_lpmode"
+        if unsupported == "missing":
+            cpoutil.cpo_object_map[PORT][3] = types.SimpleNamespace()
+        else:
+            getattr(vmodules[3], method).side_effect = NotImplementedError()
+        result = invoke_coverage(command)
+        assert result.exit_code != 0
+        assert "CPO {} is not implemented for this platform".format(method) in result.output
+        assert "Re-provision" not in result.output
+
+    def test_failed_control_is_reported(self, vmodules):
+        vmodules[3].set_lpmode.return_value = False
+        result = invoke_coverage(["config", "interface", "lpmode", "Ethernet16", "low"])
+        assert result.exit_code != 0
+        assert "OE1 (Ethernet16) ... Failed" in result.output
+
+    def test_partial_failure_names_completed_controllers(self, vmodules):
+        vmodules[3].set_lpmode.return_value = False
+        result = invoke_coverage(
+            ["config", "interface", "lpmode", "Ethernet0,Ethernet4,Ethernet8,Ethernet16", "low"])
+        assert result.exit_code != 0
+        assert "OE0 (Ethernet0, Ethernet4, Ethernet8) ... OK" in result.output
+        assert "already applied to OE0" in result.output
