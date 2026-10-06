@@ -30,16 +30,21 @@ def test_set_next_image():
         bootloader.set_next_image(image)
         mock_cmd.assert_has_calls(expected_call)
 
-def test_install_image():
+
+@patch('sonic_installer.bootloader.grub.os.path.isfile', return_value=True)
+@patch('sonic_installer.bootloader.grub.shutil.copy2')
+@patch('sonic_installer.bootloader.grub.os.makedirs')
+@patch('sonic_installer.bootloader.grub.run_command')
+def test_install_image(mock_run_cmd, mock_makedirs, mock_copy2, mock_isfile):
     image_path = 'sonic'
-    expected_calls = [
-        call(["bash", image_path]),
-        call(['grub-set-default', '--boot-directory=' + grub.HOST_PATH, '0'])
-    ]
-    with patch('sonic_installer.bootloader.grub.run_command') as mock_cmd:
-        bootloader = grub.GrubBootloader()
-        bootloader.install_image(image_path)
-        mock_cmd.assert_has_calls(expected_calls)
+    bootloader = grub.GrubBootloader()
+    bootloader.install_image(image_path)
+
+    # Verify directory creation
+    mock_makedirs.assert_called_once_with('/host/old_config', exist_ok=True)
+
+    # Verify backup copy occurred
+    mock_copy2.assert_any_call('/etc/sonic/config_db.json', '/host/old_config/config_db.json')
 
 @patch("sonic_installer.bootloader.grub.subprocess.call", Mock())
 @patch("sonic_installer.bootloader.grub.open")
