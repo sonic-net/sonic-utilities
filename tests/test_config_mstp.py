@@ -347,6 +347,7 @@ def test_enable_mst_for_interfaces():
         'bpdu_guard': 'false',
         'bpdu_guard_do': 'false',
         'root_guard': 'false',
+        'loop_guard': 'false',
         'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
     }
