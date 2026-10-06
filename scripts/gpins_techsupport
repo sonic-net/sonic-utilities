@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+
+import sys
+import dbus
+
+
+def main():
+    bus = dbus.SystemBus()
+    dbus_object = bus.get_object(
+        "org.SONiC.HostService.debug_info", "/org/SONiC/HostService/debug_info")
+    rc, artifact = dbus_object.collect(
+        ['{"component": "all", "level": "all"}'])
+    if rc != 0:
+        print("Failed to collect debug artifact: {}".format(artifact))
+    else:
+        artifact = "/tmp/dump{}".format(artifact[9:])
+        print("Debug artifact saved in {}".format(artifact))
+
+    return rc
+
+
+if __name__ == '__main__':
+    sys.exit(main())
