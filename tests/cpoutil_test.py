@@ -1631,3 +1631,61 @@ class TestEepromPageOffset:
     def test_page_zero_and_upper_offsets_are_accepted(self, coverage_environment, arguments):
         result = invoke_coverage(arguments)
         assert result.exit_code == 0, result.output
+
+
+class TestDuplicateAssociations:
+    @pytest.mark.parametrize("device_type, message", [
+        ("optical_engine", "more than one OE"),
+        ("external_laser_source", "more than one ELS"),
+    ])
+    def test_second_association_of_a_type_is_rejected(self, device_type, message):
+        data = copy.deepcopy(COMMUNITY_DATA)
+        existing, extra = ("oe0", "oe1") if device_type == "optical_engine" else ("els0", "els1")
+        data["devices"][extra] = dict(data["devices"][existing])
+        data["interfaces"]["Ethernet0"]["associated_devices"].append({"device_id": extra, "bank": 0})
+        with pytest.raises(CpoMappingError, match=message):
+            CpoMapping(data, COVERAGE_PORT_CONFIG)
+
+
+class TestGangedPorts:
+    @pytest.fixture
+    def ganged(self, coverage_environment, monkeypatch):
+        # Ethernet0 is ganged across physical ports 1 and 2.
+        monkeypatch.setattr(cpoutil, "current_port_config", {"Ethernet0": {"index": "1,2", "lanes": "1,2"}})
+        cpoutil.cpo_object_map[PORT][2] = coverage_environment
+        return coverage_environment
+
+    @pytest.mark.parametrize("command", ["tx_disable", "speed", "lane-status"])
+    def test_all_port_commands_use_the_logical_port(self, ganged, command):
+        result = invoke_coverage(["show", "interface", command, "--json"])
+        assert result.exit_code == 0, result.output
+        assert set(json.loads(result.output)) == {"Ethernet0:1 (ganged)", "Ethernet0:2 (ganged)"}
+
+    def test_entries_keep_the_logical_port(self, ganged):
+        entries = cpoutil.get_port_cpo_entries()
+        assert [(name, physical, logical) for name, physical, _, logical in entries] == [
+            ("Ethernet0:1 (ganged)", 1, "Ethernet0"),
+            ("Ethernet0:2 (ganged)", 2, "Ethernet0"),
+        ]
+        assert [entry[:3] for entry in entries] == cpoutil.get_port_cpo_objects()
+
+
+class TestInterfaceElsEepromBank:
+    @pytest.fixture
+    def community(self, coverage_environment):
+        # Ethernet0 is associated with ELS bank 2 in the community topology.
+        cpoutil.cpo_mapping = CpoMapping(COMMUNITY_DATA, COVERAGE_PORT_CONFIG)
+        assert cpoutil.cpo_mapping.get_interface("Ethernet0").els_bank == 2
+        return coverage_environment
+
+    def test_read_uses_bank_zero(self, community):
+        result = invoke_coverage(
+            ["read-eeprom", "interface", "Ethernet0", "--els", "-n", "0x1a", "-o", "0x80", "-s", "2"])
+        assert result.exit_code == 0, result.output
+        assert community.reads == [(0x1a * 0x100 + 0x80, 2)]
+
+    def test_write_uses_bank_zero(self, community):
+        result = invoke_coverage(
+            ["write-eeprom", "interface", "Ethernet0", "--els", "-n", "0x1a", "-o", "0x80", "-d", "01"])
+        assert result.exit_code == 0, result.output
+        assert [offset for offset, _, _ in community.writes] == [0x1a * 0x100 + 0x80]

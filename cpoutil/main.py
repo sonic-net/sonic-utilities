@@ -348,6 +348,18 @@ def initialize_platform():
 
 def get_port_cpo_objects(logical_port=None):
     """Return (name, physical port, CPO object) tuples."""
+    return [
+        (name, physical_port, cpo)
+        for name, physical_port, cpo, _ in get_port_cpo_entries(logical_port)
+    ]
+
+
+def get_port_cpo_entries(logical_port=None):
+    """Return (display name, physical port, CPO object, logical port) tuples.
+
+    The display name labels each member of a ganged port; use the logical
+    port for topology and lane lookups.
+    """
     if logical_port is None:
         logical_ports = sorted(current_port_config, key=_natural_sort_key)
     else:
@@ -369,6 +381,7 @@ def get_port_cpo_objects(logical_port=None):
                 get_physical_port_name(port_name, member_index, ganged),
                 physical_port,
                 cpo,
+                port_name,
             ))
     return objects
 
@@ -1328,8 +1341,7 @@ def show_interface_tx_disable(port, json_output):
     """Display per-lane Tx output state."""
     records = {}
     try:
-        for port_name, _, cpo in get_port_cpo_objects(port):
-            logical_port = port if port is not None else port_name
+        for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
             lane_positions = get_cpo_lane_positions(logical_port)
             api = get_oe_api(cpo, port_name)
             values = _select_lane_values(
@@ -1360,7 +1372,7 @@ def show_interface_speed(port, json_output):
 
     records = {}
     try:
-        for port_name, _, cpo in get_port_cpo_objects(port):
+        for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
             api = get_oe_api(cpo, port_name)
             advertisements = api.get_application_advertisement()
             active_applications = api.get_active_apsel_hostlane()
@@ -1385,7 +1397,6 @@ def show_interface_speed(port, json_output):
                 active.append(_application_speed(
                     advertisements, active_application
                 ))
-            logical_port = port if port is not None else port_name
             lane_positions = get_cpo_lane_positions(logical_port)
             records[port_name] = {
                 "Application Select Controls": _select_lane_values(
@@ -1411,10 +1422,9 @@ def show_interface_lane_status(port, json_output):
     """Display OE datapath and ELS status."""
     records = {}
     try:
-        for port_name, _, cpo in get_port_cpo_objects(port):
+        for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
             oe_api = get_oe_api(cpo, port_name)
             els_api = get_els_api(cpo, port_name)
-            logical_port = port if port is not None else port_name
             context = get_interface_context(logical_port)
             records[port_name] = {
                 "Data Path State Indicator": _select_lane_values(
@@ -2200,8 +2210,9 @@ def _interface_eeprom_target(port, target):
     if target == OPTICAL_ENGINE:
         return mapping.oe_id, _local_oe_bank(mapping)
     if target == EXTERNAL_LASER_SOURCE:
-        bank = mapping.els_bank
-        return mapping.els_id, bank if isinstance(bank, int) else 0
+        # The selected ELS endpoint and its memory map resolve ELS addressing;
+        # raw ELS EEPROM access, like 'read-eeprom els', uses bank 0.
+        return mapping.els_id, 0
     raise CpoCommandError("Specify exactly one of --oe or --els")
 
 

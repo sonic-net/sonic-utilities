@@ -193,9 +193,17 @@ class CpoMapping(object):
                         )
                     )
                 if device.get("device_type") == "optical_engine":
+                    if oe_association is not None:
+                        raise CpoMappingError(
+                            "interface {} references more than one OE".format(port)
+                        )
                     oe_association = (device_name, association)
                 elif device.get("device_type") == \
                         "external_laser_source":
+                    if els_association is not None:
+                        raise CpoMappingError(
+                            "interface {} references more than one ELS".format(port)
+                        )
                     els_association = (device_name, association)
 
             if oe_association is None or els_association is None:
