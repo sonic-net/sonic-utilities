@@ -43,6 +43,24 @@ QSFP_CMIS_DELTA_DATA_MAP = {
     'e2_server_firmware': 'E2 Server Firmware'
 }
 
+ELSFP_DATA_MAP = {
+    'els_identifier': 'ELS Identifier',
+    'els_revision': 'ELS Revision',
+    'els_laser_count': 'ELS Laser Count',
+    'els_vendor_name': 'ELS Vendor Name',
+    'els_vendor_oui': 'ELS Vendor OUI',
+    'els_vendor_pn': 'ELS Vendor PN',
+    'els_vendor_rev': 'ELS Vendor Rev',
+    'els_vendor_sn': 'ELS Vendor SN',
+    'els_date_code': 'ELS Vendor Date Code(YYYY-MM-DD Lot)',
+    'els_max_power': 'ELS Maximum Power Consumption',
+}
+
+BAILLY_RLM_DATA_MAP = {
+    'rlm_laser_wavelength_grid': 'RLM Laser Wavelength Grid',
+    'rlm_laser_lpmode_control': 'RLM Laser Lpower Mode Control'
+}
+
 C_CMIS_DELTA_DATA_MAP = {
     'supported_max_tx_power': 'Supported Max TX Power',
     'supported_min_tx_power': 'Supported Min TX Power',
@@ -50,7 +68,7 @@ C_CMIS_DELTA_DATA_MAP = {
     'supported_min_laser_freq': 'Supported Min Laser Frequency',
 }
 
-CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
+CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP, **BAILLY_RLM_DATA_MAP, **ELSFP_DATA_MAP}
 C_CMIS_DATA_MAP = {**CMIS_DATA_MAP, **C_CMIS_DELTA_DATA_MAP}
 
 # Common fields for all types:
@@ -271,7 +289,17 @@ CMIS_STATUS_MAP = {
     'postfecberhighalarm_flag': 'Postfec ber high alarm flag',
     'postfecberhighwarning_flag': 'Postfec ber high warning flag',
     'postfecberlowwarning_flag': 'Postfec ber low warning flag',
-    'postfecberlowalarm_flag': 'Postfec ber low alarm flag'
+    'postfecberlowalarm_flag': 'Postfec ber low alarm flag',
+    'els_tempHAlarm': 'ELS temperature high alarm flag',
+    'els_tempLAlarm': 'ELS temperature low alarm flag',
+    'els_tempHWarn': 'ELS temperature high warning flag',
+    'els_tempLWarn': 'ELS temperature low warning flag',
+    'els_vccHAlarm': 'ELS Vcc high alarm flag',
+    'els_vccLAlarm': 'ELS Vcc low alarm flag',
+    'els_vccHWarn': 'ELS Vcc high warning flag',
+    'els_vccLWarn': 'ELS Vcc low warning flag',
+    'els_module_low_power_state': 'ELS module state',
+    'els_interrupt_status': 'ELS interrupt status'
 }
 
 CMIS_VDM_TO_LEGACY_STATUS_MAP = {
