@@ -265,6 +265,10 @@
   * [SFP Utilities show commands](#sfp-utilities-show-commands)
   * [SFP Utilities read command](#sfp-utilities-read-command)
   * [SFP Utilities write command](#sfp-utilities-write-command)
+* [CPO Utilities Commands](#cpo-utilities-commands)
+  * [CPO Utilities show commands](#cpo-utilities-show-commands)
+  * [CPO Utilities config commands](#cpo-utilities-config-commands)
+  * [CPO Utilities EEPROM commands](#cpo-utilities-eeprom-commands)
 * [Static DNS Commands](#static-dns-commands)
   * [Static DNS config command](#static-dns-config-command)
   * [Static DNS show command](#static-dns-show-command)
@@ -1400,138 +1404,6 @@ Ethernet0: SFP EEPROM detected
                 VccLowWarning  : 3.15Volts
 ```
 
-- Example (Decode and display information stored on the EEPROM of CPO connected to Ethernet0):
-```
-admin@sonic:~$ show interfaces transceiver eeprom -d Ethernet0
-Ethernet0: SFP EEPROM detected
-        Active Firmware: N/A
-        Active application selected code assigned to host lane 1: 6
-        Active application selected code assigned to host lane 2: 6
-        Active application selected code assigned to host lane 3: 6
-        Active application selected code assigned to host lane 4: 6
-        Active application selected code assigned to host lane 5: 6
-        Active application selected code assigned to host lane 6: 6
-        Active application selected code assigned to host lane 7: 6
-        Active application selected code assigned to host lane 8: 6
-        Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
-                                   200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
-                                   Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
-                                   CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
-                                   Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
-                                   800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
-        CMIS Rev: 5.2
-        Connector: LC
-        ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
-        ELS Laser Count: 8
-        ELS Maximum Power Consumption: 12.0
-        ELS Revision: 0.1
-        ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
-        ELS Vendor Name: BROADCOM
-        ELS Vendor OUI: ec-01-e2
-        ELS Vendor PN: ARLM-96F8DMZ
-        ELS Vendor Rev: A0
-        ELS Vendor SN: FD2424VG006
-        Encoding: N/A
-        Extended Identifier: Power Class 8 (20.0W Max)
-        Extended RateSelect Compliance: N/A
-        Host Lane Count: 8
-        Identifier: CPO Bailly
-        Inactive Firmware: N/A
-        Length Cable Assembly(m): 0.0
-        Media Interface Technology: Others
-        Media Lane Count: 8
-        Module Hardware Rev: 0.0
-        Nominal Bit Rate(100Mbs): N/A
-        RLM Laser Lpower Mode Control: 0
-        RLM Laser Wavelength Grid: CWDM4
-        Specification compliance: sm_media_interface
-        Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
-        Vendor Name: BROADCOM
-        Vendor OUI: 38-ba-b0
-        Vendor PN: BCM789096FBB0KLG
-        Vendor Rev: A0
-        Vendor SN: SB243500200
-        is_replaceable: False
-        type_abbrv_name: QSFP-DD
-        vdm_supported: False
-        ChannelMonitorValues:
-                RX1Power: 1.757dBm
-                RX2Power: 1.898dBm
-                RX3Power: 2.279dBm
-                RX4Power: 2.458dBm
-                RX5Power: 0.9dBm
-                RX6Power: 1.475dBm
-                RX7Power: 1.678dBm
-                RX8Power: 1.159dBm
-                TX1Bias: 79.6mA
-                TX1Power: 1.952dBm
-                TX2Bias: 57.22mA
-                TX2Power: 1.994dBm
-                TX3Bias: 68.8mA
-                TX3Power: 1.879dBm
-                TX4Bias: 63.024mA
-                TX4Power: 2.101dBm
-                TX5Bias: 79.6mA
-                TX5Power: 1.939dBm
-                TX6Bias: 57.22mA
-                TX6Power: 1.927dBm
-                TX7Bias: 68.8mA
-                TX7Power: 1.874dBm
-                TX8Bias: 63.024mA
-                TX8Power: 2.037dBm
-        ChannelThresholdValues:
-                RxPowerHighAlarm  : 6.0dBm
-                RxPowerHighWarning: 4.003dBm
-                RxPowerLowAlarm   : -11.203dBm
-                RxPowerLowWarning : -8.202dBm
-                TxBiasHighAlarm   : 137.5mA
-                TxBiasHighWarning : 132.5mA
-                TxBiasLowAlarm    : 5.0mA
-                TxBiasLowWarning  : 7.5mA
-                TxPowerHighAlarm  : 6.0dBm
-                TxPowerHighWarning: 4.0dBm
-                TxPowerLowAlarm   : -7.201dBm
-                TxPowerLowWarning : -4.201dBm
-        ModuleMonitorValues:
-                Temperature: 81.363C
-                Vcc: 3.311Volts
-        ModuleThresholdValues:
-                TempHighAlarm  : 90.0C
-                TempHighWarning: 85.0C
-                TempLowAlarm   : 15.0C
-                TempLowWarning : 20.0C
-                VccHighAlarm   : 3.465Volts
-                VccHighWarning : 3.399Volts
-                VccLowAlarm    : 3.135Volts
-                VccLowWarning  : 3.201Volts
-        ELSMonitorValues:
-                RLM0_Laser4_current: 252.38 mA
-                RLM0_Laser4_power: 72.290 mW 18.591 dBm
-                RLM0_Laser5_current: 275.49 mA
-                RLM0_Laser5_power: 76.700 mW 18.848 dBm
-                RLM0_Laser6_current: 228.96 mA
-                RLM0_Laser6_power: 66.600 mW 18.235 dBm
-                RLM0_Laser7_current: 318.41 mA
-                RLM0_Laser7_power: 88.060 mW 19.448 dBm
-                ELS Temperature: 25.027C
-                ELS Vcc: 3.365Volts
-        ELSThresholdValues:
-                ELS TempHighAlarm: 0.0C
-                ELS TempHighWarning: 0.0C
-                ELS TempLowAlarm: 0.0C
-                ELS TempLowWarning: 0.0C
-                ELS TxBiasHighAlarm: 0.0mA
-                ELS TxBiasHighWarning: 0.0mA
-                ELS TxPowerHighAlarm: 0.0mW
-                ELS TxPowerHighWarning: 0.0mW
-                ELS TxPowerLowAlarm: 0.0mW
-                ELS TxPowerLowWarning: 0.0mW
-                ELS VccHighAlarm: 0.0Volts
-                ELS VccHighWarning: 0.0Volts
-                ELS VccLowAlarm: 0.0Volts
-                ELS VccLowWarning: 0.0Volts
-```
-
 - Example (Decode and display information stored on the EEPROM of SFP transceiver connected to Ethernet16):
   ```
   admin@sonic:~$ show interfaces transceiver info Ethernet16
@@ -1572,62 +1444,6 @@ Ethernet0: SFP EEPROM detected
           Vendor PN: DP04QSDD-E20-00E
           Vendor Rev: 01
           Vendor SN: 210753986
-  ```
-
-- Example (Decode and display information stored on the EEPROM of CPO connected to Ethernet0):
-  ```
-admin@sonic:~$ show interfaces transceiver info Ethernet0
-Ethernet0: SFP EEPROM detected
-        Active Firmware: N/A
-        Active application selected code assigned to host lane 1: 6
-        Active application selected code assigned to host lane 2: 6
-        Active application selected code assigned to host lane 3: 6
-        Active application selected code assigned to host lane 4: 6
-        Active application selected code assigned to host lane 5: 6
-        Active application selected code assigned to host lane 6: 6
-        Active application selected code assigned to host lane 7: 6
-        Active application selected code assigned to host lane 8: 6
-        Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
-                                   200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
-                                   Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
-                                   CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
-                                   Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
-                                   800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
-        CMIS Rev: 5.2
-        Connector: LC
-        ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
-        ELS Laser Count: 8
-        ELS Maximum Power Consumption: 12.0
-        ELS Revision: 0.1
-        ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
-        ELS Vendor Name: BROADCOM
-        ELS Vendor OUI: ec-01-e2
-        ELS Vendor PN: ARLM-96F8DMZ
-        ELS Vendor Rev: A0
-        ELS Vendor SN: FD2424VG006
-        Encoding: N/A
-        Extended Identifier: Power Class 8 (20.0W Max)
-        Extended RateSelect Compliance: N/A
-        Host Lane Count: 8
-        Identifier: CPO Bailly
-        Inactive Firmware: N/A
-        Length Cable Assembly(m): 0.0
-        Media Interface Technology: Others
-        Media Lane Count: 8
-        Module Hardware Rev: 0.0
-        Nominal Bit Rate(100Mbs): N/A
-        RLM Laser Lpower Mode Control: 0
-        RLM Laser Wavelength Grid: CWDM4
-        Specification compliance: sm_media_interface
-        Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
-        Vendor Name: BROADCOM
-        Vendor OUI: 38-ba-b0
-        Vendor PN: BCM789096FBB0KLG
-        Vendor Rev: A0
-        Vendor SN: SB243500200
-        is_replaceable: False
-        type_abbrv_name: QSFP-DD
-        vdm_supported: False
   ```
 
 - Example (Display status of low-power mode of SFP transceiver connected to Ethernet100):
@@ -1960,221 +1776,6 @@ Ethernet0: SFP EEPROM detected
           Rxtotpower high warning flag: False
           Rxtotpower low warning flag: False
           Rxtotpower low alarm flag: False
-  ```
-
-- Example (Display status info of CPO connected to Ethernet0):
-  ```
-admin@sonic:~$ show interfaces transceiver status Ethernet0
-Ethernet0: 
-        CMIS State (SW): READY
-        Tx fault flag on media lane 1: False
-        Tx fault flag on media lane 2: False
-        Tx fault flag on media lane 3: False
-        Tx fault flag on media lane 4: False
-        Tx fault flag on media lane 5: False
-        Tx fault flag on media lane 6: False
-        Tx fault flag on media lane 7: False
-        Tx fault flag on media lane 8: False
-        Rx loss of signal flag on media lane 1: False
-        Rx loss of signal flag on media lane 2: False
-        Rx loss of signal flag on media lane 3: False
-        Rx loss of signal flag on media lane 4: False
-        Rx loss of signal flag on media lane 5: False
-        Rx loss of signal flag on media lane 6: False
-        Rx loss of signal flag on media lane 7: False
-        Rx loss of signal flag on media lane 8: False
-        TX disable status on lane 1: False
-        TX disable status on lane 2: False
-        TX disable status on lane 3: False
-        TX disable status on lane 4: False
-        TX disable status on lane 5: False
-        TX disable status on lane 6: False
-        TX disable status on lane 7: False
-        TX disable status on lane 8: False
-        Disabled TX channels: 0
-        Current module state: ModuleReady
-        Reason of entering the module fault state: No Fault detected
-        Datapath firmware fault: False
-        Module firmware fault: False
-        Module state changed: False
-        Data path state indicator on host lane 1: DataPathActivated
-        Data path state indicator on host lane 2: DataPathActivated
-        Data path state indicator on host lane 3: DataPathActivated
-        Data path state indicator on host lane 4: DataPathActivated
-        Data path state indicator on host lane 5: DataPathActivated
-        Data path state indicator on host lane 6: DataPathActivated
-        Data path state indicator on host lane 7: DataPathActivated
-        Data path state indicator on host lane 8: DataPathActivated
-        Tx output status on media lane 1: True
-        Tx output status on media lane 2: True
-        Tx output status on media lane 3: True
-        Tx output status on media lane 4: True
-        Tx output status on media lane 5: True
-        Tx output status on media lane 6: True
-        Tx output status on media lane 7: True
-        Tx output status on media lane 8: True
-        Rx output status on host lane 1: True
-        Rx output status on host lane 2: True
-        Rx output status on host lane 3: True
-        Rx output status on host lane 4: True
-        Rx output status on host lane 5: True
-        Rx output status on host lane 6: True
-        Rx output status on host lane 7: True
-        Rx output status on host lane 8: True
-        Tx loss of signal flag on host lane 1: False
-        Tx loss of signal flag on host lane 2: False
-        Tx loss of signal flag on host lane 3: False
-        Tx loss of signal flag on host lane 4: False
-        Tx loss of signal flag on host lane 5: False
-        Tx loss of signal flag on host lane 6: False
-        Tx loss of signal flag on host lane 7: False
-        Tx loss of signal flag on host lane 8: False
-        Tx clock and data recovery loss of lock on host lane 1: N/A
-        Tx clock and data recovery loss of lock on host lane 2: N/A
-        Tx clock and data recovery loss of lock on host lane 3: N/A
-        Tx clock and data recovery loss of lock on host lane 4: N/A
-        Tx clock and data recovery loss of lock on host lane 5: N/A
-        Tx clock and data recovery loss of lock on host lane 6: N/A
-        Tx clock and data recovery loss of lock on host lane 7: N/A
-        Tx clock and data recovery loss of lock on host lane 8: N/A
-        Rx clock and data recovery loss of lock on media lane 1: N/A
-        Rx clock and data recovery loss of lock on media lane 2: N/A
-        Rx clock and data recovery loss of lock on media lane 3: N/A
-        Rx clock and data recovery loss of lock on media lane 4: N/A
-        Rx clock and data recovery loss of lock on media lane 5: N/A
-        Rx clock and data recovery loss of lock on media lane 6: N/A
-        Rx clock and data recovery loss of lock on media lane 7: N/A
-        Rx clock and data recovery loss of lock on media lane 8: N/A
-        Configuration status for the data path of host line 1: ConfigSuccess
-        Configuration status for the data path of host line 2: ConfigSuccess
-        Configuration status for the data path of host line 3: ConfigSuccess
-        Configuration status for the data path of host line 4: ConfigSuccess
-        Configuration status for the data path of host line 5: ConfigSuccess
-        Configuration status for the data path of host line 6: ConfigSuccess
-        Configuration status for the data path of host line 7: ConfigSuccess
-        Configuration status for the data path of host line 8: ConfigSuccess
-        Data path configuration updated on host lane 1: True
-        Data path configuration updated on host lane 2: True
-        Data path configuration updated on host lane 3: True
-        Data path configuration updated on host lane 4: True
-        Data path configuration updated on host lane 5: True
-        Data path configuration updated on host lane 6: True
-        Data path configuration updated on host lane 7: True
-        Data path configuration updated on host lane 8: True
-        Temperature high alarm flag: False
-        Temperature high warning flag: False
-        Temperature low warning flag: False
-        Temperature low alarm flag: False
-        Vcc high alarm flag: False
-        Vcc high warning flag: False
-        Vcc low warning flag: False
-        Vcc low alarm flag: False
-        Tx power high alarm flag on lane 1: False
-        Tx power high alarm flag on lane 2: False
-        Tx power high alarm flag on lane 3: False
-        Tx power high alarm flag on lane 4: False
-        Tx power high alarm flag on lane 5: False
-        Tx power high alarm flag on lane 6: False
-        Tx power high alarm flag on lane 7: False
-        Tx power high alarm flag on lane 8: False
-        Tx power high warning flag on lane 1: False
-        Tx power high warning flag on lane 2: False
-        Tx power high warning flag on lane 3: False
-        Tx power high warning flag on lane 4: False
-        Tx power high warning flag on lane 5: False
-        Tx power high warning flag on lane 6: False
-        Tx power high warning flag on lane 7: False
-        Tx power high warning flag on lane 8: False
-        Tx power low warning flag on lane 1: False
-        Tx power low warning flag on lane 2: False
-        Tx power low warning flag on lane 3: False
-        Tx power low warning flag on lane 4: False
-        Tx power low warning flag on lane 5: False
-        Tx power low warning flag on lane 6: False
-        Tx power low warning flag on lane 7: False
-        Tx power low warning flag on lane 8: False
-        Tx power low alarm flag on lane 1: False
-        Tx power low alarm flag on lane 2: False
-        Tx power low alarm flag on lane 3: False
-        Tx power low alarm flag on lane 4: False
-        Tx power low alarm flag on lane 5: False
-        Tx power low alarm flag on lane 6: False
-        Tx power low alarm flag on lane 7: False
-        Tx power low alarm flag on lane 8: False
-        Rx power high alarm flag on lane 1: False
-        Rx power high alarm flag on lane 2: False
-        Rx power high alarm flag on lane 3: False
-        Rx power high alarm flag on lane 4: False
-        Rx power high alarm flag on lane 5: False
-        Rx power high alarm flag on lane 6: False
-        Rx power high alarm flag on lane 7: False
-        Rx power high alarm flag on lane 8: False
-        Rx power high warning flag on lane 1: False
-        Rx power high warning flag on lane 2: False
-        Rx power high warning flag on lane 3: False
-        Rx power high warning flag on lane 4: False
-        Rx power high warning flag on lane 5: False
-        Rx power high warning flag on lane 6: False
-        Rx power high warning flag on lane 7: False
-        Rx power high warning flag on lane 8: False
-        Rx power low warning flag on lane 1: False
-        Rx power low warning flag on lane 2: False
-        Rx power low warning flag on lane 3: False
-        Rx power low warning flag on lane 4: False
-        Rx power low warning flag on lane 5: False
-        Rx power low warning flag on lane 6: False
-        Rx power low warning flag on lane 7: False
-        Rx power low warning flag on lane 8: False
-        Rx power low alarm flag on lane 1: False
-        Rx power low alarm flag on lane 2: False
-        Rx power low alarm flag on lane 3: False
-        Rx power low alarm flag on lane 4: False
-        Rx power low alarm flag on lane 5: False
-        Rx power low alarm flag on lane 6: False
-        Rx power low alarm flag on lane 7: False
-        Rx power low alarm flag on lane 8: False
-        Tx bias high alarm flag on lane 1: False
-        Tx bias high alarm flag on lane 2: False
-        Tx bias high alarm flag on lane 3: False
-        Tx bias high alarm flag on lane 4: False
-        Tx bias high alarm flag on lane 5: False
-        Tx bias high alarm flag on lane 6: False
-        Tx bias high alarm flag on lane 7: False
-        Tx bias high alarm flag on lane 8: False
-        Tx bias high warning flag on lane 1: False
-        Tx bias high warning flag on lane 2: False
-        Tx bias high warning flag on lane 3: False
-        Tx bias high warning flag on lane 4: False
-        Tx bias high warning flag on lane 5: False
-        Tx bias high warning flag on lane 6: False
-        Tx bias high warning flag on lane 7: False
-        Tx bias high warning flag on lane 8: False
-        Tx bias low warning flag on lane 1: False
-        Tx bias low warning flag on lane 2: False
-        Tx bias low warning flag on lane 3: False
-        Tx bias low warning flag on lane 4: False
-        Tx bias low warning flag on lane 5: False
-        Tx bias low warning flag on lane 6: False
-        Tx bias low warning flag on lane 7: False
-        Tx bias low warning flag on lane 8: False
-        Tx bias low alarm flag on lane 1: False
-        Tx bias low alarm flag on lane 2: False
-        Tx bias low alarm flag on lane 3: False
-        Tx bias low alarm flag on lane 4: False
-        Tx bias low alarm flag on lane 5: False
-        Tx bias low alarm flag on lane 6: False
-        Tx bias low alarm flag on lane 7: False
-        Tx bias low alarm flag on lane 8: False
-        ELS temperature high alarm flag: False
-        ELS temperature low alarm flag: False
-        ELS temperature high warning flag: False
-        ELS temperature low warning flag: False
-        ELS Vcc high alarm flag: False
-        ELS Vcc low alarm flag: False
-        ELS Vcc high warning flag: False
-        ELS Vcc low warning flag: False
-        ELS module state: High power mode
-        ELS interrupt status: Interrupt event cleared
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#basic-show-commands)
@@ -17538,6 +17139,172 @@ Error: Write data failed! Write: 4a44, read: 0000.
 ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#sfp-utilities-commands)
+
+# CPO Utilities Commands
+
+This sub-section explains the commands available for Co-Packaged Optics (CPO) devices through `cpoutil`.
+
+A CPO port is served by an Optical Engine (OE) and an External Laser Source (ELS). The platform describes the mapping between ports, OEs and ELS in `cpo.json`, and exposes each port as a CPO virtual module through `Chassis.get_cpo()`.
+
+`cpoutil` reads and controls the hardware directly; it is a debug and manual-provisioning tool. The values that xcvrd publishes to STATE_DB for CPO ports remain available through `show interfaces transceiver`. On platforms without `cpo.json`, every command exits with `Error: CPO topology is unavailable for this platform`.
+
+Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS indexes may be given as a number (`0`) or a name (`oe0`, `els0`); when omitted, all are shown.
+
+## CPO Utilities show commands
+
+**cpoutil show interface map|presence|dom|tx_disable|speed|lane-status|lpmode**
+
+These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown.
+
+- Usage:
+  ```
+  cpoutil show interface map [PORT] [--json]          # OE, bank, lanes, ELS and lasers of each interface
+  cpoutil show interface presence [PORT] [--json]     # CPO virtual-module presence
+  cpoutil show interface dom [PORT] [--json]          # OE and ELS information, monitors and thresholds
+  cpoutil show interface tx_disable [PORT] [--json]   # per-lane Tx output state
+  cpoutil show interface speed [PORT] [--json]        # configured and active application per lane
+  cpoutil show interface lane-status [PORT] [--json]  # OE datapath state and ELS lane state
+  cpoutil show interface lpmode [PORT] [--json]       # low-power mode of the CPO virtual module
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil show interface presence Ethernet32
+  Interface    Presence
+  -----------  ----------
+  Ethernet32   Present
+
+  admin@sonic:~$ cpoutil show interface lpmode Ethernet448
+  Interface    Low-power Mode
+  -----------  ----------------
+  Ethernet448  Off
+  ```
+
+**cpoutil show oe lpmode|status|temperature|input-power**
+
+These commands display Optical Engine state. `input-power` reports every mapped bank of the OE.
+
+- Usage:
+  ```
+  cpoutil show oe {lpmode|status|temperature|input-power} [OE_INDEX] [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil show oe status 7
+  OE    Module State
+  ----  --------------
+  OE7   ModuleReady
+  ```
+
+**cpoutil show els lpmode|status|temperature|output-power**
+
+These commands display External Laser Source state.
+
+- Usage:
+  ```
+  cpoutil show els {lpmode|status|temperature|output-power} [ELS_INDEX] [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil show els temperature 1
+  ELS      Temperature (C)
+  -----  -----------------
+  ELS1                21.973
+  ```
+
+## CPO Utilities config commands
+
+**cpoutil config interface lpmode|reset**
+
+These commands set the low-power mode of, or reset, a CPO virtual module through its controller.
+
+A controller can serve several ports, including breakout subports. The command applies to every port served by the selected controller, so every affected port must be named (PORT accepts a comma-separated list), or `--all-ports` must be given. Otherwise the command is rejected before any change.
+
+These are maintenance overrides and are not persistent: xcvrd restores full power when it next provisions the ports. After a reset, the affected ports must be re-provisioned (for example, by an admin toggle).
+
+- Usage:
+  ```
+  cpoutil config interface lpmode PORT {full|low} [--all-ports]
+  cpoutil config interface reset PORT [--all-ports]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil config interface lpmode Ethernet448 low
+  Error: The selected CPO controller(s) also serve Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504; select all affected ports or use --all-ports
+
+  admin@sonic:~$ cpoutil config interface lpmode Ethernet448 low --all-ports
+  Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... OK
+  ```
+
+**cpoutil config interface tx_disable**
+
+This command enables or disables Tx-disable on the OE and ELS lanes mapped to one interface. It is rejected when a mapped ELS laser is shared with another subport.
+
+- Usage:
+  ```
+  cpoutil config interface tx_disable PORT {enable|disable}
+  ```
+
+**cpoutil config oe lpmode|reset|tx_disable**
+
+These commands control an Optical Engine. `tx_disable` applies to every mapped bank of the OE. After a reset, the OE's ports may need application and datapath re-provisioning.
+
+- Usage:
+  ```
+  cpoutil config oe lpmode OE_INDEX {full|low}
+  cpoutil config oe reset OE_INDEX
+  cpoutil config oe tx_disable OE_INDEX {enable|disable}
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil config oe tx_disable 7 enable
+  Enabling Tx-disable for OE7 ... OK
+  ```
+
+**cpoutil config els lpmode|reset|tx_disable**
+
+These commands control an External Laser Source endpoint. They are intended for platforms that control the ELS independently; when the platform does not support the operation, an error is reported and nothing is changed. Use `config interface lpmode|reset` for the CPO virtual module.
+
+- Usage:
+  ```
+  cpoutil config els lpmode ELS_INDEX {full|low}
+  cpoutil config els reset ELS_INDEX
+  cpoutil config els tx_disable ELS_INDEX {enable|disable}
+  ```
+
+## CPO Utilities EEPROM commands
+
+**cpoutil read-eeprom|write-eeprom**
+
+These commands read or write raw EEPROM data of an OE, an ELS, or the OE/ELS mapped to an interface. Without page, offset and size, `read-eeprom` dumps the standard pages; `cpoutil read-eeprom` with no target dumps every OE and ELS.
+
+Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages accept offsets 0x80-0xFF. ELS access is limited to the ELS's own pages.
+
+- Usage:
+  ```
+  cpoutil read-eeprom oe [-i OE_INDEX] [-b BANK] [-n PAGE -o OFFSET -s SIZE]
+  cpoutil read-eeprom els [-i ELS_INDEX] [-n PAGE -o OFFSET -s SIZE]
+  cpoutil read-eeprom interface PORT {--oe|--els} [-n PAGE -o OFFSET -s SIZE]
+  cpoutil write-eeprom oe -i OE_INDEX [-b BANK] -n PAGE -o OFFSET -d DATA
+  cpoutil write-eeprom els -i ELS_INDEX -n PAGE -o OFFSET -d DATA
+  cpoutil write-eeprom interface PORT {--oe|--els} -n PAGE -o OFFSET -d DATA
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil read-eeprom oe -i 0 -b 0 -n 0x11 -o 0x80 -s 16
+  EEPROM hexdump for OE0 bank 0h page 11h offset 80h size 16
+          00000080 44 44 44 44 ff 00 00 00  00 00 00 00 00 00 00 00 |DDDD............|
+
+  admin@sonic:~$ cpoutil read-eeprom oe -i 0 -b 0 -n 0x11 -o 2 -s 1
+  Error: Invalid offset 0x02 for page 11h; valid range: 80h-FFh
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#cpo-utilities-commands)
 
 # Static DNS Commands
 
