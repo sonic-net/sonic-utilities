@@ -296,7 +296,7 @@ def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE,
     return output
 
 
-def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, exit_on_fail=True):
+def get_vtysh_shell_cmd():
     # RVTYSH is a routing-stack-aware wrapper that execs into the nested "bgp"
     # docker container on a real SONiC device. On single-container images such
     # as docker-sonic-vs (cSONiC neighbors in the KVM testbed) the wrapper does
@@ -305,7 +305,11 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
     vtysh_shell_cmd = constants.RVTYSH_COMMAND
     if shutil.which(vtysh_shell_cmd) is None:
         vtysh_shell_cmd = constants.VTYSH_COMMAND
-    output = run_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd, exit_on_fail)
+    return vtysh_shell_cmd
+
+
+def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, exit_on_fail=True):
+    output = run_bgp_command(vtysh_cmd, bgp_namespace, get_vtysh_shell_cmd(), exit_on_fail)
     # handle the the alias mode in the following code
     if output is not None:
         if clicommon.get_interface_naming_mode() == "alias" and re.search("show ip|ipv6 route", vtysh_cmd):

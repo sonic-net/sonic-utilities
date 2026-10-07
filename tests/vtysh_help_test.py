@@ -238,10 +238,13 @@ class TestVtyshHelpCommands:
         # No Commands section since rvtysh returned no usable subcommand list.
         assert "Commands:" not in result.output
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @mock.patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @mock.patch('show.vtysh_helper.multi_asic.is_multi_asic')
     @mock.patch('show.vtysh_helper.multi_asic.get_asic_id_from_name')
     @mock.patch('show.vtysh_helper.subprocess.run')
-    def test_namespace_passed_through_to_rvtysh(self, mock_subprocess, mock_get_asic_id, mock_is_multi):
+    def test_namespace_passed_through_to_rvtysh(self, mock_subprocess, mock_get_asic_id, mock_is_multi, mock_which):
         """On multi-ASIC, --namespace propagates to rvtysh as `-n <asic_id>`."""
         mock_is_multi.return_value = True
         mock_get_asic_id.return_value = 0
@@ -267,9 +270,12 @@ class TestVtyshHelpCommands:
             assert asic_arg == "0"
         mock_get_asic_id.assert_called_with("asic0")
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @mock.patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @mock.patch('show.vtysh_helper.multi_asic.is_multi_asic')
     @mock.patch('show.vtysh_helper.subprocess.run')
-    def test_namespace_ignored_on_single_asic(self, mock_subprocess, mock_is_multi):
+    def test_namespace_ignored_on_single_asic(self, mock_subprocess, mock_is_multi, mock_which):
         """On single-ASIC, --namespace is silently ignored for help rendering
         (the actual route command already rejects --namespace on single-ASIC).
         SONiC's vtysh wrapper does not consume -n on single-ASIC, so passing
@@ -294,8 +300,11 @@ class TestVtyshHelpCommands:
             assert "rvtysh" in cmd
             assert "-n" not in cmd
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @mock.patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @mock.patch('show.vtysh_helper.subprocess.run')
-    def test_no_namespace_omits_n_flag(self, mock_subprocess):
+    def test_no_namespace_omits_n_flag(self, mock_subprocess, mock_which):
         """Without --namespace, rvtysh is invoked without -n (default namespace)."""
         mock_result = mock.Mock()
         mock_result.returncode = 0
@@ -423,8 +432,11 @@ class TestVtyshCompletionCommands:
         # Should not include empty strings
         assert "" not in completions
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @mock.patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @mock.patch('show.vtysh_helper.subprocess.run')
-    def test_completion_false_uses_space_before_question_mark(self, mock_subprocess):
+    def test_completion_false_uses_space_before_question_mark(self, mock_subprocess, mock_which):
         """
         Test that completion=False sends " ?" (space before ?) to vtysh.
 
@@ -464,8 +476,11 @@ class TestVtyshCompletionCommands:
         assert "json" in completions
         assert len(completions) == 3
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @mock.patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @mock.patch('show.vtysh_helper.subprocess.run')
-    def test_completion_true_uses_no_space_before_question_mark(self, mock_subprocess):
+    def test_completion_true_uses_no_space_before_question_mark(self, mock_subprocess, mock_which):
         """
         Test that completion=True sends "?" (no space) to vtysh.
 

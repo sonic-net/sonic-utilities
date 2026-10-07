@@ -1408,22 +1408,31 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['watermarkcfg', '--show-interval'])
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_route_map(self, mock_run_command):
+    def test_show_route_map(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["route-map"], ['BGP', '--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', 'show route-map BGP'], display_cmd=True)
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ip_prefix_list(self, mock_run_command):
+    def test_show_ip_prefix_list(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ip'].commands["prefix-list"], ['0.0.0.0', '--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', 'show ip prefix-list 0.0.0.0'], display_cmd=True)
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ip_protocol(self, mock_run_command):
+    def test_show_ip_protocol(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ip'].commands["protocol"], ['--verbose'])
         assert result.exit_code == 0
@@ -1436,15 +1445,21 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['fibshow', '-4', '-ip', '0.0.0.0'], display_cmd=True)
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ipv6_prefix_list(self, mock_run_command):
+    def test_show_ipv6_prefix_list(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ipv6'].commands["prefix-list"], ['0.0.0.0', '--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', 'show ipv6 prefix-list 0.0.0.0'], display_cmd=True)
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ipv6_protocol(self, mock_run_command):
+    def test_show_ipv6_protocol(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ipv6'].commands["protocol"], ['--verbose'])
         assert result.exit_code == 0
@@ -1878,6 +1893,18 @@ class TestCsonicNeighborEnv(object):
                            side_effect=fake_run_bgp_command):
             bgp_util.run_bgp_show_command("show ip bgp summary json")
             assert captured['shell'] == constants.RVTYSH_COMMAND
+
+    def test_get_vtysh_shell_cmd_falls_back_to_vtysh(self):
+        # 'rvtysh' absent (docker-sonic-vs neighbor) -> plain 'vtysh'.
+        with mock.patch('utilities_common.bgp_util.shutil.which',
+                        return_value=None):
+            assert bgp_util.get_vtysh_shell_cmd() == constants.VTYSH_COMMAND
+
+    def test_get_vtysh_shell_cmd_uses_rvtysh_when_present(self):
+        # 'rvtysh' present (real SONiC) -> keep using the wrapper.
+        with mock.patch('utilities_common.bgp_util.shutil.which',
+                        return_value='/usr/bin/rvtysh'):
+            assert bgp_util.get_vtysh_shell_cmd() == constants.RVTYSH_COMMAND
 
     def teardown_method(self):
         print('TEAR DOWN')
