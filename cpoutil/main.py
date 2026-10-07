@@ -506,16 +506,6 @@ def get_els_lpmode(_api):
     )
 
 
-def set_els_lpmode(api, low_power):
-    """Set ELS low-power mode through the active ELSFP backend."""
-    return api.set_lpmode(low_power)
-
-
-def reset_els(api):
-    """Reset the ELS through its public API, independently of the OE."""
-    return api.reset()
-
-
 def set_els_tx_disable(api, lane_mask, disable):
     """Control ELS output through the public per-lane enable API."""
     return api.set_per_lane_enable(lane_mask, not disable)
@@ -2048,7 +2038,7 @@ def config_els_lpmode(els_index, mode):
                 "Enabling" if low_power else "Disabling",
                 resource_id.upper(),
             ),
-            lambda: set_els_lpmode(api, low_power),
+            lambda: api.set_lpmode(low_power),
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -2069,7 +2059,7 @@ def config_els_reset(els_index):
         api = get_els_api(cpo, resource_id)
         _run_action(
             "Resetting {}".format(resource_id.upper()),
-            lambda: reset_els(api),
+            lambda: api.reset(),
         )
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
@@ -2079,7 +2069,11 @@ def config_els_reset(els_index):
 @click.argument("els_index")
 @click.argument("state", type=click.Choice(["enable", "disable"]))
 def config_els_tx_disable(els_index, state):
-    """Enable or disable Tx-disable for every ELS laser."""
+    """Enable or disable Tx-disable for every ELS laser.
+
+    For platforms that control the ELS independently (separate mode). Use
+    'config interface tx_disable' for one interface's lanes and lasers.
+    """
     try:
         resource_ids = cpo_mapping.resolve_resource_ids(
             els_index, EXTERNAL_LASER_SOURCE
