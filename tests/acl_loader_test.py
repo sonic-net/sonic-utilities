@@ -22,7 +22,7 @@ class TestAclLoader(object):
 
     def test_valid(self):
         yang_acl = AclLoader.parse_acl_json(os.path.join(test_path, 'acl_input/acl1.json'))
-        assert len(yang_acl.acl.acl_sets.acl_set) == 9
+        assert len(yang_acl.acl.acl_sets.acl_set) == 10
 
     def test_invalid(self):
         with pytest.raises(AclLoaderException):
@@ -229,6 +229,16 @@ class TestAclLoader(object):
             'IP_TYPE': 'IP',
             "PACKET_ACTION": "FORWARD",
             "PRIORITY": "9998"
+        }
+
+    def test_noiptype_custom_acl_table_type(self, acl_loader):
+        acl_loader.rules_info = {}
+        acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))
+        assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")]
+        assert acl_loader.rules_info[("ACL_NOIPTYPE", "RULE_1")] == {
+            "IP_PROTOCOL": 1,
+            "PACKET_ACTION": "FORWARD",
+            "PRIORITY": "9999"
         }
 
     def test_ingress_default_deny_rule(self, acl_loader):
