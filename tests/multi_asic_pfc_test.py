@@ -111,6 +111,12 @@ class TestPfcMultiAsic(TestPfcBase):
     def test_pfc_config_asymmetric_invalid_all_masic(self):
         self.executor(testData['pfc_config_asymmetric_invalid_all_masic'])
 
+    def test_pfc_config_asymmetric_invalid_intf_one_masic(self):
+        self.executor(testData['pfc_config_asymmetric_invalid_intf_one_masic'])
+
+    def test_pfc_config_asymmetric_invalid_intf_all_masic(self):
+        self.executor(testData['pfc_config_asymmetric_invalid_intf_all_masic'])
+
     def test_pfc_config_priority_one_masic(self):
         self.executor(testData['pfc_config_priority_one_masic'])
 
