@@ -1418,6 +1418,46 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', 'show route-map BGP'], display_cmd=True)
 
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
+    @patch('show.main.run_command')
+    def test_show_vrrp_commands(self, mock_run_command, mock_which):
+        runner = CliRunner()
+        vrrp = show.cli.commands['vrrp']
+        invocations = [
+            (vrrp, ['--verbose'], 'show vrrp'),
+            (vrrp.commands['interface'], ['Ethernet0', '1', '--verbose'],
+             'show vrrp interface Ethernet0 1'),
+            (vrrp.commands['vrid'], ['1', '--verbose'], 'show vrrp 1'),
+            (vrrp.commands['summary'], ['--verbose'], 'show vrrp summary'),
+        ]
+
+        for command, args, expected_vtysh_command in invocations:
+            result = runner.invoke(command, args)
+            assert result.exit_code == 0
+            mock_run_command.assert_called_with(
+                ['sudo', constants.RVTYSH_COMMAND, '-c', expected_vtysh_command],
+                display_cmd=True)
+
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
+    @patch('show.main.run_command')
+    def test_show_vrrp6_commands(self, mock_run_command, mock_which):
+        runner = CliRunner()
+        vrrp6 = show.cli.commands['vrrp6']
+        invocations = [
+            (vrrp6, ['--verbose'], 'show vrrp6'),
+            (vrrp6.commands['interface'], ['Ethernet0', '1', '--verbose'],
+             'show vrrp6 interface Ethernet0 1'),
+            (vrrp6.commands['vrid'], ['1', '--verbose'], 'show vrrp6 1'),
+            (vrrp6.commands['summary'], ['--verbose'], 'show vrrp6 summary'),
+        ]
+
+        for command, args, expected_vtysh_command in invocations:
+            result = runner.invoke(command, args)
+            assert result.exit_code == 0
+            mock_run_command.assert_called_with(
+                ['sudo', constants.RVTYSH_COMMAND, '-c', expected_vtysh_command],
+                display_cmd=True)
+
     # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
     # pin it present so the assertion stays deterministic off-device.
     @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
