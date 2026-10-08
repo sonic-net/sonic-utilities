@@ -57,6 +57,9 @@
         },
         "TELEMETRY": {
             "services_to_validate": [ "telemetry-service" ]
+        },
+        "DEVICE_METADATA": {
+            "services_to_validate": [ "bgp-routing-mode-service" ]
         }
     },
     "services": {
@@ -89,6 +92,9 @@
         },
         "telemetry-service": {
             "validate_commands": [ "generic_config_updater.services_validator.telemetry_validator" ]
+        },
+        "bgp-routing-mode-service": {
+            "validate_commands": [ "generic_config_updater.services_validator.frr_routing_mode_validator" ]
         }
     }
 }
