@@ -92,6 +92,14 @@ show_ipv6_link_local_mode_output="""\
 +------------------+----------+
 | Vlan4000         | Disabled |
 +------------------+----------+
+| Vlan1111         | Disabled |
++------------------+----------+
+| Ethernet0.10     | Disabled |
++------------------+----------+
+| Eth36.10         | Disabled |
++------------------+----------+
+| Po0001.10        | Disabled |
++------------------+----------+
 """
 
 class TestIPv6LinkLocal(object):
@@ -223,6 +231,128 @@ class TestIPv6LinkLocal(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == ''
+
+    def test_config_enable_disable_ipv6_link_local_on_sub_interface(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        enable_cmd = (config.config.commands["interface"]
+                      .commands["ipv6"].commands["enable"]
+                      .commands["use-link-local-only"])
+        disable_cmd = (config.config.commands["interface"]
+                       .commands["ipv6"].commands["disable"]
+                       .commands["use-link-local-only"])
+
+        result = runner.invoke(enable_cmd, ["Ethernet0.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == ''
+
+        result = runner.invoke(disable_cmd, ["Ethernet0.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == ''
+
+    def test_config_enable_disable_ipv6_link_local_on_shortname_sub_interface(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        enable_cmd = (config.config.commands["interface"]
+                      .commands["ipv6"].commands["enable"]
+                      .commands["use-link-local-only"])
+        disable_cmd = (config.config.commands["interface"]
+                       .commands["ipv6"].commands["disable"]
+                       .commands["use-link-local-only"])
+
+        result = runner.invoke(enable_cmd, ["Eth36.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == ''
+
+        result = runner.invoke(disable_cmd, ["Eth36.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == ''
+
+        result = runner.invoke(enable_cmd, ["Po0001.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == ''
+
+        result = runner.invoke(disable_cmd, ["Po0001.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == ''
+
+    def test_config_enable_ipv6_link_local_on_nonexistent_sub_interface(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        enable_cmd = (config.config.commands["interface"]
+                      .commands["ipv6"].commands["enable"]
+                      .commands["use-link-local-only"])
+
+        result = runner.invoke(enable_cmd, ["Ethernet0.999"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert ('invalid' in result.output.lower()
+                or 'Invalid' in result.output)
+
+    def test_config_enable_ipv6_link_local_on_nonexistent_shortname(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        enable_cmd = (config.config.commands["interface"]
+                      .commands["ipv6"].commands["enable"]
+                      .commands["use-link-local-only"])
+
+        result = runner.invoke(enable_cmd, ["Eth99.99"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'invalid' in result.output.lower()
+
+    def test_config_enable_ipv6_link_local_on_bogus_prefix(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        enable_cmd = (config.config.commands["interface"]
+                      .commands["ipv6"].commands["enable"]
+                      .commands["use-link-local-only"])
+
+        result = runner.invoke(enable_cmd, ["Et36.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'not valid' in result.output
+
+        result = runner.invoke(enable_cmd, ["Foo0.10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'not valid' in result.output
+
+    def test_show_ipv6_link_local_mode_includes_sub_interfaces(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        show_cmd = show.cli.commands["ipv6"].commands["link-local-mode"]
+        result = runner.invoke(show_cmd, [], obj=obj)
+        print(result.output)
+        assert 'Ethernet0.10' in result.output
 
     def test_vlan_member_add_on_link_local_interface(self):
         runner = CliRunner()
