@@ -7,10 +7,14 @@ import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, is_bmc, get_all_dpus
 from utilities_common.module import ModuleHelper
+from sonic_py_common.device_info import get_platform_json_data
 from datetime import timedelta
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
+
+MODULE_ADMIN_STATUS_CHANGE_ALLOWED_KEY = "module_admin_status_change_allowed"
+MODULE_ADMIN_STATUS_CHANGE_ALLOWED_LIST_KEY = "allowed_list"
 
 
 class StateDBHelper:
@@ -34,6 +38,7 @@ class StateDBHelper:
         client = self.db.get_redis_client("STATE_DB")
         return client.hdel(redis_key, field)
 
+
 #
 # 'chassis_modules' group ('config chassis_modules ...')
 #
@@ -41,6 +46,7 @@ class StateDBHelper:
 def chassis():
     """Configure chassis commands group"""
     pass
+
 
 @chassis.group()
 def modules():
@@ -54,6 +60,7 @@ def ensure_statedb_connected(db):
         chassisdb.connect("STATE_DB")
         db.statedb = StateDBHelper(chassisdb)
 
+
 def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb
     fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name)
@@ -66,6 +73,7 @@ def get_config_module_state(db, chassis_module_name):
         # On BMC, SWITCH-HOST default is 'down' to keep it powered off on boot
         return 'down'
     return 'up'
+
 
 #
 # Name: check_config_module_state_with_timeout
@@ -132,6 +140,38 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
             click.echo("Start swss@{} and peer services".format(asic))
             clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
 
+
+def change_module_admin_status_allowed(module_name=None):
+    """
+    Return True if changing a chassis module's admin_status is supported.
+
+    Policy is read from platform.json:
+
+    Args:
+        chassis_module_name: module name from the CLI, e.g. FABRIC-CARD0
+
+    Returns:
+        True if the change is allowed, False otherwise.
+    """
+    try:
+        platform_data = get_platform_json_data()
+    except Exception:
+        return True
+
+    if not platform_data:
+        return True
+
+    policy = platform_data.get(MODULE_ADMIN_STATUS_CHANGE_ALLOWED_KEY)
+    if policy is None:
+        return True
+
+    allowed_list = policy.get(MODULE_ADMIN_STATUS_CHANGE_ALLOWED_LIST_KEY) or []
+    if not module_name:
+        return False
+
+    return module_name in allowed_list
+
+
 #
 # 'shutdown' subcommand ('config chassis_modules shutdown ...')
 #
@@ -153,6 +193,10 @@ def shutdown_chassis_module(db, chassis_module_name):
     if not chassis_module_name.startswith(allowed_prefixes):
         allowed_prefixes_str = "', '".join(allowed_prefixes)
         ctx.fail(f"'module_name' has to begin with '{allowed_prefixes_str}'")
+
+    if not change_module_admin_status_allowed(chassis_module_name):
+        click.echo(f"Module {chassis_module_name} admin status change is not allowed")
+        return
 
     if get_config_module_state(db, chassis_module_name) == 'down':
         click.echo(f"Module {chassis_module_name} is already in down state")
@@ -181,6 +225,7 @@ def shutdown_chassis_module(db, chassis_module_name):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'down'):
             fabric_module_set_admin_status(db, chassis_module_name, 'down')
 
+
 #
 # 'startup' subcommand ('config chassis_modules startup ...')
 #
@@ -202,6 +247,10 @@ def startup_chassis_module(db, chassis_module_name):
     if not chassis_module_name.startswith(allowed_prefixes):
         allowed_prefixes_str = "', '".join(allowed_prefixes)
         ctx.fail(f"'module_name' has to begin with '{allowed_prefixes_str}'")
+        return
+
+    if not change_module_admin_status_allowed(chassis_module_name):
+        click.echo(f"Module {chassis_module_name} admin status change is not allowed")
         return
 
     if get_config_module_state(db, chassis_module_name) == 'up':

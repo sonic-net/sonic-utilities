@@ -510,6 +510,56 @@ class TestChassisModules(object):
             assert result.exit_code == 0
             assert "Module DPU0 is already in down state" in result.output
 
+    def test_shutdown_module_admin_status_change_not_allowed(self):
+        with mock.patch("config.chassis_modules.change_module_admin_status_allowed", return_value=False):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["LINE-CARD0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module LINE-CARD0 admin status change is not allowed" in result.output
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "LINE-CARD0")
+            assert cfg_fvs.get("admin_status") != "down"
+
+    def test_startup_module_admin_status_change_not_allowed(self):
+        with mock.patch("config.chassis_modules.change_module_admin_status_allowed", return_value=False):
+            runner = CliRunner()
+            db = Db()
+            db.cfgdb.set_entry("CHASSIS_MODULE", "LINE-CARD0", {"admin_status": "down"})
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["LINE-CARD0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module LINE-CARD0 admin status change is not allowed" in result.output
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "LINE-CARD0")
+            assert cfg_fvs.get("admin_status") == "down"
+
+    def test_change_module_admin_status_allowed_policy(self):
+        from config.chassis_modules import change_module_admin_status_allowed
+
+        with mock.patch("config.chassis_modules.get_platform_json_data", return_value={}):
+            assert change_module_admin_status_allowed("LINE-CARD0") is True
+
+        deny_all = {"module_admin_status_change_allowed": {"allowed_list": []}}
+        with mock.patch("config.chassis_modules.get_platform_json_data", return_value=deny_all):
+            assert change_module_admin_status_allowed("LINE-CARD0") is False
+            assert change_module_admin_status_allowed("FABRIC-CARD0") is False
+
+        fabric_only = {"module_admin_status_change_allowed": {"allowed_list": ["FABRIC-CARD0"]}}
+        with mock.patch("config.chassis_modules.get_platform_json_data", return_value=fabric_only):
+            assert change_module_admin_status_allowed("FABRIC-CARD0") is True
+            assert change_module_admin_status_allowed("FABRIC-CARD1") is False
+            assert change_module_admin_status_allowed("LINE-CARD0") is False
+
     def test_startup_smartswitch_module(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
