@@ -27,7 +27,7 @@ from tabulate import tabulate
 from utilities_common import constants
 from utilities_common import multi_asic as multi_asic_util
 from utilities_common.intf_filter import parse_interface_in_filter
-from utilities_common.netstat import table_as_json
+from utilities_common.netstat import table_as_json, format_fec_ber
 from utilities_common.platform_sfputil_helper import is_rj45_port, RJ45_PORT_TYPE
 from sonic_py_common.interface import get_intf_longname
 from sonic_py_common import multi_asic
@@ -38,6 +38,7 @@ from sonic_py_common import multi_asic
 PORT_STATUS_TABLE_PREFIX = "PORT_TABLE:"
 PORT_STATE_TABLE_PREFIX = "PORT_TABLE|"
 PORT_TRANSCEIVER_TABLE_PREFIX = "TRANSCEIVER_INFO|"
+PORT_OPERR_TABLE_PREFIX = "PORT_OPERR_TABLE|"
 PORT_LANES_STATUS = "lanes"
 PORT_ALIAS = "alias"
 PORT_OPER_STATUS = "oper_status"
@@ -58,6 +59,25 @@ OPTICS_TYPE_RJ45 = RJ45_PORT_TYPE
 TYPE_DPC = 'DPU-NPU Data Port'
 PORT_LINK_TRAINING = 'link_training'
 PORT_LINK_TRAINING_STATUS = 'link_training_status'
+PORT_APPLICATION_ADVERTISEMENT = "application_advertisement"
+PORT_HOST_ELECTRICAL_INTERFACE_ID = "host_electrical_interface_id"
+PORT_MODULE_MEDIA_INTERFACE_ID = "module_media_interface_id"
+PORT_MEDIA_LANE_COUNT = "media_lane_count"
+PORT_HOST_LANE_COUNT = "host_lane_count"
+PORT_MODEL = "model"
+PORT_MANUFACTURER = "manufacturer"
+PORT_LAST_UP_TIME = "last_up_time"
+PORT_LAST_DOWN_TIME = "last_down_time"
+PORT_FLAP_COUNT = "flap_count"
+PORT_OPER_ERROR_STATUS = "oper_error_status"
+
+# Pre-FEC BER is computed by the rate daemon and published to COUNTERS_DB
+# under RATES:<oid>; the port-name-to-oid mapping lives in
+# COUNTERS_PORT_NAME_MAP. This is the same source 'show interface counters'
+# (portstat) reads from, so the l1-summary value stays consistent with it.
+COUNTERS_PORT_NAME_MAP = "COUNTERS_PORT_NAME_MAP"
+RATES_TABLE_PREFIX = "RATES:"
+PORT_FEC_PRE_BER = "FEC_PRE_BER"
 
 VLAN_SUB_INTERFACE_SEPARATOR = "."
 VLAN_SUB_INTERFACE_TYPE = "802.1q-encapsulation"
@@ -231,6 +251,23 @@ def port_oper_speed_get_raw(db, intf_name):
     if speed is None or speed == "N/A" or oper_status != "up":
         speed = db.get(db.APPL_DB, PORT_STATUS_TABLE_PREFIX + intf_name, PORT_SPEED)
     return speed
+
+
+def port_pre_fec_ber_get(db, intf_name):
+    """
+    Get the port's current pre-FEC bit error rate, the same value shown by
+    'show interface counters' (see portstat.py). The rate is read from
+    COUNTERS_DB at RATES:<oid>, where <oid> is resolved through
+    COUNTERS_PORT_NAME_MAP, and rendered with the shared format_fec_ber()
+    formatter so the two views agree.
+    """
+    oid = db.get(db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP, intf_name)
+    if oid is None:
+        return "N/A"
+    rate = db.get(db.COUNTERS_DB, RATES_TABLE_PREFIX + oid, PORT_FEC_PRE_BER)
+    if rate is None:
+        return "N/A"
+    return format_fec_ber(rate)
 
 def port_optics_get(db, intf_name, type):
     """
@@ -454,6 +491,217 @@ def appl_db_sub_intf_status_get(appl_db, config_db, front_panel_ports_list, port
                 return "N/A"
 
     return "N/A"
+
+
+def get_port_application_info(db, intf_name, form_factor):
+    """
+    Get host_electrical_id and module_media_id for CMIS transceivers without placeholder text
+    """
+    full_table_id = f"{PORT_TRANSCEIVER_TABLE_PREFIX}{intf_name}"
+    xcvr_info = db.get_all(db.STATE_DB, full_table_id)
+
+    if not xcvr_info or xcvr_info.get("cmis_rev") is None:
+        return ("N/A", "N/A")
+
+    # Find the first valid appsel from active_apsel_hostlane{N} entries.
+    appsel = None
+    for key, value in xcvr_info.items():
+        if key.startswith("active_apsel_hostlane") and value != "N/A":
+            appsel = value
+            break
+
+    if appsel is None:
+        return ("N/A", "N/A")
+
+    app_addv_str = xcvr_info.get(PORT_APPLICATION_ADVERTISEMENT)
+    if not app_addv_str:
+        return ("N/A", "N/A")
+
+    try:
+        appsel = int(appsel)
+        app_addv = eval(app_addv_str)
+        host_electrical_id = app_addv[appsel][PORT_HOST_ELECTRICAL_INTERFACE_ID]
+        module_media_id = app_addv[appsel][PORT_MODULE_MEDIA_INTERFACE_ID]
+    except (ValueError, KeyError, SyntaxError, TypeError, NameError):
+        return ("N/A", "N/A")
+
+    module_media_id = clean_media_interface_text(module_media_id)
+
+    return (host_electrical_id, module_media_id)
+
+
+def clean_media_interface_text(media_id):
+    """
+    Clean up media interface text by removing placeholder and clause reference suffixes.
+    E.g., "400GBASE-DR4 (Cl 124)" -> "400GBASE-DR4"
+          "800GBASE-DR8 (placeholder)" -> "800GBASE-DR8"
+    """
+    # Remove (placeholder), (Cl NNN), (Annex NNNG), etc.
+    cleaned = re.sub(r'\s*\([^)]*\)', '', media_id)
+    return cleaned.strip()
+
+
+def state_db_transceiver_info_get(db, port_name, status_type):
+    """
+    Get the transceiver info
+    """
+    full_table_id = f"{PORT_TRANSCEIVER_TABLE_PREFIX}{port_name}"
+    status = db.get(db.STATE_DB, full_table_id, status_type)
+    if status is None:
+        return "N/A"
+    return status
+
+
+def state_db_port_operr_status_get(db, port_name, status_type):
+    """
+    Get the port_operr_status
+    """
+    full_table_id = f"{PORT_OPERR_TABLE_PREFIX}{port_name}"
+    status = db.get(db.STATE_DB, full_table_id, status_type)
+    if status is None:
+        return "0"
+    return status
+
+
+def is_bit_set(oper_error_status, bit_position):
+    """
+    Check if bit is set at specified position
+    """
+    mask = 1 << bit_position
+    return (oper_error_status & mask) != 0
+
+
+def get_fault_status(local_fault, remote_fault):
+    """
+    Convert local and remote fault booleans to a display string.
+    """
+    if local_fault and remote_fault:
+        return "local+remote"
+    elif local_fault:
+        return "local"
+    elif remote_fault:
+        return "remote"
+    return "none"
+
+
+def get_transceiver_display(db, intf_name):
+    """
+    Get combined vendor and model string for transceiver display.
+    Returns "N/A" if either vendor or model is not available.
+    """
+    vendor = state_db_transceiver_info_get(db, intf_name, PORT_MANUFACTURER)
+    model = state_db_transceiver_info_get(db, intf_name, PORT_MODEL)
+    if vendor == "N/A" or model == "N/A":
+        return "N/A"
+    return f"{vendor} {model}".strip()
+
+
+def format_link_change_time(timestamp):
+    """
+    Format a link change timestamp for display.
+    Input format: "Wed Oct 10 02:19:46 2025" (ctime format)
+    Output format: "Oct 10 02:19:46" (month day time, without weekday and year)
+
+    Returns "N/A" if timestamp is "N/A" or cannot be parsed.
+    """
+    if timestamp == "N/A" or not timestamp:
+        return "N/A"
+    # Split the timestamp and extract month, day, and time (skip weekday at [0] and year at [-1])
+    parts = timestamp.split()
+    if len(parts) >= 4:
+        return " ".join(parts[1:-1])
+    return timestamp
+
+
+# ========================== interface-l1-summary logic ==========================
+
+header_l1_summary = ['Interface', 'Alias', 'Mode', 'FEC', 'Pre-FEC BER', 'Oper', 'Admin', 'Fault',
+                     'Transceiver', 'Media Interface', 'Flaps', 'Last Up', 'Last Down']
+
+
+class IntfL1Summary(object):
+
+    def __init__(self, intf_name, namespace_option, display_option):
+        """
+        Class constructor method
+        :param self:
+        :param intf_name: string of interface
+        :return:
+        """
+        self.db = None
+        self.config_db = None
+        self.sub_intf_only = False
+        self.intf_name = intf_name
+        self.sub_intf_name = intf_name
+        self.table = []
+        self.multi_asic = multi_asic_util.MultiAsic(
+            display_option, namespace_option)
+
+    def display_intf_l1_summary(self):
+        self.get_intf_l1_summary()
+        sorted_table = natsorted(self.table)
+        print(tabulate(sorted_table,
+                       header_l1_summary if not self.sub_intf_only else header_stat_sub_intf,
+                       tablefmt="simple",
+                       stralign='right'))
+
+    def generate_intf_l1_summary(self):
+        """
+            Generate interface-l1-summary output
+        """
+
+        i = {}
+        table = []
+        key = []
+
+        intf_fs = parse_interface_in_filter(self.intf_name)
+        #
+        # Iterate through all the keys and append port's associated state to
+        # the result table.
+        #
+        for i in self.appl_db_keys:
+            key = re.split(':', i, maxsplit=1)[-1].strip()
+            if key in self.front_panel_ports_list:
+                if self.multi_asic.skip_display(constants.PORT_OBJ, key):
+                    continue
+
+                # Entries that need additional processing before printing
+                form_factor = port_optics_get(self.db, key, PORT_OPTICS_TYPE).split()[0]
+                lanes_str = appl_db_port_status_get(self.db, key, PORT_LANES_STATUS)
+                num_lanes = len(lanes_str.split(','))
+                host_electrical_id, module_media_id = get_port_application_info(self.db, key, form_factor)
+                oper_error_status = int(state_db_port_operr_status_get(self.db, key, PORT_OPER_ERROR_STATUS))
+                local_fault = is_bit_set(oper_error_status, 0)
+                remote_fault = is_bit_set(oper_error_status, 1)
+                last_up_time = appl_db_port_status_get(self.db, key, PORT_LAST_UP_TIME)
+                last_down_time = appl_db_port_status_get(self.db, key, PORT_LAST_DOWN_TIME)
+
+                if self.intf_name is None or key in intf_fs:
+                    fault_status = get_fault_status(local_fault, remote_fault)
+                    transceiver = get_transceiver_display(self.db, key)
+
+                    table.append((
+                        key,
+                        appl_db_port_status_get(self.db, key, PORT_ALIAS),
+                        f"{port_oper_speed_get(self.db, key)}/{num_lanes}",
+                        appl_db_port_status_get(self.db, key, PORT_FEC),
+                        port_pre_fec_ber_get(self.db, key),
+                        appl_db_port_status_get(self.db, key, PORT_OPER_STATUS),
+                        appl_db_port_status_get(self.db, key, PORT_ADMIN_STATUS),
+                        fault_status,
+                        transceiver,
+                        module_media_id,
+                        appl_db_port_status_get(self.db, key, PORT_FLAP_COUNT),
+                        format_link_change_time(last_up_time),
+                        format_link_change_time(last_down_time)))
+        return table
+
+    @multi_asic_util.run_on_multi_asic
+    def get_intf_l1_summary(self):
+        self.front_panel_ports_list = get_frontpanel_port_list(self.config_db)
+        self.appl_db_keys = appl_db_keys_get(self.db, self.front_panel_ports_list, None)
+        if self.appl_db_keys:
+            self.table += self.generate_intf_l1_summary()
 
 # ========================== interface-status logic ==========================
 
@@ -935,6 +1183,9 @@ def main():
     if args.command == "status":
         interface_stat = IntfStatus(args.interface, args.namespace, args.display, args.json)
         interface_stat.display_intf_status()
+    elif args.command == "l1_summary":
+        interface_stat = IntfL1Summary(args.interface, args.namespace, args.display)
+        interface_stat.display_intf_l1_summary()
     elif args.command == "description":
         interface_desc = IntfDescription(args.interface, args.namespace, args.display, args.json)
         interface_desc.display_intf_description()
