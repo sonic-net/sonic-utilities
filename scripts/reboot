@@ -5,7 +5,6 @@ declare -r EXIT_ERROR=1
 declare -r EXIT_TIMEOUT=2
 declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
-declare -r PRE_SHUTDOWN_HOOK_TIMEOUT=10
 declare -r PRE_SHUTDOWN_WATCHDOG_SECS=180
 
 source reboot_smartswitch_helper
@@ -440,22 +439,18 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE} ]; then
     ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE}
 fi
 
-if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
+# The platform pre-reboot script prepares the device for the coming reboot,
+# for example by programming pending firmware. Switch-host pre-shutdown ends
+# in BMC power removal rather than a reboot, and firmware programming must not
+# start when power is about to be removed, so the script is not run there.
+if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" ]]; then
+    debug "Skipping the pre-reboot script for switch-host pre-shutdown"
+elif [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
     debug "Executing the pre-reboot script"
-    if [[ "${SWITCH_HOST_PRE_SHUTDOWN}" == "yes" ]]; then
-        SONIC_PRE_SHUTDOWN=1 timeout --kill-after=10 "${PRE_SHUTDOWN_HOOK_TIMEOUT}" \
-            "${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}"
-        EXIT_CODE=$?
-        if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
-            VERBOSE=yes debug "PRE-SHUTDOWN FAILED: pre-reboot hook rc=${EXIT_CODE}"
-            exit ${EXIT_ERROR}
-        fi
-    else
-        ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
-        EXIT_CODE="$?"
-        if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
-            debug "WARNING: Failed to handle pre-reboot script: rc=${EXIT_CODE}"
-        fi
+    ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
+    EXIT_CODE="$?"
+    if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
+        debug "WARNING: Failed to handle pre-reboot script: rc=${EXIT_CODE}"
     fi
 fi
 

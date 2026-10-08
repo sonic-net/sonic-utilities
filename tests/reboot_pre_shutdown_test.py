@@ -5,7 +5,6 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 
 import pytest
 
@@ -63,8 +62,6 @@ def _build_reboot_sandbox(tmp_path, stop_after_precheck):
     call_log = tmp_path / "calls.log"
     real_jq = shutil.which("jq")
     assert real_jq is not None, "jq is required by the reboot sandbox"
-    real_timeout = shutil.which("timeout")
-    assert real_timeout is not None, "timeout is required by the reboot sandbox"
 
     script = REBOOT_SCRIPT.read_text()
     replacements = {
@@ -136,11 +133,6 @@ esac""",
 exec "$REBOOT_TEST_REAL_JQ" "$@"''',
     )
     _write_executable(
-        bin_dir / "timeout",
-        'echo "timeout $*" >> "$REBOOT_TEST_CALL_LOG"\n'
-        'exec "$REBOOT_TEST_REAL_TIMEOUT" "$@"',
-    )
-    _write_executable(
         bin_dir / "sonic-installer",
         """case "$1" in
   list)
@@ -166,25 +158,8 @@ esac""",
     )
     _write_executable(
         platform_dir / "pre_reboot_hook",
-        '''echo "pre-reboot-hook marker=${SONIC_PRE_SHUTDOWN:-unset}" >> "$REBOOT_TEST_CALL_LOG"
-case "${REBOOT_TEST_HOOK_MODE:-exit}" in
-  exit)
-    exit "${REBOOT_TEST_HOOK_RC:-0}"
-    ;;
-  sleep)
-    /bin/sleep "${REBOOT_TEST_HOOK_SLEEP_SECS:-2}"
-    ;;
-  ignore-term)
-    trap '' TERM
-    (
-      trap '' TERM
-      exec /bin/sleep 60
-    ) &
-    hook_child=$!
-    echo "$hook_child" > "$REBOOT_TEST_HOOK_CHILD_PID_FILE"
-    wait "$hook_child"
-    ;;
-esac''',
+        'echo "pre-reboot-hook" >> "$REBOOT_TEST_CALL_LOG"\n'
+        'exit "${REBOOT_TEST_HOOK_RC:-0}"',
     )
     (platform_dir / "asic.conf").write_text(
         'NUM_ASIC="${REBOOT_TEST_NUM_ASIC:-1}"\n'
@@ -258,9 +233,7 @@ esac""",
             "PATH": "{}:{}".format(bin_dir, env["PATH"]),
             "REBOOT_TEST_ALLOW_NON_ROOT": "yes",
             "REBOOT_TEST_CALL_LOG": str(call_log),
-            "REBOOT_TEST_HOOK_CHILD_PID_FILE": str(tmp_path / "hook-child.pid"),
             "REBOOT_TEST_REAL_JQ": real_jq,
-            "REBOOT_TEST_REAL_TIMEOUT": real_timeout,
             "REBOOT_TEST_PLATFORM_JSON_PATH": str(platform_dir / "platform.json"),
             "REBOOT_TEST_PRECHECK_RC": "0",
         }
@@ -426,9 +399,7 @@ def test_switch_host_runs_existing_teardown_without_dpu_helper(
 
     assert result.returncode == 0
     assert not any("get_num_dpus" in call for call in calls)
-    timeout_call = next(call for call in calls if call.startswith("timeout "))
-    assert timeout_call.startswith("timeout --kill-after=10 10 ")
-    assert timeout_call.endswith("/pre_reboot_hook")
+    assert "pre-reboot-hook" not in calls
     ordered_calls = [
         "docker exec -i syncd /usr/bin/syncd_request_shutdown --cold",
         "systemctl disable pmon",
@@ -439,8 +410,6 @@ def test_switch_host_runs_existing_teardown_without_dpu_helper(
         "sync",
         "fstrim -av",
         "platform-update-reboot-cause",
-        timeout_call,
-        "pre-reboot-hook marker=1",
         "watchdogutil arm -s 180",
     ]
     assert [calls.index(call) for call in ordered_calls] == sorted(
@@ -495,8 +464,7 @@ def test_dpu_identity_wins_and_strict_failures_remain_best_effort(
     assert "docker kill pmon" in calls
     assert not any(call.startswith("docker inspect") for call in calls)
     assert "fstrim -av" in calls
-    assert "pre-reboot-hook marker=unset" in calls
-    assert not any(call.startswith("timeout ") for call in calls)
+    assert "pre-reboot-hook" in calls
     assert "watchdogutil arm" in calls
 
 
@@ -522,8 +490,7 @@ def test_switch_host_plain_reboot_remains_non_strict(
     assert "docker kill pmon" in calls
     assert not any(call.startswith("docker inspect") for call in calls)
     assert "fstrim -av" in calls
-    assert "pre-reboot-hook marker=unset" in calls
-    assert not any(call.startswith("timeout ") for call in calls)
+    assert "pre-reboot-hook" in calls
     assert "watchdogutil arm" in calls
 
 
@@ -644,72 +611,20 @@ def test_strict_sync_failure_is_fatal(full_reboot_sandbox):
     assert "fstrim -av" not in calls
 
 
-@pytest.mark.parametrize(
-    "hook_environment,expected_hook_rc",
-    [
-        ({"REBOOT_TEST_HOOK_RC": 1}, 1),
-        (
-            {
-                "REBOOT_TEST_HOOK_MODE": "sleep",
-                "REBOOT_TEST_HOOK_SLEEP_SECS": 30,
-            },
-            124,
-        ),
-    ],
-    ids=["non-zero", "term-timeout"],
-)
-def test_strict_hook_failure_is_fatal(
-        full_reboot_sandbox, hook_environment, expected_hook_rc):
+def test_switch_host_pre_shutdown_skips_platform_hook(full_reboot_sandbox):
     result, calls = _run_reboot(
         full_reboot_sandbox,
-        ["-p"],
+        ["-v", "-p"],
         **SWITCH_HOST_ENV,
-        **hook_environment
+        REBOOT_TEST_HOOK_RC=9
     )
 
-    assert result.returncode != 0
-    assert "PRE-SHUTDOWN FAILED: pre-reboot hook rc={}".format(
-        expected_hook_rc
-    ) in result.stdout
-    assert "pre-reboot-hook marker=1" in calls
-    assert any(call.startswith("timeout --kill-after=10 ") for call in calls)
-    assert not any(call.startswith("watchdogutil arm") for call in calls)
-
-
-def test_strict_hook_ignoring_term_is_killed_with_no_surviving_child(
-        full_reboot_sandbox):
-    child_pid_file = Path(
-        full_reboot_sandbox[2]["REBOOT_TEST_HOOK_CHILD_PID_FILE"]
+    assert result.returncode == 0
+    assert "Skipping the pre-reboot script for switch-host pre-shutdown" in (
+        result.stdout
     )
-
-    started = time.monotonic()
-    result, calls = _run_reboot(
-        full_reboot_sandbox,
-        ["-p"],
-        **SWITCH_HOST_ENV,
-        REBOOT_TEST_HOOK_MODE="ignore-term"
-    )
-    elapsed = time.monotonic() - started
-
-    assert result.returncode != 0
-    assert "PRE-SHUTDOWN FAILED: pre-reboot hook rc=137" in result.stdout
-    assert "pre-reboot-hook marker=1" in calls
-    assert 20.0 <= elapsed < 27.0
-    child_stat = Path("/proc") / child_pid_file.read_text().strip() / "stat"
-    child_exit_deadline = time.monotonic() + 2
-    while True:
-        try:
-            child_state = child_stat.read_text().rsplit(")", 1)[1].split()[0]
-        except (FileNotFoundError, ProcessLookupError):
-            break
-        # A zombie has exited; reaping it belongs to its parent or init.
-        if child_state == "Z":
-            break
-        assert time.monotonic() < child_exit_deadline, (
-            "Hook child is still alive (state={})".format(child_state)
-        )
-        time.sleep(0.05)
-    assert not any(call.startswith("watchdogutil arm") for call in calls)
+    assert "pre-reboot-hook" not in calls
+    assert "watchdogutil arm -s 180" in calls
 
 
 @pytest.mark.parametrize(
@@ -726,10 +641,7 @@ def test_retired_platform_timing_keys_do_not_change_fixed_limits(
     )
 
     assert result.returncode == 0
-    assert any(
-        call.startswith("timeout --kill-after=10 10 ") for call in calls
-    )
-    assert "pre-reboot-hook marker=1" in calls
+    assert "pre-reboot-hook" not in calls
     assert "watchdogutil arm -s 180" in calls
     assert not any(call.startswith("jq ") for call in calls)
 
