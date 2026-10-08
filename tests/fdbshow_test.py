@@ -648,3 +648,21 @@ class TestFdbshow():
                 rows = [line.split() for line in result.splitlines() if mac in line.lower()]
                 assert len(rows) == 1
                 assert rows[0][3] == "Ethernet0"
+
+    def test_show_mac_zero_endpoint_ip_nhg(self):
+        """A zero endpoint address on an NHG bridge port still resolves through the multihoming lookup"""
+        self.set_mock_variant("8")
+
+        return_code, result = get_result_and_return_code(['fdbshow'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        rows = [line.split() for line in result.splitlines() if "aa:bb:cc:dd:ee:05" in line.lower()]
+        assert len(rows) == 1
+        assert rows[0][3] == "10.0.0.1"
+
+        return_code, result = get_result_and_return_code(['fdbshow', '-l'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "aa:bb:cc:dd:ee:05" not in result.lower()

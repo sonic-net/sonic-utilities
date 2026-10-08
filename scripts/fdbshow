@@ -179,8 +179,8 @@ class FdbShow(object):
             except KeyError:
                 endpoint_ip = None
 
-            # The attribute cannot be removed, so a MAC that moved from a remote
-            # VTEP to a local port keeps an all-zero address: no endpoint.
+            # SAI has no attribute unset: when a remote VTEP MAC becomes local, orchagent
+            # resets ENDPOINT_IP to its default (0.0.0.0 or ::). Treat that as no endpoint.
             if endpoint_ip in ("0.0.0.0", "::"):
                 endpoint_ip = None
 
