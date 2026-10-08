@@ -549,12 +549,12 @@ class TestChassisModules(object):
         with mock.patch("config.chassis_modules.get_platform_json_data", return_value={}):
             assert change_module_admin_status_allowed("LINE-CARD0") is True
 
-        deny_all = {"module_admin_status_change_allowed": {"allowed_list": []}}
+        deny_all = {"module_admin_status_change_allowed_list": []}
         with mock.patch("config.chassis_modules.get_platform_json_data", return_value=deny_all):
             assert change_module_admin_status_allowed("LINE-CARD0") is False
             assert change_module_admin_status_allowed("FABRIC-CARD0") is False
 
-        fabric_only = {"module_admin_status_change_allowed": {"allowed_list": ["FABRIC-CARD0"]}}
+        fabric_only = {"module_admin_status_change_allowed_list": ["FABRIC-CARD0"]}
         with mock.patch("config.chassis_modules.get_platform_json_data", return_value=fabric_only):
             assert change_module_admin_status_allowed("FABRIC-CARD0") is True
             assert change_module_admin_status_allowed("FABRIC-CARD1") is False

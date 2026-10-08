@@ -13,8 +13,7 @@ from datetime import timedelta
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
 
-MODULE_ADMIN_STATUS_CHANGE_ALLOWED_KEY = "module_admin_status_change_allowed"
-MODULE_ADMIN_STATUS_CHANGE_ALLOWED_LIST_KEY = "allowed_list"
+MODULE_ADMIN_STATUS_CHANGE_ALLOWED_LIST_KEY = "module_admin_status_change_allowed_list"
 
 
 class StateDBHelper:
@@ -141,14 +140,16 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
             clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
 
 
-def change_module_admin_status_allowed(module_name=None):
+def change_module_admin_status_allowed(module_name):
     """
     Return True if changing a chassis module's admin_status is supported.
 
-    Policy is read from platform.json:
+    Policy is the platform.json list module_admin_status_change_allowed_list.
+    When the key is absent, every module is allowed. When it is present, only
+    names in that list are allowed.
 
     Args:
-        chassis_module_name: module name from the CLI, e.g. FABRIC-CARD0
+        module_name: module name from the CLI, e.g. FABRIC-CARD0
 
     Returns:
         True if the change is allowed, False otherwise.
@@ -161,13 +162,9 @@ def change_module_admin_status_allowed(module_name=None):
     if not platform_data:
         return True
 
-    policy = platform_data.get(MODULE_ADMIN_STATUS_CHANGE_ALLOWED_KEY)
-    if policy is None:
+    allowed_list = platform_data.get(MODULE_ADMIN_STATUS_CHANGE_ALLOWED_LIST_KEY)
+    if allowed_list is None:
         return True
-
-    allowed_list = policy.get(MODULE_ADMIN_STATUS_CHANGE_ALLOWED_LIST_KEY) or []
-    if not module_name:
-        return False
 
     return module_name in allowed_list
 
