@@ -4383,7 +4383,7 @@ This command is vendor-specific and supported on the modules to set the target m
 
 Example of the module supporting target mode
 
-Remote upgrade workflow
+![RMT_UPGRD](https://github.com/AnoopKamath/sonic-utilities_remote_upgrade/assets/115578705/c3b0bb62-eb14-4b05-b0a8-96b8c082455a)
 
 **sfputil firmware target**
 
@@ -11574,7 +11574,7 @@ Both modular and non modular chassis platforms are supported.
   Installing firmware:
       /usr/local/lib/firmware/mellanox/sn3800/chassis1/bios.bin
 
-  admin@sonic:~$ sudo config platform firmware install module Module1 component BIOS fw https://firmware.example.com/module1/bios.bin
+  admin@sonic:~$ sudo config platform firmware install module Module1 component BIOS fw https://www.mellanox.com/fw/sn3800/module1/bios.bin
   Warning: Immediate cold reboot is required to complete BIOS firmware update.
   New firmware will be installed, continue? [y/N]: y
   Downloading firmware:
