@@ -1576,58 +1576,58 @@ Ethernet0: SFP EEPROM detected
 
 - Example (Decode and display information stored on the EEPROM of CPO connected to Ethernet0):
   ```
-admin@sonic:~$ show interfaces transceiver info Ethernet0
-Ethernet0: SFP EEPROM detected
-        Active Firmware: N/A
-        Active application selected code assigned to host lane 1: 6
-        Active application selected code assigned to host lane 2: 6
-        Active application selected code assigned to host lane 3: 6
-        Active application selected code assigned to host lane 4: 6
-        Active application selected code assigned to host lane 5: 6
-        Active application selected code assigned to host lane 6: 6
-        Active application selected code assigned to host lane 7: 6
-        Active application selected code assigned to host lane 8: 6
-        Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
-                                   200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
-                                   Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
-                                   CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
-                                   Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
-                                   800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
-        CMIS Rev: 5.2
-        Connector: LC
-        ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
-        ELS Laser Count: 8
-        ELS Maximum Power Consumption: 12.0
-        ELS Revision: 0.1
-        ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
-        ELS Vendor Name: BROADCOM
-        ELS Vendor OUI: ec-01-e2
-        ELS Vendor PN: ARLM-96F8DMZ
-        ELS Vendor Rev: A0
-        ELS Vendor SN: FD2424VG006
-        Encoding: N/A
-        Extended Identifier: Power Class 8 (20.0W Max)
-        Extended RateSelect Compliance: N/A
-        Host Lane Count: 8
-        Identifier: CPO Bailly
-        Inactive Firmware: N/A
-        Length Cable Assembly(m): 0.0
-        Media Interface Technology: Others
-        Media Lane Count: 8
-        Module Hardware Rev: 0.0
-        Nominal Bit Rate(100Mbs): N/A
-        RLM Laser Lpower Mode Control: 0
-        RLM Laser Wavelength Grid: CWDM4
-        Specification compliance: sm_media_interface
-        Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
-        Vendor Name: BROADCOM
-        Vendor OUI: 38-ba-b0
-        Vendor PN: BCM789096FBB0KLG
-        Vendor Rev: A0
-        Vendor SN: SB243500200
-        is_replaceable: False
-        type_abbrv_name: QSFP-DD
-        vdm_supported: False
+  admin@sonic:~$ show interfaces transceiver info Ethernet0
+  Ethernet0: SFP EEPROM detected
+          Active Firmware: N/A
+          Active application selected code assigned to host lane 1: 6
+          Active application selected code assigned to host lane 2: 6
+          Active application selected code assigned to host lane 3: 6
+          Active application selected code assigned to host lane 4: 6
+          Active application selected code assigned to host lane 5: 6
+          Active application selected code assigned to host lane 6: 6
+          Active application selected code assigned to host lane 7: 6
+          Active application selected code assigned to host lane 8: 6
+          Application Advertisement: 400GAUI-4-L C2M (Annex 120G) - Host Assign (0x11) - 400G-FR4/400GBASE-FR4 (Cl 151) - Media Assign (0x11)
+                                    200GAUI-4 C2M (Annex 120E) - Host Assign (0x11) - 200GBASE-FR4 (Cl 122) - Media Assign (0x11)
+                                    Bailly-Reserved-2 - Host Assign (0x11) - Bailly-Reserved-LC-2 - Media Assign (0x11)
+                                    CAUI-4 C2M (Annex 83E) with RS(528,514) FEC - Host Assign (0x11) - 100G CWDM4 MSA Spec - Media Assign (0x11)
+                                    Bailly-Reserved-1 - Host Assign (0x1) - Bailly-Reserved-LC-1 - Media Assign (0x1)
+                                    800GAUI-8 L C2M (Annex 120G) - Host Assign (0x1) - Bailly-800G-2xFR4 - Media Assign (0x1)
+          CMIS Rev: 5.2
+          Connector: LC
+          ELS Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+          ELS Laser Count: 8
+          ELS Maximum Power Consumption: 12.0
+          ELS Revision: 0.1
+          ELS Vendor Date Code(YYYY-MM-DD Lot): 2024-06-28
+          ELS Vendor Name: BROADCOM
+          ELS Vendor OUI: ec-01-e2
+          ELS Vendor PN: ARLM-96F8DMZ
+          ELS Vendor Rev: A0
+          ELS Vendor SN: FD2424VG006
+          Encoding: N/A
+          Extended Identifier: Power Class 8 (20.0W Max)
+          Extended RateSelect Compliance: N/A
+          Host Lane Count: 8
+          Identifier: CPO Bailly
+          Inactive Firmware: N/A
+          Length Cable Assembly(m): 0.0
+          Media Interface Technology: Others
+          Media Lane Count: 8
+          Module Hardware Rev: 0.0
+          Nominal Bit Rate(100Mbs): N/A
+          RLM Laser Lpower Mode Control: 0
+          RLM Laser Wavelength Grid: CWDM4
+          Specification compliance: sm_media_interface
+          Vendor Date Code(YYYY-MM-DD Lot): 2024-09-14
+          Vendor Name: BROADCOM
+          Vendor OUI: 38-ba-b0
+          Vendor PN: BCM789096FBB0KLG
+          Vendor Rev: A0
+          Vendor SN: SB243500200
+          is_replaceable: False
+          type_abbrv_name: QSFP-DD
+          vdm_supported: False
   ```
 
 - Example (Display status of low-power mode of SFP transceiver connected to Ethernet100):
@@ -1964,217 +1964,217 @@ Ethernet0: SFP EEPROM detected
 
 - Example (Display status info of CPO connected to Ethernet0):
   ```
-admin@sonic:~$ show interfaces transceiver status Ethernet0
-Ethernet0: 
-        CMIS State (SW): READY
-        Tx fault flag on media lane 1: False
-        Tx fault flag on media lane 2: False
-        Tx fault flag on media lane 3: False
-        Tx fault flag on media lane 4: False
-        Tx fault flag on media lane 5: False
-        Tx fault flag on media lane 6: False
-        Tx fault flag on media lane 7: False
-        Tx fault flag on media lane 8: False
-        Rx loss of signal flag on media lane 1: False
-        Rx loss of signal flag on media lane 2: False
-        Rx loss of signal flag on media lane 3: False
-        Rx loss of signal flag on media lane 4: False
-        Rx loss of signal flag on media lane 5: False
-        Rx loss of signal flag on media lane 6: False
-        Rx loss of signal flag on media lane 7: False
-        Rx loss of signal flag on media lane 8: False
-        TX disable status on lane 1: False
-        TX disable status on lane 2: False
-        TX disable status on lane 3: False
-        TX disable status on lane 4: False
-        TX disable status on lane 5: False
-        TX disable status on lane 6: False
-        TX disable status on lane 7: False
-        TX disable status on lane 8: False
-        Disabled TX channels: 0
-        Current module state: ModuleReady
-        Reason of entering the module fault state: No Fault detected
-        Datapath firmware fault: False
-        Module firmware fault: False
-        Module state changed: False
-        Data path state indicator on host lane 1: DataPathActivated
-        Data path state indicator on host lane 2: DataPathActivated
-        Data path state indicator on host lane 3: DataPathActivated
-        Data path state indicator on host lane 4: DataPathActivated
-        Data path state indicator on host lane 5: DataPathActivated
-        Data path state indicator on host lane 6: DataPathActivated
-        Data path state indicator on host lane 7: DataPathActivated
-        Data path state indicator on host lane 8: DataPathActivated
-        Tx output status on media lane 1: True
-        Tx output status on media lane 2: True
-        Tx output status on media lane 3: True
-        Tx output status on media lane 4: True
-        Tx output status on media lane 5: True
-        Tx output status on media lane 6: True
-        Tx output status on media lane 7: True
-        Tx output status on media lane 8: True
-        Rx output status on host lane 1: True
-        Rx output status on host lane 2: True
-        Rx output status on host lane 3: True
-        Rx output status on host lane 4: True
-        Rx output status on host lane 5: True
-        Rx output status on host lane 6: True
-        Rx output status on host lane 7: True
-        Rx output status on host lane 8: True
-        Tx loss of signal flag on host lane 1: False
-        Tx loss of signal flag on host lane 2: False
-        Tx loss of signal flag on host lane 3: False
-        Tx loss of signal flag on host lane 4: False
-        Tx loss of signal flag on host lane 5: False
-        Tx loss of signal flag on host lane 6: False
-        Tx loss of signal flag on host lane 7: False
-        Tx loss of signal flag on host lane 8: False
-        Tx clock and data recovery loss of lock on host lane 1: N/A
-        Tx clock and data recovery loss of lock on host lane 2: N/A
-        Tx clock and data recovery loss of lock on host lane 3: N/A
-        Tx clock and data recovery loss of lock on host lane 4: N/A
-        Tx clock and data recovery loss of lock on host lane 5: N/A
-        Tx clock and data recovery loss of lock on host lane 6: N/A
-        Tx clock and data recovery loss of lock on host lane 7: N/A
-        Tx clock and data recovery loss of lock on host lane 8: N/A
-        Rx clock and data recovery loss of lock on media lane 1: N/A
-        Rx clock and data recovery loss of lock on media lane 2: N/A
-        Rx clock and data recovery loss of lock on media lane 3: N/A
-        Rx clock and data recovery loss of lock on media lane 4: N/A
-        Rx clock and data recovery loss of lock on media lane 5: N/A
-        Rx clock and data recovery loss of lock on media lane 6: N/A
-        Rx clock and data recovery loss of lock on media lane 7: N/A
-        Rx clock and data recovery loss of lock on media lane 8: N/A
-        Configuration status for the data path of host line 1: ConfigSuccess
-        Configuration status for the data path of host line 2: ConfigSuccess
-        Configuration status for the data path of host line 3: ConfigSuccess
-        Configuration status for the data path of host line 4: ConfigSuccess
-        Configuration status for the data path of host line 5: ConfigSuccess
-        Configuration status for the data path of host line 6: ConfigSuccess
-        Configuration status for the data path of host line 7: ConfigSuccess
-        Configuration status for the data path of host line 8: ConfigSuccess
-        Data path configuration updated on host lane 1: True
-        Data path configuration updated on host lane 2: True
-        Data path configuration updated on host lane 3: True
-        Data path configuration updated on host lane 4: True
-        Data path configuration updated on host lane 5: True
-        Data path configuration updated on host lane 6: True
-        Data path configuration updated on host lane 7: True
-        Data path configuration updated on host lane 8: True
-        Temperature high alarm flag: False
-        Temperature high warning flag: False
-        Temperature low warning flag: False
-        Temperature low alarm flag: False
-        Vcc high alarm flag: False
-        Vcc high warning flag: False
-        Vcc low warning flag: False
-        Vcc low alarm flag: False
-        Tx power high alarm flag on lane 1: False
-        Tx power high alarm flag on lane 2: False
-        Tx power high alarm flag on lane 3: False
-        Tx power high alarm flag on lane 4: False
-        Tx power high alarm flag on lane 5: False
-        Tx power high alarm flag on lane 6: False
-        Tx power high alarm flag on lane 7: False
-        Tx power high alarm flag on lane 8: False
-        Tx power high warning flag on lane 1: False
-        Tx power high warning flag on lane 2: False
-        Tx power high warning flag on lane 3: False
-        Tx power high warning flag on lane 4: False
-        Tx power high warning flag on lane 5: False
-        Tx power high warning flag on lane 6: False
-        Tx power high warning flag on lane 7: False
-        Tx power high warning flag on lane 8: False
-        Tx power low warning flag on lane 1: False
-        Tx power low warning flag on lane 2: False
-        Tx power low warning flag on lane 3: False
-        Tx power low warning flag on lane 4: False
-        Tx power low warning flag on lane 5: False
-        Tx power low warning flag on lane 6: False
-        Tx power low warning flag on lane 7: False
-        Tx power low warning flag on lane 8: False
-        Tx power low alarm flag on lane 1: False
-        Tx power low alarm flag on lane 2: False
-        Tx power low alarm flag on lane 3: False
-        Tx power low alarm flag on lane 4: False
-        Tx power low alarm flag on lane 5: False
-        Tx power low alarm flag on lane 6: False
-        Tx power low alarm flag on lane 7: False
-        Tx power low alarm flag on lane 8: False
-        Rx power high alarm flag on lane 1: False
-        Rx power high alarm flag on lane 2: False
-        Rx power high alarm flag on lane 3: False
-        Rx power high alarm flag on lane 4: False
-        Rx power high alarm flag on lane 5: False
-        Rx power high alarm flag on lane 6: False
-        Rx power high alarm flag on lane 7: False
-        Rx power high alarm flag on lane 8: False
-        Rx power high warning flag on lane 1: False
-        Rx power high warning flag on lane 2: False
-        Rx power high warning flag on lane 3: False
-        Rx power high warning flag on lane 4: False
-        Rx power high warning flag on lane 5: False
-        Rx power high warning flag on lane 6: False
-        Rx power high warning flag on lane 7: False
-        Rx power high warning flag on lane 8: False
-        Rx power low warning flag on lane 1: False
-        Rx power low warning flag on lane 2: False
-        Rx power low warning flag on lane 3: False
-        Rx power low warning flag on lane 4: False
-        Rx power low warning flag on lane 5: False
-        Rx power low warning flag on lane 6: False
-        Rx power low warning flag on lane 7: False
-        Rx power low warning flag on lane 8: False
-        Rx power low alarm flag on lane 1: False
-        Rx power low alarm flag on lane 2: False
-        Rx power low alarm flag on lane 3: False
-        Rx power low alarm flag on lane 4: False
-        Rx power low alarm flag on lane 5: False
-        Rx power low alarm flag on lane 6: False
-        Rx power low alarm flag on lane 7: False
-        Rx power low alarm flag on lane 8: False
-        Tx bias high alarm flag on lane 1: False
-        Tx bias high alarm flag on lane 2: False
-        Tx bias high alarm flag on lane 3: False
-        Tx bias high alarm flag on lane 4: False
-        Tx bias high alarm flag on lane 5: False
-        Tx bias high alarm flag on lane 6: False
-        Tx bias high alarm flag on lane 7: False
-        Tx bias high alarm flag on lane 8: False
-        Tx bias high warning flag on lane 1: False
-        Tx bias high warning flag on lane 2: False
-        Tx bias high warning flag on lane 3: False
-        Tx bias high warning flag on lane 4: False
-        Tx bias high warning flag on lane 5: False
-        Tx bias high warning flag on lane 6: False
-        Tx bias high warning flag on lane 7: False
-        Tx bias high warning flag on lane 8: False
-        Tx bias low warning flag on lane 1: False
-        Tx bias low warning flag on lane 2: False
-        Tx bias low warning flag on lane 3: False
-        Tx bias low warning flag on lane 4: False
-        Tx bias low warning flag on lane 5: False
-        Tx bias low warning flag on lane 6: False
-        Tx bias low warning flag on lane 7: False
-        Tx bias low warning flag on lane 8: False
-        Tx bias low alarm flag on lane 1: False
-        Tx bias low alarm flag on lane 2: False
-        Tx bias low alarm flag on lane 3: False
-        Tx bias low alarm flag on lane 4: False
-        Tx bias low alarm flag on lane 5: False
-        Tx bias low alarm flag on lane 6: False
-        Tx bias low alarm flag on lane 7: False
-        Tx bias low alarm flag on lane 8: False
-        ELS temperature high alarm flag: False
-        ELS temperature low alarm flag: False
-        ELS temperature high warning flag: False
-        ELS temperature low warning flag: False
-        ELS Vcc high alarm flag: False
-        ELS Vcc low alarm flag: False
-        ELS Vcc high warning flag: False
-        ELS Vcc low warning flag: False
-        ELS module state: High power mode
-        ELS interrupt status: Interrupt event cleared
+  admin@sonic:~$ show interfaces transceiver status Ethernet0
+  Ethernet0: 
+          CMIS State (SW): READY
+          Tx fault flag on media lane 1: False
+          Tx fault flag on media lane 2: False
+          Tx fault flag on media lane 3: False
+          Tx fault flag on media lane 4: False
+          Tx fault flag on media lane 5: False
+          Tx fault flag on media lane 6: False
+          Tx fault flag on media lane 7: False
+          Tx fault flag on media lane 8: False
+          Rx loss of signal flag on media lane 1: False
+          Rx loss of signal flag on media lane 2: False
+          Rx loss of signal flag on media lane 3: False
+          Rx loss of signal flag on media lane 4: False
+          Rx loss of signal flag on media lane 5: False
+          Rx loss of signal flag on media lane 6: False
+          Rx loss of signal flag on media lane 7: False
+          Rx loss of signal flag on media lane 8: False
+          TX disable status on lane 1: False
+          TX disable status on lane 2: False
+          TX disable status on lane 3: False
+          TX disable status on lane 4: False
+          TX disable status on lane 5: False
+          TX disable status on lane 6: False
+          TX disable status on lane 7: False
+          TX disable status on lane 8: False
+          Disabled TX channels: 0
+          Current module state: ModuleReady
+          Reason of entering the module fault state: No Fault detected
+          Datapath firmware fault: False
+          Module firmware fault: False
+          Module state changed: False
+          Data path state indicator on host lane 1: DataPathActivated
+          Data path state indicator on host lane 2: DataPathActivated
+          Data path state indicator on host lane 3: DataPathActivated
+          Data path state indicator on host lane 4: DataPathActivated
+          Data path state indicator on host lane 5: DataPathActivated
+          Data path state indicator on host lane 6: DataPathActivated
+          Data path state indicator on host lane 7: DataPathActivated
+          Data path state indicator on host lane 8: DataPathActivated
+          Tx output status on media lane 1: True
+          Tx output status on media lane 2: True
+          Tx output status on media lane 3: True
+          Tx output status on media lane 4: True
+          Tx output status on media lane 5: True
+          Tx output status on media lane 6: True
+          Tx output status on media lane 7: True
+          Tx output status on media lane 8: True
+          Rx output status on host lane 1: True
+          Rx output status on host lane 2: True
+          Rx output status on host lane 3: True
+          Rx output status on host lane 4: True
+          Rx output status on host lane 5: True
+          Rx output status on host lane 6: True
+          Rx output status on host lane 7: True
+          Rx output status on host lane 8: True
+          Tx loss of signal flag on host lane 1: False
+          Tx loss of signal flag on host lane 2: False
+          Tx loss of signal flag on host lane 3: False
+          Tx loss of signal flag on host lane 4: False
+          Tx loss of signal flag on host lane 5: False
+          Tx loss of signal flag on host lane 6: False
+          Tx loss of signal flag on host lane 7: False
+          Tx loss of signal flag on host lane 8: False
+          Tx clock and data recovery loss of lock on host lane 1: N/A
+          Tx clock and data recovery loss of lock on host lane 2: N/A
+          Tx clock and data recovery loss of lock on host lane 3: N/A
+          Tx clock and data recovery loss of lock on host lane 4: N/A
+          Tx clock and data recovery loss of lock on host lane 5: N/A
+          Tx clock and data recovery loss of lock on host lane 6: N/A
+          Tx clock and data recovery loss of lock on host lane 7: N/A
+          Tx clock and data recovery loss of lock on host lane 8: N/A
+          Rx clock and data recovery loss of lock on media lane 1: N/A
+          Rx clock and data recovery loss of lock on media lane 2: N/A
+          Rx clock and data recovery loss of lock on media lane 3: N/A
+          Rx clock and data recovery loss of lock on media lane 4: N/A
+          Rx clock and data recovery loss of lock on media lane 5: N/A
+          Rx clock and data recovery loss of lock on media lane 6: N/A
+          Rx clock and data recovery loss of lock on media lane 7: N/A
+          Rx clock and data recovery loss of lock on media lane 8: N/A
+          Configuration status for the data path of host line 1: ConfigSuccess
+          Configuration status for the data path of host line 2: ConfigSuccess
+          Configuration status for the data path of host line 3: ConfigSuccess
+          Configuration status for the data path of host line 4: ConfigSuccess
+          Configuration status for the data path of host line 5: ConfigSuccess
+          Configuration status for the data path of host line 6: ConfigSuccess
+          Configuration status for the data path of host line 7: ConfigSuccess
+          Configuration status for the data path of host line 8: ConfigSuccess
+          Data path configuration updated on host lane 1: True
+          Data path configuration updated on host lane 2: True
+          Data path configuration updated on host lane 3: True
+          Data path configuration updated on host lane 4: True
+          Data path configuration updated on host lane 5: True
+          Data path configuration updated on host lane 6: True
+          Data path configuration updated on host lane 7: True
+          Data path configuration updated on host lane 8: True
+          Temperature high alarm flag: False
+          Temperature high warning flag: False
+          Temperature low warning flag: False
+          Temperature low alarm flag: False
+          Vcc high alarm flag: False
+          Vcc high warning flag: False
+          Vcc low warning flag: False
+          Vcc low alarm flag: False
+          Tx power high alarm flag on lane 1: False
+          Tx power high alarm flag on lane 2: False
+          Tx power high alarm flag on lane 3: False
+          Tx power high alarm flag on lane 4: False
+          Tx power high alarm flag on lane 5: False
+          Tx power high alarm flag on lane 6: False
+          Tx power high alarm flag on lane 7: False
+          Tx power high alarm flag on lane 8: False
+          Tx power high warning flag on lane 1: False
+          Tx power high warning flag on lane 2: False
+          Tx power high warning flag on lane 3: False
+          Tx power high warning flag on lane 4: False
+          Tx power high warning flag on lane 5: False
+          Tx power high warning flag on lane 6: False
+          Tx power high warning flag on lane 7: False
+          Tx power high warning flag on lane 8: False
+          Tx power low warning flag on lane 1: False
+          Tx power low warning flag on lane 2: False
+          Tx power low warning flag on lane 3: False
+          Tx power low warning flag on lane 4: False
+          Tx power low warning flag on lane 5: False
+          Tx power low warning flag on lane 6: False
+          Tx power low warning flag on lane 7: False
+          Tx power low warning flag on lane 8: False
+          Tx power low alarm flag on lane 1: False
+          Tx power low alarm flag on lane 2: False
+          Tx power low alarm flag on lane 3: False
+          Tx power low alarm flag on lane 4: False
+          Tx power low alarm flag on lane 5: False
+          Tx power low alarm flag on lane 6: False
+          Tx power low alarm flag on lane 7: False
+          Tx power low alarm flag on lane 8: False
+          Rx power high alarm flag on lane 1: False
+          Rx power high alarm flag on lane 2: False
+          Rx power high alarm flag on lane 3: False
+          Rx power high alarm flag on lane 4: False
+          Rx power high alarm flag on lane 5: False
+          Rx power high alarm flag on lane 6: False
+          Rx power high alarm flag on lane 7: False
+          Rx power high alarm flag on lane 8: False
+          Rx power high warning flag on lane 1: False
+          Rx power high warning flag on lane 2: False
+          Rx power high warning flag on lane 3: False
+          Rx power high warning flag on lane 4: False
+          Rx power high warning flag on lane 5: False
+          Rx power high warning flag on lane 6: False
+          Rx power high warning flag on lane 7: False
+          Rx power high warning flag on lane 8: False
+          Rx power low warning flag on lane 1: False
+          Rx power low warning flag on lane 2: False
+          Rx power low warning flag on lane 3: False
+          Rx power low warning flag on lane 4: False
+          Rx power low warning flag on lane 5: False
+          Rx power low warning flag on lane 6: False
+          Rx power low warning flag on lane 7: False
+          Rx power low warning flag on lane 8: False
+          Rx power low alarm flag on lane 1: False
+          Rx power low alarm flag on lane 2: False
+          Rx power low alarm flag on lane 3: False
+          Rx power low alarm flag on lane 4: False
+          Rx power low alarm flag on lane 5: False
+          Rx power low alarm flag on lane 6: False
+          Rx power low alarm flag on lane 7: False
+          Rx power low alarm flag on lane 8: False
+          Tx bias high alarm flag on lane 1: False
+          Tx bias high alarm flag on lane 2: False
+          Tx bias high alarm flag on lane 3: False
+          Tx bias high alarm flag on lane 4: False
+          Tx bias high alarm flag on lane 5: False
+          Tx bias high alarm flag on lane 6: False
+          Tx bias high alarm flag on lane 7: False
+          Tx bias high alarm flag on lane 8: False
+          Tx bias high warning flag on lane 1: False
+          Tx bias high warning flag on lane 2: False
+          Tx bias high warning flag on lane 3: False
+          Tx bias high warning flag on lane 4: False
+          Tx bias high warning flag on lane 5: False
+          Tx bias high warning flag on lane 6: False
+          Tx bias high warning flag on lane 7: False
+          Tx bias high warning flag on lane 8: False
+          Tx bias low warning flag on lane 1: False
+          Tx bias low warning flag on lane 2: False
+          Tx bias low warning flag on lane 3: False
+          Tx bias low warning flag on lane 4: False
+          Tx bias low warning flag on lane 5: False
+          Tx bias low warning flag on lane 6: False
+          Tx bias low warning flag on lane 7: False
+          Tx bias low warning flag on lane 8: False
+          Tx bias low alarm flag on lane 1: False
+          Tx bias low alarm flag on lane 2: False
+          Tx bias low alarm flag on lane 3: False
+          Tx bias low alarm flag on lane 4: False
+          Tx bias low alarm flag on lane 5: False
+          Tx bias low alarm flag on lane 6: False
+          Tx bias low alarm flag on lane 7: False
+          Tx bias low alarm flag on lane 8: False
+          ELS temperature high alarm flag: False
+          ELS temperature low alarm flag: False
+          ELS temperature high warning flag: False
+          ELS temperature low warning flag: False
+          ELS Vcc high alarm flag: False
+          ELS Vcc low alarm flag: False
+          ELS Vcc high warning flag: False
+          ELS Vcc low warning flag: False
+          ELS module state: High power mode
+          ELS interrupt status: Interrupt event cleared
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#basic-show-commands)
@@ -8775,7 +8775,7 @@ you type, including for nested subcommands like `show ip route vrf <TAB>`.
        Known via "connected", distance 0, metric 0, vrf Vrf-red, best
        Last update 21:57:53 ago
        * directly connected, Loopback11
-   ```
+     ```
 
 #### show ip interfaces
 
@@ -14845,22 +14845,23 @@ This can take two forms of "<option>" 1. DPU module name (ex: DPU0) 2. all, whic
 
 - Example:
   ```
-root@MtFuji-dut:/home/cisco# show system-health dpu DPU0
-Name    Oper-Status    State-Detail             State-Value    Time                             Reason
-------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
-DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
-                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
-                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+  root@MtFuji-dut:/home/cisco# show system-health dpu DPU0
+  Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+  ------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+  DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                        dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                        dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
 
-root@MtFuji-dut:/home/cisco# show system-health dpu all
-Name    Oper-Status    State-Detail             State-Value    Time                             Reason
-------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
-DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
-                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
-                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
-DPU1    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
-                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
-                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+  root@MtFuji-dut:/home/cisco# show system-health dpu all
+  Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+  ------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+  DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                        dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                        dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+  DPU1    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                        dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                        dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-Health)
 
