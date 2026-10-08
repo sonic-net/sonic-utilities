@@ -26,7 +26,7 @@ def read_reboot_cause_file():
 
 
 # Function to fetch reboot cause data from database
-def fetch_data_from_db(module_name, fetch_history=False, use_chassis_db=False):
+def fetch_data_from_db(module_name, fetch_history=False, use_chassis_db=False, verbose=False):
     if module_name is None:
         prefix = 'REBOOT_CAUSE|2'
     elif "DPU" in module_name:
@@ -90,6 +90,10 @@ def fetch_data_from_db(module_name, fetch_history=False, use_chassis_db=False):
             table.append(r)
         elif fetch_history:
             r.append(entry['comment'] if 'comment' in entry else "")
+            # Add verbose fields if requested
+            if verbose:
+                r.append(entry['power_cycle'] if 'power_cycle' in entry else "N/A")
+                r.append(entry['reboot_type'] if 'reboot_type' in entry else "N/A")
             if module_name is None or module_name == 'all' or "DPU" in module:
                 table.append(r)
 
@@ -120,16 +124,16 @@ def fetch_reboot_cause_from_db(module_name):
 
 
 # Function to fetch reboot cause history data from database REBOOT_CAUSE table
-def fetch_reboot_cause_history_from_db(module_name):
+def fetch_reboot_cause_history_from_db(module_name, verbose=False):
     if module_name == "all":
         # Combine data from both Redis containers for "all" modules
-        data_switch = fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=False)
-        data_dpu = fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=True)
+        data_switch = fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=False, verbose=verbose)
+        data_dpu = fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=True, verbose=verbose)
         return data_switch + data_dpu
     elif module_name is None:
-        return fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=False)
+        return fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=False, verbose=verbose)
     else:
-        return fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=True)
+        return fetch_data_from_db(module_name, fetch_history=True, use_chassis_db=True, verbose=verbose)
 
 #
 # 'reboot-cause' group ("show reboot-cause")
@@ -188,16 +192,23 @@ def all():
         required=False,
         type=click.Choice(get_all_dpu_options(), case_sensitive=False) if is_smartswitch() else None
         )
-def history(module_name=None):
+@click.option('-v', '--verbose', is_flag=True, help='Show verbose reboot-cause details')
+def history(module_name=None, verbose=False):
     """Show history of reboot-cause"""
     if not is_smartswitch() and module_name:
         click.echo("module option is supported only for smartswitch platform")
         return
-    reboot_cause_history = fetch_reboot_cause_history_from_db(module_name)
+    reboot_cause_history = fetch_reboot_cause_history_from_db(module_name, verbose)
     if is_smartswitch() and module_name:
-        header = ['Device', 'Name', 'Cause', 'Time', 'User', 'Comment']
+        if verbose:
+            header = ['Device', 'Name', 'Cause', 'Time', 'User', 'Comment', 'Power Cycle', 'Reboot Type']
+        else:
+            header = ['Device', 'Name', 'Cause', 'Time', 'User', 'Comment']
     else:
-        header = ['Name', 'Cause', 'Time', 'User', 'Comment']
+        if verbose:
+            header = ['Name', 'Cause', 'Time', 'User', 'Comment', 'Power Cycle', 'Reboot Type']
+        else:
+            header = ['Name', 'Cause', 'Time', 'User', 'Comment']
 
     if reboot_cause_history:
         click.echo(tabulate(reboot_cause_history, header, numalign="left"))
