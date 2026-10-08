@@ -132,6 +132,13 @@ class ConfigWrapper:
 
         sy = self.create_sonic_yang_with_loaded_models()
 
+        # This loads a different config into the shared tree -- the round trip through
+        # convert_sonic_yang_to_config_db -- so once it runs, _currently_loaded_hash no
+        # longer describes what the tree holds. find_ref_paths treats that hash as the
+        # sole authority on whether a reload is needed, so clear it either way: on
+        # success the tree holds something else, on failure it holds nothing.
+        self._currently_loaded_hash = None
+
         try:
             # Loading data automatically does full validation
             sy.loadData(config_db_as_json)
@@ -556,7 +563,7 @@ class PathAddressing:
     def _create_sonic_yang_with_loaded_models(self):
         return self.config_wrapper.create_sonic_yang_with_loaded_models()
 
-    def find_ref_paths(self, paths, config, reload_config: bool = True):
+    def find_ref_paths(self, paths, config):
         """
         Finds the paths referencing any line under the given 'path' within the given 'config'.
         Example:
@@ -596,18 +603,46 @@ class PathAddressing:
         # TODO: Also fetch references by must statement (check similar statements)
         sy = self._create_sonic_yang_with_loaded_models()
 
-        if reload_config:
-            _config_hash = hashlib.md5(
-                json.dumps(config, sort_keys=True).encode()
-            ).hexdigest()
-            already_loaded = (
-                self.config_wrapper is not None and
-                self.config_wrapper._currently_loaded_hash == _config_hash
-            )
-            if not already_loaded:
+        # NOTE: this used to take a reload_config flag, by which a caller claimed
+        # "I already loaded this config, skip the reload". That claim could not be
+        # relied on, so the flag was removed. The sonic_yang instance and its data
+        # tree are shared, and loadData() sets self.root = None when a load fails;
+        # the patch sorter's DFS loads invalid intermediate configs constantly
+        # while backtracking, which is normal and expected. So the tree a caller
+        # loaded is routinely destroyed before that caller reads it again, and
+        # trusting the flag meant dereferencing it.
+        #
+        # The tree's own state is the only sound basis for the decision, and it is
+        # also the cheap one: hashing a 61KB config measures ~0.5ms against ~23ms
+        # for the loadData it avoids. Skipping redundant loads is what the flag
+        # was trying to buy, and the hash buys it correctly.
+        _config_hash = hashlib.md5(
+            json.dumps(config, sort_keys=True).encode()
+        ).hexdigest()
+        # The hash alone is not enough, and this is the load-bearing part: it
+        # keeps matching a config whose tree a later failed load has already
+        # destroyed, which is exactly the case described above. Requiring a live
+        # sy.root is what makes a hash hit mean "loaded, and still there".
+        already_loaded = (
+            self.config_wrapper is not None and
+            self.config_wrapper._currently_loaded_hash == _config_hash and
+            sy.root is not None
+        )
+        if not already_loaded:
+            try:
                 sy.loadData(config)
+            except Exception:
+                # Deliberately broader than the SonicYangException that
+                # validate_config_db_config catches: any failure here leaves the
+                # tree in a state we cannot confirm, and a hash outliving its
+                # tree is the failure this change exists to prevent. Clear it so
+                # no later caller can match it and skip a reload it actually
+                # needs; re-raise so nothing is swallowed.
                 if self.config_wrapper is not None:
-                    self.config_wrapper._currently_loaded_hash = _config_hash
+                    self.config_wrapper._currently_loaded_hash = None
+                raise
+            if self.config_wrapper is not None:
+                self.config_wrapper._currently_loaded_hash = _config_hash
 
         # Force to be a list
         if not isinstance(paths, list):

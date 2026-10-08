@@ -274,11 +274,75 @@ class TestConfigWrapper(unittest.TestCase):
         load_count_after_validate = mock_sy.loadData.call_count
 
         # Second: find_ref_paths with same config should NOT call loadData again
-        path_addressing.find_ref_paths("/ACL_TABLE", config, reload_config=True)
+        path_addressing.find_ref_paths("/ACL_TABLE", config)
         load_count_after_find = mock_sy.loadData.call_count
 
         self.assertEqual(load_count_after_validate, load_count_after_find,
                          "find_ref_paths should skip loadData when validate already loaded same config")
+
+    def test_find_ref_paths__tree_destroyed_by_failed_load__reloads_anyway(self):
+        """
+        sonic_yang.loadData() sets root=None when a load fails, which the patch
+        sorter's DFS triggers routinely while backtracking over invalid intermediate
+        configs. find_ref_paths must notice that the shared tree was destroyed and
+        reload it, even though the cached hash still matches the requested config.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config = {"ACL_TABLE": {}}
+
+        # Load the config so the hash is recorded and the tree is live
+        path_addressing.find_ref_paths("/ACL_TABLE", config)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash)
+        load_count = mock_sy.loadData.call_count
+
+        # Something else fails to load and destroys the shared tree
+        mock_sy.root = None
+
+        # The cached hash still matches this config, but the tree backing it is gone
+        path_addressing.find_ref_paths("/ACL_TABLE", config)
+
+        self.assertEqual(load_count + 1, mock_sy.loadData.call_count,
+                         "find_ref_paths must reload when sy.root is None")
+
+    def test_find_ref_paths__failed_load__clears_cached_hash(self):
+        """
+        A loadData that raises leaves root=None. If the hash it was about to set
+        survived, a later caller could match it and skip the reload it needs.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config = {"ACL_TABLE": {}}
+
+        # Record the hash for this config the way a real caller would
+        path_addressing.find_ref_paths("/ACL_TABLE", config)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash)
+
+        # A load of some other config raises, which destroys the tree holding this one
+        mock_sy.loadData = MagicMock(side_effect=sonic_yang.SonicYangException("Data Loading Failed"))
+        with self.assertRaises(sonic_yang.SonicYangException):
+            path_addressing.find_ref_paths("/PORT", {"PORT": {}})
+
+        self.assertIsNone(config_wrapper._currently_loaded_hash,
+                          "a failed load must clear the cached hash")
+
+        # The consequence the clear exists for: the next caller for the original config
+        # must load again. root is left live here so this pins the hash clear on its own,
+        # independently of the sy.root check.
+        mock_sy.loadData = MagicMock()
+        path_addressing.find_ref_paths("/ACL_TABLE", config)
+        self.assertEqual(1, mock_sy.loadData.call_count,
+                         "a caller after a failed load must not match the cleared hash")
 
     def test_find_ref_paths__after_validate_different_config__loadData_called(self):
         """
@@ -301,7 +365,7 @@ class TestConfigWrapper(unittest.TestCase):
                              "validate_config_db_config should have set _currently_loaded_hash")
         load_count_after_validate = mock_sy.loadData.call_count
 
-        path_addressing.find_ref_paths("/ACL_TABLE", config_b, reload_config=True)
+        path_addressing.find_ref_paths("/ACL_TABLE", config_b)
         load_count_after_find = mock_sy.loadData.call_count
 
         self.assertEqual(load_count_after_find, load_count_after_validate + 1,
