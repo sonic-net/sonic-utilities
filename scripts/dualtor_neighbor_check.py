@@ -22,7 +22,6 @@ import time
 from natsort import natsorted
 
 from swsscommon import swsscommon
-from sonic_py_common import daemon_base
 try:
     from swsssdk import port_util
 except ImportError:
@@ -209,6 +208,8 @@ return redis.status_reply(cjson.encode(result))
 POST_FLUSH_CHECK_DELAY_SEC = 10
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
+DEFAULT_NAMESPACE = ""
+REDIS_TIMEOUT_MSECS = 0
 ZERO_MAC = "00:00:00:00:00:00"
 NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
                                   "TUNNEL_IN_ASIC", "HWSTATUS"]
@@ -351,7 +352,7 @@ def run_command(cmd):
 
 def redis_cli(redis_cmd):
     """Call a redis command with return error check."""
-    run_cmd = "sudo redis-cli %s" % redis_cmd
+    run_cmd = "sudo sonic-db-cli --unixsocket APPL_DB %s" % redis_cmd
     result = run_command(run_cmd).strip()
     if "error" in result or "ERR" in result:
         raise RuntimeError("Redis command '%s' failed: %s" % (redis_cmd, result))
@@ -434,7 +435,7 @@ def read_tables_from_db(appl_db):
 
 def get_if_br_oid_to_port_name_map():
     """Return port bridge oid to port name map."""
-    db = swsscommon.SonicV2Connector(host="127.0.0.1")
+    db = swsscommon.SonicV2Connector(use_unix_socket_path=True)
     try:
         port_name_map = port_util.get_interface_oid_map(db)[1]
     except IndexError:
@@ -746,9 +747,11 @@ def main():
     args = parse_args()
     config_logging(args)
 
-    config_db = swsscommon.ConfigDBConnector(use_unix_socket_path=False)
+    config_db = swsscommon.ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
-    appl_db = daemon_base.db_connect("APPL_DB")
+    appl_db = swsscommon.DBConnector(
+        "APPL_DB", REDIS_TIMEOUT_MSECS, False, DEFAULT_NAMESPACE
+    )
 
     mux_cables = get_mux_cable_config(config_db)
 
