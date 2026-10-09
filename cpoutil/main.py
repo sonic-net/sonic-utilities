@@ -1,6 +1,7 @@
 """Command-line utility for Co-Packaged Optics devices."""
 
 import json
+import math
 import re
 import sys
 
@@ -639,8 +640,22 @@ def _ordered_top_level(records):
     }
 
 
+def _json_safe(value):
+    """Replace non-finite numbers, which standard JSON cannot represent, with None.
+
+    For example, a 0 mW power threshold converted to dBm is -inf.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def _json_records(records):
-    return json.dumps(_ordered_top_level(records), indent=4)
+    return json.dumps(_json_safe(_ordered_top_level(records)), indent=4, allow_nan=False)
 
 
 def _format_cpo_info(info):
@@ -815,10 +830,30 @@ def _append_additional_dom_values(lines, values, displayed_keys):
             ))
 
 
+def _read_dom_section(failures, endpoint, section, read):
+    """Read one DOM section at the platform API boundary.
+
+    A read that fails, returns None, or returns no info or DOM data is recorded
+    as a failure instead of being displayed as valid data.
+    NotImplementedError and AttributeError still propagate as unsupported.
+    """
+    try:
+        value = read()
+    except (TypeError, ValueError, OSError) as exc:
+        failures.append("{} {} ({})".format(endpoint, section, exc or type(exc).__name__))
+        return None
+    if value is None or (section != "thresholds" and value == {}):
+        failures.append("{} {}".format(endpoint, section))
+        return None
+    return value
+
+
 def _format_interface_dom(port_name, record):
     if not record["present"]:
         return "{}: CPO EEPROM not detected".format(port_name)
     lines = ["{}: CPO EEPROM detected".format(port_name)]
+    if record.get("read_errors"):
+        lines.append("    Read errors: {}".format(", ".join(record["read_errors"])))
     for endpoint, formatter in (("oe", _format_oe_dom), ("els", _format_els_dom)):
         data = record[endpoint]
         lines.append("    {}:".format(endpoint.upper()))
@@ -1306,6 +1341,7 @@ def show_interface_dom(port, json_output):
     """
     records = {}
     output = []
+    failed_ports = []
     try:
         for port_name, _, cpo in get_port_cpo_objects(port):
             present = get_cpo_presence(cpo, port_name)
@@ -1317,19 +1353,26 @@ def show_interface_dom(port, json_output):
             oe_api = get_oe_api(cpo, port_name)
             els_api = get_els_api(cpo, port_name)
 
+            failures = []
             record["oe"] = {
-                "info": oe_api.get_transceiver_info(),
-                "dom": oe_api.get_transceiver_dom_real_value(),
-                "thresholds": oe_api.get_transceiver_threshold_info(),
+                "info": _read_dom_section(failures, "OE", "info", oe_api.get_transceiver_info),
+                "dom": _read_dom_section(failures, "OE", "dom", oe_api.get_transceiver_dom_real_value),
+                "thresholds": _read_dom_section(
+                    failures, "OE", "thresholds", oe_api.get_transceiver_threshold_info),
             }
-            els_info = els_api.get_elsfp_info()
+            els_info = _read_dom_section(failures, "ELS", "info", els_api.get_elsfp_info)
             record["els"] = {
                 "info": els_info,
                 "dom": _filter_els_dom_lanes(
-                    els_api.get_elsfp_dom_real_value(), _get_els_lane_count(els_info)
+                    _read_dom_section(failures, "ELS", "dom", els_api.get_elsfp_dom_real_value),
+                    _get_els_lane_count(els_info),
                 ),
-                "thresholds": els_api.get_elsfp_threshold_info(),
+                "thresholds": _read_dom_section(
+                    failures, "ELS", "thresholds", els_api.get_elsfp_threshold_info),
             }
+            if failures:
+                record["read_errors"] = failures
+                failed_ports.append("{} ({})".format(port_name, ", ".join(failures)))
             output.append(_format_interface_dom(port_name, record))
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
@@ -1341,6 +1384,11 @@ def show_interface_dom(port, json_output):
         click.echo(_json_records(records))
     else:
         click.echo("\n\n".join(output))
+    if failed_ports:
+        # Other ports are still displayed; the command reports the failed reads.
+        raise click.ClickException(
+            "Failed to read CPO data for {}".format("; ".join(failed_ports))
+        )
 
 
 @show_interface.command("tx_disable")

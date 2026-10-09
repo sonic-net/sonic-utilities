@@ -1793,3 +1793,73 @@ class TestBreakoutWithoutLaneMapping:
         assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet1) ... OK" in result.output
         breakout.tx_disable.assert_called_once_with(True)
         assert breakout.api.calls == []
+
+
+def strict_json(text):
+    """Parse output as standard JSON, which has no NaN or Infinity."""
+    def reject(token):
+        raise ValueError("non-standard JSON constant " + token)
+    return json.loads(text, parse_constant=reject)
+
+
+class TestDomJsonAndReadFailures:
+    def test_json_output_has_no_non_finite_numbers(self):
+        text = cpoutil._json_records({"b": {"c": float("-inf")}, "a": [float("inf"), 1.5, float("nan")]})
+        assert strict_json(text) == {"a": [None, 1.5, None], "b": {"c": None}}
+
+    def test_dom_json_maps_zero_milliwatt_thresholds_to_null(self, coverage_environment, monkeypatch):
+        # A 0 mW threshold converted to dBm is -inf, as on Bailly ELS hardware.
+        monkeypatch.setattr(coverage_environment.api, "get_elsfp_threshold_info", lambda: {
+            "optical_power_alarm_high": float("-inf"),
+            "optical_power_warn_low": float("nan"),
+            "temperature_alarm_high": 75.0,
+        })
+        result = invoke_coverage(["show", "interface", "dom", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        thresholds = strict_json(result.output)["Ethernet0"]["els"]["thresholds"]
+        assert thresholds == {
+            "optical_power_alarm_high": None,
+            "optical_power_warn_low": None,
+            "temperature_alarm_high": 75.0,
+        }
+
+    @pytest.mark.parametrize("method, failure, expected", [
+        ("get_transceiver_info", None, "OE info"),
+        ("get_transceiver_dom_real_value", {}, "OE dom"),
+        ("get_transceiver_dom_real_value", TypeError("unsupported operand type(s)"), "OE dom (unsupported operand"),
+        ("get_transceiver_threshold_info", None, "OE thresholds"),
+        ("get_elsfp_info", None, "ELS info"),
+        ("get_elsfp_dom_real_value", OSError(5, "I2C read failed"), "ELS dom ([Errno 5] I2C read failed)"),
+        ("get_elsfp_threshold_info", None, "ELS thresholds"),
+    ])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_read_failure_is_reported_not_displayed_as_data(
+            self, coverage_environment, monkeypatch, method, failure, expected, json_output):
+        def read():
+            if isinstance(failure, Exception):
+                raise failure
+            return failure
+        monkeypatch.setattr(coverage_environment.api, method, read)
+        arguments = ["show", "interface", "dom", "Ethernet0"] + (["--json"] if json_output else [])
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert isinstance(result.exception, SystemExit)    # no traceback
+        assert "Failed to read CPO data for Ethernet0 ({}".format(expected) in result.output
+        if json_output:
+            record = strict_json(result.output[:result.output.index("\nError:")])["Ethernet0"]
+            assert any(error.startswith(expected) for error in record["read_errors"])
+        else:
+            assert "Read errors: " + expected in result.output
+
+    def test_empty_thresholds_are_not_a_failure(self, coverage_environment, monkeypatch):
+        monkeypatch.setattr(coverage_environment.api, "get_elsfp_threshold_info", lambda: {})
+        result = invoke_coverage(["show", "interface", "dom", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert "read_errors" not in strict_json(result.output)["Ethernet0"]
+
+    def test_unsupported_read_is_still_reported_as_not_implemented(self, coverage_environment, monkeypatch):
+        monkeypatch.setattr(coverage_environment.api, "get_transceiver_info",
+                            mock.Mock(side_effect=NotImplementedError("info")))
+        result = invoke_coverage(["show", "interface", "dom", "Ethernet0"])
+        assert result.exit_code != 0
+        assert "This functionality is not implemented" in result.output
