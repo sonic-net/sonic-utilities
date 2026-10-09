@@ -144,7 +144,10 @@ class BrokerServer(object):
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             listener.bind(self.config.broker_socket)
-            os.chmod(self.config.broker_socket, 0o666)
+            # Linux checks write permission when a client connects to a Unix
+            # stream socket.  Keep read permission private while allowing the
+            # broker to authenticate ordinary callers with SO_PEERCRED.
+            os.chmod(self.config.broker_socket, 0o622)
             listener.listen(MAX_CONNECTIONS)
             listener.settimeout(1.0)
             return listener
