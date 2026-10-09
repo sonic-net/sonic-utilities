@@ -177,6 +177,7 @@ def multi_asic_click_option_namespace(func=None, required=False, default=None,
         help=help
     )
 
+
 def run_on_multi_asic(func=None, use_unix_socket_path=False, db_names=()):
     '''
     This decorator is used on the CLI functions which needs to be
