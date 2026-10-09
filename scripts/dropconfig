@@ -44,6 +44,15 @@ DROP_REASON_CONFIG_TABLE = 'DEBUG_COUNTER_DROP_REASON'
 DEBUG_DROP_MONITOR_TABLE = 'DEBUG_DROP_MONITOR'
 PERSISTENT_DROP_ALERTS_TABLE = 'PERSISTENT_DROP_ALERTS'
 
+DROP_CONFIG_WRITE_COMMANDS = {
+    'install',
+    'uninstall',
+    'add',
+    'remove',
+    'enable_drop_monitor',
+    'disable_drop_monitor',
+}
+
 # STATE_DB Tables
 DEBUG_COUNTER_CAPABILITY_TABLE = 'DEBUG_COUNTER_CAPABILITIES'
 
@@ -478,7 +487,6 @@ class DropConfigWrapper(object):
         self.db = None
         self.config_db = None
 
-    @multi_asic_util.run_on_multi_asic
     def run(self,
             command,
             name,
@@ -490,6 +498,41 @@ class DropConfigWrapper(object):
             window,
             incident_count_threshold,
             drop_count_threshold):
+
+        run_command = self.run_write if command in DROP_CONFIG_WRITE_COMMANDS else self.run_read
+        run_command(command,
+                    name,
+                    alias,
+                    group,
+                    counter_type,
+                    description,
+                    reasons,
+                    window,
+                    incident_count_threshold,
+                    drop_count_threshold)
+
+    @multi_asic_util.run_on_multi_asic(
+        use_unix_socket_path=True,
+        db_names=('STATE_DB', 'COUNTERS_DB')
+    )
+    def run_write(self, *args):
+        self._run(*args)
+
+    @multi_asic_util.run_on_multi_asic
+    def run_read(self, *args):
+        self._run(*args)
+
+    def _run(self,
+             command,
+             name,
+             alias,
+             group,
+             counter_type,
+             description,
+             reasons,
+             window,
+             incident_count_threshold,
+             drop_count_threshold):
 
         dconfig = DropConfig(self.multi_asic.current_namespace, self.db, self.config_db)
 
