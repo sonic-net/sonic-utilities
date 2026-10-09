@@ -55,9 +55,6 @@ class BrokerSonicV2Connector(object):
     def exists(self, db_name, key):
         return self._connection(db_name).exists(key)
 
-    def get(self, db_name, key):
-        return self._connection(db_name).get(key)
-
     def get_all(self, db_name, key, blocking=False):
         if blocking:
             raise RuntimeError("blocking reads are not supported by the read broker")
