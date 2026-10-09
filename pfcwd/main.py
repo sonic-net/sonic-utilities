@@ -323,6 +323,31 @@ class PfcwdCli(object):
         if os.geteuid() != 0:
             sys.exit("Root privileges are required for this operation")
 
+        poll_interval = (self.config_db.get_entry(
+            CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
+        ) or {}).get('POLL_INTERVAL')
+        # Strict gt: equal values are allowed (consistent with interval cmd)
+        if poll_interval is not None:
+            poll_interval_int = int(poll_interval)
+            if poll_interval_int > detection_time:
+                click.echo(
+                    "detection time {}ms is smaller than the configured "
+                    "polling interval {}ms, please use a larger detection "
+                    "time or reduce the polling interval".format(
+                        detection_time, poll_interval_int
+                    ), err=True
+                )
+                sys.exit(1)
+            if restoration_time is not None and poll_interval_int > restoration_time:
+                click.echo(
+                    "restoration time {}ms is smaller than the configured "
+                    "polling interval {}ms, please use a larger restoration "
+                    "time or reduce the polling interval".format(
+                        restoration_time, poll_interval_int
+                    ), err=True
+                )
+                sys.exit(1)
+
         pfcwd_info = {
             'detection_time': detection_time,
         }
