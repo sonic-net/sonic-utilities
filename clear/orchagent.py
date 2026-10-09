@@ -18,7 +18,7 @@ REDIS_TIMEOUT_MSECS = 0
 def _send_clear(namespace):
     # orchagent runs per-ASIC on multi-ASIC platforms, so target the right
     # namespace's APPL_DB ('' for the default/single-ASIC DB).
-    db = swsscommon.DBConnector("APPL_DB", REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector("APPL_DB", REDIS_TIMEOUT_MSECS, False, namespace)
     producer = swsscommon.NotificationProducer(db, TASK_STATS_QUERY_CHANNEL)
     consumer = swsscommon.NotificationConsumer(db, TASK_STATS_REPLY_CHANNEL)
 
