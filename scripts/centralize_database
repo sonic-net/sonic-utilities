@@ -6,7 +6,6 @@ from swsscommon.swsscommon import SonicDBConfig, SonicDBKey
 import redis
 import argparse
 import os
-import time
 
 
 SCAN_BATCH_SIZE = 7000
@@ -17,28 +16,36 @@ def copy_database(source, target):
     while True:
         cursor, keys = source.scan(cursor=cursor, count=SCAN_BATCH_SIZE)
         if keys:
-            # Read each value and its expiry in one Redis transaction so they
-            # describe the same version of the key.
+            # Read each value, its expiry, and the Redis server time in one
+            # transaction.  RESTORE with ABSTTL then preserves the original
+            # absolute expiry across the socket-to-socket copy.
             source_pipeline = source.pipeline()
             for key in keys:
                 source_pipeline.dump(key)
                 source_pipeline.pttl(key)
-            read_started = int(time.time() * 1000)
+                source_pipeline.execute_command('TIME')
             values = source_pipeline.execute()
-            read_elapsed = int(time.time() * 1000) - read_started
 
             target_pipeline = target.pipeline()
             restore_count = 0
             for index, key in enumerate(keys):
-                value = values[index * 2]
-                ttl = values[index * 2 + 1]
+                value = values[index * 3]
+                ttl = values[index * 3 + 1]
+                source_time = values[index * 3 + 2]
                 if value is None or ttl == -2:
                     continue
                 if ttl < 0:
-                    ttl = 0
+                    target_pipeline.execute_command(
+                        'RESTORE', key, 0, value, 'REPLACE')
                 else:
-                    ttl = max(ttl - read_elapsed, 1)
-                target_pipeline.execute_command('RESTORE', key, ttl, value, 'REPLACE')
+                    source_time_ms = (
+                        int(source_time[0]) * 1000 +
+                        int(source_time[1]) // 1000
+                    )
+                    absolute_expiry_ms = source_time_ms + ttl
+                    target_pipeline.execute_command(
+                        'RESTORE', key, absolute_expiry_ms, value,
+                        'REPLACE', 'ABSTTL')
                 restore_count += 1
 
             if restore_count:
