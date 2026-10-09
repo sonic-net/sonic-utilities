@@ -766,6 +766,20 @@ def flowcnt_trap(namespace):
     run_command(command)
 
 
+# ("sonic-clear copp")
+@cli.command()
+def copp():
+    """ Clear COPP statistics """
+    from utilities_common.general import is_copp_policer_stats_supported
+    if not is_copp_policer_stats_supported():
+        click.echo("COPP policer per-color statistics are not supported on "
+                   "this platform (SAI does not advertise SAI_OBJECT_TYPE_POLICER "
+                   "stats capability).")
+        return
+    command = ["coppstat", "-c"]
+    run_command(command)
+
+
 # ("sonic-clear flowcnt-route")
 @cli.group(invoke_without_command=True)
 @click.option('--namespace', '-n', 'namespace', default=None, type=click.Choice(multi_asic_util.multi_asic_ns_choices()), show_default=True, help='Namespace name or all')
