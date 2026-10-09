@@ -1,0 +1,44 @@
+[Unit]
+Description=SONiC Redis read broker instance %i
+Wants=database.service
+After=config-setup.service database.service
+PartOf=sonic-redis-read-broker.target
+ConditionPathExists=/etc/sonic/redis-read-broker/%i.json
+ConditionPathIsExecutable=/usr/local/bin/sonic-redis-read-broker
+
+[Service]
+Type=simple
+DynamicUser=yes
+User=sonic-redis-read-broker
+Group=sonic-redis-read-broker
+SupplementaryGroups=redis
+RuntimeDirectory=sonic-redis-read-broker-%i
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=no
+UMask=0077
+ExecStart=/usr/local/bin/sonic-redis-read-broker --instance %i
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
+DefaultInstance=default

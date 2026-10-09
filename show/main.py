@@ -16,7 +16,7 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
 from utilities_common import hft as hft_common
-from utilities_common.db import Db
+from utilities_common.db import LazyDb
 from datetime import datetime
 import utilities_common.constants as constants
 from utilities_common.general import load_db_config
@@ -309,7 +309,7 @@ def cli(ctx):
 
     # Load database config files
     load_db_config()
-    ctx.obj = Db()
+    ctx.obj = LazyDb()
 
 # Add groups from other modules
 cli.add_command(acl.acl)
