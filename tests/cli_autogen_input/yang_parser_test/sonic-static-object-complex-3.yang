@@ -1,0 +1,49 @@
+module sonic-static-object-complex-3 {
+
+    yang-version 1.1;
+
+    namespace "http://github.com/Azure/static-complex-3";
+    prefix static-complex-3;
+
+    container sonic-static-object-complex-3 {
+        /* sonic-static-object-complex-3 - top level container */
+
+        container TABLE_3 {
+            /* TABLE_3 - table container */
+
+            description "TABLE_3 description";
+
+            container OBJECT_3 {
+                /* OBJECT_3 - object container, it have:
+                 * 1 leaf with hyphen,
+                 * 1 leaf-list with hyphen
+                 * 1 choice with hyphen
+                 */
+
+                description "OBJECT_3 description";
+
+                leaf OBJ-3-LEAF-1 {
+                    description "OBJ-3-LEAF-1 description";
+                    type string;
+                }
+
+                leaf-list OBJ-3-LEAF-LIST-1 {
+                    type string;
+                }
+
+                choice OBJ-3-CHOICE-1 {
+                    case OBJ-3-CHOICE-1-CASE-1 {
+                        leaf OBJ-3-CHOICE-1-LEAF-1 {
+                            type uint16;
+                        }
+                    }
+                    case OBJ-3-CHOICE-1-CASE-2 {
+                        leaf OBJ-3-CHOICE-1-LEAF-2 {
+                            type string;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
