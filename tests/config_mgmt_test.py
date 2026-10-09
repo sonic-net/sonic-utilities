@@ -5,6 +5,7 @@ from copy import deepcopy
 from unittest import mock, TestCase
 
 import pytest
+import config.config_mgmt as config_mgmt_package
 from utilities_common.general import load_module_from_source
 
 from .utils import worker_tmp_path
@@ -50,6 +51,27 @@ class TestConfigMgmt(TestCase):
         cm = config_mgmt.ConfigMgmt(source=config_mgmt.CONFIG_DB_JSON_FILE)
         assert "unknown_table" in cm.tablesWithOutYang()
         return
+
+    def test_write_config_db_uses_unix_socket(self):
+        cm = config_mgmt_package.ConfigMgmt.__new__(
+            config_mgmt_package.ConfigMgmt)
+        cm.configdb = None
+        cm.sysLog = mock.Mock()
+        config_db = mock.Mock()
+
+        with mock.patch.object(config_mgmt_package, 'ConfigDBConnector',
+                               return_value=config_db) as connector, \
+                mock.patch.object(
+                    config_mgmt_package.sonic_cfggen.FormatConverter,
+                    'to_deserialized', return_value={}), \
+                mock.patch.object(
+                    config_mgmt_package.sonic_cfggen.FormatConverter,
+                    'output_to_db', return_value={'PORT': {}}):
+            cm.writeConfigDB({})
+
+        connector.assert_called_once_with(use_unix_socket_path=True)
+        config_db.connect.assert_called_once_with(False)
+        config_db.mod_config.assert_called_once_with({'PORT': {}})
 
     def test_search_keys(self):
         curConfig = deepcopy(configDbJson)
