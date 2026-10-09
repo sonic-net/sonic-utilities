@@ -571,7 +571,7 @@ def eni_disable(ctx):
 @click.pass_context
 def ha_set(ctx):
     """ HA set counter commands """
-    ctx.obj = ConfigDBConnector()
+    ctx.obj = ConfigDBConnector(use_unix_socket_path=True)
     ctx.obj.connect()
 
 
