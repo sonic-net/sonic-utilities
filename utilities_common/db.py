@@ -13,10 +13,11 @@ class Db(object):
         self.cfgdb_pipe = ConfigDBPipeConnector(use_unix_socket_path=use_unix_socket_path)
         self.cfgdb_pipe.connect()
         self.db = SonicV2Connector(use_unix_socket_path=use_unix_socket_path)
+        self.chassis_db = self.db
 
         # Skip connecting to chassis databases in line cards
         self.db_list = list(self.db.get_db_list())
-        if not device_info.is_supervisor():
+        if use_unix_socket_path or not device_info.is_supervisor():
             try:
                 self.db_list.remove('CHASSIS_APP_DB')
                 self.db_list.remove('CHASSIS_STATE_DB')
@@ -25,6 +26,14 @@ class Db(object):
 
         for db_id in self.db_list:
             self.db.connect(db_id)
+
+        # Chassis databases are hosted by redis_chassis.server and remain on
+        # TCP. Keep them separate from the local Unix-socket connector.
+        if use_unix_socket_path and device_info.is_supervisor():
+            self.chassis_db = SonicV2Connector(use_unix_socket_path=False)
+            for db_id in ('CHASSIS_APP_DB', 'CHASSIS_STATE_DB'):
+                if db_id in self.chassis_db.get_db_list():
+                    self.chassis_db.connect(db_id)
 
         self.cfgdb_clients[constants.DEFAULT_NAMESPACE] = self.cfgdb
         self.db_clients[constants.DEFAULT_NAMESPACE] = self.db
@@ -43,12 +52,11 @@ class Db(object):
                     db = SonicV2Connector(
                         use_unix_socket_path=True, namespace=ns)
                     db_list = list(db.get_db_list())
-                    if not device_info.is_supervisor():
-                        try:
-                            db_list.remove('CHASSIS_APP_DB')
-                            db_list.remove('CHASSIS_STATE_DB')
-                        except Exception:
-                            pass
+                    try:
+                        db_list.remove('CHASSIS_APP_DB')
+                        db_list.remove('CHASSIS_STATE_DB')
+                    except Exception:
+                        pass
                     for db_id in db_list:
                         db.connect(db_id)
                     self.db_clients[ns] = db
