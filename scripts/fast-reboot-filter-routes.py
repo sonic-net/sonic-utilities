@@ -41,7 +41,7 @@ def get_route(db, route):
 
 
 def generate_default_route_entries(namespace):
-    db = ConfigDBConnector(namespace=namespace)
+    db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     db.db_connect(db.APPL_DB)
 
     default_routes = []
@@ -58,7 +58,7 @@ def generate_default_route_entries(namespace):
 
 
 def filter_routes(namespace, preserved_routes):
-    db = ConfigDBConnector(namespace=namespace)
+    db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     db.db_connect(db.APPL_DB)
 
     key = 'ROUTE_TABLE:*'
