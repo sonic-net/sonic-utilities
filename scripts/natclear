@@ -20,7 +20,7 @@ class NatClear(object):
 
     def __init__(self):
         super(NatClear,self).__init__()
-        self.db = SonicV2Connector()
+        self.db = SonicV2Connector(use_unix_socket_path=True)
         self.db.connect(self.db.APPL_DB)
         return
 
