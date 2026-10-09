@@ -1547,6 +1547,7 @@ collect_mellanox() {
         "media_settings.json"
         "optics_si_settings.json"
     )
+    local nv_syncd_shared_dir="/run/nv-syncd-shared"
 
     local pids=()
     for ((i=0; i<NUM_ASICS; i++)); do
@@ -1556,6 +1557,7 @@ collect_mellanox() {
 
         local cmis_host_mgmt_path="cmis-host-mgmt"
         local sku_folder_path="${sku_folder}"
+        local sai_profile_path="${nv_syncd_shared_dir}/sai.profile"
 
         if [[ "$NUM_ASICS" > 1 ]]; then
             namespace="-n asic$i"
@@ -1564,9 +1566,10 @@ collect_mellanox() {
 
             cmis_host_mgmt_path="cmis-host-mgmt/asic${i}"
             sku_folder_path="${sku_folder}/$i"
+            sai_profile_path="${nv_syncd_shared_dir}/${i}/sai.profile"
         fi
 
-        ${CMD_PREFIX}save_file "/tmp/nv-syncd-shared/sai.profile" "$cmis_host_mgmt_path" false true
+        ${CMD_PREFIX}save_file "$sai_profile_path" "$cmis_host_mgmt_path" false true
 
         if [[ ! -f "${sku_folder_path}/pmon_daemon_control.json" && -f "${platform_folder}/pmon_daemon_control.json" ]]; then
             ${CMD_PREFIX}save_file "${platform_folder}/pmon_daemon_control.json" "$cmis_host_mgmt_path" false true
