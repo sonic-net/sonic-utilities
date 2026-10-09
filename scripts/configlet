@@ -87,7 +87,7 @@ test_only = False
 
 connected = False
 
-db = ConfigDBConnector()
+db = ConfigDBConnector(use_unix_socket_path=True)
 
 def init():
     global connected
