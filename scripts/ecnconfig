@@ -190,7 +190,7 @@ class EcnConfig(object):
 
         return result
 
-    @multi_asic_util.run_on_multi_asic
+    @multi_asic_util.run_on_multi_asic(use_unix_socket_path=True)
     def set_wred_threshold(self, profile, threshold, value):
         """
         Single asic behaviour:
@@ -217,7 +217,7 @@ class EcnConfig(object):
             else:
                 self.updated_profile_tables[self.multi_asic.current_namespace] = profile_table
 
-    @multi_asic_util.run_on_multi_asic
+    @multi_asic_util.run_on_multi_asic(use_unix_socket_path=True)
     def set_wred_prob(self, profile, drop_color, value):
         """
         Single asic behaviour:
@@ -304,7 +304,7 @@ class EcnQ(object):
                 self.updated_q_table[self.multi_asic.current_namespace] = {repr(x):y for x, y in q_table.items()}
                 json.dump(self.updated_q_table, fd)
 
-    @multi_asic_util.run_on_multi_asic
+    @multi_asic_util.run_on_multi_asic(use_unix_socket_path=True)
     def set(self, enable):
         """
         Single asic behaviour:
