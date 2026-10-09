@@ -513,7 +513,7 @@ class DropConfigWrapper(object):
 
     @multi_asic_util.run_on_multi_asic(
         use_unix_socket_path=True,
-        db_names=('STATE_DB', 'COUNTERS_DB')
+        db_names=('STATE_DB',)
     )
     def run_write(self, *args):
         self._run(*args)
