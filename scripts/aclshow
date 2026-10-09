@@ -24,10 +24,6 @@ import sys
 
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from utilities_common.cli import UserCache
-from utilities_common.redis_read_broker import (
-    BrokerConfigDBConnector,
-    BrokerSonicV2Connector,
-)
 
 from tabulate import tabulate
 
@@ -66,16 +62,11 @@ class AclStat(object):
         if tables:
             self.table_list = tables.split(",")
 
-        # Select the broker explicitly for an ordinary user.  Root keeps the
-        # configured private Unix-socket path.
-        if os.geteuid() == 0:
-            self.db = SonicV2Connector(use_unix_socket_path=True)
-            self.configdb = ConfigDBConnector(use_unix_socket_path=True)
-        else:
-            self.db = BrokerSonicV2Connector(instance="default")
-            self.configdb = BrokerConfigDBConnector(instance="default")
-
+        # Set up db connections
+        self.db = SonicV2Connector(use_unix_socket_path=False)
         self.db.connect(self.db.COUNTERS_DB)
+
+        self.configdb = ConfigDBConnector()
         self.configdb.connect()
 
     def previous_counters(self):
