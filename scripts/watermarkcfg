@@ -17,7 +17,7 @@ class Watermarkcfg(object):
         pass
 
     def set_interval(self, interval):
-        configdb = ConfigDBConnector()
+        configdb = ConfigDBConnector(use_unix_socket_path=True)
         configdb.connect()
 
         configdb.mod_entry('WATERMARK_TABLE', 'TELEMETRY_INTERVAL', {'interval': interval})
