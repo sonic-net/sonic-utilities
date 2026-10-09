@@ -2,12 +2,13 @@ import ast
 import json
 import os
 import sys
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
 import config.main as config
 from .ecn_input.ecn_test_vectors import testData
-from .utils import get_result_and_return_code
+from .utils import get_result_and_return_code, load_source
 from utilities_common.db import Db
 import show.main as show
 
@@ -225,3 +226,21 @@ class TestEcnConfig(TestEcnConfigBase):
 
     def test_ecn_queue_set_lossy_q_on(self):
         self.executor(testData['ecn_cfg_lossy_q_on'])
+
+    def test_ecn_namespace_rejected_on_single_asic(self):
+        """Verify -n is rejected with a clear error on single-ASIC platforms."""
+        runner = CliRunner(mix_stderr=False)
+        ecnconfig_mod = load_source('ecnconfig',
+                                    os.path.join(scripts_path, 'ecnconfig'))
+
+        ns_param = next(p for p in ecnconfig_mod.main.params if p.name == 'namespace')
+        original_choices_func = ns_param.type._choices_func
+        try:
+            ns_param.type._choices_func = lambda: ['', 'asic0']
+            with patch.object(ecnconfig_mod.multi_asic, 'is_multi_asic', return_value=False), \
+                 patch.object(ecnconfig_mod, 'load_db_config'):
+                result = runner.invoke(ecnconfig_mod.main, ['-l', '-n', 'asic0'])
+                assert result.exit_code != 0
+                assert "not available for single ASIC" in result.stderr
+        finally:
+            ns_param.type._choices_func = original_choices_func
