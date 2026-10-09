@@ -7,6 +7,7 @@ import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic, device_info
 from sonic_py_common.general import getstatusoutput_noshell_pipe
+from swsscommon.swsscommon import SonicV2Connector
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
@@ -822,8 +823,7 @@ helper.load_and_register_plugins(plugins, cli)
 @click.option('--namespace', '-n', 'namespace', required=False, default=None, show_default=False,
               help='Option needed for multi-asic only: provide namespace name',
               type=click.Choice(multi_asic_util.multi_asic_ns_choices()))
-@clicommon.pass_db
-def asic_sdk_health_event(db, namespace):
+def asic_sdk_health_event(namespace):
     """Clear received ASIC/SDK health events"""
     if multi_asic.get_num_asics() > 1:
         namespace_list = multi_asic.get_namespaces_from_linux()
@@ -834,8 +834,10 @@ def asic_sdk_health_event(db, namespace):
         if namespace and namespace != ns:
             continue
 
-        state_db = db.db_clients[ns]
-        keys = state_db.keys(db.db.STATE_DB, "ASIC_SDK_HEALTH_EVENT_TABLE*")
+        state_db = SonicV2Connector(
+            use_unix_socket_path=True, namespace=ns)
+        state_db.connect(state_db.STATE_DB)
+        keys = state_db.keys(state_db.STATE_DB, "ASIC_SDK_HEALTH_EVENT_TABLE*")
         for key in keys:
             state_db.delete(state_db.STATE_DB, key);
 
