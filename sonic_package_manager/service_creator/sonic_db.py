@@ -128,7 +128,7 @@ class SonicDB:
                 if not swsscommon.SonicDBConfig.isGlobalInit():
                     swsscommon.SonicDBConfig.initializeGlobalConfig()
                 for ns in device_info.get_namespaces():
-                    conn = swsscommon.ConfigDBConnector(namespace=ns)
+                    conn = swsscommon.ConfigDBConnector(use_unix_socket_path=True, namespace=ns)
                     conn.connect()
                     conns.append(conn)
             cls._namespace_db_conns = conns
@@ -146,7 +146,7 @@ class SonicDB:
 
         if cls._running_db_conn is None:
             try:
-                cls._running_db_conn = swsscommon.ConfigDBConnector()
+                cls._running_db_conn = swsscommon.ConfigDBConnector(use_unix_socket_path=True)
                 cls._running_db_conn.connect()
             except RuntimeError:
                 # Failed to connect to DB.
