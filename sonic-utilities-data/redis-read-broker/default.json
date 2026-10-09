@@ -3,7 +3,6 @@
     "database": "CONFIG_DB",
     "allowed_databases": [
         "CONFIG_DB",
-        "STATE_DB",
-        "COUNTERS_DB"
+        "STATE_DB"
     ]
 }
