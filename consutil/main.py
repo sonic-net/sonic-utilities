@@ -14,6 +14,7 @@ try:
     import utilities_common.cli as clicommon
 
     from tabulate import tabulate
+    from utilities_common.db import Db
     from .lib import (
         ConsolePortProvider,
         ERR_CMD,
@@ -31,11 +32,29 @@ except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
 
 
-@click.group()
-@clicommon.pass_db
-def consutil(db):
-    """consutil - Command-line utility for interacting with switches via console device"""
+def _initialize_command_db(ctx, use_unix_socket_path=False):
+    db = ctx.find_object(Db)
+    if db is None:
+        if use_unix_socket_path:
+            db = Db(use_unix_socket_path=True)
+        else:
+            db = Db()
+        ctx.obj = db
     initialize_console_runtime(db)
+
+
+@click.group()
+@click.pass_context
+def consutil(ctx):
+    """consutil - Command-line utility for interacting with switches via console device"""
+    # Defer database setup until Click resolves the nested mirror subcommand.
+    if ctx.invoked_subcommand == "mirror":
+        return
+
+    use_unix_socket_path = ctx.invoked_subcommand == "clear"
+    if use_unix_socket_path:
+        require_root()
+    _initialize_command_db(ctx, use_unix_socket_path)
 
 
 # 'show' subcommand
@@ -141,9 +160,13 @@ def connect(db, target, devicename):
 
 # 'mirror' subcommand group
 @consutil.group()
-def mirror():
+@click.pass_context
+def mirror(ctx):
     """Manage console mirror recording sessions"""
-    pass
+    use_unix_socket_path = ctx.invoked_subcommand in ("start", "stop", "timeout")
+    if use_unix_socket_path:
+        require_root()
+    _initialize_command_db(ctx, use_unix_socket_path)
 
 
 # 'mirror start' subcommand
