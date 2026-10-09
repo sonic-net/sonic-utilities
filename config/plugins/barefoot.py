@@ -45,7 +45,7 @@ def profile(profile):
         raise click.Abort()
     
     # Update configuration
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry('DEVICE_METADATA', 'localhost',
         {'p4_profile': profile + '_profile'})
