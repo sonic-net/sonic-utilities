@@ -1907,7 +1907,7 @@ def config(ctx):
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
-    ctx.obj = Db()
+    ctx.obj = Db(use_unix_socket_path=True)
 
 
 # Add groups from other modules
@@ -5432,7 +5432,7 @@ def fast_linkup(ctx, interface_name, mode, verbose):
         raise click.ClickException('Interface name is invalid. Please enter a valid interface name')
 
     # Read capability from STATE_DB for validation
-    db = Db()
+    db = Db(use_unix_socket_path=True)
     state_db = db.db_clients.get(namespace, db.db)
     cap_tbl = state_db.get_all(state_db.STATE_DB, 'SWITCH_CAPABILITY|switch') or {}
     if cap_tbl.get('FAST_LINKUP_CAPABLE', 'false') != 'true':
