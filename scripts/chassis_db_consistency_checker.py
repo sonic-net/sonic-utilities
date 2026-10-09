@@ -73,11 +73,11 @@ def extract_table_ids_from_chassis_db(table_output):
 def get_lag_ids_asic_namespace(asic_netns):
     """Get LAG IDs from a specific ASIC namespace."""
     if asic_netns == multi_asic.DEFAULT_NAMESPACE:
-        asic_cmd = ["redis-dump", "-d", "1", "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"]
+        asic_cmd = ["sonic-db-dump", "-n", "ASIC_DB", "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"]
     else:
         asic_cmd = [
-            "sudo", "ip", "netns", "exec", asic_netns,
-            "redis-dump", "-d", "1", "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"
+            "sonic-db-dump", "--netns", asic_netns, "-n", "ASIC_DB",
+            "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"
         ]
     asic_db_output = run_redis_dump(asic_cmd)
     lag_id_ns = extract_lag_ids_from_asic_db(
