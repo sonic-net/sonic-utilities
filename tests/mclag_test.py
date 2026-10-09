@@ -66,6 +66,18 @@ class TestMclag(object):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         print("SETUP")
 
+    def test_mclag_group_uses_unix_socket(self):
+        ctx = mock.Mock()
+        config_db = mock.Mock()
+
+        with mock.patch.object(mclag, 'ConfigDBConnector',
+                               return_value=config_db) as connector:
+            mclag.mclag.callback.__wrapped__(ctx)
+
+        connector.assert_called_once_with(use_unix_socket_path=True)
+        config_db.connect.assert_called_once_with()
+        assert ctx.obj == {'db': config_db}
+
     def verify_mclag_domain_cfg(self, db, domain_id, src_ip="", peer_ip="", peer_link=""):
         mclag_entry = db.cfgdb.get_entry("MCLAG_DOMAIN", MCLAG_DOMAIN_ID)
         if len(mclag_entry) == 0:

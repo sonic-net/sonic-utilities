@@ -14,6 +14,7 @@ from utilities_common.db import Db
 #sys.modules['os.geteuid'] = mock.Mock()
 #sys.modules['platform_sfputil'] = mock.Mock()
 import config.main as config
+import config.muxcable as muxcable
 import show.main as show
 
 
@@ -676,6 +677,16 @@ class TestMuxcable(object):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         #show.muxcable.platform_sfputil.logical = mock.Mock(return_value=["Ethernet0", "Ethernet4"])
         print("SETUP")
+
+    def test_db_connect_uses_unix_socket(self):
+        connection = mock.Mock()
+
+        with mock.patch.object(muxcable.swsscommon, 'DBConnector',
+                               return_value=connection) as connector:
+            result = muxcable.db_connect('STATE_DB', 'asic0')
+
+        assert result is connection
+        connector.assert_called_once_with('STATE_DB', 0, False, 'asic0')
 
     @mock.patch('show.muxcable.get_hwmode_mux_direction_port', mock.MagicMock(return_value=({ 0 :"active",
                                                                                               1  :"standby",
