@@ -42,7 +42,7 @@ def get_nameservers(db):
 @click.pass_context
 def dns(ctx):
     """Static DNS configuration"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     ctx.obj = {'db': config_db}
 
