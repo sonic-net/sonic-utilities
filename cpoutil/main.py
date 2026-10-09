@@ -1692,6 +1692,10 @@ def _call_hook(target, method, label, *args):
         return function(*args)
     except NotImplementedError as exc:
         raise CpoCommandError(unsupported) from exc
+    except OSError as exc:
+        # Hardware access errors are reported like any other failed control,
+        # so a multi-target command can still name what it already applied.
+        raise CpoCommandError("{} {} failed: {}".format(label, method, exc)) from exc
 
 
 def _call_vmodule(cpo, method, *args):

@@ -1498,6 +1498,20 @@ class TestVmoduleControls:
         vmodules[2].tx_disable.assert_called_once_with(False)
         vmodules[3].tx_disable.assert_not_called()
 
+    @pytest.mark.parametrize("command, method", [
+        (["config", "interface", "lpmode", "Ethernet0,Ethernet16", "low"], "set_lpmode"),
+        (["config", "interface", "reset", "Ethernet0,Ethernet16"], "reset"),
+        (["config", "interface", "tx_disable", "Ethernet0,Ethernet16", "enable"], "tx_disable"),
+    ])
+    def test_hardware_error_is_reported_with_completed_targets(self, vmodules, command, method):
+        getattr(vmodules[3], method).side_effect = OSError(5, "I2C read failed")
+        result = invoke_coverage(command)
+        assert result.exit_code != 0
+        assert not isinstance(result.exception, OSError)
+        assert "CPO {} failed: [Errno 5] I2C read failed".format(method) in result.output
+        assert "already applied to" in result.output
+        assert "Re-provision" not in result.output
+
     def test_tx_disable_partial_failure_names_completed_targets(self, vmodules):
         vmodules[3].tx_disable.return_value = False
         result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0,Ethernet16", "enable"])
