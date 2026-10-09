@@ -9,6 +9,7 @@ from sonic_py_common.multi_asic import get_external_ports
 from tabulate import tabulate
 from utilities_common import multi_asic as multi_asic_util
 from utilities_common import constants
+from utilities_common.db import Db
 from utilities_common.general import load_db_config
 from sonic_py_common import logger
 
@@ -61,12 +62,28 @@ CONFIG_HEADER = ('PORT',) + list(zip(*CONFIG_DESCRIPTION))[0]
 
 CONFIG_DB_PFC_WD_TABLE_NAME = 'PFC_WD'
 PORT_QOS_MAP =  "PORT_QOS_MAP"
+PFCWD_ADMIN_COMMANDS = frozenset((
+    'start',
+    'interval',
+    'stop',
+    'start_default',
+    'counter_poll',
+    'big_red_switch',
+    'pfc_stat_history',
+))
 
 # Main entrypoint
 @click.group()
-def cli():
+@click.pass_context
+def cli(ctx):
     """ SONiC PFC Watchdog """
     load_db_config()
+
+    if ctx.invoked_subcommand in PFCWD_ADMIN_COMMANDS:
+        if os.geteuid() != 0:
+            sys.exit("Root privileges are required for this operation")
+        if ctx.find_object(Db) is None:
+            ctx.obj = Db(use_unix_socket_path=True)
 
 def get_all_queues(db, namespace=None, display=constants.DISPLAY_ALL):
     queue_names = db.get_all(db.COUNTERS_DB, 'COUNTERS_QUEUE_NAME_MAP')
