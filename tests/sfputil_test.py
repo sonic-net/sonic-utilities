@@ -264,6 +264,20 @@ class TestSfputil(object):
         output = sfputil.convert_sfp_info_to_output_string(sfp_info_dict)
         assert output == expected_output
 
+    def test_convert_sfp_info_has_no_legacy_els_labels(self):
+        output = sfputil.convert_sfp_info_to_output_string({
+            "cmis_rev": "5.0",
+            "manufacturer": "test vendor",
+            "els_vendor_name": "legacy ELS vendor",
+            "rlm_laser_wavelength_grid": "legacy grid",
+        })
+        assert output == (
+            "        CMIS Revision: 5.0\n"
+            "        Vendor Name: test vendor\n"
+            "        els_vendor_name: legacy ELS vendor\n"
+            "        rlm_laser_wavelength_grid: legacy grid\n"
+        )
+
     @pytest.mark.parametrize("sfp_type, is_sfp_cmis, dom_info_dict, expected_output", [
         (
             'QSFP28 or later',
@@ -417,6 +431,8 @@ class TestSfputil(object):
             'CPO',
             True,
             {
+                'temperature': '42.0',
+                'RLM1Laser1Power': '7.0mW',
                 'els_temperature': '16.16',
                 'els_voltage': '3.396',
                 'els_temphighalarm': '80.0',
@@ -438,25 +454,8 @@ class TestSfputil(object):
         ChannelMonitorValues:
         ChannelThresholdValues:
         ModuleMonitorValues:
+                Temperature: 42.0C
         ModuleThresholdValues:
-        ELSMonitorValues:
-                ELS Temperature: 16.16C
-                ELS Vcc: 3.396Volts
-        ELSThresholdValues:
-                ELS TempHighAlarm: 80.0C
-                ELS TempHighWarning: 70.0C
-                ELS TempLowAlarm: -5.0C
-                ELS TempLowWarning: 0.0C
-                ELS TxBiasHighAlarm: 162.5mA
-                ELS TxBiasHighWarning: 156.248mA
-                ELS TxPowerHighAlarm: 7.0mW
-                ELS TxPowerHighWarning: 4.0mW
-                ELS TxPowerLowAlarm: -6.9mW
-                ELS TxPowerLowWarning: -2.9mW
-                ELS VccHighAlarm: 3.63Volts
-                ELS VccHighWarning: 3.465Volts
-                ELS VccLowAlarm: 2.97Volts
-                ELS VccLowWarning: 3.135Volts
 '''
         )])
     def test_convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict, expected_output):
