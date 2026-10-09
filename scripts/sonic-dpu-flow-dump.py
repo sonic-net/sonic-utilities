@@ -195,7 +195,7 @@ def wait_for_completion(session_name, timeout=60):
 
     print_verbose(f"Waiting for session '{session_name}' to complete (timeout: {timeout}s)...")
 
-    db = swsscommon.DBConnector("DPU_STATE_DB", 0, True)
+    db = swsscommon.DBConnector("DPU_STATE_DB", 0, False)
     subscriber_table = swsscommon.SubscriberStateTable(db, STATE_TABLE_NAME)
     select = swsscommon.Select()
     select.addSelectable(subscriber_table)
@@ -364,7 +364,7 @@ def print_flows(file_path, file_only=False):
 def is_dpu_type():
     """Check if switch type is DPU from CONFIG_DB."""
     try:
-        config_db = swsscommon.DBConnector("CONFIG_DB", 0, True)
+        config_db = swsscommon.DBConnector("CONFIG_DB", 0, False)
         table = swsscommon.Table(config_db, "DEVICE_METADATA")
         exists, switch_type = table.hget("localhost", "switch_type")
 
