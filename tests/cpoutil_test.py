@@ -487,6 +487,15 @@ def coverage_environment(monkeypatch):
     return cpo
 
 
+@pytest.fixture
+def hooked(coverage_environment):
+    """Give the coverage fake explicit CPO, OE and ELS hooks; its endpoints are itself."""
+    for method in ("set_lpmode", "reset", "tx_disable"):
+        setattr(coverage_environment, method, mock.Mock(return_value=True))
+    coverage_environment.get_lpmode = mock.Mock(return_value=False)
+    return coverage_environment
+
+
 def invoke_coverage(arguments):
     return CliRunner().invoke(cpoutil.cli, arguments)
 
@@ -508,12 +517,12 @@ HARDWARE_COMMANDS = [
     ("lpmode", "status", "temperature", "output-power")
 ] + [
     ["config", "interface", "tx_disable", "Ethernet0", "enable"],
+    ["config", "interface", "lpmode", "Ethernet0", "low"],
+    ["config", "interface", "reset", "Ethernet0"],
     ["config", "oe", "lpmode", "0", "full"],
     ["config", "oe", "reset", "0"],
-    ["config", "oe", "tx_disable", "0", "enable"],
     ["config", "els", "lpmode", "0", "full"],
     ["config", "els", "reset", "0"],
-    ["config", "els", "tx_disable", "0", "enable"],
     ["read-eeprom"],
     ["read-eeprom", "interface", "Ethernet0", "--oe"],
     ["read-eeprom", "oe"],
@@ -803,40 +812,55 @@ class TestCommandCoverage(object):
         "arguments",
         [
             ["config", "interface", "tx_disable", "Ethernet0", "enable"],
+            ["config", "interface", "lpmode", "Ethernet0", "low"],
+            ["config", "interface", "reset", "Ethernet0"],
             ["config", "oe", "lpmode", "0", "low"],
             ["config", "oe", "lpmode", "0", "full"],
             ["config", "oe", "reset", "0"],
-            ["config", "oe", "tx_disable", "0", "enable"],
             ["config", "els", "lpmode", "0", "low"],
-            ["config", "els", "tx_disable", "0", "disable"],
+            ["config", "els", "reset", "0"],
         ],
     )
-    def test_config_commands(self, coverage_environment, arguments):
+    def test_config_commands(self, hooked, arguments):
         result = invoke_coverage(arguments)
         assert result.exit_code == 0, result.output
         assert "OK" in result.output
+        # Configuration goes through the platform hooks, never the module APIs.
+        assert hooked.api.calls == []
+        assert not hooked.writes
 
-    def test_oe_reset_reports_reprovisioning_requirement(self, coverage_environment):
+    @pytest.mark.parametrize("arguments", [
+        ["config", "oe", "tx_disable", "0", "enable"],
+        ["config", "els", "tx_disable", "0", "enable"],
+    ])
+    def test_endpoint_tx_disable_commands_are_removed(self, hooked, arguments):
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert "No such command 'tx_disable'" in result.output
+        hooked.tx_disable.assert_not_called()
+
+    def test_oe_reset_reports_reprovisioning_requirement(self, hooked):
         result = invoke_coverage(["config", "oe", "reset", "0"])
         assert result.exit_code == 0, result.output
-        assert "Resetting OE0 ... OK" in result.output
+        assert "Resetting OE0 (Ethernet0) ... OK" in result.output
         assert "Affected ports may require application and datapath reprovisioning" in result.output
-        assert coverage_environment.api.calls == [("reset",)]
-        assert not coverage_environment.writes
+        hooked.reset.assert_called_once_with()
+        assert hooked.api.calls == []
+        assert not hooked.writes
 
     @pytest.mark.parametrize("unsupported", [False, True])
-    def test_oe_reset_failure_is_reported(self, coverage_environment, monkeypatch, unsupported):
-        reset = mock.Mock(return_value=False)
+    def test_oe_reset_failure_is_reported(self, hooked, unsupported):
+        hooked.reset.return_value = False
         if unsupported:
-            reset.side_effect = NotImplementedError("OE reset is not implemented")
-        monkeypatch.setattr(coverage_environment.api, "reset", reset)
+            hooked.reset.side_effect = NotImplementedError()
         result = invoke_coverage(["config", "oe", "reset", "0"])
         assert result.exit_code != 0
-        assert "Resetting OE0 ... Failed" in result.output
+        assert "Resetting OE0 (Ethernet0) ... Failed" in result.output
         assert "reprovisioning" not in result.output
-        error = "OE reset is not implemented" if unsupported else "Resetting OE0 failed"
+        error = "OE reset is not implemented for this platform" if unsupported else \
+            "Resetting OE0 (Ethernet0) failed"
         assert error in result.output
-        reset.assert_called_once_with()
+        hooked.reset.assert_called_once_with()
 
     def test_oe_reset_help_describes_module_defaults(self):
         result = invoke_coverage(["config", "oe", "reset", "--help"])
@@ -845,12 +869,12 @@ class TestCommandCoverage(object):
         assert "Module settings may return to defaults" in help_text
         assert "application and datapath reprovisioning" in help_text
 
-    def test_unimplemented_els_reset(self, coverage_environment, monkeypatch):
-        monkeypatch.setattr(coverage_environment.api, "reset", mock.Mock(
-            side_effect=NotImplementedError("ELS reset is not implemented")))
+    def test_unimplemented_els_reset(self, hooked):
+        hooked.reset.side_effect = NotImplementedError()
         result = invoke_coverage(["config", "els", "reset", "0"])
         assert result.exit_code != 0
-        assert "not implemented" in result.output
+        assert "ELS reset is not implemented for this platform" in result.output
+        assert hooked.api.calls == []
 
     @pytest.mark.parametrize(
         "arguments",
@@ -1093,148 +1117,109 @@ class TestCpoHelpers:
         assert cpoutil.get_els_api(cpo, "els0") is els.get_api.return_value
 
 
+class HookEndpoint(CoverageFakeEndpoint):
+    """OE or ELS endpoint double with its own low-power and reset hooks."""
+
+    def __init__(self, api):
+        super().__init__(api)
+        self.set_lpmode = mock.Mock(return_value=True)
+        self.reset = mock.Mock(return_value=True)
+
+
 class TestOptionalElsApis:
-    def test_existing_public_els_api_controls_and_state(self, coverage_environment, monkeypatch):
+    @staticmethod
+    def install(monkeypatch, cpo):
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {"oe0": cpo},
+            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
+        })
+
+    @pytest.mark.parametrize("command, endpoint, method, args", [
+        (["config", "oe", "lpmode", "0", "low"], "oe", "set_lpmode", (True,)),
+        (["config", "oe", "lpmode", "0", "full"], "oe", "set_lpmode", (False,)),
+        (["config", "oe", "reset", "0"], "oe", "reset", ()),
+        (["config", "els", "lpmode", "0", "low"], "elsfp", "set_lpmode", (True,)),
+        (["config", "els", "reset", "0"], "elsfp", "reset", ()),
+    ])
+    def test_endpoint_commands_call_only_the_selected_endpoint_hook(
+            self, coverage_environment, monkeypatch, command, endpoint, method, args):
+        oe_api, els_api = CoverageFakeApi(), CoverageFakeApi()
+        oe, els = HookEndpoint(oe_api), HookEndpoint(els_api)
+        cpo = cpoutil.CpoBase(None, oe, els)
+        self.install(monkeypatch, cpo)
+        result = invoke_coverage(command)
+        assert result.exit_code == 0, result.output
+        selected, other = (oe, els) if endpoint == "oe" else (els, oe)
+        getattr(selected, method).assert_called_once_with(*args)
+        other.set_lpmode.assert_not_called()
+        other.reset.assert_not_called()
+        assert oe_api.calls == [] and els_api.calls == []
+
+    @pytest.mark.parametrize("command, label, method", [
+        (["config", "oe", "lpmode", "0", "low"], "OE", "set_lpmode"),
+        (["config", "oe", "reset", "0"], "OE", "reset"),
+        (["config", "els", "lpmode", "0", "low"], "ELS", "set_lpmode"),
+        (["config", "els", "reset", "0"], "ELS", "reset"),
+    ])
+    @pytest.mark.parametrize("unsupported", ["missing", "not_implemented"])
+    def test_endpoint_commands_are_unsupported_by_default(
+            self, coverage_environment, monkeypatch, command, label, method, unsupported):
+        # Joint-mode platforms do not implement the endpoint hooks; older
+        # platform-common packages do not declare them at all.
+        oe_api, els_api = CoverageFakeApi(), CoverageFakeApi()
+        if unsupported == "missing":
+            oe, els = CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api)
+        else:
+            oe, els = HookEndpoint(oe_api), HookEndpoint(els_api)
+            for endpoint in (oe, els):
+                getattr(endpoint, method).side_effect = NotImplementedError()
+        self.install(monkeypatch, cpoutil.CpoBase(None, oe, els))
+        result = invoke_coverage(command)
+        assert result.exit_code != 0
+        assert "{} {} is not implemented for this platform".format(label, method) in result.output
+        assert "OK" not in result.output
+        assert oe_api.calls == [] and els_api.calls == []
+
+    @pytest.mark.parametrize("command", [
+        ["config", "els", "lpmode", "0", "low"],
+        ["config", "els", "lpmode", "0", "full"],
+        ["config", "els", "reset", "0"],
+    ])
+    def test_public_elsfp_api_controls_are_never_called(self, coverage_environment, monkeypatch, command):
         from sonic_platform_base.sonic_xcvr.api.public.elsfp import ElsfpApi
-        from sonic_platform_base.sonic_xcvr.fields import consts, elsfp_consts
+        from sonic_platform_base.sonic_xcvr.fields import consts
 
         eeprom = mock.Mock()
         eeprom.read.side_effect = lambda field: "ModuleReady" if field == consts.MODULE_STATE else 0
-        eeprom.write.return_value = True
         els_api = ElsfpApi(eeprom)
-        oe_api = CoverageFakeApi()
-        cpo = cpoutil.CpoBase(
-            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
-        monkeypatch.setattr(cpoutil, "cpo_object_map", {
-            OPTICAL_ENGINE: {"oe0": cpo},
-            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
-        })
+        cpo = cpoutil.CpoBase(None, CoverageFakeEndpoint(CoverageFakeApi()), CoverageFakeEndpoint(els_api))
+        self.install(monkeypatch, cpo)
         status = invoke_coverage(["show", "els", "status", "0", "--json"])
         assert status.exit_code == 0, status.output
         assert json.loads(status.output) == {"els0": "ModuleReady"}
-        for state, expected in (("disable", 0b11), ("enable", 0)):
-            result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", state])
-            assert result.exit_code == 0, result.output
-            eeprom.write.assert_called_with(elsfp_consts.LANE_ENABLE_FIELD, expected)
-
-    @pytest.mark.parametrize("command, method", [
-        (["config", "els", "reset", "0"], "reset"),
-        (["config", "els", "lpmode", "0", "low"], "set_lpmode"),
-        (["config", "els", "lpmode", "0", "full"], "set_lpmode"),
-    ])
-    def test_missing_optional_els_control(self, coverage_environment, command, method):
-        # Older platform-common packages do not declare the optional controls.
-        # Placeholder implementations are tested in platform-common; utilities
-        # must handle their absence as well as NotImplementedError.
-        els_api = mock.Mock(spec=[])
-        coverage_environment.elsfp = CoverageFakeEndpoint(els_api)
         result = invoke_coverage(command)
         assert result.exit_code != 0
-        assert method in result.output
-        assert "has no attribute" in result.output
-        assert "OK" not in result.output
-        assert coverage_environment.api.calls == []
-        assert els_api.mock_calls == []
-
-    @pytest.mark.parametrize("disable", [False, True])
-    @pytest.mark.parametrize("interface", [False, True])
-    def test_per_lane_enable_needs_no_support_query(
-            self, coverage_environment, monkeypatch, disable, interface):
-        oe_api = CoverageFakeApi()
-        els_api = mock.Mock(spec=["set_per_lane_enable"])
-        els_api.set_per_lane_enable.return_value = True
-        cpo = cpoutil.CpoBase(
-            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
-        monkeypatch.setattr(cpoutil, "cpo_object_map", {
-            OPTICAL_ENGINE: {"oe0": cpo},
-            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
-        })
-        arguments = ["config", "interface", "tx_disable", "Ethernet0"] if interface else [
-            "config", "els", "tx_disable", "0"]
-        result = invoke_coverage(arguments + ["enable" if disable else "disable"])
-        assert result.exit_code == 0, result.output
-        els_api.set_per_lane_enable.assert_called_once_with(0b11, not disable)
-        assert oe_api.calls == ([("tx_disable_channel", 0b11, disable)] if interface else [])
-
-    @pytest.mark.parametrize("unsupported", [False, True])
-    def test_interface_els_failure_reports_completed_oe_write(
-            self, coverage_environment, monkeypatch, unsupported):
-        oe_api = CoverageFakeApi()
-        els_api = mock.Mock(spec=["set_per_lane_enable"])
-        els_api.set_per_lane_enable.return_value = False
-        if unsupported:
-            els_api.set_per_lane_enable.side_effect = NotImplementedError(
-                "ELS operation is not implemented")
-        cpo = cpoutil.CpoBase(
-            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
-        monkeypatch.setattr(cpoutil, "cpo_object_map", {
-            OPTICAL_ENGINE: {"oe0": cpo},
-            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
-        })
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", "enable"])
-        assert result.exit_code != 0
-        assert "OE Tx-disable already applied to physical port(s) 1" in result.output
-        assert "configuration may be partially applied" in result.output
-        assert "OK" not in result.output
-        assert oe_api.calls == [("tx_disable_channel", 0b11, True)]
-        els_api.set_per_lane_enable.assert_called_once_with(0b11, False)
-
-    def test_missing_els_method_is_detected_before_oe_write(self, coverage_environment, monkeypatch):
-        oe_api = CoverageFakeApi()
-        cpo = cpoutil.CpoBase(
-            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(object()))
-        monkeypatch.setattr(cpoutil, "cpo_object_map", {
-            OPTICAL_ENGINE: {"oe0": cpo},
-            EXTERNAL_LASER_SOURCE: {"els0": cpo}, PORT: {1: cpo},
-        })
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", "enable"])
-        assert result.exit_code != 0
-        assert "set_per_lane_enable" in result.output
-        assert oe_api.calls == []
+        assert "not implemented for this platform" in result.output
+        eeprom.write.assert_not_called()
 
     @pytest.mark.parametrize("arguments", [
-        ["config", "els", "lpmode", "0", "low"],
-        ["config", "els", "reset", "0"],
-        ["config", "els", "tx_disable", "0", "enable"],
         ["show", "els", "status", "0"],
         ["show", "interface", "lane-status", "Ethernet0"],
     ])
-    def test_unsupported_els_commands_do_not_change_oe(
+    def test_unsupported_els_reads_do_not_change_oe(
             self, coverage_environment, monkeypatch, arguments):
-        # A platform may leave optional controls or status reads unsupported.
         els_api = CoverageFakeApi()
-        for method in (
-                "set_lpmode", "reset", "set_per_lane_enable",
-                "get_module_state", "get_per_lane_state"):
+        for method in ("get_module_state", "get_per_lane_state"):
             monkeypatch.setattr(els_api, method, mock.Mock(
                 side_effect=NotImplementedError("ELS operation is not implemented")))
         oe_api = CoverageFakeApi()
-        cpo = cpoutil.CpoBase(
-            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api))
-        monkeypatch.setattr(cpoutil, "cpo_object_map", {
-            OPTICAL_ENGINE: {"oe0": cpo},
-            EXTERNAL_LASER_SOURCE: {"els0": cpo},
-            PORT: {1: cpo},
-        })
+        self.install(monkeypatch, cpoutil.CpoBase(
+            None, CoverageFakeEndpoint(oe_api), CoverageFakeEndpoint(els_api)))
         result = invoke_coverage(arguments)
         assert result.exit_code != 0
         assert "not implemented" in result.output
         assert "has no attribute" not in result.output
-        assert "OK" not in result.output
-        assert oe_api.calls == []
-        assert els_api.calls == []
-        if arguments[2] == "tx_disable":
-            els_api.set_per_lane_enable.assert_called_once_with(0b11, False)
-        else:
-            els_api.set_per_lane_enable.assert_not_called()
-
-    def test_supported_els_reset_is_dispatched_without_resetting_oe(self, coverage_environment):
-        cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
-        cpo.api.reset = mock.Mock(return_value=True)
-        result = invoke_coverage(["config", "els", "reset", "0"])
-        assert result.exit_code == 0, result.output
-        cpo.api.reset.assert_called_once_with()
-        assert cpo.api.calls == []
+        assert oe_api.calls == [] and els_api.calls == []
 
     def test_els_module_state_read_failure_is_not_reported_as_success(self, coverage_environment):
         cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
@@ -1289,50 +1274,29 @@ class TestExplicitLaserMapping:
         assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
         assert cpoutil.get_cpo_laser_ids("Ethernet2") == ((1, 2), ())
 
-    def test_explicit_mapping_controls_only_selected_lanes(self, monkeypatch, coverage_environment):
-        self.configure(monkeypatch, self.nonuniform_topology(), {
-            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
-            "Ethernet1": {"index": "1", "lanes": "1,3,5"},
-        })
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
-        assert result.exit_code == 0, result.output
-        assert coverage_environment.api.calls == [
-            ("tx_disable_channel", 0b010101, True),
-            ("set_per_lane_enable", 0b001, False),
-        ]
-
-    def test_shared_laser_across_banks_blocks_all_writes(self, monkeypatch, coverage_environment):
+    def test_shared_laser_across_banks_is_reported(self, monkeypatch, coverage_environment):
         data = json.loads(json.dumps(COMMUNITY_DATA))
         data["devices"]["els0"]["laser_to_asic_lane_mapping"] = {
             "1": [1, 3], "2": [2], "3": [4],
         }
         self.configure(monkeypatch, data, COVERAGE_PORT_CONFIG)
         assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), (0,))
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0", "enable"])
-        assert result.exit_code != 0
-        assert "shares ELS laser(s) 0" in result.output
-        assert coverage_environment.api.calls == []
 
-    def test_shared_laser_within_bank_blocks_all_writes(self, monkeypatch, coverage_environment):
+    def test_shared_laser_within_bank_is_reported(self, monkeypatch, coverage_environment):
         self.configure(monkeypatch, self.nonuniform_topology(), {
             "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
             "Ethernet1": {"index": "1", "lanes": "1,3"},
         })
         assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), (0,))
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
-        assert result.exit_code != 0
-        assert coverage_environment.api.calls == []
 
-    def test_breakout_without_lane_mapping_is_rejected(self, monkeypatch, coverage_environment):
+    def test_breakout_without_lane_mapping_cannot_resolve_lasers(self, monkeypatch, coverage_environment):
         self.configure(monkeypatch, COVERAGE_CPO_DATA, {
             "Ethernet0": {"index": "1", "lanes": "1,2"},
             "Ethernet1": {"index": "1", "lanes": "2"},
         })
         assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), ())
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
-        assert result.exit_code != 0
-        assert "needs laser_to_asic_lane_mapping" in result.output
-        assert coverage_environment.api.calls == []
+        with pytest.raises(cpoutil.CpoLaserResolutionError, match="laser_to_asic_lane_mapping"):
+            cpoutil.get_cpo_laser_ids("Ethernet1")
 
     def test_incomplete_explicit_lane_mapping_is_rejected(self):
         data = self.nonuniform_topology()
@@ -1448,38 +1412,6 @@ class TestOeInputPower:
         assert "bank_0" not in result.output
 
 
-class TestOeBankControls:
-
-    @pytest.mark.parametrize("state,disabled", [("enable", True), ("disable", False)])
-    def test_operates_once_per_bank_and_leaves_other_oes_alone(self, bank_cpos, state, disabled):
-        result = invoke_coverage(["config", "oe", "tx_disable", "0", state])
-        assert result.exit_code == 0, result.output
-        assert bank_cpos[1].api.calls == [("tx_disable", disabled)]
-        assert bank_cpos[2].api.calls == [("tx_disable", disabled)]
-        assert bank_cpos[3].api.calls == []
-
-    def test_missing_bank_is_detected_before_any_write(self, bank_cpos):
-        del cpoutil.cpo_object_map[PORT][2]
-        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
-        assert result.exit_code != 0
-        assert "bank 1" in result.output
-        assert all(not cpo.api.calls for cpo in bank_cpos.values())
-
-    def test_unavailable_api_is_detected_before_any_write(self, bank_cpos):
-        bank_cpos[2].api = None
-        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
-        assert result.exit_code != 0
-        assert "API is unavailable" in result.output
-        assert bank_cpos[1].api.calls == []
-
-    def test_failed_bank_does_not_report_success(self, bank_cpos, monkeypatch):
-        monkeypatch.setattr(bank_cpos[2].api, "tx_disable", lambda disabled: False)
-        result = invoke_coverage(["config", "oe", "tx_disable", "0", "enable"])
-        assert result.exit_code != 0
-        assert "oe0 bank 1 Tx-disable enable failed" in result.output
-        assert "OK" not in result.output
-
-
 VMODULE_PORT_CONFIG = {
     "Ethernet0": {"index": "1", "lanes": "1,2,3,4"},
     "Ethernet4": {"index": "1", "lanes": "1,2,3,4"},
@@ -1498,6 +1430,7 @@ def vmodules(bank_cpos, monkeypatch):
         cpo.get_lpmode = mock.Mock(return_value=port == 3)
         cpo.set_lpmode = mock.Mock(return_value=True)
         cpo.reset = mock.Mock(return_value=True)
+        cpo.tx_disable = mock.Mock(return_value=True)
     return bank_cpos
 
 
@@ -1525,29 +1458,53 @@ class TestVmoduleControls:
         vmodules[3].set_lpmode.assert_called_once_with(True)
         vmodules[1].set_lpmode.assert_not_called()
 
-    @pytest.mark.parametrize("ports", ["Ethernet8", "Ethernet0", "Ethernet0,Ethernet8"])
-    def test_shared_controller_requires_every_affected_port(self, vmodules, ports):
+    @pytest.mark.parametrize("ports", ["Ethernet8", "Ethernet4", "Ethernet0,Ethernet4,Ethernet8"])
+    def test_one_port_controls_its_controller_once(self, vmodules, ports):
         result = invoke_coverage(["config", "interface", "lpmode", ports, "low"])
-        assert result.exit_code != 0
-        assert "--all-ports" in result.output
-        missing = {"Ethernet0", "Ethernet4", "Ethernet8"} - set(ports.split(","))
-        for port in missing:
-            assert port in result.output
-        for cpo in vmodules.values():
-            cpo.set_lpmode.assert_not_called()
-
-    @pytest.mark.parametrize("arguments", [
-        ["Ethernet0,Ethernet4,Ethernet8"],
-        ["Ethernet8", "--all-ports"],
-    ])
-    def test_shared_controller_is_controlled_once(self, vmodules, arguments):
-        port, *flags = arguments
-        result = invoke_coverage(["config", "interface", "lpmode", port, "full", *flags])
         assert result.exit_code == 0, result.output
-        assert "Disabling low-power mode for OE0 (Ethernet0, Ethernet4, Ethernet8) ... OK" in result.output
+        assert "Enabling low-power mode for OE0 (Ethernet0, Ethernet4, Ethernet8) ... OK" in result.output
         calls = [cpo.set_lpmode.call_args_list for cpo in vmodules.values()]
         assert sum(len(call) for call in calls) == 1
-        assert mock.call(False) in calls[0] + calls[1]
+        assert mock.call(True) in calls[0] + calls[1]
+        vmodules[3].set_lpmode.assert_not_called()
+
+    @pytest.mark.parametrize("command", [["lpmode", "Ethernet8", "low"], ["reset", "Ethernet8"]])
+    def test_all_ports_option_is_removed(self, vmodules, command):
+        result = invoke_coverage(["config", "interface"] + command + ["--all-ports"])
+        assert result.exit_code != 0
+        assert "No such option" in result.output
+        for cpo in vmodules.values():
+            cpo.set_lpmode.assert_not_called()
+            cpo.reset.assert_not_called()
+
+    @pytest.mark.parametrize("port", ["Ethernet0", "Ethernet4"])
+    def test_tx_disable_acts_on_the_port_cpo_object(self, vmodules, port):
+        result = invoke_coverage(["config", "interface", "tx_disable", port, "enable"])
+        assert result.exit_code == 0, result.output
+        # Breakout subports share the physical port's CPO object.
+        assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
+        vmodules[1].tx_disable.assert_called_once_with(True)
+        vmodules[2].tx_disable.assert_not_called()
+        vmodules[3].tx_disable.assert_not_called()
+        assert all(cpo.api.calls == [] for cpo in vmodules.values())
+
+    def test_tx_disable_calls_each_cpo_object_once(self, vmodules):
+        result = invoke_coverage(
+            ["config", "interface", "tx_disable", "Ethernet0,Ethernet4,Ethernet8", "disable"])
+        assert result.exit_code == 0, result.output
+        assert "Disabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
+        assert "Disabling Tx-disable for Ethernet8 (Ethernet8) ... OK" in result.output
+        vmodules[1].tx_disable.assert_called_once_with(False)
+        vmodules[2].tx_disable.assert_called_once_with(False)
+        vmodules[3].tx_disable.assert_not_called()
+
+    def test_tx_disable_partial_failure_names_completed_targets(self, vmodules):
+        vmodules[3].tx_disable.return_value = False
+        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0,Ethernet16", "enable"])
+        assert result.exit_code != 0
+        assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
+        assert "Enabling Tx-disable for Ethernet16 (Ethernet16) ... Failed" in result.output
+        assert "already applied to Ethernet0" in result.output
 
     def test_reset_reports_ports_to_reprovision(self, vmodules):
         result = invoke_coverage(["config", "interface", "reset", "Ethernet16"])
@@ -1559,12 +1516,13 @@ class TestVmoduleControls:
     @pytest.mark.parametrize("command", [
         ["config", "interface", "lpmode", "Ethernet16", "low"],
         ["config", "interface", "reset", "Ethernet16"],
+        ["config", "interface", "tx_disable", "Ethernet16", "enable"],
         ["show", "interface", "lpmode", "Ethernet16"],
     ])
     @pytest.mark.parametrize("unsupported", ["missing", "not_implemented"])
     def test_unsupported_platform(self, vmodules, command, unsupported):
-        method = {"lpmode": "set_lpmode", "reset": "reset"}[command[2]] if command[0] == "config" \
-            else "get_lpmode"
+        method = {"lpmode": "set_lpmode", "reset": "reset", "tx_disable": "tx_disable"}[command[2]] \
+            if command[0] == "config" else "get_lpmode"
         if unsupported == "missing":
             cpoutil.cpo_object_map[PORT][3] = types.SimpleNamespace()
         else:
@@ -1814,8 +1772,10 @@ class TestBreakoutWithoutLaneMapping:
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["Ethernet0"]["els"]["lasers"] == [0, 1]
 
-    def test_tx_disable_still_rejects_unresolved_subport(self, breakout):
+    def test_tx_disable_uses_the_cpo_object_without_laser_mapping(self, breakout, monkeypatch):
+        monkeypatch.setattr(breakout, "tx_disable", mock.Mock(return_value=True), raising=False)
         result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
-        assert result.exit_code != 0
-        assert "needs laser_to_asic_lane_mapping" in result.output
+        assert result.exit_code == 0, result.output
+        assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet1) ... OK" in result.output
+        breakout.tx_disable.assert_called_once_with(True)
         assert breakout.api.calls == []

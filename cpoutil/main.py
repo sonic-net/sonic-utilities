@@ -506,11 +506,6 @@ def get_els_lpmode(_api):
     )
 
 
-def set_els_tx_disable(api, lane_mask, disable):
-    """Control ELS output through the public per-lane enable API."""
-    return api.set_per_lane_enable(lane_mask, not disable)
-
-
 def get_oe_bank_apis(resource_id):
     """Resolve one API per mapped OE bank before any reads or writes."""
     bank_ports = {}
@@ -537,35 +532,6 @@ def get_oe_bank_apis(resource_id):
             "No OE bank mapping is available for '{}'".format(resource_id)
         )
     return targets
-
-
-def get_els_control_targets(resource_id):
-    """Return one ELS API and combined lane mask for each ELS bank."""
-    targets = {}
-    for mapping in cpo_mapping.get_interfaces():
-        if mapping.els_name != resource_id:
-            continue
-        local_mask = sum(1 << (laser % 8) for laser in mapping.laser_ids)
-        if not local_mask:
-            continue
-        bank = mapping.els_bank
-        target = targets.get(bank)
-        if target is not None:
-            target[1] |= local_mask
-            continue
-        for physical_port in mapping.physical_ports:
-            cpo = cpo_object_map[PORT].get(physical_port)
-            if cpo is None:
-                continue
-            api = get_els_api(cpo, resource_id)
-            targets[bank] = [api, local_mask]
-            break
-
-    if not targets:
-        raise CpoCommandError(
-            "No ELS laser mapping is available for '{}'".format(resource_id)
-        )
-    return [tuple(target) for target in targets.values()]
 
 
 def _get_els_lane_count(info):
@@ -1716,29 +1682,26 @@ def _get_interface_mapping(port):
     return get_cpo_interface_mapping(port)
 
 
-def _call_vmodule(cpo, method, *args):
-    """Call a CPO virtual-module control, reporting unsupported platforms."""
-    function = getattr(cpo, method, None)
+def _call_hook(target, method, label, *args):
+    """Call a platform hook, reporting a missing or unimplemented hook."""
+    function = getattr(target, method, None)
+    unsupported = "{} {} is not implemented for this platform".format(label, method)
     if not callable(function):
-        raise CpoCommandError(
-            "CPO {} is not implemented for this platform".format(method)
-        )
+        raise CpoCommandError(unsupported)
     try:
         return function(*args)
     except NotImplementedError as exc:
-        raise CpoCommandError(
-            "CPO {} is not implemented for this platform".format(method)
-        ) from exc
+        raise CpoCommandError(unsupported) from exc
 
 
-def _controller_ports(oe_name):
-    """Return the logical ports served by one OE controller in the topology."""
-    physical_ports = {
-        physical_port
-        for mapping in cpo_mapping.get_interfaces()
-        if mapping.oe_name == oe_name
-        for physical_port in mapping.physical_ports
-    }
+def _call_vmodule(cpo, method, *args):
+    """Call a CPO virtual-module hook on a CpoBase object."""
+    return _call_hook(cpo, method, "CPO", *args)
+
+
+def _ports_on_physical_ports(physical_ports):
+    """Return the logical ports that use any of the given physical ports."""
+    physical_ports = set(physical_ports)
     return sorted(
         (
             port for port in current_port_config
@@ -1750,12 +1713,25 @@ def _controller_ports(oe_name):
     )
 
 
-def get_vmodule_targets(ports, all_ports):
-    """Resolve one CPO object per controller for comma-separated ports.
+def _controller_ports(oe_name):
+    """Return the logical ports served by one OE controller in the topology."""
+    return _ports_on_physical_ports(
+        physical_port
+        for mapping in cpo_mapping.get_interfaces()
+        if mapping.oe_name == oe_name
+        for physical_port in mapping.physical_ports
+    )
 
-    A controller can serve several ports, including breakout subports. Unless
-    all_ports is set, every port served by a selected controller must be
-    selected, so no port is affected without being named.
+
+def get_vmodule_targets(ports, per_controller):
+    """Resolve the CPO objects a virtual-module command calls.
+
+    PORT is one or more comma-separated ports. Low-power mode and reset act
+    through the module controller: each controller is called once, on a
+    selected port's CPO object, and every port it serves is affected.
+    Tx-disable acts on each selected port's CPO object, affecting the ports
+    that share its physical port, such as breakout subports. Returns
+    (label, CPO object, affected ports) tuples.
     """
     selected = [port.strip() for port in str(ports).split(",") if port.strip()]
     if not selected:
@@ -1764,35 +1740,23 @@ def get_vmodule_targets(ports, all_ports):
     targets = {}
     for port in selected:
         port_cpos = get_port_cpo_objects(port)
-        oe_name = get_cpo_interface_mapping(port).oe_name
-        if oe_name not in targets:
-            targets[oe_name] = (port_cpos[0][2], _controller_ports(oe_name))
-
-    unselected = sorted(
-        {port for _, controller_ports in targets.values() for port in controller_ports}
-        - set(selected),
-        key=_natural_sort_key,
-    )
-    if unselected and not all_ports:
-        raise CpoCommandError(
-            "The selected CPO controller(s) also serve {}; select all affected "
-            "ports or use --all-ports".format(", ".join(unselected))
-        )
-    return [
-        (oe_name, cpo, controller_ports)
-        for oe_name, (cpo, controller_ports) in sorted(
-            targets.items(), key=lambda item: _natural_sort_key(item[0])
-        )
-    ]
+        if per_controller:
+            oe_name = get_cpo_interface_mapping(port).oe_name
+            if oe_name not in targets:
+                targets[oe_name] = (oe_name.upper(), port_cpos[0][2], _controller_ports(oe_name))
+            continue
+        for _, physical_port, cpo in port_cpos:
+            if physical_port not in targets:
+                affected = _ports_on_physical_ports([physical_port])
+                targets[physical_port] = (affected[0] if affected else port, cpo, affected)
+    return sorted(targets.values(), key=lambda target: _natural_sort_key(target[0]))
 
 
 def _run_vmodule_action(targets, verb, method, *args):
-    """Apply one virtual-module control to each selected controller."""
+    """Apply one virtual-module hook to each target, naming the affected ports."""
     completed = []
-    for oe_name, cpo, controller_ports in targets:
-        message = "{} {} ({})".format(
-            verb, oe_name.upper(), ", ".join(controller_ports)
-        )
+    for label, cpo, affected_ports in targets:
+        message = "{} {} ({})".format(verb, label, ", ".join(affected_ports))
         try:
             _run_action(message, lambda cpo=cpo: _call_vmodule(cpo, method, *args))
         except CpoCommandError as exc:
@@ -1801,7 +1765,7 @@ def _run_vmodule_action(targets, verb, method, *args):
                     "{}; already applied to {}".format(exc, ", ".join(completed))
                 ) from exc
             raise
-        completed.append(oe_name.upper())
+        completed.append(label)
 
 
 @cli.group()
@@ -1818,92 +1782,38 @@ def config_interface():
 @click.argument("port")
 @click.argument("state", type=click.Choice(["enable", "disable"]))
 def config_interface_tx_disable(port, state):
-    """Enable or disable Tx-disable on mapped OE and ELS lanes."""
+    """Enable or disable Tx-disable of a CPO virtual module.
+
+    PORT is one or more comma-separated ports. The setting applies to the
+    port's CPO virtual module and every port that shares it, such as breakout
+    subports.
+    """
     disable = state == "enable"
     try:
-        context = get_interface_context(port)
-        mapping = context["mapping"]
-        if context["shared_laser_ids"]:
-            raise CpoCommandError(
-                "PORT '{}' shares ELS laser(s) {} with another subport; "
-                "interface Tx-disable is unsafe".format(
-                    port,
-                    ",".join(
-                        str(laser) for laser
-                        in context["shared_laser_ids"]
-                    ),
-                )
-            )
-        if not context["laser_ids"]:
-            raise CpoCommandError(
-                "No ELS laser mapping is available for '{}'".format(port)
-            )
-
-        port_cpos = get_port_cpo_objects(port)
-        els_api = get_els_api(port_cpos[0][2], mapping.els_name)
-        # Resolve both endpoints before writing; an existing method may still
-        # raise NotImplementedError when invoked by a platform implementation.
-        els_operation = els_api.set_per_lane_enable
-        oe_targets = [
-            (physical_port, get_oe_api(cpo, port).tx_disable_channel)
-            for _, physical_port, cpo in port_cpos
-        ]
-
-        laser_mask = sum(
-            1 << (laser % 8) for laser in context["laser_ids"]
+        targets = get_vmodule_targets(port, per_controller=False)
+        _run_vmodule_action(
+            targets,
+            "Enabling Tx-disable for" if disable else "Disabling Tx-disable for",
+            "tx_disable", disable,
         )
-
-        def apply_tx_disable():
-            completed_oe_ports = []
-            try:
-                for physical_port, operation in oe_targets:
-                    _require_success(
-                        operation(context["lane_mask"], disable),
-                        "{} OE Tx-disable {}".format(port, state),
-                    )
-                    completed_oe_ports.append(str(physical_port))
-                _require_success(
-                    els_operation(laser_mask, not disable),
-                    "{} ELS Tx-disable {}".format(port, state),
-                )
-            except (CpoCommandError, NotImplementedError, AttributeError) as exc:
-                if completed_oe_ports:
-                    raise CpoCommandError(
-                        "{}; OE Tx-disable already applied to physical port(s) "
-                        "{}; configuration may be partially applied".format(
-                            exc, ", ".join(completed_oe_ports)
-                        )
-                    ) from exc
-                raise
-            return True
-
-        _run_action(
-            "{} Tx-disable for port {}".format(
-                "Enabling" if disable else "Disabling", port
-            ),
-            apply_tx_disable,
-        )
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except CpoCommandError as exc:
         raise click.ClickException(str(exc))
-
-
-ALL_PORTS_HELP = "Apply to every port served by the selected CPO controller(s)."
 
 
 @config_interface.command("lpmode")
 @click.argument("port")
 @click.argument("mode", type=click.Choice(["full", "low"]))
-@click.option("--all-ports", is_flag=True, help=ALL_PORTS_HELP)
-def config_interface_lpmode(port, mode, all_ports):
+def config_interface_lpmode(port, mode):
     """Set full-power or low-power mode of a CPO virtual module.
 
-    PORT is one or more comma-separated ports. The setting applies to the CPO
-    controller and every port it serves. It is not persistent: xcvrd restores
-    full power when it next provisions the ports.
+    PORT is one or more comma-separated ports. The setting applies through the
+    CPO controller to every port it serves; the affected ports are listed. It
+    is not persistent: xcvrd restores full power when it next provisions the
+    ports.
     """
     low_power = mode == "low"
     try:
-        targets = get_vmodule_targets(port, all_ports)
+        targets = get_vmodule_targets(port, per_controller=True)
         _run_vmodule_action(
             targets,
             "Enabling low-power mode for" if low_power else "Disabling low-power mode for",
@@ -1915,16 +1825,15 @@ def config_interface_lpmode(port, mode, all_ports):
 
 @config_interface.command("reset")
 @click.argument("port")
-@click.option("--all-ports", is_flag=True, help=ALL_PORTS_HELP)
-def config_interface_reset(port, all_ports):
+def config_interface_reset(port):
     """Reset a CPO virtual module through its controller.
 
-    PORT is one or more comma-separated ports. The reset applies to the CPO
-    controller and every port it serves. The affected ports must be
-    re-provisioned (admin toggle) after the reset.
+    PORT is one or more comma-separated ports. The reset applies through the
+    CPO controller to every port it serves; the affected ports are listed and
+    must be re-provisioned (admin toggle) after the reset.
     """
     try:
-        targets = get_vmodule_targets(port, all_ports)
+        targets = get_vmodule_targets(port, per_controller=True)
         _run_vmodule_action(targets, "Resetting", "reset")
     except CpoCommandError as exc:
         raise click.ClickException(str(exc))
@@ -1937,170 +1846,96 @@ def config_interface_reset(port, all_ports):
 
 @config.group("oe")
 def config_oe():
-    """Control an Optical Engine."""
+    """Control an Optical Engine endpoint (separate mode).
+
+    These commands call the platform's OE endpoint hooks, which platforms that
+    control the OE independently implement. Use 'config interface' for the CPO
+    virtual module.
+    """
 
 
 @config_oe.command("lpmode")
 @click.argument("oe_index")
 @click.argument("mode", type=click.Choice(["full", "low"]))
 def config_oe_lpmode(oe_index, mode):
-    """Set OE full-power or low-power mode."""
+    """Set OE endpoint full-power or low-power mode."""
     try:
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
-        api = get_oe_api(cpo, resource_id)
         low_power = mode == "low"
         _run_action(
-            "{} low-power mode for {}".format(
+            "{} low-power mode for {} ({})".format(
                 "Enabling" if low_power else "Disabling",
-                resource_id.upper(),
+                resource_id.upper(), ", ".join(_controller_ports(resource_id)),
             ),
-            lambda: api.set_lpmode(low_power),
+            lambda: _call_hook(getattr(cpo, "oe", None), "set_lpmode", "OE", low_power),
         )
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except CpoCommandError as exc:
         raise click.ClickException(str(exc))
 
 
 @config_oe.command("reset")
 @click.argument("oe_index")
 def config_oe_reset(oe_index):
-    """Reset an Optical Engine through the platform API.
+    """Reset an Optical Engine endpoint.
 
     Module settings may return to defaults. Affected ports may require
     application and datapath reprovisioning after the reset.
     """
     try:
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
-        api = get_oe_api(cpo, resource_id)
         _run_action(
-            "Resetting {}".format(resource_id.upper()), api.reset
+            "Resetting {} ({})".format(
+                resource_id.upper(), ", ".join(_controller_ports(resource_id))
+            ),
+            lambda: _call_hook(getattr(cpo, "oe", None), "reset", "OE"),
         )
         click.echo(
             "Affected ports may require application and datapath "
             "reprovisioning after the reset."
         )
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(str(exc))
-
-
-@config_oe.command("tx_disable")
-@click.argument("oe_index")
-@click.argument("state", type=click.Choice(["enable", "disable"]))
-def config_oe_tx_disable(oe_index, state):
-    """Enable or disable Tx-disable across every mapped OE bank."""
-    try:
-        resource_id, _ = _single_resource(OPTICAL_ENGINE, oe_index)
-        targets = get_oe_bank_apis(resource_id)
-        disable = state == "enable"
-
-        def apply_tx_disable():
-            # CMIS tx_disable() writes the bank bound to this CPO's API,
-            # so an OE-wide command must visit each bank explicitly.
-            for bank, api in targets:
-                _require_success(
-                    api.tx_disable(disable),
-                    "{} bank {} Tx-disable {}".format(resource_id, bank, state),
-                )
-            return True
-
-        _run_action(
-            "{} Tx-disable for {}".format(
-                "Enabling" if disable else "Disabling",
-                resource_id.upper(),
-            ),
-            apply_tx_disable,
-        )
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except CpoCommandError as exc:
         raise click.ClickException(str(exc))
 
 
 @config.group("els")
 def config_els():
-    """Control an External Laser Source."""
+    """Control an External Laser Source endpoint (separate mode).
+
+    These commands call the platform's ELS endpoint hooks, which platforms that
+    control the ELS independently implement. Use 'config interface' for the CPO
+    virtual module.
+    """
 
 
 @config_els.command("lpmode")
 @click.argument("els_index")
 @click.argument("mode", type=click.Choice(["full", "low"]))
 def config_els_lpmode(els_index, mode):
-    """Set ELS endpoint full-power or low-power mode.
-
-    For platforms that control the ELS independently (separate mode). Use
-    'config interface lpmode' for the CPO virtual module.
-    """
+    """Set ELS endpoint full-power or low-power mode."""
     try:
-        resource_id, cpo = _single_resource(
-            EXTERNAL_LASER_SOURCE, els_index
-        )
-        api = get_els_api(cpo, resource_id)
+        resource_id, cpo = _single_resource(EXTERNAL_LASER_SOURCE, els_index)
         low_power = mode == "low"
         _run_action(
             "{} low-power mode for {}".format(
-                "Enabling" if low_power else "Disabling",
-                resource_id.upper(),
+                "Enabling" if low_power else "Disabling", resource_id.upper(),
             ),
-            lambda: api.set_lpmode(low_power),
+            lambda: _call_hook(getattr(cpo, "elsfp", None), "set_lpmode", "ELS", low_power),
         )
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except CpoCommandError as exc:
         raise click.ClickException(str(exc))
 
 
 @config_els.command("reset")
 @click.argument("els_index")
 def config_els_reset(els_index):
-    """Reset an External Laser Source endpoint.
-
-    For platforms that control the ELS independently (separate mode). Use
-    'config interface reset' for the CPO virtual module.
-    """
+    """Reset an External Laser Source endpoint."""
     try:
-        resource_id, cpo = _single_resource(
-            EXTERNAL_LASER_SOURCE, els_index
-        )
-        api = get_els_api(cpo, resource_id)
+        resource_id, cpo = _single_resource(EXTERNAL_LASER_SOURCE, els_index)
         _run_action(
             "Resetting {}".format(resource_id.upper()),
-            lambda: api.reset(),
+            lambda: _call_hook(getattr(cpo, "elsfp", None), "reset", "ELS"),
         )
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(str(exc))
-
-
-@config_els.command("tx_disable")
-@click.argument("els_index")
-@click.argument("state", type=click.Choice(["enable", "disable"]))
-def config_els_tx_disable(els_index, state):
-    """Enable or disable Tx-disable for every ELS laser.
-
-    For platforms that control the ELS independently (separate mode). Use
-    'config interface tx_disable' for one interface's lanes and lasers.
-    """
-    try:
-        resource_ids = cpo_mapping.resolve_resource_ids(
-            els_index, EXTERNAL_LASER_SOURCE
-        )
-        if len(resource_ids) != 1:
-            raise CpoCommandError("Exactly one els index is required")
-        resource_id = resource_ids[0]
-        targets = get_els_control_targets(resource_id)
-        disable = state == "enable"
-
-        def apply_tx_disable():
-            for api, laser_mask in targets:
-                _require_success(
-                    set_els_tx_disable(api, laser_mask, disable),
-                    "{} ELS Tx-disable {}".format(resource_id, state),
-                )
-            return True
-
-        _run_action(
-            "{} Tx-disable for {}".format(
-                "Enabling" if disable else "Disabling",
-                resource_id.upper(),
-            ),
-            apply_tx_disable,
-        )
-    except (CpoCommandError, CpoMappingError, KeyError,
-            NotImplementedError, AttributeError) as exc:
+    except CpoCommandError as exc:
         raise click.ClickException(str(exc))
 
 
