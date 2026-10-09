@@ -17146,7 +17146,7 @@ This sub-section explains the commands available for Co-Packaged Optics (CPO) de
 
 A CPO port is served by an Optical Engine (OE) and an External Laser Source (ELS). The platform describes the mapping between ports, OEs and ELS in `cpo.json`, and exposes each port as a CPO virtual module through `Chassis.get_cpo()`.
 
-`cpoutil` reads and controls the hardware directly; it is a debug and manual-provisioning tool. The values that xcvrd publishes to STATE_DB for CPO ports remain available through `show interfaces transceiver`. On platforms without `cpo.json`, every command exits with `Error: CPO topology is unavailable for this platform`.
+`cpoutil` reads the hardware directly and controls it through the platform's CPO objects; it is a debug and manual-provisioning tool. The values that xcvrd publishes to STATE_DB for CPO ports remain available through `show interfaces transceiver`. On platforms without `cpo.json`, every hardware command exits with `Error: CPO topology is unavailable for this platform`; help remains available.
 
 Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS indexes may be given as a number (`0`) or a name (`oe0`, `els0`); when omitted, all are shown.
 
@@ -17218,64 +17218,50 @@ These commands display External Laser Source state.
 
 ## CPO Utilities config commands
 
-**cpoutil config interface lpmode|reset**
+**cpoutil config interface lpmode|reset|tx_disable**
 
-These commands set the low-power mode of, or reset, a CPO virtual module through its controller.
+These commands control a CPO virtual module. They call the platform's CPO object for the selected port (`CpoBase.set_lpmode()`, `reset()` and `tx_disable()`), and the platform decides how the hardware is controlled. When the platform does not implement a control, the command reports that it is not implemented.
 
-A controller can serve several ports, including breakout subports. The command applies to every port served by the selected controller, so every affected port must be named (PORT accepts a comma-separated list), or `--all-ports` must be given. Otherwise the command is rejected before any change.
+PORT is one port, or a comma-separated list. Each command lists the ports it affects:
+
+- `lpmode` and `reset` act through the CPO controller, so they apply to every port the controller serves, including breakout subports.
+- `tx_disable` acts on the port's CPO virtual module, so it applies to every port that shares it, such as breakout subports.
 
 These are maintenance overrides and are not persistent: xcvrd restores full power when it next provisions the ports. After a reset, the affected ports must be re-provisioned (for example, by an admin toggle).
 
 - Usage:
   ```
-  cpoutil config interface lpmode PORT {full|low} [--all-ports]
-  cpoutil config interface reset PORT [--all-ports]
+  cpoutil config interface lpmode PORT {full|low}
+  cpoutil config interface reset PORT
+  cpoutil config interface tx_disable PORT {enable|disable}
   ```
 
 - Example:
   ```
   admin@sonic:~$ cpoutil config interface lpmode Ethernet448 low
-  Error: The selected CPO controller(s) also serve Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504; select all affected ports or use --all-ports
-
-  admin@sonic:~$ cpoutil config interface lpmode Ethernet448 low --all-ports
   Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... OK
+
+  admin@sonic:~$ cpoutil config interface tx_disable Ethernet448 enable
+  Enabling Tx-disable for Ethernet448 (Ethernet448) ... OK
   ```
 
-**cpoutil config interface tx_disable**
+**cpoutil config oe|els lpmode|reset**
 
-This command enables or disables Tx-disable on the OE and ELS lanes mapped to one interface. It is rejected when a mapped ELS laser is shared with another subport.
-
-- Usage:
-  ```
-  cpoutil config interface tx_disable PORT {enable|disable}
-  ```
-
-**cpoutil config oe lpmode|reset|tx_disable**
-
-These commands control an Optical Engine. `tx_disable` applies to every mapped bank of the OE. After a reset, the OE's ports may need application and datapath re-provisioning.
+These commands control an Optical Engine or External Laser Source endpoint on its own. They are for platforms that control the OE or ELS independently (separate mode), and call the endpoint's `OeBase`/`ElsfpBase` hooks. Platforms that control the CPO virtual module as a whole (joint mode) do not implement these hooks, so the commands report that they are not implemented; use `config interface` instead. After an OE reset, the OE's ports may need application and datapath re-provisioning.
 
 - Usage:
   ```
   cpoutil config oe lpmode OE_INDEX {full|low}
   cpoutil config oe reset OE_INDEX
-  cpoutil config oe tx_disable OE_INDEX {enable|disable}
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ cpoutil config oe tx_disable 7 enable
-  Enabling Tx-disable for OE7 ... OK
-  ```
-
-**cpoutil config els lpmode|reset|tx_disable**
-
-These commands control an External Laser Source endpoint. They are intended for platforms that control the ELS independently; when the platform does not support the operation, an error is reported and nothing is changed. Use `config interface lpmode|reset` for the CPO virtual module.
-
-- Usage:
-  ```
   cpoutil config els lpmode ELS_INDEX {full|low}
   cpoutil config els reset ELS_INDEX
-  cpoutil config els tx_disable ELS_INDEX {enable|disable}
+  ```
+
+- Example (joint mode):
+  ```
+  admin@sonic:~$ cpoutil config oe lpmode 7 low
+  Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... Failed
+  Error: OE set_lpmode is not implemented for this platform
   ```
 
 ## CPO Utilities EEPROM commands
