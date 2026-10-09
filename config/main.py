@@ -903,7 +903,7 @@ def _clear_cbf():
 
     for ns in namespace_list:
         if ns is DEFAULT_NAMESPACE:
-            config_db = ConfigDBConnector()
+            config_db = ConfigDBConnector(use_unix_socket_path=True)
         else:
             config_db = ConfigDBConnector(
                 use_unix_socket_path=True, namespace=ns
@@ -934,7 +934,7 @@ def is_storm_control_supported(storm_type, namespace):
     asic_id = multi_asic.get_asic_index_from_namespace(namespace)
     #state_db[asic_id] = swsscommon.DBConnector("STATE_DB", REDIS_TIMEOUT_MSECS, True, namespace)
     #supported = state_db[asic_id].get_entry('BUM_STORM_CAPABILITY', storm_type)
-    state_db = SonicV2Connector(host='127.0.0.1')
+    state_db = SonicV2Connector(use_unix_socket_path=True)
     state_db.connect(state_db.STATE_DB, False)
     entry_name="BUM_STORM_CAPABILITY|"+storm_type
     supported = state_db.get(state_db.STATE_DB, entry_name,"supported")
@@ -951,7 +951,7 @@ def storm_control_set_entry(port_name, kbps, storm_type, namespace):
         return False
 
     #Validate kbps value
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     key = port_name + '|' + storm_type
     entry = config_db.get_entry('PORT_STORM_CONTROL', key)
@@ -979,7 +979,7 @@ def storm_control_delete_entry(port_name, storm_type):
     if storm_control_interface_validate(port_name) is False:
         return False
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     key = port_name + '|' + storm_type
     entry = config_db.get_entry('PORT_STORM_CONTROL', key)
@@ -1002,7 +1002,7 @@ def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
         return True
     start = time.time()
     empty = False
-    app_db = SonicV2Connector(host='127.0.0.1')
+    app_db = SonicV2Connector(use_unix_socket_path=True)
     app_db.connect(app_db.APPL_DB)
 
     while not empty and time.time() - start < timeout:
@@ -1050,7 +1050,7 @@ def _clear_qos(delay=False, verbose=False):
 
     for ns in namespace_list:
         if ns is DEFAULT_NAMESPACE:
-            config_db = ConfigDBConnector()
+            config_db = ConfigDBConnector(use_unix_socket_path=True)
         else:
             config_db = ConfigDBConnector(
                 use_unix_socket_path=True, namespace=ns
@@ -1741,7 +1741,7 @@ def load_sysinfo_if_missing(asic_config):
 
 def flush_configdb(namespace=DEFAULT_NAMESPACE):
     if namespace is DEFAULT_NAMESPACE:
-        config_db = ConfigDBConnector()
+        config_db = ConfigDBConnector(use_unix_socket_path=True)
     else:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
 
@@ -2617,7 +2617,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
 
     for namespace in namespace_list:
         if namespace is DEFAULT_NAMESPACE:
-            config_db = ConfigDBConnector()
+            config_db = ConfigDBConnector(use_unix_socket_path=True)
             cfggen_namespace_option = []
             ns_cmd_prefix = ""
         else:
@@ -2956,7 +2956,7 @@ def aaa_table_hard_dependency_check(config_json):
 @click.argument('new_hostname', metavar='<new_hostname>', required=True)
 def hostname(new_hostname):
     """Change device hostname without impacting the traffic."""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     try:
         config_db.mod_entry(swsscommon.CFG_DEVICE_METADATA_TABLE_NAME, 'localhost',
@@ -2986,7 +2986,7 @@ def synchronous_mode(sync_mode):
         if sync_mode != 'enable' and sync_mode != 'disable':
             raise click.BadParameter("Error: Invalid argument %s, expect either enable or disable" % sync_mode)
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     try:
         config_db.mod_entry('DEVICE_METADATA' , 'localhost', {"synchronous_mode" : sync_mode})
@@ -3043,7 +3043,7 @@ def yang_config_validation(yang_config_validation):
         if yang_config_validation != 'enable' and yang_config_validation != 'disable':
             raise click.BadParameter("Error: Invalid argument %s, expect either enable or disable" % yang_config_validation)
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     try:
         config_db.mod_entry('DEVICE_METADATA', 'localhost', {"yang_config_validation": yang_config_validation})
@@ -3493,7 +3493,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
     """
     namespaces = multi_asic.get_all_namespaces()
     if not namespaces['front_ns']:
-        config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+        config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
         config_db.connect()
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(config_db, session_name, None, raw_src_port, direction) is False:
@@ -3620,7 +3620,7 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
     """
     namespaces = multi_asic.get_all_namespaces()
     if not namespaces['front_ns']:
-        config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+        config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
         config_db.connect()
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(config_db, session_name, dst_port, raw_src_port, direction) is False:
@@ -3689,7 +3689,7 @@ def remove(session_name):
     namespaces = multi_asic.get_all_namespaces()
     ctx = click.get_current_context()
     if not namespaces['front_ns']:
-        config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+        config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
         config_db.connect()
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, None)
@@ -3855,7 +3855,7 @@ def reload(ctx, dry_run, json_data):
     for ns in namespace_list:
         if ns is DEFAULT_NAMESPACE:
             asic_id_suffix = ""
-            config_db = ConfigDBConnector()
+            config_db = ConfigDBConnector(use_unix_socket_path=True)
         else:
             asic_id = multi_asic.get_asic_id_from_name(ns)
             if asic_id is None:
@@ -3954,7 +3954,7 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
     for ns in namespace_list:
         if ns is DEFAULT_NAMESPACE:
             asic_id_suffix = ""
-            config_db = ConfigDBConnector()
+            config_db = ConfigDBConnector(use_unix_socket_path=True)
         else:
             asic_id = multi_asic.get_asic_id_from_name(ns)
             if asic_id is None:
@@ -4057,7 +4057,7 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
     for ns in namespace_list:
         if ns is DEFAULT_NAMESPACE:
             asic_id_suffix = ""
-            config_db = ConfigDBConnector()
+            config_db = ConfigDBConnector(use_unix_socket_path=True)
         else:
             asic_id = multi_asic.get_asic_id_from_name(ns)
             if asic_id is None:
@@ -4205,9 +4205,8 @@ def is_dynamic_buffer_enabled(config_db):
 @click.option('-s', '--redis-unix-socket-path', help='unix socket path for redis connection')
 def warm_restart(ctx, redis_unix_socket_path):
     """warm_restart-related configuration tasks"""
-    # Note: redis_unix_socket_path is a path string, and the ground truth is now from database_config.json.
-    # We only use it as a bool indicator on either unix_socket_path or tcp port
-    use_unix_socket_path = bool(redis_unix_socket_path)
+    # The socket path is selected from database_config.json.
+    use_unix_socket_path = True
     TABLE_NAME_SEPARATOR = '|'
     prefix = 'WARM_RESTART_ENABLE_TABLE' + TABLE_NAME_SEPARATOR
     ctx.obj = {'prefix': prefix}
@@ -4391,7 +4390,7 @@ def vrf_delete_management_vrf(config_db):
 @click.pass_context
 def snmpagentaddress(ctx):
     """SNMP agent listening IP address, port, vrf configuration"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     ctx.obj = {'db': config_db}
 
@@ -4475,7 +4474,7 @@ def del_snmp_agent_address(ctx, agentip, port, vrf):
 @click.pass_context
 def snmptrap(ctx):
     """SNMP Trap server configuration to send traps"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     ctx.obj = {'db': config_db}
 
@@ -5882,7 +5881,7 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
 def _get_all_mgmtinterface_keys():
     """Returns list of strings containing mgmt interface keys
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     return list(config_db.get_table('MGMT_INTERFACE').keys())
 
@@ -8599,7 +8598,7 @@ def add():
 
 
 def get_acl_bound_ports(namespace=None):
-    config_db = ConfigDBConnector(namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     config_db.connect()
 
     ports = set()
@@ -8627,7 +8626,7 @@ def expand_vlan_ports(port_name, namespace=None):
     If the provided interface is not a VLAN, then this method will return a list with only
     the provided interface in it.
     """
-    config_db = ConfigDBConnector(namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     config_db.connect()
 
     if port_name not in config_db.get_keys("VLAN"):
@@ -8690,7 +8689,7 @@ def add_table(ctx, table_name, table_type, description, ports, stage, namespace)
     """
     Add ACL table
     """
-    config_db = ConfigDBConnector(namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     config_db.connect()
 
     try:
@@ -8723,7 +8722,7 @@ def remove_table(table_name, namespace):
     """
     Remove ACL table
     """
-    config_db = ConfigDBConnector(namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     config_db.connect()
     config_db.set_entry("ACL_TABLE", table_name, None)
 
@@ -9085,7 +9084,7 @@ def priority(ctx, interface_name, priority, status, namespace):
 @click.pass_context
 def buffer(ctx):
     """Configure buffer_profile"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
 
     if not is_dynamic_buffer_enabled(config_db):
@@ -9479,7 +9478,7 @@ def is_loopback_name_valid(loopback_name):
 @click.option('-s', '--redis-unix-socket-path', help='unix socket path for redis connection')
 def loopback(ctx, redis_unix_socket_path):
     """Loopback-related configuration tasks"""
-    kwargs = {}
+    kwargs = {'use_unix_socket_path': True}
     if redis_unix_socket_path:
         kwargs['unix_socket_path'] = redis_unix_socket_path
     config_db = ConfigDBConnector(**kwargs)
@@ -9580,7 +9579,7 @@ def ntp(ctx):
     # This is checking to see if ctx.obj is a dictionary, to differentiate it
     # between unit test scenario and runtime scenario.
     if not isinstance(ctx.obj, dict):
-        config_db = ConfigDBConnector()
+        config_db = ConfigDBConnector(use_unix_socket_path=True)
         config_db.connect()
         ctx.obj = {'db': config_db}
 
@@ -9648,7 +9647,7 @@ def del_ntp_server(ctx, ntp_ip_address):
 @click.pass_context
 def sflow(ctx):
     """sFlow-related configuration tasks"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     ctx.obj = {'db': config_db}
 
@@ -10293,7 +10292,7 @@ def rate():
 @click.argument('rates_type', type=click.Choice(['all', 'port', 'rif', 'flowcnt-trap']), default='all')
 def smoothing_interval(interval, rates_type):
     """Set rates smoothing interval """
-    counters_db = SonicV2Connector()
+    counters_db = SonicV2Connector(use_unix_socket_path=True)
     counters_db.connect('COUNTERS_DB')
 
     alpha = 2.0/(interval + 1)
@@ -10326,7 +10325,7 @@ def subinterface(ctx, namespace, redis_unix_socket_path):
     """subinterface-related configuration tasks"""
     if namespace is None:
         namespace = DEFAULT_NAMESPACE
-    kwargs = {'namespace': str(namespace)}
+    kwargs = {'namespace': str(namespace), 'use_unix_socket_path': True}
     if redis_unix_socket_path:
         kwargs['unix_socket_path'] = redis_unix_socket_path
         kwargs['use_unix_socket_path'] = True
@@ -10492,7 +10491,7 @@ def timezone(timezone):
         click.echo(f'Timezone {timezone} does not conform format')
         sys.exit(1)
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_DEVICE_METADATA_TABLE_NAME, 'localhost',
                         {'timezone': timezone})
@@ -10657,7 +10656,7 @@ def serial_console():
 def sysrq_capabilities(sysrq_capabilities):
     """Set serial console sysrq-capabilities state"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry("SERIAL_CONSOLE", 'POLICIES',
                         {'sysrq_capabilities': sysrq_capabilities})
@@ -10669,7 +10668,7 @@ def sysrq_capabilities(sysrq_capabilities):
 def inactivity_timeout_serial(inactivity_timeout):
     """Set serial console inactivity timeout"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry("SERIAL_CONSOLE", 'POLICIES',
                         {'inactivity_timeout': inactivity_timeout})
@@ -10690,7 +10689,7 @@ def ssh():
 def inactivity_timeout_ssh(inactivity_timeout):
     """Set ssh inactivity timeout"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry("SSH_SERVER", 'POLICIES',
                         {'inactivity_timeout': inactivity_timeout})
@@ -10702,7 +10701,7 @@ def inactivity_timeout_ssh(inactivity_timeout):
 def max_sessions(max_sessions):
     """Set max number of concurrent logins"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry("SSH_SERVER", 'POLICIES',
                         {'max_sessions': max_sessions})
@@ -10722,7 +10721,7 @@ def banner():
 def state(state):
     """Set banner feature state"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
                         {'state': state})
@@ -10733,7 +10732,7 @@ def state(state):
 def login(message):
     """Set login message"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
                         {'login': message})
@@ -10744,7 +10743,7 @@ def login(message):
 def logout(message):
     """Set logout message"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
                         {'logout': message})
@@ -10755,7 +10754,7 @@ def logout(message):
 def motd(message):
     """Set message of the day"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
                         {'motd': message})
