@@ -53,7 +53,7 @@ def get_bgp_peer():
         return {}
 
     bgp_peer = {}
-    config_db = swsscommon.ConfigDBConnector()
+    config_db = swsscommon.ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     data = config_db.get_table("BGP_NEIGHBOR")
 
