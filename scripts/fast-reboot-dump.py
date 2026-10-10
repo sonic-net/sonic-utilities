@@ -19,7 +19,7 @@ ARP_CHUNK = binascii.unhexlify('08060001080006040001') # defines a part of the p
 ARP_PAD = binascii.unhexlify('00' * 18)
 
 def generate_neighbor_entries(filename, all_available_macs):
-    db = SonicV2Connector(use_unix_socket_path=False)
+    db = SonicV2Connector(use_unix_socket_path=True)
     db.connect(db.APPL_DB, False)   # Make one attempt only
 
     arp_output = []
@@ -190,8 +190,8 @@ def get_fdb(db, vlan_name, vlan_id, bridge_id_2_iface):
     return fdb_entries, available_macs, map_mac_ip
 
 def generate_fdb_entries(filename):
-    asic_db = SonicV2Connector(use_unix_socket_path=False)
-    app_db = SonicV2Connector(use_unix_socket_path=False)
+    asic_db = SonicV2Connector(use_unix_socket_path=True)
+    app_db = SonicV2Connector(use_unix_socket_path=True)
     asic_db.connect(asic_db.ASIC_DB, False)   # Make one attempt only
     app_db.connect(app_db.APPL_DB, False)   # Make one attempt only
 
@@ -301,7 +301,7 @@ def get_default_entries(db, route):
     return obj
 
 def generate_default_route_entries(filename):
-    db = SonicV2Connector(unix_socket_path=False)
+    db = SonicV2Connector(use_unix_socket_path=True)
     db.connect(db.APPL_DB, False)   # Make one attempt only
 
     default_routes_output = []
@@ -320,7 +320,7 @@ def generate_default_route_entries(filename):
         json.dump(default_routes_output, fp, indent=2, separators=(',', ': '))
 
 def generate_media_config(filename):
-    db = SonicV2Connector(host='127.0.0.1')
+    db = SonicV2Connector(use_unix_socket_path=True)
     db.connect(db.APPL_DB, False)   # Make one attempt only
     media_config= []
     port_serdes_keys = ["preemphasis", "idriver", "ipredriver", "pre1", "pre2", "pre3", "main", "post1", "post2", "post3","attn"]
