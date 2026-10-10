@@ -5,7 +5,7 @@ import click
 import netifaces
 from natsort import natsorted
 from sonic_py_common import multi_asic, device_info
-from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
+from swsscommon import swsscommon
 from utilities_common import constants
 from utilities_common.general import load_db_config
 
@@ -200,7 +200,7 @@ def run_on_multi_asic(func=None, use_unix_socket_path=False, db_names=()):
                 self.multi_asic.current_namespace = ns
 
                 if use_unix_socket_path:
-                    self.config_db = ConfigDBConnector(
+                    self.config_db = swsscommon.ConfigDBConnector(
                         use_unix_socket_path=True,
                         namespace=ns
                     )
@@ -208,7 +208,7 @@ def run_on_multi_asic(func=None, use_unix_socket_path=False, db_names=()):
 
                     self.db = None
                     if db_names:
-                        self.db = SonicV2Connector(
+                        self.db = swsscommon.SonicV2Connector(
                             use_unix_socket_path=True,
                             namespace=ns
                         )
