@@ -9402,6 +9402,8 @@ This command displays LLR profile configuration from APPL_DB. Optionally specify
 
 This command displays LLR counter statistics (summary view). Use `-i` to filter by interface.
 
+The `STATUS` column shows the user-configured LLR admin state (Enable/Disable, derived from `llr_local`/`llr_remote`). The `HW Status` column shows the operational LLR state reported by hardware (the `SAI_PORT_ATTR_LLR_TX/RX_STATUS` enum with its prefix stripped, e.g. `OFF`, `INIT`, `ADVANCE`, `REPLAY`, `FLUSH` for TX and `OFF`, `SEND_ACKS`, `SEND_NACK`, `NACK_SENT` for RX). `HW Status` shows `N/A` when the LLR flex-counter group is not polling the status (feature disabled or unsupported on the platform).
+
 - Usage:
   ```
   show llr counters [-i <interface-name>]
@@ -9411,18 +9413,18 @@ This command displays LLR counter statistics (summary view). Use `-i` to filter 
   ```
   admin@sonic:~$ show llr counters -i Ethernet0
 
-  Port Rx    STATUS   RX_INIT  RX_INIT_ECHO    RX_ACK     RX_NACK      RX_OK      RX_BAD        RX_POISONED    RX_REPLAY
-  ---------  -------  -------  ------------    ------     -------      -----      ------        -----------    ---------
-  Ethernet0  Enable         1             1     15000           0      35000         0                  0            0
+  Port Rx    STATUS   HW Status   RX_INIT  RX_INIT_ECHO    RX_ACK     RX_NACK      RX_OK      RX_BAD        RX_POISONED    RX_REPLAY
+  ---------  -------  ----------  -------  ------------    ------     -------      -----      ------        -----------    ---------
+  Ethernet0  Enable   SEND_ACKS        1             1     15000           0      35000         0                  0            0
 
-  Port Tx    STATUS   TX_INIT  TX_INIT_ECHO    TX_ACK     TX_NACK      TX_OK      TX_DISCARD    TX_POISONED    TX_REPLAY
-  ---------  -------  -------  ------------    ------     -------      -----      ----------    -----------    ---------
-  Ethernet0  Enable         1             1     15000           0      35000           0              0            0
+  Port Tx    STATUS   HW Status   TX_INIT  TX_INIT_ECHO    TX_ACK     TX_NACK      TX_OK      TX_DISCARD    TX_POISONED    TX_REPLAY
+  ---------  -------  ----------  -------  ------------    ------     -------      -----      ----------    -----------    ---------
+  Ethernet0  Enable   ADVANCE          1             1     15000           0      35000           0              0            0
   ```
 
 **show llr counters detailed**
 
-This command displays detailed LLR counter statistics per port, including all RX/TX counters. Optionally specify an interface name.
+This command displays detailed LLR counter statistics per port, including all RX/TX counters. It also shows the operational LLR TX/RX hardware status at the top of each port's section. Optionally specify an interface name.
 
 - Usage:
   ```
@@ -9435,6 +9437,9 @@ This command displays detailed LLR counter statistics per port, including all RX
 
   LLR Counters - Ethernet0
   -----------------------
+  LLR TX HW Status ............................................. ADVANCE
+  LLR RX HW Status ............................................. SEND_ACKS
+
   LLR_INIT      CtrlOS Transmitted ............................. 1
   LLR_INIT_ECHO CtrlOS Transmitted ............................. 1
   LLR_ACK       CtrlOS Transmitted ............................. 35000
