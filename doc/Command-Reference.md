@@ -37,6 +37,7 @@
   * [ASIC SDK health event clear commands](#asic-sdk-health-event-clear-commands)
 * [BMC](#bmc)
   * [BMC config commands](#bmc-config-commands)
+  * [BMC chassis module commands](#bmc-chassis-module-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
 * [BGP](#bgp)
@@ -3063,6 +3064,43 @@ This command resets the BMC root password to default
   admin@sonic:~$ sudo config bmc reset-root-password
   BMC root password reset successful
   ```
+
+### BMC chassis module commands
+
+**config chassis modules shutdown-timeout**
+
+Set the switch-host graceful shutdown/restart timeout in seconds. The default
+is 120; 0 skips the graceful wait and requests forced power-off. Existing
+configured values are preserved. The command accepts nonnegative integers
+without an upper limit, but a larger value is not necessarily safe: the
+deployment must allow power removal before the host watchdog expires and
+within the reboot backend's wait.
+
+- Usage:
+  ```bash
+  config chassis modules shutdown-timeout SWITCH-HOST <seconds>
+  ```
+
+**show chassis modules status**
+
+On a BMC, this command appends `Result` and `Request-Id` after the existing
+`Shutdown-Timeout (sec)` column. For a `SWITCH-HOST` row, they show the most
+recent operation result and request ID from `HOST_STATE|switch-host`; a
+missing value is shown as `-`. Other module types show `N/A` in these two
+columns. Non-BMC output is unchanged.
+
+- Usage:
+  ```bash
+  show chassis modules status [<module_name>]
+  ```
+
+`GRACEFUL_RESTART` has no CLI command. Its CLI equivalent is to shut down the
+switch host and then start it again:
+
+```bash
+config chassis modules shutdown SWITCH-HOST
+config chassis modules startup SWITCH-HOST
+```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bmc)
 
