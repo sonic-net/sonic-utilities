@@ -1,0 +1,7 @@
+[Unit]
+Description=SONiC Redis read broker
+Wants=sonic-redis-read-broker@default.service
+After=config-setup.service database.service
+
+[Install]
+WantedBy=multi-user.target

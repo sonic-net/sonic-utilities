@@ -27,6 +27,7 @@ sonic-utilities-data/debian/*
 !sonic-utilities-data/debian/copyright
 !sonic-utilities-data/debian/install
 !sonic-utilities-data/debian/rules
+!sonic-utilities-data/debian/sonic-utilities-data.sonic-redis-read-broker.target
 sonic-utilities-data_*.deb
 sonic-utilities-data_*.buildinfo
 sonic-utilities-data_*.changes

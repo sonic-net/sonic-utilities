@@ -1,9 +1,16 @@
+import os
 import sys
 import click
 from natsort import natsorted
+from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from tabulate import tabulate
 
 from utilities_common.cli import AbbreviationGroup, pass_db
+from utilities_common.db import LazyDb
+from utilities_common.redis_read_broker import (
+    BrokerConfigDBConnector,
+    BrokerSonicV2Connector,
+)
 
 #
 # 'feature' group (show feature ...)
@@ -34,6 +41,28 @@ def make_body(names, lst_data, fields, fields_info):
     return body
 
 
+def _connect_config_db(db=None):
+    if db is not None and not isinstance(db, LazyDb):
+        return db.cfgdb
+    if os.geteuid() == 0:
+        config_db = ConfigDBConnector(use_unix_socket_path=True)
+    else:
+        config_db = BrokerConfigDBConnector(instance="default")
+    config_db.connect()
+    return config_db
+
+
+def _connect_state_db(db=None):
+    if db is not None and not isinstance(db, LazyDb):
+        return db.db
+    if os.geteuid() == 0:
+        state_db = SonicV2Connector(use_unix_socket_path=True)
+    else:
+        state_db = BrokerSonicV2Connector(instance="default")
+    state_db.connect(state_db.STATE_DB)
+    return state_db
+
+
 #
 # 'status' subcommand (show feature status)
 #
@@ -53,8 +82,8 @@ def feature_status(db, feature_name):
             ('RemoteState', "remote_state", "")
             ]
 
-    cfg_table = db.cfgdb.get_table('FEATURE')
-    dbconn = db.db
+    cfg_table = _connect_config_db(db).get_table('FEATURE')
+    dbconn = _connect_state_db(db)
     keys = dbconn.keys(dbconn.STATE_DB, "FEATURE|*")
     ordered_data = []
     fields = set()
@@ -119,7 +148,7 @@ def feature_config(db, feature_name):
 
     update_list = { "no_fallback_to_local" : _negate_bool_str }
 
-    cfg_table = db.cfgdb.get_table('FEATURE')
+    cfg_table = _connect_config_db(db).get_table('FEATURE')
     ordered_data = []
     names = []
     fields = set()
@@ -153,7 +182,7 @@ def feature_config(db, feature_name):
 def feature_autorestart(db, feature_name):
     header = ['Feature', 'AutoRestart']
     body = []
-    feature_table = db.cfgdb.get_table('FEATURE')
+    feature_table = _connect_config_db(db).get_table('FEATURE')
     if feature_name:
         if feature_table and feature_name in feature_table:
             body.append([feature_name, feature_table[ feature_name ].get('auto_restart', 'unknown')])
