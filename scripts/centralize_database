@@ -7,39 +7,80 @@ import redis
 import argparse
 import os
 
+
+SCAN_BATCH_SIZE = 7000
+
+
+def copy_database(source, target):
+    cursor = 0
+    while True:
+        cursor, keys = source.scan(cursor=cursor, count=SCAN_BATCH_SIZE)
+        if keys:
+            # Read each value, its expiry, and the Redis server time in one
+            # transaction.  RESTORE with ABSTTL then preserves the original
+            # absolute expiry across the socket-to-socket copy.
+            source_pipeline = source.pipeline()
+            for key in keys:
+                source_pipeline.dump(key)
+                source_pipeline.pttl(key)
+                source_pipeline.execute_command('TIME')
+            values = source_pipeline.execute()
+
+            target_pipeline = target.pipeline()
+            restore_count = 0
+            for index, key in enumerate(keys):
+                value = values[index * 3]
+                ttl = values[index * 3 + 1]
+                source_time = values[index * 3 + 2]
+                if value is None or ttl == -2:
+                    continue
+                if ttl < 0:
+                    target_pipeline.execute_command(
+                        'RESTORE', key, 0, value, 'REPLACE')
+                else:
+                    source_time_ms = (
+                        int(source_time[0]) * 1000 +
+                        int(source_time[1]) // 1000
+                    )
+                    absolute_expiry_ms = source_time_ms + ttl
+                    target_pipeline.execute_command(
+                        'RESTORE', key, absolute_expiry_ms, value,
+                        'REPLACE', 'ABSTTL')
+                restore_count += 1
+
+            if restore_count:
+                target_pipeline.execute()
+
+        if cursor == 0:
+            break
+
+
 def centralize_to_target_db(target_dbname, namespace):
     if multi_asic.is_multi_asic():
         SonicDBConfig.initializeGlobalConfig()
     key = SonicDBKey(namespace)
-    target_dbport = SonicDBConfig.getDbPort(target_dbname, key)
-    target_dbhost = SonicDBConfig.getDbHostname(target_dbname, key)
+    target_dbsocket = SonicDBConfig.getDbSock(target_dbname, key)
+    if not target_dbsocket:
+        raise RuntimeError("No Unix socket configured for {}".format(target_dbname))
 
     dblists = SonicDBConfig.getDbList(key)
     for dbname in dblists:
-        dbport = SonicDBConfig.getDbPort(dbname, key)
-        dbhost = SonicDBConfig.getDbHostname(dbname, key)
-        # if the db is on the same instance, no need to move
-        if dbport == target_dbport and dbhost == target_dbhost:
+        dbsocket = SonicDBConfig.getDbSock(dbname, key)
+        if not dbsocket:
+            raise RuntimeError("No Unix socket configured for {}".format(dbname))
+        # If the DB is already on the target instance, no copy is needed.
+        if dbsocket == target_dbsocket:
             continue
 
-        dbsocket = SonicDBConfig.getDbSock(dbname, key)
         dbid = SonicDBConfig.getDbId(dbname, key)
 
-        r = redis.Redis(host=dbhost, unix_socket_path=dbsocket, db=dbid)
-
-        script = """
-            local cursor = 0;
-            repeat
-                local  dat = redis.call('SCAN', cursor, 'COUNT', 7000);
-                     cursor = dat[1];
-                redis.call('MIGRATE', KEYS[1], KEYS[2], '', KEYS[3], 5000, 'COPY', 'REPLACE', 'KEYS', unpack(dat[2]));
-            until cursor == '0';
-        """
-        r.eval(script, 3, target_dbhost, target_dbport, dbid)
+        source = redis.Redis(unix_socket_path=dbsocket, db=dbid)
+        target = redis.Redis(unix_socket_path=target_dbsocket, db=dbid)
+        copy_database(source, target)
 
     #SAVE rdb file
-    r = redis.Redis(host=target_dbhost, port=target_dbport)
-    r.save()
+    target = redis.Redis(unix_socket_path=target_dbsocket)
+    target.save()
 
 def main():
     parser = argparse.ArgumentParser(description='centralize all db data into one db instances',
