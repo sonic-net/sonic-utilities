@@ -76,7 +76,10 @@ class TestFastRebootFilterRoutes(object):
                                return_value=db) as mock_config_db:
             output = fast_reboot_filter_routes.generate_default_route_entries("asic0")
 
-        mock_config_db.assert_called_once_with(namespace="asic0")
+        mock_config_db.assert_called_once_with(
+            use_unix_socket_path=True,
+            namespace="asic0"
+        )
         db.db_connect.assert_called_once_with("APPL_DB")
         assert output == ["0.0.0.0/0", "::/0"]
 
@@ -94,7 +97,10 @@ class TestFastRebootFilterRoutes(object):
                                return_value=db) as mock_config_db:
             fast_reboot_filter_routes.filter_routes("asic0", {"0.0.0.0/0", "10.0.0.0/24"})
 
-        mock_config_db.assert_called_once_with(namespace="asic0")
+        mock_config_db.assert_called_once_with(
+            use_unix_socket_path=True,
+            namespace="asic0"
+        )
         db.db_connect.assert_called_once_with("APPL_DB")
         db.delete.assert_called_once_with("APPL_DB", "ROUTE_TABLE:192.0.2.0/24")
 
