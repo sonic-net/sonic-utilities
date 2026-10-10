@@ -14,8 +14,14 @@ GROUP_TYPE_CHOICES = ("PORT", "BUFFER_POOL", "INGRESS_PRIORITY_GROUP", "QUEUE")
 
 PROFILE_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_PROFILE"
 GROUP_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_GROUP"
+AGGREGATOR_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR"
+AGGREGATOR_HISTOGRAM_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM"
+AGGREGATOR_ROLLOVER_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER"
 PROFILE_TABLE_PATH = f"/{PROFILE_TABLE_NAME}"
 GROUP_TABLE_PATH = f"/{GROUP_TABLE_NAME}"
+AGGREGATOR_TABLE_PATH = f"/{AGGREGATOR_TABLE_NAME}"
+AGGREGATOR_HISTOGRAM_TABLE_PATH = f"/{AGGREGATOR_HISTOGRAM_TABLE_NAME}"
+AGGREGATOR_ROLLOVER_TABLE_PATH = f"/{AGGREGATOR_ROLLOVER_TABLE_NAME}"
 STREAM_STATE_FIELD = "stream_state"
 
 
@@ -42,6 +48,26 @@ def hft_disable(ctx, profile_name):
     _process_payload(ctx, payload)
 
 
+@hft.command('bind-aggregator', short_help="Bind an aggregator to an HFT profile")
+@click.argument('profile_name')
+@click.argument('aggregator_name')
+@click.pass_context
+def hft_bind_aggregator(ctx, profile_name, aggregator_name):
+    """Bind an existing aggregator to an HFT profile."""
+    _validate_aggregator_name(aggregator_name)
+    payload = _build_profile_field_patch(profile_name, "aggregator", aggregator_name)
+    _process_payload(ctx, payload)
+
+
+@hft.command('unbind-aggregator', short_help="Unbind the aggregator from an HFT profile")
+@click.argument('profile_name')
+@click.pass_context
+def hft_unbind_aggregator(ctx, profile_name):
+    """Remove the aggregator binding from an HFT profile."""
+    payload = _build_profile_field_remove_patch(profile_name, "aggregator")
+    _process_payload(ctx, payload)
+
+
 @hft.group('add', short_help="Add HFT resources")
 def hft_add():
     """Group of add operations for HFT."""
@@ -53,25 +79,33 @@ def hft_add():
               type=click.Choice(STREAM_STATE_CHOICES), show_default=True,
               help='Desired stream state for this profile.')
 @click.option('--poll_interval', 'poll_interval', default=DEFAULT_POLL_INTERVAL_USEC,
-              type=click.IntRange(min=0), show_default=True,
+              type=click.IntRange(min=1, max=2**32 - 1), show_default=True,
               help='Polling interval in microseconds.')
+@click.option('--aggregator', 'aggregator', default=None,
+              help='Optional aggregator name to apply to this profile.')
 @click.pass_context
-def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
+def hft_add_profile(ctx, profile_name, stream_state, poll_interval, aggregator):
     """Create a profile entry for HFT."""
-    if _has_existing_profile(ctx):
+    if aggregator is not None:
+        _validate_aggregator_name(aggregator, '--aggregator')
+    if _get_table_or_fail(ctx, PROFILE_TABLE_NAME):
         click.echo(
             "A profile already exists; this version supports only one profile. "
             "Delete the existing profile before adding another."
         )
         ctx.exit(1)
 
+    attributes = {
+        "stream_state": stream_state,
+        "poll_interval": str(poll_interval),
+    }
+    if aggregator:
+        attributes["aggregator"] = aggregator
+
     profile_payload = _build_profile_patch(
         op="add",
         profile_name=profile_name,
-        attributes={
-            "stream_state": stream_state,
-            "poll_interval": str(poll_interval),
-        }
+        attributes=attributes
     )
     _process_payload(ctx, profile_payload)
 
@@ -87,16 +121,120 @@ def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
 @click.pass_context
 def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
     """Create a group definition under an HFT profile."""
+    group_entries = _get_table_or_fail(ctx, GROUP_TABLE_NAME)
     group_payload = _build_group_patch(
         op="add",
         profile_name=profile_name,
         group_type=group_type,
+        table_exists=bool(group_entries),
         attributes={
             "object_names": _split_csv_items(object_names),
             "object_counters": _split_csv_items(object_counters),
         }
     )
     _process_payload(ctx, group_payload)
+
+
+@hft_add.command('aggregator', short_help="Add an HFT aggregator")
+@click.argument('aggregator_name')
+@click.option('--reporting_rate', 'reporting_rate', default=None,
+              type=click.IntRange(min=1, max=2**32 - 1),
+              help='Reporting interval after aggregation in microseconds.')
+@click.option('--rollover_counters', 'rollover_counters', default=None,
+              help='Comma-separated list of GROUP|COUNTER entries requiring rollover correction.')
+@click.option('--heatmap_interval', 'heatmap_interval', default=None,
+              type=click.IntRange(min=1, max=2**32 - 1),
+              help='Independent heatmap interval in microseconds.')
+@click.option('--heatmap_counters', 'heatmap_counters', default=None,
+              help='Comma-separated list of GROUP|COUNTER entries treated as heatmap data.')
+@click.pass_context
+def hft_add_aggregator(ctx, aggregator_name, reporting_rate, rollover_counters,
+                       heatmap_interval, heatmap_counters):
+    """Create an aggregator definition for HFT."""
+    _validate_aggregator_name(aggregator_name)
+    aggregator_entries = _get_table_or_fail(ctx, AGGREGATOR_TABLE_NAME)
+    if aggregator_name in {_stringify_composite_key(key) for key in aggregator_entries}:
+        raise click.ClickException(
+            "Aggregator '{}' already exists.".format(aggregator_name)
+        )
+    heatmap_counters = (
+        None if heatmap_counters is None else _split_csv_items(heatmap_counters)
+    )
+    if heatmap_counters is not None and not heatmap_counters:
+        raise click.BadParameter(
+            'must contain at least one GROUP|COUNTER entry',
+            param_hint='--heatmap_counters'
+        )
+    if (heatmap_interval is None) != (heatmap_counters is None):
+        raise click.UsageError(
+            '--heatmap_interval and nonempty --heatmap_counters must be configured together.'
+        )
+
+    attributes = {}
+    if reporting_rate is not None:
+        attributes["reporting_rate"] = str(reporting_rate)
+    if rollover_counters is not None:
+        attributes["rollover_counters"] = _split_csv_items(rollover_counters)
+    if heatmap_interval is not None:
+        attributes["heatmap_interval"] = str(heatmap_interval)
+        attributes["heatmap_counters"] = heatmap_counters
+
+    aggregator_payload = _build_aggregator_patch(
+        op="add",
+        aggregator_name=aggregator_name,
+        table_exists=bool(aggregator_entries),
+        attributes=attributes
+    )
+    _process_payload(ctx, aggregator_payload)
+
+
+@hft_add.command('histogram', short_help="Add per-counter HFT histogram bounds")
+@click.argument('aggregator_name')
+@click.option('--counter', 'counter', required=True,
+              help='Heatmap counter selector in GROUP|COUNTER form.')
+@click.option('--explicit_bounds', 'explicit_bounds', required=True,
+              help='Comma-separated histogram upper bounds in raw counter units: '
+                   '1..511 strictly increasing values, each in 0..2^53 inclusive.')
+@click.pass_context
+def hft_add_histogram(ctx, aggregator_name, counter, explicit_bounds):
+    """Create explicit histogram bounds for one aggregator counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, '--counter')
+    bounds = _parse_explicit_bounds(explicit_bounds)
+    histogram_entries = _get_table_or_fail(ctx, AGGREGATOR_HISTOGRAM_TABLE_NAME)
+    histogram_payload = _build_histogram_patch(
+        op="add",
+        aggregator_name=aggregator_name,
+        group_type=group_type,
+        counter_name=counter_name,
+        table_exists=bool(histogram_entries),
+        attributes={"explicit_bounds": [str(boundary) for boundary in bounds]}
+    )
+    _process_payload(ctx, histogram_payload)
+
+
+@hft_add.command('rollover', short_help="Add an HFT rollover counter bit width")
+@click.argument('aggregator_name')
+@click.option('--counter', 'counter', required=True,
+              help='Rollover counter selector in GROUP|COUNTER form.')
+@click.option('--bit_width', 'bit_width', required=True,
+              type=click.IntRange(min=1, max=63),
+              help='Counter bit width used for rollover correction.')
+@click.pass_context
+def hft_add_rollover(ctx, aggregator_name, counter, bit_width):
+    """Create a bit-width override for one aggregator rollover counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, '--counter')
+    rollover_entries = _get_table_or_fail(ctx, AGGREGATOR_ROLLOVER_TABLE_NAME)
+    rollover_payload = _build_rollover_patch(
+        op="add",
+        aggregator_name=aggregator_name,
+        group_type=group_type,
+        counter_name=counter_name,
+        table_exists=bool(rollover_entries),
+        attributes={"bit_width": str(bit_width)}
+    )
+    _process_payload(ctx, rollover_payload)
 
 
 @hft.group('del', short_help="Remove HFT resources")
@@ -123,6 +261,108 @@ def hft_delete_group(ctx, profile_name, group_type):
     remove_entire_table = _is_last_entry(ctx, GROUP_TABLE_NAME)
     group_payload = _build_group_remove_patch(profile_name, group_type, remove_entire_table)
     _process_payload(ctx, group_payload)
+
+
+@hft_delete.command('aggregator', short_help="Delete an HFT aggregator")
+@click.argument('aggregator_name')
+@click.pass_context
+def hft_delete_aggregator(ctx, aggregator_name):
+    """Remove an existing HFT aggregator."""
+    _validate_aggregator_name(aggregator_name)
+    profile_users = _get_aggregator_users(ctx, aggregator_name)
+    if profile_users:
+        click.echo(
+            "Cannot delete aggregator '{}'; it is still referenced by HFT profile(s): {}".format(
+                aggregator_name,
+                ', '.join(profile_users)
+            )
+        )
+        ctx.exit(1)
+
+    if not _has_table_entry(ctx, AGGREGATOR_TABLE_NAME, aggregator_name):
+        click.echo("Aggregator '{}' does not exist.".format(aggregator_name))
+        ctx.exit(1)
+
+    remove_entire_table = _is_last_entry(ctx, AGGREGATOR_TABLE_NAME)
+    aggregator_payload = []
+    for table_name, table_path in (
+        (AGGREGATOR_HISTOGRAM_TABLE_NAME, AGGREGATOR_HISTOGRAM_TABLE_PATH),
+        (AGGREGATOR_ROLLOVER_TABLE_NAME, AGGREGATOR_ROLLOVER_TABLE_PATH),
+    ):
+        aggregator_payload.extend(
+            _build_counter_children_remove_patch(
+                ctx,
+                aggregator_name,
+                table_name,
+                table_path
+            )
+        )
+    aggregator_payload.extend(
+        _build_aggregator_remove_patch(aggregator_name, remove_entire_table)
+    )
+    _process_payload(ctx, aggregator_payload)
+
+
+@hft_delete.command('histogram', short_help="Delete per-counter HFT histogram bounds")
+@click.argument('aggregator_name')
+@click.argument('counter')
+@click.pass_context
+def hft_delete_histogram(ctx, aggregator_name, counter):
+    """Remove explicit histogram bounds for one aggregator counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, 'counter')
+    histogram_key = _compose_histogram_key(
+        aggregator_name,
+        group_type,
+        counter_name
+    )
+    histogram_keys = _get_normalized_table_keys(
+        ctx,
+        AGGREGATOR_HISTOGRAM_TABLE_NAME
+    )
+    if histogram_key not in histogram_keys:
+        click.echo("Histogram '{}' does not exist.".format(histogram_key))
+        ctx.exit(1)
+
+    remove_entire_table = len(histogram_keys) == 1
+    histogram_payload = _build_histogram_remove_patch(
+        aggregator_name,
+        group_type,
+        counter_name,
+        remove_entire_table
+    )
+    _process_payload(ctx, histogram_payload)
+
+
+@hft_delete.command('rollover', short_help="Delete an HFT rollover counter bit width")
+@click.argument('aggregator_name')
+@click.argument('counter')
+@click.pass_context
+def hft_delete_rollover(ctx, aggregator_name, counter):
+    """Remove a bit-width override for one aggregator rollover counter."""
+    _validate_aggregator_name(aggregator_name)
+    group_type, counter_name = _parse_counter_selector(counter, 'counter')
+    rollover_key = _compose_rollover_key(
+        aggregator_name,
+        group_type,
+        counter_name
+    )
+    rollover_keys = _get_normalized_table_keys(
+        ctx,
+        AGGREGATOR_ROLLOVER_TABLE_NAME
+    )
+    if rollover_key not in rollover_keys:
+        click.echo("Rollover '{}' does not exist.".format(rollover_key))
+        ctx.exit(1)
+
+    remove_entire_table = len(rollover_keys) == 1
+    rollover_payload = _build_rollover_remove_patch(
+        aggregator_name,
+        group_type,
+        counter_name,
+        remove_entire_table
+    )
+    _process_payload(ctx, rollover_payload)
 
 
 def _process_payload(ctx, payload):
@@ -170,6 +410,79 @@ def _split_csv_items(value):
     return [item.strip() for item in value.split(',') if item.strip()]
 
 
+def _validate_aggregator_name(aggregator_name, param_hint='aggregator_name'):
+    """Reject names that cannot be represented in a child composite key."""
+    if aggregator_name != aggregator_name.strip():
+        raise click.BadParameter(
+            'must not have leading or trailing whitespace',
+            param_hint=param_hint
+        )
+    if not aggregator_name:
+        raise click.BadParameter('must be nonempty', param_hint=param_hint)
+    if '|' in aggregator_name:
+        raise click.BadParameter(
+            "must not contain '|'",
+            param_hint=param_hint
+        )
+
+
+def _parse_counter_selector(value, param_hint):
+    """Parse a GROUP|COUNTER selector without validating the SAI counter name."""
+    parts = value.split('|') if value is not None else []
+    if len(parts) != 2:
+        raise click.BadParameter(
+            'must use GROUP|COUNTER format',
+            param_hint=param_hint
+        )
+
+    group_type, counter_name = (part.strip() for part in parts)
+    if group_type not in GROUP_TYPE_CHOICES:
+        raise click.BadParameter(
+            'GROUP must be one of {}'.format(', '.join(GROUP_TYPE_CHOICES)),
+            param_hint=param_hint
+        )
+    if not counter_name:
+        raise click.BadParameter(
+            'COUNTER must be nonempty',
+            param_hint=param_hint
+        )
+    return group_type, counter_name
+
+
+def _parse_explicit_bounds(value):
+    """Parse 1..511 strictly increasing decimal bounds in the exact OTLP range."""
+    items = [item.strip() for item in value.split(',')]
+    if not 1 <= len(items) <= 511:
+        raise click.BadParameter(
+            'must contain between 1 and 511 values',
+            param_hint='--explicit_bounds'
+        )
+    if any(not item or not item.isascii() or not item.isdigit() for item in items):
+        raise click.BadParameter(
+            'must be a comma-separated list of uint64 decimal values',
+            param_hint='--explicit_bounds'
+        )
+
+    try:
+        bounds = [int(item, 10) for item in items]
+    except ValueError as error:
+        raise click.BadParameter(
+            'must be a comma-separated list of uint64 decimal values',
+            param_hint='--explicit_bounds'
+        ) from error
+    if any(boundary > 2**53 for boundary in bounds):
+        raise click.BadParameter(
+            'values must be between 0 and 2^53 for exact OTLP encoding',
+            param_hint='--explicit_bounds'
+        )
+    if any(left >= right for left, right in zip(bounds, bounds[1:])):
+        raise click.BadParameter(
+            'values must be strictly increasing',
+            param_hint='--explicit_bounds'
+        )
+    return bounds
+
+
 def _build_profile_patch(op, profile_name, attributes):
     """Construct a JSON Patch entry targeting the profile table."""
     return [
@@ -179,28 +492,102 @@ def _build_profile_patch(op, profile_name, attributes):
     ]
 
 
-def _build_group_patch(op, profile_name, group_type, attributes):
+def _build_group_patch(op, profile_name, group_type, attributes, table_exists=False):
     """Construct a JSON Patch entry targeting the group table."""
+    group_key = _compose_group_key(profile_name, group_type)
+    if table_exists:
+        return [
+            _build_patch_entry(op, _join_pointer(GROUP_TABLE_PATH, group_key), attributes)
+        ]
     return [
         _build_patch_entry(op, GROUP_TABLE_PATH, {
-            _compose_group_key(profile_name, group_type): attributes
+            group_key: attributes
+        })
+    ]
+
+
+def _build_aggregator_patch(op, aggregator_name, attributes, table_exists=False):
+    """Construct a JSON Patch entry targeting the aggregator table."""
+    if table_exists:
+        return [
+            _build_patch_entry(
+                op,
+                _join_pointer(AGGREGATOR_TABLE_PATH, aggregator_name),
+                attributes
+            )
+        ]
+    return [
+        _build_patch_entry(op, AGGREGATOR_TABLE_PATH, {
+            aggregator_name: attributes
+        })
+    ]
+
+
+def _build_histogram_patch(op, aggregator_name, group_type, counter_name,
+                           attributes, table_exists=False):
+    """Construct a JSON Patch entry targeting the aggregator histogram table."""
+    histogram_key = _compose_histogram_key(aggregator_name, group_type, counter_name)
+    if table_exists:
+        return [
+            _build_patch_entry(
+                op,
+                _join_pointer(AGGREGATOR_HISTOGRAM_TABLE_PATH, histogram_key),
+                attributes
+            )
+        ]
+    return [
+        _build_patch_entry(op, AGGREGATOR_HISTOGRAM_TABLE_PATH, {
+            histogram_key: attributes
+        })
+    ]
+
+
+def _build_rollover_patch(op, aggregator_name, group_type, counter_name,
+                          attributes, table_exists=False):
+    """Construct a JSON Patch entry targeting the aggregator rollover table."""
+    rollover_key = _compose_rollover_key(aggregator_name, group_type, counter_name)
+    if table_exists:
+        return [
+            _build_patch_entry(
+                op,
+                _join_pointer(AGGREGATOR_ROLLOVER_TABLE_PATH, rollover_key),
+                attributes
+            )
+        ]
+    return [
+        _build_patch_entry(op, AGGREGATOR_ROLLOVER_TABLE_PATH, {
+            rollover_key: attributes
         })
     ]
 
 
 def _build_stream_state_patch(profile_name, state):
     """Construct a JSON Patch entry to update a profile stream state."""
+    return _build_profile_field_patch(profile_name, STREAM_STATE_FIELD, state)
+
+
+def _build_profile_field_patch(profile_name, field_name, value):
+    """Construct a JSON Patch entry to update a profile field."""
     path = _join_pointer(
         _join_pointer(PROFILE_TABLE_PATH, profile_name),
-        STREAM_STATE_FIELD
+        field_name
     )
     return [
         {
             "op": "add",
             "path": path,
-            "value": state,
+            "value": value,
         }
     ]
+
+
+def _build_profile_field_remove_patch(profile_name, field_name):
+    """Construct a JSON Patch entry to remove a profile field."""
+    path = _join_pointer(
+        _join_pointer(PROFILE_TABLE_PATH, profile_name),
+        field_name
+    )
+    return [_build_remove_entry(path)]
 
 
 def _build_profile_remove_patch(profile_name, remove_entire_table):
@@ -218,6 +605,56 @@ def _build_group_remove_patch(profile_name, group_type, remove_entire_table):
         _build_remove_entry(
             _join_pointer(GROUP_TABLE_PATH, _compose_group_key(profile_name, group_type))
         )
+    ]
+
+
+def _build_aggregator_remove_patch(aggregator_name, remove_entire_table):
+    """Create a remove operation for an aggregator or the entire table if requested."""
+    if remove_entire_table:
+        return [_build_remove_entry(AGGREGATOR_TABLE_PATH)]
+    return [_build_remove_entry(_join_pointer(AGGREGATOR_TABLE_PATH, aggregator_name))]
+
+
+def _build_histogram_remove_patch(aggregator_name, group_type, counter_name,
+                                  remove_entire_table):
+    """Create a remove operation for a histogram entry or its entire table."""
+    if remove_entire_table:
+        return [_build_remove_entry(AGGREGATOR_HISTOGRAM_TABLE_PATH)]
+    histogram_key = _compose_histogram_key(aggregator_name, group_type, counter_name)
+    return [
+        _build_remove_entry(
+            _join_pointer(AGGREGATOR_HISTOGRAM_TABLE_PATH, histogram_key)
+        )
+    ]
+
+
+def _build_rollover_remove_patch(aggregator_name, group_type, counter_name,
+                                 remove_entire_table):
+    """Create a remove operation for a rollover entry or its entire table."""
+    if remove_entire_table:
+        return [_build_remove_entry(AGGREGATOR_ROLLOVER_TABLE_PATH)]
+    rollover_key = _compose_rollover_key(aggregator_name, group_type, counter_name)
+    return [
+        _build_remove_entry(
+            _join_pointer(AGGREGATOR_ROLLOVER_TABLE_PATH, rollover_key)
+        )
+    ]
+
+
+def _build_counter_children_remove_patch(ctx, aggregator_name, table_name, table_path):
+    """Remove all rows in one counter child table owned by an aggregator."""
+    prefix = f"{aggregator_name}|"
+    all_child_keys = _get_normalized_table_keys(ctx, table_name)
+    child_keys = sorted(
+        key for key in all_child_keys if key.startswith(prefix)
+    )
+    if not child_keys:
+        return []
+    if len(child_keys) == len(all_child_keys):
+        return [_build_remove_entry(table_path)]
+    return [
+        _build_remove_entry(_join_pointer(table_path, key))
+        for key in child_keys
     ]
 
 
@@ -241,6 +678,23 @@ def _build_remove_entry(path):
 def _compose_group_key(profile_name, group_type):
     """Compose the key used by the HFT group table."""
     return f"{profile_name}|{group_type}"
+
+
+def _compose_histogram_key(aggregator_name, group_type, counter_name):
+    """Compose the key used by the aggregator histogram table."""
+    return f"{aggregator_name}|{group_type}|{counter_name}"
+
+
+def _compose_rollover_key(aggregator_name, group_type, counter_name):
+    """Compose the key used by the aggregator rollover table."""
+    return f"{aggregator_name}|{group_type}|{counter_name}"
+
+
+def _stringify_composite_key(key):
+    """Normalize Config DB tuple and string composite keys."""
+    if isinstance(key, (tuple, list)):
+        return '|'.join(str(component) for component in key)
+    return str(key)
 
 
 def _join_pointer(base_path, key):
@@ -275,13 +729,55 @@ def _get_cfgdb(ctx):
     return getattr(db, 'cfgdb', None)
 
 
-def _has_existing_profile(ctx):
-    """Return True when at least one HFT profile already exists."""
+def _get_table_or_fail(ctx, table_name):
+    """Read a Config DB table or fail before constructing a mutation."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return {}
+    try:
+        return cfgdb.get_table(table_name) or {}
+    except Exception as error:
+        raise click.ClickException(
+            "Failed to read Config DB table '{}': {}".format(table_name, error)
+        ) from error
+
+
+def _get_normalized_table_keys(ctx, table_name):
+    """Return Config DB table keys normalized to pipe-delimited strings."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return []
+    try:
+        entries = cfgdb.get_table(table_name) or {}
+    except Exception:
+        return []
+    return [_stringify_composite_key(key) for key in entries]
+
+
+def _has_table_entry(ctx, table_name, entry_name):
+    """Return True if the CFG table contains the requested entry."""
     cfgdb = _get_cfgdb(ctx)
     if cfgdb is None:
         return False
     try:
-        entries = cfgdb.get_table(PROFILE_TABLE_NAME) or {}
+        entries = cfgdb.get_table(table_name) or {}
     except Exception:
         return False
-    return bool(entries)
+    return entry_name in entries
+
+
+def _get_aggregator_users(ctx, aggregator_name):
+    """Return profile names that reference the given aggregator."""
+    cfgdb = _get_cfgdb(ctx)
+    if cfgdb is None:
+        return []
+    try:
+        profiles = cfgdb.get_table(PROFILE_TABLE_NAME) or {}
+    except Exception:
+        return []
+
+    users = []
+    for profile_name, attributes in profiles.items():
+        if isinstance(attributes, dict) and attributes.get('aggregator') == aggregator_name:
+            users.append(profile_name)
+    return sorted(users)

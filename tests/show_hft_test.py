@@ -29,11 +29,157 @@ def test_build_rows_with_mixed_profiles_and_groups():
     rows = show_hft._build_rows(profile_table, group_table)
 
     assert rows == [
-        ['profile2', 'disabled', '15', 'PORT', 'Ethernet0\nEthernet1', 'COUNTER0\nCOUNTER2'],
-        ['', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY'],
-        ['profile3', '-', '-', '-', '-', '-'],
-        ['profile10', 'enabled', '2,000', 'BUFFER_POOL', '-', '-']
+        [
+            'profile2', 'disabled', '15', '-', 'PORT', 'Ethernet0\nEthernet1',
+            'COUNTER0\nCOUNTER2', '-', '-', '-', '-', '-', '-'
+        ],
+        ['', '', '', '', 'QUEUE', '-', 'QUEUE_OCCUPANCY', '', '', '', '', '', ''],
+        ['profile3', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+        [
+            'profile10', 'enabled', '2,000', '-', 'BUFFER_POOL', '-', '-',
+            '-', '-', '-', '-', '-', '-'
+        ]
     ]
+
+
+def test_build_rows_with_aggregator_config():
+    profile_table = {
+        'profileA': {'stream_state': 'enabled', 'poll_interval': '1000', 'aggregator': 'ag0'}
+    }
+    group_table = {
+        'profileA|PORT': {
+            'object_names': ['Ethernet0'],
+            'object_counters': ['IF_IN_UCAST_PKTS']
+        }
+    }
+    aggregator_table = {
+        'ag0': {
+            'reporting_rate': '5000',
+            'rollover_counters': ['PORT|IF_IN_UCAST_PKTS', 'QUEUE|DROPPED_PACKETS'],
+            'heatmap_interval': '1000000',
+            'heatmap_counters': 'PORT|IF_OUT_OCTETS,QUEUE|WRED_ECN_MARKED_PACKETS'
+        }
+    }
+    histogram_table = {
+        'ag0|QUEUE|WRED_ECN_MARKED_PACKETS': {
+            'explicit_bounds': '["0", "64", "128"]'
+        },
+        ('ag0', 'PORT', 'IF_OUT_OCTETS'): {
+            'explicit_bounds': [0, 1250000, 2500000]
+        }
+    }
+
+    rows = show_hft._build_rows(
+        profile_table,
+        group_table,
+        aggregator_table,
+        histogram_table,
+        {
+            ('ag0', 'PORT', 'IF_IN_UCAST_PKTS'): {'bit_width': '40'},
+            'orphan|PORT|IF_OUT_OCTETS': {'bit_width': '24'}
+        }
+    )
+
+    assert rows == [[
+        'profileA',
+        'enabled',
+        '1,000',
+        'ag0',
+        'PORT',
+        'Ethernet0',
+        'IF_IN_UCAST_PKTS',
+        '5,000',
+        'PORT|IF_IN_UCAST_PKTS\nQUEUE|DROPPED_PACKETS',
+        'PORT|IF_IN_UCAST_PKTS: 40\nQUEUE|DROPPED_PACKETS: 32 (default)',
+        '1,000,000',
+        'PORT|IF_OUT_OCTETS\nQUEUE|WRED_ECN_MARKED_PACKETS',
+        'PORT|IF_OUT_OCTETS: 0,1250000,2500000\n'
+        'QUEUE|WRED_ECN_MARKED_PACKETS: 0,64,128'
+    ]]
+
+
+def test_build_rows_includes_unbound_aggregator_config():
+    rows = show_hft._build_rows(
+        {},
+        {},
+        {
+            'ag0': {
+                'reporting_rate': '5000',
+                'rollover_counters': ['PORT|IF_IN_UCAST_PKTS'],
+                'heatmap_interval': '1000000',
+                'heatmap_counters': ['PORT|IF_OUT_OCTETS']
+            }
+        },
+        {
+            'ag0|PORT|IF_OUT_OCTETS': {
+                'explicit_bounds': ['0', '1000']
+            }
+        },
+        {
+            'ag0|PORT|IF_IN_UCAST_PKTS': {'bit_width': 48}
+        }
+    )
+
+    assert rows == [[
+        '-',
+        '-',
+        '-',
+        'ag0',
+        '-',
+        '-',
+        '-',
+        '5,000',
+        'PORT|IF_IN_UCAST_PKTS',
+        'PORT|IF_IN_UCAST_PKTS: 48',
+        '1,000,000',
+        'PORT|IF_OUT_OCTETS',
+        'PORT|IF_OUT_OCTETS: 0,1000'
+    ]]
+
+
+def test_build_rows_shows_default_rollover_width():
+    rows = show_hft._build_rows(
+        {'profileA': {'aggregator': 'ag0'}},
+        {},
+        {'ag0': {'rollover_counters': ['QUEUE|PACKETS']}},
+        {},
+        {}
+    )
+
+    assert rows[0][8:10] == [
+        'QUEUE|PACKETS',
+        'QUEUE|PACKETS: 32 (default)'
+    ]
+
+
+def test_build_rows_supports_dash_aggregator_name():
+    rows = show_hft._build_rows(
+        {'profileA': {'aggregator': '-'}},
+        {},
+        {'-': {'rollover_counters': ['QUEUE|PACKETS']}},
+        {},
+        {'-|QUEUE|PACKETS': {'bit_width': '24'}}
+    )
+
+    assert rows[0][3] == '-'
+    assert rows[0][9] == 'QUEUE|PACKETS: 24'
+
+
+def test_build_rows_ignores_unbound_rollover_child_rows():
+    rows = show_hft._build_rows(
+        {},
+        {},
+        {'ag0': {'rollover_counters': ['PORT|IF_IN_OCTETS']}},
+        {},
+        {
+            'ag0|PORT|IF_OUT_OCTETS': {'bit_width': '24'},
+            'missing|PORT|IF_IN_OCTETS': {'bit_width': '16'}
+        }
+    )
+
+    assert rows[0][9] == 'PORT|IF_IN_OCTETS: 32 (default)'
+    assert 'IF_OUT_OCTETS' not in rows[0][9]
+    assert all(row[3] != 'missing' for row in rows)
 
 
 def test_format_poll_interval_variants():
@@ -93,8 +239,11 @@ def test_execute_streaming_command_exits_on_unhandled_return_code(monkeypatch):
 
 
 def test_display_hft_outputs_table(capsys):
+    requested_tables = []
+
     class MockCfgDb:
         def get_table(self, name):
+            requested_tables.append(name)
             if name == show_hft.PROFILE_TABLE:
                 return {
                     'p1': {'stream_state': 'enabled', 'poll_interval': '1000'}
@@ -106,6 +255,8 @@ def test_display_hft_outputs_table(capsys):
                         'object_counters': ['BYTES']
                     }
                 }
+            if name == show_hft.AGGREGATOR_TABLE:
+                return {}
             return {}
 
     class MockDb:
@@ -116,6 +267,10 @@ def test_display_hft_outputs_table(capsys):
     assert 'p1' in output
     assert 'Ethernet0' in output
     assert 'BYTES' in output
+    assert 'Rollover Bit Widths' in output
+    assert 'Per-counter Explicit Bounds' in output
+    assert show_hft.AGGREGATOR_HISTOGRAM_TABLE in requested_tables
+    assert show_hft.AGGREGATOR_ROLLOVER_TABLE in requested_tables
 
 
 def test_format_list_parses_json_array():
