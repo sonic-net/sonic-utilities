@@ -919,3 +919,107 @@ def test_mirror_session_erspan_add_with_valid_sample_rate_and_truncate():
         assert result.exit_code == 0
         mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2",
                                   8, 64, None, None, None, None, None, 50000, 128)
+
+
+def test_mirror_session_sflow_add():
+    runner = CliRunner()
+    cmd = config.config.commands["mirror_session"].commands["sflow"].commands["add"]
+
+    # Verify invalid IPv4 src_ip
+    result = runner.invoke(cmd, ["sflow0", "400.1.1.1", "2.2.2.2", "8", "64", "0", "Ethernet0",
+                                 "--sample_rate", "1000"])
+    assert result.exit_code != 0
+    assert ERR_MSG_IP_FAILURE in result.stdout
+
+    # Verify invalid IPv4 dst_ip
+    result = runner.invoke(cmd, ["sflow0", "1.1.1.1", "256.2.2.2", "8", "64", "0", "Ethernet0",
+                                 "--sample_rate", "1000"])
+    assert result.exit_code != 0
+    assert ERR_MSG_IP_FAILURE in result.stdout
+
+    # Verify a valid session is accepted
+    with mock.patch('config.main.add_sflow') as mocked:
+        result = runner.invoke(cmd, ["sflow0", "1.1.1.1", "2.2.2.2", "8", "64", "0", "Ethernet0",
+                                     "--sample_rate", "1000"])
+        assert result.exit_code == 0
+        mocked.assert_called_with("sflow0", "1.1.1.1", "2.2.2.2", 8, 64,
+                                  0, "Ethernet0", None, 1000, 0, None)
+
+    # Verify udp_dst_port is passed through when given
+    with mock.patch('config.main.add_sflow') as mocked:
+        result = runner.invoke(cmd, ["sflow0", "1.1.1.1", "2.2.2.2", "8", "64", "0", "Ethernet0",
+                                     "--sample_rate", "1000", "--udp_dst_port", "9999"])
+        assert result.exit_code == 0
+        mocked.assert_called_with("sflow0", "1.1.1.1", "2.2.2.2", 8, 64,
+                                  0, "Ethernet0", None, 1000, 0, 9999)
+
+
+def test_mirror_session_sflow_add_udp_dst_port_boundary():
+    runner = CliRunner()
+    cmd = config.config.commands["mirror_session"].commands["sflow"].commands["add"]
+    base = ["sflow0", "1.1.1.1", "2.2.2.2", "8", "64", "0", "Ethernet0", "--sample_rate", "1000"]
+
+    result = runner.invoke(cmd, base + ["--udp_dst_port", "65536"])
+    assert result.exit_code != 0
+    assert ERR_MSG_VALUE_FAILURE in result.output
+
+    with mock.patch('config.main.add_sflow') as _:
+        result = runner.invoke(cmd, base + ["--udp_dst_port", "65535"])
+        assert result.exit_code == 0
+
+
+def test_mirror_session_sflow_add_invalid_sample_rate():
+    runner = CliRunner()
+    cmd = config.config.commands["mirror_session"].commands["sflow"].commands["add"]
+    base = ["sflow0", "1.1.1.1", "2.2.2.2", "8", "64", "0", "Ethernet0"]
+
+    result = runner.invoke(cmd, base + ["--sample_rate", "1"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 2..4294967295' in result.output
+
+    result = runner.invoke(cmd, base + ["--sample_rate", "1000", "--truncate_size", "63"])
+    assert result.exit_code != 0
+    assert 'must be 0 or in range 64..9216' in result.output
+
+
+def test_mirror_session_sflow_add_rejects_what_mirrororch_rejects():
+    runner = CliRunner()
+    cmd = config.config.commands["mirror_session"].commands["sflow"].commands["add"]
+
+    # No source port
+    result = runner.invoke(cmd, ["sflow0", "1.1.1.1", "2.2.2.2", "8", "64", "--sample_rate", "1000"])
+    assert result.exit_code != 0
+    assert "src_port is required" in result.output
+
+    # No sample rate
+    result = runner.invoke(cmd, ["sflow0", "1.1.1.1", "2.2.2.2", "8", "64", "0", "Ethernet0"])
+    assert result.exit_code != 0
+    assert "--sample_rate is required" in result.output
+
+
+def test_add_sflow_writes_config_db():
+    config.ADHOC_VALIDATION = True
+    db = mock.MagicMock()
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+             mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
+             mock.patch("config.main.validate_mirror_session_config", return_value=True), \
+             mock.patch("config.main.normalize_mirror_src_port", side_effect=lambda _db, p: p):
+            config.add_sflow("sflow0", "10.1.1.1", "10.2.2.2", 8, 64,
+                             0, "Ethernet0", "rx", 1000, 128, 9999)
+
+    session_info = db.set_entry.call_args[0][2]
+    assert session_info["type"] == "SFLOW"
+    assert session_info["src_ip"] == "10.1.1.1"
+    assert session_info["dst_ip"] == "10.2.2.2"
+    assert "udp_src_port" not in session_info
+    assert session_info["udp_dst_port"] == 9999
+    assert session_info["dscp"] == 8
+    assert session_info["ttl"] == 64
+    assert session_info["src_port"] == "Ethernet0"
+    assert session_info["direction"] == "RX"
+    assert session_info["sample_rate"] == "1000"
+    assert session_info["truncate_size"] == "128"
+    assert "gre_type" not in session_info
+    assert "policer" not in session_info
