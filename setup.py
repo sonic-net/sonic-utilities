@@ -75,6 +75,7 @@ setup(
         'pddf_ledutil',
         'syslog_util',
         'rcli',
+        'secure_boot',
         'show',
         'show.interfaces',
         'show.plugins',
