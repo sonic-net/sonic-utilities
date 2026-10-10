@@ -287,6 +287,7 @@ setup(
         'pyfakefs',
         'responses',
         'pytest',
+        'pytest-cov',
         'mockredispy>=2.9.3',
         'deepdiff>=6.2.2'
     ],
@@ -295,6 +296,7 @@ setup(
             'pyfakefs',
             'responses',
             'pytest',
+            'pytest-cov',
             'pytest-xdist',
             'mockredispy>=2.9.3',
             'deepdiff>=6.2.2'
