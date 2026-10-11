@@ -90,6 +90,25 @@ class TestSyslog:
         assert result.exit_code == SUCCESS
 
     @mock.patch("utilities_common.cli.run_command", mock.MagicMock(return_value=None))
+    def test_config_syslog_add_duplicate(self):
+        db = Db()
+        runner = CliRunner()
+        server_ip = "7.7.7.7"
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            [server_ip, "--port", "5514"], obj=db
+        )
+        assert result.exit_code == SUCCESS
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            [server_ip, "--port", "5514"], obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "SYSLOG_SERVER|{} already exists in Config DB".format(server_ip) in result.output
+
+    @mock.patch("utilities_common.cli.run_command", mock.MagicMock(return_value=None))
     @mock.patch("config.syslog.exec_cmd", mock.MagicMock(side_effect=config_mock.exec_cmd_mock))
     @pytest.mark.parametrize("server_ip,source_ip,port,vrf", [
         ("2.2.2.2", "1.1.1.1", "514", "default"),
