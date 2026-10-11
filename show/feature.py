@@ -5,8 +5,7 @@ from natsort import natsorted
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from tabulate import tabulate
 
-from utilities_common.cli import AbbreviationGroup, pass_db
-from utilities_common.db import LazyDb
+from utilities_common.cli import AbbreviationGroup
 from utilities_common.redis_read_broker import (
     BrokerConfigDBConnector,
     BrokerSonicV2Connector,
@@ -42,7 +41,7 @@ def make_body(names, lst_data, fields, fields_info):
 
 
 def _connect_config_db(db=None):
-    if db is not None and not isinstance(db, LazyDb):
+    if db is not None:
         return db.cfgdb
     if os.geteuid() == 0:
         config_db = ConfigDBConnector(use_unix_socket_path=True)
@@ -53,7 +52,7 @@ def _connect_config_db(db=None):
 
 
 def _connect_state_db(db=None):
-    if db is not None and not isinstance(db, LazyDb):
+    if db is not None:
         return db.db
     if os.geteuid() == 0:
         state_db = SonicV2Connector(use_unix_socket_path=True)
@@ -68,7 +67,7 @@ def _connect_state_db(db=None):
 #
 @feature.command('status', short_help="Show feature state")
 @click.argument('feature_name', required=False)
-@pass_db
+@click.pass_obj
 def feature_status(db, feature_name):
     fields_info = [
             ('State', 'state', ""),
@@ -137,7 +136,7 @@ def _update_data(upd_lst, data):
 #
 @feature.command('config', short_help="Show feature config")
 @click.argument('feature_name', required=False)
-@pass_db
+@click.pass_obj
 def feature_config(db, feature_name):
     fields_info = [
             ('State', 'state', ""),
@@ -178,7 +177,7 @@ def feature_config(db, feature_name):
 #
 @feature.command('autorestart', short_help="Show auto-restart state for a feature")
 @click.argument('feature_name', required=False)
-@pass_db
+@click.pass_obj
 def feature_autorestart(db, feature_name):
     header = ['Feature', 'AutoRestart']
     body = []

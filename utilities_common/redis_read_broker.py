@@ -9,9 +9,7 @@ from swsscommon.swsscommon import ConfigDBConnector, DBConnector, SonicDBConfig
 from redis_read_broker.config import load_instance_config
 
 
-BROKER_TIMEOUT_MS = 5000
-SCAN_COUNT = 512
-MAX_SCAN_KEYS = 100000
+BROKER_TIMEOUT_MS = 0
 
 
 class BrokerSonicV2Connector(object):
@@ -61,19 +59,7 @@ class BrokerSonicV2Connector(object):
         return dict(self._connection(db_name).hgetall(key))
 
     def keys(self, db_name, pattern):
-        """Use bounded SCAN calls instead of Redis KEYS."""
-
-        connection = self._connection(db_name)
-        cursor = 0
-        keys = []
-        while True:
-            cursor, batch = connection.scan(cursor, pattern, SCAN_COUNT)
-            keys.extend(batch)
-            if len(keys) > MAX_SCAN_KEYS:
-                raise RuntimeError("read broker scan key limit exceeded")
-            cursor = int(cursor)
-            if cursor == 0:
-                return keys
+        return list(self._connection(db_name).keys(pattern))
 
     def _connection(self, db_name):
         try:

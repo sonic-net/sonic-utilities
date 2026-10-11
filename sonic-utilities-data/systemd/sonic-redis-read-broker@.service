@@ -4,7 +4,7 @@ Wants=database.service
 After=config-setup.service database.service
 PartOf=sonic-redis-read-broker.target
 ConditionPathExists=/etc/sonic/redis-read-broker/%i.json
-ConditionPathIsExecutable=/usr/local/bin/sonic-redis-read-broker
+ConditionFileIsExecutable=/usr/local/bin/sonic-redis-read-broker
 
 [Service]
 Type=simple

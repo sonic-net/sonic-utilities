@@ -45,11 +45,11 @@ def test_sonic_connector_rejects_namespace_and_unknown_database(monkeypatch, bro
         db.exists("CONFIG_DB", "key")
 
 
-def test_sonic_connector_reads_hashes_and_bounded_scans(monkeypatch, broker_config):
+def test_sonic_connector_reads_hashes_and_keys(monkeypatch, broker_config):
     monkeypatch.setattr(connector, "load_instance_config", lambda _instance: broker_config)
     connection = mock.Mock()
     connection.hgetall.return_value = [("field", "value")]
-    connection.scan.side_effect = [(1, ["a"]), (0, ["b"])]
+    connection.keys.return_value = ["a", "b"]
     monkeypatch.setattr(connector.SonicDBConfig, "getDbId", mock.Mock(return_value=4))
     monkeypatch.setattr(connector, "DBConnector", mock.Mock(return_value=connection))
 
@@ -58,26 +58,9 @@ def test_sonic_connector_reads_hashes_and_bounded_scans(monkeypatch, broker_conf
 
     assert db.get_all("CONFIG_DB", "key") == {"field": "value"}
     assert db.keys("CONFIG_DB", "FEATURE|*") == ["a", "b"]
-    assert connection.scan.call_args_list == [
-        mock.call(0, "FEATURE|*", connector.SCAN_COUNT),
-        mock.call(1, "FEATURE|*", connector.SCAN_COUNT),
-    ]
+    connection.keys.assert_called_once_with("FEATURE|*")
     with pytest.raises(RuntimeError, match="blocking"):
         db.get_all("CONFIG_DB", "key", blocking=True)
-
-
-def test_sonic_connector_enforces_scan_limit(monkeypatch, broker_config):
-    monkeypatch.setattr(connector, "load_instance_config", lambda _instance: broker_config)
-    connection = mock.Mock()
-    connection.scan.return_value = (1, ["key"] * 3)
-    monkeypatch.setattr(connector, "MAX_SCAN_KEYS", 2)
-    monkeypatch.setattr(connector.SonicDBConfig, "getDbId", mock.Mock(return_value=4))
-    monkeypatch.setattr(connector, "DBConnector", mock.Mock(return_value=connection))
-    db = connector.BrokerSonicV2Connector()
-    db.connect("CONFIG_DB")
-
-    with pytest.raises(RuntimeError, match="key limit"):
-        db.keys("CONFIG_DB", "*")
 
 
 def test_sonic_connector_metadata_and_close(monkeypatch, broker_config):
