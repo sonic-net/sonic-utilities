@@ -8,16 +8,18 @@ def policy():
     return ReadPolicy()
 
 
-def test_allowlist_contains_only_the_pilot_commands():
+def test_allowlist_contains_only_reviewed_inventory_commands():
     assert ReadPolicy.CONNECTION_COMMANDS == frozenset(("SELECT", "PING"))
     assert ReadPolicy.READ_COMMANDS == frozenset((
-        "EXISTS", "HGETALL", "KEYS"))
+        "EXISTS", "GET", "HGET", "HGETALL", "KEYS"))
 
 
 @pytest.mark.parametrize(("arguments", "expected"), [
     ((b"SELECT", b"4"), "SELECT"),
     ((b"ping",), "PING"),
     ((b"ExIsTs", b"FEATURE|bgp"), "EXISTS"),
+    ((b"get", b"CONFIG_DB_INITIALIZED"), "GET"),
+    ((b"hget", b"PORT_TABLE:Ethernet0", b"oper_status"), "HGET"),
     ((b"hgetall", b"FEATURE|bgp"), "HGETALL"),
     ((b"KeYs", b"FEATURE|*"), "KEYS"),
 ])
@@ -34,7 +36,7 @@ def test_allows_only_reviewed_command_names(policy, arguments, expected):
     (b"AUTH", b"secret"),
     (b"CONFIG", b"GET", b"*"),
     (b"SCAN", b"0"),
-    (b"GET", b"key"),
+    (b"HEXISTS", b"key", b"field"),
     (b"CLIENT", b"LIST"),
     (b"COMMAND",),
     (b"UNKNOWN",),

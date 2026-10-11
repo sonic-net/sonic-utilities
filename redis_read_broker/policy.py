@@ -15,10 +15,10 @@ _COMMAND_NAME = re.compile(br"[A-Za-z][A-Za-z0-9_-]*\Z")
 
 
 class ReadPolicy(object):
-    """Allow only commands needed by the first display-command pilot."""
+    """Allow only commands required by the reviewed display-client inventory."""
 
     CONNECTION_COMMANDS = frozenset(("SELECT", "PING"))
-    READ_COMMANDS = frozenset(("EXISTS", "HGETALL", "KEYS"))
+    READ_COMMANDS = frozenset(("EXISTS", "GET", "HGET", "HGETALL", "KEYS"))
 
     @staticmethod
     def command_name(arguments):

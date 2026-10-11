@@ -4,12 +4,20 @@ These connectors always use the named broker Unix socket.  They never retry
 through TCP or through the private Redis socket.
 """
 
-from swsscommon.swsscommon import ConfigDBConnector, DBConnector, SonicDBConfig
+import time
+
+from swsscommon.swsscommon import (
+    ConfigDBConnector,
+    DBConnector,
+    SonicDBConfig,
+)
 
 from redis_read_broker.config import load_instance_config
 
 
 BROKER_TIMEOUT_MS = 0
+CONNECT_RETRY_SECONDS = 1
+CONFIG_DB_INIT_POLL_SECONDS = 1
 
 
 class BrokerSonicV2Connector(object):
@@ -26,14 +34,24 @@ class BrokerSonicV2Connector(object):
             setattr(self, db_name, db_name)
 
     def connect(self, db_name, retry_on=True):
-        del retry_on
         if db_name not in self._db_list:
             raise RuntimeError("database is not configured")
         db_id = SonicDBConfig.getDbId(db_name, self.namespace)
-        # This overload accepts a numeric DB ID and a Unix socket path.  It
-        # cannot fall back to the hostname and port from database metadata.
-        self._connections[db_name] = DBConnector(
-            db_id, self.socket_path, BROKER_TIMEOUT_MS)
+        while True:
+            try:
+                # This overload accepts a numeric DB ID and a Unix socket path.
+                # It cannot fall back to the hostname and port from database
+                # metadata.
+                self._connections[db_name] = DBConnector(
+                    db_id, self.socket_path, BROKER_TIMEOUT_MS)
+                return
+            # swsscommon maps both RedisError and socket system_error to
+            # RuntimeError in its Python binding.
+            except RuntimeError:
+                self._connections.pop(db_name, None)
+                if not retry_on:
+                    raise
+                time.sleep(CONNECT_RETRY_SECONDS)
 
     def close(self, db_name=None):
         if db_name is None:
@@ -53,13 +71,50 @@ class BrokerSonicV2Connector(object):
     def exists(self, db_name, key):
         return self._connection(db_name).exists(key)
 
+    def get(self, db_name, key, field, blocking=False):
+        if blocking:
+            raise RuntimeError("blocking reads are not supported by the read broker")
+        value = self._read(db_name, "hget", key, field)
+        return None if value is None or value == "None" else value
+
     def get_all(self, db_name, key, blocking=False):
         if blocking:
             raise RuntimeError("blocking reads are not supported by the read broker")
-        return dict(self._connection(db_name).hgetall(key))
+        values = self._get_hash(db_name, key)
+        return dict(
+            (field, "" if value == "None" else value)
+            for field, value in values.items()
+        )
 
-    def keys(self, db_name, pattern):
-        return list(self._connection(db_name).keys(pattern))
+    def keys(self, db_name, pattern="*", blocking=False):
+        if blocking:
+            raise RuntimeError("blocking reads are not supported by the read broker")
+        return list(self._read(db_name, "keys", pattern))
+
+    def get_redis_client(self, db_name):
+        """Return the broker-backed DBConnector for reviewed read helpers."""
+        return self._connection(db_name)
+
+    def _get_string(self, db_name, key):
+        """Read a Redis string used by connector lifecycle handling."""
+        return self._read(db_name, "get", key)
+
+    def _get_hash(self, db_name, key):
+        """Read an unmodified Redis hash for ConfigDB compatibility."""
+        return dict(self._read(db_name, "hgetall", key))
+
+    def _read(self, db_name, method, *arguments):
+        """Replay one supported read after reconnecting a broken socket."""
+        connection = self._connection(db_name)
+        try:
+            return getattr(connection, method)(*arguments)
+        except RuntimeError:
+            # SWIG exposes both connection failures and deterministic Redis
+            # errors as RuntimeError. Reconnect once so a deterministic error
+            # cannot cause an endless retry loop.
+            self._connections.pop(db_name, None)
+            self.connect(db_name, retry_on=True)
+            return getattr(self._connection(db_name), method)(*arguments)
 
     def _connection(self, db_name):
         try:
@@ -86,40 +141,43 @@ class BrokerConfigDBConnector(object):
         return self._separator
 
     def connect(self, wait_for_init=True, retry_on=False):
-        del retry_on
-        self._db.connect(self.db_name, retry_on=False)
-        if (wait_for_init and
-                not self._db.exists(self.db_name, ConfigDBConnector.INIT_INDICATOR)):
-            raise RuntimeError("CONFIG_DB is not initialized")
+        self._db.connect(self.db_name, retry_on=retry_on)
+        while wait_for_init:
+            initialized = self._db._get_string(
+                self.db_name, ConfigDBConnector.INIT_INDICATOR)
+            if initialized:
+                break
+            time.sleep(CONFIG_DB_INIT_POLL_SECONDS)
 
     def close(self):
         self._db.close()
 
     def get_entry(self, table, key):
         redis_key = self._table_key(table, self.serialize_key(key))
-        return self.raw_to_typed(self._db.get_all(self.db_name, redis_key))
+        return self.raw_to_typed(self._db._get_hash(self.db_name, redis_key))
 
     def get_keys(self, table, split=True):
         prefix = self._table_key(table, "")
         keys = []
         for redis_key in self._db.keys(self.db_name, prefix + "*"):
             row = redis_key[len(prefix):]
-            keys.append(self.deserialize_key(row) if split else row)
+            keys.append(self.deserialize_key(row if split else redis_key))
         return keys
 
     def get_table(self, table):
         result = {}
         prefix = self._table_key(table, "")
-        for redis_key in self._db.keys(self.db_name, prefix + "*"):
+        for redis_key in sorted(self._db.keys(self.db_name, prefix + "*")):
             if not redis_key.startswith(prefix):
                 continue
             row = self.deserialize_key(redis_key[len(prefix):])
             result[row] = self.raw_to_typed(
-                self._db.get_all(self.db_name, redis_key))
+                self._db._get_hash(self.db_name, redis_key))
         return result
 
     def _table_key(self, table, key):
-        return "{}{}{}".format(table, self.TABLE_NAME_SEPARATOR, key)
+        return "{}{}{}".format(
+            table.upper(), self.TABLE_NAME_SEPARATOR, key)
 
     def serialize_key(self, key):
         if isinstance(key, tuple):

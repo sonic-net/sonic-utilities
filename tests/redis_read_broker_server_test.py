@@ -151,6 +151,8 @@ def test_fragmented_and_coalesced_requests_are_forwarded_byte_for_byte(proxy):
     coalesced = b"".join((
         _request(b"SELECT", b"4"),
         _request(b"EXISTS", b"FEATURE|bgp"),
+        _request(b"GET", b"CONFIG_DB_INITIALIZED"),
+        _request(b"HGET", b"FEATURE|bgp", b"state"),
         _request(b"KEYS", b"FEATURE|*"),
         _request(b"HGETALL", b"FEATURE|bgp"),
     ))
