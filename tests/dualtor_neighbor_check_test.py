@@ -229,7 +229,7 @@ class TestDualtorNeighborCheck(object):
                 patch("dualtor_neighbor_check.config_logging") as mock_config_logging, \
                 patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector",
                       return_value=config_db) as mock_config_db_connector, \
-                patch("dualtor_neighbor_check.daemon_base.db_connect") as mock_db_connect, \
+                patch("dualtor_neighbor_check.swsscommon.DBConnector") as mock_db_connect, \
                 patch("dualtor_neighbor_check.get_mux_cable_config", return_value={}), \
                 patch("dualtor_neighbor_check.is_dualtor", return_value=False), \
                 patch("dualtor_neighbor_check.run_neighbor_check") as mock_run_neighbor_check:
@@ -237,9 +237,14 @@ class TestDualtorNeighborCheck(object):
 
             assert result == 0
             mock_config_logging.assert_called_once_with(args)
-            mock_config_db_connector.assert_called_once_with(use_unix_socket_path=False)
+            mock_config_db_connector.assert_called_once_with(use_unix_socket_path=True)
             config_db.connect.assert_called_once()
-            mock_db_connect.assert_called_once_with("APPL_DB")
+            mock_db_connect.assert_called_once_with(
+                "APPL_DB",
+                dualtor_neighbor_check.REDIS_TIMEOUT_MSECS,
+                False,
+                dualtor_neighbor_check.DEFAULT_NAMESPACE
+            )
             mock_run_neighbor_check.assert_not_called()
 
     def test_main_flushes_and_reruns_inconsistent_neighbors(self, mock_log_functions):
@@ -253,7 +258,7 @@ class TestDualtorNeighborCheck(object):
         with patch("dualtor_neighbor_check.parse_args", return_value=args), \
                 patch("dualtor_neighbor_check.config_logging"), \
                 patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector", return_value=config_db), \
-                patch("dualtor_neighbor_check.daemon_base.db_connect", return_value=appl_db), \
+                patch("dualtor_neighbor_check.swsscommon.DBConnector", return_value=appl_db), \
                 patch("dualtor_neighbor_check.get_mux_cable_config", return_value={"Ethernet4": {}}), \
                 patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
                 patch("dualtor_neighbor_check.get_mux_server_to_port_map",
@@ -293,7 +298,7 @@ class TestDualtorNeighborCheck(object):
         with patch("dualtor_neighbor_check.parse_args", return_value=args), \
                 patch("dualtor_neighbor_check.config_logging"), \
                 patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector", return_value=config_db), \
-                patch("dualtor_neighbor_check.daemon_base.db_connect", return_value=appl_db), \
+                patch("dualtor_neighbor_check.swsscommon.DBConnector", return_value=appl_db), \
                 patch("dualtor_neighbor_check.get_mux_cable_config", return_value={"Ethernet4": {}}), \
                 patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
                 patch("dualtor_neighbor_check.get_mux_server_to_port_map",
@@ -324,7 +329,7 @@ class TestDualtorNeighborCheck(object):
         with patch("dualtor_neighbor_check.parse_args", return_value=args), \
                 patch("dualtor_neighbor_check.config_logging"), \
                 patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector", return_value=config_db), \
-                patch("dualtor_neighbor_check.daemon_base.db_connect", return_value=appl_db), \
+                patch("dualtor_neighbor_check.swsscommon.DBConnector", return_value=appl_db), \
                 patch("dualtor_neighbor_check.get_mux_cable_config", return_value={"Ethernet4": {}}), \
                 patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
                 patch("dualtor_neighbor_check.get_mux_server_to_port_map",
@@ -355,7 +360,7 @@ class TestDualtorNeighborCheck(object):
         with patch("dualtor_neighbor_check.parse_args", return_value=args), \
                 patch("dualtor_neighbor_check.config_logging"), \
                 patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector", return_value=config_db), \
-                patch("dualtor_neighbor_check.daemon_base.db_connect", return_value=appl_db), \
+                patch("dualtor_neighbor_check.swsscommon.DBConnector", return_value=appl_db), \
                 patch("dualtor_neighbor_check.get_mux_cable_config", return_value={"Ethernet4": {}}), \
                 patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
                 patch("dualtor_neighbor_check.get_mux_server_to_port_map",
@@ -387,7 +392,7 @@ class TestDualtorNeighborCheck(object):
         with patch("dualtor_neighbor_check.parse_args", return_value=args), \
                 patch("dualtor_neighbor_check.config_logging"), \
                 patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector", return_value=config_db), \
-                patch("dualtor_neighbor_check.daemon_base.db_connect", return_value=appl_db), \
+                patch("dualtor_neighbor_check.swsscommon.DBConnector", return_value=appl_db), \
                 patch("dualtor_neighbor_check.get_mux_cable_config", return_value={"Ethernet4": {}}), \
                 patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
                 patch("dualtor_neighbor_check.get_mux_server_to_port_map",
@@ -417,7 +422,11 @@ class TestDualtorNeighborCheck(object):
             redis_cmd = "script load \"return helloworld\""
             out = dualtor_neighbor_check.redis_cli(redis_cmd)
 
-            mock_popen.assert_called_once_with(shlex.split("sudo redis-cli %s" % redis_cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            mock_popen.assert_called_once_with(
+                shlex.split("sudo sonic-db-cli --unixsocket APPL_DB %s" % redis_cmd),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT
+            )
             mock_proc.communicate.assert_called_once()
             assert out == "6cde21a0d21ab29e08dd72e13b77214dbb01902f"
 
@@ -432,8 +441,31 @@ class TestDualtorNeighborCheck(object):
             with pytest.raises(RuntimeError):
                 dualtor_neighbor_check.redis_cli(redis_cmd)
 
-            mock_popen.assert_called_once_with(shlex.split("sudo redis-cli %s" % redis_cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            mock_popen.assert_called_once_with(
+                shlex.split("sudo sonic-db-cli --unixsocket APPL_DB %s" % redis_cmd),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT
+            )
             mock_proc.communicate.assert_called_once()
+
+    def test_get_if_br_oid_to_port_name_map_uses_unix_socket(self):
+        db = MagicMock()
+        with patch(
+                "dualtor_neighbor_check.swsscommon.SonicV2Connector",
+                return_value=db
+        ) as mock_connector, patch(
+                "dualtor_neighbor_check.port_util.get_interface_oid_map",
+                return_value=({}, {"oid:0x1": "Ethernet0"})
+        ) as mock_get_interface_oid_map, patch(
+                "dualtor_neighbor_check.port_util.get_bridge_port_map",
+                return_value={"oid:0x10": "oid:0x1"}
+        ) as mock_get_bridge_port_map:
+            result = dualtor_neighbor_check.get_if_br_oid_to_port_name_map()
+
+        mock_connector.assert_called_once_with(use_unix_socket_path=True)
+        mock_get_interface_oid_map.assert_called_once_with(db)
+        mock_get_bridge_port_map.assert_called_once_with(db)
+        assert result == {"oid:0x10": "Ethernet0"}
 
     def test_log_config_default(self, mock_py_log_functions):
         mock_log_err, mock_log_warn, mock_log_info, mock_log_debug = mock_py_log_functions
@@ -574,8 +606,10 @@ class TestDualtorNeighborCheck(object):
             mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
             mock_run_command.assert_has_calls(
                 [
-                    call("sudo redis-cli SCRIPT LOAD \"%s\"" % dualtor_neighbor_check.DB_READ_SCRIPT),
-                    call("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+                    call("sudo sonic-db-cli --unixsocket APPL_DB SCRIPT LOAD \"%s\"" %
+                         dualtor_neighbor_check.DB_READ_SCRIPT),
+                    call("sudo sonic-db-cli --unixsocket APPL_DB "
+                         "EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
                 ]
             )
             assert neighbors == result[0]
@@ -623,9 +657,12 @@ class TestDualtorNeighborCheck(object):
             mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
             mock_run_command.assert_has_calls(
                 [
-                    call("sudo redis-cli SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
-                    call("sudo redis-cli SCRIPT LOAD \"%s\"" % dualtor_neighbor_check.DB_READ_SCRIPT),
-                    call("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+                    call("sudo sonic-db-cli --unixsocket APPL_DB "
+                         "SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
+                    call("sudo sonic-db-cli --unixsocket APPL_DB SCRIPT LOAD \"%s\"" %
+                         dualtor_neighbor_check.DB_READ_SCRIPT),
+                    call("sudo sonic-db-cli --unixsocket APPL_DB "
+                         "EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
                 ]
             )
             assert neighbors == result[0]
@@ -672,8 +709,10 @@ class TestDualtorNeighborCheck(object):
             mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
             mock_run_command.assert_has_calls(
                 [
-                    call("sudo redis-cli SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
-                    call("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+                    call("sudo sonic-db-cli --unixsocket APPL_DB "
+                         "SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
+                    call("sudo sonic-db-cli --unixsocket APPL_DB "
+                         "EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
                 ]
             )
             assert neighbors == result[0]

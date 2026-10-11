@@ -171,6 +171,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -222,6 +223,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -244,6 +246,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -264,6 +267,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -288,6 +292,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}

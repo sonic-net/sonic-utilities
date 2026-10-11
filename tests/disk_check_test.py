@@ -1,3 +1,4 @@
+import errno
 import os
 import sys
 import syslog
@@ -9,6 +10,8 @@ import disk_check
 
 disk_check.MOUNTS_FILE = "/tmp/proc_mounts"
 
+real_open = open
+
 test_data = {
     "0": {
         "desc": "All good as /tmp is read-write",
@@ -18,7 +21,8 @@ test_data = {
     "1": {
         "desc": "Not good as /tmpx is not read-write; But fix skipped",
         "args": ["", "-d", "/tmpx", "-s"],
-        "err": "/tmpx is not read-write"
+        "err": "/tmpx is not read-write. Monit diskCheck write marker failed: "
+               "[Errno 30] Read-only file system"
     },
     "2": {
         "desc": "Not good as /tmpx is not read-write; expect mount",
@@ -26,7 +30,9 @@ test_data = {
         "upperdir": "/tmp/tmpx",
         "workdir": "/tmp/tmpy",
         "mounts": "overlay_tmpx blahblah",
-        "err": "/tmpx is not read-write|READ-ONLY: Mounted ['/tmpx'] to make Read-Write",
+        "err": "/tmpx is not read-write. Monit diskCheck write marker failed: "
+               "[Errno 30] Read-only file system|"
+               "READ-ONLY: Mounted ['/tmpx'] to make Read-Write",
         "cmds": [['mount', '-t', 'overlay', 'overlay_tmpx', '-o', 'lowerdir=/tmpx,upperdir=/tmp/tmpx/tmpx,workdir=/tmp/tmpy/tmpx', '/tmpx']]
     },
     "3": {
@@ -39,7 +45,8 @@ test_data = {
         "desc": "Not good as /tmpx is not read-write; mount fail as upper exist",
         "args": ["", "-d", "/tmpx"],
         "upperdir": "/tmp",
-        "err": "/tmpx is not read-write|Already mounted",
+        "err": "/tmpx is not read-write. Monit diskCheck write marker failed: "
+               "[Errno 30] Read-only file system|Already mounted",
         "expect_ret": 1
     },
     "5": {
@@ -53,6 +60,13 @@ test_data = {
         "desc": "Test another code path for good case",
         "args": ["", "-d", "/tmp"],
         "upperdir": "/tmp"
+    },
+    "7": {
+        "desc": "Marker write with ENOSPC does not trigger read-only overlay",
+        "args": ["", "-d", "/tmpx"],
+        "trigger_errno": errno.ENOSPC,
+        "err": "/tmpx write marker check failed with a non-read-only error: ",
+        "cmds": []
     }
 }
 
@@ -64,6 +78,23 @@ current_tc = None
 def mount_file(d):
     with open(disk_check.MOUNTS_FILE, "w") as s:
         s.write(d)
+
+
+def mock_disk_open(file, *args, **kwargs):
+    if file == "/tmpx/.monit_diskCheck_rw_marker":
+        error_number = current_tc.get("trigger_errno", errno.EROFS)
+        raise OSError(error_number, os.strerror(error_number), file)
+
+    return real_open(file, *args, **kwargs)
+
+
+def assert_error_messages(actual, expected):
+    actual_messages = actual.split("|") if actual else []
+    expected_messages = expected.split("|") if expected else []
+
+    assert len(actual_messages) == len(expected_messages)
+    for actual_message, expected_message in zip(actual_messages, expected_messages):
+        assert actual_message.startswith(expected_message)
 
 
 def report_err_msg(lvl, m):
@@ -121,7 +152,7 @@ def swap_upper(tc):
 
 def swap_work(tc):
     tmp_w = tc["workdir"]
-    tc["upperdir"] = disk_check.WORK_DIR
+    tc["workdir"] = disk_check.WORK_DIR
     disk_check.WORK_DIR = tmp_w
 
 
@@ -149,7 +180,8 @@ class TestDiskCheck(object):
             print("-----------Start tc {}---------".format(i))
             init_tc(tc)
 
-            with patch('sys.argv', tc["args"]):
+            with patch('sys.argv', tc["args"]), \
+                    patch("builtins.open", side_effect=mock_disk_open):
                 if "upperdir" in tc:
                     swap_upper(tc)
 
@@ -173,7 +205,7 @@ class TestDiskCheck(object):
 
             assert ret == tc.get("expect_ret", 0)
             if  "err" in tc:
-                assert err_data == tc["err"]
+                assert_error_messages(err_data, tc["err"])
             assert cmds == tc.get("cmds", [])
             print("-----------End tc {}-----------".format(i))
 
@@ -182,10 +214,10 @@ class TestDiskCheck(object):
 
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
-    @patch('os.access', return_value=True)
+    @patch("disk_check.test_writable", return_value=True)
     @patch('os.statvfs', return_value=os.statvfs_result((4096, 4096, 1909350, 1491513, 0,
                                                          971520, 883302, 883302, 4096, 255)))
-    def test_mount_disk_full(self, mock_os_statvfs, mock_os_access, mock_proc, mock_log):
+    def test_mount_disk_full(self, mock_os_statvfs, mock_test_writable, mock_proc, mock_log):
         global max_log_lvl
         max_log_lvl = -1
         mock_proc.side_effect = mock_subproc_run
@@ -194,18 +226,28 @@ class TestDiskCheck(object):
         tc = {
             "upperdir": "/tmp",
         }
-        swap_upper(tc)
+        init_tc(tc)
 
-        with patch('sys.argv', ["", "-d", "/tmpx"]):
-            disk_check.main()
+        swap_upper(tc)
+        try:
+            with patch('sys.argv', ["", "-d", "/tmpx"]):
+                ret = disk_check.main()
+        finally:
+            swap_upper(tc)
+
+        assert ret == 1
+        assert err_data == "/tmpx has no free disk space|Already mounted"
+        assert cmds == []
+        mock_test_writable.assert_called_once_with(["/tmpx"])
 
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
     @patch('shutil.rmtree')
-    @patch('os.access', return_value=True)
+    @patch("disk_check.test_writable", return_value=True)
     @patch('os.statvfs', return_value=os.statvfs_result((4096, 4096, 1909350, 1491513, 4096,
                                                          971520, 883302, 883302, 4096, 255)))
-    def test_unmount_disk_full(self, mock_os_statvfs, mock_os_access, mock_rmtree, mock_proc, mock_log):
+    def test_unmount_disk_full(self, mock_os_statvfs, mock_test_writable, mock_rmtree,
+                               mock_proc, mock_log):
         global max_log_lvl
         max_log_lvl = -1
         mock_proc.side_effect = mock_subproc_run
@@ -213,20 +255,33 @@ class TestDiskCheck(object):
 
         tc = {
             "upperdir": "/tmp/tmpx",
-            "workdir": "/tmp/tmpy"
+            "workdir": "/tmp/tmpy",
+            "mounts": "overlay_disk_full_tmpx blahblah",
+            "cmds": [["umount", "-l", "overlay_disk_full_tmpx"]]
         }
+        init_tc(tc)
+        os.makedirs(tc["upperdir"], exist_ok=True)
+        os.makedirs(tc["workdir"], exist_ok=True)
+
         swap_upper(tc)
         swap_work(tc)
+        try:
+            with patch('sys.argv', ["", "-d", "/tmpx"]):
+                ret = disk_check.main()
+        finally:
+            swap_upper(tc)
+            swap_work(tc)
 
-        with patch('sys.argv', ["", "-d", "/tmpx"]):
-            disk_check.main()
+        assert ret == 0
+        assert cmds == tc["cmds"]
+        mock_test_writable.assert_called_once_with(["/tmpx"])
+        assert mock_rmtree.call_count == 2
 
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
-    @patch('os.access', return_value=True)
     @patch('os.statvfs', return_value=os.statvfs_result((4096, 4096, 1909350, 1491513, 0,
                                                          971520, 883302, 883302, 4096, 255)))
-    def test_diskfull(self, mock_os_statvfs, mock_os_access, mock_proc, mock_log):
+    def test_diskfull(self, mock_os_statvfs, mock_proc, mock_log):
         global max_log_lvl
         max_log_lvl = -1
         mock_proc.side_effect = mock_subproc_run
@@ -237,13 +292,23 @@ class TestDiskCheck(object):
 
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
-    def test_do_unmnt(self, mock_proc, mock_log):
+    @patch("disk_check.shutil.rmtree")
+    def test_do_unmnt(self, mock_rmtree, mock_proc, mock_log):
         global max_log_lvl
         max_log_lvl = -1
         mock_proc.side_effect = mock_subproc_run
         mock_log.side_effect = report_err_msg
 
-        disk_check.do_unmnt(["/etc"], "overlay_prefix")
+        tc = {
+            "cmds": [["umount", "-l", "overlay_prefix_etc"]]
+        }
+        init_tc(tc)
+
+        ret = disk_check.do_unmnt(["/etc"], "overlay_prefix")
+
+        assert ret == 0
+        assert cmds == tc["cmds"]
+        assert mock_rmtree.call_count == 2
 
 
     @classmethod
