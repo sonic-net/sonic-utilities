@@ -2,11 +2,12 @@
 
 import os
 import sys
+import subprocess
 import copy
 from unittest.mock import Mock, MagicMock, call, patch
 
 import pytest
-
+import jinja2
 from sonic_package_manager.database import PackageEntry
 from sonic_package_manager.manifest import Manifest
 from sonic_package_manager.metadata import Metadata
@@ -16,6 +17,34 @@ from sonic_package_manager.service_creator.creator import ETC_SYSTEMD_LOCATION
 from sonic_package_manager.service_creator.feature import FeatureRegistry
 from sonic_package_manager.service_creator.creator import DOCKER_CTL_SCRIPT_LOCATION, DOCKER_CTL_SCRIPT_TEMPLATE
 from sonic_package_manager.service_creator.creator import TEMPLATES_PATH
+
+test_path = os.path.dirname(os.path.abspath(__file__))
+_SHIPPED_TEMPLATES_DIR = os.path.join(test_path, '../..', 'sonic-utilities-data', 'templates')
+
+
+@pytest.fixture(scope='session')
+def shipped_service_templates():
+    """The shipped templates, read before pyfakefs hides the real filesystem.
+
+    Session scope, because the `fs` fixture is function scoped.
+    """
+    templates = {}
+    for name in (SERVICE_FILE_TEMPLATE, SERVICE_MGMT_SCRIPT_TEMPLATE):
+        with open(os.path.join(_SHIPPED_TEMPLATES_DIR, name)) as f:
+            templates[name] = f.read()
+    return templates
+
+
+@pytest.fixture
+def sonic_shipped_templates(sonic_fs, shipped_service_templates):
+    """Put the real templates where the creator will render them.
+
+    sonic_fs creates the template files empty, which would make any assertion on
+    the generated unit vacuous.
+    """
+    for name, content in shipped_service_templates.items():
+        with open(os.path.join(TEMPLATES_PATH, name), 'w') as f:
+            f.write(content)
 
 
 @pytest.fixture
@@ -177,6 +206,93 @@ def test_service_creator_container_hardening_opts(sonic_fs, manifest, service_cr
     assert '--ulimit=nofile=65536:65536' in run_opt
     assert '--device=/dev/mem' in run_opt
     assert '-v /etc/sonic:/etc/sonic:ro' in run_opt
+
+
+def test_service_creator_execstoppost_covers_cancelled_start(sonic_fs, sonic_shipped_templates,
+                                                             manifest, service_creator):
+    """The generated unit must clean up a start that was cancelled mid-activation.
+
+    systemd only runs ExecStop= on a unit that finished starting, so a stop
+    during ExecStartPre= orphans the container it already brought up (#29702).
+    """
+    entry = PackageEntry('test', 'azure/sonic-test')
+    package = Package(entry, Metadata(manifest))
+    service_creator.create(package)
+
+    with open(os.path.join(SYSTEMD_LOCATION, 'test.service')) as f:
+        lines = [line.rstrip('\n') for line in f]
+
+    stop = [i for i, line in enumerate(lines) if line.startswith('ExecStop=')]
+    stop_post = [i for i, line in enumerate(lines) if line.startswith('ExecStopPost=')]
+
+    assert len(stop) == 1
+    assert len(stop_post) == 1
+    assert stop_post[0] == stop[0] + 1
+    assert lines[stop_post[0]] == 'ExecStopPost=/usr/local/bin/test.sh stop_post'
+
+
+def test_service_creator_execstoppost_multi_instance(sonic_fs, sonic_shipped_templates,
+                                                     manifest, service_creator):
+    """The templated instance unit must pass its instance through the stop hook too."""
+    entry = PackageEntry('test', 'azure/sonic-test')
+    manifest['service']['asic-service'] = True
+    package = Package(entry, Metadata(manifest))
+    service_creator.create(package)
+
+    with open(os.path.join(SYSTEMD_LOCATION, 'test@.service')) as f:
+        content = f.read()
+
+    assert 'ExecStopPost=/usr/local/bin/test.sh stop_post %i\n' in content
+
+
+def test_service_creator_execstoppost_skips_fast_path_for_non_simple_type(
+        sonic_fs, sonic_shipped_templates, manifest, service_creator):
+    """A non-simple Type must not use the clean-stop fast path in stop_post.
+
+    A killed Type=notify/dbus/exec main process is a clean exit, so
+    $SERVICE_RESULT would read "success" and the hook would skip a container
+    that still needs cleaning up (#29702).
+    """
+    entry = PackageEntry('test', 'azure/sonic-test')
+    package = Package(entry, Metadata(manifest))
+    service_creator.create(package)
+
+    with open(os.path.join(SYSTEMD_LOCATION, 'test.service')) as f:
+        default = f.read()
+    assert 'STOP_POST_FORCE' not in default
+
+    manifest['service']['type'] = 'notify'
+    service_creator.create(Package(entry, Metadata(manifest)))
+
+    with open(os.path.join(SYSTEMD_LOCATION, 'test.service')) as f:
+        forced = f.read()
+    assert 'Type=notify' in forced
+    assert 'Environment=STOP_POST_FORCE=1' in forced
+
+
+def test_service_mgmt_stop_post_exits_zero_when_nothing_to_clean(shipped_service_templates,
+                                                                 manifest, tmp_path):
+    """stop_post must exit 0 when there is nothing to clean up.
+
+    A non-zero ExecStopPost= is propagated to the unit result and would turn an
+    ordinary stop into a failed unit. No sonic_fs here: pyfakefs is in-process,
+    so a child process could not exec a script written into the fake filesystem.
+    """
+    wrapper = tmp_path / 'test.sh'
+    wrapper.write_text(jinja2.Template(
+        shipped_service_templates[SERVICE_MGMT_SCRIPT_TEMPLATE]).render(
+        source=SERVICE_MGMT_SCRIPT_TEMPLATE,
+        manifest=manifest.unmarshal(),
+        multi_instance_services=[]))
+    wrapper.chmod(0o755)
+
+    # /usr/bin/test.sh does not exist, so the container looks stopped.
+    result = subprocess.run([str(wrapper), 'stop_post'], capture_output=True, text=True)
+    assert result.returncode == 0, f'stdout={result.stdout!r} stderr={result.stderr!r}'
+
+    # A bad op must still fail, so a typo in a unit cannot pass unnoticed.
+    unknown = subprocess.run([str(wrapper), 'not_an_op'], capture_output=True, text=True)
+    assert unknown.returncode == 1
 
 
 def test_service_creator_yang(sonic_fs, manifest, mock_sonic_db,

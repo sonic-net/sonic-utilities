@@ -130,21 +130,39 @@ function stop() {
     stop_dependent_services
 }
 
+function stop_post() {
+    # A start cancelled mid-activation skips ExecStop=, orphaning the container
+    # start() already brought up. A clean stop has nothing to clean up, so gate
+    # on $SERVICE_RESULT; STOP_POST_FORCE=1 covers types where that result lies.
+    # Never exit non-zero: that would turn a clean stop into a failed unit.
+    if [[ -n "$STOP_POST_FORCE" || "$SERVICE_RESULT" != "success" ]] && /usr/bin/${SERVICE}.sh is_running $DEV; then
+        debug "${SERVICE}$DEV container still running after stop, cleaning up ..."
+        check_warm_boot
+        check_fast_boot
+        stop
+    fi
+    return 0
+}
+
 OP=$1
 DEV=$2
 
-check_warm_boot
-check_fast_boot
+# stop_post re-reads these itself. Probing STATE_DB on every stop for an op that
+# usually has nothing to do is not worth it.
+if [[ "$OP" != "stop_post" ]]; then
+    check_warm_boot
+    check_fast_boot
 
-debug "Fast boot flag: ${SERVICE}$DEV ${FAST_BOOT}."
-debug "Warm boot flag: ${SERVICE}$DEV ${WARM_BOOT}."
+    debug "Fast boot flag: ${SERVICE}$DEV ${FAST_BOOT}."
+    debug "Warm boot flag: ${SERVICE}$DEV ${WARM_BOOT}."
+fi
 
 case "$OP" in
-    start|wait|stop)
+    start|wait|stop|stop_post)
         $1
         ;;
     *)
-        echo "Usage: $0 {start|wait|stop}"
+        echo "Usage: $0 {start|wait|stop|stop_post}"
         exit 1
         ;;
 esac
