@@ -336,3 +336,69 @@ def test_install_uses_resolved_swap_values(
     resolve_total_mem_threshold.assert_called_once_with(
         TOTAL_MEM_THRESHOLD_DEFAULT, TOTAL_MEM_THRESHOLD_DEFAULT)
     swap.assert_called_with(True, 3072, 8192, 1200)
+
+
+def _remove_with_prune(result=None, supported=True, script_exists=True, side_effect=None):
+    bootloader = Mock()
+    bootloader.get_installed_images.return_value = ["cur", "old"]
+    bootloader.get_current_image.return_value = "cur"
+    bootloader.is_secure_upgrade_image_verification_supported.return_value = supported
+    run_result = result or Mock(returncode=0, stdout="", stderr="")
+    with patch("sonic_installer.main.get_bootloader", return_value=bootloader), \
+            patch("sonic_installer.main.os.path.exists", return_value=script_exists), \
+            patch("os.geteuid", return_value=0), \
+            patch("sonic_installer.main.subprocess.run", return_value=run_result,
+                  side_effect=side_effect) as run:
+        result = CliRunner().invoke(sonic_installer, ["remove", "-y", "old"])
+    assert result.exit_code == 0, (result.output, result.exception)
+    bootloader.remove_image.assert_called_once_with("old")
+    return result, [c.args[0][1:] for c in run.call_args_list]
+
+
+def test_remove_prunes_db_certs_without_flag():
+    _, calls = _remove_with_prune()
+    assert calls == [["--auto"]]
+
+
+def test_remove_warns_when_prune_fails():
+    result, calls = _remove_with_prune(Mock(returncode=2, stdout="plan detail\n", stderr="boom"))
+    assert calls == [["--auto"]]
+    assert "prune failed" in result.output
+    assert "plan detail" in result.output
+
+
+def test_remove_prints_only_prune_summary_on_success():
+    stdout = "SONiC db certificate reset plan\nPRUNE_PLAN used=1\nPruning 2 stale Secure Boot db certificate(s)...\n" \
+             "  OK  /x verifies against the new db\nDone: db reset to 1 image-signing certificate(s).\n"
+    result, _ = _remove_with_prune(Mock(returncode=0, stdout=stdout, stderr=""))
+    assert "Pruning 2 stale" in result.output
+    assert "Done: db reset" in result.output
+    assert "PRUNE_PLAN" not in result.output
+    assert "verifies against" not in result.output
+
+
+def test_remove_survives_prune_exception():
+    result, _ = _remove_with_prune(side_effect=OSError("nope"))
+    assert "prune skipped" in result.output
+
+
+def test_remove_skips_prune_when_unsupported_or_script_missing():
+    assert _remove_with_prune(supported=False)[1] == []
+    assert _remove_with_prune(script_exists=False)[1] == []
+
+
+@pytest.mark.parametrize("images,expected_calls", [(["cur", "next", "old"], [["--auto"]]), (["cur", "next"], [])])
+def test_cleanup_prunes_only_when_images_were_removed(images, expected_calls):
+    bootloader = Mock()
+    bootloader.get_installed_images.return_value = images
+    bootloader.get_current_image.return_value = "cur"
+    bootloader.get_next_image.return_value = "next"
+    bootloader.is_secure_upgrade_image_verification_supported.return_value = True
+    with patch("sonic_installer.main.get_bootloader", return_value=bootloader), \
+            patch("sonic_installer.main.os.path.exists", return_value=True), \
+            patch("os.geteuid", return_value=0), \
+            patch("sonic_installer.main.subprocess.run",
+                  return_value=Mock(returncode=0, stdout="", stderr="")) as run:
+        result = CliRunner().invoke(sonic_installer, ["cleanup", "-y"])
+    assert result.exit_code == 0, (result.output, result.exception)
+    assert [c.args[0][1:] for c in run.call_args_list] == expected_calls
