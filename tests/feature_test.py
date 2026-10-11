@@ -248,7 +248,8 @@ class TestFeature(object):
     def test_show_feature_status_no_kube_status(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"].commands["status"], [])
+        result = runner.invoke(
+            show.cli.commands["feature"].commands["status"], [], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -276,7 +277,8 @@ class TestFeature(object):
     def test_show_feature_config(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"].commands["config"], [])
+        result = runner.invoke(
+            show.cli.commands["feature"].commands["config"], [], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -288,7 +290,7 @@ class TestFeature(object):
     def test_show_feature_status_abbrev_cmd(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"], ["st"])
+        result = runner.invoke(show.cli.commands["feature"], ["st"], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -297,7 +299,8 @@ class TestFeature(object):
     def test_show_bgp_feature_status(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"].commands["status"], ["bgp"])
+        result = runner.invoke(
+            show.cli.commands["feature"].commands["status"], ["bgp"], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -306,7 +309,8 @@ class TestFeature(object):
     def test_show_unknown_feature_status(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"].commands["status"], ["foo"])
+        result = runner.invoke(
+            show.cli.commands["feature"].commands["status"], ["foo"], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 1
@@ -314,7 +318,8 @@ class TestFeature(object):
     def test_show_feature_autorestart(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"].commands["autorestart"], [])
+        result = runner.invoke(
+            show.cli.commands["feature"].commands["autorestart"], [], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -342,7 +347,8 @@ class TestFeature(object):
     def test_show_bgp_autorestart_status(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"].commands["autorestart"], ["bgp"])
+        result = runner.invoke(
+            show.cli.commands["feature"].commands["autorestart"], ["bgp"], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -351,7 +357,8 @@ class TestFeature(object):
     def test_show_unknown_autorestart_status(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["feature"].commands["autorestart"], ["foo"])
+        result = runner.invoke(
+            show.cli.commands["feature"].commands["autorestart"], ["foo"], obj=Db())
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 1
