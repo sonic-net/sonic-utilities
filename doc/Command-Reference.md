@@ -10617,10 +10617,11 @@ This command displays all the mirror sessions that are configured.
 **config mirror_session**
 
 This command is used to add or remove mirroring sessions. Mirror session is identified by "session_name".
-This command supports configuring both SPAN/ERSPAN sessions.
+This command supports configuring SPAN, ERSPAN and SFLOW sessions.
 In SPAN user can configure mirroring of list of source ports/LAG to destination port in ingress/egress/both directions.
 In ERSPAN user can configure mirroring of list of source ports/LAG to a destination IP.
-Both SPAN/ERSPAN support ACL based mirroring and can be used in ACL configurations.
+In ERSPAN/SFLOW user can configure sampled mirroring of list of source ports/LAG to a destination IP.
+SPAN/ERSPAN support ACL based mirroring and can be used in ACL configurations.
 
 While adding a new ERSPAN session, users need to configure the following fields that are used while forwarding the mirrored packets.
 
@@ -10691,6 +10692,29 @@ While adding a new SPAN session, users need to configure the following fields th
   ------  --------  ----------  ---------------------------------  -----------
   port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both
   root@T1-2:~#
+  ```
+
+While adding a new SFLOW session, users need to configure the following fields:
+
+1) source IP address
+2) destination IP address
+3) DSCP value used in the IP header of the sFlow datagram
+4) TTL value
+5) List of source ports/LAG
+6) Sample rate (1-in-N). Valid values: 2..4294967295
+7) optional - Queue
+8) optional - Direction (Supported rx/tx/both. default direction is both)
+9) optional - Truncate size in bytes. Valid values: 64..9216
+10) optional - UDP destination port. Default: 6343
+
+- Usage:
+  ```
+  config mirror_session sflow add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [queue] <source-port-list> [direction] --sample_rate <value> [--truncate_size <value>] [--udp_dst_port <port>]
+  ```
+
+- Example:
+  ```
+  root@T1-2:~# config mirror_session sflow add sflow0 10.1.1.1 10.2.2.2 8 64 0 Ethernet0 rx --sample_rate 1000
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#mirroring)
