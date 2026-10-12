@@ -16886,6 +16886,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#macsec
 # SFP Utilities Commands
  This sub-section explains the list of commands available for SFP utilities feature.
 
+On a CPO platform detected by `device_info.get_cpo_data()`, `sfputil` prints
+`cpo.json detected, current device is cpo device, please use cpoutil instead`
+and exits with status 5 before initializing the chassis or executing a subcommand.
+Use `cpoutil` to manage CPO devices. `sfputil --help` remains available.
+
 ## SFP Utilities show commands
  
 - Show SFP EEPROM hex dump

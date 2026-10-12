@@ -602,6 +602,10 @@ def load_port_config():
 def cli():
     """sfputil - Command line utility for managing SFP transceivers"""
 
+    if device_info.get_cpo_data() is not None:
+        click.echo("cpo.json detected, current device is cpo device, please use cpoutil instead")
+        sys.exit(ERROR_NOT_IMPLEMENTED)
+
     if os.geteuid() != 0:
         click.echo("Root privileges are required for this operation")
         sys.exit(ERROR_PERMISSIONS)
