@@ -5891,6 +5891,20 @@ def _get_all_mgmtinterface_keys():
 # 'mtu' subcommand
 #
 
+def get_interface_max_mtu(interface_name, namespace=DEFAULT_NAMESPACE):
+    # Kernel netdev MTU ceiling (IFLA_MAX_MTU); None when it can't be read so callers fail open.
+    cmd = ['ip']
+    if namespace and namespace is not DEFAULT_NAMESPACE:
+        cmd += ['-n', str(namespace)]
+    cmd += ['-d', 'link', 'show', str(interface_name)]
+    try:
+        output = subprocess.check_output(cmd, universal_newlines=True, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    match = re.search(r'\bmaxmtu\s+(\d+)', output)
+    return int(match.group(1)) if match else None
+
+
 @interface.command()
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
@@ -5908,6 +5922,11 @@ def mtu(ctx, interface_name, interface_mtu, verbose):
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
     if interface_is_in_portchannel(portchannel_member_table, interface_name):
         ctx.fail("'interface_name' is in portchannel!")
+
+    max_mtu = get_interface_max_mtu(interface_name, ctx.obj['namespace'])
+    if max_mtu is not None and interface_mtu > max_mtu:
+        ctx.fail("Interface MTU {} exceeds maximum supported MTU {} on {}".format(
+            interface_mtu, max_mtu, interface_name))
 
     if ctx.obj['namespace'] is DEFAULT_NAMESPACE:
         command = ['portconfig', '-p', str(interface_name), '-m', str(interface_mtu)]
