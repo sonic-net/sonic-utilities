@@ -428,7 +428,7 @@ class TestDirectPlatformApiCommands(object):
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([
-            "show", "interface", "tx_disable", "Ethernet1", "--json"
+            "show", "interface", "tx-disable", "Ethernet1", "--json"
         ])
         assert json.loads(result.output) == {
             "Ethernet1": {
@@ -437,9 +437,27 @@ class TestDirectPlatformApiCommands(object):
         }
 
         table = invoke([
-            "show", "interface", "tx_disable", "Ethernet1"
+            "show", "interface", "tx-disable", "Ethernet1"
         ])
-        assert "Tx output disable" in table.output
+        assert table.exit_code == 0, table.output
+        assert table.output.splitlines()[0].split() == [
+            "Interface", "Lane", "Tx", "Disable", "Status"
+        ]
+        assert table.output.splitlines()[2].split() == ["Ethernet1", "Lane", "2", "true"]
+
+    def test_interface_tx_disable_displays_both_boolean_states(self):
+        table = invoke(["show", "interface", "tx-disable", "Ethernet0"])
+        assert table.exit_code == 0, table.output
+        assert [row.split() for row in table.output.splitlines()[2:]] == [
+            ["Ethernet0", "Lane", "1", "false"],
+            ["Ethernet0", "Lane", "2", "true"],
+        ]
+
+        result = invoke(["show", "interface", "tx-disable", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {
+            "Ethernet0": {"lane00": False, "lane01": True}
+        }
 
     def test_interface_speed_uses_existing_cmis_methods(self):
         result = invoke([

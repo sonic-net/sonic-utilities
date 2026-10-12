@@ -17152,9 +17152,9 @@ Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS
 
 ## CPO Utilities show commands
 
-**cpoutil show interface map|presence|dom|tx_disable|speed|lane-status|lpmode**
+**cpoutil show interface map|presence|dom|tx-disable|speed|lane-status|lpmode**
 
-These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown.
+These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.
 
 For a breakout subport, `map` and `lane-status` identify its ELS lasers only when `cpo.json` provides `laser_to_asic_lane_mapping`; otherwise the lasers are shown as `N/A (needs laser_to_asic_lane_mapping)`. `lane-status` shows a lane's laser and laser state only when the topology associates that lane with a laser.
 
@@ -17163,7 +17163,7 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
   cpoutil show interface map [PORT] [--json]          # OE, bank, lanes, ELS and lasers of each interface
   cpoutil show interface presence [PORT] [--json]     # CPO virtual-module presence
   cpoutil show interface dom [PORT] [--json]          # OE and ELS information, monitors and thresholds
-  cpoutil show interface tx_disable [PORT] [--json]   # per-lane Tx output state
+  cpoutil show interface tx-disable [PORT] [--json]   # per-lane Tx disable status
   cpoutil show interface speed [PORT] [--json]        # configured and active application per lane
   cpoutil show interface lane-status [PORT] [--json]  # OE datapath state and ELS lane state
   cpoutil show interface lpmode [PORT] [--json]       # low-power mode of the CPO virtual module
@@ -17218,14 +17218,14 @@ These commands display External Laser Source state.
 
 ## CPO Utilities config commands
 
-**cpoutil config interface lpmode|reset|tx_disable**
+**cpoutil config interface lpmode|reset|tx-disable**
 
 These commands control a CPO virtual module. They call the platform's CPO object for the selected port (`CpoBase.set_lpmode()`, `reset()` and `tx_disable()`), and the platform decides how the hardware is controlled. When the platform does not implement a control, the command reports that it is not implemented.
 
 PORT is one port, or a comma-separated list. Each command lists the ports it affects:
 
 - `lpmode` and `reset` act through the CPO controller, so they apply to every port the controller serves, including breakout subports.
-- `tx_disable` acts on the port's CPO virtual module, so it applies to every port that shares it, such as breakout subports.
+- `tx-disable` acts on the port's CPO virtual module, so it applies to every port that shares it, such as breakout subports.
 
 These are maintenance overrides and are not persistent: xcvrd restores full power when it next provisions the ports. After a reset, the affected ports must be re-provisioned (for example, by an admin toggle).
 
@@ -17233,7 +17233,7 @@ These are maintenance overrides and are not persistent: xcvrd restores full powe
   ```
   cpoutil config interface lpmode PORT {full|low}
   cpoutil config interface reset PORT
-  cpoutil config interface tx_disable PORT {enable|disable}
+  cpoutil config interface tx-disable PORT {true|false}
   ```
 
 - Example:
@@ -17241,7 +17241,7 @@ These are maintenance overrides and are not persistent: xcvrd restores full powe
   admin@sonic:~$ cpoutil config interface lpmode Ethernet448 low
   Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... OK
 
-  admin@sonic:~$ cpoutil config interface tx_disable Ethernet448 enable
+  admin@sonic:~$ cpoutil config interface tx-disable Ethernet448 true
   Enabling Tx-disable for Ethernet448 (Ethernet448) ... OK
   ```
 

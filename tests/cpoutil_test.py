@@ -508,7 +508,7 @@ def command_paths(command, path=()):
 
 HARDWARE_COMMANDS = [
     ["show", "interface", name] for name in
-    ("map", "presence", "dom", "tx_disable", "speed", "lane-status")
+    ("map", "presence", "dom", "tx-disable", "speed", "lane-status")
 ] + [
     ["show", "oe", name] for name in
     ("lpmode", "status", "temperature", "input-power")
@@ -516,7 +516,7 @@ HARDWARE_COMMANDS = [
     ["show", "els", name] for name in
     ("lpmode", "status", "temperature", "output-power")
 ] + [
-    ["config", "interface", "tx_disable", "Ethernet0", "enable"],
+    ["config", "interface", "tx-disable", "Ethernet0", "true"],
     ["config", "interface", "lpmode", "Ethernet0", "low"],
     ["config", "interface", "reset", "Ethernet0"],
     ["config", "oe", "lpmode", "0", "full"],
@@ -534,6 +534,29 @@ HARDWARE_COMMANDS = [
 
 
 class TestCommandInitialization:
+    @pytest.mark.parametrize("arguments", [
+        ["show", "interface", "tx_disable", "Ethernet0"],
+        ["config", "interface", "tx_disable", "Ethernet0", "true"],
+    ])
+    def test_tx_disable_rejects_underscore_command(self, monkeypatch, arguments):
+        initialize = mock.Mock(side_effect=AssertionError("invalid command accessed hardware"))
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 2
+        assert "No such command 'tx_disable'" in result.output
+        initialize.assert_not_called()
+
+    @pytest.mark.parametrize("state", ["enable", "disable"])
+    def test_tx_disable_rejects_legacy_states(self, monkeypatch, state):
+        initialize = mock.Mock(side_effect=AssertionError("invalid state accessed hardware"))
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage([
+            "config", "interface", "tx-disable", "Ethernet0", state
+        ])
+        assert result.exit_code == 2
+        assert "Invalid value" in result.output
+        initialize.assert_not_called()
+
     @pytest.mark.parametrize("path", list(command_paths(cpoutil.cli)))
     @pytest.mark.parametrize("help_option", ["-h", "--help"])
     def test_help_does_not_load_platform(self, monkeypatch, path, help_option):
@@ -790,7 +813,7 @@ class TestCommandCoverage(object):
             ["show", "interface", "map"],
             ["show", "interface", "dom", "Ethernet0"],
             ["show", "interface", "dom", "Ethernet0", "--json"],
-            ["show", "interface", "tx_disable", "Ethernet0"],
+            ["show", "interface", "tx-disable", "Ethernet0"],
             ["show", "interface", "speed", "Ethernet0"],
             ["show", "interface", "lane-status", "Ethernet0"],
             ["show", "oe", "lpmode"],
@@ -811,7 +834,7 @@ class TestCommandCoverage(object):
     @pytest.mark.parametrize(
         "arguments",
         [
-            ["config", "interface", "tx_disable", "Ethernet0", "enable"],
+            ["config", "interface", "tx-disable", "Ethernet0", "true"],
             ["config", "interface", "lpmode", "Ethernet0", "low"],
             ["config", "interface", "reset", "Ethernet0"],
             ["config", "oe", "lpmode", "0", "low"],
@@ -830,13 +853,13 @@ class TestCommandCoverage(object):
         assert not hooked.writes
 
     @pytest.mark.parametrize("arguments", [
-        ["config", "oe", "tx_disable", "0", "enable"],
-        ["config", "els", "tx_disable", "0", "enable"],
+        ["config", "oe", "tx-disable", "0", "enable"],
+        ["config", "els", "tx-disable", "0", "enable"],
     ])
     def test_endpoint_tx_disable_commands_are_removed(self, hooked, arguments):
         result = invoke_coverage(arguments)
         assert result.exit_code != 0
-        assert "No such command 'tx_disable'" in result.output
+        assert "No such command 'tx-disable'" in result.output
         hooked.tx_disable.assert_not_called()
 
     def test_oe_reset_reports_reprovisioning_requirement(self, hooked):
@@ -1479,7 +1502,7 @@ class TestVmoduleControls:
 
     @pytest.mark.parametrize("port", ["Ethernet0", "Ethernet4"])
     def test_tx_disable_acts_on_the_port_cpo_object(self, vmodules, port):
-        result = invoke_coverage(["config", "interface", "tx_disable", port, "enable"])
+        result = invoke_coverage(["config", "interface", "tx-disable", port, "true"])
         assert result.exit_code == 0, result.output
         # Breakout subports share the physical port's CPO object.
         assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
@@ -1490,7 +1513,7 @@ class TestVmoduleControls:
 
     def test_tx_disable_calls_each_cpo_object_once(self, vmodules):
         result = invoke_coverage(
-            ["config", "interface", "tx_disable", "Ethernet0,Ethernet4,Ethernet8", "disable"])
+            ["config", "interface", "tx-disable", "Ethernet0,Ethernet4,Ethernet8", "false"])
         assert result.exit_code == 0, result.output
         assert "Disabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
         assert "Disabling Tx-disable for Ethernet8 (Ethernet8) ... OK" in result.output
@@ -1501,7 +1524,7 @@ class TestVmoduleControls:
     @pytest.mark.parametrize("command, method", [
         (["config", "interface", "lpmode", "Ethernet0,Ethernet16", "low"], "set_lpmode"),
         (["config", "interface", "reset", "Ethernet0,Ethernet16"], "reset"),
-        (["config", "interface", "tx_disable", "Ethernet0,Ethernet16", "enable"], "tx_disable"),
+        (["config", "interface", "tx-disable", "Ethernet0,Ethernet16", "true"], "tx_disable"),
     ])
     def test_hardware_error_is_reported_with_completed_targets(self, vmodules, command, method):
         getattr(vmodules[3], method).side_effect = OSError(5, "I2C read failed")
@@ -1514,7 +1537,7 @@ class TestVmoduleControls:
 
     def test_tx_disable_partial_failure_names_completed_targets(self, vmodules):
         vmodules[3].tx_disable.return_value = False
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet0,Ethernet16", "enable"])
+        result = invoke_coverage(["config", "interface", "tx-disable", "Ethernet0,Ethernet16", "true"])
         assert result.exit_code != 0
         assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
         assert "Enabling Tx-disable for Ethernet16 (Ethernet16) ... Failed" in result.output
@@ -1530,12 +1553,12 @@ class TestVmoduleControls:
     @pytest.mark.parametrize("command", [
         ["config", "interface", "lpmode", "Ethernet16", "low"],
         ["config", "interface", "reset", "Ethernet16"],
-        ["config", "interface", "tx_disable", "Ethernet16", "enable"],
+        ["config", "interface", "tx-disable", "Ethernet16", "true"],
         ["show", "interface", "lpmode", "Ethernet16"],
     ])
     @pytest.mark.parametrize("unsupported", ["missing", "not_implemented"])
     def test_unsupported_platform(self, vmodules, command, unsupported):
-        method = {"lpmode": "set_lpmode", "reset": "reset", "tx_disable": "tx_disable"}[command[2]] \
+        method = {"lpmode": "set_lpmode", "reset": "reset", "tx-disable": "tx_disable"}[command[2]] \
             if command[0] == "config" else "get_lpmode"
         if unsupported == "missing":
             cpoutil.cpo_object_map[PORT][3] = types.SimpleNamespace()
@@ -1627,7 +1650,7 @@ class TestGangedPorts:
         cpoutil.cpo_object_map[PORT][2] = coverage_environment
         return coverage_environment
 
-    @pytest.mark.parametrize("command", ["tx_disable", "speed", "lane-status"])
+    @pytest.mark.parametrize("command", ["tx-disable", "speed", "lane-status"])
     def test_all_port_commands_use_the_logical_port(self, ganged, command):
         result = invoke_coverage(["show", "interface", command, "--json"])
         assert result.exit_code == 0, result.output
@@ -1788,7 +1811,7 @@ class TestBreakoutWithoutLaneMapping:
 
     def test_tx_disable_uses_the_cpo_object_without_laser_mapping(self, breakout, monkeypatch):
         monkeypatch.setattr(breakout, "tx_disable", mock.Mock(return_value=True), raising=False)
-        result = invoke_coverage(["config", "interface", "tx_disable", "Ethernet1", "enable"])
+        result = invoke_coverage(["config", "interface", "tx-disable", "Ethernet1", "true"])
         assert result.exit_code == 0, result.output
         assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet1) ... OK" in result.output
         breakout.tx_disable.assert_called_once_with(True)

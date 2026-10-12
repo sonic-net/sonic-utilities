@@ -1391,11 +1391,11 @@ def show_interface_dom(port, json_output):
         )
 
 
-@show_interface.command("tx_disable")
+@show_interface.command("tx-disable")
 @click.argument("port", required=False)
 @output_option
 def show_interface_tx_disable(port, json_output):
-    """Display per-lane Tx output state."""
+    """Display per-lane Tx disable status (true means disabled)."""
     records = {}
     try:
         for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
@@ -1414,8 +1414,8 @@ def show_interface_tx_disable(port, json_output):
     print_records(
         records,
         json_output,
-        ("Interface", "Tx Output State"),
-        boolean_values=("Tx output disable", "Tx output enable"),
+        ("Interface", "Tx Disable Status"),
+        boolean_values=("true", "false"),
         field_header="Lane",
     )
 
@@ -1830,17 +1830,12 @@ def config_interface():
     """Control a front-panel CPO interface."""
 
 
-@config_interface.command("tx_disable")
+@config_interface.command("tx-disable")
 @click.argument("port")
-@click.argument("state", type=click.Choice(["enable", "disable"]))
+@click.argument("state", type=click.Choice(["true", "false"]))
 def config_interface_tx_disable(port, state):
-    """Enable or disable Tx-disable of a CPO virtual module.
-
-    PORT is one or more comma-separated ports. The setting applies to the
-    port's CPO virtual module and every port that shares it, such as breakout
-    subports.
-    """
-    disable = state == "enable"
+    """Enable or disable Tx-disable of a CPO virtual module."""
+    disable = state == "true"
     try:
         targets = get_vmodule_targets(port, per_controller=False)
         _run_vmodule_action(
