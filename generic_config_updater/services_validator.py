@@ -226,7 +226,7 @@ def vlanintf_validator(old_config, upd_config, keys):
             shlex.split(cmd), capture_output=True, check=False, text=True
         )
         if result.returncode != 0:
-            if "No such file or directory" in result.stderr:
+            if "RTNETLINK answers: No such file or directory" in result.stderr:
                 continue
             logger.log(logger.LOG_PRIORITY_ERROR,
                        f"vlanintf_validator: Failed to flush neighbors for "
