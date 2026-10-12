@@ -70,6 +70,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import watchdog
 
 # mock masic APIs for unit test
 try:
@@ -1641,6 +1642,7 @@ config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
+config.add_command(watchdog.watchdog)
 config.add_command(vxlan.vxlan)
 
 # add stp commands
