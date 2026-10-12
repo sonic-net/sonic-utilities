@@ -819,7 +819,6 @@ class TestCommandCoverage(object):
             ["show", "oe", "lpmode"],
             ["show", "oe", "status"],
             ["show", "oe", "temperature"],
-            ["show", "oe", "input-power"],
             ["show", "interface", "presence"],
             ["show", "els", "lpmode"],
             ["show", "els", "status"],
@@ -1365,74 +1364,39 @@ def bank_cpos(monkeypatch):
 
 
 class TestOeInputPower:
-    @pytest.mark.parametrize("selector", [[], ["0"], ["oe0"]])
-    def test_reads_each_bank_once_and_preserves_oe_ownership(self, bank_cpos, selector):
-        result = invoke_coverage(["show", "oe", "input-power", *selector, "--json"])
-        assert result.exit_code == 0, result.output
-        expected = {"oe0": {
-            "bank_0": bank_cpos[1].api.get_rx_power.return_value,
-            "bank_1": bank_cpos[2].api.get_rx_power.return_value,
-        }}
-        if not selector:
-            expected["oe1"] = {"bank_0": bank_cpos[3].api.get_rx_power.return_value}
-            bank_cpos[3].api.get_rx_power.assert_called_once_with()
-        else:
-            bank_cpos[3].api.get_rx_power.assert_not_called()
-        assert json.loads(result.output) == expected
-        bank_cpos[1].api.get_rx_power.assert_called_once_with()
-        bank_cpos[2].api.get_rx_power.assert_called_once_with()
+    @pytest.mark.parametrize("selector", [[], ["0"], ["oe0"], ["oe1"]])
+    @pytest.mark.parametrize("json_option", [[], ["--json"]])
+    def test_reports_missing_api_without_reading_power(
+            self, bank_cpos, monkeypatch, selector, json_option):
+        api_getters = []
+        for cpo in bank_cpos.values():
+            getter = mock.Mock(side_effect=AssertionError("No power API should be called"))
+            monkeypatch.setattr(cpo.oe, "get_api", getter)
+            api_getters.append(getter)
 
-    def test_table_identifies_each_bank_and_its_local_media_lanes(self, bank_cpos):
-        result = invoke_coverage(["show", "oe", "input-power", "0"])
-        assert result.exit_code == 0, result.output
-        assert "Bank / Media Lane" in result.output
-        for bank, port in [(0, 1), (1, 2)]:
-            for lane, power in enumerate(bank_cpos[port].api.get_rx_power.return_value, 1):
-                assert "OE0 bank {} / Lane {} {:g}".format(bank, lane, power) in [
-                    " ".join(line.split()) for line in result.output.splitlines()
-                ]
+        result = invoke_coverage(["show", "oe", "input-power", *selector, *json_option])
 
-    def test_preserves_nonzero_topology_bank_ids(self, bank_cpos, monkeypatch):
-        data = json.loads(json.dumps(CPO_DATA))
-        data["interfaces"]["Ethernet0"]["oe_bank_id"] = 56
-        data["interfaces"]["Ethernet8"]["oe_bank_id"] = 63
-        monkeypatch.setattr(cpoutil, "cpo_mapping", CpoMapping(data))
-        result = invoke_coverage(["show", "oe", "input-power", "0", "--json"])
-        assert result.exit_code == 0, result.output
-        assert json.loads(result.output) == {"oe0": {
-            "bank_56": bank_cpos[1].api.get_rx_power.return_value,
-            "bank_63": bank_cpos[2].api.get_rx_power.return_value,
-        }}
+        assert result.exit_code == 1
+        assert result.output.strip() == (
+            "Error: OE input optical power is not implemented: "
+            "no corresponding API is available"
+        )
+        for getter in api_getters:
+            getter.assert_not_called()
+        for cpo in bank_cpos.values():
+            cpo.api.get_rx_power.assert_not_called()
+
+    def test_unknown_oe_still_reports_invalid_resource(self, bank_cpos):
+        result = invoke_coverage(["show", "oe", "input-power", "99"])
+        assert result.exit_code != 0
+        assert "not implemented" not in result.output
+        assert "99" in result.output
 
     @pytest.mark.parametrize("json_option", [[], ["--json"]])
-    @pytest.mark.parametrize("missing", ["object", "api"])
-    def test_missing_bank_fails_without_partial_output(self, bank_cpos, json_option, missing):
-        if missing == "object":
-            del cpoutil.cpo_object_map[PORT][2]
-        else:
-            bank_cpos[2].api = None
-        result = invoke_coverage(["show", "oe", "input-power", "0", *json_option])
-        assert result.exit_code != 0
-        assert "oe0" in result.output and "bank 1" in result.output
-        assert "Input Power (mW)" not in result.output
-        assert "bank_0" not in result.output
-        bank_cpos[1].api.get_rx_power.assert_not_called()
-
-    @pytest.mark.parametrize("values", [None, [], {}])
-    def test_empty_bank_read_is_reported_as_failure(self, bank_cpos, values):
-        bank_cpos[2].api.get_rx_power.return_value = values
-        result = invoke_coverage(["show", "oe", "input-power", "0", "--json"])
-        assert result.exit_code != 0
-        assert "oe0 bank 1 input-power API returned no lane data" in result.output
-        assert "bank_0" not in result.output
-
-    @pytest.mark.parametrize("error", [NotImplementedError("unsupported"), AttributeError("missing")])
-    def test_bank_read_error_is_reported_with_bank_context(self, bank_cpos, error):
-        bank_cpos[2].api.get_rx_power.side_effect = error
-        result = invoke_coverage(["show", "oe", "input-power", "0", "--json"])
-        assert result.exit_code != 0
-        assert "oe0 bank 1 input-power read failed" in result.output
-        assert "bank_0" not in result.output
+    def test_entry_point_returns_cli_error_code(self, bank_cpos, monkeypatch, capsys, json_option):
+        monkeypatch.setattr(sys, "argv", ["cpoutil", "show", "oe", "input-power", "0", *json_option])
+        assert cpoutil.main() == cpoutil.ERROR_INVALID_RESOURCE
+        assert "OE input optical power is not implemented" in capsys.readouterr().err
 
 
 VMODULE_PORT_CONFIG = {

@@ -533,10 +533,8 @@ class TestDirectPlatformApiCommands(object):
         result = invoke(["show", "els", "status", "0", "--json"])
         assert json.loads(result.output) == {"els0": "ModuleReady"}
 
-    def test_measurements_keep_command_specific_precision(self):
-        input_power = invoke(["show", "oe", "input-power", "0"])
+    def test_temperature_keeps_measurement_precision(self):
         temperature = invoke(["show", "oe", "temperature", "0"])
-        assert "1.5238" in input_power.output
         assert "53.125" in temperature.output
 
     def test_json_records_use_natural_top_level_order(self, capsys):

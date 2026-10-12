@@ -17184,7 +17184,10 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
 
 **cpoutil show oe lpmode|status|temperature|input-power**
 
-These commands display Optical Engine state. `input-power` reports every mapped bank of the OE.
+These commands display Optical Engine state. `input-power` is reserved for the
+light-source optical power supplied to the OE by the ELS. No corresponding API
+is currently available, so the command reports "not implemented" and exits with
+status 3 in both table and JSON modes. Media RX power is not used as a substitute.
 
 - Usage:
   ```

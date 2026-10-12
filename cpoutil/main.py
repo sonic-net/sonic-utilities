@@ -507,34 +507,6 @@ def get_els_lpmode(_api):
     )
 
 
-def get_oe_bank_apis(resource_id):
-    """Resolve one API per mapped OE bank before any reads or writes."""
-    bank_ports = {}
-    for mapping in cpo_mapping.get_interfaces():
-        if mapping.oe_name == resource_id:
-            bank_ports.setdefault(mapping.oe_bank, []).extend(mapping.physical_ports)
-    targets = []
-    for bank, physical_ports in sorted(bank_ports.items()):
-        for physical_port in dict.fromkeys(physical_ports):
-            cpo = cpo_object_map[PORT].get(physical_port)
-            if cpo is not None:
-                targets.append((bank, get_oe_api(
-                    cpo, "{} bank {}".format(resource_id, bank)
-                )))
-                break
-        else:
-            raise CpoCommandError(
-                "No CPO object is available for '{}' bank {}".format(
-                    resource_id, bank
-                )
-            )
-    if not targets:
-        raise CpoCommandError(
-            "No OE bank mapping is available for '{}'".format(resource_id)
-        )
-    return targets
-
-
 def _get_els_lane_count(info):
     """Return the number of lasers reported by the public ELSFP API."""
     if not isinstance(info, dict):
@@ -1571,34 +1543,14 @@ def show_oe_temperature(oe_index, json_output):
 @click.argument("oe_index", required=False)
 @output_option
 def show_oe_input_power(oe_index, json_output):
-    """Display input optical power for every mapped OE bank.
-
-    Bank IDs come from the topology; media lanes are local to each bank.
-    """
-    records = {}
+    """OE light-source input power is not implemented: no API is available."""
     try:
-        for resource_id, _ in get_resource_cpo_objects(
-                OPTICAL_ENGINE, oe_index):
-            records[resource_id] = {}
-            for bank, api in get_oe_bank_apis(resource_id):
-                try:
-                    values = api.get_rx_power()
-                except (NotImplementedError, AttributeError) as exc:
-                    raise CpoCommandError(
-                        "{} bank {} input-power read failed: {}".format(resource_id, bank, exc)
-                    ) from exc
-                if not isinstance(values, (list, tuple, dict)) or not values:
-                    raise CpoCommandError(
-                        "{} bank {} input-power API returned no lane data".format(resource_id, bank)
-                    )
-                records[resource_id]["bank_{}".format(bank)] = values
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+        get_resource_cpo_objects(OPTICAL_ENGINE, oe_index)
+    except CpoCommandError as exc:
         raise click.ClickException(str(exc))
-    print_records(
-        records,
-        json_output,
-        ("OE", "Input Power (mW)"),
-        field_header="Bank / Media Lane",
+    # Media RX power is not the optical power supplied by the ELS to the OE.
+    raise click.ClickException(
+        "OE input optical power is not implemented: no corresponding API is available"
     )
 
 
