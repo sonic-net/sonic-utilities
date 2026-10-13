@@ -16,13 +16,13 @@ import argparse
 import signal
 
 from sonic_py_common import logger, multi_asic
-from swsscommon.swsscommon import SonicDBConfig
+from swsscommon.swsscommon import SonicDBConfig  # noqa: E402
 
 from scapy.layers.l2 import Ether  # noqa: E402
 from scapy.sendrecv import sendp, sniff  # noqa: E402
 from scapy.packet import split_layers, bind_layers  # noqa: E402
 import scapy.contrib.lacp  # noqa: E402
-from utilities_common.lacp import LACPRetryCount, get_retry_count_port_channels
+from utilities_common.lacp import LACPRetryCount, get_retry_count_port_channels  # noqa: E402
 
 conf.verb = False
 

@@ -66,8 +66,8 @@ def craft_lacp_packet(portChannelConfig, portName, preserve_retry_count=False):
                 type(actor_retry_count) is not int or not 3 < actor_retry_count <= 255 or
                 type(partner_retry_count) is not int or not 0 < partner_retry_count <= 255):
             raise ValueError(f"Invalid extended retry-count state for {portName}")
-        l4 = LACPRetryCount(version=0xf1, actor_retry_count=actor_retry_count,
-                           partner_retry_count=partner_retry_count)
+        l4 = LACPRetryCount(
+            version=0xf1, actor_retry_count=actor_retry_count, partner_retry_count=partner_retry_count)
     l4.actor_system_priority = actorConfig["system_priority"]
     l4.actor_system = actorConfig["system"]
     l4.actor_key = actorConfig["key"]
