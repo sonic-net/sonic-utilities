@@ -137,7 +137,9 @@ def test_unsupported_portchannels_probe_concurrently():
 
     assert failed == sorted(port_channels)
     assert lldp_calls == ["asic0"]
-    assert config_calls == [(name, "asic0") for name in sorted(port_channels)]
+    assert sorted(config_calls) == [
+        (name, "asic0") for name in sorted(port_channels)
+    ]
     assert len(sent) == 8
     assert sum(1 for _, kwargs in sent if "count" not in kwargs) == 4
     assert sum(1 for _, kwargs in sent if kwargs.get("count") == 2) == 4
@@ -332,6 +334,10 @@ def test_listener_error_after_detection_remains_a_probe_failure_and_resets():
     assert any(kwargs.get("count") == 2 for _, kwargs in sent)
     assert any(
         method == "log_error" and "capture failed after detection" in message
+        for method, message, _ in namespace["log"].messages
+    )
+    assert not any(
+        method == "log_warning" and "without teamd retry count feature" in message
         for method, message, _ in namespace["log"].messages
     )
 

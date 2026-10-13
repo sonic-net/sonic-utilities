@@ -355,12 +355,13 @@ def probePortChannel(portChannel, namespace, lldpInfo):
             )
             return True
 
-        log.log_warning(
-            "WARNING: Peer device {} is running version of SONiC without teamd retry count feature".format(
-                peerName
-            ),
-            also_print_to_console=True,
-        )
+        if not probeFailed and resetSucceeded:
+            log.log_warning(
+                "WARNING: Peer device {} is running version of SONiC without teamd retry count feature".format(
+                    peerName
+                ),
+                also_print_to_console=True,
+            )
         return False
 
     log.log_warning(
