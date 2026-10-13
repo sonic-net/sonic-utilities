@@ -78,13 +78,13 @@ def test_standard_packet_does_not_require_retry_state(keepalive, port_channel):
 
 
 @pytest.mark.parametrize("new_version,reset", [(False, False), (True, False), (True, True)])
-def test_retry_helper_packet_behavior_is_unchanged(keepalive, lacp, port_channel, monkeypatch,
-                                                  new_version, reset):
+def test_retry_helper_packet_behavior_is_unchanged(
+        keepalive, lacp, port_channel, monkeypatch, new_version, reset):
     monkeypatch.setattr(SlowProtocol, "payload_guess", SlowProtocol.payload_guess[:])
     helper = load_module("teamd_retry_test_module", ROOT / "scripts" / "teamd_increase_retry_count.py")
     assert helper.get_retry_count_port_channels is lacp.get_retry_count_port_channels
-    packet = bytes(helper.craftLacpPacket(port_channel, "Ethernet0",
-                                         isResetPacket=reset, newVersion=new_version))
+    packet = bytes(helper.craftLacpPacket(
+        port_channel, "Ethernet0", isResetPacket=reset, newVersion=new_version))
     standard = bytes(keepalive.craft_lacp_packet(port_channel, "Ethernet0"))
     assert len(packet) == len(standard) == 124
     if new_version:
@@ -130,8 +130,8 @@ def test_member_selection_and_namespace(keepalive, port_channel, namespace, pres
         ("PortChannel3", "Ethernet8"), ("PortChannel1", "Ethernet12"),
     ]
     app_db.get.side_effect = ["up", "up", "down", "up"]
-    config_db.get_entry.side_effect = [{"admin_status": "up"}, {"admin_status": "up"},
-                                     {"admin_status": "down"}]
+    config_db.get_entry.side_effect = [
+        {"admin_status": "up"}, {"admin_status": "up"}, {"admin_status": "down"}]
     with mock.patch.object(keepalive, "ConfigDBConnector", side_effect=[app_db, config_db]) as connector, \
             mock.patch.object(keepalive, "get_retry_count_port_channels", return_value={"PortChannel1"}) as select, \
             mock.patch.object(keepalive, "get_port_channel_config", return_value=port_channel) as config, \
@@ -208,8 +208,8 @@ def test_keepalive_replays_cached_extended_packet(keepalive, port_channel):
 
 
 def test_main_retries_then_forks_with_preservation(keepalive, monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["lag_keepalive.py", "--namespace", "asic1",
-                                     "--preserve-retry-count", "--fork-into-background"])
+    monkeypatch.setattr(sys, "argv", [
+        "lag_keepalive.py", "--namespace", "asic1", "--preserve-retry-count", "--fork-into-background"])
     packets = {"Ethernet0": (mock.sentinel.socket, mock.sentinel.packet)}
     with mock.patch.object(keepalive, "get_lacpdu_per_lag_member",
                            side_effect=[ValueError("not ready"), (["Ethernet0"], packets)]) as get, \
