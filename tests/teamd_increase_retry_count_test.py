@@ -398,7 +398,7 @@ def extract_shell_function(name):
     start = lines.index("function {}()".format(name))
     for end in range(start + 1, len(lines)):
         if lines[end] == "}":
-            return "\n".join(lines[start : end + 1]) + "\n"
+            return "\n".join(lines[start:end + 1]) + "\n"
     raise AssertionError("function {} has no closing brace".format(name))
 
 
