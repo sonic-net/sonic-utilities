@@ -3,10 +3,8 @@ import os
 import sys
 import traceback
 import click
-import pytest
 from unittest import mock
 from click.testing import CliRunner
-from utilities_common.db import Db
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -15,6 +13,7 @@ sys.path.insert(0, modules_path)
 
 config_load_input_path = os.path.join(test_path, "config_load_input")
 mock_db_path = os.path.join(test_path, "config_reload_input")
+
 
 def mock_run_command_side_effect(*args, **kwargs):
     command = args[0]
@@ -25,6 +24,7 @@ def mock_run_command_side_effect(*args, **kwargs):
                    click.style(command, fg='green'))
     if kwargs.get('return_cmd'):
         return '', 0
+
 
 class TestConfigLoadYangValidation(object):
     @classmethod
@@ -39,7 +39,7 @@ class TestConfigLoadYangValidation(object):
         (config, show) = get_cmd_module
         valid_file = os.path.join(config_load_input_path, "valid_config.json")
         with mock.patch("utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)), \
              mock.patch.object(config, "config_file_yang_validation", return_value=True) as mock_validate:
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load"], [valid_file, "-y"])
@@ -78,7 +78,7 @@ class TestConfigLoadYangValidation(object):
         valid_file = os.path.join(config_load_input_path, "valid_config.json")
         with mock.patch("utilities_common.cli.run_command") as mock_run, \
              mock.patch.object(config, "config_file_yang_validation",
-                side_effect=Exception("YANG model load failed")) as mock_validate:
+                               side_effect=Exception("YANG model load failed")) as mock_validate:
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load"], [valid_file, "-y"])
             print(result.output)
@@ -91,7 +91,7 @@ class TestConfigLoadYangValidation(object):
         (config, show) = get_cmd_module
         valid_file = os.path.join(config_load_input_path, "valid_config.json")
         with mock.patch("utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run, \
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run, \
              mock.patch.object(config, "config_file_yang_validation", return_value=True):
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load"], [valid_file, "-y"])
@@ -109,7 +109,7 @@ class TestConfigLoadYangValidation(object):
         default_cfg = os.path.join(mock_db_path, "config_db.json")
         config.DEFAULT_CONFIG_DB_FILE = default_cfg
         with mock.patch("utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)), \
              mock.patch.object(config, "config_file_yang_validation", return_value=True) as mock_validate:
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load"], ["-y"])
