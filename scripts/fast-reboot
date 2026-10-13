@@ -1180,6 +1180,18 @@ function check_teamd_retry_count_probe_success()
     fi
 }
 
+function require_teamd_retry_count_probe_success()
+{
+    if [[ "${REQUIRE_TEAMD_RETRY_COUNT}" != "yes" ]]; then
+        return 0
+    fi
+
+    if ! check_teamd_retry_count_probe_success; then
+        error "Could not confirm that all neighbor devices are running SONiC with the retry count feature"
+        return "${EXIT_TEAMD_RETRY_COUNT_FAILURE}"
+    fi
+}
+
 function increase_teamd_retry_count()
 {
     if [[ -f /tmp/teamd_retry_count_probe_success$DEV ]]; then
@@ -1189,12 +1201,7 @@ function increase_teamd_retry_count()
 
 if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
     execute_in_namespaces asic probe_teamd_retry_count
-
-    # Check if all ASICs passed retry count probe if required
-    if [[ "${REQUIRE_TEAMD_RETRY_COUNT}" = "yes" ]]; then
-        check_teamd_retry_count_probe_success || error "Could not confirm that all neighbor devices are running SONiC with the retry count feature"
-        exit "${EXIT_TEAMD_RETRY_COUNT_FAILURE}"
-    fi
+    require_teamd_retry_count_probe_success || exit "$?"
 fi
 
 function pause_orchagent()
