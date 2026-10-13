@@ -1,0 +1,22 @@
+{
+    "SYSLOG_SERVER|2.2.2.2": {
+        "applied_transport_security": "false",
+        "failure_reason": "NONE"
+    },
+    "SYSLOG_SERVER|10.0.0.5": {
+        "applied_transport_security": "true",
+        "failure_reason": "NONE"
+    },
+    "SYSLOG_SERVER|10.0.0.6": {
+        "applied_transport_security": "false",
+        "failure_reason": "RSYSLOG_APPLY_FAILED"
+    },
+    "SYSLOG_SERVER|10.0.0.8": {
+        "applied_transport_security": "false",
+        "failure_reason": "NO_CERTIFICATE"
+    },
+    "SYSLOG_SERVER|10.0.0.9": {
+        "applied_transport_security": "false",
+        "failure_reason": "NO_PERMITTED_PEERS"
+    }
+}

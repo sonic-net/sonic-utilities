@@ -229,6 +229,129 @@ class TestSyslog:
         assert ERROR_PATTERN_NONEXISTENT_VRF in result.output
         assert result.exit_code == ERROR2
 
+    ########## CONFIG SYSLOG TLS ##########
+
+    @mock.patch("utilities_common.cli.run_command", mock.MagicMock(return_value=None))
+    def test_config_syslog_tls(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--protocol", "tls", "--tls-profile-id", "siem-east",
+             "--tls-permitted-peers", "syslog-east.example.com, *.east.example.com"],
+            obj=db
+        )
+        assert result.exit_code == SUCCESS, result.output
+
+        server = db.cfgdb.get_entry(config_syslog.SYSLOG_TABLE_CDB, "10.0.0.5")
+        assert server[config_syslog.SYSLOG_TLS_PERMITTED_PEERS] == "syslog-east.example.com,*.east.example.com"
+        assert server[config_syslog.SYSLOG_PROTOCOL] == "tls"
+        assert server[config_syslog.SYSLOG_TRANSPORT_SECURITY] == "true"
+        assert server[config_syslog.SYSLOG_TLS_PROFILE_ID] == "siem-east"
+        assert server[config_syslog.SYSLOG_PORT] == str(config_syslog.SYSLOG_DEFAULT_TLS_PORT)
+
+    @mock.patch("utilities_common.cli.run_command", mock.MagicMock(return_value=None))
+    def test_config_syslog_tls_custom_port(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--protocol", "tls", "--tls-profile-id", "siem-west",
+             "--tls-permitted-peers", "syslog-west.example.com", "-p", "200"],
+            obj=db
+        )
+        assert result.exit_code == SUCCESS, result.output
+        server = db.cfgdb.get_entry(config_syslog.SYSLOG_TABLE_CDB, "10.0.0.5")
+        assert server[config_syslog.SYSLOG_PORT] == "200"
+        assert server[config_syslog.SYSLOG_TLS_PROFILE_ID] == "siem-west"
+
+    def test_config_syslog_tls_requires_profile(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--protocol", "tls", "--tls-permitted-peers", "syslog.example.com"], obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "tls-profile-id" in result.output.lower()
+
+    def test_config_syslog_tls_requires_permitted_peers(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--protocol", "tls", "--tls-profile-id", "siem-east"], obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "tls-permitted-peers" in result.output.lower()
+        assert db.cfgdb.get_entry(config_syslog.SYSLOG_TABLE_CDB, "10.0.0.5") == {}
+
+    def test_config_syslog_permitted_peers_requires_tls(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--tls-permitted-peers", "syslog.example.com"], obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "--protocol tls is required" in result.output
+
+    @pytest.mark.parametrize("peers", ["*", "bad peer", "a,,b", "-bad.example.com", "a/b", "*.", ""])
+    def test_config_syslog_tls_rejects_bad_permitted_peers(self, peers):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--protocol", "tls", "--tls-profile-id", "siem-east",
+             "--tls-permitted-peers", peers],
+            obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "not a valid permitted peer name" in result.output
+
+    def test_config_syslog_profile_requires_tls(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--tls-profile-id", "siem-east"], obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "--protocol tls is required" in result.output
+
+    def test_config_syslog_tls_rejects_gnxi(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--protocol", "tls", "--tls-profile-id", "gnxi",
+             "--tls-permitted-peers", "syslog.example.com"],
+            obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "not a valid syslog TLS profile id" in result.output
+
+    def test_config_syslog_tls_rejects_bad_profile_id(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.0.0.5", "--protocol", "tls", "--tls-profile-id", "bad/id",
+             "--tls-permitted-peers", "syslog.example.com"],
+            obj=db
+        )
+        assert result.exit_code == ERROR2
+        assert "not a valid syslog TLS profile id" in result.output
+
     @pytest.mark.parametrize("test_data", [{'interval':1, 'burst':100, 'expected_interval': '1', 'expected_burst': '100'},
                                            {'interval':0, 'burst':100, 'expected_interval': '0', 'expected_burst': '0'},
                                            {'interval':1, 'burst':0, 'expected_interval': '0', 'expected_burst': '0'}])
@@ -347,6 +470,30 @@ class TestSyslog:
         logger.debug(result.exit_code)
         assert result.exit_code == SUCCESS
         assert result.output == assert_show_output.show_syslog
+
+    def test_show_syslog_tls_apply_state(self):
+        keys = ("CONFIG_DB", "STATE_DB")
+        prev = {k: dbconnector.dedicated_dbs.get(k) for k in keys}
+        dbconnector.dedicated_dbs["CONFIG_DB"] = os.path.join(mock_db_path, "syslog_tls_cdb")
+        dbconnector.dedicated_dbs["STATE_DB"] = os.path.join(mock_db_path, "syslog_tls_state_db")
+        try:
+            db = Db()
+            runner = CliRunner()
+
+            result = runner.invoke(
+                show.cli.commands["syslog"], [], obj=db
+            )
+
+            logger.debug("\n" + result.output)
+            logger.debug(result.exit_code)
+            assert result.exit_code == SUCCESS
+            assert result.output == assert_show_output.show_syslog_tls
+        finally:
+            for k, v in prev.items():
+                if v is None:
+                    dbconnector.dedicated_dbs.pop(k, None)
+                else:
+                    dbconnector.dedicated_dbs[k] = v
 
     @pytest.mark.parametrize("test_data", [{'subcommand':'rate-limit-host', 'expected_output': assert_show_output.show_syslog_rate_limit_host},
                                            {'subcommand':'rate-limit-container', 'expected_output': assert_show_output.show_syslog_rate_limit_container}])
