@@ -241,10 +241,15 @@ function stop_service()
 # Start the lag_keepalive script to send LACPDUs to keep the LAGs refreshed
 function start_lag_keepalive()
 {
+    local args=(--fork-into-background --namespace "$NETNS")
+    if [[ ( "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ) &&
+          -f /tmp/teamd_retry_count_probe_success$DEV ]]; then
+        args+=(--preserve-retry-count)
+    fi
     # start sending LACPDUs to keep the LAGs refreshed
     # the process will die in 30s
     debug "Starting lag_keepalive to send LACPDUs ..."
-    timeout --foreground 30 python3 ${LAG_KEEPALIVE_SCRIPT} --fork-into-background --namespace "$NETNS"
+    timeout --foreground 30 python3 ${LAG_KEEPALIVE_SCRIPT} "${args[@]}"
 
     # give the lag_keepalive script a chance to send some LACPDUs
     sleep 5
@@ -1144,8 +1149,6 @@ fi
 
 execute_in_namespaces all init_warm_reboot_states
 
-execute_in_namespaces asic start_lag_keepalive
-
 if [[ $NUM_ASIC -eq 1 ]]; then
     setup_control_plane_assistant
 else
@@ -1229,6 +1232,8 @@ if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" |
     execute_in_namespaces asic increase_teamd_retry_count
 fi
 
+# Cache LACPDUs only after teamd has negotiated the extended retry counts.
+execute_in_namespaces asic start_lag_keepalive
 
 # We are fully committed to reboot from this point on because critical
 # service will go down and we cannot recover from it.
