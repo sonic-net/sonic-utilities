@@ -86,8 +86,6 @@ BMP_STATE_DB = 'BMP_STATE_DB'
 
 VLAN_SUB_INTERFACE_SEPARATOR = '.'
 
-GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
-
 COMMAND_TIMEOUT = 300
 
 # To be enhanced. Routing-stack information should be collected from a global
@@ -276,23 +274,23 @@ def connect_config_db():
     config_db.connect()
     return config_db
 
-def is_gearbox_configured():
+
+def platform_has_gearbox():
     """
-    Checks whether Gearbox is configured or not
+    Checks whether the platform ships a gearbox configuration.
+
+    Gearbox presence is a platform property: gearsyncd enables gearbox iff a
+    gearbox_config.json exists in the hwsku directory.
     """
-    app_db = SonicV2Connector()
     try:
-        app_db.connect(app_db.APPL_DB)
-
-        keys = app_db.keys(app_db.APPL_DB, '*')
-
-        # If any _GEARBOX_TABLE:phy:* records present in APPL_DB, then the gearbox is configured
-        if any(re.match(GEARBOX_TABLE_PHY_PATTERN, key) for key in keys):
-            return True
-        else:
-            return False
-    except RuntimeError:
+        hwsku_dir = device_info.get_path_to_hwsku_dir()
+    except Exception:
         return False
+
+    if not hwsku_dir:
+        return False
+
+    return os.path.isfile(os.path.join(hwsku_dir, 'gearbox_config.json'))
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 
@@ -351,8 +349,8 @@ cli.add_command(orchagent.orchagent)
 # syslog module
 cli.add_command(syslog.syslog)
 
-# Add greabox commands only if GEARBOX is configured
-if is_gearbox_configured():
+# Add gearbox commands only on platforms that have a gearbox
+if platform_has_gearbox():
     cli.add_command(gearbox.gearbox)
 
 # bgp module
