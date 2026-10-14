@@ -2260,6 +2260,7 @@ collect_nvidia_bmc_dump() {
     # times out. save_cmd tolerates fwutil failures without aborting the dump.
     save_cmd "fwutil show status"  "fwutil.status"
     save_cmd "fwutil show version" "fwutil.version"
+    save_cmd "get_component_versions.py" "component_versions"
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local HW_BMC_DUMP_FILE=/usr/bin/hw-management-bmc-generate-dump.sh
 
