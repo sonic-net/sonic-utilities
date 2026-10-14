@@ -16,17 +16,64 @@ REPLY_TIMEOUT_MS = 10000
 REDIS_TIMEOUT_MSECS = 0
 
 
-def _ms(ns):
-    """Convert ns -> ms as a float (no unit suffix)."""
-    return ns / 1_000_000.0
+# (threshold_ns, suffix) ladder for _fmt_duration. The largest entry whose
+# threshold is <= the value wins, so the unit tracks the magnitude instead of
+# being fixed. Executor run times are routinely single-digit microseconds while
+# scheduling latency and the running totals reach seconds or days, and no single
+# unit renders both ends legibly: at 0.01 ms resolution a 3 us run displayed as
+# "0.00".
+#
+# Runs to days deliberately: total_sched_ns accumulates over daemon uptime, so a
+# 1-second poll timer on a box up for a month is ~2.6e15 ns.
+_DURATION_LADDER = (
+    (1,                  "ns"),
+    (1_000,              "us"),
+    (1_000_000,          "ms"),
+    (1_000_000_000,      "s"),
+    (60_000_000_000,     "m"),
+    (3_600_000_000_000,  "h"),
+    (86_400_000_000_000, "d"),
+)
+
+
+def _sigfig3(value):
+    """Render a positive float with 3 significant figures."""
+    if value < 10:
+        return f"{value:.2f}"
+    if value < 100:
+        return f"{value:.1f}"
+    return f"{value:.0f}"
+
+
+def _fmt_duration(ns):
+    """Render a nanosecond count with an auto-scaled ASCII unit suffix.
+
+    ASCII "us" rather than the micro sign so the output survives any terminal
+    encoding or locale. Returns "0ns" for a genuine zero -- callers use "-" to
+    mean "no samples yet", which is a different statement.
+    """
+    n = int(ns)
+    if n <= 0:
+        return "0ns"
+
+    # Largest tier at or below n. n >= 1 here and _DURATION_LADDER[0] is
+    # (1, "ns"), so the ns tier always matches -- next() never falls through.
+    divisor, suffix = next(
+        (threshold, unit)
+        for threshold, unit in reversed(_DURATION_LADDER)
+        if n >= threshold
+    )
+
+    if suffix == "ns":
+        # Source resolution is already 1 ns; decimals would be noise.
+        return f"{n}ns"
+    return _sigfig3(n / divisor) + suffix
 
 
 def _fmt_quartet(median_ns, q1_ns, q3_ns, max_ns):
-    """Render a 'median/q1/q3/max' quartet in ms, two decimals each."""
-    return (f"{_ms(median_ns):.2f}/"
-            f"{_ms(q1_ns):.2f}/"
-            f"{_ms(q3_ns):.2f}/"
-            f"{_ms(max_ns):.2f}")
+    """Render a 'median/q1/q3/max' quartet, each auto-scaled with its unit."""
+    return "/".join(_fmt_duration(v)
+                    for v in (median_ns, q1_ns, q3_ns, max_ns))
 
 
 def _query_orchagent(op, namespace):
@@ -136,7 +183,7 @@ def _render_table(rows, multi_asic_mode=False):
                                        r["q1_ns"],
                                        r["q3_ns"],
                                        r["max_ns"])
-            total_run = f"{_ms(r['total_ns']):.2f}"
+            total_run = _fmt_duration(r["total_ns"])
 
         if r["sched_count"] == 0:
             sched_quartet = "-"
@@ -146,7 +193,7 @@ def _render_table(rows, multi_asic_mode=False):
                                          r["sched_q1_ns"],
                                          r["sched_q3_ns"],
                                          r["sched_max_ns"])
-            total_sched = f"{_ms(r['total_sched_ns']):.2f}"
+            total_sched = _fmt_duration(r["total_sched_ns"])
 
         # TOTAL column shows "<run>/<sched>" so a viewer can see at a
         # glance how much wall-clock the loop spent inside the task vs
@@ -171,11 +218,11 @@ def _render_table(rows, multi_asic_mode=False):
 
     headers = [
         "TASK",
-        "RUN TIME\nmedian/q1/q3/max\n(in msec)",
+        "RUN TIME\nmedian/q1/q3/max",
         "RUNS",
         "OUTLIERS",
-        "SCHED LATENCY\nmedian/q1/q3/max\n(in msec)",
-        "TOTAL\nrun/sched\n(in msec)",
+        "SCHED LATENCY\nmedian/q1/q3/max",
+        "TOTAL\nrun/sched",
     ]
     if multi_asic_mode:
         headers.insert(0, "ASIC")
