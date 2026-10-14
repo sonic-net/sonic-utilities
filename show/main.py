@@ -12,7 +12,6 @@ import utilities_common.multi_asic as multi_asic_util
 from importlib import reload
 from natsort import natsorted
 from sonic_py_common import device_info
-from swsscommon import swsscommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
@@ -1308,7 +1307,8 @@ def get_mac_sync_mode(db):
     metadata = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
     if metadata.get('subtype') == 'L3EvpnMH':
         return 'fpm'
-    fdb_sync = db.cfgdb.get_entry(swsscommon.CFG_FDB_SYNC_TABLE_NAME, 'global')
+    # TODO: use swsscommon.CFG_FDB_SYNC_TABLE_NAME once sonic-net/sonic-buildimage#29312 is merged.
+    fdb_sync = db.cfgdb.get_entry('FDB_SYNC', 'global')
     return fdb_sync.get('mac_sync_mode', 'kernel')
 
 
