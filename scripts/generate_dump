@@ -966,6 +966,8 @@ save_sdk_sysfs() {
     local excludes=("$@")
     # there are module's sysfs which we cannot access while the module is in fw control
     local fw_control_skip_list=(frequency_support frequency hw_present hw_reset low_power_mode power_good power_limit interrupt)
+    # there are module's sysfs which we cannot access while the module is in sw control
+    local sw_control_skip_list=(module_ext_info els_laser_status els_error module_cpo_info)
 
     $MKDIR $V -p "$dest"
 
@@ -1029,6 +1031,7 @@ save_sdk_sysfs() {
                     local base="$(basename "$f")"
                     should_skip "$base" "${excludes[@]}" && continue
                     [[ "$control" == "0" ]] && should_skip "$base" "${fw_control_skip_list[@]}" && continue
+                    [[ "$control" == "1" ]] && should_skip "$base" "${sw_control_skip_list[@]}" && continue
 
                     [[ "$only_copy_presence_files" == true && "$base" != "present" && "$base" != "hw_present" ]] && continue
                     [[ "$frequency_support" == "0" && "$base" == "frequency" ]] && continue
