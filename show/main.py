@@ -1699,6 +1699,52 @@ def table(verbose):
     run_command(cmd, display_cmd=verbose)
 
 
+# 'global' subcommand ("show lldp global")
+@lldp.command('global')
+def lldp_global():
+    """Show global LLDP configuration (LLDP|GLOBAL)"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    entry = config_db.get_entry('LLDP', 'GLOBAL')
+
+    header = ['Field', 'Value']
+    fields = [
+        ('hello_time', 'Hello Time'),
+        ('multiplier', 'Multiplier'),
+        ('system_name', 'System Name'),
+        ('system_description', 'System Description'),
+        ('mgmt_addr_interface', 'Mgmt Address Interface'),
+        ('supp_mgmt_address_tlv', 'Suppress Mgmt Address TLV'),
+        ('supp_system_capabilities_tlv', 'Suppress System Capabilities TLV'),
+        ('enabled', 'Enabled'),
+        ('mode', 'Mode'),
+    ]
+    body = [[label, entry.get(key, 'N/A')] for key, label in fields]
+    click.echo(tabulate(body, header))
+
+
+# 'port' subcommand ("show lldp port")
+@lldp.command('port')
+@click.argument('interfacename', required=False)
+def lldp_port(interfacename):
+    """Show per-port LLDP configuration (LLDP_PORT)"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    table = config_db.get_table('LLDP_PORT')
+
+    if interfacename is not None:
+        if clicommon.get_interface_naming_mode() == "alias":
+            interfacename = iface_alias_converter.alias_to_name(interfacename)
+        table = {k: v for k, v in table.items() if k == interfacename}
+
+    header = ['Interface', 'Enabled', 'Mode']
+    body = []
+    for key in natsorted(table):
+        entry = table[key]
+        body.append([key, entry.get('enabled', 'N/A'), entry.get('mode', 'N/A')])
+    click.echo(tabulate(body, header))
+
+
 #
 # 'logging' command ("show logging")
 #
