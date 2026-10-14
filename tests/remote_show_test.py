@@ -121,10 +121,16 @@ class TestRexecInterfacesStatus(object):
             self, mock_run, mock_run_command):
         import show.main as show
         runner = CliRunner()
+        status_command = show.cli.commands["interfaces"].commands["status"]
+        display_param = next(param for param in status_command.params
+                             if param.name == "display")
+        original_default = display_param.default
+        display_param.default = "frontend"
 
-        result = runner.invoke(
-            show.cli.commands["interfaces"].commands["status"],
-            ["--location", "SUPERVISOR"])
+        try:
+            result = runner.invoke(status_command, ["--location", "SUPERVISOR"])
+        finally:
+            display_param.default = original_default
 
         assert result.exit_code == 0
         assert "======== SUPERVISOR1 output: ========\n" in result.output
