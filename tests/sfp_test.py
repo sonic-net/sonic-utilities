@@ -1,3 +1,4 @@
+import re
 import sys
 import os
 from click.testing import CliRunner
@@ -316,28 +317,47 @@ Ethernet40: SFP EEPROM detected
         Vendor SN: INKAO2900002A
 """
 
-test_qsfp_dd_pm_output = """\
-Ethernet44:
-    Parameter        Unit    Min       Avg       Max       Threshold    Threshold    Threshold     Threshold    Threshold    Threshold
-                                                           High         High         Crossing      Low          Low          Crossing
-                                                           Alarm        Warning      Alert-High    Alarm        Warning      Alert-Low
-    ---------------  ------  --------  --------  --------  -----------  -----------  ------------  -----------  -----------  -----------
-    Tx Power         dBm     -8.22     -8.23     -8.24     -5.0         -6.0         False         -16.99       -16.003      False
-    Rx Total Power   dBm     -10.61    -10.62    -10.62    2.0          0.0          False         -21.0        -18.0        False
-    Rx Signal Power  dBm     -40.0     0.0       40.0      13.0         10.0         True          -18.0        -15.0        True
-    CD-short link    ps/nm   0.0       0.0       0.0       1000.0       500.0        False         -1000.0      -500.0       False
-    PDL              dB      0.5       0.6       0.6       4.0          4.0          False         0.0          0.0          False
-    OSNR             dB      36.5      36.5      36.5      99.0         99.0         False         0.0          0.0          False
-    eSNR             dB      30.5      30.5      30.5      99.0         99.0         False         0.0          0.0          False
-    CFO              MHz     54.0      70.0      121.0     3800.0       3800.0       False         -3800.0      -3800.0      False
-    DGD              ps      5.37      5.56      5.81      7.0          7.0          False         0.0          0.0          False
-    SOPMD            ps^2    0.0       0.0       0.0       655.35       655.35       False         0.0          0.0          False
-    SOP ROC          krad/s  1.0       1.0       2.0       N/A          N/A          N/A           N/A          N/A          N/A
-    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     False         0.0          0.0\
-          False
-    Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False         0.0          0.0          False
-    EVM              %       100.0     100.0     100.0     N/A          N/A          N/A           N/A          N/A          N/A
-"""
+test_qsfp_dd_pm_output = (
+    "Ethernet44:\n"
+    "    Parameter        Unit    Min       Avg       Max       Threshold    Threshold    "
+    "Threshold     Threshold    Threshold    Threshold\n"
+    "                                                           High         High         "
+    "Crossing      Low          Low          Crossing\n"
+    "                                                           Alarm        Warning      "
+    "Alert-High    Alarm        Warning      Alert-Low\n"
+    "    ---------------  ------  --------  --------  --------  -----------  -----------  "
+    "------------  -----------  -----------  -----------\n"
+    "    Tx Power         dBm     -8.22     -8.23     -8.24     -5.0         -6.0         False  "
+    "       -16.99       -16.003      False\n"
+    "    Rx Total Power   dBm     -10.61    -10.62    -10.62    2.0          0.0          False  "
+    "       -21.0        -18.0        False\n"
+    "    Rx Signal Power  dBm     -40.0     0.0       40.0      13.0         10.0         True   "
+    "       -18.0        -15.0        True\n"
+    "    CD-short link    ps/nm   0.0       0.0       0.0       1000.0       500.0        False  "
+    "       -1000.0      -500.0       False\n"
+    "    CD-long link     ps/nm   N/A       N/A       N/A       400000.0     200000.0     N/A    "
+    "       -400000.0    -200000.0    N/A\n"
+    "    PDL              dB      0.5       0.6       0.6       4.0          4.0          False  "
+    "       0.0          0.0          False\n"
+    "    OSNR             dB      36.5      36.5      36.5      99.0         99.0         False  "
+    "       0.0          0.0          False\n"
+    "    eSNR             dB      30.5      30.5      30.5      99.0         99.0         False  "
+    "       0.0          0.0          False\n"
+    "    CFO              MHz     54.0      70.0      121.0     3800.0       3800.0       False  "
+    "       -3800.0      -3800.0      False\n"
+    "    DGD              ps      5.37      5.56      5.81      7.0          7.0          False  "
+    "       0.0          0.0          False\n"
+    "    SOPMD            ps^2    0.0       0.0       0.0       655.35       655.35       False  "
+    "       0.0          0.0          False\n"
+    "    SOP ROC          krad/s  1.0       1.0       2.0       N/A          N/A          N/A    "
+    "       N/A          N/A          N/A\n"
+    "    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     False  "
+    "       0.0          0.0          False\n"
+    "    Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False  "
+    "       0.0          0.0          False\n"
+    "    EVM              %       100.0     100.0     100.0     N/A          N/A          N/A    "
+    "       N/A          N/A          N/A\n"
+)
 
 test_qsfp_status_output = """\
 Ethernet4:
@@ -900,6 +920,257 @@ Ethernet4: Transceiver status info not applicable
 Ethernet64: Transceiver status info not applicable
 """
 
+# `sfpshow` runs as a subprocess, so the banner's "Current System Time:" line and
+# flag-detail relative-time fields vary between runs. Parse tables into cell rows
+# before comparing so tabulate padding differences do not fail the test.
+_VDM_CUR_TIME_RE = re.compile(r"^Current System Time: .*$", re.MULTILINE)
+_VDM_REL_DURATION_RE = re.compile(
+    r"\d+ (?:days?, \d+ hours?|hours?, \d+ mins?|mins?, \d+ secs?|secs)")
+_VDM_FLAG_DETAIL_ROW_RE = re.compile(
+    r'^(?P<prefix>.*?)(?P<label>Flag|Change Count|Last Set|Last Clear)\s+(?P<rest>.*)$')
+_VDM_DASH_CELL_RE = re.compile(r'^-+$')
+
+
+def _normalize_vdm_banner_time(text):
+    return _VDM_CUR_TIME_RE.sub("Current System Time: <TIME>", text)
+
+
+def _normalize_vdm_flag_detail_cell(cell):
+    if _VDM_DASH_CELL_RE.fullmatch(cell):
+        return '-'
+    if _VDM_REL_DURATION_RE.search(cell):
+        return '<REL_TIME>'
+    return cell
+
+
+def _parse_vdm_flag_detail_table_row(line):
+    match = _VDM_FLAG_DETAIL_ROW_RE.match(line)
+    if match:
+        label = match.group('label')
+        prefix_cells = [
+            cell.strip()
+            for cell in re.split(r'\s{2,}', match.group('prefix').strip())
+            if cell.strip()
+        ]
+        rest_cells = [
+            _normalize_vdm_flag_detail_cell(cell.strip())
+            for cell in re.split(r'\s{2,}', match.group('rest').strip())
+        ]
+        return prefix_cells + [label] + rest_cells
+    return [
+        _normalize_vdm_flag_detail_cell(cell.strip())
+        for cell in re.split(r'\s{2,}', line.strip())
+    ]
+
+
+def _parse_vdm_flag_detail_output(text):
+    """Return banner lines and parsed flag-detail table rows for comparison."""
+    lines = _normalize_vdm_banner_time(text).split('\n')
+    banner = []
+    table_rows = []
+    idx = 0
+    while idx < len(lines) and not re.match(r'^Ethernet\S+:', lines[idx]):
+        banner.append(lines[idx].rstrip())
+        idx += 1
+    if idx < len(lines):
+        idx += 1
+    while idx < len(lines):
+        line = lines[idx]
+        if line.strip() == '':
+            table_rows.append([])
+            idx += 1
+            continue
+        if not line.startswith('    '):
+            break
+        table_rows.append(_parse_vdm_flag_detail_table_row(line))
+        idx += 1
+    return {'banner': banner, 'rows': table_rows}
+
+
+def _vdm_flag_detail_for_compare(text):
+    return _parse_vdm_flag_detail_output(text)
+
+
+# Banner prepended to every `sfpshow vdm`/`vdm-flag` output when no port has a
+# `last_update_time` (i.e. the "not applicable" case).
+VDM_NA_BANNER = (
+    "Current System Time: <TIME>\n"
+    "Update interval: 60 seconds\n"
+    "Last updated: N/A\n"
+    "\n"
+)
+
+test_qsfp_dd_vdm_output = (
+    "Current System Time: <TIME>\n"
+    "Update interval: 60 seconds\n"
+    "Last updated: Wed Jun 4 12:34:00 2026\n"
+    "\n"
+    "Ethernet44:\n"
+    "    Parameter                   Unit    Lane    Current    Min        Avg        Max    "
+    "Threshold    Threshold    Threshold    Threshold\n"
+    "                                                Value                                   "
+    "High         High         Low          Low\n"
+    "                                                                                        "
+    "Alarm        Warning      Warning      Alarm\n"
+    "    --------------------------  ------  ------  ---------  ---------  ---------  -----  "
+    "-----------  -----------  -----------  -----------\n"
+    "    eSNR Media Input            dB      1       14.2       --         --         --     "
+    "99.0         99.0         10.0         8.0\n"
+    "    Errored Frames Media Input  N/A     1       --         --         0.0        --     "
+    "1000.0       1.0          0.0          0.0\n"
+    "    Laser Temperature           C       1       45.5       --         --         --     "
+    "80.0         75.0         -5.0         -10.0\n"
+    "    Modulator Bias XI           %       1       38.5       --         --         --     "
+    "99.0         95.0         5.0          1.0\n"
+    "    Modulator Bias XP           %       1       25.5       --         --         --     "
+    "99.0         95.0         5.0          1.0\n"
+    "    Modulator Bias XQ           %       1       34.1       --         --         --     "
+    "99.0         95.0         5.0          1.0\n"
+    "    Modulator Bias YI           %       1       32.3       --         --         --     "
+    "99.0         95.0         5.0          1.0\n"
+    "    Modulator Bias YP           %       1       48.5       --         --         --     "
+    "99.0         95.0         5.0          1.0\n"
+    "    Modulator Bias YQ           %       1       30.7       --         --         --     "
+    "99.0         95.0         5.0          1.0\n"
+    "    Pre-FEC BER Media Input     N/A     1       --         1.100E-05  4.660E-04  --     "
+    "1.250E-02    1.100E-02    0.0          0.0\n"
+    "    Pre-FEC BER Media Input     N/A     2       --         1.200E-05  --         --     "
+    "--           --           --           --\n"
+    "    Pre-FEC BER Media Input     N/A     3       --         1.050E-05  --         --     "
+    "--           --           --           --\n"
+    "    Pre-FEC BER Media Input     N/A     4       --         1.150E-05  --         --     "
+    "--           --           --           --\n"
+)
+
+test_qsfp_dd_vdm_flag_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: Wed Jun 4 12:34:00 2026
+
+Ethernet44:
+    Parameter                   Lane    High Alarm    High Warning    Low Warning    Low Alarm
+                                        Flag          Flag            Flag           Flag
+    --------------------------  ------  ------------  --------------  -------------  -----------
+    CD Long                     1       False         False           False          False
+    eSNR Media Input            1       False         False           False          False
+    Errored Frames Media Input  1       False         False           False          False
+    Laser Temperature           1       False         False           False          False
+    Modulator Bias XI           1       False         False           False          False
+    Modulator Bias XP           1       False         False           False          False
+    Modulator Bias XQ           1       False         False           False          False
+    Modulator Bias YI           1       False         False           False          False
+    Modulator Bias YP           1       False         False           False          False
+    Modulator Bias YQ           1       False         False           False          False
+    Pre-FEC BER Media Input     1       False         False           False          False
+    Pre-FEC BER Media Input     2       False         False           False          False
+    Pre-FEC BER Media Input     3       False         False           False          False
+    Pre-FEC BER Media Input     4       False         False           False          False
+"""
+
+test_qsfp_dd_vdm_flag_detail_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: Wed Jun 4 12:34:00 2026
+
+Ethernet44:
+    Parameter       Lane    Detail        High Alarm    High Warning    Low Warning    Low Alarm
+    --------------  ------  ------------  ------------  --------------  -------------  -----------
+    CD Long         1       Flag          False         False           False          False
+                            Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    eSNR Media      1       Flag          False         False           False          False
+    Input                   Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Errored Frames  1       Flag          False         False           False          False
+    Media Input             Change Count  1             0               0              0
+                            Last Set      <REL_TIME>    never           never          never
+                            Last Clear    <REL_TIME>    never           never          never
+
+    Laser           1       Flag          False         False           False          False
+    Temperature             Change Count  3             0               0              0
+                            Last Set      <REL_TIME>    never           never          never
+                            Last Clear    <REL_TIME>    never           never          never
+
+    Modulator Bias  1       Flag          False         False           False          False
+    XI                      Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Modulator Bias  1       Flag          False         False           False          False
+    XP                      Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Modulator Bias  1       Flag          False         False           False          False
+    XQ                      Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Modulator Bias  1       Flag          False         False           False          False
+    YI                      Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Modulator Bias  1       Flag          False         False           False          False
+    YP                      Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Modulator Bias  1       Flag          False         False           False          False
+    YQ                      Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Pre-FEC BER     1       Flag          False         False           False          False
+    Media Input             Change Count  1             2               0              0
+                            Last Set      <REL_TIME>    <REL_TIME>      never          never
+                            Last Clear    never         <REL_TIME>      never          never
+
+    Pre-FEC BER     2       Flag          False         False           False          False
+    Media Input             Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Pre-FEC BER     3       Flag          False         False           False          False
+    Media Input             Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+
+    Pre-FEC BER     4       Flag          False         False           False          False
+    Media Input             Change Count  0             0               0              0
+                            Last Set      never         never           never          never
+                            Last Clear    never         never           never          never
+"""
+
+test_qsfp_dd_vdm_all_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: N/A
+
+Ethernet0: Transceiver VDM data not applicable
+
+Ethernet4: Transceiver VDM data not applicable
+
+Ethernet64: Transceiver VDM data not applicable
+"""
+
+test_qsfp_dd_vdm_flag_all_output = """\
+Current System Time: <TIME>
+Update interval: 60 seconds
+Last updated: N/A
+
+Ethernet0: Transceiver VDM flags not applicable
+
+Ethernet4: Transceiver VDM flags not applicable
+
+Ethernet64: Transceiver VDM flags not applicable
+"""
+
+
 test_els_dom_info_dict = {
     'els_temperature': '16.16',
     'els_voltage': '3.396',
@@ -1109,6 +1380,58 @@ Ethernet36  Present
         expected = "Ethernet200: Transceiver status info not applicable"
         assert result_lines == expected
 
+    def test_qsfp_dd_vdm(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"], ["Ethernet44"])
+        assert result.exit_code == 0
+        normalized = _normalize_vdm_banner_time(result.output)
+        assert "\n".join([line.rstrip() for line in normalized.split('\n')]) == test_qsfp_dd_vdm_output
+
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"], ["Ethernet200"])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet200: Transceiver VDM data not applicable"
+        assert result_lines == expected
+
+    def test_qsfp_dd_vdm_flag(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ["flag", "Ethernet44"])
+        assert result.exit_code == 0
+        normalized = _normalize_vdm_banner_time(result.output)
+        assert "\n".join([line.rstrip() for line in normalized.split('\n')]) == test_qsfp_dd_vdm_flag_output
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ["flag", "Ethernet200"])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet200: Transceiver VDM flags not applicable"
+        assert result_lines == expected
+
+    def test_qsfp_dd_vdm_flag_detail(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ["flag", "Ethernet44", "--detail"])
+        assert result.exit_code == 0
+        assert _vdm_flag_detail_for_compare(result.output) == \
+            _vdm_flag_detail_for_compare(test_qsfp_dd_vdm_flag_detail_output)
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ["flag", "Ethernet44", "-d"])
+        assert result.exit_code == 0
+        assert _vdm_flag_detail_for_compare(result.output) == \
+            _vdm_flag_detail_for_compare(test_qsfp_dd_vdm_flag_detail_output)
+
+    def test_qsfp_dd_vdm_detail_misuse(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ["Ethernet44", "--detail"])
+        assert result.exit_code != 0
+        assert "--detail is only applicable with 'flag'" in result.output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
@@ -1240,6 +1563,60 @@ Ethernet200  Not present
         expected = "Ethernet0: Transceiver status info not applicable"
         assert result_lines == expected
 
+    @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_qsfp_dd_vdm_with_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"], ['Ethernet0', '-n', 'asic0'])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet0: Transceiver VDM data not applicable"
+        assert result_lines == expected
+
+    def test_qsfp_dd_vdm_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"], ['Ethernet0'])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet0: Transceiver VDM data not applicable"
+        assert result_lines == expected
+
+    @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_qsfp_dd_vdm_flag_with_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ['flag', 'Ethernet0', '-n', 'asic0'])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet0: Transceiver VDM flags not applicable"
+        assert result_lines == expected
+
+    def test_qsfp_dd_vdm_flag_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"], ['flag', 'Ethernet0'])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet0: Transceiver VDM flags not applicable"
+        assert result_lines == expected
+
+    @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_qsfp_dd_vdm_flag_detail_with_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ['flag', 'Ethernet0', '-n', 'asic0', '--detail'])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet0: Transceiver VDM flags not applicable"
+        assert result_lines == expected
+
+    def test_qsfp_dd_vdm_flag_detail_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"],
+                ['flag', 'Ethernet0', '--detail'])
+        result_lines = _normalize_vdm_banner_time(result.output).strip('\n')
+        expected = VDM_NA_BANNER + "Ethernet0: Transceiver VDM flags not applicable"
+        assert result_lines == expected
+
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic1'))
     def test_cmis_sfp_info_with_ns(self):
         runner = CliRunner()
@@ -1295,6 +1672,28 @@ Ethernet200  Not present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["status"])
         assert result.exit_code == 0
         assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_qsfp_dd_status_all_output
+
+    def test_qsfp_dd_vdm_all(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"])
+        assert result.exit_code == 0
+        normalized = _normalize_vdm_banner_time(result.output)
+        assert "\n".join([line.rstrip() for line in normalized.split('\n')]) == test_qsfp_dd_vdm_all_output
+
+    def test_qsfp_dd_vdm_flag_all(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"], ['flag'])
+        assert result.exit_code == 0
+        normalized = _normalize_vdm_banner_time(result.output)
+        assert "\n".join([line.rstrip() for line in normalized.split('\n')]) == test_qsfp_dd_vdm_flag_all_output
+
+    def test_qsfp_dd_vdm_flag_detail_all(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["vdm"], ['flag', '--detail'])
+        assert result.exit_code == 0
+        normalized = _normalize_vdm_banner_time(result.output)
+        assert "\n".join([line.rstrip() for line in normalized.split('\n')]) == test_qsfp_dd_vdm_flag_all_output
 
     @classmethod
     def teardown_class(cls):
