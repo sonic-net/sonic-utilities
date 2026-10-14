@@ -2,8 +2,10 @@
 
 import argparse
 import json
+import math
 import os
 import sys
+import time
 
 from natsort import natsorted
 from tabulate import tabulate
@@ -25,8 +27,10 @@ except KeyError:
 
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.cli import UserCache
+from utilities_common.netstat import format_prate
 
 STATUS_NA = 'N/A'
+DEFAULT_POLL_INTERVAL_MS = 10000
 
 
 def counter_diff(newstr, oldstr):
@@ -80,20 +84,46 @@ class CoppStats(object):
         if self.args.delete:
             self.cache.remove()
         self.data = {}
+        self.poll_interval_ms = 0
 
     def show(self):
-        """Show COPP policer statistics"""
-        self._collect_and_diff()
-        headers, table = self._prepare_show_data()
+        """Show COPP policer statistics, with PPS sampled over args.period seconds (0 skips it)"""
+        first = None
+        window = 0
+        if self.args.period:
+            self._collect()
+            first, self.data = self.data, {}
+            window = self._sample_window()
+            time.sleep(window)
+        self._collect()
+        # PPS uses the raw totals; _diff below rewrites self.data relative to the clear cache.
+        pps = self._pps(first, self.data, window) if first is not None else None
+        old_data = self._load()
+        if self._diff(old_data, self.data):
+            self._save(old_data)
+        headers, table = self._prepare_show_data(pps)
+        if pps is not None:
+            print("The rates are calculated within %g seconds period" % window)
         self._print_data(headers, table)
 
-    def _collect_and_diff(self):
-        """Collect statistic from db and diff from old data if any"""
-        self._collect()
-        old_data = self._load()
-        need_update_cache = self._diff(old_data, self.data)
-        if need_update_cache:
-            self._save(old_data)
+    def _sample_window(self):
+        """args.period rounded up to whole counter poll intervals, so both samples see a fresh poll"""
+        interval = (self.poll_interval_ms or DEFAULT_POLL_INTERVAL_MS) / 1000
+        return max(1, math.ceil(self.args.period / interval)) * interval
+
+    def _pps(self, old_data, new_data, window):
+        """Packets per second per trap group, from the Total Pkts of two samples"""
+        pps = {}
+        for ns, stats in new_data.items():
+            pps[ns] = {}
+            for trap_group, values in stats.items():
+                old_values = old_data.get(ns, {}).get(trap_group)
+                if old_values is None or STATUS_NA in (values[0], old_values[0]):
+                    pps[ns][trap_group] = STATUS_NA
+                else:
+                    delta = max(0, int(values[0]) - int(old_values[0]))
+                    pps[ns][trap_group] = format_prate(delta / window)
+        return pps
     
     @multi_asic_util.run_on_multi_asic
     def _collect(self):
@@ -108,6 +138,8 @@ class CoppStats(object):
         """
         ns = self.multi_asic.current_namespace
         policer_name_map = self.db.get_all(self.db.COUNTERS_DB, self.POLICER_NAME_MAP)
+        interval = self.db.get(self.db.CONFIG_DB, "FLEX_COUNTER_TABLE|COPP_STATS", "POLL_INTERVAL")
+        self.poll_interval_ms = max(self.poll_interval_ms, int(interval or DEFAULT_POLL_INTERVAL_MS))
         data = {ns: {}}
 
         # None means an older orchagent that doesn't publish the list.
@@ -149,7 +181,7 @@ class CoppStats(object):
         """
         return ['ASIC ID'] + headers if self.multi_asic.is_multi_asic else headers
     
-    def _prepare_show_data(self):
+    def _prepare_show_data(self, pps=None):
         """Prepare headers and table data for output
         
         Returns:
@@ -157,7 +189,7 @@ class CoppStats(object):
             table (list): Table data
         """
         table = []
-        headers = self._adjust_headers(self.HEADERS)
+        headers = self._adjust_headers(self.HEADERS + (["PPS"] if pps is not None else []))
         
         for ns, stats in natsorted(self.data.items()):
             if self.args.namespace is not None and self.args.namespace != ns:
@@ -169,6 +201,8 @@ class CoppStats(object):
                     row = []
                 row.append(trap_group_name)
                 row.extend(values)
+                if pps is not None:
+                    row.append(pps.get(ns, {}).get(trap_group_name, STATUS_NA))
                 table.append(row)
         
         return headers, table
@@ -253,13 +287,20 @@ def main():
 Examples:
   coppstat -c
   coppstat
+  coppstat -p 10
+  coppstat -p 0
   coppstat -d
 """)
     parser.add_argument('-c', '--clear', action='store_true', help='Clear stats')
     parser.add_argument('-d', '--delete', action='store_true', help='Delete saved stats')
     parser.add_argument('-n', '--namespace', default=None, help='Display COPP stats for specific namespace')
+    parser.add_argument('-p', '--period', type=int, default=0,
+                        help='Add a PPS column sampled over this many seconds, rounded up to whole\n'
+                             'counter poll intervals (default: 0, no PPS)')
 
     args = parser.parse_args()
+    if args.period < 0:
+        parser.error('--period must not be negative')
 
     stats = CoppStats(args)
 

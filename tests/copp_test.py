@@ -1,9 +1,11 @@
+import argparse
 import importlib
 import pytest
 import os
 import logging
 import show.main as show
 from utilities_common.db import Db
+from utilities_common.general import load_module_from_source
 from .mock_tables import dbconnector
 from unittest.mock import mock_open, patch
 
@@ -363,7 +365,23 @@ class TestCoppStatsCapabilityGate:
             result = runner.invoke(show.cli.commands["copp"].commands["stats"])
         assert result.exit_code == 0
         mock_run.assert_called_once()
-        assert mock_run.call_args[0][0][0] == "coppstat"
+        assert mock_run.call_args[0][0] == ["coppstat"]
+
+    def test_show_copp_stats_passes_period(self):
+        runner = CliRunner()
+        with _patch("show.copp.is_copp_policer_stats_supported", return_value=True), \
+             _patch("show.copp.clicommon.run_command") as mock_run:
+            result = runner.invoke(show.cli.commands["copp"].commands["stats"], ["-p", "2"])
+        assert result.exit_code == 0
+        assert mock_run.call_args[0][0][:3] == ["coppstat", "-p", "2"]
+
+    def test_show_copp_stats_rejects_negative_period(self):
+        runner = CliRunner()
+        with _patch("show.copp.is_copp_policer_stats_supported", return_value=True), \
+             _patch("show.copp.clicommon.run_command") as mock_run:
+            result = runner.invoke(show.cli.commands["copp"].commands["stats"], ["-p", "-1"])
+        assert result.exit_code != 0
+        mock_run.assert_not_called()
 
     def test_clear_copp_unsupported_platform(self):
         """sonic-clear copp gates on the same capability flag."""
@@ -384,3 +402,50 @@ class TestCoppStatsCapabilityGate:
             result = runner.invoke(_clear_main.cli.commands["copp"])
         assert result.exit_code == 0
         mock_run.assert_called_once_with(["coppstat", "-c"])
+
+
+coppstat = load_module_from_source('coppstat', os.path.join(scripts_path, 'coppstat'))
+
+
+class TestCoppStatsPps:
+    @staticmethod
+    def _show(period, samples, capsys, poll_interval_ms=0):
+        args = argparse.Namespace(period=period, namespace=None, delete=False, clear=False)
+        stats = coppstat.CoppStats(args)
+        stats.poll_interval_ms = poll_interval_ms
+        with _patch.object(coppstat.CoppStats, '_get_stats_from_db', side_effect=samples), \
+             _patch.object(coppstat.CoppStats, '_load', return_value=None), \
+             _patch.object(coppstat.time, 'sleep') as mock_sleep:
+            stats.show()
+        return mock_sleep, capsys.readouterr().out.splitlines()
+
+    def test_pps_from_two_samples(self, capsys):
+        before = {'': {'default': ['100', '1000'] + ['0'] * 6, 'queue4_group3': ['N/A'] * 8}}
+        after = {'': {'default': ['300', '3000'] + ['0'] * 6, 'queue4_group3': ['N/A'] * 8}}
+        mock_sleep, out = self._show(2, [before, after], capsys, poll_interval_ms=2000)
+        mock_sleep.assert_called_once_with(2)
+        assert out[0] == "The rates are calculated within 2 seconds period"
+        assert out[1].split()[-1] == "PPS"
+        rows = {line.split()[0]: line.split() for line in out[3:]}
+        assert rows['default'][1] == '300'
+        assert rows['default'][-1] == '100.00/s'
+        assert rows['queue4_group3'][-1] == 'N/A'
+
+    def test_period_rounds_up_to_poll_interval(self, capsys):
+        before = {'': {'default': ['0'] * 8}}
+        after = {'': {'default': ['1000'] + ['0'] * 7}}
+        mock_sleep, out = self._show(5, [before, after], capsys)
+        mock_sleep.assert_called_once_with(10.0)
+        assert out[-1].split()[-1] == '100.00/s'
+
+    def test_pps_counter_reset_is_zero(self, capsys):
+        before = {'': {'default': ['500'] + ['0'] * 7}}
+        after = {'': {'default': ['20'] + ['0'] * 7}}
+        _, out = self._show(10, [before, after], capsys)
+        assert out[-1].split()[-1] == '0.00/s'
+
+    def test_no_period_skips_pps(self, capsys):
+        sample = {'': {'default': ['300'] + ['0'] * 7}}
+        mock_sleep, out = self._show(0, [sample], capsys)
+        mock_sleep.assert_not_called()
+        assert 'PPS' not in out[0]

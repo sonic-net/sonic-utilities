@@ -274,7 +274,9 @@ def detailed(_db, trapid, group):
 @click.option('--namespace', '-n', 'namespace', default=None,
               type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
               show_default=True, help='Namespace name or all')
-def stats(namespace):
+@click.option('--period', '-p', type=click.IntRange(min=0), default=0, show_default=True,
+              help='Add a PPS column sampled over this many seconds (rounded up to counter poll intervals)')
+def stats(namespace, period):
     """Show copp policer statistics with per-color breakdown"""
 
     if not is_copp_policer_stats_supported(namespace):
@@ -284,6 +286,8 @@ def stats(namespace):
         return
 
     cmd = ['coppstat']
+    if period:
+        cmd += ['-p', str(period)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
     clicommon.run_command(cmd)
