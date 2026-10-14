@@ -703,7 +703,8 @@ def list_command():
     click.echo("Next: " + nextimage)
     click.echo("Available: ")
     for image in images:
-        click.echo(image)
+        if image:
+            click.echo(image)
 
 
 # Set default image for boot
