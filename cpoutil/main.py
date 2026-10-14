@@ -1539,21 +1539,6 @@ def show_oe_temperature(oe_index, json_output):
     print_records(records, json_output, ("OE", "Temperature (C)"))
 
 
-@show_oe.command("input-power")
-@click.argument("oe_index", required=False)
-@output_option
-def show_oe_input_power(oe_index, json_output):
-    """OE light-source input power is not implemented: no API is available."""
-    try:
-        get_resource_cpo_objects(OPTICAL_ENGINE, oe_index)
-    except CpoCommandError as exc:
-        raise click.ClickException(str(exc))
-    # Media RX power is not the optical power supplied by the ELS to the OE.
-    raise click.ClickException(
-        "OE input optical power is not implemented: no corresponding API is available"
-    )
-
-
 @show.group("els")
 def show_els():
     """Display External Laser Source status."""

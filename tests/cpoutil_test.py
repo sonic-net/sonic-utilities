@@ -511,7 +511,7 @@ HARDWARE_COMMANDS = [
     ("map", "presence", "dom", "tx-disable", "speed", "lane-status")
 ] + [
     ["show", "oe", name] for name in
-    ("lpmode", "status", "temperature", "input-power")
+    ("lpmode", "status", "temperature")
 ] + [
     ["show", "els", name] for name in
     ("lpmode", "status", "temperature", "output-power")
@@ -534,6 +534,26 @@ HARDWARE_COMMANDS = [
 
 
 class TestCommandInitialization:
+    def test_oe_help_omits_input_power(self, monkeypatch):
+        initialize = mock.Mock(side_effect=AssertionError("help accessed hardware"))
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage(["show", "oe", "--help"])
+        assert result.exit_code == 0
+        assert "input-power" not in result.output
+        initialize.assert_not_called()
+
+    @pytest.mark.parametrize("arguments", [
+        ["show", "oe", "input-power"],
+        ["show", "oe", "input-power", "0", "--json"],
+    ])
+    def test_oe_input_power_command_is_removed(self, monkeypatch, arguments):
+        initialize = mock.Mock(side_effect=AssertionError("removed command accessed hardware"))
+        monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 2
+        assert "No such command 'input-power'" in result.output
+        initialize.assert_not_called()
+
     @pytest.mark.parametrize("arguments", [
         ["show", "interface", "tx_disable", "Ethernet0"],
         ["config", "interface", "tx_disable", "Ethernet0", "true"],
@@ -1358,45 +1378,7 @@ def bank_cpos(monkeypatch):
         PORT: dict(cpos),
     })
     monkeypatch.setattr(cpoutil, "initialize_platform", lambda: None)
-    for port, cpo in cpos.items():
-        cpo.api.get_rx_power = mock.Mock(return_value=[port + lane / 10 for lane in range(8)])
     return cpos
-
-
-class TestOeInputPower:
-    @pytest.mark.parametrize("selector", [[], ["0"], ["oe0"], ["oe1"]])
-    @pytest.mark.parametrize("json_option", [[], ["--json"]])
-    def test_reports_missing_api_without_reading_power(
-            self, bank_cpos, monkeypatch, selector, json_option):
-        api_getters = []
-        for cpo in bank_cpos.values():
-            getter = mock.Mock(side_effect=AssertionError("No power API should be called"))
-            monkeypatch.setattr(cpo.oe, "get_api", getter)
-            api_getters.append(getter)
-
-        result = invoke_coverage(["show", "oe", "input-power", *selector, *json_option])
-
-        assert result.exit_code == 1
-        assert result.output.strip() == (
-            "Error: OE input optical power is not implemented: "
-            "no corresponding API is available"
-        )
-        for getter in api_getters:
-            getter.assert_not_called()
-        for cpo in bank_cpos.values():
-            cpo.api.get_rx_power.assert_not_called()
-
-    def test_unknown_oe_still_reports_invalid_resource(self, bank_cpos):
-        result = invoke_coverage(["show", "oe", "input-power", "99"])
-        assert result.exit_code != 0
-        assert "not implemented" not in result.output
-        assert "99" in result.output
-
-    @pytest.mark.parametrize("json_option", [[], ["--json"]])
-    def test_entry_point_returns_cli_error_code(self, bank_cpos, monkeypatch, capsys, json_option):
-        monkeypatch.setattr(sys, "argv", ["cpoutil", "show", "oe", "input-power", "0", *json_option])
-        assert cpoutil.main() == cpoutil.ERROR_INVALID_RESOURCE
-        assert "OE input optical power is not implemented" in capsys.readouterr().err
 
 
 VMODULE_PORT_CONFIG = {
