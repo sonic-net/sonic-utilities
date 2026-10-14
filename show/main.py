@@ -1283,6 +1283,42 @@ def aging_time(ctx):
             click.echo("Aging time for {} is {} seconds".format(key.split(':')[-1], fdb_aging_time))
         else:
             click.echo("Aging time not configured for the {}".format(key.split(':')[-1]))
+
+
+@mac.command('sync-mode')
+@clicommon.pass_db
+def mac_sync_mode_mac(db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
+    click.echo(get_mac_sync_mode(db))
+
+
+#
+# 'fdb' group ("show fdb ...")
+#
+
+@cli.group(cls=clicommon.AliasedGroup)
+def fdb():
+    """Show FDB (MAC) configuration"""
+    pass
+
+
+def get_mac_sync_mode(db):
+    # An L3EvpnMH device always synchronizes MACs over FPM, whatever FDB_SYNC says.
+    metadata = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
+    if metadata.get('subtype') == 'L3EvpnMH':
+        return 'fpm'
+    # TODO: use swsscommon.CFG_FDB_SYNC_TABLE_NAME once sonic-net/sonic-buildimage#29312 is merged.
+    fdb_sync = db.cfgdb.get_entry('FDB_SYNC', 'global')
+    return fdb_sync.get('mac_sync_mode', 'kernel')
+
+
+@fdb.command('mac-sync-mode')
+@clicommon.pass_db
+def mac_sync_mode(db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
+    click.echo(get_mac_sync_mode(db))
+
+
 #
 # 'show route-map' command ("show route-map")
 #
