@@ -289,6 +289,34 @@ test_vlanintf_failure_data = [
             "stderr": "Device \"Vlan9999\" does not exist.\n",
             "expected_result": False,
             "description": "Non-existent VLAN deletion fails with both stdout and stderr"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {}
+                }
+            },
+            "upd": {},
+            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "rc": 2,
+            "stderr": "RTNETLINK answers: No such file or directory\n",
+            "expected_result": True,
+            "description": "Stale-neighbor race: kernel RTNETLINK ENOENT is tolerated"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {}
+                }
+            },
+            "upd": {},
+            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "rc": 127,
+            "stderr": "sh: ip: No such file or directory\n",
+            "expected_result": False,
+            "description": "Generic ENOENT (missing binary) must not be tolerated"
         }
    ]
 
