@@ -2359,10 +2359,10 @@ def aaa(db):
 
 
 @cli.command()
-def tacacs():
+@clicommon.pass_db
+def tacacs(db):
     """Show TACACS+ configuration"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = db.cfgdb
     output = ''
     data = config_db.get_table('TACPLUS')
 
@@ -2370,7 +2370,8 @@ def tacacs():
         'global': {
             'auth_type': 'pap (default)',
             'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'passkey': '<EMPTY_STRING> (default)',
+            'traceid_authorization': 'False (default)'
         }
     }
     if 'global' in data:
