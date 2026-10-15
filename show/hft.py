@@ -11,14 +11,25 @@ import utilities_common.cli as clicommon
 
 PROFILE_TABLE = 'HIGH_FREQUENCY_TELEMETRY_PROFILE'
 GROUP_TABLE = 'HIGH_FREQUENCY_TELEMETRY_GROUP'
+AGGREGATOR_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR'
+AGGREGATOR_HISTOGRAM_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_HISTOGRAM'
+AGGREGATOR_ROLLOVER_TABLE = 'HIGH_FREQUENCY_TELEMETRY_AGGREGATOR_ROLLOVER'
+DEFAULT_ROLLOVER_BIT_WIDTH = 32
 DEFAULT_CELL_PLACEHOLDER = '-'
 TABLE_HEADER = [
     'Profile',
     'Stream State',
     'Poll Interval (usec)',
+    'Aggregator',
     'Group Type',
     'Object Names',
-    'Object Counters'
+    'Object Counters',
+    'Reporting Rate (usec)',
+    'Rollover Counters',
+    'Rollover Bit Widths',
+    'Heatmap Interval (usec)',
+    'Heatmap Counters',
+    'Per-counter Explicit Bounds'
 ]
 
 
@@ -66,8 +77,17 @@ def hft_counters(stats_interval, max_stats_per_report, log_level, log_format):
 def _display_hft(db):
     profile_table = db.cfgdb.get_table(PROFILE_TABLE) or {}
     group_table = db.cfgdb.get_table(GROUP_TABLE) or {}
+    aggregator_table = db.cfgdb.get_table(AGGREGATOR_TABLE) or {}
+    histogram_table = db.cfgdb.get_table(AGGREGATOR_HISTOGRAM_TABLE) or {}
+    rollover_table = db.cfgdb.get_table(AGGREGATOR_ROLLOVER_TABLE) or {}
 
-    rows = _build_rows(profile_table, group_table)
+    rows = _build_rows(
+        profile_table,
+        group_table,
+        aggregator_table,
+        histogram_table,
+        rollover_table
+    )
     if not rows:
         click.echo("No high frequency telemetry configuration present.")
         return
@@ -75,8 +95,13 @@ def _display_hft(db):
     click.echo(tabulate(rows, TABLE_HEADER, tablefmt='grid'))
 
 
-def _build_rows(profile_table, group_table):
+def _build_rows(profile_table, group_table, aggregator_table=None, histogram_table=None,
+                rollover_table=None):
     group_index = _index_groups(group_table)
+    aggregator_table = aggregator_table or {}
+    histogram_index = _index_histograms(histogram_table or {})
+    rollover_index = _index_rollovers(rollover_table or {})
+    used_aggregators = set()
     rows = []
 
     for profile_name in natsorted(profile_table.keys()):
@@ -84,6 +109,18 @@ def _build_rows(profile_table, group_table):
         stream_state = profile_entry.get('stream_state', DEFAULT_CELL_PLACEHOLDER)
         poll_interval_raw = profile_entry.get('poll_interval', DEFAULT_CELL_PLACEHOLDER)
         poll_interval = _format_poll_interval(poll_interval_raw)
+        aggregator_name = profile_entry.get('aggregator')
+        aggregator_display = aggregator_name or DEFAULT_CELL_PLACEHOLDER
+        if aggregator_name is not None:
+            used_aggregators.add(aggregator_name)
+        aggregator = aggregator_table.get(aggregator_name, {}) if aggregator_name is not None else {}
+        aggregator_fields = _format_aggregator(
+            aggregator,
+            histogram_index.get(aggregator_name, []),
+            rollover_index.get(aggregator_name, {})
+        )
+        reporting_rate, rollover_counters, rollover_bit_widths, heatmap_interval, \
+            heatmap_counters, explicit_bounds = aggregator_fields
         groups = group_index.get(profile_name)
 
         if not groups:
@@ -91,9 +128,16 @@ def _build_rows(profile_table, group_table):
                 profile_name,
                 stream_state,
                 poll_interval,
+                aggregator_display,
                 DEFAULT_CELL_PLACEHOLDER,
                 DEFAULT_CELL_PLACEHOLDER,
-                DEFAULT_CELL_PLACEHOLDER
+                DEFAULT_CELL_PLACEHOLDER,
+                reporting_rate,
+                rollover_counters,
+                rollover_bit_widths,
+                heatmap_interval,
+                heatmap_counters,
+                explicit_bounds
             ])
             continue
 
@@ -102,12 +146,103 @@ def _build_rows(profile_table, group_table):
                 profile_name if idx == 0 else '',
                 stream_state if idx == 0 else '',
                 poll_interval if idx == 0 else '',
+                aggregator_display if idx == 0 else '',
                 group['type'],
                 group['names'],
-                group['counters']
+                group['counters'],
+                reporting_rate if idx == 0 else '',
+                rollover_counters if idx == 0 else '',
+                rollover_bit_widths if idx == 0 else '',
+                heatmap_interval if idx == 0 else '',
+                heatmap_counters if idx == 0 else '',
+                explicit_bounds if idx == 0 else ''
             ])
 
+    for aggregator_name in natsorted(set(aggregator_table.keys()) - used_aggregators):
+        aggregator_fields = _format_aggregator(
+            aggregator_table.get(aggregator_name, {}),
+            histogram_index.get(aggregator_name, []),
+            rollover_index.get(aggregator_name, {})
+        )
+        reporting_rate, rollover_counters, rollover_bit_widths, heatmap_interval, \
+            heatmap_counters, explicit_bounds = aggregator_fields
+        rows.append([
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            aggregator_name,
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            DEFAULT_CELL_PLACEHOLDER,
+            reporting_rate,
+            rollover_counters,
+            rollover_bit_widths,
+            heatmap_interval,
+            heatmap_counters,
+            explicit_bounds
+        ])
+
     return rows
+
+
+def _format_aggregator(aggregator, histograms=None, rollover_overrides=None):
+    reporting_rate = _format_poll_interval(aggregator.get('reporting_rate', DEFAULT_CELL_PLACEHOLDER))
+    rollover_selectors = _ensure_list(aggregator.get('rollover_counters'))
+    rollover_counters = '\n'.join(rollover_selectors) or DEFAULT_CELL_PLACEHOLDER
+    rollover_overrides = rollover_overrides or {}
+    rollover_bit_widths = '\n'.join(
+        '{}: {}'.format(
+            selector,
+            rollover_overrides.get(selector, '{} (default)'.format(DEFAULT_ROLLOVER_BIT_WIDTH))
+        )
+        for selector in rollover_selectors
+    ) or DEFAULT_CELL_PLACEHOLDER
+    heatmap_interval = _format_poll_interval(
+        aggregator.get('heatmap_interval', DEFAULT_CELL_PLACEHOLDER)
+    )
+    heatmap_counters = _format_list(aggregator.get('heatmap_counters')) or DEFAULT_CELL_PLACEHOLDER
+    explicit_bounds = '\n'.join(histograms or []) or DEFAULT_CELL_PLACEHOLDER
+    return (
+        reporting_rate,
+        rollover_counters,
+        rollover_bit_widths,
+        heatmap_interval,
+        heatmap_counters,
+        explicit_bounds
+    )
+
+
+def _index_histograms(histogram_table):
+    index = {}
+    for composite_key, attributes in histogram_table.items():
+        aggregator_name, group_type, counter_name = _split_histogram_key(composite_key)
+        if not aggregator_name or not group_type or not counter_name:
+            continue
+
+        bounds = ','.join(_ensure_list((attributes or {}).get('explicit_bounds')))
+        if not bounds:
+            continue
+        index.setdefault(aggregator_name, []).append(
+            '{}|{}: {}'.format(group_type, counter_name, bounds)
+        )
+
+    for histograms in index.values():
+        histograms.sort()
+    return index
+
+
+def _index_rollovers(rollover_table):
+    index = {}
+    for composite_key, attributes in rollover_table.items():
+        aggregator_name, group_type, counter_name = _split_counter_child_key(composite_key)
+        if not aggregator_name or not group_type or not counter_name:
+            continue
+        if not isinstance(attributes, dict) or attributes.get('bit_width') is None:
+            continue
+
+        selector = '{}|{}'.format(group_type, counter_name)
+        index.setdefault(aggregator_name, {})[selector] = str(attributes['bit_width'])
+    return index
 
 
 def _index_groups(group_table):
@@ -144,6 +279,25 @@ def _split_group_key(key):
             return parts[0], parts[1]
 
     return None, None
+
+
+def _split_histogram_key(key):
+    return _split_counter_child_key(key)
+
+
+def _split_counter_child_key(key):
+    if not key:
+        return None, None, None
+
+    if isinstance(key, (tuple, list)) and len(key) == 3:
+        return key[0], key[1], key[2]
+
+    if isinstance(key, str):
+        parts = key.split('|')
+        if len(parts) == 3:
+            return parts[0], parts[1], parts[2]
+
+    return None, None, None
 
 
 def _format_list(value):
