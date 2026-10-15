@@ -177,6 +177,177 @@ class TestVxlan(object):
         assert result.exit_code == 0
         assert result.output == show_vxlan_vrfvnimap_output
 
+    def test_config_default_vrf_vni_map_lifecycle(self):
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "200"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('VRF')['default']['vni'] == '200'
+
+        with patch('show.vxlan.ConfigDBConnector', return_value=db.cfgdb):
+            result = runner.invoke(
+                show.cli.commands["vxlan"].commands["vrfvnimap"], [], obj=db)
+        assert result.exit_code == 0
+        assert 'default' in result.output
+        assert '200' in result.output
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["del_vrf_vni_map"],
+            ["default"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('VRF')['default']['vni'] == '0'
+
+        with patch('show.vxlan.ConfigDBConnector', return_value=db.cfgdb):
+            result = runner.invoke(
+                show.cli.commands["vxlan"].commands["vrfvnimap"], [], obj=db)
+        assert result.exit_code == 0
+        assert 'default' not in result.output
+
+        db.cfgdb.mod_entry(
+            'VXLAN_TUNNEL_MAP', 'vtep1|map_201_Vlan200',
+            {'vni': '201', 'vlan': 'Vlan200'})
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "201"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('VRF')['default']['vni'] == '201'
+
+    def test_config_vrf_vni_map_rejects_zero_and_missing_delete(self):
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "0"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "Valid range [1 to 16777215]" in result.output
+        assert 'default' not in db.cfgdb.get_table('VRF')
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["del_vrf_vni_map"],
+            ["default"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "VRF default has no VNI mapping" in result.output
+        assert 'default' not in db.cfgdb.get_table('VRF')
+
+    def test_config_vrf_vni_map_replay_and_replacement_validation(self):
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+        db.cfgdb.mod_entry(
+            'VXLAN_TUNNEL_MAP', 'vtep1|map_201_Vlan200',
+            {'vni': '201', 'vlan': 'Vlan200'})
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "200"], obj=vrf_obj)
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "200"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('VRF')['default']['vni'] == '200'
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "201"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "Delete the existing mapping" in result.output
+        assert db.cfgdb.get_table('VRF')['default']['vni'] == '200'
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["Vrf1", "1000"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('VRF')['Vrf1']['vni'] == '1000'
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["Vrf1", "201"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "Delete the existing mapping" in result.output
+        assert db.cfgdb.get_table('VRF')['Vrf1']['vni'] == '1000'
+
+    def test_config_default_vrf_vni_map_requires_vlan_vni_map(self):
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "5000"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "VLAN VNI not mapped" in result.output
+        assert 'default' not in db.cfgdb.get_table('VRF')
+
+    def test_config_default_vrf_vni_map_rejects_duplicate_ownership(self):
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+        tenant_vni = db.cfgdb.get_table('VRF')['Vrf1']['vni']
+        db.cfgdb.mod_entry(
+            'VXLAN_TUNNEL_MAP',
+            'vtep1|map_{}_Vlan{}'.format(tenant_vni, tenant_vni),
+            {'vni': tenant_vni, 'vlan': 'Vlan{}'.format(tenant_vni)})
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", tenant_vni], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "VNI already mapped to vrf Vrf1" in result.output
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "200"], obj=vrf_obj)
+        assert result.exit_code == 0
+        db.cfgdb.mod_entry('VRF', 'Vrf2', {})
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["Vrf2", "200"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "VNI already mapped to vrf default" in result.output
+
+    def test_config_vxlan_map_delete_blocked_by_vrf_vni_mapping(self):
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["add_vrf_vni_map"],
+            ["default", "200"], obj=vrf_obj)
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            config.config.commands["vxlan"].commands["map"].commands["del"],
+            ["vtep1", "200", "200"], obj=db)
+        assert result.exit_code != 0
+        assert "VNI mapped to vrf default" in result.output
+        assert ('vtep1', 'map_200_Vlan200') in db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
+
+        result = runner.invoke(
+            config.config.commands["vxlan"].commands["map_range"].commands["del"],
+            ["vtep1", "200", "200", "200"], obj=db)
+        assert result.exit_code == 0
+        assert "Skipping Vlan Vlan200 VNI 200 mapped delete" in result.output
+        assert ('vtep1', 'map_200_Vlan200') in db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
+
+        db.cfgdb.mod_entry(
+            'VXLAN_TUNNEL_MAP', 'vtep1|map_1000_Vlan200',
+            {'vni': '1000', 'vlan': 'Vlan200'})
+        result = runner.invoke(
+            config.config.commands["vxlan"].commands["map"].commands["del"],
+            ["vtep1", "200", "1000"], obj=db)
+        assert result.exit_code != 0
+        assert "VNI mapped to vrf Vrf1" in result.output
+        assert ('vtep1', 'map_1000_Vlan200') in db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
+
     def test_show_vxlan_tunnel(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["vxlan"].commands["remotevtep"], [])
