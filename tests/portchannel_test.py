@@ -21,8 +21,10 @@ class TestPortChannel(object):
         print("SETUP")
 
     @patch("config.main.is_portchannel_present_in_db", mock.Mock(return_value=False))
-    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=ValueError))
-    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
+           mock.Mock(side_effect=ValueError))
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+           mock.Mock(return_value=True))
     def test_add_portchannel_with_invalid_name_yang_validation(self):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
@@ -56,8 +58,10 @@ class TestPortChannel(object):
         assert "Error: PortChanl00000 is invalid!, name should have prefix 'PortChannel' and suffix '<0-9999>' and " \
             "its length should not exceed 15 characters" in result.output
 
-    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
-    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
+           mock.Mock(side_effect=JsonPatchConflict))
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+           mock.Mock(return_value=True))
     def test_delete_nonexistent_portchannel_yang_validation(self):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
@@ -299,13 +303,98 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert "PortChannel1001 has vlan Vlan4000 configured, remove vlan membership to proceed" in result.output
 
+    def test_portchannel_mode_multi_process_help(self):
+        """Test help message for multi-process mode command"""
+        runner = CliRunner()
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["mode"].commands["set"], ["--help"])
+        print("PASSED:test_portchannel_mode_multi_process_help")
+        assert result.exit_code == 0
+        assert "set mode for legacy" in result.output
+
+    def test_portchannel_mode_invalid_action(self):
+        """Test invalid action parameter"""
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(
+            config.config.commands["portchannel"].commands["mode"].commands["set"],
+            ["invalid"],
+            obj=obj
+        )
+
+        print("PASSED:test_portchannel_mode_invalid_action")
+        assert result.exit_code != 0
+        assert "Error: Invalid value for '<multi-process|unified-process>'" in result.output
+        assert "'invalid' is not one of 'multi-process', 'unified-process'" in result.output
+
+    def test_portchannel_mode_missing_action(self):
+        """Test missing action parameter"""
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(
+            config.config.commands["portchannel"].commands["mode"].commands["set"],
+            [],
+            obj=obj
+        )
+
+        print("PASSED:test_portchannel_mode_missing_action")
+        assert result.exit_code != 0
+        assert "Error: Missing argument '<multi-process|unified-process>'" in result.output
+
+    def test_portchannel_multiprocess_mode(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # Enable multi-process mode
+        result = runner.invoke(config.config.commands["portchannel"]
+                               .commands["mode"].commands["set"], ["multi-process"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert ("[WARNING] mode = multi-process is configured. Please restart the teamd docker to take effect."
+                in result.output)
+
+    def test_portchannel_unifiedprocess_mode(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # Enable unified-process mode
+        result = runner.invoke(config.config.commands["portchannel"]
+                               .commands["mode"].commands["set"], ["unified-process"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert ("[WARNING] mode = unified-process is configured. Please restart the teamd docker to take effect."
+                in result.output)
+
+    def test_portchannel_mode_with_invalid_db(self):
+        runner = CliRunner()
+
+        # Simulate broken db object
+        fake_db = "not-a-db-object"
+        obj = {'db': fake_db}
+
+        result = runner.invoke(config.config.commands["portchannel"]
+                               .commands["mode"].commands["set"], ['multi-process'], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Failed to set mode" in result.output
+
     def test_get_invalid_portchannel_retry_count(self):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         # get the retry count of a portchannel with an invalid portchannel name
-        result = runner.invoke(config.config.commands["portchannel"].commands["retry-count"].commands["get"], ["Ethernet48"], obj=obj)
+        result = runner.invoke(config.config.commands["portchannel"]
+                               .commands["retry-count"].commands["get"], ["Ethernet48"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
