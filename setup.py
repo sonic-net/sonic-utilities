@@ -215,7 +215,7 @@ setup(
             'connect = connect.main:connect',
             'consutil = consutil.main:consutil',
             'counterpoll = counterpoll.main:cli',
-            'cpoutil = cpoutil.main:main',
+            'cpoutil = cpoutil.main:cli',
             'crm = crm.main:cli',
             'debug = debug.main:cli',
             'dump = dump.main:dump',
