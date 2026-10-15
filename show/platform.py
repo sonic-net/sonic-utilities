@@ -339,10 +339,19 @@ def leak_control_policy():
         click.echo(" system_leak_policy              : {}".format(entry.get('system_leak_policy', 'enabled')))
         critical_action = entry.get('system_critical_leak_action', 'power_off')
         click.echo(" system_critical_leak_action     : {}".format(critical_action))
+        major_action = entry.get('system_major_leak_action', 'syslog_only')
+        click.echo(" system_major_leak_action        : {}".format(major_action))
         click.echo(" system_minor_leak_action        : {}".format(entry.get('system_minor_leak_action', 'syslog_only')))
+        # MIN-N threshold is only meaningful when the platform supports the MAJOR
+        # classification; it is omitted when absent (platform returns 0).
+        major_min_sensors = entry.get('system_major_leak_num_min_sensors')
+        if major_min_sensors is not None:
+            click.echo(" system_major_leak_num_min_sensors: {}".format(major_min_sensors))
         click.echo(" rack_mgr_leak_policy            : {}".format(entry.get('rack_mgr_leak_policy', 'enabled')))
         rack_critical_action = entry.get('rack_mgr_critical_alert_action', 'syslog_only')
         click.echo(" rack_mgr_critical_alert_action  : {}".format(rack_critical_action))
+        rack_major_action = entry.get('rack_mgr_major_alert_action', 'syslog_only')
+        click.echo(" rack_mgr_major_alert_action     : {}".format(rack_major_action))
         rack_minor_action = entry.get('rack_mgr_minor_alert_action', 'syslog_only')
         click.echo(" rack_mgr_minor_alert_action     : {}".format(rack_minor_action))
     except Exception as e:
