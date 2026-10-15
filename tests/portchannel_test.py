@@ -156,6 +156,35 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert 'Invalid value for \'--fast-rate\'' in result.output
 
+    @pytest.mark.parametrize("fallback_timeout", ["1", "90", "300"])
+    def test_add_portchannel_with_fallback_timeout_adhoc_validation(self, fallback_timeout):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db':db.cfgdb}
+
+        # add a portchannel with fallback and a valid fallback timeout
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0005", "--fallback", "true", "--fallback-timeout", fallback_timeout], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("PORTCHANNEL", "PortChannel0005").get("fallback_timeout") == fallback_timeout
+
+    @pytest.mark.parametrize("fallback_timeout", ["0", "301", "abc"])
+    def test_add_portchannel_with_invalid_fallback_timeout(self, fallback_timeout):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db':db.cfgdb}
+
+        # add a portchannel with an invalid fallback timeout
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0005", "--fallback", "true", "--fallback-timeout", fallback_timeout], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Invalid value for \'--fallback-timeout\'' in result.output
+
     def test_add_portchannel_member_with_invalid_name(self):
         runner = CliRunner()
         db = Db()
