@@ -81,7 +81,7 @@ class TestPfcwd(object):
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_ports_valid(self, mock_os):
-        # pfcwd start --action drop --restoration-time 200 Ethernet0 200
+        # pfcwd start --action forward --restoration-time 701 Ethernet0 702
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
@@ -98,8 +98,8 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "101",
-                "Ethernet0", "102"
+                "--action", "forward", "--restoration-time", "701",
+                "Ethernet0", "702"
             ],
             obj=db
         )
@@ -114,6 +114,43 @@ class TestPfcwd(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == test_vectors.pfcwd_show_start_config_output_pass
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_below_poll_interval(self, mock_os):
+        # Mock CONFIG_DB has PFC_WD|GLOBAL.POLL_INTERVAL=600.
+        # Starting with detection_time below the polling interval must fail
+        # without modifying CONFIG_DB.
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+
+        # detection_time below POLL_INTERVAL, restoration defaulted to 2x
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["Ethernet0", "150"],
+            obj=db
+        )
+        assert result.exit_code != 0
+        assert "smaller than the configured polling interval" in result.output
+
+        # restoration_time below POLL_INTERVAL even though detection is valid
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--restoration-time", "200", "Ethernet0", "700"],
+            obj=db
+        )
+        assert result.exit_code != 0
+        assert "restoration time" in result.output
+        assert "smaller than the configured polling interval" in result.output
+
+        # CONFIG_DB should be unchanged (still the original show output)
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        assert result.output == test_vectors.pfcwd_show_config_output
 
     @patch('pfcwd.main.os')
     def test_pfcwd_enable_history_ports_valid(self, mock_os):
@@ -171,8 +208,8 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "301",
-                "all", "302"
+                "--action", "forward", "--restoration-time", "701",
+                "all", "702"
             ],
             obj=db
         )
@@ -191,8 +228,8 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "alert", "--restoration-time", "501",
-                "all", "502"
+                "--action", "alert", "--restoration-time", "801",
+                "all", "802"
             ],
             obj=db
         )
@@ -802,8 +839,8 @@ class TestMultiAsicPfcwdShow(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "101",
-                "Ethernet0", "Ethernet-BP4", "102"
+                "--action", "forward", "--restoration-time", "201",
+                "Ethernet0", "Ethernet-BP4", "202"
             ],
             obj=db
         )
