@@ -1,4 +1,5 @@
 import os
+import re
 import pytest
 import shutil
 import subprocess
@@ -7,6 +8,80 @@ from pathlib import Path
 
 
 FAST_REBOOT = Path(__file__).parents[1] / "scripts" / "fast-reboot"
+
+
+@pytest.mark.parametrize("reboot_type", ["warm-reboot", "fastfast-reboot", "express-reboot", "fast-reboot"])
+@pytest.mark.parametrize("probe_success", [False, True])
+@pytest.mark.parametrize("namespace", ["", "asic1"])
+def test_lag_keepalive_preserves_only_negotiated_retry_counts(tmp_path, reboot_type, probe_success, namespace):
+    script = FAST_REBOOT.read_text()
+    function = re.search(r"^function start_lag_keepalive\(\).*?^}", script, re.M | re.S).group()
+    # Redirect the marker to a test-owned path, never touching live reboot state.
+    dev = namespace.removeprefix("asic")
+    marker = tmp_path / f"probe_success{dev}"
+    if probe_success:
+        marker.touch()
+    else:
+        (tmp_path / "probe_success_other_asic").touch()
+    function = function.replace("/tmp/teamd_retry_count_probe_success", str(tmp_path / "probe_success"))
+    driver = function + '''
+debug() { :; }
+timeout() { printf '<%s>\\n' "$@"; }
+sleep() { printf 'sleep:%s\\n' "$1"; }
+start_lag_keepalive
+'''
+    env = dict(os.environ, REBOOT_TYPE=reboot_type, NETNS=namespace, DEV=dev,
+               LAG_KEEPALIVE_SCRIPT="/usr/local/bin/lag_keepalive.py")
+    result = subprocess.run(["bash", "-e", "-c", driver], env=env,
+                            capture_output=True, text=True, timeout=10)
+    expected = ["<--foreground>", "<30>", "<python3>", "</usr/local/bin/lag_keepalive.py>",
+                "<--fork-into-background>", "<--namespace>", f"<{namespace}>"]
+    if probe_success and reboot_type != "fast-reboot":
+        expected.append("<--preserve-retry-count>")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == expected + ["sleep:5"]
+
+
+def test_lag_keepalive_starts_after_negotiation_before_shutdown():
+    script = FAST_REBOOT.read_text()
+    start = "execute_in_namespaces asic start_lag_keepalive"
+    assert script.count(start) == 1
+    assert (script.index("    setup_control_plane_assistant", script.index("execute_in_namespaces all init_warm")) <
+            script.index("    execute_in_namespaces asic probe_teamd_retry_count") <
+            script.index("    execute_in_namespaces asic pause_orchagent") <
+            script.index("    execute_in_namespaces asic increase_teamd_retry_count") <
+            script.index(start) < script.index("\nset +e", script.index(start)))
+
+
+@pytest.mark.parametrize("reboot_type", ["warm-reboot", "fastfast-reboot", "express-reboot", "fast-reboot"])
+@pytest.mark.parametrize("increase_status", [0, 1])
+def test_lag_keepalive_shutdown_sequence(reboot_type, increase_status):
+    script = FAST_REBOOT.read_text()
+    start = script.index("execute_in_namespaces all init_warm_reboot_states")
+    end = script.index("\nset +e", start)
+    sequence = re.sub(r"^function \w+\(\).*?^}\n", "", script[start:end], flags=re.M | re.S)
+    driver = '''
+execute_in_namespaces() { shift; "$@"; }
+init_warm_reboot_states() { echo init; }
+setup_control_plane_assistant() { echo cpa; }
+probe_teamd_retry_count() { echo probe; }
+pause_orchagent() { echo pause; }
+increase_teamd_retry_count() { echo increase; return "$INCREASE_STATUS"; }
+start_lag_keepalive() { echo keepalive; }
+''' + sequence
+    env = dict(os.environ, REBOOT_TYPE=reboot_type, NUM_ASIC="1",
+               REQUIRE_TEAMD_RETRY_COUNT="no", INCREASE_STATUS=str(increase_status))
+    result = subprocess.run(["bash", "-e", "-c", driver], env=env,
+                            capture_output=True, text=True, timeout=10)
+    if reboot_type == "fast-reboot":
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == ["init", "cpa", "pause", "keepalive"]
+    else:
+        assert result.returncode == increase_status, result.stderr
+        expected = ["init", "cpa", "probe", "pause", "increase"]
+        if not increase_status:
+            expected.append("keepalive")
+        assert result.stdout.splitlines() == expected
 
 
 def run_cpa_tunnel_check(tmp_path, tunnel_type="", tunnel_term_type=""):
