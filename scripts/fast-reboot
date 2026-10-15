@@ -369,16 +369,18 @@ function filter_asic_list()
 # Should only apply to Arista-7060CX-32S-*
 function arista_7060_gen_system_prefdl()
 {
-    HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
-    if [ ! -f "/host/.system-prefdl" ]; then
+    if [[ "${HWSKU}" == *"Arista-7060CX-32S-"* && ! -f "/host/.system-prefdl" ]]; then
         if [ -f "/etc/sonic/.syseeprom" ]; then
             cp /etc/sonic/.syseeprom /host/.system-prefdl
             echo "/host/.system-prefdl not found - restored from /etc/sonic/.syseeprom"
-        elif [[ "${HWSKU}" == *"Arista-7060CX-32S-"* ]]; then
-            python3 ${READ_ARISTA_7060_EEPROM_SCRIPT}
+        else
+            if ! python3 "${READ_ARISTA_7060_EEPROM_SCRIPT}"; then
+                error "EEPROM read failed for HWSKU ${HWSKU}"
+                exit "${EXIT_FAILURE}"
+            fi
             echo "/host/.system-prefdl not found - restored by reading from EEPROM"
         fi
-    fi 
+    fi
 }
 
 function clear_fast_boot_table()
