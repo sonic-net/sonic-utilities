@@ -64,6 +64,7 @@ from . import sflow
 from . import vlan
 from . import vnet
 from . import vxlan
+from . import tunnel
 from . import system_health
 from . import warm_restart
 from . import plugins
@@ -337,6 +338,7 @@ cli.add_command(sflow.sflow)
 cli.add_command(vlan.vlan)
 cli.add_command(vnet.vnet)
 cli.add_command(vxlan.vxlan)
+cli.add_command(tunnel.tunnel)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
