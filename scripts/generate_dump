@@ -135,6 +135,37 @@ sed_if_exists() {
     sed -i -E "$expr" "$file"
 }
 
+BCMCMD_PROBE_OUT=""
+BCMCMD_SKIP_NOTE="broadcom.bcmcmd_skipped"
+
+# Leaves a note in the dump so missing broadcom.* files are explained.
+bcmcmd_skip() {
+    SKIP_BCMCMD=1
+    echo "bcmcmd collection skipped: $1" >&2
+    mkdir -p "$LOGDIR"
+    {
+        echo "bcmcmd collection was skipped: $1"
+        echo "The Broadcom diag shell allows one bcmcmd/bcmsh client at a time. Another session"
+        echo "(bcmsh, bcmcmd, FDRstat, hmon temp, phy diag loops) is likely holding it."
+        echo "Check: ps -eo pid,etime,cmd | grep -E 'bcmcmd|bcmsh'"
+        echo "Commands not collected:"
+    } > "$LOGDIR/$BCMCMD_SKIP_NOTE"
+}
+
+# Output goes to BCMCMD_PROBE_OUT, not stdout, so SKIP_BCMCMD survives (no subshell).
+bcmcmd_probe() {
+    BCMCMD_PROBE_OUT=""
+    if [ $SKIP_BCMCMD -eq 1 ]; then
+        return 0
+    fi
+    local rc=0
+    BCMCMD_PROBE_OUT=$(timeout --foreground 30s bcmcmd -t 5 "$@" 2>&1) || rc=$?
+    if [ $rc -eq $TIMEOUT_EXIT_CODE ] || [[ "$BCMCMD_PROBE_OUT" == *"polling socket timeout"* ]]; then
+        bcmcmd_skip "diag shell did not respond to 'bcmcmd $*'"
+    fi
+    return 0
+}
+
 save_bcmcmd() {
     trap 'handle_error $? $LINENO' ERR
     local start_t=$(date +%s%3N)
@@ -151,6 +182,7 @@ save_bcmcmd() {
 
     if [ $SKIP_BCMCMD -eq 1 ]; then
         echo "Skip $cmd"
+        echo "  $cmd" >> "$LOGDIR/$BCMCMD_SKIP_NOTE"
         return 0
     fi
     # eval required here to re-evaluate the $cmd properly at runtime
@@ -165,12 +197,12 @@ save_bcmcmd() {
         if [ $ret -ne 0 ]; then
             if [ $ret -eq $TIMEOUT_EXIT_CODE ]; then
                 echo "Command: $cmd timedout after ${TIMEOUT_MIN} minutes."
+                bcmcmd_skip "'$cmd' timed out after ${TIMEOUT_MIN} minutes"
             else
                 RC=0
                 grep "polling socket timeout: Success" ${filepath} &>/dev/null || RC=$?
                 if [ $RC -eq 0 ]; then
-                    echo "bcmcmd command timeout. Setting SKIP_BCMCMD to true ..."
-                    SKIP_BCMCMD=1
+                    bcmcmd_skip "diag shell reported 'polling socket timeout' for '$cmd'"
                 fi
             fi
         fi
@@ -1832,7 +1864,8 @@ collect_broadcom() {
         print(json.load(sys.stdin)["platform"])')
     local hwsku=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
-    local hsdk=$(bcmcmd bsh -c SOC | grep 'Failed to execute')
+    bcmcmd_probe bsh -c SOC
+    local hsdk=$(echo "$BCMCMD_PROBE_OUT" | grep 'Failed to execute')
 
     # save SAI configuration files (config.bcm, port_config.ini, sai.profile)
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
@@ -1960,7 +1993,8 @@ collect_broadcom() {
        save_bcmcmd_all_ns "\"fabric connectivity\"" "fabric.connect.summary"
        save_bcmcmd_all_ns "\"port status\"" "port.status.summary"
     else
-       if [ -n "$(bcmcmd 'show feature' | grep -i nat)" ]; then
+       bcmcmd_probe 'show feature'
+       if [ -n "$(echo "$BCMCMD_PROBE_OUT" | grep -i nat)" ]; then
            save_bcmcmd_all_ns "\"l3 nat_ingress show\"" "broadcom.nat.ingress"
            save_bcmcmd_all_ns "\"l3 nat_egress show\"" "broadcom.nat.egress"
        fi
