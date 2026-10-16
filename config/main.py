@@ -4308,7 +4308,7 @@ def warm_restart_bgp_timer(ctx, namespace, seconds):
     namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
-        if seconds not in range(1, 3600):
+        if seconds not in range(1, 3601):
             ctx.fail("bgp warm restart timer must be in range 1-3600")
 
     for namespace in namespaces:
@@ -4330,7 +4330,7 @@ def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
     namespaces = [namespace] if namespace is not None else ctx.obj["asic_namespaces"]
 
     if ADHOC_VALIDATION:
-        if seconds not in range(1, 3600):
+        if seconds not in range(1, 3601):
             ctx.fail("teamsyncd warm restart timer must be in range 1-3600")
 
     for namespace in namespaces:
@@ -4355,6 +4355,31 @@ def warm_restart_bgp_eoiu(ctx, namespace, enable):
         db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
         try:
             db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+# The command is named bgp_eoiu_hold_timer for consistency with its bgp_timer and bgp_eoiu
+# siblings, but it deliberately writes the CONFIG_DB field 'eoiu_hold_timer' (pre-existing).
+# Do not "fix" this mismatch.
+@warm_restart.command('bgp_eoiu_hold_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
+@click.argument('seconds', metavar='<seconds>', required=True, type=int)
+@click.pass_context
+def warm_restart_bgp_eoiu_hold_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
+    if ADHOC_VALIDATION:
+        if seconds not in range(1, 3601):
+            ctx.fail("bgp eoiu hold timer must be in range 1-3600")
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'bgp', {'eoiu_hold_timer': seconds})
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
