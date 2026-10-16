@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 from sonic_installer.bootloader.uboot import UbootBootloader
 
+
 @patch("subprocess.Popen")
 def test_get_installed_images_preserves_slot_ordering(mock_popen):
     """
