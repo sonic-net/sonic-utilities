@@ -14872,11 +14872,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#System
 
 **show vlan brief**
 
-This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, the proxy ARP status, and the Static Anycast Gateway status. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
+This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, the proxy ARP status, and the Static Anycast Gateway status. Optionally, a single VLAN ID can be supplied to display only that VLAN. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
-  show vlan brief [-n <namespace>]
+  show vlan brief [<vid>] [-n <namespace>]
   ```
 
 - Example:
@@ -14891,14 +14891,24 @@ This command displays brief information about all the vlans configured in the de
   +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
   ```
 
+  To display only a single VLAN, pass its VLAN ID:
+  ```
+  admin@sonic:~$ show vlan brief 4
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  |   VLAN ID | IP Address       | Ports     | Port Tagging   | Proxy ARP   | Static Anycast Gateway   | DHCP Helper Address   |
+  +===========+==================+===========+================+=============+==========================+=======================+
+  |         4 | 100.200.200.1/24 | Ethernet4 | untagged       | disabled    | enabled                  |                       |
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  ```
+
 
 **show vlan config**
 
-This command displays all the vlan configuration. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
+This command displays all the vlan configuration. Optionally, a single VLAN ID can be supplied to display only that VLAN's member configuration. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
-  show vlan config [-n <namespace>]
+  show vlan config [<vid>] [-n <namespace>]
   ```
 
 - Example:
