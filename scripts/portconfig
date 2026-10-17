@@ -90,8 +90,8 @@ class portconfig(object):
         self.is_rj45_port = False
         # Set up db connections
         if namespace is None:
-            self.db = ConfigDBConnector()
-            self.state_db = SonicV2Connector(host='127.0.0.1')
+            self.db = ConfigDBConnector(use_unix_socket_path=True)
+            self.state_db = SonicV2Connector(use_unix_socket_path=True)
         else:
             self.db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
             self.state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
@@ -259,7 +259,7 @@ class portconfig(object):
 
     def get_supported_speeds(self, port):
         if not self.namespace:
-            state_db = SonicV2Connector(host="127.0.0.1")
+            state_db = SonicV2Connector(use_unix_socket_path=True)
         else:
             state_db = SonicV2Connector(host="127.0.0.1", namespace=self.namespace, use_unix_socket_path=True)
         state_db.connect(state_db.STATE_DB)
@@ -269,7 +269,7 @@ class portconfig(object):
         # If there is supported_fecs exposed in STATE_DB, let's use it.
         # Otherwise, take the default
         if not self.namespace:
-            state_db = SonicV2Connector(host="127.0.0.1")
+            state_db = SonicV2Connector(use_unix_socket_path=True)
         else:
             state_db = SonicV2Connector(host="127.0.0.1", namespace=self.namespace, use_unix_socket_path=True)
         state_db.connect(state_db.STATE_DB)

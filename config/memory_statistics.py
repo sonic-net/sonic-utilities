@@ -101,7 +101,7 @@ class MemoryStatisticsDB:
         Logs an error if the connection fails.
         """
         try:
-            cls._db = ConfigDBConnector()
+            cls._db = ConfigDBConnector(use_unix_socket_path=True)
             cls._db.connect()
         except RuntimeError as e:
             log_to_syslog(f"ConfigDB connection failed: {e}", syslog.LOG_ERR)

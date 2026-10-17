@@ -33,7 +33,7 @@ VENDOR_MODEL_REGEX = re.compile(r"CAC\w{3}321P2P\w{2}MS")
 
 
 def db_connect(db_name, namespace=EMPTY_NAMESPACE):
-    return swsscommon.DBConnector(db_name, REDIS_TIMEOUT_MSECS, True, namespace)
+    return swsscommon.DBConnector(db_name, REDIS_TIMEOUT_MSECS, False, namespace)
 
 
 target_dict = { "NIC":"0",

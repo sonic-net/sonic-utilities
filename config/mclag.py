@@ -110,7 +110,7 @@ def get_intf_vrf_bind_unique_ip(db, interface_name, interface_type):
 @click.group()
 @click.pass_context
 def mclag(ctx):
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     ctx.obj = {'db': config_db}
 

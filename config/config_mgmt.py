@@ -195,7 +195,7 @@ class ConfigMgmt():
         # Read from config DB on sonic switch
         data = dict()
         if self.configdb is None:
-            configdb = ConfigDBConnector()
+            configdb = ConfigDBConnector(use_unix_socket_path=True)
             configdb.connect()
         else:
             configdb = self.configdb
@@ -219,7 +219,7 @@ class ConfigMgmt():
         self.sysLog(doPrint=True, msg='Writing in Config DB')
         data = dict()
         if self.configdb is None:
-            configdb = ConfigDBConnector()
+            configdb = ConfigDBConnector(use_unix_socket_path=True)
             configdb.connect(False)
         else:
             configdb = self.configdb
@@ -443,7 +443,7 @@ class ConfigMgmtDPB(ConfigMgmt):
                 return None, ret
 
             # Save Port OIDs Mapping Before Deleting Port
-            dataBase = SonicV2Connector(host="127.0.0.1")
+            dataBase = SonicV2Connector(use_unix_socket_path=True)
             if_name_map, if_oid_map = port_util.get_interface_oid_map(dataBase)
             self.sysLog(syslog.LOG_DEBUG, 'if_name_map {}'.format(if_name_map))
 
