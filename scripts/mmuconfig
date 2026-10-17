@@ -127,7 +127,7 @@ class MmuConfig(object):
         else:
             print(f"No buffer profile information available{namespace_str}")
 
-    @multi_asic_util.run_on_multi_asic
+    @multi_asic_util.run_on_multi_asic(use_unix_socket_path=True)
     def set(self, profile, field, value):
         namespace_str = f" for namespace {self.multi_asic.current_namespace}" if multi_asic.is_multi_asic() else ''
         if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":

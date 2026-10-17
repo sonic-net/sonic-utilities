@@ -5,6 +5,7 @@ import click
 import netifaces
 from natsort import natsorted
 from sonic_py_common import multi_asic, device_info
+from swsscommon import swsscommon
 from utilities_common import constants
 from utilities_common.general import load_db_config
 
@@ -176,7 +177,8 @@ def multi_asic_click_option_namespace(func=None, required=False, default=None,
         help=help
     )
 
-def run_on_multi_asic(func):
+
+def run_on_multi_asic(func=None, use_unix_socket_path=False, db_names=()):
     '''
     This decorator is used on the CLI functions which needs to be
     run on all the namespaces in the multi ASIC platform
@@ -184,25 +186,52 @@ def run_on_multi_asic(func):
     for every iteration, it connects to all the DBs and provides an handle
     to the wrapped function.
 
+    Privileged callers can explicitly select namespace-local Unix sockets.
+    Those callers must also list the databases they access through the
+    SonicV2Connector. The default behavior remains unchanged for display
+    commands that do not have access to the private Redis sockets.
+
     '''
-    @functools.wraps(func)
-    def wrapped_run_on_all_asics(self, *args, **kwargs):
-        ns_list = self.multi_asic.get_ns_list_based_on_options()
-        for ns in ns_list:
-            self.multi_asic.current_namespace = ns
-            # if object instance already has db connections, use them
-            if self.multi_asic.db and self.multi_asic.db.cfgdb_clients.get(ns):
-                self.config_db = self.multi_asic.db.cfgdb_clients[ns]
-            else:
-                self.config_db = multi_asic.connect_config_db_for_ns(ns)
+    def decorator(wrapped_func):
+        @functools.wraps(wrapped_func)
+        def wrapped_run_on_all_asics(self, *args, **kwargs):
+            ns_list = self.multi_asic.get_ns_list_based_on_options()
+            for ns in ns_list:
+                self.multi_asic.current_namespace = ns
 
-            if self.multi_asic.db and self.multi_asic.db.db_clients.get(ns):
-                self.db = self.multi_asic.db.db_clients[ns]
-            else:
-                self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
+                if use_unix_socket_path:
+                    self.config_db = swsscommon.ConfigDBConnector(
+                        use_unix_socket_path=True,
+                        namespace=ns
+                    )
+                    self.config_db.connect()
 
-            func(self,  *args, **kwargs)
-    return wrapped_run_on_all_asics
+                    self.db = None
+                    if db_names:
+                        self.db = swsscommon.SonicV2Connector(
+                            use_unix_socket_path=True,
+                            namespace=ns
+                        )
+                        for db_name in db_names:
+                            self.db.connect(db_name)
+                else:
+                    # if object instance already has db connections, use them
+                    if self.multi_asic.db and self.multi_asic.db.cfgdb_clients.get(ns):
+                        self.config_db = self.multi_asic.db.cfgdb_clients[ns]
+                    else:
+                        self.config_db = multi_asic.connect_config_db_for_ns(ns)
+
+                    if self.multi_asic.db and self.multi_asic.db.db_clients.get(ns):
+                        self.db = self.multi_asic.db.db_clients[ns]
+                    else:
+                        self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
+
+                wrapped_func(self,  *args, **kwargs)
+        return wrapped_run_on_all_asics
+
+    if func is None:
+        return decorator
+    return decorator(func)
 
 
 def multi_asic_args(parser=None):
