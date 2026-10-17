@@ -73,7 +73,7 @@ config_db = None
 
 def connect_config_db():
     global config_db
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
 
 #
@@ -83,7 +83,7 @@ appl_db = None
 
 def connect_app_db():
     global appl_db
-    appl_db = SonicV2Connector(host="127.0.0.1")
+    appl_db = SonicV2Connector(use_unix_socket_path=True)
     appl_db.connect(appl_db.APPL_DB)
 
 #

@@ -73,10 +73,10 @@ def craft_lacp_packet(portChannelConfig, portName):
 
 
 def get_lacpdu_per_lag_member(namespace):
-    appDB = ConfigDBConnector(namespace=namespace)
+    appDB = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     appDB.db_connect('APPL_DB')
     appDB_lag_info = appDB.get_keys('LAG_MEMBER_TABLE')
-    configDB = ConfigDBConnector(namespace=namespace)
+    configDB = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     configDB.connect()
     active_lag_members = list()
     lag_member_to_packet = dict()
