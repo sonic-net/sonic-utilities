@@ -35,7 +35,7 @@ def is_valid_port_address(address):
 def nat_interface_name_is_valid(interface_name):
     """Check if the given nat interface is valid"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
 
     if interface_name.startswith("Ethernet"):
@@ -59,7 +59,7 @@ def nat_interface_name_is_valid(interface_name):
 def isIpOverlappingWithAnyStaticEntry(ipAddress, table):
     """Check if the given ipAddress is overlapping with any static entry"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
 
     static_dict = config_db.get_table(table)
@@ -101,7 +101,7 @@ def isIpOverlappingWithAnyStaticEntry(ipAddress, table):
 def isOverlappingWithAnyDynamicEntry(ipAddress):
     """Check if the given ipAddress is overlapping with any dynamic pool entry"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
 
     ip = int(ipaddress.IPv4Address(ipAddress))
@@ -128,7 +128,7 @@ def isOverlappingWithAnyDynamicEntry(ipAddress):
 def getTwiceNatIdCountWithStaticEntries(twice_nat_id, table, count):
     """Get the twice nat id count with static entries"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
 
     static_dict = config_db.get_table(table)
@@ -153,7 +153,7 @@ def getTwiceNatIdCountWithStaticEntries(twice_nat_id, table, count):
 def getTwiceNatIdCountWithDynamicBinding(twice_nat_id, count, dynamic_key):
     """Get the twice nat id count with dynamic binding"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
 
     nat_binding_dict = config_db.get_table('NAT_BINDINGS')
@@ -255,7 +255,7 @@ def add_basic(ctx, global_ip, local_ip, nat_type, twice_nat_id):
         if is_valid_ipv4_address(global_ip) is False:
             ctx.fail("Given global ip address {} is invalid. Please enter a valid global ip address !!".format(global_ip))
    
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     entryFound = False
@@ -283,7 +283,7 @@ def add_basic(ctx, global_ip, local_ip, nat_type, twice_nat_id):
         ctx.fail("Given entry is overlapping with existing Dynamic entry !!")
 
     if entryFound is False:
-        counters_db = SonicV2Connector()
+        counters_db = SonicV2Connector(use_unix_socket_path=True)
         counters_db.connect(counters_db.COUNTERS_DB)
         snat_entries = 0
         max_entries = 0
@@ -349,7 +349,7 @@ def add_tcp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_n
         if is_valid_ipv4_address(global_ip) is False:
             ctx.fail("Given global ip address {} is invalid. Please enter a valid global ip address !!".format(global_ip))
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     
     entryFound = False
@@ -375,7 +375,7 @@ def add_tcp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_n
         ctx.fail("Given entry is overlapping with existing NAT entry !!")
 
     if entryFound is False:
-        counters_db = SonicV2Connector()
+        counters_db = SonicV2Connector(use_unix_socket_path=True)
         counters_db.connect(counters_db.COUNTERS_DB)
         snat_entries = 0
         max_entries = 0
@@ -442,7 +442,7 @@ def add_udp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_n
         if is_valid_ipv4_address(global_ip) is False:
             ctx.fail("Given global ip address {} is invalid. Please enter a valid global ip address !!".format(global_ip))
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     entryFound = False
@@ -468,7 +468,7 @@ def add_udp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_n
         ctx.fail("Given entry is overlapping with existing NAT entry !!")
 
     if entryFound is False:
-        counters_db = SonicV2Connector()
+        counters_db = SonicV2Connector(use_unix_socket_path=True)
         counters_db.connect(counters_db.COUNTERS_DB)
         snat_entries = 0
         max_entries = 0
@@ -539,7 +539,7 @@ def remove_basic(ctx, global_ip, local_ip):
         if is_valid_ipv4_address(global_ip) is False:
             ctx.fail("Given global ip address {} is invalid. Please enter a valid global ip address !!".format(global_ip))
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     entryFound = False
@@ -580,7 +580,7 @@ def remove_tcp(ctx, global_ip, global_port, local_ip, local_port):
         if is_valid_ipv4_address(global_ip) is False:
             ctx.fail("Given global ip address {} is invalid. Please enter a valid global ip address !!".format(global_ip))
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     entryFound = False
@@ -619,7 +619,7 @@ def remove_udp(ctx, global_ip, global_port, local_ip, local_port):
         if is_valid_ipv4_address(global_ip) is False:
             ctx.fail("Given global ip address {} is invalid. Please enter a valid global ip address !!".format(global_ip))
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     entryFound = False
@@ -648,7 +648,7 @@ def remove_udp(ctx, global_ip, global_port, local_ip, local_port):
 def remove_static_all(ctx):
     """Remove all Static related configuration"""
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     tables = ['STATIC_NAT', 'STATIC_NAPT']
@@ -720,7 +720,7 @@ def add_pool(ctx, pool_name, global_ip_range, global_port_range):
     else:
         global_port_range = "NULL"
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     entryFound = False
@@ -799,7 +799,7 @@ def add_binding(ctx, binding_name, pool_name, acl_name, nat_type, twice_nat_id):
     if len(binding_name) > 32:
         ctx.fail("Invalid binding name. Maximum allowed binding name is 32 characters !!")
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     data = config_db.get_entry(table, key)
@@ -853,7 +853,7 @@ def remove_pool(ctx, pool_name):
     if len(pool_name) > 32:
         ctx.fail("Invalid pool name. Maximum allowed pool name is 32 characters !!")
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     data = config_db.get_entry(table, key)
@@ -883,7 +883,7 @@ def remove_pool(ctx, pool_name):
 def remove_pools(ctx):
     """Remove all Pools for Dynamic configuration"""
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     entryFound = False
@@ -922,7 +922,7 @@ def remove_binding(ctx, binding_name):
     if len(binding_name) > 32:
         ctx.fail("Invalid binding name. Maximum allowed binding name is 32 characters !!")
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     data = config_db.get_entry(table, key)
@@ -944,7 +944,7 @@ def remove_binding(ctx, binding_name):
 def remove_bindings(ctx):
     """Remove all Bindings for Dynamic configuration"""
 
-    config_db = ValidatedConfigBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     binding_table_name = 'NAT_BINDINGS'
@@ -966,7 +966,7 @@ def remove_bindings(ctx):
 def add_interface(ctx, interface_name, nat_zone):
     """Add interface related nat configuration"""
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     if nat_interface_name_is_valid(interface_name) is False:
@@ -999,7 +999,7 @@ def add_interface(ctx, interface_name, nat_zone):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 def remove_interface(ctx, interface_name):
     """Remove interface related NAT configuration"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     if nat_interface_name_is_valid(interface_name) is False:
@@ -1031,7 +1031,7 @@ def remove_interface(ctx, interface_name):
 @click.pass_context
 def remove_interfaces(ctx):
     """Remove all interface related NAT configuration"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE']
@@ -1065,7 +1065,7 @@ def feature():
 def enable(ctx):
     """Enable the NAT feature """
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     try:
         config_db.mod_entry("NAT_GLOBAL", "Values", {"admin_mode": "enabled"})
@@ -1079,7 +1079,7 @@ def enable(ctx):
 @click.pass_context
 def disable(ctx):
     """Disable the NAT feature """
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     try:
         config_db.mod_entry("NAT_GLOBAL", "Values", {"admin_mode": "disabled"})
@@ -1094,7 +1094,7 @@ def disable(ctx):
 @click.argument('seconds', metavar='<timeout in range of 300 to 432000 seconds>', type=click.IntRange(300, 432000), required=True)
 def timeout(ctx, seconds):
     """Set NAT timeout configuration"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     
     try:
@@ -1110,7 +1110,7 @@ def timeout(ctx, seconds):
 @click.argument('seconds', metavar='<timeout in range of 300 to 432000 seconds>', type=click.IntRange(300, 432000), required=True)
 def tcp_timeout(ctx, seconds):
     """Set NAT TCP timeout configuration"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     
     try:
@@ -1126,7 +1126,7 @@ def tcp_timeout(ctx, seconds):
 @click.argument('seconds', metavar='<timeout in range of 120 to 600 seconds>', type=click.IntRange(120, 600), required=True)
 def udp_timeout(ctx, seconds):
     """Set NAT UDP timeout configuration"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
 
     try:
@@ -1141,7 +1141,7 @@ def udp_timeout(ctx, seconds):
 @click.pass_context
 def timeout(ctx):
     """Reset NAT timeout configuration to default value (600 seconds)"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     seconds = 600
     
@@ -1157,7 +1157,7 @@ def timeout(ctx):
 @click.pass_context
 def tcp_timeout(ctx):
     """Reset NAT TCP timeout configuration to default value (86400 seconds)"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     seconds = 86400
     
@@ -1173,7 +1173,7 @@ def tcp_timeout(ctx):
 @click.pass_context
 def udp_timeout(ctx):
     """Reset NAT UDP timeout configuration to default value (300 seconds)"""
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True))
     config_db.connect()
     seconds = 300
     

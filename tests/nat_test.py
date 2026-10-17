@@ -265,3 +265,36 @@ class TestNat(object):
 
         result = runner.invoke(config.config.commands["nat"].commands["reset"].commands["udp-timeout"], obj=obj)
         assert "Invalid ConfigDB. Error" in result.output
+
+    def test_nat_commands_use_unix_socket_connectors(self):
+        nat.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        connector = mock.Mock()
+        connector.get_entry.return_value = None
+        connector.get_table.return_value = {}
+        config_connector = mock.Mock(return_value=connector)
+        validated_connector = mock.Mock(return_value=connector)
+        obj = {'config_db': connector}
+
+        with patch("config.nat.ConfigDBConnector", config_connector), \
+                patch("config.nat.ValidatedConfigDBConnector", validated_connector), \
+                patch("config.nat.getTwiceNatIdCountWithStaticEntries", return_value=0), \
+                patch("config.nat.getTwiceNatIdCountWithDynamicBinding", return_value=0):
+            commands = config.config.commands["nat"].commands
+            runner.invoke(commands["remove"].commands["static"].commands["tcp"],
+                          ["65.66.45.1", "100", "12.12.12.14", "200"], obj=obj)
+            runner.invoke(commands["add"].commands["pool"], ["pool1", "65.66.45.1"], obj=obj)
+            runner.invoke(commands["add"].commands["binding"], ["binding1", "pool1"], obj=obj)
+            runner.invoke(commands["remove"].commands["pool"], ["pool1"], obj=obj)
+            runner.invoke(commands["remove"].commands["pools"], obj=obj)
+            runner.invoke(commands["remove"].commands["binding"], ["binding1"], obj=obj)
+            runner.invoke(commands["remove"].commands["bindings"], obj=obj)
+            runner.invoke(commands["add"].commands["interface"],
+                          ["Ethernet0", "-nat_zone", "1"], obj=obj)
+            runner.invoke(commands["remove"].commands["interface"], ["Ethernet0"], obj=obj)
+            runner.invoke(commands["remove"].commands["interfaces"], obj=obj)
+
+        assert config_connector.call_count == 12
+        assert all(call.kwargs == {"use_unix_socket_path": True}
+                   for call in config_connector.call_args_list)
+        assert validated_connector.call_count == 10
