@@ -97,7 +97,7 @@ def get_asic_list_from_db(chassisdb, chassis_module_name):
 # Syntax: fabric_module_set_admin_status <chassis_module_name> <'up'/'down'>
 #
 def fabric_module_set_admin_status(db, chassis_module_name, state):
-    chassisdb = db.db
+    chassisdb = getattr(db, 'chassis_db', db.db)
     chassisdb.connect("CHASSIS_STATE_DB")
     asic_list = get_asic_list_from_db(chassisdb, chassis_module_name)
 

@@ -115,7 +115,7 @@ class TestConfigAcl(object):
         )
         assert result.exit_code == 0
 
-        mock_cfg_connector.assert_any_call(namespace="asic0")
+        mock_cfg_connector.assert_any_call(use_unix_socket_path=True, namespace="asic0")
         mock_instance.set_entry.assert_called_once()
         table_name = mock_instance.set_entry.call_args[0][1]
         table_info = mock_instance.set_entry.call_args[0][2]
@@ -137,5 +137,5 @@ class TestConfigAcl(object):
         result = runner.invoke(cmd, ["DATAACL", "-n", "asic0"])
         assert result.exit_code == 0
 
-        mock_cfg_connector.assert_called_once_with(namespace="asic0")
+        mock_cfg_connector.assert_called_once_with(use_unix_socket_path=True, namespace="asic0")
         mock_instance.set_entry.assert_called_once_with("ACL_TABLE", "DATAACL", None)
