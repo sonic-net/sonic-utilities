@@ -228,7 +228,7 @@ def get_value_from_db_by_field(db_name, table_name, field, key):
     if db_name == "CONFIG_DB":
         db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     else:
-        db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
+        db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
 
     try:
         if db_name == "CONFIG_DB":

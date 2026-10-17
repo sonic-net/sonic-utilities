@@ -80,7 +80,7 @@ def print_eeprom_dict(tlv_dict):
 def read_eeprom_from_db():
     tlv_dict = {}
 
-    db = SonicV2Connector(host="127.0.0.1")
+    db = SonicV2Connector(use_unix_socket_path=True)
     db.connect(db.STATE_DB)
 
     initialized = db.get(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, 'State'), 'Initialized')
@@ -129,7 +129,7 @@ def read_eeprom_from_db():
 
 
 def get_tlv_value_from_db(tlv_code):
-    db = SonicV2Connector(host="127.0.0.1")
+    db = SonicV2Connector(use_unix_socket_path=True)
     db.connect(db.STATE_DB)
 
     initialized = db.get(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, 'State'), 'Initialized')

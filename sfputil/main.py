@@ -1212,7 +1212,7 @@ def error_status(port, fetch_from_hardware):
     else:
         namespaces = multi_asic.get_front_end_namespaces()
         for namespace in namespaces:
-            state_db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
+            state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
             if state_db is not None:
                 state_db.connect(state_db.STATE_DB)
                 output_table.extend(fetch_error_status_from_state_db(port, state_db))
@@ -1509,7 +1509,7 @@ def update_firmware_info_to_state_db(port_name):
 
     namespaces = multi_asic.get_front_end_namespaces()
     for namespace in namespaces:
-        state_db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
+        state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
         if state_db is not None:
             state_db.connect(state_db.STATE_DB)
             transceiver_firmware_info_dict = platform_chassis.get_sfp(physical_port).get_transceiver_info_firmware_versions()

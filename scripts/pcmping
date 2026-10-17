@@ -83,7 +83,7 @@ def find_probe_packet(interface, dst_out, dst_in, sockets, exp_socket, max_iter)
        sys.exit(0)
 
 def get_portchannel(interface):
-    configdb = ConfigDBConnector()
+    configdb = ConfigDBConnector(use_unix_socket_path=True)
     configdb.connect()
     portchannels = configdb.get_table("PORTCHANNEL")
     for key, value in portchannels.items():
@@ -101,7 +101,7 @@ def is_ip_prefix_in_key(key):
     return (isinstance(key, tuple))
 
 def get_portchannel_ipv4(portchannel_name):
-    configdb = ConfigDBConnector()
+    configdb = ConfigDBConnector(use_unix_socket_path=True)
     configdb.connect()
     config = configdb.get_config()
     portchannel_interfaces = config["PORTCHANNEL_INTERFACE"]
