@@ -17161,6 +17161,8 @@ Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS
 
 These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.
 
+`show interface speed application` displays four columns: Interface, Lane, Configured Application, and Active Application. Each application is displayed as `AppSel: Host interface / Media interface`, using the complete descriptions returned by the public API. It does not infer a numeric link speed. JSON preserves the complete `Application Advertisement` and the per-lane AppSel IDs under `Application Select Controls` and `Active Application Control Set`. Breakout subports display only their own lanes.
+
 For a breakout subport, `map` and `lane-status` identify its ELS lasers only when `cpo.json` provides `laser_to_asic_lane_mapping`; otherwise the lasers are shown as `N/A (needs laser_to_asic_lane_mapping)`. `lane-status` shows a lane's laser and laser state only when the topology associates that lane with a laser.
 
 - Usage:
@@ -17169,7 +17171,7 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
   cpoutil show interface presence [PORT] [--json]     # CPO virtual-module presence
   cpoutil show interface dom [PORT] [--json]          # OE and ELS information, monitors and thresholds
   cpoutil show interface tx-disable [PORT] [--json]   # per-lane Tx disable status
-  cpoutil show interface speed [PORT] [--json]        # configured and active application per lane
+  cpoutil show interface speed application [PORT] [--json]  # full configured and active applications per lane
   cpoutil show interface lane-status [PORT] [--json]  # OE datapath state and ELS lane state
   cpoutil show interface lpmode [PORT] [--json]       # low-power mode of the CPO virtual module
   ```

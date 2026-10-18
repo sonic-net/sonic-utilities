@@ -506,9 +506,9 @@ def command_paths(command, path=()):
         yield from command_paths(child, path + (name,))
 
 
-HARDWARE_COMMANDS = [
+HARDWARE_COMMANDS = [["show", "interface", "speed", "application"]] + [
     ["show", "interface", name] for name in
-    ("map", "presence", "dom", "tx-disable", "speed", "lane-status")
+    ("map", "presence", "dom", "tx-disable", "lane-status")
 ] + [
     ["show", "oe", name] for name in
     ("lpmode", "status", "temperature")
@@ -806,7 +806,7 @@ class TestHelperCoverage(object):
                           "els": {"info": None, "dom": None, "thresholds": None}}
         )
         cpoutil.print_records({"oe0": [1, 2]}, False, field_header="Lane")
-        cpoutil.print_speed_records(
+        cpoutil.print_application_records(
             {"Ethernet0": {"Application Select Controls": {"lane00": 400000}}},
             False,
         )
@@ -834,7 +834,7 @@ class TestCommandCoverage(object):
             ["show", "interface", "dom", "Ethernet0"],
             ["show", "interface", "dom", "Ethernet0", "--json"],
             ["show", "interface", "tx-disable", "Ethernet0"],
-            ["show", "interface", "speed", "Ethernet0"],
+            ["show", "interface", "speed", "application", "Ethernet0"],
             ["show", "interface", "lane-status", "Ethernet0"],
             ["show", "oe", "lpmode"],
             ["show", "oe", "status"],
@@ -1597,7 +1597,10 @@ class TestGangedPorts:
 
     @pytest.mark.parametrize("command", ["tx-disable", "speed", "lane-status"])
     def test_all_port_commands_use_the_logical_port(self, ganged, command):
-        result = invoke_coverage(["show", "interface", command, "--json"])
+        arguments = ["show", "interface", command]
+        if command == "speed":
+            arguments.append("application")
+        result = invoke_coverage(arguments + ["--json"])
         assert result.exit_code == 0, result.output
         assert set(json.loads(result.output)) == {"Ethernet0:1 (ganged)", "Ethernet0:2 (ganged)"}
 

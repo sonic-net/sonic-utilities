@@ -86,8 +86,18 @@ class FakeApi:
 
     def get_application_advertisement(self):
         return {
-            1: {"host_electrical_interface_id": "400GAUI-4-L"},
-            2: {"host_electrical_interface_id": "200GAUI-4"},
+            1: {
+                "host_electrical_interface_id": "400GAUI-4-L C2M (Annex 120G)",
+                "module_media_interface_id": "400G-FR4/400GBASE-FR4 (Cl 151)",
+                "host_lane_count": 4, "media_lane_count": 4,
+                "host_lane_assignment_options": 17, "media_lane_assignment_options": 17,
+            },
+            2: {
+                "host_electrical_interface_id": "CAUI-4 C2M (Annex 83E) with RS(528,514) FEC",
+                "module_media_interface_id": "100G CWDM4 MSA Spec",
+                "host_lane_count": 4, "media_lane_count": 4,
+                "host_lane_assignment_options": 17, "media_lane_assignment_options": 17,
+            },
         }
 
     def get_application(self, lane):
@@ -459,29 +469,59 @@ class TestDirectPlatformApiCommands(object):
             "Ethernet0": {"lane00": False, "lane01": True}
         }
 
-    def test_interface_speed_uses_existing_cmis_methods(self):
+    def test_interface_application_preserves_public_api_values(self):
         result = invoke([
-            "show", "interface", "speed", "Ethernet0", "--json"
-        ])
-        values = json.loads(result.output)["Ethernet0"]
-        assert values["Application Select Controls"] == {
-            "lane00": 400000,
-            "lane01": 200000,
-        }
-        assert values["Active Application Control Set"] == {
-            "lane00": 200000,
-            "lane01": 400000,
-        }
-
-    def test_breakout_speed_does_not_require_els_lane_mapping(self):
-        result = invoke([
-            "show", "interface", "speed", "Ethernet1", "--json"
+            "show", "interface", "speed", "application", "Ethernet0", "--json"
         ])
         assert result.exit_code == 0, result.output
-        assert json.loads(result.output)["Ethernet1"] == {
-            "Application Select Controls": {"lane01": 200000},
-            "Active Application Control Set": {"lane01": 400000},
+        values = json.loads(result.output)["Ethernet0"]
+        assert values["Application Select Controls"] == {"lane00": 1, "lane01": 2}
+        assert values["Active Application Control Set"] == {"lane00": 2, "lane01": 1}
+        assert values["Application Advertisement"] == {
+            str(key): value for key, value in self.cpo.api.get_application_advertisement().items()
         }
+
+    def test_application_table_has_four_columns_and_full_interface_names(self):
+        result = invoke(["show", "interface", "speed", "application", "Ethernet0"])
+        assert result.exit_code == 0, result.output
+        assert result.output.splitlines()[0].split("  ")[0] == "Interface"
+        assert "Configured Application" in result.output
+        assert "Active Application" in result.output
+        assert "Configured Speed" not in result.output
+        assert "AppSel" not in result.output.splitlines()[0]
+        for value in self.cpo.api.get_application_advertisement().values():
+            assert value["host_electrical_interface_id"] in result.output
+            assert value["module_media_interface_id"] in result.output
+        assert "1: 400GAUI-4-L C2M (Annex 120G)" in result.output
+        assert "2: CAUI-4 C2M (Annex 83E) with RS(528,514) FEC" in result.output
+
+    def test_breakout_application_does_not_require_els_lane_mapping(self):
+        result = invoke([
+            "show", "interface", "speed", "application", "Ethernet1", "--json"
+        ])
+        assert result.exit_code == 0, result.output
+        values = json.loads(result.output)["Ethernet1"]
+        assert values["Application Select Controls"] == {"lane01": 2}
+        assert values["Active Application Control Set"] == {"lane01": 1}
+        assert values["Application Advertisement"]["2"]["host_electrical_interface_id"] == (
+            "CAUI-4 C2M (Annex 83E) with RS(528,514) FEC"
+        )
+
+    @pytest.mark.parametrize("application", [0, 15])
+    def test_unadvertised_application_keeps_the_selected_id(self, monkeypatch, application):
+        monkeypatch.setattr(self.cpo.api, "get_application", lambda lane: application)
+        result = invoke(["show", "interface", "speed", "application", "Ethernet1"])
+        assert result.exit_code == 0, result.output
+        assert "{}: N/A".format(application) in result.output
+
+    def test_application_with_serialized_advertisement_keys(self, monkeypatch):
+        advertisements = self.cpo.api.get_application_advertisement()
+        monkeypatch.setattr(self.cpo.api, "get_application_advertisement", lambda: {
+            str(key): value for key, value in advertisements.items()
+        })
+        result = invoke(["show", "interface", "speed", "application", "Ethernet1"])
+        assert result.exit_code == 0, result.output
+        assert advertisements[2]["host_electrical_interface_id"] in result.output
 
     def test_interface_lane_status_uses_public_elsfp_api(self):
         result = invoke([

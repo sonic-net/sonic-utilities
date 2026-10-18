@@ -878,19 +878,18 @@ def _interface_mapping_record(logical_port):
     }
 
 
-def _application_speed(advertisements, application):
-    if not application or not isinstance(advertisements, dict):
+def _format_selected_application(advertisements, application):
+    """Keep the AppSel and full public Host/Media interface descriptions."""
+    if application is None or application == "N/A":
         return "N/A"
     details = advertisements.get(application)
     if details is None:
-        details = advertisements.get(str(application), {})
+        details = advertisements.get(str(application))
     if not isinstance(details, dict):
-        return "N/A"
-    interface = details.get("host_electrical_interface_id", "")
-    match = re.search(r"(\d+(?:\.\d+)?)G", str(interface), re.IGNORECASE)
-    if not match:
-        return "N/A"
-    return int(float(match.group(1)) * 1000)
+        return "{}: N/A".format(application)
+    host = details.get("host_electrical_interface_id", "N/A")
+    media = details.get("module_media_interface_id", "N/A")
+    return "{}: {} / {}".format(application, host, media)
 
 
 def _format_map_table(mappings):
@@ -1048,13 +1047,14 @@ def print_records(records, json_output, headers=("Resource", "Value"),
     click.echo(tabulate(rows, table_headers, **options))
 
 
-def print_speed_records(records, json_output):
+def print_application_records(records, json_output):
     if json_output:
         click.echo(_json_records(records))
         return
 
     rows = []
     for interface, values in records.items():
+        advertisements = values.get("Application Advertisement", {})
         configured = values.get("Application Select Controls", {})
         active = values.get("Active Application Control Set", {})
         lanes = sorted(
@@ -1064,16 +1064,16 @@ def print_speed_records(records, json_output):
             rows.append((
                 interface,
                 _display_field(lane),
-                configured.get(lane, "N/A"),
-                active.get(lane, "N/A"),
+                _format_selected_application(advertisements, configured.get(lane)),
+                _format_selected_application(advertisements, active.get(lane)),
             ))
     click.echo(tabulate(
         rows,
         (
             "Interface",
             "Lane",
-            "Configured Speed (Mbps)",
-            "Active Speed (Mbps)",
+            "Configured Application",
+            "Active Application",
         ),
         tablefmt="simple",
     ))
@@ -1393,11 +1393,20 @@ def show_interface_tx_disable(port, json_output):
     )
 
 
-@show_interface.command("speed")
+@show_interface.group("speed")
+def show_interface_speed():
+    """Display CPO interface application settings."""
+
+
+@show_interface_speed.command("application")
 @click.argument("port", required=False)
 @output_option
-def show_interface_speed(port, json_output):
-    """Display configured and active speed per lane."""
+def show_interface_speed_application(port, json_output):
+    """Display configured and active Application selections per lane.
+
+    Each table entry is AppSel: Host interface / Media interface. JSON retains
+    the complete public Application Advertisement and the per-lane AppSel IDs.
+    """
     from sonic_platform_base.sonic_xcvr.fields import consts
 
     records = {}
@@ -1415,20 +1424,17 @@ def show_interface_speed(port, json_output):
             configured = []
             active = []
             for lane in range(api.NUM_CHANNELS):
-                configured.append(_application_speed(
-                    advertisements, api.get_application(lane)
-                ))
+                configured.append(api.get_application(lane))
                 active_application = active_applications.get(
                     "{}{}".format(
                         consts.ACTIVE_APSEL_HOSTLANE, lane + 1
                     ),
                     "N/A",
                 )
-                active.append(_application_speed(
-                    advertisements, active_application
-                ))
+                active.append(active_application)
             lane_positions = get_cpo_lane_positions(logical_port)
             records[port_name] = {
+                "Application Advertisement": advertisements,
                 "Application Select Controls": _select_lane_values(
                     configured, lane_positions
                 ),
@@ -1442,7 +1448,7 @@ def show_interface_speed(port, json_output):
         )
     except CpoCommandError as exc:
         raise click.ClickException(str(exc))
-    print_speed_records(records, json_output)
+    print_application_records(records, json_output)
 
 
 @show_interface.command("lane-status")
