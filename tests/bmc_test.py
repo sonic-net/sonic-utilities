@@ -6,7 +6,6 @@ from unittest import mock
 from click.testing import CliRunner
 from mock import MagicMock
 from sonic_py_common import device_info
-from utilities_common.db import Db
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -21,42 +20,6 @@ SONIC_BMC_PATCH = mock.patch(
 SWITCH_HOST_PATCH = mock.patch(
     'config.bmc.device_info.is_switch_host',
     return_value=True)
-
-
-class TestBmcConfigOs(object):
-    """Test class for 'config bmc os' command"""
-
-    @SWITCH_HOST_PATCH
-    def test_config_bmc_os_sonic(self, mock_is_switch_host):
-        db = Db()
-        runner = CliRunner()
-        result = runner.invoke(bmc.config_bmc_os, ['sonic'], obj=db)
-        assert result.exit_code == 0
-        assert "BMC OS set to sonic" in result.output
-        assert db.cfgdb.get_entry('DEVICE_METADATA', 'bmc')['os'] == 'sonic'
-
-    @SWITCH_HOST_PATCH
-    def test_config_bmc_os_openbmc(self, mock_is_switch_host):
-        db = Db()
-        runner = CliRunner()
-        result = runner.invoke(bmc.config_bmc_os, ['openbmc'], obj=db)
-        assert result.exit_code == 0
-        assert "BMC OS set to openbmc" in result.output
-        assert db.cfgdb.get_entry('DEVICE_METADATA', 'bmc')['os'] == 'openbmc'
-
-    @SWITCH_HOST_PATCH
-    def test_config_bmc_os_case_insensitive(self, mock_is_switch_host):
-        db = Db()
-        runner = CliRunner()
-        result = runner.invoke(bmc.config_bmc_os, ['SONIC'], obj=db)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_entry('DEVICE_METADATA', 'bmc')['os'] == 'sonic'
-
-    def test_config_bmc_os_invalid(self):
-        db = Db()
-        runner = CliRunner()
-        result = runner.invoke(bmc.config_bmc_os, ['linux'], obj=db)
-        assert result.exit_code != 0
 
 
 class TestBmcResetRootPassword(object):

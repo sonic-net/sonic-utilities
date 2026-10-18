@@ -1,5 +1,4 @@
 import click
-import utilities_common.cli as clicommon
 from sonic_py_common import device_info
 
 
@@ -19,19 +18,6 @@ def _reject_unless_switch_host_openbmc():
 def bmc():
     """BMC (Baseboard Management Controller) configuration tasks"""
     pass
-
-
-# config bmc os <openbmc|sonic>
-@bmc.command('os')
-@click.argument('os_type', metavar='<os>',
-                type=click.Choice([device_info.BMC_OS_OPENBMC, device_info.BMC_OS_SONIC],
-                                  case_sensitive=False))
-@clicommon.pass_db
-def config_bmc_os(db, os_type):
-    """Configure BMC operating system (openbmc: Redfish, sonic: Redis)"""
-    _reject_non_switch_host()
-    db.cfgdb.mod_entry('DEVICE_METADATA', 'bmc', {'os': os_type.lower()})
-    click.echo(f"BMC OS set to {os_type.lower()}")
 
 
 # config bmc reset-root-password

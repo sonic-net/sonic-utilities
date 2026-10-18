@@ -1188,7 +1188,8 @@ This command displays the status of the device's thermal sensors
 
 **show platform bmc os**
 
-This command displays the configured BMC operating system (`openbmc` or `sonic`).
+This command displays the BMC operating system (`openbmc` or `sonic`), as defined in
+`bmc_os.json` in the HwSKU directory.
 
 - Usage:
   ```
@@ -3056,9 +3057,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#arp--n
 ## BMC
 
 On Switch-Host platforms, the BMC peer on the USB/BMC link may run OpenBMC (Redfish) or
-SONiC-on-BMC (Redis). The configured type is stored in CONFIG_DB as
-`DEVICE_METADATA|bmc` field `os` (`openbmc` or `sonic`; default `sonic`). Use
-`config bmc os` to set it and `show platform bmc os` to display the current value.
+SONiC-on-BMC (Redis). The type is defined per HwSKU by the `os` field (`openbmc` or
+`sonic`) in `bmc_os.json` in the HwSKU directory
+(`/usr/share/sonic/device/<platform>/<hwsku>/bmc_os.json`). When the file is missing or
+invalid, the default is `sonic`. To change the BMC OS, edit this file. Use
+`show platform bmc os` to display the current value.
 
 All BMC commands are supported only when run on the Switch-Host (not on the BMC
 itself). OpenBMC-only commands (Redfish session management: `reset-root-password`,
@@ -3069,28 +3072,6 @@ SerialNumber from remote STATE_DB, with PowerState derived from BMC reachability
 FirmwareVersion shown as `N/A`.
 
 ### BMC config commands
-
-**config bmc os**
-
-This command configures the BMC operating system type for Switch-Host communication with
-the BMC on the USB/BMC link.
-
-- Usage:
-  ```
-  config bmc os <openbmc|sonic>
-  ```
-
-- Arguments:
-  - `<openbmc|sonic>`: `openbmc` — Redfish APIs; `sonic` — Redis over the BMC link
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config bmc os sonic
-  BMC OS set to sonic
-
-  admin@sonic:~$ sudo config bmc os openbmc
-  BMC OS set to openbmc
-  ```
 
 **config bmc open-session**
 

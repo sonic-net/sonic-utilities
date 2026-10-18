@@ -89,7 +89,7 @@ def _reject_non_switch_host():
 # 'os' subcommand ("show platform bmc os")
 @bmc.command(name='os')
 def bmc_os():
-    """Show configured BMC operating system (openbmc or sonic)"""
+    """Show BMC operating system (openbmc or sonic)"""
     _reject_non_switch_host()
     click.echo(device_info.get_bmc_os())
 
