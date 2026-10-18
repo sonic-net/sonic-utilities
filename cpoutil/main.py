@@ -8,6 +8,7 @@ import sys
 import click
 from tabulate import tabulate
 
+from sonic_py_common import multi_asic
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
@@ -127,11 +128,11 @@ def load_current_port_config():
     if platform_sfputil_helper.platform_sfputil is None:
         platform_sfputil_helper.load_platform_sfputil()
     platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
+    # Read each namespace once instead of discovering it for every port.
+    port_table = multi_asic.get_port_table()
     current_port_config = {}
     for port in platform_sfputil_helper.get_logical_list():
-        lanes = platform_sfputil_helper.get_value_from_db_by_field(
-            "CONFIG_DB", "PORT", "lanes", port
-        )
+        lanes = port_table.get(port, {}).get("lanes")
         current_port_config[port] = {
             "index": platform_sfputil_helper.get_validated_physical_port_list(port),
             "lanes": _parse_port_lanes(lanes, port),

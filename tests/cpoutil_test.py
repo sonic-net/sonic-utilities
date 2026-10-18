@@ -1119,10 +1119,12 @@ class TestCpoHelpers:
         monkeypatch.setattr(helper, "platform_sfputil", None)
         load = mock.Mock(side_effect=lambda: setattr(helper, "platform_sfputil", shared_port_mapping))
         read_mappings = mock.Mock()
-        read_lanes = mock.Mock(side_effect=lambda db, table, field, port: lane_fields[port])
+        read_ports = mock.Mock(return_value={
+            port: {"lanes": lanes} for port, lanes in lane_fields.items()
+        })
         monkeypatch.setattr(helper, "load_platform_sfputil", load)
         monkeypatch.setattr(helper, "platform_sfputil_read_porttab_mappings", read_mappings)
-        monkeypatch.setattr(helper, "get_value_from_db_by_field", read_lanes)
+        monkeypatch.setattr(cpoutil.multi_asic, "get_port_table", read_ports)
         cpoutil.load_current_port_config()
         load.assert_called_once_with()
         read_mappings.assert_called_once_with()
@@ -1130,10 +1132,7 @@ class TestCpoHelpers:
             "Ethernet0": {"index": [1], "lanes": (41, 43)},
             "Ethernet2": {"index": [1], "lanes": (42, 44)},
         }
-        assert read_lanes.call_args_list == [
-            mock.call("CONFIG_DB", "PORT", "lanes", "Ethernet0"),
-            mock.call("CONFIG_DB", "PORT", "lanes", "Ethernet2"),
-        ]
+        read_ports.assert_called_once_with()
         cpoutil.load_current_port_config()
         load.assert_called_once_with()
 
@@ -1832,3 +1831,88 @@ class TestDomJsonAndReadFailures:
         result = invoke_coverage(["show", "interface", "dom", "Ethernet0"])
         assert result.exit_code != 0
         assert "This functionality is not implemented" in result.output
+
+
+class TestPortConfigurationSnapshot:
+    def configure(self, monkeypatch, shared_port_mapping, ports, physical_ports):
+        helper = cpoutil.platform_sfputil_helper
+        shared_port_mapping.logical = ports
+        shared_port_mapping.is_logical_port.side_effect = lambda port: port in ports
+        shared_port_mapping.get_logical_to_physical.side_effect = lambda port: physical_ports[port]
+        monkeypatch.setattr(helper, "platform_sfputil_read_porttab_mappings", mock.Mock())
+        monkeypatch.setattr(helper, "get_value_from_db_by_field", mock.Mock(
+            side_effect=AssertionError("per-port database query")
+        ))
+        monkeypatch.setattr(cpoutil.multi_asic, "get_namespace_for_port", mock.Mock(
+            side_effect=AssertionError("per-port namespace discovery")
+        ))
+        monkeypatch.setattr(cpoutil, "current_port_config", {})
+
+    @pytest.mark.parametrize("namespaces", [[""], ["asic0", "asic1"]])
+    @pytest.mark.parametrize("port_count", [1, 130])
+    def test_table_reads_scale_with_namespaces_not_ports(
+            self, monkeypatch, shared_port_mapping, namespaces, port_count):
+        ports = ["Ethernet{}".format(index * 8) for index in range(port_count)]
+        physical = {port: [index + 1] for index, port in enumerate(ports)}
+        self.configure(monkeypatch, shared_port_mapping, ports, physical)
+        tables = {namespace: {} for namespace in namespaces}
+        expected = {}
+        for index, port in enumerate(ports):
+            lanes = (index * 8 + 1, index * 8 + 2)
+            namespace = namespaces[index % len(namespaces)]
+            # get_table can return typed lanes rather than a comma-separated string.
+            value = list(lanes) if index % 2 else ",".join(map(str, lanes))
+            tables[namespace][port] = {"lanes": value, "speed": "800000"}
+            expected[port] = {"index": physical[port], "lanes": lanes}
+        tables[namespaces[0]]["NotInLogicalList"] = {"lanes": "999"}
+        databases = {namespace: mock.Mock() for namespace in namespaces}
+        for namespace, database in databases.items():
+            database.get_table.return_value = tables[namespace]
+        namespace_list = mock.Mock(return_value=namespaces)
+        connector = mock.Mock(side_effect=lambda namespace: databases[namespace])
+        monkeypatch.setattr(cpoutil.multi_asic, "get_namespace_list", namespace_list)
+        monkeypatch.setattr(cpoutil.multi_asic.swsscommon, "ConfigDBConnector", connector)
+
+        cpoutil.load_current_port_config()
+
+        assert cpoutil.current_port_config == expected
+        namespace_list.assert_called_once_with(None)
+        assert connector.call_args_list == [mock.call(namespace=ns) for ns in namespaces]
+        for database in databases.values():
+            database.connect.assert_called_once_with()
+            database.get_table.assert_called_once_with("PORT")
+            database.get.assert_not_called()
+
+    def test_breakout_ports_keep_distinct_lanes_and_shared_physical_index(
+            self, monkeypatch, shared_port_mapping):
+        ports = ["Ethernet0", "Ethernet2"]
+        self.configure(monkeypatch, shared_port_mapping, ports, {port: [1] for port in ports})
+        read = mock.Mock(return_value={
+            "Ethernet0": {"lanes": "41,43"}, "Ethernet2": {"lanes": [42, 44]},
+        })
+        monkeypatch.setattr(cpoutil.multi_asic, "get_port_table", read)
+        cpoutil.load_current_port_config()
+        assert cpoutil.current_port_config == {
+            "Ethernet0": {"index": [1], "lanes": (41, 43)},
+            "Ethernet2": {"index": [1], "lanes": (42, 44)},
+        }
+        read.assert_called_once_with()
+
+    @pytest.mark.parametrize("table", [{}, {"Ethernet0": {}}, {"Ethernet0": {"lanes": None}}])
+    def test_missing_port_or_lanes_is_reported(self, monkeypatch, shared_port_mapping, table):
+        self.configure(monkeypatch, shared_port_mapping, ["Ethernet0"], {"Ethernet0": [1]})
+        monkeypatch.setattr(cpoutil.multi_asic, "get_port_table", mock.Mock(return_value=table))
+        with pytest.raises(cpoutil.CpoCommandError, match="Ethernet0.*no usable lanes"):
+            cpoutil.load_current_port_config()
+
+    def test_second_load_reads_fresh_lanes(self, monkeypatch, shared_port_mapping):
+        self.configure(monkeypatch, shared_port_mapping, ["Ethernet0"], {"Ethernet0": [1]})
+        read = mock.Mock(side_effect=[
+            {"Ethernet0": {"lanes": "1,2"}}, {"Ethernet0": {"lanes": "3,4"}},
+        ])
+        monkeypatch.setattr(cpoutil.multi_asic, "get_port_table", read)
+        cpoutil.load_current_port_config()
+        assert cpoutil.current_port_config["Ethernet0"]["lanes"] == (1, 2)
+        cpoutil.load_current_port_config()
+        assert cpoutil.current_port_config["Ethernet0"]["lanes"] == (3, 4)
+        assert read.call_count == 2
