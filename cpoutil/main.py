@@ -1963,6 +1963,14 @@ def _validate_eeprom_range(bank, page, offset, size):
         )
 
 
+def _validate_requested_eeprom_bank(bank, page):
+    """Reject explicit nonzero banks on pages the CMIS reader treats as shared."""
+    if bank != 0 and (page < 0x10 or 0x9F <= page <= 0xAF):
+        raise CpoCommandError(
+            "Page {:x}h does not use bank selection; --bank must be 0".format(page)
+        )
+
+
 def _get_oe_bank_count(resource_id, cpo):
     """Return the number of CMIS banks advertised by one OE."""
     bank_count = cpo_oe_bank_counts.get(resource_id)
@@ -2080,10 +2088,13 @@ def _write_resource_eeprom(resource_type, index, bank, page, offset, data):
     return resource_id
 
 
-def _interface_eeprom_target(port, target):
+def _interface_eeprom_target(port, target, page=None):
     mapping = _get_interface_mapping(port)
     if target == OPTICAL_ENGINE:
-        return mapping.oe_id, _local_oe_bank(mapping)
+        bank = _local_oe_bank(mapping)
+        if page is not None and (page < 0x10 or 0x9F <= page <= 0xAF):
+            bank = 0
+        return mapping.oe_id, bank
     if target == EXTERNAL_LASER_SOURCE:
         # The selected ELS endpoint and its memory map resolve ELS addressing;
         # raw ELS EEPROM access, like 'read-eeprom els', uses bank 0.
@@ -2162,7 +2173,7 @@ def _read_eeprom_at(reader, resource_id, linear_offset, size):
 
 def _full_eeprom_sections(banks):
     """Return the standard OE pages printed by a full dump."""
-    common_bank = banks[0]
+    common_bank = 0
     sections = [
         ("Lower page 0h", common_bank, 0, 0, EEPROM_PAGE_SIZE),
         ("Upper page 0h", common_bank, 0,
@@ -2239,15 +2250,19 @@ def _format_full_eeprom(resource_type, resource_id, cpo, banks,
 def _print_full_resource_eeprom(resource_type, index=None, bank=None):
     outputs = []
     resources = get_resource_cpo_objects(resource_type, index)
+    failed_resources = []
     for resource_id, cpo in resources:
-        banks = _resource_banks(resource_type, resource_id, bank)
         try:
+            banks = _resource_banks(resource_type, resource_id, bank)
+            for selected_bank in banks:
+                _physical_eeprom_bank(resource_type, resource_id, cpo, selected_bank)
             outputs.append(_format_full_eeprom(
                 resource_type, resource_id, cpo, banks
             ))
         except CpoCommandError as exc:
             if index is not None:
                 raise
+            failed_resources.append(str(resource_id).upper())
             outputs.append(
                 "EEPROM hexdump for {}\n{}{}".format(
                     str(resource_id).upper(),
@@ -2255,6 +2270,10 @@ def _print_full_resource_eeprom(resource_type, index=None, bank=None):
                 )
             )
     click.echo("\n".join(outputs).rstrip())
+    if failed_resources:
+        raise CpoCommandError(
+            "Failed to dump EEPROM for: {}".format(", ".join(failed_resources))
+        )
 
 
 def _eeprom_range_requested(page, offset, size):
@@ -2316,7 +2335,7 @@ def read_eeprom_interface(port, oe, els, page, offset, size):
     """Read EEPROM through a front-panel interface mapping."""
     try:
         target = _interface_target_option(oe, els)
-        index, bank = _interface_eeprom_target(port, target)
+        index, bank = _interface_eeprom_target(port, target, page=page)
         if not _eeprom_range_requested(page, offset, size):
             resource_id, cpo = _single_resource(target, index)
             click.echo(_format_full_eeprom(
@@ -2356,6 +2375,8 @@ def read_eeprom_oe(index, bank, page, offset, size):
             _print_full_resource_eeprom(OPTICAL_ENGINE, index, bank)
             return
         target_bank = 0 if bank is None else bank
+        _validate_eeprom_range(target_bank, page, offset, size)
+        _validate_requested_eeprom_bank(target_bank, page)
         results = _read_resource_eeprom(
             OPTICAL_ENGINE, index, target_bank, page, offset, size
         )
@@ -2421,7 +2442,7 @@ def write_eeprom_interface(port, oe, els, page, offset, data):
     """Write EEPROM through a front-panel interface mapping."""
     try:
         target = _interface_target_option(oe, els)
-        index, bank = _interface_eeprom_target(port, target)
+        index, bank = _interface_eeprom_target(port, target, page=page)
         payload = _parse_hex_data(data)
         _write_resource_eeprom(
             target, index, bank, page, offset, payload
@@ -2445,6 +2466,8 @@ def write_eeprom_oe(index, bank, page, offset, data):
     """Write raw EEPROM bytes to an Optical Engine."""
     try:
         payload = _parse_hex_data(data)
+        _validate_eeprom_range(bank, page, offset, len(payload))
+        _validate_requested_eeprom_bank(bank, page)
         _write_resource_eeprom(
             OPTICAL_ENGINE, index, bank, page, offset, payload
         )

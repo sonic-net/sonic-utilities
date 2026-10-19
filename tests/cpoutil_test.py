@@ -942,6 +942,15 @@ class TestCommandCoverage(object):
     def test_eeprom_ranges_and_writes(self, coverage_environment, arguments):
         result = invoke_coverage(arguments)
         assert result.exit_code == 0, result.output
+        if arguments[0] == "read-eeprom":
+            offset = int(arguments[arguments.index("-o") + 1], 0)
+            size = int(arguments[arguments.index("-s") + 1], 0)
+            expected = cpoutil._format_eeprom_hexdump(bytearray(range(size)), offset)
+            heading, _, dump = result.output.partition("\n")
+            assert heading.startswith("EEPROM hexdump for ")
+            page = int(arguments[arguments.index("-n") + 1], 0)
+            assert "page {:x}h offset {:x}h size {}".format(page, offset, size) in heading
+            assert dump == expected + "\n"
 
     def test_full_eeprom_commands(self, coverage_environment):
         from sonic_platform_base.sonic_xcvr.codes.public.elsfp import ElsfpCodes
@@ -1919,3 +1928,117 @@ class TestPortConfigurationSnapshot:
         cpoutil.load_current_port_config()
         assert cpoutil.current_port_config["Ethernet0"]["lanes"] == (3, 4)
         assert read.call_count == 2
+
+
+class TestEepromBankValidation:
+    @pytest.fixture(autouse=True)
+    def two_bank_eeprom(self, coverage_environment, monkeypatch):
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
+
+        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: 2)
+        monkeypatch.setattr(
+            cpoutil, "_eeprom_linear_offset",
+            lambda kind, name, cpo, bank, page, offset: CmisPage.linear_offset(
+                page, cpoutil._physical_eeprom_bank(kind, name, cpo, bank), offset))
+
+    @pytest.mark.parametrize("page", [0, 1, 2, 0x0F, 0x9F, 0xAF])
+    @pytest.mark.parametrize("operation", ["read-eeprom", "write-eeprom"])
+    def test_shared_page_rejects_explicit_nonzero_bank(
+            self, coverage_environment, operation, page):
+        arguments = [operation, "oe", "-i", "0", "-b", "1",
+                     "-n", str(page), "-o", "128"]
+        arguments += ["-s", "1"] if operation == "read-eeprom" else ["-d", "ff"]
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert "does not use bank selection; --bank must be 0" in result.output
+        assert coverage_environment.reads == []
+        assert coverage_environment.writes == []
+
+    @pytest.mark.parametrize("page", [0, 1, 2, 0x9F])
+    @pytest.mark.parametrize("operation", ["read-eeprom", "write-eeprom"])
+    def test_shared_page_accepts_bank_zero(self, coverage_environment, operation, page):
+        arguments = [operation, "oe", "-i", "0", "-b", "0",
+                     "-n", str(page), "-o", "128"]
+        arguments += ["-s", "1"] if operation == "read-eeprom" else ["-d", "ff"]
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
+
+    @pytest.mark.parametrize("page", [0x10, 0x11])
+    def test_banked_page_accepts_nonzero_bank(self, coverage_environment, page):
+        result = invoke_coverage(["read-eeprom", "oe", "-i", "0", "-b", "1",
+                                  "-n", str(page), "-o", "128", "-s", "1"])
+        assert result.exit_code == 0, result.output
+        assert coverage_environment.reads == [((256 + page) * 128 + 128, 1)]
+
+    @pytest.mark.parametrize("page, expected_bank", [(0, 0), (1, 0), (0x9F, 0), (0x10, 1), (0x11, 1)])
+    @pytest.mark.parametrize("operation", ["read-eeprom", "write-eeprom"])
+    def test_interface_eeprom_resolves_bank_for_page(
+            self, coverage_environment, operation, page, expected_bank):
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
+
+        data = copy.deepcopy(COMMUNITY_DATA)
+        data["interfaces"]["Ethernet0"]["associated_devices"][0]["bank"] = 1
+        data["devices"]["oe0"]["max_banks"] = 2
+        cpoutil.cpo_mapping = CpoMapping(data, COVERAGE_PORT_CONFIG)
+        assert cpoutil._interface_eeprom_target(
+            "Ethernet0", OPTICAL_ENGINE, page=page) == (0, expected_bank)
+        assert cpoutil._interface_eeprom_target("Ethernet0", OPTICAL_ENGINE) == (0, 1)
+        arguments = [operation, "interface", "Ethernet0", "--oe",
+                     "-n", str(page), "-o", "128"]
+        arguments += ["-s", "1"] if operation == "read-eeprom" else ["-d", "ff"]
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
+        address = CmisPage.linear_offset(page, expected_bank, 128)
+        if operation == "read-eeprom":
+            assert "bank {:x}h page {:x}h".format(expected_bank, page) in result.output
+            assert coverage_environment.reads == [(address, 1)]
+        else:
+            assert coverage_environment.writes == [(address, 1, bytearray([0xFF]))]
+
+    def test_interface_shared_page_does_not_hide_capability_failure(
+            self, coverage_environment, monkeypatch):
+        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: 0)
+        result = invoke_coverage(["read-eeprom", "interface", "Ethernet0", "--oe",
+                                  "-n", "1", "-o", "128", "-s", "1"])
+        assert result.exit_code != 0
+        assert "Invalid OE bank count 0" in result.output
+        assert coverage_environment.reads == []
+
+    def test_full_eeprom_shared_sections_use_bank_zero(self):
+        sections = cpoutil._full_eeprom_sections([1])
+        assert [bank for _, bank, page, _, _ in sections if page < 0x10] == [0, 0, 0, 0]
+        assert [bank for _, bank, page, _, _ in sections if page >= 0x10] == [1, 1]
+
+    @pytest.mark.parametrize("bank", [-1, 2, 8, 255, 256])
+    @pytest.mark.parametrize("index", [[], ["-i", "0"]])
+    def test_full_eeprom_invalid_bank_is_failure(self, coverage_environment, bank, index):
+        result = invoke_coverage(["read-eeprom", "oe", *index, "-b", str(bank)])
+        assert result.exit_code != 0
+        assert "bank" in result.output.lower()
+        assert coverage_environment.reads == []
+        assert coverage_environment.writes == []
+
+    def test_global_full_eeprom_read_error_is_failure(self, coverage_environment, monkeypatch):
+        monkeypatch.setattr(coverage_environment, "read_eeprom", mock.Mock(return_value=None))
+        result = invoke_coverage(["read-eeprom", "oe"])
+        assert result.exit_code != 0
+        assert "Failed to dump EEPROM for: OE0" in result.output
+
+    def test_full_eeprom_selected_bank_includes_shared_pages(self, coverage_environment):
+        result = invoke_coverage(["read-eeprom", "oe", "-i", "0", "-b", "1"])
+        assert result.exit_code == 0, result.output
+        assert "Upper page 1h" in result.output
+        assert "Upper page 10h bank 1h" in result.output
+
+    @pytest.mark.parametrize("bank", [-1, 2, 255, 256])
+    @pytest.mark.parametrize("operation", ["read-eeprom", "write-eeprom"])
+    def test_range_eeprom_invalid_bank_never_accesses_data(
+            self, coverage_environment, operation, bank):
+        arguments = [operation, "oe", "-i", "0", "-b", str(bank),
+                     "-n", "0x10", "-o", "128"]
+        arguments += ["-s", "1"] if operation == "read-eeprom" else ["-d", "ff"]
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert "bank" in result.output.lower()
+        assert coverage_environment.reads == []
+        assert coverage_environment.writes == []
