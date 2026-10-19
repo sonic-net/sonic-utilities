@@ -50,15 +50,20 @@ def test_lag_keepalive_starts_after_negotiation_before_shutdown():
             script.index("    execute_in_namespaces asic probe_teamd_retry_count") <
             script.index("    execute_in_namespaces asic pause_orchagent") <
             script.index("    execute_in_namespaces asic increase_teamd_retry_count") <
-            script.index(start) < script.index("\nset +e", script.index(start)))
+            script.index("\nset +e") <
+            script.index("    execute_in_namespaces asic filter_routes") <
+            script.index("trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM") <
+            script.index(start) < script.index("\n    stop_service $service"))
 
 
 @pytest.mark.parametrize("reboot_type", ["warm-reboot", "fastfast-reboot", "express-reboot", "fast-reboot"])
 @pytest.mark.parametrize("increase_status", [0, 1])
-def test_lag_keepalive_shutdown_sequence(reboot_type, increase_status):
+@pytest.mark.parametrize("keepalive_status", [0, 1, 124])
+def test_lag_keepalive_shutdown_sequence(reboot_type, increase_status, keepalive_status):
     script = FAST_REBOOT.read_text()
     start = script.index("execute_in_namespaces all init_warm_reboot_states")
-    end = script.index("\nset +e", start)
+    keepalive_call = "execute_in_namespaces asic start_lag_keepalive"
+    end = script.index(keepalive_call, start) + len(keepalive_call)
     sequence = re.sub(r"^function \w+\(\).*?^}\n", "", script[start:end], flags=re.M | re.S)
     driver = '''
 execute_in_namespaces() { shift; "$@"; }
@@ -67,20 +72,22 @@ setup_control_plane_assistant() { echo cpa; }
 probe_teamd_retry_count() { echo probe; }
 pause_orchagent() { echo pause; }
 increase_teamd_retry_count() { echo increase; return "$INCREASE_STATUS"; }
-start_lag_keepalive() { echo keepalive; }
-''' + sequence
+filter_routes() { echo filter; }
+start_lag_keepalive() { echo keepalive; return "$KEEPALIVE_STATUS"; }
+''' + sequence + '\necho shutdown\n'
     env = dict(os.environ, REBOOT_TYPE=reboot_type, NUM_ASIC="1",
-               REQUIRE_TEAMD_RETRY_COUNT="no", INCREASE_STATUS=str(increase_status))
+               REQUIRE_TEAMD_RETRY_COUNT="no", INCREASE_STATUS=str(increase_status),
+               KEEPALIVE_STATUS=str(keepalive_status))
     result = subprocess.run(["bash", "-e", "-c", driver], env=env,
                             capture_output=True, text=True, timeout=10)
     if reboot_type == "fast-reboot":
         assert result.returncode == 0, result.stderr
-        assert result.stdout.splitlines() == ["init", "cpa", "pause", "keepalive"]
+        assert result.stdout.splitlines() == ["init", "cpa", "pause", "filter", "keepalive", "shutdown"]
     else:
         assert result.returncode == increase_status, result.stderr
         expected = ["init", "cpa", "probe", "pause", "increase"]
         if not increase_status:
-            expected.append("keepalive")
+            expected.extend(["keepalive", "shutdown"])
         assert result.stdout.splitlines() == expected
 
 

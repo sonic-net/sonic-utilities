@@ -1232,9 +1232,6 @@ if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" |
     execute_in_namespaces asic increase_teamd_retry_count
 fi
 
-# Cache LACPDUs only after teamd has negotiated the extended retry counts.
-execute_in_namespaces asic start_lag_keepalive
-
 # We are fully committed to reboot from this point on because critical
 # service will go down and we cannot recover from it.
 set +e
@@ -1259,6 +1256,9 @@ fi
 
 # disable trap-handlers which were set before
 trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM
+
+# Cache LACPDUs only after teamd has negotiated the extended retry counts.
+execute_in_namespaces asic start_lag_keepalive
 
 if [ -x ${LOG_SSD_HEALTH} ]; then
     debug "Collecting logs to check ssd health before ${REBOOT_TYPE}..."
