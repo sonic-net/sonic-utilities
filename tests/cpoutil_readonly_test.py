@@ -54,18 +54,45 @@ def public_els_threshold_api():
 
 
 CPO_DATA = {
-    "oes": {"oe0": {"index": 0, "oe_cmis_path": "/sys/oe0/"}},
-    "elss": {"els0": {"index": 0}},
+    "devices": {
+        "oe0": {
+            "device_type": "optical_engine",
+            "max_banks": 1,
+            "asic_lanes": [
+                1,
+                2
+            ]
+        },
+        "els0": {
+            "device_type": "external_laser_source",
+            "laser_to_asic_lane_mapping": {}
+        }
+    },
     "interfaces": {
         "Ethernet0": {
             "index": "1,1",
             "lanes": "1,2",
-            "oe_id": 0,
-            "oe_bank_id": 0,
-            "els_id": 0,
-            "laser_ids": [0, 1],
+            "associated_devices": [
+                {
+                    "device_id": "oe0",
+                    "bank": 0
+                },
+                {
+                    "device_id": "els0"
+                }
+            ]
         }
     },
+    "platform_data": {
+        "interfaces": {
+            "Ethernet0": {
+                "laser_ids": [
+                    0,
+                    1
+                ]
+            }
+        }
+    }
 }
 
 

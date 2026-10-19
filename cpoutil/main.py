@@ -840,19 +840,14 @@ def _format_interface_dom(port_name, record):
 
 
 def _local_oe_bank(mapping):
-    """Return the OE-local CMIS bank of one topology interface.
-
-    Community topologies declare OE-local banks. Legacy topologies may number
-    banks across all OEs (OE n bank b as n * bank_count + b), so the declared
-    bank is reduced modulo the OE's advertised bank count. The declared bank is
-    never replaced by its position among the mapped banks.
-    """
+    """Validate and return the OE-local CMIS bank declared by the HLD topology."""
     cpo = cpo_object_map[OPTICAL_ENGINE].get(mapping.oe_name)
     if cpo is None:
-        raise CpoCommandError(
-            "No CPO object is available for '{}'".format(mapping.oe_name)
-        )
-    return mapping.oe_bank % _get_oe_bank_count(mapping.oe_name, cpo)
+        raise CpoCommandError("No CPO object is available for '{}'".format(mapping.oe_name))
+    bank_count = _get_oe_bank_count(mapping.oe_name, cpo)
+    if mapping.oe_bank < 0 or mapping.oe_bank >= bank_count:
+        raise CpoCommandError("Invalid bank {} for '{}'".format(mapping.oe_bank, mapping.oe_name))
+    return mapping.oe_bank
 
 
 def _interface_mapping_record(logical_port):

@@ -43,40 +43,109 @@ def shared_port_mapping(monkeypatch):
 
 
 CPO_DATA = {
-    "oes": {
-        "oe0": {"index": 0, "oe_cmis_path": "/sys/oe0/"},
-        "oe1": {"index": 1, "oe_cmis_path": "/sys/oe1/"},
-    },
-    "elss": {
-        "els0": {"index": 0},
-        "els1": {"index": 1},
+    "devices": {
+        "oe0": {
+            "device_type": "optical_engine",
+            "max_banks": 2,
+            "asic_lanes": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+            ]
+        },
+        "oe1": {
+            "device_type": "optical_engine",
+            "max_banks": 1,
+            "asic_lanes": [
+                9,
+                10,
+                11,
+                12
+            ]
+        },
+        "els0": {
+            "device_type": "external_laser_source",
+            "laser_to_asic_lane_mapping": {}
+        },
+        "els1": {
+            "device_type": "external_laser_source",
+            "laser_to_asic_lane_mapping": {}
+        }
     },
     "interfaces": {
         "Ethernet8": {
             "index": "2,2,2,2",
             "lanes": "5,6,7,8",
-            "oe_id": 0,
-            "oe_bank_id": 1,
-            "els_id": 0,
-            "laser_ids": [4, 5, 6, 7],
+            "associated_devices": [
+                {
+                    "device_id": "oe0",
+                    "bank": 1
+                },
+                {
+                    "device_id": "els0"
+                }
+            ]
         },
         "Ethernet0": {
             "index": "1,1,1,1",
             "lanes": "1,2,3,4",
-            "oe_id": 0,
-            "oe_bank_id": 0,
-            "els_id": 0,
-            "laser_ids": [0, 1, 2, 3],
+            "associated_devices": [
+                {
+                    "device_id": "oe0",
+                    "bank": 0
+                },
+                {
+                    "device_id": "els0"
+                }
+            ]
         },
         "Ethernet16": {
             "index": "3,3,3,3",
             "lanes": "9,10,11,12",
-            "oe_id": 1,
-            "oe_bank_id": 0,
-            "els_id": 1,
-            "laser_ids": [0, 1, 2, 3],
-        },
+            "associated_devices": [
+                {
+                    "device_id": "oe1",
+                    "bank": 0
+                },
+                {
+                    "device_id": "els1"
+                }
+            ]
+        }
     },
+    "platform_data": {
+        "interfaces": {
+            "Ethernet8": {
+                "laser_ids": [
+                    4,
+                    5,
+                    6,
+                    7
+                ]
+            },
+            "Ethernet0": {
+                "laser_ids": [
+                    0,
+                    1,
+                    2,
+                    3
+                ]
+            },
+            "Ethernet16": {
+                "laser_ids": [
+                    0,
+                    1,
+                    2,
+                    3
+                ]
+            }
+        }
+    }
 }
 
 
@@ -119,11 +188,9 @@ class TestCpoMapping(object):
         ]
 
     def test_rejects_unknown_oe(self):
-        invalid = dict(CPO_DATA)
-        invalid["interfaces"] = {
-            "Ethernet0": dict(CPO_DATA["interfaces"]["Ethernet0"], oe_id=99)
-        }
-        with pytest.raises(CpoMappingError, match="unknown OE"):
+        invalid = copy.deepcopy(CPO_DATA)
+        invalid["interfaces"]["Ethernet0"]["associated_devices"][0]["device_id"] = "oe99"
+        with pytest.raises(CpoMappingError, match="unknown device"):
             CpoMapping(invalid)
 
 
@@ -219,32 +286,33 @@ class TestOeLocalBank(object):
     def sparse_bank(self, coverage_environment, monkeypatch):
         def use_topology_bank(bank):
             data = copy.deepcopy(COVERAGE_CPO_DATA)
-            data["interfaces"]["Ethernet0"]["oe_bank_id"] = bank
+            data["interfaces"]["Ethernet0"]["associated_devices"][0]["bank"] = bank
+            data["devices"]["oe0"]["max_banks"] = 8
             cpoutil.cpo_mapping = CpoMapping(data, COVERAGE_PORT_CONFIG)
         monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: 8)
         return use_topology_bank
 
-    @pytest.mark.parametrize("topology_bank", [4, 12])
-    def test_sparse_or_global_bank_is_not_renumbered(self, coverage_environment, sparse_bank, topology_bank):
-        # Only bank 4 of the OE is mapped; 12 is the same bank numbered across OEs.
+    @pytest.mark.parametrize("topology_bank", [0, 4, 7])
+    def test_local_bank_is_not_renumbered(self, coverage_environment, sparse_bank, topology_bank):
+        # A sparse topology retains its declared OE-local bank.
         sparse_bank(topology_bank)
         mapping = cpoutil.cpo_mapping.get_interface("Ethernet0")
-        assert cpoutil._local_oe_bank(mapping) == 4
-        assert cpoutil._resource_banks(OPTICAL_ENGINE, "oe0") == [4]
+        assert cpoutil._local_oe_bank(mapping) == topology_bank
+        assert cpoutil._resource_banks(OPTICAL_ENGINE, "oe0") == [topology_bank]
 
         result = invoke_coverage(
             ["write-eeprom", "interface", "Ethernet0", "--oe", "-n", "0x10", "-o", "0x82", "-d", "ff"])
         assert result.exit_code == 0, result.output
-        assert [offset for offset, _, _ in coverage_environment.writes] == [4 * 0x10000 + 0x10 * 0x100 + 0x82]
+        assert [offset for offset, _, _ in coverage_environment.writes] == [
+            topology_bank * 0x10000 + 0x10 * 0x100 + 0x82]
 
         coverage_environment.reads.clear()
         result = invoke_coverage(["read-eeprom", "interface", "Ethernet0", "--oe"])
         assert result.exit_code == 0, result.output
-        assert "Upper page 10h bank 4h" in result.output
-        assert "Upper page 10h bank 0h" not in result.output
+        assert "Upper page 10h bank {:x}h".format(topology_bank) in result.output
 
     def test_map_reports_local_bank(self, coverage_environment, sparse_bank):
-        sparse_bank(12)
+        sparse_bank(4)
         result = invoke_coverage(["show", "interface", "map", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["Ethernet0"]["oe"]["bank"] == 4
@@ -259,19 +327,46 @@ class TestOeLocalBank(object):
 # Additional cpoutil command and topology coverage.
 
 COVERAGE_CPO_DATA = {
-    "oes": {"oe0": {"index": 0}},
-    "elss": {"els0": {"index": 0}},
+    "devices": {
+        "oe0": {
+            "device_type": "optical_engine",
+            "max_banks": 1,
+            "asic_lanes": [
+                1,
+                2
+            ]
+        },
+        "els0": {
+            "device_type": "external_laser_source",
+            "laser_to_asic_lane_mapping": {}
+        }
+    },
     "interfaces": {
         "Ethernet0": {
             "index": "1",
             "lanes": "1,2",
-            "oe_id": 0,
-            "oe_bank_id": 0,
-            "els_id": 0,
-            "els_bank_id": 0,
-            "laser_ids": [0, 1],
-        },
+            "associated_devices": [
+                {
+                    "device_id": "oe0",
+                    "bank": 0
+                },
+                {
+                    "device_id": "els0",
+                    "bank": 0
+                }
+            ]
+        }
     },
+    "platform_data": {
+        "interfaces": {
+            "Ethernet0": {
+                "laser_ids": [
+                    0,
+                    1
+                ]
+            }
+        }
+    }
 }
 
 
@@ -648,11 +743,9 @@ class TestCommunityMappingCoverage(object):
         "data,match",
         [
             (None, "root must be an object"),
-            ({"oes": {}, "elss": {}, "interfaces": {}}, "non-empty oes"),
-            ({"oes": {"oe0": {}}, "elss": {}, "interfaces": {}},
-             "non-empty elss"),
-            ({"oes": {"oe0": {}}, "elss": {"els0": {}},
-              "interfaces": {}}, "non-empty interfaces"),
+            ({"oes": {}, "elss": {}, "interfaces": {}}, "non-empty devices"),
+            ({"devices": {}, "interfaces": {}}, "non-empty devices"),
+            ({"devices": {"oe0": {}}, "interfaces": {}}, "non-empty interfaces"),
         ],
     )
     def test_rejects_missing_topology_sections(self, data, match):
@@ -686,12 +779,12 @@ class TestCommunityMappingCoverage(object):
 
     def test_mapping_validation_errors(self):
         bad = json.loads(json.dumps(COVERAGE_CPO_DATA))
-        bad["oes"]["bad"] = bad["oes"].pop("oe0")
-        with pytest.raises(CpoMappingError, match="inconsistent index"):
+        bad["devices"]["bad"] = bad["devices"].pop("oe0")
+        with pytest.raises(CpoMappingError, match="invalid oe device id"):
             CpoMapping(bad)
 
         bad = json.loads(json.dumps(COVERAGE_CPO_DATA))
-        bad["interfaces"]["Ethernet0"]["els_bank_id"] = "bad"
+        bad["interfaces"]["Ethernet0"]["associated_devices"][1]["bank"] = "bad"
         with pytest.raises(CpoMappingError, match="invalid ELS bank"):
             CpoMapping(bad)
 
@@ -1928,6 +2021,54 @@ class TestPortConfigurationSnapshot:
         cpoutil.load_current_port_config()
         assert cpoutil.current_port_config["Ethernet0"]["lanes"] == (3, 4)
         assert read.call_count == 2
+
+
+class TestHldOnlyTopology:
+    @pytest.mark.parametrize("missing", [False, True])
+    def test_precise_laser_map_is_optional(self, missing):
+        data = copy.deepcopy(CPO_DATA)
+        for device in data["devices"].values():
+            if device["device_type"] == "external_laser_source":
+                if missing:
+                    device.pop("laser_to_asic_lane_mapping", None)
+                else:
+                    device["laser_to_asic_lane_mapping"] = {}
+        mapping = CpoMapping(data)
+        interface = mapping.get_interface("Ethernet8")
+        assert interface.laser_ids == (4, 5, 6, 7)
+        assert interface.laser_to_asic_lane_mapping == {}
+
+    def test_missing_whole_interface_group_is_also_optional(self):
+        data = copy.deepcopy(CPO_DATA)
+        data.pop("platform_data")
+        mapping = CpoMapping(data)
+        assert mapping.get_interface("Ethernet0").laser_ids == ()
+
+    def test_legacy_reference_is_ignored(self):
+        data = copy.deepcopy(CPO_DATA)
+        data["legacy_bailly_reference"] = {"devices": {"oe99": {}}, "interfaces": {"bad": {}}}
+        mapping = CpoMapping(data)
+        assert mapping.ports() == ["Ethernet0", "Ethernet8", "Ethernet16"]
+        assert mapping.resource_ids(OPTICAL_ENGINE) == ["oe0", "oe1"]
+
+    def test_legacy_reference_cannot_replace_hld_devices(self):
+        data = {"legacy_bailly_reference": CPO_DATA, "interfaces": CPO_DATA["interfaces"]}
+        with pytest.raises(CpoMappingError, match="non-empty devices"):
+            CpoMapping(data)
+
+    @pytest.mark.parametrize("bank", [-1, 2, 12])
+    def test_oe_bank_must_be_local_and_in_range(self, bank):
+        data = copy.deepcopy(CPO_DATA)
+        data["interfaces"]["Ethernet0"]["associated_devices"][0]["bank"] = bank
+        with pytest.raises(CpoMappingError, match="invalid OE bank"):
+            CpoMapping(data)
+
+    @pytest.mark.parametrize("lasers", [[-1], [0, 0]])
+    def test_platform_laser_groups_are_validated(self, lasers):
+        data = copy.deepcopy(COVERAGE_CPO_DATA)
+        data["platform_data"]["interfaces"]["Ethernet0"]["laser_ids"] = lasers
+        with pytest.raises(CpoMappingError, match="unique non-negative"):
+            CpoMapping(data)
 
 
 class TestEepromBankValidation:

@@ -17151,6 +17151,11 @@ This sub-section explains the commands available for Co-Packaged Optics (CPO) de
 
 A CPO port is served by an Optical Engine (OE) and an External Laser Source (ELS). The platform describes the mapping between ports, OEs and ELS in `cpo.json`, and exposes each port as a CPO virtual module through `Chassis.get_cpo()`.
 
+The topology uses the community `devices` and `interfaces.associated_devices` format.
+`platform_data` may supply zero-based, whole-interface `laser_ids` when precise laser-to-ASIC wiring is unavailable;
+these groups cannot resolve a breakout subport. `legacy_bailly_reference` is ignored by the parser.
+OE banks are local to each device and must be within its supported range; global bank numbering is not accepted.
+
 `cpoutil` reads the hardware directly and controls it through the platform's CPO objects; it is a debug and manual-provisioning tool. The values that xcvrd publishes to STATE_DB for CPO ports remain available through `show interfaces transceiver`. On platforms without `cpo.json`, every hardware command exits with `Error: CPO topology is unavailable for this platform`; help remains available.
 
 Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS indexes may be given as a number (`0`) or a name (`oe0`, `els0`); when omitted, all are shown.
