@@ -766,3 +766,176 @@ def test_reply_fallback_tolerates_request_that_arrives_late():
     client_side.close()
     t.join()
     assert json.loads(data.decode().strip()) == {"fallback": True}
+
+
+
+# --------------------------------------------------------------------------- #
+# pty mode: a terminal caller gets a command child with a real controlling tty
+# --------------------------------------------------------------------------- #
+
+def _pty_round_trip(action, winsize=(37, 91), env=None):
+    """Run `action` through the real client and supervisor with the client's stdio on a pty
+    (standing in for the user's terminal). Returns (exit_code, bytes_the_user_saw, name_of_the_users_tty)."""
+    import fcntl
+    import pty
+    import select
+    import tempfile
+    import termios
+
+    user_master, user_tty = pty.openpty()
+    user_ttyname = os.ttyname(user_tty)
+    fcntl.ioctl(user_tty, termios.TIOCSWINSZ, struct.pack("HHHH", *winsize, 0, 0))
+    sock_path = os.path.join(tempfile.mkdtemp(), "cli.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+    cli_server._clis["show"] = _FakeCli(action)
+    old_path = cli_server.SOCKET_PATH
+    cli_server.SOCKET_PATH = sock_path
+    sup = os.fork()
+    if sup == 0:
+        try:
+            conn, _ = server.accept()
+            cli_server._serve_request(conn)
+        finally:
+            os._exit(0)
+    server.close()
+    try:
+        saved = {k: os.environ.get(k) for k in (env or {})}
+        os.environ.update(env or {})
+        rc = cli_server._try_run_with_fds("show", (user_tty, user_tty, user_tty))
+        seen = b""
+        while select.select([user_master], [], [], 0.3)[0]:
+            try:
+                data = os.read(user_master, 65536)
+            except OSError:
+                break
+            if not data:
+                break
+            seen += data
+        os.waitpid(sup, 0)
+        return rc, seen, user_ttyname
+    finally:
+        for k, v in (saved if env else {}).items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        cli_server.SOCKET_PATH = old_path
+        cli_server._clis.pop("show", None)
+        os.close(user_master)
+        os.close(user_tty)
+
+
+def test_client_pty_spec_is_none_without_a_terminal():
+    r, w = os.pipe()
+    try:
+        assert cli_server._client_pty_spec((r, w, w)) is None
+    finally:
+        os.close(r)
+        os.close(w)
+
+
+def test_client_pty_spec_can_be_disabled(monkeypatch):
+    import pty
+
+    master, slave = pty.openpty()
+    try:
+        assert cli_server._client_pty_spec((slave, slave, slave))["mask"] == [True, True, True]
+        monkeypatch.setenv("SONIC_CLI_DAEMON_PTY", "0")
+        assert cli_server._client_pty_spec((slave, slave, slave)) is None
+    finally:
+        os.close(master)
+        os.close(slave)
+
+
+def test_pty_mode_child_has_a_controlling_terminal_and_the_callers_window_size():
+    def action(_args, _prog):
+        with open("/dev/tty", "w") as tty:  # ENXIO in the plain fd-passing mode
+            tty.write("DEVTTY-OK\n")
+        sys.stdout.write("ISATTY=%s SIZE=%s\n" % (os.isatty(1), tuple(os.get_terminal_size(1))))
+        sys.stdout.write("OWN-SESSION=%s\n" % (os.getsid(0) == os.getpid()))
+        sys.stdout.write("TTYNAME=%s\n" % os.ttyname(1))
+
+    rc, seen, user_tty = _pty_round_trip(action, winsize=(37, 91))
+    text = seen.decode()
+    assert rc == 0
+    assert "TTYNAME=%s" % user_tty not in text  # a fresh pty, not the caller's terminal
+    assert "DEVTTY-OK" in text
+    assert "ISATTY=True SIZE=(91, 37)" in text
+    assert "OWN-SESSION=True" in text
+
+
+def test_pty_mode_exit_code_and_output_ordering():
+    def action(_args, _prog):
+        sys.stdout.write("first\n")
+        sys.stdout.flush()
+        sys.exit(7)
+
+    rc, seen, _user_tty = _pty_round_trip(action)
+    assert rc == 7
+    assert seen.decode().replace("\r\n", "\n") == "first\n"
+
+
+def test_pty_mode_can_be_disabled_and_falls_back_to_plain_fds():
+    def action(_args, _prog):
+        sys.stdout.write("TTYNAME=%s\n" % os.ttyname(1))
+
+    rc, seen, user_tty = _pty_round_trip(action, env={"SONIC_CLI_DAEMON_PTY": "0"})
+    assert rc == 0
+    assert "TTYNAME=%s" % user_tty in seen.decode()  # the caller's own terminal fd was passed
+
+
+def test_pty_mode_forwards_keyboard_input_to_the_command():
+    # The caller's stdin is a tty: bytes the user types must reach the child's stdin
+    # (prompts, getpass), echoed by the child's own tty line discipline.
+    import fcntl
+    import pty
+    import select
+    import tempfile
+
+    def action(_args, _prog):
+        line = sys.stdin.readline()
+        sys.stdout.write("GOT:%s" % line)
+
+    user_master, user_tty = pty.openpty()
+    sock_path = os.path.join(tempfile.mkdtemp(), "cli.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+    cli_server._clis["show"] = _FakeCli(action)
+    old_path = cli_server.SOCKET_PATH
+    cli_server.SOCKET_PATH = sock_path
+    sup = os.fork()
+    if sup == 0:
+        try:
+            conn, _ = server.accept()
+            cli_server._serve_request(conn)
+        finally:
+            os._exit(0)
+    server.close()
+    try:
+        client_pid = os.fork()
+        if client_pid == 0:
+            rc = cli_server._try_run_with_fds("show", (user_tty, user_tty, user_tty))
+            os._exit(rc)
+        seen = b""
+        for i in range(60):
+            if i == 5:  # after the client switched the terminal to raw mode (that flushes input)
+                os.write(user_master, b"hello\n")
+            if select.select([user_master], [], [], 0.2)[0]:
+                try:
+                    seen += os.read(user_master, 65536)
+                except OSError:
+                    break
+            if b"GOT:hello" in seen:
+                break
+        _pid, status = os.waitpid(client_pid, 0)
+        os.waitpid(sup, 0)
+        assert b"GOT:hello" in seen
+        assert os.WEXITSTATUS(status) == 0
+    finally:
+        cli_server.SOCKET_PATH = old_path
+        cli_server._clis.pop("show", None)
+        os.close(user_master)
+        os.close(user_tty)

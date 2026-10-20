@@ -99,12 +99,16 @@ def _try_run_with_fds(prog, fds):
     # outright failure) or to the response-wait loop further down.
     sock.settimeout(None)
 
-    req = json.dumps({
+    request = {
         "prog": prog,
         "argv": sys.argv[1:],
         "env": dict(os.environ),
         "cwd": os.getcwd(),
-    }).encode("utf-8")
+    }
+    pty_spec = _client_pty_spec(fds)
+    if pty_spec is not None:
+        request["pty"] = pty_spec
+    req = json.dumps(request).encode("utf-8")
     frame = struct.pack("!I", len(req)) + req
 
     try:
@@ -146,14 +150,17 @@ def _try_run_with_fds(prog, fds):
 
     buf = b""
     try:
-        while True:
-            try:
-                chunk = sock.recv(65536)
-            except (OSError, socket.timeout):
-                break
-            if not chunk:
-                break
-            buf += chunk
+        if pty_spec is not None:
+            buf = _client_pty_session(sock, pty_spec, fds)
+        else:
+            while True:
+                try:
+                    chunk = sock.recv(65536)
+                except (OSError, socket.timeout):
+                    break
+                if not chunk:
+                    break
+                buf += chunk
     finally:
         for sig, handler in prev_handlers.items():
             signal.signal(sig, handler)
@@ -174,6 +181,211 @@ def _try_run_with_fds(prog, fds):
     if resp.get("fallback"):
         return None
     return int(resp.get("exit_code", 1))
+
+
+# ----------------------------------------------------------- client pty mode
+#
+# When any of the caller's stdin/stdout/stderr is a terminal, the daemon gives the command
+# child a *fresh pty* as its controlling terminal (setsid + TIOCSCTTY works on a new pty) and
+# this client proxies bytes, window-size changes and raw mode between the caller's terminal
+# and that pty, like ``docker exec -t`` or ssh. The forwarded fds alone cannot do this: after
+# setsid() the child has no controlling terminal, so ``/dev/tty`` (sudo/getpass prompts, ssh),
+# tty-generated signals (SIGWINCH) and job control would all be broken, and stealing the
+# caller's terminal (TIOCSCTTY with arg 1) would evict the user's own login shell.
+
+def _client_pty_spec(fds):
+    """Describe the caller's terminal for the daemon, or ``None`` for the plain fd-passing mode."""
+    if os.environ.get("SONIC_CLI_DAEMON_PTY", "1") == "0":
+        return None
+    try:
+        mask = [os.isatty(fd) for fd in fds[:3]]
+    except OSError:
+        return None
+    if len(fds) != 3 or not any(mask):
+        return None
+    import fcntl
+    import termios
+
+    tty_fd = fds[mask.index(True)]
+    spec = {"mask": mask}
+    try:
+        attrs = termios.tcgetattr(tty_fd)
+        spec["termios"] = attrs[:6] + [[c if isinstance(c, int) else c[0] for c in attrs[6]]]
+    except (termios.error, OSError, IndexError):
+        pass
+    try:
+        spec["winsize"] = list(struct.unpack("HHHH", fcntl.ioctl(tty_fd, termios.TIOCGWINSZ, b"\0" * 8)))
+    except OSError:
+        pass
+    return spec
+
+
+def _client_pty_session(sock, spec, fds):
+    """Receive the pty master from the daemon and proxy the terminal until the result arrives.
+
+    Returns the raw bytes received on the control socket after the pty hand-off (the final
+    ``{"exit_code": n}`` line, or ``{"fallback": true}``).
+    """
+    import fcntl
+    import select
+    import termios
+    import tty
+
+    # First reply: either {"fallback": true} / a result (no pty), or {"pty": bool} plus the
+    # master fd as SCM_RIGHTS ancillary data.
+    master = None
+    got = array.array("i")
+    try:
+        msg, anc, _flags, _addr = sock.recvmsg(65536, socket.CMSG_SPACE(got.itemsize))
+    except OSError:
+        return b""
+    for level, ctype, data in anc:
+        if level == socket.SOL_SOCKET and ctype == socket.SCM_RIGHTS:
+            got.frombytes(data[: len(data) - (len(data) % got.itemsize)])
+    if got:
+        master = got[0]
+    head, _, rest = msg.partition(b"\n")
+    try:
+        status = json.loads(head.decode("utf-8")) if head else {}
+    except ValueError:
+        status = {}
+    if "pty" not in status:
+        # Fallback or an immediate result -- no pty was set up.
+        return msg
+    if not status.get("pty") or master is None:
+        # Daemon could not allocate a pty: behave like the plain mode (child uses our fds).
+        return rest + _drain_socket(sock)
+
+    mask = spec["mask"]
+    in_fd = fds[0] if mask[0] else None
+    out_fd = next((fds[i] for i in (1, 2) if mask[i]), None)
+    close_extra = []
+    if in_fd is None or out_fd is None:
+        # A prompt (sudo, getpass) goes to /dev/tty even if our stdin/stdout are redirected, so
+        # keep the real keyboard/screen wired to the child's pty.
+        try:
+            extra = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+            close_extra.append(extra)
+            in_fd = extra if in_fd is None else in_fd
+            out_fd = extra if out_fd is None else out_fd
+        except OSError:
+            pass
+    size_fd = fds[mask.index(True)]
+    saved = None
+    raw_fd = in_fd
+    if raw_fd is not None and os.isatty(raw_fd):
+        try:
+            saved = termios.tcgetattr(raw_fd)
+            tty.setraw(raw_fd)
+        except (termios.error, OSError):
+            saved = None
+
+    def _winch(_signum, _frame):
+        try:
+            fcntl.ioctl(master, termios.TIOCSWINSZ, fcntl.ioctl(size_fd, termios.TIOCGWINSZ, b"\0" * 8))
+        except OSError:
+            pass
+
+    prev_winch = signal.signal(signal.SIGWINCH, _winch)
+    result = bytearray(rest)
+    master_open = True
+    sock_open = True
+    try:
+        _winch(None, None)
+        while sock_open or master_open:
+            rlist = []
+            if master_open:
+                rlist.append(master)
+            if sock_open:
+                rlist.append(sock)
+            if in_fd is not None and master_open:
+                rlist.append(in_fd)
+            try:
+                readable, _, _ = select.select(rlist, [], [])
+            except InterruptedError:
+                continue
+            if in_fd is not None and in_fd in readable:
+                try:
+                    data = os.read(in_fd, 4096)
+                except OSError:
+                    data = b""
+                if data:
+                    try:
+                        os.write(master, data)
+                    except OSError:
+                        pass
+                else:
+                    in_fd = None
+            if master in readable:
+                try:
+                    data = os.read(master, 65536)
+                except OSError:  # EIO: every slave end is closed
+                    data = b""
+                if data:
+                    _write_all(out_fd, data)
+                else:
+                    master_open = False
+            if sock in readable:
+                try:
+                    chunk = sock.recv(65536)
+                except OSError:
+                    chunk = b""
+                if chunk:
+                    result += chunk
+                    if b"\n" in result:
+                        sock_open = False
+                else:
+                    sock_open = False
+            if not sock_open and master_open:
+                # Result is in; flush whatever the command wrote last, then stop. Descendants
+                # that outlive the command and keep the pty open must not hold us here.
+                while True:
+                    ready, _, _ = select.select([master], [], [], 0.05)
+                    if not ready:
+                        break
+                    try:
+                        data = os.read(master, 65536)
+                    except OSError:
+                        data = b""
+                    if not data:
+                        break
+                    _write_all(out_fd, data)
+                master_open = False
+    finally:
+        signal.signal(signal.SIGWINCH, prev_winch)
+        if saved is not None:
+            try:
+                termios.tcsetattr(raw_fd, termios.TCSADRAIN, saved)
+            except (termios.error, OSError):
+                pass
+        _safe_close(master)
+        for fd in close_extra:
+            _safe_close(fd)
+    return bytes(result)
+
+
+def _write_all(fd, data):
+    while data:
+        try:
+            n = os.write(fd, data)
+        except InterruptedError:
+            continue
+        except OSError:
+            return
+        data = data[n:]
+
+
+def _drain_socket(sock):
+    buf = b""
+    while True:
+        try:
+            chunk = sock.recv(65536)
+        except OSError:
+            break
+        if not chunk:
+            break
+        buf += chunk
+    return buf
 
 
 # =============================================================== daemon side
@@ -279,7 +491,66 @@ def _acquire_controlling_tty():
         pass
 
 
-def _run_child(req, fds, uid, gid):
+def _open_pty(spec, uid):
+    """Allocate a pty for the command child and mirror the caller's terminal settings onto it.
+    Returns ``(master, slave)``; raises OSError if no pty can be allocated."""
+    import fcntl
+    import termios
+
+    master, slave = os.openpty()
+    try:
+        attrs = spec.get("termios")
+        if attrs:
+            iflag, oflag, cflag, lflag, ispeed, ospeed, cc = attrs
+            canon = bool(lflag & termios.ICANON)
+            cc = [bytes([v]) if (canon or i not in (termios.VMIN, termios.VTIME)) else v
+                  for i, v in enumerate(cc)]
+            termios.tcsetattr(slave, termios.TCSANOW, [iflag, oflag, cflag, lflag, ispeed, ospeed, cc])
+    except (termios.error, OSError, ValueError, TypeError):
+        pass
+    try:
+        size = spec.get("winsize")
+        if size:
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", *size))
+    except (OSError, struct.error, TypeError):
+        pass
+    try:
+        # What grantpt() does for a login: the caller owns the terminal it is typing into.
+        os.fchown(slave, uid, -1)
+    except OSError:
+        pass
+    return master, slave
+
+
+def _send_pty_status(conn, master):
+    """First reply of a pty-mode request: ``{"pty": true}`` + the master fd, or ``{"pty": false}``."""
+    line = json.dumps({"pty": master is not None}).encode("utf-8") + b"\n"
+    anc = []
+    if master is not None:
+        anc.append((socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [master])))
+    conn.sendmsg([line], anc)
+
+
+def _adopt_pty(slave, mask):
+    """Make the fresh pty the child's controlling terminal and its stdio for every caller fd
+    that was a terminal. Must run after ``setsid()`` (a session leader without a controlling tty
+    can claim an unowned pty with ``TIOCSCTTY``)."""
+    import fcntl
+    import termios
+
+    for fd, is_tty in enumerate(mask[:3]):
+        if is_tty:
+            os.dup2(slave, fd)
+    if slave > 2:
+        os.close(slave)
+    first = next((i for i, is_tty in enumerate(mask[:3]) if is_tty), 0)
+    try:
+        fcntl.ioctl(first, termios.TIOCSCTTY, 0)
+    except OSError:
+        pass
+
+
+def _run_child(req, fds, uid, gid, slave=None):
     """Runs inside the forked command child. Never returns normally."""
     # Reset signal dispositions *first*, before any other setup. This
     # process inherited the daemon's SIGHUP (re-exec self) and
@@ -301,7 +572,10 @@ def _run_child(req, fds, uid, gid):
             os.close(fd)
 
     os.setsid()
-    _acquire_controlling_tty()
+    if slave is not None:
+        _adopt_pty(slave, (req.get("pty") or {}).get("mask") or [])
+    else:
+        _acquire_controlling_tty()
     _drop_privileges(uid, gid)
 
     os.environ.clear()
@@ -374,6 +648,29 @@ def _serve_request(conn):
         return
 
     uid, gid = _peer_creds(conn)
+
+    slave = None
+    if req.get("pty"):
+        # Pty mode: the child's terminal is a fresh pty, whose master goes back to the client
+        # (it proxies the real terminal to it). Done before fork so a failure is still
+        # reportable and before any command runs.
+        try:
+            master, slave = _open_pty(req["pty"], uid)
+        except OSError:
+            master = None
+        try:
+            _send_pty_status(conn, master)
+        except OSError:
+            _safe_close(master)
+            _safe_close(slave)
+            for fd in fds:
+                _safe_close(fd)
+            conn.close()
+            return
+        # The client owns the only master now: when it goes away the child sees a hangup,
+        # exactly like a command whose ssh session dropped.
+        _safe_close(master)
+
     pipe_r, pipe_w = os.pipe()
 
     def _on_sigchld(_signum, _frame):
@@ -396,9 +693,10 @@ def _serve_request(conn):
         os.close(pipe_r)
         os.close(pipe_w)
         conn.close()
-        _run_child(req, fds, uid, gid)
+        _run_child(req, fds, uid, gid, slave)
         os._exit(1)  # unreachable
 
+    _safe_close(slave)
     for fd in fds:
         _safe_close(fd)
 
@@ -506,6 +804,8 @@ def _reply_fallback(conn):
 
 
 def _safe_close(fd):
+    if fd is None:
+        return
     try:
         os.close(fd)
     except OSError:
