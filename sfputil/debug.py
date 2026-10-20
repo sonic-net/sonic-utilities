@@ -6,12 +6,22 @@ import utilities_common.cli as clicommon
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
     get_subport,
-    get_sfp_object,
+    get_validated_physical_port_list,
+    get_sfp_object as _get_sfp_object,
     get_logical_list,
     get_subport_lane_mask,
     get_media_lane_count,
     get_host_lane_count,
 )
+
+from sfputil.port import filter_cpo_ports, reject_cpo_ports
+
+
+def get_sfp_object(port_name):
+    physical_ports = get_validated_physical_port_list(port_name)
+    reject_cpo_ports(port_name, physical_ports, platform_sfputil_helper.platform_chassis)
+    return _get_sfp_object(port_name)
+
 
 EXIT_FAIL = -1
 EXIT_SUCCESS = 0
@@ -218,6 +228,10 @@ def loopback_capability(port_name):
     If PORT_NAME is omitted, prints capability for all ports that support loopback.
     """
     port_list = [port_name] if port_name else natsorted(set(get_logical_list()))
+    if port_name is None:
+        port_list = filter_cpo_ports(
+            port_list, get_validated_physical_port_list, platform_sfputil_helper.platform_chassis
+        )
     single_port = port_name is not None
     found = False
 
@@ -247,6 +261,10 @@ def loopback_status(port_name):
     If PORT_NAME is omitted, prints status for all ports that support loopback.
     """
     port_list = [port_name] if port_name else natsorted(set(get_logical_list()))
+    if port_name is None:
+        port_list = filter_cpo_ports(
+            port_list, get_validated_physical_port_list, platform_sfputil_helper.platform_chassis
+        )
     single_port = port_name is not None
     found = False
 

@@ -2203,3 +2203,62 @@ def test_cable_info_fields_render_independently(info):
             assert not any(line.startswith(label + ":") for line in lines)
     assert info == original
     assert json.loads(cpoutil._json_records({"info": info}))["info"] == original
+
+
+@pytest.mark.parametrize("command", [
+    ["show", "interface", "tx-disable"],
+    ["show", "interface", "speed", "application"],
+    ["show", "interface", "dom"],
+    ["show", "interface", "lane-status"],
+])
+def test_interface_sfp_selection_suggests_sfputil(coverage_environment, monkeypatch, command):
+    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": "9,10,11,12,13,14,15,16"}
+    sfp = mock.Mock()
+    chassis = mock.Mock()
+    chassis.get_sfp.return_value = sfp
+    monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
+    result = invoke_coverage(command + ["Ethernet8"])
+    assert result.exit_code != 0
+    assert "Port 'Ethernet8' is an SFP port; please use sfputil instead" in result.output
+    chassis.get_sfp.assert_called_once_with(2)
+    sfp.get_presence.assert_not_called()
+    sfp.get_xcvr_api.assert_not_called()
+    assert coverage_environment.reads == []
+
+
+@pytest.mark.parametrize("error", [None, NotImplementedError, AttributeError, IndexError])
+def test_interface_missing_objects_are_not_mislabeled_sfp(coverage_environment, monkeypatch, error):
+    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": "9,10,11,12,13,14,15,16"}
+    chassis = mock.Mock()
+    chassis.get_sfp.return_value = None
+    chassis.get_sfp.side_effect = error
+    monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
+    result = invoke_coverage(["show", "interface", "tx-disable", "Ethernet8"])
+    assert result.exit_code != 0
+    assert "No CPO or SFP object is available for port 'Ethernet8'" in result.output
+    assert "please use sfputil" not in result.output
+
+
+def test_global_cpo_selection_skips_sfp_without_query(coverage_environment, monkeypatch):
+    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": "9,10,11,12,13,14,15,16"}
+    chassis = mock.Mock()
+    monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
+    entries = cpoutil.get_port_cpo_entries()
+    assert [row[0] for row in entries] == ["Ethernet0"]
+    chassis.get_sfp.assert_not_called()
+
+
+def test_cpo_selection_does_not_query_sfp(coverage_environment, monkeypatch):
+    chassis = mock.Mock()
+    monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
+    assert cpoutil.get_port_cpo_entries("Ethernet0")[0][2] is coverage_environment
+    chassis.get_sfp.assert_not_called()
+
+
+def test_invalid_interface_does_not_query_sfp(coverage_environment, monkeypatch):
+    chassis = mock.Mock()
+    monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
+    result = invoke_coverage(["show", "interface", "tx-disable", "Ethernet100"])
+    assert result.exit_code != 0
+    assert "Invalid port 'Ethernet100'" in result.output
+    chassis.get_sfp.assert_not_called()

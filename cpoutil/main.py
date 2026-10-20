@@ -399,8 +399,16 @@ def get_port_cpo_entries(logical_port=None):
             if cpo is None:
                 if logical_port is None:
                     continue
+                try:
+                    sfp = platform_chassis.get_sfp(physical_port)
+                except (NotImplementedError, AttributeError, IndexError):
+                    sfp = None
+                if sfp is not None:
+                    raise CpoCommandError(
+                        "Port '{}' is an SFP port; please use sfputil instead".format(port_name)
+                    )
                 raise CpoCommandError(
-                    "Port '{}' is not a CPO port".format(port_name)
+                    "No CPO or SFP object is available for port '{}'".format(port_name)
                 )
             objects.append((
                 get_physical_port_name(port_name, member_index, ganged),

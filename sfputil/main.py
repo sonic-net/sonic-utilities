@@ -18,6 +18,7 @@ import click
 import sonic_platform
 import sonic_platform_base.sonic_sfp.sfputilhelper
 from sfputil.debug import debug
+from sfputil.port import filter_cpo_ports, is_cpo_port, reject_cpo_ports
 from sonic_platform_base.sfp_base import SfpBase
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from natsort import natsorted
@@ -514,12 +515,16 @@ def get_physical_port_name(logical_port, physical_port, ganged):
 def logical_port_name_to_physical_port_list(port_name):
     if port_name.startswith("Ethernet"):
         if platform_sfputil.is_logical_port(port_name):
-            return platform_sfputil.get_logical_to_physical(port_name)
+            physical_ports = platform_sfputil.get_logical_to_physical(port_name)
+            reject_cpo_ports(port_name, physical_ports, platform_chassis)
+            return physical_ports
         else:
             click.echo("Error: Invalid port '{}'".format(port_name))
             return None
     else:
-        return [int(port_name)]
+        physical_ports = [int(port_name)]
+        reject_cpo_ports(port_name, physical_ports, platform_chassis)
+        return physical_ports
 
 def logical_port_to_physical_port_index(port_name):
     if not platform_sfputil.is_logical_port(port_name):
@@ -602,10 +607,6 @@ def load_port_config():
 def cli():
     """sfputil - Command line utility for managing SFP transceivers"""
 
-    if device_info.get_cpo_data() is not None:
-        click.echo("cpo.json detected, current device is cpo device, please use cpoutil instead")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
-
     if os.geteuid() != 0:
         click.echo("Root privileges are required for this operation")
         sys.exit(ERROR_PERMISSIONS)
@@ -650,6 +651,9 @@ def eeprom(port, dump_dom, namespace):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
@@ -757,6 +761,9 @@ def eeprom_hexdump(port, page):
         if page is not None:
             page = validate_eeprom_page(page)
         logical_port_list = natsorted(platform_sfputil.logical)
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
         lines = []
         for logical_port_name in logical_port_list:
             return_code, output = eeprom_hexdump_single_port(logical_port_name, page)
@@ -1013,6 +1020,9 @@ def presence(port):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
@@ -1062,6 +1072,9 @@ def fetch_error_status_from_platform_api(port):
     """
     if port is None:
         logical_port_list = natsort.natsorted(platform_sfputil.logical)
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         logical_port_list = [port]
 
@@ -1100,6 +1113,9 @@ def fetch_error_status_from_state_db(port, state_db):
     sorted_ports = natsort.natsorted(status)
     output = []
     for port in sorted_ports:
+        physical_ports = platform_sfputil.get_logical_to_physical(port)
+        if port and any(is_cpo_port(index, platform_chassis) for index in physical_ports):
+            continue
         if is_port_type_rj45(port):
             description = "N/A"
         else:
@@ -1131,6 +1147,9 @@ def error_status(port, fetch_from_hardware):
         click.echo("Valid values for port: {}\n".format(str(platform_sfputil.logical)))
         sys.exit(ERROR_INVALID_PORT)
 
+    if port:
+        logical_port_name_to_physical_port_list(port)
+
     if fetch_from_hardware:
         output_table = fetch_error_status_from_platform_api(port)
     else:
@@ -1160,6 +1179,9 @@ def lpmode(port, use_lpmode_pin):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
