@@ -6,6 +6,13 @@ import subprocess
 import sys
 import time
 import utilities_common.cli as clicommon
+from utilities_common.image_disk_space import (
+    check_image_install_free_disk_space,
+)
+from utilities_common.swap_mem import (
+    resolve_swap_mem_size,
+    resolve_total_mem_threshold,
+)
 from urllib.request import urlopen, urlretrieve
 
 import click
@@ -419,12 +426,18 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             umount(new_image_mount, raise_exception=False)
 
 
+# Defaults in MiB. Kept at module level so they stay readable when
+# SWAPAllocator itself is patched out.
+SWAP_MEM_SIZE_DEFAULT = 1024
+TOTAL_MEM_THRESHOLD_DEFAULT = 2048
+
+
 class SWAPAllocator(object):
     """Context class to allocate SWAP memory."""
 
-    SWAP_MEM_SIZE = 1024
+    SWAP_MEM_SIZE = SWAP_MEM_SIZE_DEFAULT
     DISK_FREESPACE_THRESHOLD = 4 * 1024
-    TOTAL_MEM_THRESHOLD = 2048
+    TOTAL_MEM_THRESHOLD = TOTAL_MEM_THRESHOLD_DEFAULT
     AVAILABLE_MEM_THRESHOLD = 1200
     SWAP_FILE_PATH = '/host/swapfile'
     KiB_TO_BYTES_FACTOR = 1024
@@ -587,6 +600,16 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
             echo_and_log('Error: Failed to set image as default', LOG_ERR)
             raise click.Abort()
     else:
+        # Validate that enough disk space is available before modifying the
+        # installed image state. The helper automatically applies the NPU or
+        # DPU threshold based on the system on which this command is running.
+        if not check_image_install_free_disk_space():
+            echo_and_log(
+                "Insufficient free disk space to install the image. Aborting...",
+                LOG_ERR,
+            )
+            raise click.Abort()
+
         # Verify not installing non-secure image in a secure running image
         if not force and not bootloader.verify_secureboot_image(image_path):
             echo_and_log("Image file '{}' is of a different type than running image.\n".format(url) +
@@ -610,7 +633,27 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
                 echo_and_log('Verification successful')
 
         echo_and_log("Installing image {} and setting it as default...".format(binary_image_version))
-        with SWAPAllocator(not skip_setup_swap, swap_mem_size, total_mem_threshold, available_mem_threshold):
+        effective_swap_mem_size = swap_mem_size
+        effective_total_mem_threshold = total_mem_threshold
+        if not skip_setup_swap:
+            # Without platform.json these are what SWAPAllocator would use, so
+            # comparing against them reports only what the platform raised.
+            requested_swap_mem_size = (
+                swap_mem_size if swap_mem_size is not None else SWAP_MEM_SIZE_DEFAULT)
+            requested_total_mem_threshold = (
+                total_mem_threshold if total_mem_threshold is not None
+                else TOTAL_MEM_THRESHOLD_DEFAULT)
+            effective_swap_mem_size = resolve_swap_mem_size(swap_mem_size, SWAP_MEM_SIZE_DEFAULT)
+            effective_total_mem_threshold = resolve_total_mem_threshold(
+                total_mem_threshold, TOTAL_MEM_THRESHOLD_DEFAULT)
+            if effective_swap_mem_size != requested_swap_mem_size:
+                echo_and_log("Using SWAP memory size of {} MiB required by the platform".format(
+                    effective_swap_mem_size))
+            if effective_total_mem_threshold != requested_total_mem_threshold:
+                echo_and_log("Using total memory threshold of {} MiB required by the platform".format(
+                    effective_total_mem_threshold))
+        with SWAPAllocator(not skip_setup_swap, effective_swap_mem_size,
+                           effective_total_mem_threshold, available_mem_threshold):
             try:
                 bootloader.install_image(image_path)
             except SystemExit as e:
