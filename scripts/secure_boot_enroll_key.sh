@@ -7,9 +7,9 @@
 # sonic-installer also uses this with signed empty updates to remove KEK first
 # and PK last. Removing PK transitions the firmware to Setup Mode.
 #
-# Unlike secure_boot_enroll_db.sh (which is best-effort and always exits 0), this
-# script's exit status reflects whether the firmware accepted the update. Every
-# problem is logged.
+# The installer treats db enrollment as best-effort, but key removal must succeed.
+# This script's exit status reflects whether firmware accepted the update.
+# Every problem is logged.
 #   exit 0 - the variable update was applied
 #   exit 1 - the variable update failed
 #   exit 2 - a precondition was not met (bad args, no efivars)

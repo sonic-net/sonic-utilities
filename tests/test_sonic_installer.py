@@ -104,6 +104,29 @@ def test_run_command():
     assert e.value.code == 6
 
 
+@pytest.mark.parametrize("enrolled", [False, True])
+@patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=False)
+@patch("sonic_installer.main.get_bootloader")
+def test_install_verifies_signature_after_enrollment(get_bootloader, pk_enrolled, enrolled):
+    bootloader = get_bootloader.return_value
+    bootloader.get_binary_image_version.return_value = "new-image"
+    bootloader.get_installed_images.return_value = ["current-image"]
+    bootloader.is_secure_upgrade_image_verification_supported.return_value = True
+    bootloader.enroll_image_secure_boot_keys.return_value = enrolled
+    bootloader.verify_image_sign.return_value = False
+
+    result = CliRunner().invoke(sonic_installer.commands["install"], ["sonic.bin", "-y"])
+
+    assert result.exit_code != 0
+    assert "Failed verify image signature" in result.output
+    assert ("continuing to signature verification" in result.output) is not enrolled
+    bootloader.enroll_image_secure_boot_keys.assert_called_once_with("./sonic.bin")
+    bootloader.verify_image_sign.assert_called_once_with("./sonic.bin")
+    assert bootloader.method_calls.index(call.enroll_image_secure_boot_keys("./sonic.bin")) < \
+        bootloader.method_calls.index(call.verify_image_sign("./sonic.bin"))
+    bootloader.install_image.assert_not_called()
+
+
 @patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
 @pytest.mark.parametrize("resolv_conf_symlink_target", [
     "/run/resolvconf/resolv.conf",       # absolute symlink

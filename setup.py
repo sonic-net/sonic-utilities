@@ -199,7 +199,6 @@ setup(
         'scripts/storm_control.py',
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
-        'scripts/secure_boot_enroll_db.sh',
         'scripts/secure_boot_enroll_key.sh',
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
@@ -235,6 +234,8 @@ setup(
             'show = show.main:cli',
             'sonic-clear = clear.main:cli',
             'sonic-installer = sonic_installer.main:sonic_installer',
+            'secure_boot_enroll_db.py = sonic_installer.secure_boot_enroll_db:main',
+            'secure_boot_enroll_db.sh = sonic_installer.secure_boot_enroll_db:main',  # Legacy enrollment command
             'remove_stale_db_certs.py = sonic_installer.secure_boot_db:main',
             'remove_stale_db_certs.sh = sonic_installer.secure_boot_db:main',  # Legacy installer command
             'sonic_installer = sonic_installer.main:sonic_installer',  # Deprecated

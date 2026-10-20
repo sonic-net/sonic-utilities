@@ -9,6 +9,7 @@ import subprocess
 import click
 
 from sonic_py_common import device_info
+from .. import secure_boot_db, secure_boot_enroll_db
 from ..common import (
    HOST_PATH,
    IMAGE_DIR_PREFIX,
@@ -202,37 +203,20 @@ class GrubBootloader(OnieInstallerBootloader):
         return verification_result.returncode == 0
 
     def enroll_image_secure_boot_keys(self, image_path):
-        # Enroll the db certificate bundled in the image into the UEFI db before the image's
-        # signature is verified. verify_image_sign.sh reads the verification certificate from
-        # the UEFI db, so an image signed with a rotated (KEK-authorized) db key would not be
-        # trusted until its certificate is enrolled. This is best-effort: firmware still
-        # validates the db update against the enrolled KEK, so it does not weaken verification.
-        enroll_script_name = 'secure_boot_enroll_db.sh'
-        script_path = os.path.join('/usr', 'local', 'bin', enroll_script_name)
-        if not os.path.exists(script_path):
-            click.echo("Unable to find Secure Boot enrollment script in path " + script_path)
+        """Enroll an authorized bundled db update before image-signature verification."""
+        try:
+            return secure_boot_enroll_db.enroll_db_certificate(image_path)
+        except (secure_boot_db.ScriptError, OSError, subprocess.SubprocessError) as e:
+            click.echo(f"secure_boot_enroll_db: ERROR: {e}", err=True)
             return False
-        enroll_result = subprocess.run([script_path, image_path], capture_output=True)
-        stdout = enroll_result.stdout.decode()
-        stderr = enroll_result.stderr.decode()
-        if stdout:
-            click.echo(stdout)
-        if stderr:
-            click.echo(stderr, err=True)
-        return enroll_result.returncode == 0
 
     def image_has_secure_boot_db_auth(self, image_path):
-        check_script_name = 'secure_boot_enroll_db.sh'
-        script_path = os.path.join('/usr', 'local', 'bin', check_script_name)
-        if not os.path.exists(script_path):
-            click.echo("Unable to find Secure Boot image inspection script in path " + script_path)
+        """Inspect the bundled update without enrolling or trusting its contents."""
+        try:
+            return secure_boot_enroll_db.enroll_db_certificate(image_path, check_only=True)
+        except (secure_boot_db.ScriptError, OSError, subprocess.SubprocessError) as e:
+            click.echo(f"secure_boot_enroll_db: ERROR: {e}", err=True)
             return False
-        check_result = subprocess.run(
-            [script_path, '--check', image_path],
-            capture_output=True,
-        )
-        click.echo(check_result.stdout.decode())
-        return check_result.returncode == 0
 
     @classmethod
     def detect(cls):

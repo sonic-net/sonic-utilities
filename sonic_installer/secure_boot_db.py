@@ -27,6 +27,7 @@ EFI_IMAGE_SECURITY_DATABASE_GUID = uuid.UUID("d719b2cb-3d3a-4596-a3bc-dad00e6765
 EFI_CERT_X509_GUID = uuid.UUID("a5c059a1-94e4-4aa7-87b5-ab155c2bf072")
 VARIABLE_GUIDS = {
     "db": EFI_IMAGE_SECURITY_DATABASE_GUID,
+    "PK": EFI_GLOBAL_VARIABLE_GUID,
     "KEK": EFI_GLOBAL_VARIABLE_GUID,
     "SecureBoot": EFI_GLOBAL_VARIABLE_GUID,
 }
@@ -415,12 +416,12 @@ def print_plan(config, plan, commit, verbose):
           f"reinstall={len(plan.selected_auths)} used={len(plan.used)} db={len(plan.db_certs)}")
 
 
-def build_trusted_pem(config, work):
-    """Build the enrolled KEK certificate bundle that authorizes db updates."""
+def build_trusted_pem(config, work, authorities=AUTHORITY_VARIABLES):
+    """Build an enrolled-authority bundle; pruning trusts only KEK by default."""
     pem = b"".join(c.pem.read_bytes()
-                   for variable in AUTHORITY_VARIABLES for c in read_efi_certificates(config, work, variable))
+                   for variable in authorities for c in read_efi_certificates(config, work, variable))
     if not pem:
-        raise ScriptError("no enrolled KEK certificates are available")
+        raise ScriptError(f"no enrolled {' or '.join(authorities)} certificates are available")
     trusted = work / "firmware-authorities.pem"
     trusted.write_bytes(pem)
     return trusted

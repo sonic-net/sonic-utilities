@@ -2,6 +2,8 @@ import os
 import shutil
 from unittest.mock import Mock, patch, call
 
+import pytest
+
 # Import test module
 import sonic_installer.bootloader.grub as grub
 
@@ -132,51 +134,37 @@ def test_verify_image():
     assert not bootloader.verify_image_sign(image)
 
 
-def test_enroll_image_secure_boot_keys_missing_script():
-
+@pytest.mark.parametrize("success", [False, True])
+def test_enroll_image_secure_boot_keys_calls_module(success):
     bootloader = grub.GrubBootloader()
     image = f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde'
-    with patch("sonic_installer.bootloader.grub.os.path.exists", return_value=False):
-        # When the enrollment script is absent, the method reports failure without raising.
-        assert not bootloader.enroll_image_secure_boot_keys(image)
+    with patch.object(grub.secure_boot_enroll_db, "enroll_db_certificate", return_value=success) as enroll, \
+            patch.object(grub.subprocess, "run") as subprocess_run:
+        assert bootloader.enroll_image_secure_boot_keys(image) is success
+        enroll.assert_called_once_with(image)
+        subprocess_run.assert_not_called()
 
 
-def test_enroll_image_secure_boot_keys_runs_script():
-
+@pytest.mark.parametrize("method", ["enroll_image_secure_boot_keys", "image_has_secure_boot_db_auth"])
+@pytest.mark.parametrize("error", [
+    grub.secure_boot_db.ScriptError("firmware rejected update"),
+    OSError("cannot read image"),
+    grub.subprocess.SubprocessError("command failed"),
+])
+def test_secure_boot_enrollment_errors_are_reported(method, error):
     bootloader = grub.GrubBootloader()
-    image = f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde'
-    completed = Mock()
-    completed.returncode = 0
-    completed.stdout = b'db certificate enrolled\n'
-    completed.stderr = b''
-    with patch("sonic_installer.bootloader.grub.os.path.exists", return_value=True), \
-            patch("sonic_installer.bootloader.grub.subprocess.run", return_value=completed) as mock_run:
-        assert bootloader.enroll_image_secure_boot_keys(image)
-        mock_run.assert_called_once_with(
-            ['/usr/local/bin/secure_boot_enroll_db.sh', image], capture_output=True)
-
-
-def test_enroll_image_secure_boot_keys_reports_stderr():
-
-    bootloader = grub.GrubBootloader()
-    image = f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde'
-    completed = Mock(returncode=1, stdout=b'', stderr=b'firmware rejected update\n')
-    with patch("sonic_installer.bootloader.grub.os.path.exists", return_value=True), \
-            patch("sonic_installer.bootloader.grub.subprocess.run", return_value=completed), \
+    with patch.object(grub.secure_boot_enroll_db, "enroll_db_certificate", side_effect=error), \
             patch("sonic_installer.bootloader.grub.click.echo") as mock_echo:
-        assert not bootloader.enroll_image_secure_boot_keys(image)
-        mock_echo.assert_called_once_with("firmware rejected update\n", err=True)
+        assert not getattr(bootloader, method)("sonic.bin")
+        mock_echo.assert_called_once_with(f"secure_boot_enroll_db: ERROR: {error}", err=True)
 
 
-def test_image_has_secure_boot_db_auth():
-
+@pytest.mark.parametrize("present", [False, True])
+def test_image_has_secure_boot_db_auth_calls_module(present):
     bootloader = grub.GrubBootloader()
     image = f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde'
-    completed = Mock(returncode=0, stdout=b'image bundles boot/DB.auth\n')
-    with patch("sonic_installer.bootloader.grub.os.path.exists", return_value=True), \
-            patch("sonic_installer.bootloader.grub.subprocess.run", return_value=completed) as mock_run:
-        assert bootloader.image_has_secure_boot_db_auth(image)
-        mock_run.assert_called_once_with(
-            ['/usr/local/bin/secure_boot_enroll_db.sh', '--check', image],
-            capture_output=True,
-        )
+    with patch.object(grub.secure_boot_enroll_db, "enroll_db_certificate", return_value=present) as enroll, \
+            patch.object(grub.subprocess, "run") as subprocess_run:
+        assert bootloader.image_has_secure_boot_db_auth(image) is present
+        enroll.assert_called_once_with(image, check_only=True)
+        subprocess_run.assert_not_called()
