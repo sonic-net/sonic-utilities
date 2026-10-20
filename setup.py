@@ -114,6 +114,7 @@ setup(
     },
     scripts=[
         'scripts/aclshow',
+        'scripts/arista_7060_prefdl_gen.py',
         'scripts/asic_config_check',
         'scripts/boot_part',
         'scripts/buffershow',
