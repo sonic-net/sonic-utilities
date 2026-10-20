@@ -48,7 +48,7 @@ fi
 # variables so the variable can be written. Best-effort; efi-updatevar also
 # manages the flag itself.
 var_path="${EFIVARS_DIR}/${var_name}-${EFI_GLOBAL_GUID}"
-if [ -e "$var_path" ] && command -v chattr >/dev/null 2>&1; then
+if [ -e "$var_path" ]; then
     chattr -i "$var_path" 2>/dev/null || true
 fi
 

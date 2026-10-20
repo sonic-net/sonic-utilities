@@ -125,11 +125,6 @@ done
 # ---------------------------------------------------------------------------
 [ "$(id -u)" -eq 0 ] || die "must be run as root (needs to read/write $EFIVARS_DIR and $HOST_PATH)"
 
-HAVE_MOKUTIL=0
-command -v mokutil >/dev/null 2>&1 && HAVE_MOKUTIL=1
-HAVE_CHATTR=0
-command -v chattr >/dev/null 2>&1 && HAVE_CHATTR=1
-
 if [ ! -d "$EFIVARS_DIR" ] || [ -z "$(ls -A "$EFIVARS_DIR" 2>/dev/null)" ]; then
     mount -t efivarfs efivarfs "$EFIVARS_DIR" 2>/dev/null || true
 fi
@@ -137,13 +132,11 @@ fi
     || die "UEFI efivars not available at $EFIVARS_DIR (not a UEFI system, or firmware access blocked)"
 
 SB_STATE="unknown"
-if [ "$HAVE_MOKUTIL" -eq 1 ]; then
-    _sb="$(mokutil --sb-state 2>/dev/null)"
-    case "$_sb" in
-        *[Ee]nabled*)  SB_STATE="enabled" ;;
-        *[Dd]isabled*) SB_STATE="disabled" ;;
-    esac
-fi
+_sb="$(mokutil --sb-state 2>/dev/null)"
+case "$_sb" in
+    *[Ee]nabled*)  SB_STATE="enabled" ;;
+    *[Dd]isabled*) SB_STATE="disabled" ;;
+esac
 
 [ -d "$AUTH_DIR" ] || warn "auth directory not found: $AUTH_DIR (reinstall will find no .auth files)"
 
@@ -346,12 +339,10 @@ CURRENT_IMG=""
 NEXT_IMG=""
 IMAGES=""
 
-if command -v sonic-installer >/dev/null 2>&1; then
-    SI_OUT="$(sonic-installer list 2>/dev/null || true)"
-    CURRENT_IMG="$(printf '%s\n' "$SI_OUT" | sed -n 's/^Current: *//p' | head -n1)"
-    NEXT_IMG="$(printf '%s\n' "$SI_OUT" | sed -n 's/^Next: *//p' | head -n1)"
-    IMAGES="$(printf '%s\n' "$SI_OUT" | grep -o "${IMAGE_PREFIX}[^ ]*" | sort -u)"
-fi
+SI_OUT="$(sonic-installer list 2>/dev/null || true)"
+CURRENT_IMG="$(printf '%s\n' "$SI_OUT" | sed -n 's/^Current: *//p' | head -n1)"
+NEXT_IMG="$(printf '%s\n' "$SI_OUT" | sed -n 's/^Next: *//p' | head -n1)"
+IMAGES="$(printf '%s\n' "$SI_OUT" | grep -o "${IMAGE_PREFIX}[^ ]*" | sort -u)"
 if [ -z "$IMAGES" ] && [ -r "$HOST_PATH/grub/grub.cfg" ]; then
     IMAGES="$(grep '^menuentry' "$HOST_PATH/grub/grub.cfg" 2>/dev/null \
               | grep -o "${IMAGE_PREFIX}[^']*" | sort -u)"
@@ -712,11 +703,9 @@ done < "$SEL_AUTHS"
 # Apply
 # ---------------------------------------------------------------------------
 # Best-effort: clear the immutable flag on the db efivars file so writes succeed.
-if [ "$HAVE_CHATTR" -eq 1 ]; then
-    for v in "$EFIVARS_DIR"/db-*; do
-        [ -e "$v" ] && chattr -i "$v" 2>/dev/null || true
-    done
-fi
+for v in "$EFIVARS_DIR"/db-*; do
+    [ -e "$v" ] && chattr -i "$v" 2>/dev/null || true
+done
 
 echo "Deleting all db certificates (applying remove-all .auth) ..."
 efi-updatevar -f "$REMOVE_ALL_AUTH" db \
@@ -737,9 +726,7 @@ _fail=0
 while IFS= read -r a; do
     [ -n "$a" ] || continue
     echo "  appending: $a"
-    if [ "$HAVE_CHATTR" -eq 1 ]; then
-        for v in "$EFIVARS_DIR"/db-*; do [ -e "$v" ] && chattr -i "$v" 2>/dev/null || true; done
-    fi
+    for v in "$EFIVARS_DIR"/db-*; do [ -e "$v" ] && chattr -i "$v" 2>/dev/null || true; done
     if ! efi-updatevar -a -f "$a" db; then
         warn "failed to append $a"
         _fail=1
