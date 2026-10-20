@@ -3351,6 +3351,8 @@ fi
 
 switch_type=$(sonic-db-cli CONFIG_DB hget "DEVICE_METADATA|localhost" "switch_type")
 
+# define IS_VOQ_CHASSIS for voq based platform (chassis or multi-asic Pizza Box)
+# This is for "show fabric ..." commands 
 if $IS_CHASSIS_MODULE && [[ x"$switch_type" == x"voq" || x"$switch_type" == x"fabric" ]]; then
     IS_VOQ_CHASSIS=true
 fi
