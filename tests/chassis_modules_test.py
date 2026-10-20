@@ -8,6 +8,7 @@ import pytest
 
 import show.main as show
 import config.main as config
+import config.chassis_modules as chassis_modules
 import tests.mock_tables.dbconnector
 from utilities_common.db import Db
 from .utils import get_result_and_return_code
@@ -303,6 +304,83 @@ class TestChassisModules(object):
             print(result.output)
             assert result.exit_code != 0
             assert db.cfgdb.get_entry('CHASSIS_MODULE', "FABRIC-CARD0").get('admin_status') != 'down'
+
+    @pytest.mark.parametrize("service_stopped, container_stopped, message", [
+        (False, True, "Stop swss@6.service failed"),
+        (True, False, "Container swss6 is still running"),
+    ])
+    def test_config_shutdown_module_fabric_asic_stop_fails(self, service_stopped, container_stopped, message):
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+             mock.patch("config.chassis_modules.wait_for_service_inactive", return_value=service_stopped), \
+             mock.patch("config.chassis_modules.wait_for_container_stopped", return_value=container_stopped):
+            runner = CliRunner()
+            db = Db()
+
+            chassisdb = db.db
+            chassisdb.connect("CHASSIS_STATE_DB")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "name", "FABRIC-CARD0")
+            chassisdb.close("CHASSIS_STATE_DB")
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code != 0
+            assert message in result.output
+            assert db.cfgdb.get_entry('CHASSIS_MODULE', "FABRIC-CARD0").get('admin_status') != 'down'
+
+    def test_config_shutdown_module_fabric_without_asics(self):
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
+            runner = CliRunner()
+            db = Db()
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 0
+            assert db.cfgdb.get_entry('CHASSIS_MODULE', "FABRIC-CARD0").get('admin_status') == 'down'
+
+    def test_wait_for_service_inactive(self):
+        with mock.patch("config.chassis_modules.subprocess.call", side_effect=[0, 3]) as mock_call, \
+             mock.patch("config.chassis_modules.time.sleep") as mock_sleep:
+            assert chassis_modules.wait_for_service_inactive("syncd@6.service")
+            mock_call.assert_called_with(["systemctl", "is-active", "--quiet", "syncd@6.service"])
+            assert mock_call.call_count == 2
+            assert mock_sleep.call_count == 1
+
+    def test_wait_for_service_inactive_timeout(self):
+        with mock.patch("config.chassis_modules.subprocess.call", return_value=0), \
+             mock.patch("config.chassis_modules.time.sleep"):
+            assert not chassis_modules.wait_for_service_inactive("syncd@6.service", timeout_secs=0)
+
+    def test_wait_for_container_stopped(self):
+        running = mock.Mock(returncode=0, stdout="true\n")
+        stopped = mock.Mock(returncode=0, stdout="false\n")
+        with mock.patch("config.chassis_modules.subprocess.run", side_effect=[running, stopped]) as mock_run, \
+             mock.patch("config.chassis_modules.time.sleep") as mock_sleep:
+            assert chassis_modules.wait_for_container_stopped("syncd6")
+            assert mock_run.call_args[0][0] == ["docker", "inspect", "-f", "{{.State.Running}}", "syncd6"]
+            assert mock_run.call_count == 2
+            assert mock_sleep.call_count == 1
+
+    def test_wait_for_container_stopped_no_container(self):
+        with mock.patch("config.chassis_modules.subprocess.run",
+                        return_value=mock.Mock(returncode=1, stdout="")):
+            assert chassis_modules.wait_for_container_stopped("syncd6")
+
+    def test_wait_for_container_stopped_no_docker(self):
+        with mock.patch("config.chassis_modules.subprocess.run", side_effect=OSError):
+            assert chassis_modules.wait_for_container_stopped("syncd6")
+
+    def test_wait_for_container_stopped_timeout(self):
+        with mock.patch("config.chassis_modules.subprocess.run",
+                        return_value=mock.Mock(returncode=0, stdout="true\n")), \
+             mock.patch("config.chassis_modules.time.sleep"):
+            assert not chassis_modules.wait_for_container_stopped("syncd6", timeout_secs=0)
 
     def test_config_startup_module(self):
         runner = CliRunner()
