@@ -66,17 +66,32 @@ runs.
 
 ## Known limitations
 
-- **BGP routing-stack staleness.** `show/main.py` decides once, at import
-  time, whether to wire up FRR or Quagga `show ip bgp` commands (`sudo
-  docker ps` probe). The daemon imports `show.main` once at startup, so if
-  the BGP container was still starting when the daemon booted, `show ip
-  bgp` stays unavailable until the daemon re-imports. Send `SIGHUP` to
-  the daemon (or `systemctl reload sonic-cli-daemon`) after BGP comes up
-  to force a clean re-exec and re-run that probe. The daemon also
-  re-execs automatically if it detects `show/main.py` or `config/main.py`
-  changed on disk (package upgrade).
-- **Plugins installed after the daemon started** are not picked up until
-  the daemon restarts/reloads, for the same reason.
+- **Import-time state (BGP routing stack, plugins) and how it is refreshed.**
+  `show/main.py` decides once, at import time, whether to wire up FRR or
+  Quagga `show ip bgp` commands (`sudo docker ps` probe), and `show`/`config`
+  discover their plugins (`show/plugins`, `config/plugins`, including the
+  ones sonic-package-manager extracts for extensions) once at import. The
+  daemon imports once, so anything derived then would otherwise be frozen.
+  It is refreshed automatically:
+  - **bgp container (re)appears:** the shipped `bgp.service` drop-in
+    (`10-sonic-cli-daemon.conf`, `ExecStartPost`) asks the daemon to reload
+    every time `bgp.service` starts -- boot, `config feature state bgp
+    enabled`, `systemctl restart bgp`. The reload is a SIGHUP re-exec, so the
+    probe re-runs against the container that now exists. (An
+    `After=bgp.service` ordering on the daemon unit was tried and not kept:
+    the hook already covers cold boot, and the ordering delays the warm CLI
+    by about two minutes.)
+  - **plugins installed/upgraded/removed:** the daemon also watches the
+    plugin directories (directory mtime plus each plugin file's mtime), in
+    addition to `show/main.py` and `config/main.py`. On the next request it
+    answers that one request with "fallback" (cold path) and re-execs.
+  - **manually:** `systemctl reload sonic-cli-daemon` (SIGHUP) at any time.
+    A reload that arrives while the daemon is still importing at startup is
+    remembered and applied once it is listening (it no longer kills it).
+  While the daemon re-execs, new clients get a missing socket or an
+  explicit "fallback" and run on the cold path; they never fail. Each
+  re-exec is logged to syslog (`sonic-cli-daemon: re-exec (<reason>)`).
+  Multi-asic `bgp@N.service` instances are not covered by the drop-in.
 - **Zombie reaping** relies on a `SIGCHLD` handler in the top-level daemon
   process; if you extend this code, keep that handler in place.
 - **Pagers/prompts that open `/dev/tty` directly** (e.g. `less`) don't
