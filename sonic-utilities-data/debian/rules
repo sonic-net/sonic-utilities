@@ -22,5 +22,6 @@ override_dh_install:
 	dh_install
 ifneq ($(strip $(OPTIMIZE_CLI)),y)
 	rm -f debian/sonic-utilities-data/lib/systemd/system/sonic-cli-daemon.service
+	rm -rf debian/sonic-utilities-data/lib/systemd/system/bgp.service.d
 	rm -f debian/sonic-utilities-data/usr/share/doc/sonic-utilities-data/cli-daemon.md
 endif
