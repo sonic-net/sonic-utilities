@@ -29,7 +29,7 @@ def test_get_installed_images_preserves_slot_ordering(mock_popen):
     ]
     bootloader.set_next_image(installed_images[0])
 
-    next_image=bootloader.get_next_image()
+    next_image = bootloader.get_next_image()
     assert next_image == installed_images[0]
 
     # Case 2 First_slot no image and second_slot valid sonic image
@@ -51,5 +51,5 @@ def test_get_installed_images_preserves_slot_ordering(mock_popen):
 
     bootloader.set_next_image(installed_images[1])
 
-    next_image=bootloader.get_next_image()
+    next_image = bootloader.get_next_image()
     assert next_image == installed_images[1]
