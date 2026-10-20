@@ -327,7 +327,9 @@ function reboot_all_dpus() {
     # intentionally reject a reboot when the target DPU has insufficient
     # space, and the parent must propagate that failure.
     for pid in "${pids[@]}"; do
-        if ! wait "$pid"; then
+        local status=0
+        wait "$pid" || status=$?
+        if [[ $status -ne $EXIT_SUCCESS && $status -ne $EXIT_DPU_DOWN ]]; then
             ((failures++))
         fi
     done
