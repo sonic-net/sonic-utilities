@@ -146,16 +146,15 @@ def test_get_next_image_slot2_preserves_mapping(
     assert bootloader.get_next_image() == "SONiC-OS-2"
 
 
+@patch("sonic_installer.main.os.geteuid", return_value=0)
 @patch("sonic_installer.main.get_bootloader")
 def test_list_preserves_slot_ordering_second_slot(
-        mock_get_bootloader):
+        mock_get_bootloader,
+        _mock_geteuid):
 
     bootloader = MagicMock(spec=UbootBootloader)
 
-    bootloader.get_installed_images.return_value = [
-        "",
-        "SONiC-OS-2"
-    ]
+    bootloader.get_installed_images.return_value = ["", "SONiC-OS-2"]
 
     bootloader.get_current_image.return_value = "SONiC-OS-2"
     bootloader.get_next_image.return_value = "SONiC-OS-2"
@@ -164,10 +163,10 @@ def test_list_preserves_slot_ordering_second_slot(
 
     runner = CliRunner()
 
-    result = runner.invoke(
-        sonic_installer,
-        ["list"]
-    )
+    result = runner.invoke(sonic_installer, ["list"])
 
     assert result.exit_code == 0, result.output
     assert "SONiC-OS-2" in result.output
+    bootloader.get_installed_images.assert_called_once()
+    bootloader.get_current_image.assert_called_once()
+    bootloader.get_next_image.assert_called_once()
