@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+from click.testing import CliRunner
 from sonic_installer.main import cli
 from sonic_installer.bootloader.uboot import UbootBootloader
 
@@ -67,6 +68,7 @@ def test_list_images_preserves_slot_ordering(mock_get_images):
         "",
         "SONiC-OS-2"
     ]
+    runner = CliRunner()
 
     result = runner.invoke(cli, ["list"])
 
