@@ -9,6 +9,7 @@ import subprocess
 import click
 
 from sonic_py_common import device_info
+from .. import secure_boot_lock
 from ..common import (
    HOST_PATH,
    IMAGE_DIR_PREFIX,
@@ -66,7 +67,7 @@ class GrubBootloader(OnieInstallerBootloader):
         return True
 
     def install_image(self, image_path):
-        run_command(["bash", image_path])
+        run_command(["bash", image_path], **secure_boot_lock.subprocess_lock_options())
         run_command(['grub-set-default', '--boot-directory=' + HOST_PATH, '0'])
 
     def remove_image(self, image):
@@ -212,7 +213,9 @@ class GrubBootloader(OnieInstallerBootloader):
         if not os.path.exists(script_path):
             click.echo("Unable to find Secure Boot enrollment script in path " + script_path)
             return False
-        enroll_result = subprocess.run([script_path, image_path], capture_output=True)
+        enroll_result = subprocess.run(
+            [script_path, image_path], capture_output=True, **secure_boot_lock.subprocess_lock_options(),
+        )
         click.echo(enroll_result.stdout.decode())
         return enroll_result.returncode == 0
 

@@ -34,6 +34,19 @@ if [ -z "$image_file" ] || [ ! -f "$image_file" ]; then
     exit 1
 fi
 
+LOCK_FILE=/run/lock/sonic-installer.lock
+lock_fd="${SONIC_INSTALLER_LOCK_FD:-}"
+if [ -n "$lock_fd" ]; then
+    if [[ ! "$lock_fd" =~ ^[0-9]+$ ]] || [ ! "/proc/$$/fd/$lock_fd" -ef "$LOCK_FILE" ]; then
+        log "ERROR: invalid inherited installer lock descriptor"
+        exit 1
+    fi
+else
+    exec {lock_fd}>>"$LOCK_FILE"
+fi
+# Reusing the installer's open file description avoids deadlocking its child.
+flock --exclusive "$lock_fd"
+
 if [ ! -d "$EFIVARS_DIR" ]; then
     log "ERROR: efivars not available at $EFIVARS_DIR, cannot enroll db certificate"
     exit 1
