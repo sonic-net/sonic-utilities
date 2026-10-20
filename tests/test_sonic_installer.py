@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 import pytest
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from sonic_installer.main import (
     sonic_installer,
     SWAP_MEM_SIZE_DEFAULT,
@@ -12,6 +12,70 @@ from click.testing import CliRunner
 from unittest.mock import patch, Mock, call
 import sonic_installer.common as sonic_installer_common
 from sonic_installer import secure_boot_db
+from sonic_installer import secure_boot_lock
+
+
+@pytest.fixture(autouse=True)
+def installer_lock_file(tmp_path, monkeypatch, request):
+    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", tmp_path / "installer.lock")
+    if "fs" in request.fixturenames:
+        # fcntl requires real descriptors; filesystem-mocked cases test installer behavior only.
+        monkeypatch.setattr(secure_boot_lock, "installer_lock", nullcontext)
+
+
+@pytest.mark.parametrize("fail_install", [False, True])
+def test_install_locks_discovery_enrollment_and_installation(monkeypatch, fail_install):
+    import sonic_installer.main as installer
+
+    bootloader = Mock()
+    phases = []
+
+    def checked(name, result=None):
+        def operation(*args, **kwargs):
+            assert secure_boot_lock.current_lock_fd() is not None
+            phases.append(name)
+            if name == "install" and fail_install:
+                raise RuntimeError("installation failed")
+            return result
+        return operation
+
+    bootloader.get_binary_image_version.return_value = "new-image"
+    bootloader.get_installed_images.side_effect = checked("discovery", ["current-image"])
+    bootloader.enroll_image_secure_boot_keys.side_effect = checked("enrollment", True)
+    bootloader.verify_image_sign.side_effect = checked("verification", True)
+    bootloader.install_image.side_effect = checked("install")
+    monkeypatch.setattr(installer, "get_bootloader", lambda: bootloader)
+    monkeypatch.setattr(installer, "check_image_install_free_disk_space", lambda: True)
+    monkeypatch.setattr(installer, "SWAPAllocator", lambda *args: nullcontext())
+    monkeypatch.setattr(installer, "run_command", Mock())
+    monkeypatch.setattr(installer, "update_sonic_environment", checked("environment"))
+    result = CliRunner().invoke(sonic_installer.commands["install"], [
+        "sonic.bin", "-y", "--skip_migration", "--skip-package-migration", "--skip-setup-swap",
+    ])
+    assert (result.exit_code != 0) == fail_install, (result.output, result.exception)
+    assert phases == ["discovery", "enrollment", "verification", "install"] + (
+        [] if fail_install else ["environment"]
+    )
+    assert secure_boot_lock.current_lock_fd() is None
+
+
+def test_pruning_helper_locks_before_image_discovery(monkeypatch):
+    import sonic_installer.main as installer
+
+    def checked_images():
+        assert secure_boot_lock.current_lock_fd() is not None
+        return ["current-image"]
+
+    def checked_prune(*args, **kwargs):
+        assert secure_boot_lock.current_lock_fd() is not None
+        assert kwargs["images"] == ["current-image"]
+
+    bootloader = Mock()
+    bootloader.get_installed_images.side_effect = checked_images
+    monkeypatch.setattr(secure_boot_db, "prune_db_certificates", checked_prune)
+    installer.prune_stale_db_certs(bootloader)
+    bootloader.get_installed_images.assert_called_once()
+    assert secure_boot_lock.current_lock_fd() is None
 
 
 def test_run_command():

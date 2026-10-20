@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
+from .secure_boot_lock import locked
+
 PROG = Path(sys.argv[0]).name if sys.argv and sys.argv[0] else "remove_stale_db_certs.py"
 
 IMAGE_PREFIX = "SONiC-OS-"
@@ -39,6 +41,9 @@ COMMAND_TIMEOUT_SECS = 600
 EFI_GLOBAL_VARIABLE_GUID = uuid.UUID("8be4df61-93ca-11d2-aa0d-00e098032b8c")
 EFI_IMAGE_SECURITY_DATABASE_GUID = uuid.UUID("d719b2cb-3d3a-4596-a3bc-dad00e67656f")
 EFI_CERT_X509_GUID = uuid.UUID("a5c059a1-94e4-4aa7-87b5-ab155c2bf072")
+EFI_CERT_TYPE_PKCS7_GUID = uuid.UUID("4aafd29d-68df-49ee-8aa9-347d375665a7")
+WIN_CERT_REVISION_2_0 = 0x0200
+WIN_CERT_TYPE_EFI_GUID = 0x0EF1
 VARIABLE_GUIDS = {
     "db": EFI_IMAGE_SECURITY_DATABASE_GUID,
     "KEK": EFI_GLOBAL_VARIABLE_GUID,
@@ -211,6 +216,14 @@ def parse_auth(data):
     cert_end = ctypes.sizeof(EfiTime) + auth.auth_info.length
     if auth.auth_info.length < ctypes.sizeof(WinCertificateUefiGuid) or cert_end > len(data):
         raise ScriptError("authenticated update certificate length is invalid")
+    if auth.auth_info.revision != WIN_CERT_REVISION_2_0:
+        raise ScriptError("authenticated update certificate revision is invalid")
+    if auth.auth_info.cert_type != WIN_CERT_TYPE_EFI_GUID:
+        raise ScriptError("authenticated update certificate type is invalid")
+    if bytes(auth.auth_info.cert_type_guid) != EFI_CERT_TYPE_PKCS7_GUID.bytes_le:
+        raise ScriptError("authenticated update certificate type GUID is not PKCS#7")
+    if cert_end == header_size:
+        raise ScriptError("authenticated update signature is empty")
     return AuthUpdate(data[:ctypes.sizeof(EfiTime)], data[header_size:cert_end], data[cert_end:])
 
 
@@ -250,7 +263,7 @@ def verify_db_auth(update, attributes, require_payload, trusted_pem, prefix):
     content.write_bytes(signed_content)
     return succeeds([
         "openssl", "cms", "-verify", "-binary", "-inform", "DER", "-in", str(pkcs7), "-content", str(content),
-        "-no_attr_verify", "-no_check_time", "-purpose", "any", "-partial_chain", "-CAfile", str(trusted_pem),
+        "-no_check_time", "-purpose", "any", "-partial_chain", "-CAfile", str(trusted_pem),
         "-out", "/dev/null",
     ])
 
@@ -392,7 +405,8 @@ def analyze(config, work, images=None) -> Plan:
     return Plan(
         sb_state=secure_boot_state(config), db_certs=db_certs,
         boot_critical_dir=boot_critical_dir, records=records, boot_critical_binaries=binaries, used=used,
-        drop=[c for c in db_certs if c not in used], auth_map=auth_map, selected_auths=selected,
+        drop=[c for c in db_certs if c not in used and c.fingerprint not in reinstall_fps],
+        auth_map=auth_map, selected_auths=selected,
         missing=missing,
         boot_critical_binaries_at_risk=check_boot_chain(binaries, records, reinstall_fps, config.auth_dir),
     )
@@ -537,6 +551,7 @@ def apply_plan(config, plan, work, verbose=True):
     print(f"\nDone: db reset to {len(new_pems)} image-signing certificate(s); all boot-chain binaries verify.")
 
 
+@locked
 def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, auto=False, verbose=False):
     """Analyze or prune db; automatic mode modifies only safe plans with stale certificates."""
     if auto and plan_only:

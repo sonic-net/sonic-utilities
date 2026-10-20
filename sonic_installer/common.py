@@ -22,8 +22,9 @@ DOCKERDIR_NAME = 'docker'
 def is_list_of_strings(command):
     return isinstance(command, list) and all(isinstance(item, str) for item in command)
 
+
 # Run bash command and print output to stdout
-def run_command(command, stdout=subprocess.PIPE, env=None, shell=False):
+def run_command(command, stdout=subprocess.PIPE, env=None, shell=False, pass_fds=()):
     if not is_list_of_strings(command):
         sys.exit("Input command should be a list of strings")
     if not shell:
@@ -32,7 +33,8 @@ def run_command(command, stdout=subprocess.PIPE, env=None, shell=False):
         command_str = command
     click.echo(click.style("Command: ", fg='cyan') + click.style(command_str, fg='green'))
 
-    proc = subprocess.Popen(command, text=True, stdout=stdout, env=env, shell=shell)
+    options = {"pass_fds": pass_fds} if pass_fds else {}
+    proc = subprocess.Popen(command, text=True, stdout=stdout, env=env, shell=shell, **options)
     (out, _) = proc.communicate()
 
     click.echo(out)
@@ -65,4 +67,3 @@ def run_command_or_raise(argv, raise_exception=True, capture=True):
 # output of multiple commands using subprocess.Popen()
 def default_sigpipe():
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-
