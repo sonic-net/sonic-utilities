@@ -219,7 +219,9 @@ class TestChassisModules(object):
 
     def test_config_shutdown_module_fabric(self):
         with mock.patch("utilities_common.cli.run_command",
-                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
+             mock.patch("config.chassis_modules.wait_for_service_inactive", return_value=True), \
+             mock.patch("config.chassis_modules.wait_for_container_stopped", return_value=True):
             runner = CliRunner()
             db = Db()
 
@@ -256,7 +258,51 @@ class TestChassisModules(object):
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
-            assert mock_run_command.call_count == 6
+            # Two ASICs, and per ASIC: stop swss, stop syncd, reset-failed swss,
+            # start swss.
+            assert mock_run_command.call_count == 8
+
+    def test_config_shutdown_module_fabric_stops_asics_before_db_write(self):
+        """ASIC services must be stopped before admin_status reaches CONFIG_DB.
+
+        chassisd powers the fabric card off as soon as it observes the write, so
+        a syncd still running at that point drives MMIO into hardware whose
+        rails are already gone.
+        """
+        admin_status_when_stopped = []
+
+        def record_admin_status(db, chassis_module_name, state):
+            fvs = db.cfgdb.get_entry('CHASSIS_MODULE', chassis_module_name)
+            admin_status_when_stopped.append(fvs.get('admin_status') if fvs else None)
+            return True
+
+        with mock.patch("config.chassis_modules.fabric_module_set_admin_status",
+                        side_effect=record_admin_status) as mock_set_admin_status:
+            runner = CliRunner()
+            db = Db()
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert mock_set_admin_status.call_count == 1
+            assert admin_status_when_stopped[0] != 'down'
+            assert db.cfgdb.get_entry('CHASSIS_MODULE', "FABRIC-CARD0").get('admin_status') == 'down'
+
+    def test_config_shutdown_module_fabric_aborts_when_asics_do_not_stop(self):
+        """Leave the card up rather than power it off underneath a live syncd."""
+        with mock.patch("config.chassis_modules.fabric_module_set_admin_status",
+                        return_value=False):
+            runner = CliRunner()
+            db = Db()
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code != 0
+            assert db.cfgdb.get_entry('CHASSIS_MODULE', "FABRIC-CARD0").get('admin_status') != 'down'
 
     def test_config_startup_module(self):
         runner = CliRunner()

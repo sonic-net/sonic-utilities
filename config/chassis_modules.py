@@ -11,6 +11,7 @@ from datetime import timedelta
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
+SERVICE_STOP_TIMEOUT_SECS = 60
 
 
 class StateDBHelper:
@@ -93,6 +94,44 @@ def get_asic_list_from_db(chassisdb, chassis_module_name):
     return asic_list
 
 
+def wait_for_service_inactive(service, timeout_secs=SERVICE_STOP_TIMEOUT_SECS):
+    """Poll systemd until <service> is no longer active. Returns False on timeout."""
+    deadline = time.time() + timeout_secs
+    while True:
+        # rc 0 == active, non-zero == inactive
+        if subprocess.call(["systemctl", "is-active", "--quiet", service]) != 0:
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(1)
+
+
+def wait_for_container_stopped(container, timeout_secs=SERVICE_STOP_TIMEOUT_SECS):
+    """Poll docker until <container> is no longer running. Returns False on timeout.
+
+    The systemd unit is not a sufficient signal on its own: 'systemctl
+    is-active' reports a unit in the 'deactivating' state as not active, so
+    the unit can look stopped while ExecStop is still inside 'docker stop'
+    terminating the container. Until the container is gone syncd can still
+    issue MMIO, so the container state is what has to be checked.
+    """
+    deadline = time.time() + timeout_secs
+    while True:
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.Running}}", container],
+                capture_output=True, text=True, check=False)
+        except OSError:
+            # No docker on this host, so there is nothing to wait for.
+            return True
+        # A non-zero rc means no such container, which is as stopped as it gets
+        if result.returncode != 0 or result.stdout.strip() != "true":
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(1)
+
+
 #
 # Syntax: fabric_module_set_admin_status <chassis_module_name> <'up'/'down'>
 #
@@ -102,20 +141,27 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
     asic_list = get_asic_list_from_db(chassisdb, chassis_module_name)
 
     if len(asic_list) == 0:
-        return
+        return True
 
     if state == "down":
         for asic in asic_list:
             click.echo("Stop swss@{} and peer services".format(asic))
             clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss@{}.service'.format(asic)])
+            # swss.sh stops syncd as its peer, but skips that under warm/fast
+            # boot. Stop it directly so the ASIC is quiesced either way.
+            clicommon.run_command(['sudo', 'systemctl', 'stop', 'syncd@{}.service'.format(asic)])
 
-        is_active = subprocess.call(["systemctl", "is-active", "--quiet", "swss@{}.service".format(asic)])
+        for asic in asic_list:
+            for service in ('swss@{}.service'.format(asic), 'syncd@{}.service'.format(asic)):
+                if not wait_for_service_inactive(service):
+                    click.echo("Stop {} failed".format(service))
+                    return False
+            for container in ('swss{}'.format(asic), 'syncd{}'.format(asic)):
+                if not wait_for_container_stopped(container):
+                    click.echo("Container {} is still running".format(container))
+                    return False
 
-        if is_active == 0:  # zero active,  non-zero, inactive
-            click.echo("Stop swss@{} and peer services failed".format(asic))
-            return
-
-        click.echo("Delete related CAHSSIS_FABRIC_ASIC_TABLE entries")
+        click.echo("Delete related CHASSIS_FABRIC_ASIC_TABLE entries")
 
         for asic in asic_list:
             chassisdb.delete("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic" + str(asic))
@@ -131,6 +177,8 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
         for asic in asic_list:
             click.echo("Start swss@{} and peer services".format(asic))
             clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
+
+    return True
 
 #
 # 'shutdown' subcommand ('config chassis_modules shutdown ...')
@@ -158,6 +206,14 @@ def shutdown_chassis_module(db, chassis_module_name):
         click.echo(f"Module {chassis_module_name} is already in down state")
         return
 
+    # chassisd cuts power to the fabric card as soon as it observes admin_status
+    # 'down' in CONFIG_DB, so the ASIC services must be gone before that write
+    # lands. Otherwise syncd keeps issuing MMIO to hardware whose rails are
+    # already down, producing PCIe completion timeouts on the root port.
+    if chassis_module_name.startswith("FABRIC-CARD"):
+        if not fabric_module_set_admin_status(db, chassis_module_name, 'down'):
+            ctx.fail(f"Failed to stop ASIC services for {chassis_module_name}; module left up")
+
     if is_smartswitch():
         module_helper = ModuleHelper()
         if module_helper.get_module_state_transition(chassis_module_name):
@@ -176,10 +232,6 @@ def shutdown_chassis_module(db, chassis_module_name):
     else:
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})
-
-    if chassis_module_name.startswith("FABRIC-CARD"):
-        if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'down'):
-            fabric_module_set_admin_status(db, chassis_module_name, 'down')
 
 #
 # 'startup' subcommand ('config chassis_modules startup ...')
