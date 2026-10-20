@@ -821,7 +821,7 @@ def cleanup():
     nextimage = bootloader.get_next_image()
     image_removed = 0
     for image in images:
-        if image != curimage and image != nextimage:
+        if image and image != curimage and image != nextimage:
             echo_and_log("Removing image %s" % image)
             bootloader.remove_image(image)
             image_removed += 1
