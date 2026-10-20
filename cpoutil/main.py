@@ -484,31 +484,18 @@ def get_cpo_presence(cpo, label):
     return present
 
 
-def get_els_lpmode(_api):
-    """Derive ELS low-power state from the public ELSFP status API."""
-    status = _api.get_elsfp_status()
-    if not isinstance(status, dict):
-        raise CpoCommandError("The ELSFP status API returned no data")
-
-    if "module_low_power_state" in status:
-        return _normalize_lpmode(status["module_low_power_state"])
-
-    module_state = status.get("module_state")
-    if module_state is not None:
-        normalized = str(module_state).strip().lower()
-        if normalized == "modulelowpwr":
-            return True
-        if normalized == "moduleready":
-            return False
-        raise CpoCommandError(
-            "Unable to normalize ELS module state {!r} as low-power "
-            "mode".format(
-                module_state
-            )
-        )
-
-    raise NotImplementedError(
-        "The active CPO backend does not report ELS low-power state"
+def get_els_lpmode(api):
+    """Read ELS low-power state without collecting per-laser status."""
+    module_state = api.get_module_state()
+    if module_state is None:
+        raise CpoCommandError("The ELSFP module state API returned no data")
+    normalized = str(module_state).strip().lower()
+    if normalized == "modulelowpwr":
+        return True
+    if normalized == "moduleready":
+        return False
+    raise CpoCommandError(
+        "Unable to normalize ELS module state {!r} as low-power mode".format(module_state)
     )
 
 
@@ -1667,14 +1654,14 @@ def show_els_temperature(els_index, json_output):
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
             api = get_els_api(cpo, resource_id)
-            dom = api.get_elsfp_dom_real_value()
-            if not isinstance(dom, dict) or "temperature" not in dom:
+            temperature = api.get_module_temperature()
+            if temperature is None:
                 raise CpoCommandError(
                     "ELSFP temperature is unavailable for '{}'".format(
                         resource_id
                     )
                 )
-            records[resource_id] = dom["temperature"]
+            records[resource_id] = temperature
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Temperature (C)"))
@@ -1692,7 +1679,7 @@ def show_els_output_power(els_index, json_output):
                     EXTERNAL_LASER_SOURCE, els_index):
                 api = get_els_api(cpo, resource_id)
                 attach_snapshot(cpo.elsfp, api)
-                lane_count = _get_els_lane_count(api.get_elsfp_info())
+                lane_count = api.get_lane_count()
                 values = _filter_els_monitor_lanes(
                     api.get_per_lane_opt_power_monitor(),
                     lane_count,

@@ -486,6 +486,9 @@ class CoverageFakeApi:
     def get_elsfp_info(self):
         return {"manufacturer": "Example ELS", "lane_count": 2}
 
+    def get_lane_count(self):
+        return 2
+
     def get_elsfp_status(self):
         return {
             "module_state": "ModuleReady",
@@ -838,10 +841,10 @@ class TestHelperCoverage(object):
 
     def test_normalizers_and_filters(self):
         assert cpoutil.get_els_lpmode(
-            mock.Mock(get_elsfp_status=lambda: {"module_state": "ModuleLowPwr"})
+            mock.Mock(get_module_state=lambda: "ModuleLowPwr")
         ) is True
         assert cpoutil.get_els_lpmode(
-            mock.Mock(get_elsfp_status=lambda: {"module_state": "ModuleReady"})
+            mock.Mock(get_module_state=lambda: "ModuleReady")
         ) is False
         assert cpoutil._get_els_lane_count({"laser_count": "2"}) == 2
         assert "optical_power_lane3" not in cpoutil._filter_els_dom_lanes(
@@ -2023,6 +2026,8 @@ class TestPortConfigurationSnapshot:
         assert read.call_count == 2
 
 
+
+
 class TestHldOnlyTopology:
     @pytest.mark.parametrize("missing", [False, True])
     def test_precise_laser_map_is_optional(self, missing):
@@ -2038,11 +2043,13 @@ class TestHldOnlyTopology:
         assert interface.laser_ids == (4, 5, 6, 7)
         assert interface.laser_to_asic_lane_mapping == {}
 
+
     def test_missing_whole_interface_group_is_also_optional(self):
         data = copy.deepcopy(CPO_DATA)
         data.pop("platform_data")
         mapping = CpoMapping(data)
         assert mapping.get_interface("Ethernet0").laser_ids == ()
+
 
     def test_legacy_reference_is_ignored(self):
         data = copy.deepcopy(CPO_DATA)
