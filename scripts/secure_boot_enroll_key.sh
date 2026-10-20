@@ -11,8 +11,8 @@
 # script's exit status reflects whether the firmware accepted the update. Every
 # problem is logged.
 #   exit 0 - the variable update was applied
-#   exit 1 - efi-updatevar was run but the firmware rejected the update
-#   exit 2 - a precondition was not met (bad args, no efivars, missing efitools)
+#   exit 1 - the variable update failed
+#   exit 2 - a precondition was not met (bad args, no efivars)
 
 var_name="${1}"
 auth_file="${2}"
@@ -42,11 +42,6 @@ if [ ! -d "$EFIVARS_DIR" ]; then
 fi
 if ! mountpoint -q "$EFIVARS_DIR" 2>/dev/null; then
     mount -t efivarfs efivarfs "$EFIVARS_DIR" 2>/dev/null || true
-fi
-
-if ! command -v efi-updatevar >/dev/null 2>&1; then
-    log "efi-updatevar not found; cannot update ${var_name}"
-    exit 2
 fi
 
 # Clear the immutable (i) attribute the kernel sets on existing Secure Boot

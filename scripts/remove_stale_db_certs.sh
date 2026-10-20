@@ -125,10 +125,6 @@ done
 # ---------------------------------------------------------------------------
 [ "$(id -u)" -eq 0 ] || die "must be run as root (needs to read/write $EFIVARS_DIR and $HOST_PATH)"
 
-for tool in efi-readvar sig-list-to-certs sbverify openssl efi-updatevar python3; do
-    command -v "$tool" >/dev/null 2>&1 || die "required tool not found in PATH: $tool"
-done
-
 HAVE_MOKUTIL=0
 command -v mokutil >/dev/null 2>&1 && HAVE_MOKUTIL=1
 HAVE_CHATTR=0

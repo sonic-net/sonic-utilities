@@ -83,13 +83,6 @@ if ! mountpoint -q "$EFIVARS_DIR" 2>/dev/null; then
     fi
 fi
 
-for tool in efi-readvar sig-list-to-certs openssl python3; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-        log "ERROR: $tool not found, cannot validate DB.auth authorization"
-        exit 1
-    fi
-done
-
 AUTH_PKCS7="${TMP_DIR}/DB-auth.p7b"
 AUTH_SIGNED_CONTENT="${TMP_DIR}/DB-auth.signed-content"
 TRUSTED_CERTS="${TMP_DIR}/firmware-authorities.pem"
@@ -235,13 +228,6 @@ clear_db_immutable() {
 }
 
 # Enroll via efi-updatevar (efitools); append (-a) so existing db entries are preserved.
-# efitools is installed in the SONiC image; if it is absent there is no supported way to
-# apply a signed authenticated variable update here, so enrollment fails.
-if ! command -v efi-updatevar >/dev/null 2>&1; then
-    log "ERROR: efi-updatevar not found, cannot enroll db certificate"
-    exit 1
-fi
-
 log "enrolling bundled db certificate into UEFI db"
 clear_db_immutable
 if ! efi-updatevar -a -f "$DB_AUTH" db; then
