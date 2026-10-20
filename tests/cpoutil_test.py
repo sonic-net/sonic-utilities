@@ -2186,3 +2186,20 @@ class TestEepromBankValidation:
         assert "bank" in result.output.lower()
         assert coverage_environment.reads == []
         assert coverage_environment.writes == []
+
+
+@pytest.mark.parametrize("info", [
+    {"cable_type": "Length Cable Assembly(m)", "cable_length": 4.8},
+    {"cable_type": "Length(km)"},
+    {"cable_length": 2},
+])
+def test_cable_info_fields_render_independently(info):
+    original = copy.deepcopy(info)
+    lines = [line.strip() for line in cpoutil._format_cpo_info(info)]
+    for key, label in (("cable_type", "Cable Type"), ("cable_length", "Cable Length")):
+        if key in info:
+            assert "{}: {}".format(label, info[key]) in lines
+        else:
+            assert not any(line.startswith(label + ":") for line in lines)
+    assert info == original
+    assert json.loads(cpoutil._json_records({"info": info}))["info"] == original

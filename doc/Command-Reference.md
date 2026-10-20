@@ -17162,6 +17162,10 @@ Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS
 
 ## CPO Utilities show commands
 
+`cpoutil show interface dom` displays cable type and cable length on separate
+`Cable Type` and `Cable Length` lines. JSON retains the original `cable_type`
+and `cable_length` keys and values.
+
 **cpoutil show interface map|presence|dom|tx-disable|speed|lane-status|lpmode**
 
 These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.

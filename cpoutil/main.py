@@ -53,6 +53,8 @@ cpo_object_map = {
 
 CPO_INFO_FIELD_MAP = {
     **CMIS_INFO_FIELD_MAP,
+    "cable_type": "Cable Type",
+    "cable_length": "Cable Length",
     'lane_count': 'Laser Count',
     'control_mode': 'Control Mode',
     'max_optical_power': 'Maximum Optical Power',
@@ -636,12 +638,7 @@ def _format_cpo_info(info):
         ),
     )
     for key in keys:
-        if key == "cable_length":
-            continue
-        if key == "cable_type":
-            label = info.get("cable_type", CPO_INFO_FIELD_MAP[key])
-            value = info.get("cable_length", "N/A")
-        elif key == "application_advertisement":
+        if key == "application_advertisement":
             label = CPO_INFO_FIELD_MAP[key]
             values = format_application_advertisement(info[key])
             prefix = "{}{}: ".format(indent, label)
