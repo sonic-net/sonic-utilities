@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
-from sonic_installer.main import cleanup
+from click.testing import CliRunner
+from sonic_installer.main import cleanup, sonic_installer
 from sonic_installer.bootloader.uboot import UbootBootloader
 
 
@@ -97,3 +98,76 @@ def test_cleanup_skips_empty_slot_placeholder_second_slot(mock_get_bootloader):
     cleanup.callback()
 
     bootloader.remove_image.assert_not_called()
+
+
+@patch.object(UbootBootloader, "get_installed_images")
+@patch("subprocess.Popen")
+def test_get_next_image_slot1_preserves_mapping(
+        mock_popen,
+        mock_get_images):
+
+    mock_get_images.return_value = [
+        "SONiC-OS-1",
+        ""
+    ]
+
+    proc = MagicMock()
+    proc.communicate.return_value = (
+        "run sonic_image_1\n",
+        None
+    )
+    mock_popen.return_value = proc
+
+    bootloader = UbootBootloader()
+
+    assert bootloader.get_next_image() == "SONiC-OS-1"
+
+
+@patch.object(UbootBootloader, "get_installed_images")
+@patch("subprocess.Popen")
+def test_get_next_image_slot2_preserves_mapping(
+        mock_popen,
+        mock_get_images):
+
+    mock_get_images.return_value = [
+        "",
+        "SONiC-OS-2"
+    ]
+
+    proc = MagicMock()
+    proc.communicate.return_value = (
+        "run sonic_image_2\n",
+        None
+    )
+    mock_popen.return_value = proc
+
+    bootloader = UbootBootloader()
+
+    assert bootloader.get_next_image() == "SONiC-OS-2"
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_list_preserves_slot_ordering_second_slot(
+        mock_get_bootloader):
+
+    bootloader = MagicMock(spec=UbootBootloader)
+
+    bootloader.get_installed_images.return_value = [
+        "",
+        "SONiC-OS-2"
+    ]
+
+    bootloader.get_current_image.return_value = "SONiC-OS-2"
+    bootloader.get_next_image.return_value = "SONiC-OS-2"
+
+    mock_get_bootloader.return_value = bootloader
+
+    runner = CliRunner()
+
+    result = runner.invoke(
+        sonic_installer,
+        ["list"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "SONiC-OS-2" in result.output
