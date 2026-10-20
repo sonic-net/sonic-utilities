@@ -199,7 +199,7 @@ class TestVxlan(object):
             config.config.commands["vrf"].commands["del_vrf_vni_map"],
             ["default"], obj=vrf_obj)
         assert result.exit_code == 0
-        assert db.cfgdb.get_table('VRF')['default']['vni'] == '0'
+        assert 'default' not in db.cfgdb.get_table('VRF')
 
         with patch('show.vxlan.ConfigDBConnector', return_value=db.cfgdb):
             result = runner.invoke(
@@ -215,6 +215,19 @@ class TestVxlan(object):
             ["default", "201"], obj=vrf_obj)
         assert result.exit_code == 0
         assert db.cfgdb.get_table('VRF')['default']['vni'] == '201'
+
+    def test_config_named_vrf_vni_map_delete_retains_vrf(self):
+        runner = CliRunner()
+        db = Db()
+        vrf_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+
+        assert db.cfgdb.get_table('VRF')['Vrf1']['vni'] == '1000'
+
+        result = runner.invoke(
+            config.config.commands["vrf"].commands["del_vrf_vni_map"],
+            ["Vrf1"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('VRF')['Vrf1']['vni'] == '0'
 
     def test_config_vrf_vni_map_rejects_zero_and_missing_delete(self):
         runner = CliRunner()
