@@ -569,7 +569,14 @@ def _reexec_self():
     scratch, which reruns the probe against current container state.
     In-flight commands are unaffected -- they already forked and hold
     their own copy of the previously loaded code.
+
+    A caught signal reverts to its default disposition across ``execv``,
+    and SIGHUP's default is "terminate" -- which systemd counts as a clean
+    exit, so ``Restart=on-failure`` would NOT bring the daemon back. An
+    *ignored* disposition survives exec, so ignore SIGHUP here; the new
+    image installs its own handler first thing in ``run_daemon_main``.
     """
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
     os.execv(sys.argv[0], sys.argv)
 
 
@@ -577,6 +584,15 @@ def _reexec_self():
 
 def run_daemon_main():
     """Entry point for the ``sonic-cli-daemon`` console script."""
+    # Install the SIGHUP handler BEFORE the (multi-second on this CPU)
+    # show/config imports. A reload requested while we are still starting up
+    # (e.g. systemctl reload right after a restart, or the bgp.service
+    # reload hook) used to hit the default disposition and kill the daemon
+    # for good (systemd treats death-by-SIGHUP as a clean exit). Instead
+    # remember it and re-exec once startup is complete.
+    reload_pending = []
+    signal.signal(signal.SIGHUP, lambda _s, _f: reload_pending.append(True))
+
     for prog, (modname, attr) in PROG_LOADERS.items():
         mod = __import__(modname, fromlist=[attr])
         _clis[prog] = getattr(mod, attr)
@@ -616,6 +632,11 @@ def run_daemon_main():
     signal.signal(signal.SIGHUP, _handle_sighup)
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
+
+    if reload_pending:
+        # A reload arrived during startup: honour it now (re-import with
+        # current state) rather than serving the state we just loaded.
+        _reexec_self()
 
     while True:
         try:
