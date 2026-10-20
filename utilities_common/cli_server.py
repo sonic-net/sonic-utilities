@@ -482,11 +482,27 @@ def _relay_signals(buf, data, child):
 
 
 def _reply_fallback(conn):
+    """Tell the client to re-run on the cold path, then close cleanly.
+
+    Closing a Unix socket that still holds *unread* data (the client's
+    request, sent before we read it) resets the peer: its ``recv`` fails
+    with ECONNRESET and the fallback line is lost -- the client would then
+    see "no reply" and, for non-idempotent ``config``, report failure.
+    So half-close our side (client reads the reply, then EOF) and swallow
+    whatever the client had already queued before the final close().
+    """
     try:
+        conn.settimeout(0.5)
         conn.sendall(b'{"fallback": true}\n')
+        conn.shutdown(socket.SHUT_WR)
+        while conn.recv(65536):
+            pass
     except OSError:
         pass
-    conn.close()
+    try:
+        conn.close()
+    except OSError:
+        pass
 
 
 def _safe_close(fd):

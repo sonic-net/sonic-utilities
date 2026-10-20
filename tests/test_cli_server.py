@@ -682,3 +682,28 @@ def test_watch_mtimes_changed_true_when_file_removed(tmp_path, monkeypatch):
     monkeypatch.setattr(cli_server, "_watch_mtimes", {str(fake_module): mtime})
     os.remove(fake_module)
     assert cli_server._watch_mtimes_changed() is True
+
+
+def test_reply_fallback_tolerates_request_that_arrives_late():
+    """Re-exec race: the daemon answers 'fallback' (and starts closing)
+    before a just-connected client has sent its request. The client's send
+    must still succeed (EPIPE would make it report failure for a command
+    that never ran) and it must still read the fallback line."""
+    import threading
+    import time
+
+    server_side, client_side = socket.socketpair()
+    t = threading.Thread(target=cli_server._reply_fallback, args=(server_side,))
+    t.start()
+    time.sleep(0.1)  # reply + half-close happened before the request lands
+    client_side.sendall(b"request that arrives after the reply")
+    client_side.settimeout(2)
+    data = b""
+    while True:
+        chunk = client_side.recv(4096)
+        if not chunk:
+            break
+        data += chunk
+    client_side.close()
+    t.join()
+    assert json.loads(data.decode().strip()) == {"fallback": True}
