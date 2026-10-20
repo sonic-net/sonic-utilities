@@ -46,8 +46,8 @@ def test_get_installed_images_preserves_slot_ordering(mock_popen):
 
 
 @patch.object(UbootBootloader, "get_installed_images")
-@patch("subprocess.run")
-def test_set_next_image_preserves_slot_mapping(mock_run, mock_get_images):
+@patch("sonic_installer.bootloader.uboot.run_command")
+def test_set_next_image_preserves_slot_mapping(mock_run_command, mock_get_images):
 
     mock_get_images.return_value = [
         "",
@@ -58,7 +58,9 @@ def test_set_next_image_preserves_slot_mapping(mock_run, mock_get_images):
 
     bootloader.set_next_image("SONiC-OS-2")
 
-    mock_run.assert_called_once()
+    mock_run_command.assert_called_once_with(
+        ['/usr/bin/fw_setenv', 'boot_once', 'run sonic_image_2']
+    )
 
 
 @patch("sonic_installer.main.get_bootloader")
@@ -74,7 +76,7 @@ def test_cleanup_skips_empty_slot_placeholder_first_slot(mock_get_bootloader):
 
     mock_get_bootloader.return_value = bootloader
 
-    cleanup()
+    cleanup.callback()
 
     bootloader.remove_image.assert_not_called()
 
@@ -92,6 +94,6 @@ def test_cleanup_skips_empty_slot_placeholder_second_slot(mock_get_bootloader):
 
     mock_get_bootloader.return_value = bootloader
 
-    cleanup()
+    cleanup.callback()
 
     bootloader.remove_image.assert_not_called()
