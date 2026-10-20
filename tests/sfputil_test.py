@@ -71,6 +71,25 @@ EMPTY_DOM_VALUES = """        ChannelMonitorValues:
 
 """
 
+
+@pytest.fixture
+def pluggable_port_mapping(monkeypatch):
+    """Initialize port selection for callbacks invoked without their parent CLI."""
+    names = ("Ethernet0", "Ethernet4", "Ethernet8", "Ethernet12", "Ethernet16",
+             "Ethernet28", "Ethernet36", "Ethernet40", "Ethernet44")
+    physical_ports = {name: [index] for index, name in enumerate(names, start=1)}
+    ports = MagicMock()
+    ports.logical = list(names)
+    ports.is_logical_port.side_effect = lambda name: name in physical_ports
+    ports.get_logical_to_physical.side_effect = physical_ports.get
+    chassis = MagicMock()
+    chassis.get_cpo.return_value = None
+    monkeypatch.setattr(sfputil, "platform_sfputil", ports)
+    monkeypatch.setattr(sfputil, "platform_chassis", chassis)
+    monkeypatch.setattr(sfputil_debug.platform_sfputil_helper, "platform_sfputil", ports)
+    monkeypatch.setattr(sfputil_debug.platform_sfputil_helper, "platform_chassis", chassis)
+
+
 class TestSfputil(object):
     def test_format_dict_value_to_string(self):
         sorted_key_table = [
@@ -478,7 +497,7 @@ class TestSfputil(object):
         assert result.output.rstrip() == 'sfputil version {}'.format(sfputil.VERSION)
 
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
-    def test_error_status_from_db(self):
+    def test_error_status_from_db(self, pluggable_port_mapping):
         db = Db()
         expected_output = [['Ethernet0', 'Blocking Error|High temperature'],
                            ['Ethernet4', 'OK'],
@@ -497,7 +516,7 @@ class TestSfputil(object):
         assert output == expected_output_ethernet0
 
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
-    def test_error_status_from_db_RJ45(self):
+    def test_error_status_from_db_RJ45(self, pluggable_port_mapping):
         db = Db()
         expected_output = [['Ethernet0', 'N/A'],
                            ['Ethernet4', 'N/A'],
@@ -2303,7 +2322,8 @@ EEPROM hexdump for port Ethernet4
 
     @patch('sfputil.debug.get_logical_list')
     @patch('sfputil.debug.get_sfp_object')
-    def test_debug_loopback_capability_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+    def test_debug_loopback_capability_all_ports(
+            self, mock_get_sfp_object, mock_get_logical_list, pluggable_port_mapping):
         mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
@@ -2427,7 +2447,8 @@ EEPROM hexdump for port Ethernet4
 
     @patch('sfputil.debug.get_logical_list')
     @patch('sfputil.debug.get_sfp_object')
-    def test_debug_loopback_status_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+    def test_debug_loopback_status_all_ports(
+            self, mock_get_sfp_object, mock_get_logical_list, pluggable_port_mapping):
         mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-status']
