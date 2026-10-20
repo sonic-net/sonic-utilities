@@ -557,16 +557,54 @@ def _set_socket_permissions(sock_path):
         )
 
 
-def _reexec_self():
+_server = None  # the listening socket, once bound (see _retire_listener)
+
+
+def _retire_listener():
+    """Stop accepting without resetting clients that are already queued.
+
+    ``execv`` / process exit close the listening socket, and the kernel
+    resets every connection still sitting in its accept backlog. A client
+    that connected and sent its request in that window sees an empty reply
+    and (because ``config`` is not idempotent) must report failure -- even
+    though nothing ran. So: unlink the path first (new clients get ENOENT
+    and take the cold path), then answer everything already queued with
+    ``fallback`` (the client re-runs on the cold path), then close.
+    """
+    server = _server
+    try:
+        os.unlink(SOCKET_PATH)
+    except OSError:
+        pass
+    if server is None:
+        return
+    try:
+        server.setblocking(False)
+        while True:
+            conn, _addr = server.accept()
+            conn.setblocking(True)
+            conn.settimeout(1.0)
+            _reply_fallback(conn)
+    except (BlockingIOError, InterruptedError):
+        pass
+    except OSError:
+        pass
+    try:
+        server.close()
+    except OSError:
+        pass
+
+
+def _reexec_self(reason="reload"):
     """Re-exec the daemon process in place.
 
-    Used both when ``show.main``/``config.main`` changed on disk (package
-    upgrade) and on SIGHUP. SIGHUP is the intended manual fix for
-    show/main.py's import-time BGP routing-stack probe: if the BGP
-    container was still starting when the daemon booted, ``show ip bgp``
-    is permanently unavailable until something re-triggers that probe.
-    Sending SIGHUP (or restarting the service) re-imports show.main from
-    scratch, which reruns the probe against current container state.
+    Used both when ``show.main``/``config.main``/a plugin changed on disk
+    (package upgrade, extension install) and on SIGHUP. SIGHUP is the
+    trigger for show/main.py's import-time BGP routing-stack probe: if the
+    BGP container was still starting when the daemon booted, ``show ip bgp``
+    is unavailable until something re-triggers that probe. Re-importing
+    show.main from scratch reruns the probe against current container state.
+
     In-flight commands are unaffected -- they already forked and hold
     their own copy of the previously loaded code.
 
@@ -576,6 +614,8 @@ def _reexec_self():
     *ignored* disposition survives exec, so ignore SIGHUP here; the new
     image installs its own handler first thing in ``run_daemon_main``.
     """
+    syslog.syslog(syslog.LOG_INFO, "sonic-cli-daemon: re-exec (%s)" % reason)
+    _retire_listener()
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     os.execv(sys.argv[0], sys.argv)
 
@@ -584,14 +624,17 @@ def _reexec_self():
 
 def run_daemon_main():
     """Entry point for the ``sonic-cli-daemon`` console script."""
-    # Install the SIGHUP handler BEFORE the (multi-second on this CPU)
-    # show/config imports. A reload requested while we are still starting up
-    # (e.g. systemctl reload right after a restart, or the bgp.service
-    # reload hook) used to hit the default disposition and kill the daemon
-    # for good (systemd treats death-by-SIGHUP as a clean exit). Instead
-    # remember it and re-exec once startup is complete.
-    reload_pending = []
-    signal.signal(signal.SIGHUP, lambda _s, _f: reload_pending.append(True))
+    global _server
+
+    # Signals only record what was asked (``actions``); the main loop acts on
+    # it at a safe point, never while holding an accepted-but-unserved
+    # connection. The SIGHUP handler is installed BEFORE the (multi-second on
+    # this CPU) show/config imports: a reload requested while we are still
+    # starting up (e.g. `systemctl reload` right after a restart, or the
+    # bgp.service reload hook) used to hit the default disposition and kill
+    # the daemon for good (systemd treats death-by-SIGHUP as a clean exit).
+    actions = []
+    signal.signal(signal.SIGHUP, lambda _s, _f: actions.append("reload"))
 
     for prog, (modname, attr) in PROG_LOADERS.items():
         mod = __import__(modname, fromlist=[attr])
@@ -606,9 +649,17 @@ def run_daemon_main():
     server.bind(SOCKET_PATH)
     _set_socket_permissions(SOCKET_PATH)
     server.listen(64)
+    server.setblocking(False)
+    _server = server
 
     with open(PID_PATH, "w") as pid_file:
         pid_file.write(str(os.getpid()))
+
+    # Wake select() on any signal without polling.
+    wake_r, wake_w = os.pipe()
+    os.set_blocking(wake_r, False)
+    os.set_blocking(wake_w, False)
+    signal.set_wakeup_fd(wake_w)
 
     def _reap_supervisors(_signum, _frame):
         while True:
@@ -619,43 +670,59 @@ def run_daemon_main():
             if pid == 0:
                 break
 
-    def _handle_sighup(_signum, _frame):
-        _reexec_self()
-
-    def _shutdown(_signum, _frame):
-        server.close()
-        if os.path.exists(SOCKET_PATH):
-            os.unlink(SOCKET_PATH)
-        sys.exit(0)
-
     signal.signal(signal.SIGCHLD, _reap_supervisors)
-    signal.signal(signal.SIGHUP, _handle_sighup)
-    signal.signal(signal.SIGTERM, _shutdown)
-    signal.signal(signal.SIGINT, _shutdown)
-
-    if reload_pending:
-        # A reload arrived during startup: honour it now (re-import with
-        # current state) rather than serving the state we just loaded.
-        _reexec_self()
+    signal.signal(signal.SIGTERM, lambda _s, _f: actions.append("shutdown"))
+    signal.signal(signal.SIGINT, lambda _s, _f: actions.append("shutdown"))
 
     while True:
+        if actions:
+            action = actions[0]
+            if action == "shutdown":
+                _retire_listener()
+                sys.exit(0)
+            _reexec_self("SIGHUP")
+
+        try:
+            readable, _, _ = select.select([server, wake_r], [], [])
+        except InterruptedError:
+            continue
+        if wake_r in readable:
+            try:
+                os.read(wake_r, 4096)
+            except OSError:
+                pass
+        if server not in readable:
+            continue
+
         try:
             conn, _addr = server.accept()
-        except InterruptedError:
+        except (BlockingIOError, InterruptedError):
             continue
         except OSError:
             break
+        conn.setblocking(True)
 
         if _watch_mtimes_changed():
-            # Code changed on disk since we loaded it (upgrade). Refuse
-            # this one connection with fallback and restart with fresh
-            # code; the client falls back to its own cold-start path.
+            # Code (or a plugin) changed on disk since we loaded it
+            # (upgrade / extension install). Refuse this one connection with
+            # fallback and restart with fresh code; the client falls back to
+            # its own cold-start path.
             _reply_fallback(conn)
-            _reexec_self()
+            _reexec_self("watched file changed")
             continue  # unreachable after execv
 
         pid = os.fork()
         if pid == 0:
+            # Supervisor: drop the daemon's loop state. Its signal handlers
+            # only append to the daemon's `actions` list and would otherwise
+            # make SIGTERM/SIGHUP no-ops here; the wakeup pipe belongs to
+            # the daemon.
+            signal.set_wakeup_fd(-1)
+            signal.signal(signal.SIGHUP, signal.SIG_DFL)
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            signal.signal(signal.SIGINT, signal.default_int_handler)
+            os.close(wake_r)
+            os.close(wake_w)
             server.close()
             _serve_request(conn)
             os._exit(0)
