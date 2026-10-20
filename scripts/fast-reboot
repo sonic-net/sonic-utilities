@@ -54,6 +54,7 @@ EXIT_NO_MIRROR_SESSION_ACLS=24
 EXIT_PFC_STORM_DETECTED=25
 EXIT_LEFTOVER_CPA_TUNNEL=30
 EXIT_SSD_HEALTH_FAILURE=40
+EXIT_EEPROM_READ_FAILURE=50
 
 [ -f /usr/share/sonic/device/$PLATFORM/asic.conf ] && . /usr/share/sonic/device/$PLATFORM/asic.conf
 NUM_ASIC=${NUM_ASIC:-1}
@@ -376,7 +377,7 @@ function arista_7060_gen_system_prefdl()
         else
             if ! python3 "${READ_ARISTA_7060_EEPROM_SCRIPT}"; then
                 error "EEPROM read failed for HWSKU ${HWSKU}"
-                exit "${EXIT_FAILURE}"
+                exit "${EXIT_EEPROM_READ_FAILURE}"
             fi
             echo "/host/.system-prefdl not found - restored by reading from EEPROM"
         fi
