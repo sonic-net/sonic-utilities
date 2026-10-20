@@ -911,23 +911,24 @@ class TestLaneStatusEepromSnapshot:
     @pytest.mark.parametrize("json_output", [False, True])
     def test_preserves_status_and_reduces_shared_oe_els_reads(self, tmp_path, port, json_output):
         from sonic_platform_base.sonic_xcvr.api.public.cmis import CmisApi
-        from sonic_platform_base.sonic_xcvr.api.broadcom.bailly_elsfp import BaillyElsfpApi
-        from sonic_platform_base.sonic_xcvr.codes.broadcom.bailly import BaillyCodes
-        from sonic_platform_base.sonic_xcvr.mem_maps.broadcom.bailly import BaillyMemMap, BaillyElsfpMemMap
-        from sonic_platform_base.sonic_xcvr.fields.broadcom import bailly
+        from sonic_platform_base.sonic_xcvr.api.public.elsfp import ElsfpApi
+        from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+        from sonic_platform_base.sonic_xcvr.codes.public.elsfp import ElsfpCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisMemMap
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.elsfp import ElsfpMemMap
+        from sonic_platform_base.sonic_xcvr.fields import elsfp_consts
 
         path = tmp_path / "eeprom"
         data = bytearray(1024 * 1024)
-        oe_map = BaillyMemMap(BaillyCodes, bank=0, base_page=0)
-        els_map = BaillyElsfpMemMap(BaillyCodes, base_page=0)
-        count_code = next(code for code, count in BaillyCodes.LASER_COUNT.items() if count == 8)
-        data[els_map.get_field(bailly.LASER_COUNT).get_offset()] = count_code
-        data[els_map.get_field(bailly.MODULE_LOW_POWER_STATE).get_offset()] = 2
-        data[els_map.get_field(bailly.LASER_ACTIVE_STATUS_7_0).get_offset()] = 0x0F
+        oe_map = CmisMemMap(CmisCodes, bank=0)
+        els_map = ElsfpMemMap(ElsfpCodes, bank=0)
+        # CMIS byte 3 bits 3:1 encode ModuleLowPwr as 1.
+        data[els_map.get_field(consts.MODULE_STATE).get_offset()] = 1 << 1
+        data[els_map.get_field(elsfp_consts.LANE_ENABLE_FIELD).get_offset()] = 0x0F
         path.write_bytes(data)
         oe, els = DomOptoeEndpoint(path), DomOptoeEndpoint(path)
         oe.api = CmisApi(cpoutil.XcvrEeprom(oe.read_eeprom, oe.write_eeprom, oe_map))
-        els.api = BaillyElsfpApi(cpoutil.XcvrEeprom(els.read_eeprom, els.write_eeprom, els_map))
+        els.api = ElsfpApi(cpoutil.XcvrEeprom(els.read_eeprom, els.write_eeprom, els_map))
         self.cpo.oe, self.cpo.elsfp = oe, els
         arguments = ["show", "interface", "lane-status"]
         if port is not None:
