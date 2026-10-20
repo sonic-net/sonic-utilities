@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Prune the UEFI Secure Boot "db" down to the certificates that sign an installed SONiC image.
 
 Strategy
@@ -12,8 +11,8 @@ Strategy
      reinstall .auth. Every .auth is first verified against the enrolled KEK, so db is never
      wiped by an update that firmware would refuse to follow up.
 
-The script is a dry run unless --commit or --auto is given. "sonic-installer remove" and
-"cleanup" run it with --auto, which prunes only when the plan is safe and something is stale.
+The standalone command is a dry run unless --commit or --auto is given. "sonic-installer remove"
+and "cleanup" call prune_db_certificates directly in automatic mode.
 
 Exit status: 0 on success (or a clean plan/skip), 2 on any error or refused safety gate.
 """
@@ -34,6 +33,7 @@ PROG = Path(sys.argv[0]).name if sys.argv and sys.argv[0] else "remove_stale_db_
 
 IMAGE_PREFIX = "SONiC-OS-"
 IMAGE_DIR_PREFIX = "image-"
+COMMAND_TIMEOUT_SECS = 600
 
 EFI_GLOBAL_VARIABLE_GUID = uuid.UUID("8be4df61-93ca-11d2-aa0d-00e098032b8c")
 EFI_IMAGE_SECURITY_DATABASE_GUID = uuid.UUID("d719b2cb-3d3a-4596-a3bc-dad00e67656f")
@@ -151,7 +151,7 @@ def warn(message):
 
 
 def run(cmd, **kwargs):
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=COMMAND_TIMEOUT_SECS, **kwargs)
 
 
 def succeeds(cmd):
@@ -290,12 +290,14 @@ def load_db_certs(config, work):
 
 
 def installed_images():
-    """Return the images reported by sonic-installer, the source of truth."""
+    """Return the images reported by sonic-installer for standalone use."""
     try:
-        output = run(["sonic-installer", "list"], stdin=subprocess.DEVNULL).stdout
-    except OSError:
-        raise ScriptError("sonic-installer not found; cannot determine installed images, refusing to prune")
-    images = sorted(set(re.findall(rf"{IMAGE_PREFIX}\S*", output)))
+        result = run(["sonic-installer", "list"], stdin=subprocess.DEVNULL)
+    except OSError as e:
+        raise ScriptError("sonic-installer not found; cannot determine installed images, refusing to prune") from e
+    if result.returncode:
+        raise ScriptError(f"sonic-installer list failed: {result.stderr.strip()}")
+    images = sorted(set(re.findall(rf"{IMAGE_PREFIX}\S*", result.stdout)))
     if not images:
         raise ScriptError("sonic-installer list returned no installed images, refusing to prune")
     return images
@@ -360,9 +362,12 @@ def check_boot_chain(crit_bins, records, reinstall_fps, auth_dir):
     return at_risk
 
 
-def analyze(config, work):
+def analyze(config, work, images=None):
+    """Build a plan for supplied images, querying sonic-installer only for standalone use."""
     db_certs = load_db_certs(config, work)
-    images = installed_images()
+    images = installed_images() if images is None else images
+    if not images:
+        raise ScriptError("sonic-installer returned no installed images, refusing to prune")
     targets, crit_dir = collect_targets(config, images)
 
     binaries = []
@@ -475,32 +480,38 @@ def update_db(config, auth, append):
         succeeds(["chattr", "-i", str(variable)])
     sys.stdout.flush()
     cmd = ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"]
-    return subprocess.run(cmd).returncode == 0
+    return subprocess.run(cmd, timeout=COMMAND_TIMEOUT_SECS).returncode == 0
 
 
-def apply_plan(config, plan, work):
-    print("Deleting all db certificates (applying remove-all .auth) ...")
+def apply_plan(config, plan, work, verbose=True):
+    """Apply the validated updates and verify the resulting boot chain."""
+    if verbose:
+        print("Deleting all db certificates (applying remove-all .auth) ...")
     if not update_db(config, config.remove_all_auth, append=False):
         raise ScriptError(f"failed to apply remove-all .auth ({config.remove_all_auth}); "
                           "db unchanged or partially modified -- verify before rebooting")
-    print("  db emptied.")
+    if verbose:
+        print("  db emptied.")
 
-    print(f"Reinstalling {len(plan.selected_auths)} image-signing certificate(s) ...")
+        print(f"Reinstalling {len(plan.selected_auths)} image-signing certificate(s) ...")
     failed = []
     for auth in plan.selected_auths:
-        print(f"  appending: {auth}")
+        if verbose:
+            print(f"  appending: {auth}")
         if not update_db(config, auth, append=True):
             warn(f"failed to append {auth}")
             failed.append(auth)
 
-    print("\nVerifying db after reinstall ...")
+    if verbose:
+        print("\nVerifying db after reinstall ...")
     new_pems = [c.pem for c in read_efi_certificates(config, work, "db", "new-db")]
-    print(f"  db now holds {len(new_pems)} certificate(s).")
+    if verbose:
+        print(f"  db now holds {len(new_pems)} certificate(s).")
     broken = [b for b in plan.crit_bins if not any(succeeds(["sbverify", "--cert", str(p), str(b)]) for p in new_pems)]
     for binary in plan.crit_bins:
         if binary in broken:
             print(f"  ERR {binary} does NOT verify against the new db", file=sys.stderr)
-        else:
+        elif verbose:
             print(f"  OK  {binary} verifies against the new db")
     if broken:
         raise ScriptError("CRITICAL: a boot-chain binary no longer verifies against db. DO NOT REBOOT with "
@@ -511,9 +522,11 @@ def apply_plan(config, plan, work):
     print(f"\nDone: db reset to {len(new_pems)} image-signing certificate(s); all boot-chain binaries verify.")
 
 
-def prune(args):
-    config = Config.from_env(args.auth_dir, args.remove_all)
-    commit = args.commit or args.auto
+def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, auto=False, verbose=False):
+    """Analyze or prune db; automatic mode modifies only safe plans with stale certificates."""
+    if auto and plan_only:
+        raise ScriptError("--auto cannot be combined with --plan")
+    commit = commit or auto
 
     if os.geteuid() != 0:
         raise ScriptError(f"must be run as root (needs to read/write {config.efivars_dir} and {config.host_path})")
@@ -523,14 +536,15 @@ def prune(args):
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        plan = analyze(config, work)
-        print_plan(config, plan, commit, args.verbose)
+        plan = analyze(config, work, images)
+        if not auto or verbose:
+            print_plan(config, plan, commit, verbose)
 
-        if args.plan:
+        if plan_only:
             print("Plan only - no changes made.")
             return 0
 
-        if args.auto:
+        if auto:
             if not plan.used or plan.missing or plan.crit_fail:
                 warn(f"Secure Boot db prune skipped (unsafe plan: used={len(plan.used)} "
                      f"missing={len(plan.missing)} essential_missing={plan.crit_at_risk})")
@@ -556,7 +570,7 @@ def prune(args):
             raise ScriptError("a boot-chain binary would lose every db signer. "
                               f"Refusing to touch db. Provide the missing .auth in {config.auth_dir}.")
         validate_updates(config, plan, work)
-        apply_plan(config, plan, work)
+        apply_plan(config, plan, work, verbose=not auto or verbose)
     return 0
 
 
@@ -583,10 +597,14 @@ def parse_args(argv):
 
 
 def main(argv=None):
+    """Run the standalone command and report expected failures as exit status 2."""
     args = parse_args(argv)
     try:
-        return prune(args)
-    except ScriptError as e:
+        return prune_db_certificates(
+            Config.from_env(args.auth_dir, args.remove_all),
+            commit=args.commit, plan_only=args.plan, auto=args.auto, verbose=args.verbose,
+        )
+    except (ScriptError, OSError, subprocess.SubprocessError) as e:
         print(f"{PROG}: error: {e}", file=sys.stderr)
         return 2
 

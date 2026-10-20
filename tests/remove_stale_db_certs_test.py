@@ -1,12 +1,11 @@
 import datetime
 import ctypes
-import importlib.util
 import shutil
 import stat
 import sys
 import struct
 import uuid
-from pathlib import Path
+from unittest.mock import Mock, call
 
 import pytest
 from cryptography import x509
@@ -14,10 +13,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "remove_stale_db_certs.py"
-spec = importlib.util.spec_from_file_location("remove_stale_db_certs", SCRIPT)
-prune = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(prune)
+from sonic_installer import secure_boot_db as prune
 
 X509_GUID = prune.EFI_CERT_X509_GUID.bytes_le
 OWNER_GUID = uuid.UUID(int=1).bytes_le
@@ -312,3 +308,108 @@ def test_pkcs7_wrapping_detection():
     assert prune.is_pkcs7_content_info(wrapped)
     assert not prune.is_pkcs7_content_info(prune.der(prune.DER_SEQUENCE, b"\x02\x01\x01"))
     assert prune.der(0x04, b"x" * 300)[:4] == b"\x04\x82\x01\x2c"
+
+
+def test_direct_call_uses_supplied_images_without_spawning_installer(env, monkeypatch):
+    monkeypatch.setattr(prune, "installed_images", Mock(side_effect=AssertionError("unexpected CLI invocation")))
+    assert prune.prune_db_certificates(
+        prune.Config.from_env(), images=["SONiC-OS-test"], plan_only=True,
+    ) == 0
+    assert not env["marker"].exists()
+
+
+def test_direct_call_rejects_empty_image_list(env):
+    with pytest.raises(prune.ScriptError, match="returned no installed images"):
+        prune.prune_db_certificates(prune.Config.from_env(), images=[], auto=True)
+    assert not env["marker"].exists()
+
+
+def test_direct_call_rejects_conflicting_options(env):
+    with pytest.raises(prune.ScriptError, match="--auto cannot be combined with --plan"):
+        prune.prune_db_certificates(prune.Config.from_env(), plan_only=True, auto=True)
+    assert not env["marker"].exists()
+
+
+def test_auto_skips_when_no_certificates_are_stale(env, monkeypatch, capsys):
+    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[])
+    monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+    apply = Mock()
+    monkeypatch.setattr(prune, "apply_plan", apply)
+    assert prune.prune_db_certificates(prune.Config.from_env(), auto=True) == 0
+    assert "No stale db certificates" in capsys.readouterr().out
+    apply.assert_not_called()
+    assert not env["marker"].exists()
+
+
+@pytest.mark.parametrize("verbose", [False, True])
+def test_auto_validates_before_updates_and_keeps_default_output_concise(env, monkeypatch, capsys, verbose):
+    config = prune.Config.from_env()
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    kernel = config.host_path / "image-test" / "boot" / "vmlinuz-test"
+    cert = config.auth_dir / "cert.pem"
+    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[Mock()], selected_auths=[auth], crit_bins=[kernel])
+    monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+    print_plan = Mock()
+    monkeypatch.setattr(prune, "print_plan", print_plan)
+    operations = Mock()
+    operations.update.return_value = True
+    operations.read.return_value = [Mock(pem=cert)]
+    operations.verify.return_value = True
+    monkeypatch.setattr(prune, "validate_updates", operations.validate)
+    monkeypatch.setattr(prune, "update_db", operations.update)
+    monkeypatch.setattr(prune, "read_efi_certificates", operations.read)
+    monkeypatch.setattr(prune, "succeeds", operations.verify)
+    assert prune.prune_db_certificates(config, auto=True, verbose=verbose) == 0
+    assert [item[0] for item in operations.mock_calls] == ["validate", "update", "update", "read", "verify"]
+    assert operations.update.call_args_list == [
+        call(config, config.remove_all_auth, append=False), call(config, auth, append=True),
+    ]
+    out = capsys.readouterr().out
+    assert "Pruning 1 stale" in out and "Done: db reset" in out
+    assert ("verifies against the new db" in out) == verbose
+    assert ("Reinstalling" in out) == verbose
+    assert print_plan.call_count == int(verbose)
+
+
+@pytest.mark.parametrize("error", [
+    FileNotFoundError("sig-list-to-certs"), prune.subprocess.TimeoutExpired("openssl", 600),
+])
+def test_cli_reports_command_failures(env, monkeypatch, capsys, error):
+    monkeypatch.setattr(prune, "analyze", Mock(side_effect=error))
+    code, _, err = _run(capsys, "--plan")
+    assert code == 2
+    assert str(error) in err
+    assert not env["marker"].exists()
+
+
+def test_cli_passes_options_to_importable_api(tmp_path, monkeypatch):
+    api = Mock(return_value=0)
+    monkeypatch.setattr(prune, "prune_db_certificates", api)
+    auth_dir, remove_all = tmp_path / "auth", tmp_path / "remove-all.auth"
+    assert prune.main(["--auth-dir", str(auth_dir), "--remove-all", str(remove_all), "--commit", "-v"]) == 0
+    api.assert_called_once()
+    assert api.call_args.args[0].auth_dir == auth_dir
+    assert api.call_args.args[0].remove_all_auth == remove_all
+    assert api.call_args.kwargs == {"commit": True, "plan_only": False, "auto": False, "verbose": True}
+
+
+def test_installed_images_rejects_failed_query_even_with_image_output(monkeypatch):
+    monkeypatch.setattr(prune, "run", Mock(return_value=prune.subprocess.CompletedProcess(
+        ["sonic-installer", "list"], 1, stdout="SONiC-OS-test", stderr="bootloader failure",
+    )))
+    with pytest.raises(prune.ScriptError, match="sonic-installer list failed: bootloader failure"):
+        prune.installed_images()
+
+
+def test_command_execution_remains_time_bounded(env, monkeypatch):
+    run = Mock(return_value=prune.subprocess.CompletedProcess(["openssl"], 0))
+    monkeypatch.setattr(prune.subprocess, "run", run)
+    prune.run(["openssl"], stdin=prune.subprocess.DEVNULL)
+    run.assert_called_once_with(
+        ["openssl"], capture_output=True, text=True, timeout=prune.COMMAND_TIMEOUT_SECS,
+        stdin=prune.subprocess.DEVNULL,
+    )
+    run.reset_mock()
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    assert prune.update_db(prune.Config.from_env(), auth, append=True)
+    run.assert_called_with(["efi-updatevar", "-a", "-f", str(auth), "db"], timeout=prune.COMMAND_TIMEOUT_SECS)
