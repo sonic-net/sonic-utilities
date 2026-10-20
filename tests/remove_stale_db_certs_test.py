@@ -139,6 +139,22 @@ def _run(capsys, *argv):
     return code, captured.out, captured.err
 
 
+def test_analyzed_plan_exposes_boot_chain_safety(env, tmp_path):
+    config = prune.Config.from_env()
+    plan = prune.analyze(config, tmp_path, images=["SONiC-OS-test"])
+    assert plan.boot_critical_dir == config.sonic_os_dir
+    assert set(plan.boot_critical_binaries) == {
+        config.host_path / "image-test" / "boot" / "vmlinuz-test",
+        config.sonic_os_dir / "shimx64.efi",
+        config.esp_path / "BOOT" / "BOOTX64.EFI",
+    }
+    assert set(plan.records) == set(plan.boot_critical_binaries)
+    assert plan.boot_critical_binaries_at_risk == 2
+    assert plan.boot_chain_at_risk is True
+    plan.boot_critical_binaries_at_risk = 0
+    assert plan.boot_chain_at_risk is False
+
+
 def test_plan_marks_installed_kernel_and_fallback_loader_as_essential(env, capsys):
     code, out, err = _run(capsys, "--plan")
     assert code == 0, err
@@ -331,7 +347,7 @@ def test_direct_call_rejects_conflicting_options(env):
 
 
 def test_auto_skips_when_no_certificates_are_stale(env, monkeypatch, capsys):
-    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[])
+    plan = Mock(used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[])
     monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
     apply = Mock()
     monkeypatch.setattr(prune, "apply_plan", apply)
@@ -347,7 +363,10 @@ def test_auto_validates_before_updates_and_keeps_default_output_concise(env, mon
     auth = env["auth_dir"] / "DB-cert0.auth"
     kernel = config.host_path / "image-test" / "boot" / "vmlinuz-test"
     cert = config.auth_dir / "cert.pem"
-    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[Mock()], selected_auths=[auth], crit_bins=[kernel])
+    plan = Mock(
+        used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[Mock()],
+        selected_auths=[auth], boot_critical_binaries=[kernel],
+    )
     monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
     print_plan = Mock()
     monkeypatch.setattr(prune, "print_plan", print_plan)
