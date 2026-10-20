@@ -519,9 +519,6 @@ def prune(args):
 
     if os.geteuid() != 0:
         raise ScriptError(f"must be run as root (needs to read/write {config.efivars_dir} and {config.host_path})")
-    for tool in ("sbverify", "openssl", "efi-updatevar", "sig-list-to-certs"):
-        if not shutil.which(tool):
-            raise ScriptError(f"required tool not found in PATH: {tool}")
     ensure_efivars(config)
     if not config.auth_dir.is_dir():
         warn(f"auth directory not found: {config.auth_dir} (reinstall will find no .auth files)")
