@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -453,10 +454,14 @@ def validate_updates(config, plan, work):
 def update_db(config, auth, append):
     """Apply an authenticated db update, clearing immutable flags best-effort."""
     for variable in config.efivars_dir.glob("db-*"):
-        succeeds(["chattr", "-i", str(variable)])
+        try:
+            succeeds(["chattr", "-i", str(variable)])
+        except subprocess.SubprocessError as e:
+            warn(f"could not clear immutable flag on {variable}: {e}; attempting the firmware update")
     sys.stdout.flush()
     cmd = ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"]
-    return subprocess.run(cmd, timeout=COMMAND_TIMEOUT_SECS).returncode == 0
+    # A deadline must not kill a firmware write after db has been emptied.
+    return subprocess.run(cmd).returncode == 0
 
 
 def apply_plan(config, plan, work, verbose=True):
@@ -474,9 +479,14 @@ def apply_plan(config, plan, work, verbose=True):
     for auth in plan.selected_auths:
         if verbose:
             print(f"  appending: {auth}")
-        if not update_db(config, auth, append=True):
-            warn(f"failed to append {auth}")
-            failed.append(auth)
+        failure = f"failed to append {auth}"
+        try:
+            if update_db(config, auth, append=True):
+                continue
+        except (OSError, subprocess.SubprocessError) as e:
+            failure += f": {e}"
+        warn(failure)
+        failed.append(auth)
 
     if verbose:
         print("\nVerifying db after reinstall ...")
@@ -543,7 +553,22 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
             raise ScriptError("a boot-chain binary would lose every db signer. "
                               f"Refusing to touch db. Provide the missing .auth in {config.auth_dir}.")
         validate_updates(config, plan, work)
-        apply_plan(config, plan, work, verbose=not auto or verbose)
+        completed = False
+        handle_sigterm = (threading.current_thread() is threading.main_thread()
+                          and signal.getsignal(signal.SIGTERM) == signal.SIG_DFL)
+        try:
+            if handle_sigterm:
+                signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
+            apply_plan(config, plan, work, verbose=not auto or verbose)
+            completed = True
+        finally:
+            try:
+                if not completed:
+                    warn("Secure Boot db update did not complete. DO NOT REBOOT until db has been "
+                         "verified and any missing image-signing certificates have been restored.")
+            finally:
+                if handle_sigterm:
+                    signal.signal(signal.SIGTERM, signal.SIG_DFL)
     return 0
 
 

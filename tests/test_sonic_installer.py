@@ -105,9 +105,10 @@ def test_run_command():
 
 
 @pytest.mark.parametrize("enrolled", [False, True])
+@patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
 @patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=False)
 @patch("sonic_installer.main.get_bootloader")
-def test_install_verifies_signature_after_enrollment(get_bootloader, pk_enrolled, enrolled):
+def test_install_verifies_signature_after_enrollment(get_bootloader, pk_enrolled, free_space, enrolled):
     bootloader = get_bootloader.return_value
     bootloader.get_binary_image_version.return_value = "new-image"
     bootloader.get_installed_images.return_value = ["current-image"]
@@ -125,6 +126,29 @@ def test_install_verifies_signature_after_enrollment(get_bootloader, pk_enrolled
     assert bootloader.method_calls.index(call.enroll_image_secure_boot_keys("./sonic.bin")) < \
         bootloader.method_calls.index(call.verify_image_sign("./sonic.bin"))
     bootloader.install_image.assert_not_called()
+
+
+@pytest.mark.parametrize("force", [False, True])
+@patch("sonic_installer.main.run_command")
+@patch("sonic_installer.main.SWAPAllocator")
+@patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=False)
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.check_image_install_free_disk_space", return_value=False)
+def test_install_refuses_insufficient_space_before_modifying_state(
+        free_space, get_bootloader, pk_enrolled, swap, run_command, force):
+    bootloader = get_bootloader.return_value
+    bootloader.get_binary_image_version.return_value = "new-image"
+    bootloader.get_installed_images.return_value = ["current-image"]
+    options = ["sonic.bin", "-y"] + (["-f"] if force else [])
+    result = CliRunner().invoke(sonic_installer.commands["install"], options)
+    assert result.exit_code != 0
+    assert "Insufficient free disk space" in result.output
+    free_space.assert_called_once_with()
+    bootloader.enroll_image_secure_boot_keys.assert_not_called()
+    bootloader.install_image.assert_not_called()
+    bootloader.set_default_image.assert_not_called()
+    swap.assert_not_called()
+    run_command.assert_not_called()
 
 
 @patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
@@ -357,8 +381,9 @@ def test_install_rejects_image_without_db_auth_when_pk_enrolled(pk_enrolled, get
 @patch("sonic_installer.main.run_command")
 @patch("sonic_installer.main.get_bootloader")
 @patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=True)
+@patch("sonic_installer.main.check_image_install_free_disk_space", return_value=False)
 def test_install_accepts_image_with_db_auth_when_pk_enrolled(
-        pk_enrolled, get_bootloader, run_command, fs):
+        free_space, pk_enrolled, get_bootloader, run_command, fs):
     sonic_image_filename = "sonic.bin"
     image_version = "image_1"
     fs.create_file(sonic_image_filename)
@@ -378,6 +403,7 @@ def test_install_accepts_image_with_db_auth_when_pk_enrolled(
 
     assert result.exit_code == 0
     mock_bootloader.set_default_image.assert_called_once_with(image_version)
+    free_space.assert_not_called()
 
 
 @patch("sonic_installer.main.get_bootloader")
