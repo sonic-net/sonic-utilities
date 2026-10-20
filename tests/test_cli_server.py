@@ -939,3 +939,56 @@ def test_pty_mode_forwards_keyboard_input_to_the_command():
         cli_server._clis.pop("show", None)
         os.close(user_master)
         os.close(user_tty)
+
+
+def test_supervisor_survives_a_stop_of_its_child_and_relays_sigcont():
+    # Ctrl-Z stops the command child; SIGCHLD fires for the stop too. The supervisor must keep
+    # relaying (SIGCONT) instead of blocking in waitpid() until the child exits.
+    import threading
+    import time
+
+    def action(_args, _prog):
+        time.sleep(0.5)
+        sys.stdout.write("RESUMED-AND-DONE\n")
+
+    r, w = os.pipe()
+    sock_path_dir = __import__("tempfile").mkdtemp()
+    sock_path = os.path.join(sock_path_dir, "cli.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+    cli_server._clis["show"] = _FakeCli(action)
+    sup = os.fork()
+    if sup == 0:
+        try:
+            conn, _ = server.accept()
+            cli_server._serve_request(conn)
+        finally:
+            os._exit(0)
+    server.close()
+    try:
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(sock_path)
+        req = json.dumps({"prog": "show", "argv": [], "env": dict(os.environ), "cwd": os.getcwd()}).encode()
+        client.sendmsg([struct.pack("!I", len(req)) + req],
+                       [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [r, w, w]))])
+        time.sleep(0.2)
+        client.sendall(json.dumps({"signal": int(signal.SIGSTOP)}).encode() + b"\n")
+        time.sleep(1.0)  # the command would have finished by now had it not been stopped
+        client.settimeout(0.3)
+        with pytest.raises(socket.timeout):
+            client.recv(4096)  # no result yet: the supervisor is still waiting for the stopped child
+        client.settimeout(10)
+        client.sendall(json.dumps({"signal": int(signal.SIGCONT)}).encode() + b"\n")
+        resp = json.loads(client.recv(4096).decode().strip())
+        os.close(w)
+        out = os.read(r, 4096).decode()
+        assert resp == {"exit_code": 0}
+        assert "RESUMED-AND-DONE" in out
+        os.waitpid(sup, 0)
+    finally:
+        cli_server._clis.pop("show", None)
+        try:
+            os.close(r)
+        except OSError:
+            pass

@@ -286,6 +286,34 @@ def _client_pty_session(sock, spec, fds):
         except OSError:
             pass
 
+    susp = None
+    if saved is not None and saved[3] & termios.ISIG:
+        c = saved[6][termios.VSUSP]
+        c = c if isinstance(c, int) else c[0]
+        susp = bytes([c]) if c else None
+
+    def _suspend():
+        """Ctrl-Z: the command's process group is orphaned (its own session), so the pty
+        would ignore SIGTSTP; stop it explicitly, hand the terminal back and stop like any
+        job so the shell reports ``Stopped`` and ``fg``/``bg`` work as on the cold path."""
+        _send_signal(sock, signal.SIGSTOP)
+        try:
+            termios.tcsetattr(raw_fd, termios.TCSADRAIN, saved)
+        except (termios.error, OSError):
+            pass
+        previous = signal.signal(signal.SIGTSTP, signal.SIG_DFL)
+        os.kill(os.getpid(), signal.SIGTSTP)  # returns after SIGCONT (fg/bg)
+        signal.signal(signal.SIGTSTP, previous)
+        try:
+            foreground = os.tcgetpgrp(raw_fd) == os.getpgrp()
+        except OSError:
+            foreground = False
+        if foreground:
+            tty.setraw(raw_fd)
+        _winch(None, None)
+        _send_signal(sock, signal.SIGCONT)
+        return foreground
+
     prev_winch = signal.signal(signal.SIGWINCH, _winch)
     result = bytearray(rest)
     master_open = True
@@ -309,13 +337,16 @@ def _client_pty_session(sock, spec, fds):
                     data = os.read(in_fd, 4096)
                 except OSError:
                     data = b""
-                if data:
-                    try:
-                        os.write(master, data)
-                    except OSError:
-                        pass
+                if not data:
+                    in_fd = None  # EOF on the caller's input
                 else:
-                    in_fd = None
+                    if susp is not None and susp in data:
+                        head, _, data = data.partition(susp)
+                        _write_all(master, head)
+                        if not _suspend():
+                            in_fd = None  # resumed with `bg`: stay off the shell's keyboard
+                    if data:
+                        _write_all(master, data)
             if master in readable:
                 try:
                     data = os.read(master, 65536)
@@ -362,6 +393,13 @@ def _client_pty_session(sock, spec, fds):
         for fd in close_extra:
             _safe_close(fd)
     return bytes(result)
+
+
+def _send_signal(sock, signum):
+    try:
+        sock.sendall(json.dumps({"signal": int(signum)}).encode("utf-8") + b"\n")
+    except OSError:
+        pass
 
 
 def _write_all(fd, data):
@@ -713,7 +751,16 @@ def _serve_request(conn):
             watch_fds = [pipe_r] + ([conn] if watch_conn else [])
             readable, _, _ = select.select(watch_fds, [], [])
             if pipe_r in readable:
-                _pid, status = os.waitpid(child, 0)
+                # SIGCHLD also fires when the child is merely stopped/continued (Ctrl-Z, fg);
+                # only a real exit ends the command, so poll instead of blocking in waitpid()
+                # and keep relaying the client's signals (SIGCONT) meanwhile.
+                try:
+                    os.read(pipe_r, 4096)
+                except OSError:
+                    pass
+                _pid, status = os.waitpid(child, os.WNOHANG)
+                if _pid == 0:
+                    continue
                 exit_code = _exit_code_from_wait_status(status)
                 break
             if conn in readable:
