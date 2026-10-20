@@ -8,7 +8,6 @@ changed. Automatic pruning skips unsafe plans instead of modifying firmware.
 import argparse
 import ctypes
 import os
-import re
 import signal
 import subprocess
 import sys
@@ -274,16 +273,15 @@ def load_db_certs(config, work):
 
 
 def installed_images():
-    """Return the images reported by sonic-installer for standalone use."""
+    """Discover installed images through the bootloader API for standalone use."""
+    from .bootloader import get_bootloader
+
     try:
-        result = run(["sonic-installer", "list"], stdin=subprocess.DEVNULL)
-    except OSError as e:
-        raise ScriptError("sonic-installer not found; cannot determine installed images, refusing to prune") from e
-    if result.returncode:
-        raise ScriptError(f"sonic-installer list failed: {result.stderr.strip()}")
-    images = sorted(set(re.findall(rf"{IMAGE_PREFIX}\S*", result.stdout)))
+        images = get_bootloader().get_installed_images()
+    except (OSError, RuntimeError) as e:
+        raise ScriptError(f"failed to query installed images from bootloader: {e}; refusing to prune") from e
     if not images:
-        raise ScriptError("sonic-installer list returned no installed images, refusing to prune")
+        raise ScriptError("bootloader returned no installed images, refusing to prune")
     return images
 
 

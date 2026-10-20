@@ -5,6 +5,7 @@ import stat
 import sys
 import struct
 import uuid
+from types import ModuleType
 from unittest.mock import Mock, call
 
 import pytest
@@ -77,7 +78,16 @@ def _write_var(efivars, name, data):
 
 
 @pytest.fixture
-def env(tmp_path, monkeypatch, certs):
+def bootloader(monkeypatch):
+    module = ModuleType("sonic_installer.bootloader")
+    module.get_bootloader = Mock()
+    module.get_bootloader.return_value.get_installed_images.return_value = ["SONiC-OS-test"]
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    return module.get_bootloader
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch, certs, bootloader):
     """Only cert0 has a reinstall update; cert1 signs the kernel and fallback loader."""
     cert0, cert1 = certs
     host, esp = tmp_path / "host", tmp_path / "esp" / "EFI"
@@ -100,8 +110,6 @@ def env(tmp_path, monkeypatch, certs):
     (auth_dir / "remove-all-db.auth").write_bytes(_auth())
 
     marker = tmp_path / "efi-updatevar-called"
-    _write_executable(fake_bin / "sonic-installer", "#!/bin/sh\nprintf 'Current: SONiC-OS-test\\n"
-                      "Next: SONiC-OS-test\\nAvailable:\\nSONiC-OS-test\\n'\n")
     _write_executable(fake_bin / "sbverify", f"""#!/bin/sh
 if [ "$1" = "--list" ]; then
     [ "$(basename "$2")" != "$UNINSPECTABLE_BINARY" ]
@@ -303,14 +311,6 @@ def test_uninspectable_kernel_is_reported_distinctly_and_blocks_commit(env, caps
     assert not env["marker"].exists()
 
 
-def test_plan_fails_closed_when_sonic_installer_lists_no_images(env, capsys):
-    _write_executable(env["fake_bin"] / "sonic-installer", "#!/bin/sh\nexit 0\n")
-    code, _, err = _run(capsys, "--plan")
-    assert code != 0
-    assert "returned no installed images" in err
-    assert not env["marker"].exists()
-
-
 def test_auto_skips_unsafe_plan_without_touching_db(env, capsys):
     code, _, err = _run(capsys, "--auto")
     assert code == 0, err
@@ -373,12 +373,13 @@ def test_pkcs7_wrapping_detection():
     assert prune.der(0x04, b"x" * 300)[:4] == b"\x04\x82\x01\x2c"
 
 
-def test_direct_call_uses_supplied_images_without_spawning_sonic_installer(env, monkeypatch):
-    monkeypatch.setattr(prune, "installed_images", Mock(side_effect=AssertionError("unexpected CLI invocation")))
+def test_direct_call_uses_supplied_images_without_querying_bootloader(env, monkeypatch, bootloader):
+    monkeypatch.setattr(prune, "installed_images", Mock(side_effect=AssertionError("unexpected image discovery")))
     assert prune.prune_db_certificates(
         prune.Config.from_env(), images=["SONiC-OS-test"], plan_only=True,
     ) == 0
     assert not env["marker"].exists()
+    bootloader.assert_not_called()
 
 
 def test_direct_call_rejects_empty_image_list(env):
@@ -435,12 +436,32 @@ def test_trust_store_uses_enrolled_kek_only(env, tmp_path, monkeypatch):
     read.assert_called_once_with(config, tmp_path, "KEK")
 
 
-def test_installed_images_rejects_failed_query_even_with_image_output(monkeypatch):
-    monkeypatch.setattr(prune, "run", Mock(return_value=prune.subprocess.CompletedProcess(
-        ["sonic-installer", "list"], 1, stdout="SONiC-OS-test", stderr="bootloader failure",
-    )))
-    with pytest.raises(prune.ScriptError, match="sonic-installer list failed: bootloader failure"):
-        prune.installed_images()
+def test_installed_images_uses_bootloader_without_subprocesses(bootloader, monkeypatch):
+    images = ["SONiC-OS-z", "SONiC-OS-a"]
+    bootloader.return_value.get_installed_images.return_value = images
+    monkeypatch.setattr(prune, "run", Mock(side_effect=AssertionError("unexpected subprocess")))
+    assert prune.installed_images() is images
+    bootloader.assert_called_once_with()
+    bootloader.return_value.get_installed_images.assert_called_once_with()
+
+
+@pytest.mark.parametrize("mode", ["--plan", "--commit", "--auto"])
+@pytest.mark.parametrize("failure", ["detect", "query", "empty"])
+def test_cli_refuses_pruning_when_bootloader_image_discovery_fails(env, bootloader, capsys, mode, failure):
+    if failure == "detect":
+        bootloader.side_effect = RuntimeError("Bootloader could not be detected")
+        message = "Bootloader could not be detected"
+    elif failure == "query":
+        bootloader.return_value.get_installed_images.side_effect = OSError("unreadable boot config")
+        message = "unreadable boot config"
+    else:
+        bootloader.return_value.get_installed_images.return_value = []
+        message = "bootloader returned no installed images"
+    code, _, err = _run(capsys, mode)
+    assert code == 2
+    assert message in err
+    assert "refusing to prune" in err
+    assert not env["marker"].exists()
 
 
 @pytest.mark.parametrize("verifies", [False, True])
