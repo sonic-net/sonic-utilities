@@ -28,6 +28,7 @@ from .common import (
     DOCKERDIR_NAME,
 )
 from .exception import SonicRuntimeException
+from . import secure_boot_db
 
 SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
@@ -770,9 +771,6 @@ def get_fips(image):
     else:
        click.echo("FIPS is disabled")
 
-PRUNE_DB_CERTS_SCRIPT = os.path.join('/usr', 'local', 'bin', 'remove_stale_db_certs.py')
-PRUNE_DB_CERTS_TIMEOUT_SECS = 600
-
 
 def prune_stale_db_certs(bootloader):
     """ Trim the UEFI db to certificates that still sign an installed image.
@@ -783,24 +781,14 @@ def prune_stale_db_certs(bootloader):
     try:
         if not bootloader.is_secure_upgrade_image_verification_supported():
             return
-        if not os.path.exists(PRUNE_DB_CERTS_SCRIPT):
-            echo_and_log("Warning: {} not found; skipping Secure Boot db prune".format(PRUNE_DB_CERTS_SCRIPT),
-                         LOG_WARN, fg="yellow")
-            return
-
-        result = subprocess.run([PRUNE_DB_CERTS_SCRIPT, '--auto'], capture_output=True, text=True,
-                                stdin=subprocess.DEVNULL, timeout=PRUNE_DB_CERTS_TIMEOUT_SECS)
-        # The script prints a long plan; show it in full only on failure.
-        for line in result.stdout.splitlines():
-            if result.returncode != 0 or line.startswith(('Pruning ', 'Done:', 'No stale ')):
-                click.echo(line)
-        if result.stderr:
-            click.echo(result.stderr, err=True)
-        if result.returncode != 0:
-            echo_and_log("Warning: Secure Boot db prune failed; verify db before rebooting",
-                         LOG_WARN, fg="yellow")
-    except (OSError, subprocess.SubprocessError) as e:
-        echo_and_log("Warning: Secure Boot db prune skipped: {}".format(e), LOG_WARN, fg="yellow")
+        secure_boot_db.prune_db_certificates(
+            secure_boot_db.Config.from_env(),
+            images=bootloader.get_installed_images(),
+            auto=True,
+        )
+    except (secure_boot_db.ScriptError, OSError, subprocess.SubprocessError) as e:
+        echo_and_log("Warning: Secure Boot db prune failed: {}. Verify db before rebooting".format(e),
+                     LOG_WARN, fg="yellow")
 
 
 # Uninstall image
