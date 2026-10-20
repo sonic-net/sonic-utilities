@@ -347,6 +347,49 @@ class TestValidateFieldOperation:
                    return_value=True):
             assert fov.buffer_profile_config_update_validator("localhost", patch_element) is True
 
+    @pytest.mark.parametrize(
+        "path,op,expected", [
+            ("/BUFFER_POOL", "add", True),
+            ("/BUFFER_POOL/ingress_lossless_pool", "remove", True),
+            ("/BUFFER_POOL/ingress_lossless_pool", "move", False),
+        ]
+    )
+    def test_buffer_pool_config_update_validator_table_and_object_operations(
+            self, path, op, expected):
+        patch_element = {"path": path, "op": op}
+
+        assert fov.buffer_pool_config_update_validator("localhost", patch_element) is expected
+
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="unknown"))
+    def test_buffer_pool_config_update_validator_field_unknown_asic(self):
+        patch_element = {
+            "path": "/BUFFER_POOL/ingress_lossless_pool/size",
+            "op": "replace",
+            "value": "1024",
+        }
+
+        assert fov.buffer_pool_config_update_validator("localhost", patch_element) is True
+
+    def test_buffer_pool_config_update_validator_field_known_asic(self):
+        patch_element = {
+            "path": "/BUFFER_POOL/ingress_lossless_pool/size",
+            "op": "replace",
+            "value": "1024",
+        }
+
+        with (
+            patch("generic_config_updater.field_operation_validators.get_asic_name",
+                  return_value="spc1"),
+            patch("generic_config_updater.field_operation_validators.rdma_config_update_validator_common",
+                  return_value=False) as validator,
+        ):
+            assert fov.buffer_pool_config_update_validator("localhost", patch_element) is False
+
+        validator.assert_called_once_with(
+            "localhost", patch_element, exact_field_match=False, remove_port=True
+        )
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
