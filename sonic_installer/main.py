@@ -21,6 +21,7 @@ from .common import (
     DOCKERDIR_NAME,
 )
 from .exception import SonicRuntimeException
+from . import secure_boot_db
 
 SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
@@ -783,6 +784,22 @@ def get_fips(image):
     else:
        click.echo("FIPS is disabled")
 
+
+def prune_stale_db_certs(bootloader):
+    """Prune unused db signers after removal without failing the completed image operation."""
+    try:
+        if not bootloader.is_secure_upgrade_image_verification_supported():
+            return
+        secure_boot_db.prune_db_certificates(
+            secure_boot_db.Config.from_env(),
+            images=bootloader.get_installed_images(),
+            auto=True,
+        )
+    except (secure_boot_db.ScriptError, OSError, subprocess.SubprocessError) as e:
+        echo_and_log("Warning: Secure Boot db prune failed: {}. Verify db before rebooting".format(e),
+                     LOG_WARN, fg="yellow")
+
+
 # Uninstall image
 @sonic_installer.command('remove')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
@@ -801,6 +818,7 @@ def remove(image):
         sys.exit(1)
     # TODO: check if image is next boot or default boot and fix these
     bootloader.remove_image(image)
+    prune_stale_db_certs(bootloader)
 
 
 # Retrieve version from binary image file and print to screen
@@ -840,6 +858,8 @@ def cleanup():
 
     if image_removed == 0:
         echo_and_log("No image(s) to remove")
+    else:
+        prune_stale_db_certs(bootloader)
 
 
 DOCKER_CONTAINER_LIST = [

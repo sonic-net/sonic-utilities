@@ -201,7 +201,6 @@ setup(
         'scripts/verify_image_sign_common.sh',
         'scripts/secure_boot_enroll_db.sh',
         'scripts/secure_boot_enroll_key.sh',
-        'scripts/remove_stale_db_certs.sh',
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
         'scripts/wredstat',
@@ -236,6 +235,8 @@ setup(
             'show = show.main:cli',
             'sonic-clear = clear.main:cli',
             'sonic-installer = sonic_installer.main:sonic_installer',
+            'remove_stale_db_certs.py = sonic_installer.secure_boot_db:main',
+            'remove_stale_db_certs.sh = sonic_installer.secure_boot_db:main',  # Legacy installer command
             'sonic_installer = sonic_installer.main:sonic_installer',  # Deprecated
             'sonic-package-manager = sonic_package_manager.main:cli',
             'spm = sonic_package_manager.main:cli',

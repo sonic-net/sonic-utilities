@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 import pytest
 from contextlib import contextmanager
@@ -6,6 +7,95 @@ from sonic_installer.main import SECURE_BOOT_KEY_UPDATE_SCRIPT, sonic_installer
 from click.testing import CliRunner
 from unittest.mock import patch, Mock, call
 import sonic_installer.common as sonic_installer_common
+from sonic_installer import secure_boot_db
+
+
+@pytest.mark.parametrize("supported", [False, True])
+@patch("sonic_installer.main.os.geteuid", return_value=0)
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.secure_boot_db.prune_db_certificates")
+def test_remove_calls_python_pruning_directly(prune, get_bootloader, geteuid, supported):
+    bootloader = get_bootloader.return_value
+    bootloader.get_installed_images.side_effect = [
+        ["SONiC-OS-cur", "SONiC-OS-old"], ["SONiC-OS-cur"],
+    ]
+    bootloader.get_current_image.return_value = "SONiC-OS-cur"
+    bootloader.is_secure_upgrade_image_verification_supported.return_value = supported
+
+    def after_removal(*args, **kwargs):
+        bootloader.remove_image.assert_called_once_with("SONiC-OS-old")
+
+    prune.side_effect = after_removal
+    result = CliRunner().invoke(sonic_installer, ["remove", "-y", "SONiC-OS-old"])
+    assert result.exit_code == 0, (result.output, result.exception)
+    if supported:
+        prune.assert_called_once()
+        assert isinstance(prune.call_args.args[0], secure_boot_db.Config)
+        assert prune.call_args.kwargs == {"images": ["SONiC-OS-cur"], "auto": True}
+    else:
+        prune.assert_not_called()
+
+
+@pytest.mark.parametrize("error", [
+    secure_boot_db.ScriptError("invalid authenticated update"),
+    OSError("missing utility"),
+    subprocess.TimeoutExpired("openssl", 10),
+])
+@patch("sonic_installer.main.os.geteuid", return_value=0)
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.secure_boot_db.prune_db_certificates")
+def test_remove_reports_pruning_errors_without_failing_removal(prune, get_bootloader, geteuid, error):
+    bootloader = get_bootloader.return_value
+    bootloader.get_installed_images.side_effect = [
+        ["SONiC-OS-cur", "SONiC-OS-old"], ["SONiC-OS-cur"],
+    ]
+    bootloader.get_current_image.return_value = "SONiC-OS-cur"
+    bootloader.is_secure_upgrade_image_verification_supported.return_value = True
+    prune.side_effect = error
+    result = CliRunner().invoke(sonic_installer, ["remove", "-y", "SONiC-OS-old"])
+    assert result.exit_code == 0, (result.output, result.exception)
+    bootloader.remove_image.assert_called_once_with("SONiC-OS-old")
+    assert "Secure Boot db prune failed" in result.output
+    assert "Verify db before rebooting" in result.output
+
+
+@pytest.mark.parametrize("old_images", [[], ["SONiC-OS-old1", "SONiC-OS-old2"]])
+@patch("sonic_installer.main.os.geteuid", return_value=0)
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.secure_boot_db.prune_db_certificates")
+def test_cleanup_prunes_once_after_removing_old_images(prune, get_bootloader, geteuid, old_images):
+    bootloader = get_bootloader.return_value
+    remaining = ["SONiC-OS-cur", "SONiC-OS-next"]
+    bootloader.get_installed_images.side_effect = [remaining + old_images, remaining]
+    bootloader.get_current_image.return_value = remaining[0]
+    bootloader.get_next_image.return_value = remaining[1]
+    bootloader.is_secure_upgrade_image_verification_supported.return_value = True
+    operations = []
+    bootloader.remove_image.side_effect = operations.append
+    prune.side_effect = lambda *args, **kwargs: operations.append("prune")
+    result = CliRunner().invoke(sonic_installer, ["cleanup", "-y"])
+    assert result.exit_code == 0, (result.output, result.exception)
+    if old_images:
+        assert operations == old_images + ["prune"]
+        prune.assert_called_once()
+        assert prune.call_args.kwargs == {"images": remaining, "auto": True}
+    else:
+        assert operations == []
+        prune.assert_not_called()
+
+
+@pytest.mark.parametrize("image", ["SONiC-OS-cur", "SONiC-OS-missing"])
+@patch("sonic_installer.main.os.geteuid", return_value=0)
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.secure_boot_db.prune_db_certificates")
+def test_rejected_removal_does_not_prune(prune, get_bootloader, geteuid, image):
+    bootloader = get_bootloader.return_value
+    bootloader.get_installed_images.return_value = ["SONiC-OS-cur", "SONiC-OS-old"]
+    bootloader.get_current_image.return_value = "SONiC-OS-cur"
+    result = CliRunner().invoke(sonic_installer, ["remove", "-y", image])
+    assert result.exit_code != 0
+    bootloader.remove_image.assert_not_called()
+    prune.assert_not_called()
 
 
 def test_run_command():

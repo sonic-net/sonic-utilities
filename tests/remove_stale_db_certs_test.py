@@ -1,11 +1,70 @@
-import os
+import ctypes
+import datetime
+import shutil
 import stat
+import sys
 import struct
-import subprocess
-from pathlib import Path
+import uuid
+from unittest.mock import Mock, call
+
+import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
+
+from sonic_installer import secure_boot_db as prune
+
+X509_GUID = prune.EFI_CERT_X509_GUID.bytes_le
+OWNER_GUID = uuid.UUID(int=1).bytes_le
+ESL_HEADER_SIZE = 28
+REAL_OPENSSL = shutil.which("openssl")
+
+FAKE_SIG_LIST_TO_CERTS = """#!%s
+import struct, sys
+data, prefix, count, pos = open(sys.argv[1], "rb").read(), sys.argv[2], 0, 0
+while pos < len(data):
+    list_size, header_size, sig_size = struct.unpack_from("<III", data, pos + 16)
+    for entry in range(pos + 28 + header_size, pos + list_size, sig_size):
+        open("%%s-%%d.der" %% (prefix, count), "wb").write(data[entry + 16:entry + sig_size])
+        count += 1
+    pos += list_size
+"""
 
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "remove_stale_db_certs.sh"
+def _make_cert(common_name):
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    return (
+        x509.CertificateBuilder()
+        .subject_name(name).issuer_name(name).public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime(2024, 1, 1)).not_valid_after(datetime.datetime(2099, 1, 1))
+        .sign(key, hashes.SHA256())
+    )
+
+
+@pytest.fixture(scope="module")
+def certs():
+    return _make_cert("CERT0"), _make_cert("CERT1")
+
+
+def _der(cert):
+    return cert.public_bytes(serialization.Encoding.DER)
+
+
+def _esl(*certs):
+    out = b""
+    for cert in certs:
+        entry = OWNER_GUID + _der(cert)
+        out += X509_GUID + struct.pack("<III", ESL_HEADER_SIZE + len(entry), 0, len(entry)) + entry
+    return out
+
+
+def _auth(payload=b"", signed=b"CMS!"):
+    header = prune.EfiAuthVariable2()
+    header.auth_info.length = ctypes.sizeof(prune.WinCertificateUefiGuid) + len(signed)
+    return bytes(header) + signed + payload
 
 
 def _write_executable(path, contents):
@@ -13,391 +72,325 @@ def _write_executable(path, contents):
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
-def test_plan_marks_installed_kernel_and_fallback_loader_as_essential(tmp_path):
-    fake_bin = tmp_path / "bin"
-    host = tmp_path / "host"
-    esp = tmp_path / "esp" / "EFI"
-    efivars = tmp_path / "efivars"
-    auth_dir = tmp_path / "db-auth"
-    update_marker = tmp_path / "efi-updatevar-called"
+def _write_var(efivars, name, data):
+    (efivars / f"{name}-{prune.VARIABLE_GUIDS[name]}").write_bytes(b"\0" * prune.EFIVAR_ATTR_SIZE + data)
 
-    for directory in (
-        fake_bin,
-        host / "image-test" / "boot",
-        esp / "SONiC-OS",
-        esp / "BOOT",
-        efivars,
-        auth_dir,
-    ):
-        directory.mkdir(parents=True, exist_ok=True)
 
-    (host / "image-test" / "boot" / "vmlinuz-test").write_text("kernel")
-    (esp / "SONiC-OS" / "shimx64.efi").write_text("shim")
-    (esp / "BOOT" / "BOOTX64.EFI").write_text("fallback")
-    (efivars / "db-test").write_text("db")
+@pytest.fixture
+def env(tmp_path, monkeypatch, certs):
+    """Only cert0 has a reinstall update; cert1 signs the kernel and fallback loader."""
+    cert0, cert1 = certs
+    host, esp = tmp_path / "host", tmp_path / "esp" / "EFI"
+    efivars, auth_dir = tmp_path / "efivars", tmp_path / "db-auth"
+    fake_bin, signers = tmp_path / "bin", tmp_path / "signers"
+    for d in (host / "image-test" / "boot", esp / "SONiC-OS", esp / "BOOT", efivars, auth_dir, fake_bin, signers):
+        d.mkdir(parents=True)
 
-    # A minimally shaped authenticated update carrying CERT0. CERT1 deliberately
-    # has no matching .auth, so both the kernel and fallback loader are at risk.
-    (auth_dir / "DB-cert0.auth").write_bytes(
-        b"\0" * 16 + struct.pack("<I", 24) + b"\0" * 20 + b"ESL"
-    )
+    kernel = host / "image-test" / "boot" / "vmlinuz-test"
+    shim = esp / "SONiC-OS" / "shimx64.efi"
+    fallback = esp / "BOOT" / "BOOTX64.EFI"
+    for binary in (kernel, shim, fallback):
+        binary.write_text("binary")
+    for binary, cert in ((shim, cert0), (kernel, cert1), (fallback, cert1)):
+        (signers / binary.name).write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 
-    _write_executable(
-        fake_bin / "id",
-        """#!/bin/sh
-if [ "$1" = "-u" ]; then echo 0; else /usr/bin/id "$@"; fi
-""",
-    )
-    _write_executable(
-        fake_bin / "sonic-installer",
-        """#!/bin/sh
-cat <<EOF
-Current: SONiC-OS-test
-Next: SONiC-OS-test
-Available:
-SONiC-OS-test
-EOF
-""",
-    )
-    _write_executable(
-        fake_bin / "efi-readvar",
-        """#!/bin/sh
-while [ "$#" -gt 0 ]; do
-    if [ "$1" = "-o" ]; then shift; printf db > "$1"; exit 0; fi
-    shift
-done
-exit 1
-""",
-    )
-    _write_executable(
-        fake_bin / "sig-list-to-certs",
-        """#!/bin/sh
-case "$2" in
-    */db)
-        printf CERT0 > "$2-0.der"
-        printf CERT1 > "$2-1.der"
-        ;;
-    */am_cert)
-        printf CERT0 > "$2-0.der"
-        ;;
-esac
-""",
-    )
-    _write_executable(
-        fake_bin / "openssl",
-        """#!/bin/sh
-input=""
-output=""
-previous=""
-for argument in "$@"; do
-    [ "$previous" = "-in" ] && input="$argument"
-    [ "$previous" = "-out" ] && output="$argument"
-    previous="$argument"
-done
-if [ -n "$output" ]; then
-    cp "$input" "$output"
-    exit 0
+    _write_var(efivars, "db", _esl(cert0, cert1))
+    _write_var(efivars, "KEK", _esl(cert0))
+    (auth_dir / "DB-cert0.auth").write_bytes(_auth(_esl(cert0)))
+    (auth_dir / "remove-all-db.auth").write_bytes(_auth())
+
+    marker = tmp_path / "efi-updatevar-called"
+    _write_executable(fake_bin / "sonic-installer", "#!/bin/sh\nprintf 'Current: SONiC-OS-test\\n"
+                      "Next: SONiC-OS-test\\nAvailable:\\nSONiC-OS-test\\n'\n")
+    _write_executable(fake_bin / "sbverify", f"""#!/bin/sh
+if [ "$1" = "--list" ]; then
+    [ "$(basename "$2")" != "$UNINSPECTABLE_BINARY" ]
+    exit
 fi
-if grep -q CERT1 "$input"; then cert=1; else cert=0; fi
-case " $* " in
-    *" -subject "*) echo "subject=CN=CERT$cert" ;;
-    *" -issuer "*) echo "issuer=CN=TEST" ;;
-    *" -fingerprint "*) echo "SHA256 Fingerprint=FP$cert" ;;
-    *" -enddate "*) echo "notAfter=Jan 1 00:00:00 2099 GMT" ;;
-esac
-""",
-    )
-    _write_executable(
-        fake_bin / "sbverify",
-        """#!/bin/sh
-cert="$2"
-binary="$3"
-case "$(basename "$binary")" in
-    shimx64.efi) grep -q CERT0 "$cert" ;;
-    vmlinuz-test|BOOTX64.EFI) grep -q CERT1 "$cert" ;;
-    *) exit 1 ;;
-esac
-""",
-    )
-    _write_executable(
-        fake_bin / "efi-updatevar",
-        '#!/bin/sh\nprintf called > "$EFI_UPDATEVAR_MARKER"\n',
-    )
+name="$(basename "$3")"
+[ "$name" != "$UNSIGNED_BINARY" ] && cmp -s "$2" "{signers}/$name"
+""")
+    _write_executable(fake_bin / "openssl", f'#!/bin/sh\n[ "$1" = x509 ] && exec "{REAL_OPENSSL}" "$@"\n'
+                      'case "$*" in *reinstall-*) exit 1;; esac\nexit 0\n')
+    _write_executable(fake_bin / "sig-list-to-certs", FAKE_SIG_LIST_TO_CERTS % sys.executable)
+    _write_executable(fake_bin / "efi-updatevar", f'#!/bin/sh\nprintf called > "{marker}"\n')
 
-    env = os.environ.copy()
-    env.update(
-        {
-            "PATH": f"{fake_bin}:{env['PATH']}",
-            "SONIC_HOST_PATH": str(host),
-            "SONIC_ESP_PATH": str(esp),
-            "SONIC_OS_DIR": str(esp / "SONiC-OS"),
-            "SONIC_EFIVARS_DIR": str(efivars),
-            "SONIC_DB_AUTH_DIR": str(auth_dir),
-            "EFI_UPDATEVAR_MARKER": str(update_marker),
-        }
-    )
-
-    result = subprocess.run(
-        [str(SCRIPT), "--plan"],
-        capture_output=True,
-        env=env,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "essential_missing=2" in result.stdout
-    assert "boot-chain binary would lose all db signers" in result.stderr
-    assert "vmlinuz-test" in result.stderr
-    assert "BOOTX64.EFI" in result.stderr
-
-    commit_result = subprocess.run(
-        [str(SCRIPT), "--commit"],
-        capture_output=True,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        text=True,
-        check=False,
-    )
-
-    assert commit_result.returncode == 2
-    assert "Refusing to touch db" in commit_result.stderr
-    assert not update_marker.exists()
+    monkeypatch.setenv("PATH", f"{fake_bin}:/usr/bin:/bin")
+    monkeypatch.setenv("SONIC_HOST_PATH", str(host))
+    monkeypatch.setenv("SONIC_ESP_PATH", str(esp))
+    monkeypatch.setenv("SONIC_OS_DIR", str(esp / "SONiC-OS"))
+    monkeypatch.setenv("SONIC_EFIVARS_DIR", str(efivars))
+    monkeypatch.setenv("SONIC_DB_AUTH_DIR", str(auth_dir))
+    monkeypatch.setenv("UNSIGNED_BINARY", "-none-")
+    monkeypatch.setenv("UNINSPECTABLE_BINARY", "-none-")
+    monkeypatch.setattr(prune.os, "geteuid", lambda: 0)
+    return {"marker": marker, "esp": esp, "auth_dir": auth_dir, "fake_bin": fake_bin, "certs": certs}
 
 
-def test_commit_rejects_remove_all_auth_with_nonempty_payload(tmp_path):
-    fake_bin = tmp_path / "bin"
-    host = tmp_path / "host"
-    esp = tmp_path / "esp" / "EFI"
-    efivars = tmp_path / "efivars"
-    auth_dir = tmp_path / "db-auth"
-    update_marker = tmp_path / "efi-updatevar-called"
-
-    for directory in (
-        fake_bin,
-        host / "image-test" / "boot",
-        esp,
-        efivars,
-        auth_dir,
-    ):
-        directory.mkdir(parents=True, exist_ok=True)
-
-    (host / "image-test" / "boot" / "vmlinuz-test").write_text("kernel")
-    (efivars / "db-test").write_text("db")
-
-    auth_with_cert = b"\0" * 16 + struct.pack("<I", 24) + b"\0" * 20 + b"ESL"
-    (auth_dir / "DB-cert0.auth").write_bytes(auth_with_cert)
-    (auth_dir / "remove-all-db.auth").write_bytes(auth_with_cert)
-
-    _write_executable(
-        fake_bin / "id",
-        """#!/bin/sh
-if [ "$1" = "-u" ]; then echo 0; else /usr/bin/id "$@"; fi
-""",
-    )
-    _write_executable(
-        fake_bin / "sonic-installer",
-        """#!/bin/sh
-cat <<EOF
-Current: SONiC-OS-test
-Next: SONiC-OS-test
-Available:
-SONiC-OS-test
-EOF
-""",
-    )
-    _write_executable(
-        fake_bin / "efi-readvar",
-        """#!/bin/sh
-while [ "$#" -gt 0 ]; do
-    if [ "$1" = "-o" ]; then shift; printf db > "$1"; exit 0; fi
-    shift
-done
-exit 1
-""",
-    )
-    _write_executable(
-        fake_bin / "sig-list-to-certs",
-        """#!/bin/sh
-case "$2" in
-    */db|*/am_cert) printf CERT0 > "$2-0.der" ;;
-esac
-""",
-    )
-    _write_executable(
-        fake_bin / "openssl",
-        """#!/bin/sh
-input=""
-output=""
-previous=""
-for argument in "$@"; do
-    [ "$previous" = "-in" ] && input="$argument"
-    [ "$previous" = "-out" ] && output="$argument"
-    previous="$argument"
-done
-if [ -n "$output" ]; then
-    cp "$input" "$output"
-    exit 0
-fi
-case " $* " in
-    *" -subject "*) echo "subject=CN=CERT0" ;;
-    *" -issuer "*) echo "issuer=CN=TEST" ;;
-    *" -fingerprint "*) echo "SHA256 Fingerprint=FP0" ;;
-    *" -enddate "*) echo "notAfter=Jan 1 00:00:00 2099 GMT" ;;
-esac
-""",
-    )
-    _write_executable(fake_bin / "sbverify", "#!/bin/sh\nexit 0\n")
-    _write_executable(
-        fake_bin / "efi-updatevar",
-        '#!/bin/sh\nprintf called > "$EFI_UPDATEVAR_MARKER"\n',
-    )
-
-    env = os.environ.copy()
-    env.update(
-        {
-            "PATH": f"{fake_bin}:{env['PATH']}",
-            "SONIC_HOST_PATH": str(host),
-            "SONIC_ESP_PATH": str(esp),
-            "SONIC_OS_DIR": str(esp / "SONiC-OS"),
-            "SONIC_EFIVARS_DIR": str(efivars),
-            "SONIC_DB_AUTH_DIR": str(auth_dir),
-            "EFI_UPDATEVAR_MARKER": str(update_marker),
-        }
-    )
-
-    result = subprocess.run(
-        [str(SCRIPT), "--commit"],
-        capture_output=True,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 2
-    assert "remove-all .auth must contain an empty signature-list payload" in result.stderr
-    assert not update_marker.exists()
+def _run(capsys, *argv):
+    try:
+        code = prune.main(list(argv))
+    except SystemExit as e:
+        code = e.code
+    captured = capsys.readouterr()
+    return code, captured.out, captured.err
 
 
-def test_commit_rejects_replace_only_reinstall_auth_before_db_update(tmp_path):
-    fake_bin = tmp_path / "bin"
-    host = tmp_path / "host"
-    esp = tmp_path / "esp" / "EFI"
-    efivars = tmp_path / "efivars"
-    auth_dir = tmp_path / "db-auth"
-    update_marker = tmp_path / "efi-updatevar-called"
+def test_plan_marks_installed_kernel_and_fallback_loader_as_essential(env, capsys):
+    code, out, err = _run(capsys, "--plan")
+    assert code == 0, err
+    assert "essential_missing=2" in out
+    assert "boot-chain binary would lose all db signers" in err
+    assert "vmlinuz-test" in err and "BOOTX64.EFI" in err
+    code, _, err = _run(capsys, "--commit")
+    assert code == 2
+    assert "Refusing to touch db" in err
+    assert not env["marker"].exists()
 
-    for directory in (
-        fake_bin,
-        host / "image-test" / "boot",
-        esp,
-        efivars,
-        auth_dir,
-    ):
-        directory.mkdir(parents=True, exist_ok=True)
 
-    (host / "image-test" / "boot" / "vmlinuz-test").write_text("kernel")
-    (efivars / "db-test").write_text("db")
+def test_plan_does_not_check_tool_availability(env, capsys, monkeypatch):
+    def unexpected_tool_check(tool):
+        pytest.fail(f"unexpected tool availability check: {tool}")
 
-    authentication_header = b"\0" * 16 + struct.pack("<I", 28) + b"\0" * 20 + b"CMS!"
-    (auth_dir / "DB-cert0.auth").write_bytes(authentication_header + b"ESL")
-    (auth_dir / "remove-all-db.auth").write_bytes(authentication_header)
+    monkeypatch.setattr(shutil, "which", unexpected_tool_check)
+    code, out, err = _run(capsys, "--plan")
+    assert code == 0, err
+    assert "Plan only - no changes made." in out
+    assert not env["marker"].exists()
 
-    _write_executable(
-        fake_bin / "id",
-        """#!/bin/sh
-if [ "$1" = "-u" ]; then echo 0; else /usr/bin/id "$@"; fi
-""",
-    )
-    _write_executable(
-        fake_bin / "sonic-installer",
-        """#!/bin/sh
-cat <<EOF
-Current: SONiC-OS-test
-Next: SONiC-OS-test
-Available:
-SONiC-OS-test
-EOF
-""",
-    )
-    _write_executable(
-        fake_bin / "efi-readvar",
-        """#!/bin/sh
-while [ "$#" -gt 0 ]; do
-    if [ "$1" = "-o" ]; then shift; printf db > "$1"; exit 0; fi
-    shift
-done
-exit 1
-""",
-    )
-    _write_executable(
-        fake_bin / "sig-list-to-certs",
-        """#!/bin/sh
-case "$2" in
-    */db|*/am_cert) printf CERT0 > "$2-0.der" ;;
-    */PK|*/KEK) printf AUTHORITY > "$2-0.der" ;;
-esac
-""",
-    )
-    _write_executable(
-        fake_bin / "openssl",
-        """#!/bin/sh
-input=""
-output=""
-previous=""
-for argument in "$@"; do
-    [ "$previous" = "-in" ] && input="$argument"
-    [ "$previous" = "-out" ] && output="$argument"
-    previous="$argument"
-done
-if [ "$1" = "cms" ]; then
-    case "$input" in
-        *reinstall-*) exit 1 ;;
-        *) exit 0 ;;
-    esac
-fi
-if [ -n "$output" ] && [ "$output" != "/dev/null" ]; then
-    cp "$input" "$output"
-    exit 0
-fi
-case " $* " in
-    *" -subject "*) echo "subject=CN=CERT0" ;;
-    *" -issuer "*) echo "issuer=CN=TEST" ;;
-    *" -fingerprint "*) echo "SHA256 Fingerprint=FP0" ;;
-    *" -enddate "*) echo "notAfter=Jan 1 00:00:00 2099 GMT" ;;
-    *) cat "$input" ;;
-esac
-""",
-    )
-    _write_executable(fake_bin / "sbverify", "#!/bin/sh\nexit 0\n")
-    _write_executable(
-        fake_bin / "efi-updatevar",
-        '#!/bin/sh\nprintf called > "$EFI_UPDATEVAR_MARKER"\n',
-    )
 
-    env = os.environ.copy()
-    env.update(
-        {
-            "PATH": f"{fake_bin}:{env['PATH']}",
-            "SONIC_HOST_PATH": str(host),
-            "SONIC_ESP_PATH": str(esp),
-            "SONIC_OS_DIR": str(esp / "SONiC-OS"),
-            "SONIC_EFIVARS_DIR": str(efivars),
-            "SONIC_DB_AUTH_DIR": str(auth_dir),
-            "EFI_UPDATEVAR_MARKER": str(update_marker),
-        }
-    )
+@pytest.mark.parametrize("append", [False, True])
+@pytest.mark.parametrize("chattr_status,update_status", [(0, 0), (1, 0), (0, 1)])
+def test_update_db_calls_tools_directly(env, monkeypatch, append, chattr_status, update_status):
+    config = prune.Config.from_env()
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    calls = []
 
-    result = subprocess.run(
-        [str(SCRIPT), "--commit"],
-        capture_output=True,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        text=True,
-        check=False,
-    )
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        status = chattr_status if cmd[0] == "chattr" else update_status
+        return prune.subprocess.CompletedProcess(cmd, status)
 
-    assert result.returncode == 2
-    assert "not an authorized db append update" in result.stderr
-    assert not update_marker.exists()
+    def unexpected_tool_check(tool):
+        pytest.fail(f"unexpected tool availability check: {tool}")
+
+    monkeypatch.setattr(shutil, "which", unexpected_tool_check)
+    monkeypatch.setattr(prune.subprocess, "run", run)
+    assert prune.update_db(config, auth, append) == (update_status == 0)
+    assert calls == [
+        ["chattr", "-i", str(config.efivars_dir / f"db-{prune.VARIABLE_GUIDS['db']}")],
+        ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"],
+    ]
+
+
+def test_commit_rejects_remove_all_auth_with_nonempty_payload(env, capsys, monkeypatch):
+    cert0, _ = env["certs"]
+    (env["auth_dir"] / "remove-all-db.auth").write_bytes(_auth(_esl(cert0)))
+    monkeypatch.setattr(prune, "check_boot_chain", lambda *a: 0)
+    code, _, err = _run(capsys, "--commit")
+    assert code == 2
+    assert "remove-all .auth must contain an empty signature-list payload" in err
+    assert not env["marker"].exists()
+
+
+def test_commit_rejects_replace_only_reinstall_auth_before_db_update(env, capsys, monkeypatch):
+    monkeypatch.setattr(prune, "check_boot_chain", lambda *a: 0)
+    code, _, err = _run(capsys, "--commit")
+    assert code == 2
+    assert "not an authorized db append update" in err
+    assert not env["marker"].exists()
+
+
+def test_binary_without_any_db_signer_is_essential_and_blocks_commit(env, capsys, monkeypatch):
+    monkeypatch.setenv("UNSIGNED_BINARY", "shimx64.efi")
+    code, out, err = _run(capsys, "--plan")
+    assert code == 0, err
+    assert "essential_missing=3" in out
+    assert "not signed by any db certificate" in err
+    assert "shimx64.efi" in err
+    code, _, _ = _run(capsys, "--commit")
+    assert code == 2
+    assert not env["marker"].exists()
+
+
+def test_plan_discovers_efi_binaries_case_insensitively(env, capsys):
+    (env["esp"] / "SONiC-OS" / "shimx64.efi").rename(env["esp"] / "SONiC-OS" / "ShimX64.EFI")
+    (env["esp"] / "BOOT" / "grubnetx64.EFI").write_text("netboot")
+    (env["esp"] / "SONiC-OS" / "mmx64.efi").write_text("mokmanager")
+    code, out, err = _run(capsys, "--plan")
+    assert code == 0, err
+    assert "ShimX64.EFI" in err
+    assert "grubnetx64" not in out + err and "mmx64" not in out + err
+
+
+def test_plan_fails_closed_when_no_boot_loader_is_found(env, capsys):
+    (env["esp"] / "SONiC-OS" / "shimx64.efi").unlink()
+    code, _, err = _run(capsys, "--plan")
+    assert code != 0
+    assert "no boot loader found" in err
+    assert not env["marker"].exists()
+
+
+def test_uninspectable_kernel_is_reported_distinctly_and_blocks_commit(env, capsys, monkeypatch):
+    monkeypatch.setenv("UNSIGNED_BINARY", "vmlinuz-test")
+    monkeypatch.setenv("UNINSPECTABLE_BINARY", "vmlinuz-test")
+    code, out, err = _run(capsys, "--plan")
+    assert code == 0, err
+    assert "essential_missing=2" in out
+    assert "cannot inspect boot-chain binary" in err
+    assert "vmlinuz-test" in err
+    code, _, _ = _run(capsys, "--commit")
+    assert code == 2
+    assert not env["marker"].exists()
+
+
+def test_plan_fails_closed_when_sonic_installer_lists_no_images(env, capsys):
+    _write_executable(env["fake_bin"] / "sonic-installer", "#!/bin/sh\nexit 0\n")
+    code, _, err = _run(capsys, "--plan")
+    assert code != 0
+    assert "returned no installed images" in err
+    assert not env["marker"].exists()
+
+
+def test_auto_skips_unsafe_plan_without_touching_db(env, capsys):
+    code, _, err = _run(capsys, "--auto")
+    assert code == 0, err
+    assert "prune skipped (unsafe plan" in err
+    assert not env["marker"].exists()
+
+
+def test_auto_rejects_conflicting_options(env, capsys):
+    code, _, err = _run(capsys, "--auto", "--plan")
+    assert code == 2
+    assert "--auto cannot be combined" in err
+
+
+def test_allow_essential_missing_option_is_not_supported(env, capsys):
+    code, _, err = _run(capsys, "--commit", "--allow-essential-missing")
+    assert code == 2
+    assert "unrecognized arguments: --allow-essential-missing" in err
+    assert not env["marker"].exists()
+
+
+def test_commit_refuses_when_boot_chain_binary_would_lose_its_signer(env, capsys):
+    code, _, err = _run(capsys, "--commit")
+    assert code == 2
+    assert "a boot-chain binary would lose every db signer" in err
+    assert not env["marker"].exists()
+
+
+def test_esl_roundtrip_and_auth_parsing(env, tmp_path):
+    cert0, cert1 = env["certs"]
+    parsed = prune.load_certificates(_esl(cert0, cert1), tmp_path, "db")
+    assert [c.fingerprint for c in parsed] == [
+        cert.fingerprint(hashes.SHA256()).hex(":").upper() for cert in (cert0, cert1)
+    ]
+    assert parsed[0].subject == "CN=CERT0" and parsed[0].expires.endswith("2099 GMT")
+    assert prune.load_certificates(b"", tmp_path, "empty") == []
+    update = prune.parse_auth(_auth(_esl(cert0)))
+    assert update.signed_data == b"CMS!"
+    assert update.payload == _esl(cert0)
+    with pytest.raises(prune.ScriptError):
+        prune.parse_auth(b"\0" * 10)
+
+
+def test_pkcs7_wrapping_detection():
+    wrapped = prune.der(prune.DER_SEQUENCE, prune.PKCS7_SIGNED_DATA_OID + b"\xa0\x00")
+    assert prune.is_pkcs7_content_info(wrapped)
+    assert not prune.is_pkcs7_content_info(prune.der(prune.DER_SEQUENCE, b"\x02\x01\x01"))
+    assert prune.der(0x04, b"x" * 300)[:4] == b"\x04\x82\x01\x2c"
+
+
+def test_direct_call_uses_supplied_images_without_spawning_sonic_installer(env, monkeypatch):
+    monkeypatch.setattr(prune, "installed_images", Mock(side_effect=AssertionError("unexpected CLI invocation")))
+    assert prune.prune_db_certificates(
+        prune.Config.from_env(), images=["SONiC-OS-test"], plan_only=True,
+    ) == 0
+    assert not env["marker"].exists()
+
+
+def test_direct_call_rejects_empty_image_list(env):
+    with pytest.raises(prune.ScriptError, match="returned no installed images"):
+        prune.prune_db_certificates(prune.Config.from_env(), images=[], auto=True)
+    assert not env["marker"].exists()
+
+
+def test_auto_skips_when_no_certificates_are_stale(env, monkeypatch, capsys):
+    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[])
+    monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+    apply = Mock()
+    monkeypatch.setattr(prune, "apply_plan", apply)
+    assert prune.prune_db_certificates(prune.Config.from_env(), auto=True) == 0
+    assert "No stale db certificates" in capsys.readouterr().out
+    apply.assert_not_called()
+
+
+def test_auto_validates_before_applying_safe_plan(env, monkeypatch):
+    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[Mock()])
+    monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+    operations = Mock()
+    monkeypatch.setattr(prune, "validate_updates", operations.validate)
+    monkeypatch.setattr(prune, "apply_plan", operations.apply)
+    assert prune.prune_db_certificates(prune.Config.from_env(), auto=True) == 0
+    assert [call[0] for call in operations.mock_calls] == ["validate", "apply"]
+
+
+def test_cli_reports_missing_utilities(env, monkeypatch, capsys):
+    monkeypatch.setattr(prune, "analyze", Mock(side_effect=FileNotFoundError("sig-list-to-certs")))
+    code, _, err = _run(capsys, "--plan")
+    assert code == 2
+    assert "sig-list-to-certs" in err
+    assert not env["marker"].exists()
+
+
+def test_trust_store_uses_enrolled_kek_only(env, tmp_path, monkeypatch):
+    cert_file = tmp_path / "kek.pem"
+    cert_file.write_bytes(b"KEK")
+    read = Mock(return_value=[Mock(pem=cert_file)])
+    monkeypatch.setattr(prune, "read_efi_certificates", read)
+    config = prune.Config.from_env()
+    assert prune.build_trusted_pem(config, tmp_path).read_bytes() == b"KEK"
+    read.assert_called_once_with(config, tmp_path, "KEK")
+
+
+def test_installed_images_rejects_failed_query_even_with_image_output(monkeypatch):
+    monkeypatch.setattr(prune, "run", Mock(return_value=prune.subprocess.CompletedProcess(
+        ["sonic-installer", "list"], 1, stdout="SONiC-OS-test", stderr="bootloader failure",
+    )))
+    with pytest.raises(prune.ScriptError, match="sonic-installer list failed: bootloader failure"):
+        prune.installed_images()
+
+
+@pytest.mark.parametrize("verifies", [False, True])
+def test_apply_plan_verifies_boot_chain_after_reinstall(env, tmp_path, monkeypatch, verifies):
+    config = prune.Config.from_env()
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    plan = Mock(selected_auths=[auth], crit_bins=[tmp_path / "kernel"])
+    update = Mock(return_value=True)
+    monkeypatch.setattr(prune, "update_db", update)
+    monkeypatch.setattr(prune, "read_efi_certificates", Mock(return_value=[Mock(pem=tmp_path / "cert.pem")]))
+    verify = Mock(return_value=verifies)
+    monkeypatch.setattr(prune, "succeeds", verify)
+    if verifies:
+        prune.apply_plan(config, plan, tmp_path)
+    else:
+        with pytest.raises(prune.ScriptError, match="DO NOT REBOOT"):
+            prune.apply_plan(config, plan, tmp_path)
+    assert update.call_args_list == [
+        call(config, config.remove_all_auth, append=False), call(config, auth, append=True),
+    ]
+    verify.assert_called_once_with([
+        "sbverify", "--cert", str(tmp_path / "cert.pem"), str(tmp_path / "kernel"),
+    ])
+
+
+def test_apply_plan_attempts_other_reinstalls_after_append_failure(env, tmp_path, monkeypatch):
+    plan = Mock(selected_auths=[tmp_path / "first.auth", tmp_path / "second.auth"],
+                crit_bins=[tmp_path / "kernel"])
+    update = Mock(side_effect=[True, False, True])
+    monkeypatch.setattr(prune, "update_db", update)
+    monkeypatch.setattr(prune, "read_efi_certificates", Mock(return_value=[Mock(pem=tmp_path / "cert.pem")]))
+    monkeypatch.setattr(prune, "succeeds", Mock(return_value=True))
+    with pytest.raises(prune.ScriptError, match="one or more reinstall .auth files failed"):
+        prune.apply_plan(prune.Config.from_env(), plan, tmp_path)
+    assert update.call_count == 3
