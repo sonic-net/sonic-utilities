@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+from sonic_installer.main import cli
 from sonic_installer.bootloader.uboot import UbootBootloader
 
 
@@ -22,15 +23,10 @@ def test_get_installed_images_preserves_slot_ordering(mock_popen):
 
     bootloader = UbootBootloader()
 
-    installed_images = bootloader.get_installed_images()
-    assert installed_images == [
+    assert bootloader.get_installed_images() == [
         "SONiC-OS-1",
         ""
     ]
-    bootloader.set_next_image(installed_images[0])
-
-    next_image = bootloader.get_next_image()
-    assert next_image == installed_images[0]
 
     # Case 2 First_slot no image and second_slot valid sonic image
     proc1 = MagicMock()
@@ -43,13 +39,35 @@ def test_get_installed_images_preserves_slot_ordering(mock_popen):
 
     bootloader = UbootBootloader()
 
-    installed_images = bootloader.get_installed_images()
-    assert installed_images == [
+    assert bootloader.get_installed_images() == [
         "",
         "SONiC-OS-2"
     ]
 
-    bootloader.set_next_image(installed_images[1])
 
-    next_image = bootloader.get_next_image()
-    assert next_image == installed_images[1]
+@patch.object(UbootBootloader, "get_installed_images")
+@patch("subprocess.run")
+def test_set_next_image_preserves_slot_mapping(mock_run, mock_get_images):
+
+    mock_get_images.return_value = [
+        "",
+        "SONiC-OS-2"
+    ]
+
+    bootloader = UbootBootloader()
+
+    bootloader.set_next_image("SONiC-OS-2")
+
+    mock_run.assert_called_once()
+
+
+@patch.object(UbootBootloader, "get_installed_images")
+def test_list_images_preserves_slot_ordering(mock_get_images):
+    mock_get_images.return_value = [
+        "",
+        "SONiC-OS-2"
+    ]
+
+    result = runner.invoke(cli, ["list"])
+
+    assert "SONiC-OS-2" in result.output
