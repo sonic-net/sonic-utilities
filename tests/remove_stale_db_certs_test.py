@@ -156,6 +156,17 @@ def test_plan_marks_installed_kernel_and_fallback_loader_as_essential(env, capsy
     assert not env["marker"].exists()
 
 
+def test_plan_does_not_check_tool_availability(env, capsys, monkeypatch):
+    def unexpected_tool_check(tool):
+        pytest.fail(f"unexpected tool availability check: {tool}")
+
+    monkeypatch.setattr(prune.shutil, "which", unexpected_tool_check)
+    code, out, err = _run(capsys, "--plan")
+    assert code == 0, err
+    assert "Plan only - no changes made." in out
+    assert not env["marker"].exists()
+
+
 def test_commit_rejects_remove_all_auth_with_nonempty_payload(env, capsys, monkeypatch):
     cert0, _ = env["certs"]
     (env["auth_dir"] / "remove-all-db.auth").write_bytes(_auth(_esl(cert0)))
