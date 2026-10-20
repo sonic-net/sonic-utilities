@@ -22,7 +22,6 @@ import argparse
 import ctypes
 import os
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -472,9 +471,8 @@ def validate_updates(config, plan, work):
 
 def update_db(config, auth, append):
     """efi-updatevar on db; the db efivar is immutable by default, so clear that first (best effort)."""
-    if shutil.which("chattr"):
-        for variable in config.efivars_dir.glob("db-*"):
-            succeeds(["chattr", "-i", str(variable)])
+    for variable in config.efivars_dir.glob("db-*"):
+        succeeds(["chattr", "-i", str(variable)])
     sys.stdout.flush()
     cmd = ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"]
     return subprocess.run(cmd).returncode == 0

@@ -160,11 +160,35 @@ def test_plan_does_not_check_tool_availability(env, capsys, monkeypatch):
     def unexpected_tool_check(tool):
         pytest.fail(f"unexpected tool availability check: {tool}")
 
-    monkeypatch.setattr(prune.shutil, "which", unexpected_tool_check)
+    monkeypatch.setattr(shutil, "which", unexpected_tool_check)
     code, out, err = _run(capsys, "--plan")
     assert code == 0, err
     assert "Plan only - no changes made." in out
     assert not env["marker"].exists()
+
+
+@pytest.mark.parametrize("append", [False, True])
+@pytest.mark.parametrize("chattr_status,update_status", [(0, 0), (1, 0), (0, 1)])
+def test_update_db_calls_tools_directly(env, monkeypatch, append, chattr_status, update_status):
+    config = prune.Config.from_env(None, None)
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        status = chattr_status if cmd[0] == "chattr" else update_status
+        return prune.subprocess.CompletedProcess(cmd, status)
+
+    def unexpected_tool_check(tool):
+        pytest.fail(f"unexpected tool availability check: {tool}")
+
+    monkeypatch.setattr(shutil, "which", unexpected_tool_check)
+    monkeypatch.setattr(prune.subprocess, "run", run)
+    assert prune.update_db(config, auth, append) == (update_status == 0)
+    assert calls == [
+        ["chattr", "-i", str(config.efivars_dir / f"db-{prune.VARIABLE_GUIDS['db']}")],
+        ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"],
+    ]
 
 
 def test_commit_rejects_remove_all_auth_with_nonempty_payload(env, capsys, monkeypatch):
