@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from . import secure_boot_db
+from .secure_boot_lock import locked
 
 
 class PreconditionError(secure_boot_db.ScriptError):
@@ -29,6 +30,7 @@ def ensure_efivars(config):
             )
 
 
+@locked
 def update_secure_boot_key(variable, auth_file, *, config=None):
     """Replace PK or KEK using a signed update; raise on failure, never append."""
     if variable not in ("KEK", "PK"):

@@ -23,6 +23,7 @@ from .common import (
 )
 from .exception import SonicRuntimeException
 from . import secure_boot_db, secure_boot_keys
+from .secure_boot_lock import locked
 
 SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
@@ -391,13 +392,16 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             # Inject host DNS into chroot for sonic-package-manager to resolve hostnames.
             chroot_resolv = os.path.join(new_image_mount, RESOLV_CONF_FILE)
             if os.path.islink(chroot_resolv):
-                # Symlink: populate the target inside the chroot so the symlink resolves.
-                # Cannot cp over the symlink because the absolute target path escapes
-                # the overlay mount to the host filesystem ("are the same file" error).
+                # Resolve relative targets from /etc, clamping ".." at the image root.
                 resolv_target = os.readlink(chroot_resolv)
+                if not os.path.isabs(resolv_target):
+                    resolv_target = os.path.join("/", os.path.dirname(RESOLV_CONF_FILE), resolv_target)
+                resolv_target = os.path.normpath(resolv_target)
                 chroot_target = os.path.join(new_image_mount, resolv_target.lstrip("/"))
                 run_command_or_raise(["mkdir", "-p", os.path.dirname(chroot_target)])
-                run_command_or_raise(["cp", "-L", os.path.join("/", RESOLV_CONF_FILE), chroot_target])
+                # Replace a symlink at the destination rather than following it outside the image.
+                run_command_or_raise(["cp", "-L", "--remove-destination",
+                                      os.path.join("/", RESOLV_CONF_FILE), chroot_target])
             else:
                 # Regular file: overwrite with host DNS content.
                 run_command_or_raise(["cp", os.path.join("/", RESOLV_CONF_FILE), chroot_resolv])
@@ -532,6 +536,7 @@ def validate_remove_pk_dir(ctx, param, value):
     return value
 
 
+@locked
 def remove_secure_boot_platform_keys(auth_dir):
     """Remove the UEFI Secure Boot KEK and PK using signed empty updates."""
     updates = (
@@ -597,6 +602,7 @@ def sonic_installer():
               help='After installation, remove KEK and PK using remove-all-kek.auth and '
               'remove-all-pk.auth from DIRECTORY')
 @click.argument('url')
+@locked
 def install(url, force, skip_platform_check=False, skip_migration=False, skip_package_migration=False,
             skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None,
             available_mem_threshold=None, remove_pk=None):
@@ -794,6 +800,7 @@ def get_fips(image):
        click.echo("FIPS is disabled")
 
 
+@locked
 def prune_stale_db_certs(bootloader):
     """Prune unused db signers after removal without failing the completed image operation."""
     try:
@@ -814,6 +821,7 @@ def prune_stale_db_certs(bootloader):
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
               expose_value=False, prompt='Image will be removed, continue?')
 @click.argument('image')
+@locked
 def remove(image):
     """ Uninstall image """
     bootloader = get_bootloader()
@@ -852,6 +860,7 @@ def binary_version(binary_image_path):
 @sonic_installer.command('cleanup')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
               expose_value=False, prompt='Remove images which are not current and next, continue?')
+@locked
 def cleanup():
     """ Remove installed images which are not current and next """
     bootloader = get_bootloader()

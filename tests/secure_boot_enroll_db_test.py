@@ -6,7 +6,6 @@ import os
 import struct
 import subprocess
 import tarfile
-import uuid
 import zipfile
 from pathlib import Path
 
@@ -19,6 +18,7 @@ from cryptography.x509.oid import NameOID
 
 from sonic_installer import secure_boot_db as db
 from sonic_installer import secure_boot_enroll_db as enroll
+from sonic_installer import secure_boot_lock
 
 
 @pytest.fixture(scope="module")
@@ -64,8 +64,9 @@ def _signed_auth(authority, *, attributes=db.DB_ATTR_APPEND, bare=False):
     if bare:
         signature = _der_content(_der_content(signature)[len(db.PKCS7_SIGNED_DATA_OID):])
     header.auth_info.length = ctypes.sizeof(db.WinCertificateUefiGuid) + len(signature)
-    header.auth_info.revision, header.auth_info.cert_type = 0x200, 0xef1
-    header.auth_info.cert_type_guid[:] = uuid.UUID("4aafd29d-68df-49ee-8aa9-347d375665a7").bytes_le
+    header.auth_info.revision = db.WIN_CERT_REVISION_2_0
+    header.auth_info.cert_type = db.WIN_CERT_TYPE_EFI_GUID
+    header.auth_info.cert_type_guid[:] = db.EFI_CERT_TYPE_PKCS7_GUID.bytes_le
     return bytes(header) + signature + payload
 
 
@@ -93,6 +94,7 @@ def _create_installer(path, auth=b"DB.auth", *, fs_zip=None, include_fs=True, se
 
 @pytest.fixture
 def env(tmp_path, monkeypatch, authorities):
+    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", tmp_path / "installer.lock")
     host, efivars = tmp_path / "host", tmp_path / "efivars"
     host.mkdir()
     efivars.mkdir()
@@ -119,6 +121,7 @@ def env(tmp_path, monkeypatch, authorities):
             Path(f"{cmd[2]}-0.der").write_bytes(Path(cmd[1]).read_bytes()[44:])
             return subprocess.CompletedProcess(cmd, 0, "", "")
         if cmd[0] == "efi-updatevar":
+            assert secure_boot_lock.current_lock_fd() is not None
             data = Path(cmd[-2]).read_bytes()
             persisted = config.auth_dir / f"DB-{hashlib.sha256(data).hexdigest()}.auth"
             assert persisted.read_bytes() == data
@@ -150,6 +153,7 @@ def test_enrolls_authorized_append_updates(env, authorities, authority, bare):
 
 @pytest.mark.parametrize("kind", [
     "unauthorized", "replace-only", "tampered", "empty-payload", "empty-signature", "truncated", "bad-length",
+    "bad-revision", "bad-type", "bad-guid", "tampered-signature",
 ])
 def test_rejects_invalid_auth_before_persistence_or_firmware_write(env, authorities, kind):
     auth = _signed_auth(
@@ -158,12 +162,25 @@ def test_rejects_invalid_auth_before_persistence_or_firmware_write(env, authorit
     )
     if kind == "tampered":
         auth = auth[:-1] + bytes([auth[-1] ^ 1])
+    elif kind == "tampered-signature":
+        header = db.EfiAuthVariable2.from_buffer_copy(auth)
+        signature_end = ctypes.sizeof(db.EfiTime) + header.auth_info.length
+        auth = auth[:signature_end - 1] + bytes([auth[signature_end - 1] ^ 1]) + auth[signature_end:]
     elif kind == "empty-payload":
         auth = auth[:-len(_esl(authorities["PK"][1]))]
     elif kind == "empty-signature":
-        header = db.EfiAuthVariable2()
+        header = db.EfiAuthVariable2.from_buffer_copy(auth)
         header.auth_info.length = ctypes.sizeof(db.WinCertificateUefiGuid)
         auth = bytes(header) + _esl(authorities["PK"][1])
+    elif kind in ("bad-revision", "bad-type", "bad-guid"):
+        header = db.EfiAuthVariable2.from_buffer_copy(auth)
+        if kind == "bad-revision":
+            header.auth_info.revision = 0
+        elif kind == "bad-type":
+            header.auth_info.cert_type = 0
+        else:
+            header.auth_info.cert_type_guid[:] = db.EFI_CERT_X509_GUID.bytes_le
+        auth = bytes(header) + auth[ctypes.sizeof(db.EfiAuthVariable2):]
     elif kind == "truncated":
         auth = auth[:20]
     elif kind == "bad-length":
@@ -174,6 +191,24 @@ def test_rejects_invalid_auth_before_persistence_or_firmware_write(env, authorit
     assert not env["updates"]
     assert not env["config"].auth_dir.exists()
     assert not list(env["config"].host_path.glob(".secure_boot_enroll_db.*"))
+
+
+def test_enrollment_holds_lock_during_authentication_and_persistence(env, monkeypatch):
+    operations = []
+
+    def checked(name, original):
+        def wrapper(*args, **kwargs):
+            assert secure_boot_lock.current_lock_fd() is not None
+            operations.append(name)
+            return original(*args, **kwargs)
+        return wrapper
+
+    monkeypatch.setattr(db, "build_trusted_pem", checked("authorities", db.build_trusted_pem))
+    monkeypatch.setattr(db, "verify_db_auth", checked("verify", db.verify_db_auth))
+    monkeypatch.setattr(enroll, "persist_auth", checked("persist", enroll.persist_auth))
+    assert enroll.enroll_db_certificate(env["image"], config=env["config"])
+    assert operations == ["authorities", "verify", "persist"]
+    assert secure_boot_lock.current_lock_fd() is None
 
 
 def test_check_only_does_not_validate_or_access_firmware(env, monkeypatch):

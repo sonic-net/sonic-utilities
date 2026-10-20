@@ -12,14 +12,23 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import pkcs7
 from cryptography.x509.oid import NameOID
 
 from sonic_installer import secure_boot_db as prune
+from sonic_installer import secure_boot_lock
 
 X509_GUID = prune.EFI_CERT_X509_GUID.bytes_le
 OWNER_GUID = uuid.UUID(int=1).bytes_le
 ESL_HEADER_SIZE = 28
 REAL_OPENSSL = shutil.which("openssl")
+INVALID_AUTH_HEADERS = [
+    ({"revision": 0}, "certificate revision is invalid"),
+    ({"cert_type": 0}, "certificate type is invalid"),
+    ({"cert_type_guid": X509_GUID}, "certificate type GUID is not PKCS#7"),
+    ({"cert_type_guid": prune.EFI_CERT_TYPE_PKCS7_GUID.bytes}, "certificate type GUID is not PKCS#7"),
+    ({"signed": b""}, "signature is empty"),
+]
 
 FAKE_SIG_LIST_TO_CERTS = """#!%s
 import struct, sys
@@ -33,8 +42,9 @@ while pos < len(data):
 """
 
 
-def _make_cert(common_name):
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+def _make_cert(common_name, key=None):
+    if key is None:
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
     return (
         x509.CertificateBuilder()
@@ -62,9 +72,13 @@ def _esl(*certs):
     return out
 
 
-def _auth(payload=b"", signed=b"CMS!"):
+def _auth(payload=b"", signed=b"CMS!", *, revision=prune.WIN_CERT_REVISION_2_0,
+          cert_type=prune.WIN_CERT_TYPE_EFI_GUID, cert_type_guid=prune.EFI_CERT_TYPE_PKCS7_GUID.bytes_le):
     header = prune.EfiAuthVariable2()
     header.auth_info.length = ctypes.sizeof(prune.WinCertificateUefiGuid) + len(signed)
+    header.auth_info.revision = revision
+    header.auth_info.cert_type = cert_type
+    header.auth_info.cert_type_guid[:] = cert_type_guid
     return bytes(header) + signed + payload
 
 
@@ -89,6 +103,7 @@ def bootloader(monkeypatch):
 @pytest.fixture
 def env(tmp_path, monkeypatch, certs, bootloader):
     """Only cert0 has a reinstall update; cert1 signs the kernel and fallback loader."""
+    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", tmp_path / "installer.lock")
     cert0, cert1 = certs
     host, esp = tmp_path / "host", tmp_path / "esp" / "EFI"
     efivars, auth_dir = tmp_path / "efivars", tmp_path / "db-auth"
@@ -168,6 +183,26 @@ previous = db.read_bytes()[4:] if "-a" in sys.argv else b""
 db.write_bytes(bytes(4) + previous + auth.read_bytes()[{payload_offset}:])
 """)
     return config
+
+
+def test_pruning_holds_lock_from_discovery_through_verification(safe_updates, monkeypatch):
+    phases = []
+
+    def checked(name, original):
+        def wrapper(*args, **kwargs):
+            assert secure_boot_lock.current_lock_fd() is not None
+            phases.append(name)
+            return original(*args, **kwargs)
+        return wrapper
+
+    for name in ("installed_images", "load_db_certs", "validate_updates", "update_db", "read_efi_certificates"):
+        monkeypatch.setattr(prune, name, checked(name, getattr(prune, name)))
+    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+    assert phases[0] == "load_db_certs"
+    assert "installed_images" in phases and "validate_updates" in phases
+    assert phases.count("update_db") == 3
+    assert phases[-1] == "read_efi_certificates"
+    assert secure_boot_lock.current_lock_fd() is None
 
 
 def test_analyzed_plan_exposes_boot_chain_safety(env, tmp_path):
@@ -394,6 +429,62 @@ def test_esl_roundtrip_and_auth_parsing(env, tmp_path):
         prune.parse_auth(b"\0" * 10)
 
 
+@pytest.mark.parametrize("kwargs, message", INVALID_AUTH_HEADERS)
+def test_rejects_invalid_authentication_headers(kwargs, message):
+    with pytest.raises(prune.ScriptError, match=message):
+        prune.parse_auth(_auth(**kwargs))
+
+
+@pytest.mark.parametrize("kwargs, message", INVALID_AUTH_HEADERS)
+@pytest.mark.parametrize("filename", ["remove-all-db.auth", "DB-cert0.auth"])
+@pytest.mark.parametrize("mode", ["--auto", "--commit"])
+def test_invalid_auth_header_never_changes_firmware(env, safe_updates, capsys, kwargs, message, filename, mode):
+    before = prune.read_efi_variable(safe_updates, "db")
+    payload = b"" if filename == "remove-all-db.auth" else _esl(env["certs"][0])
+    (env["auth_dir"] / filename).write_bytes(_auth(payload, **kwargs))
+    code, _, err = _run(capsys, mode)
+    if mode == "--auto" and filename != "remove-all-db.auth":
+        assert code == 0
+        assert "could not parse an ESL" in err
+        assert "prune skipped (unsafe plan" in err
+    else:
+        assert code == 2
+    assert err
+    assert not env["marker"].exists()
+    assert prune.read_efi_variable(safe_updates, "db") == before
+
+
+@pytest.mark.parametrize("signed_attributes", [False, True])
+@pytest.mark.parametrize("attributes", [prune.DB_ATTR_REPLACE, prune.DB_ATTR_APPEND])
+def test_cms_verification_rejects_corrupted_signature(tmp_path, signed_attributes, attributes):
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    cert = _make_cert("KEK", key)
+    payload = _esl(cert) if attributes == prune.DB_ATTR_APPEND else b""
+    timestamp = prune.parse_auth(_auth(payload)).timestamp
+    content = (
+        "db".encode("utf-16-le") + prune.EFI_IMAGE_SECURITY_DATABASE_GUID.bytes_le
+        + attributes.to_bytes(4, "little") + timestamp + payload
+    )
+    options = [pkcs7.PKCS7Options.DetachedSignature, pkcs7.PKCS7Options.Binary]
+    if not signed_attributes:
+        options.append(pkcs7.PKCS7Options.NoAttributes)
+    signature = (
+        pkcs7.PKCS7SignatureBuilder().set_data(content).add_signer(cert, key, hashes.SHA256())
+        .sign(serialization.Encoding.DER, options)
+    )
+    trusted = tmp_path / "KEK.pem"
+    trusted.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    prefix = tmp_path / "update"
+    assert prune.verify_db_auth(
+        prune.parse_auth(_auth(payload, signature)), attributes, bool(payload), trusted, prefix,
+    )
+    # With no unsigned attributes, the final DER byte belongs to the signer's signature.
+    corrupted = signature[:-1] + bytes([signature[-1] ^ 1])
+    assert not prune.verify_db_auth(
+        prune.parse_auth(_auth(payload, corrupted)), attributes, bool(payload), trusted, prefix,
+    )
+
+
 def test_pkcs7_wrapping_detection():
     wrapped = prune.der(prune.DER_SEQUENCE, prune.PKCS7_SIGNED_DATA_OID + b"\xa0\x00")
     assert prune.is_pkcs7_content_info(wrapped)
@@ -414,6 +505,42 @@ def test_direct_call_rejects_empty_image_list(env):
     with pytest.raises(prune.ScriptError, match="returned no installed images"):
         prune.prune_db_certificates(prune.Config.from_env(), images=[], auto=True)
     assert not env["marker"].exists()
+
+
+@pytest.mark.parametrize("has_removable_certificate", [False, True])
+def test_multi_certificate_auth_only_drops_certificates_not_reinstalled(
+        env, safe_updates, tmp_path, capsys, has_removable_certificate):
+    cert0, cert1 = env["certs"]
+    reinstalled = _make_cert("REINSTALLED")
+    removable = _make_cert("REMOVABLE") if has_removable_certificate else None
+    original_certs = [cert0, cert1, reinstalled] + ([removable] if removable is not None else [])
+    _write_var(safe_updates.efivars_dir, "db", _esl(*original_certs))
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    original_auth = _auth(_esl(cert0, reinstalled))
+    auth.write_bytes(original_auth)
+
+    plan = prune.analyze(safe_updates, tmp_path, images=["SONiC-OS-test"])
+    assert len(plan.used) == 2
+    assert not plan.missing
+    assert not plan.boot_chain_at_risk
+    assert plan.selected_auths == [auth, env["auth_dir"] / "DB-cert1.auth"]
+    expected_drop = [removable.fingerprint(hashes.SHA256()).hex(":").upper()] if removable is not None else []
+    assert [cert.fingerprint for cert in plan.drop] == expected_drop
+
+    code, out, err = _run(capsys, "--auto")
+    assert code == 0
+    assert not err
+    if has_removable_certificate:
+        assert "Pruning 1 stale" in out
+        assert env["marker"].read_text().splitlines() == [
+            "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
+        ]
+        assert prune.read_efi_variable(safe_updates, "db") == _esl(cert0, reinstalled) + _esl(cert1)
+    else:
+        assert "No stale db certificates to prune." in out
+        assert not env["marker"].exists()
+        assert prune.read_efi_variable(safe_updates, "db") == _esl(*original_certs)
+    assert auth.read_bytes() == original_auth
 
 
 def test_auto_skips_when_no_certificates_are_stale(env, monkeypatch, capsys):

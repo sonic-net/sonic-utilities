@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import secure_boot_db
 from .secure_boot_keys import ensure_efivars
+from .secure_boot_lock import locked
 
 ENROLLMENT_AUTHORITIES = ("PK", "KEK")
 
@@ -96,6 +97,7 @@ def persist_auth(auth, auth_dir):
     return destination
 
 
+@locked
 def enroll_db_certificate(image_file, *, check_only=False, config=None):
     """Inspect or enroll a bundled update; return False only when check mode finds none."""
     image_path = Path(image_file)

@@ -4,10 +4,12 @@ import pytest
 
 from sonic_installer import secure_boot_db as db
 from sonic_installer import secure_boot_keys as keys
+from sonic_installer import secure_boot_lock
 
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
+    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", tmp_path / "installer.lock")
     efivars = tmp_path / "efivars"
     efivars.mkdir()
     for name in ("KEK", "PK"):
@@ -23,6 +25,7 @@ def env(tmp_path, monkeypatch):
     }
 
     def run(cmd, **kwargs):
+        assert secure_boot_lock.current_lock_fd() is not None
         assert cmd[0] in state["status"], f"unexpected external command: {cmd}"
         assert kwargs["timeout"] == 600
         state["calls"].append(call(cmd, **kwargs))
