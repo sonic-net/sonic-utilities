@@ -240,20 +240,35 @@ class TestDirectPlatformApiCommands(object):
         assert json.loads(temperature.output) == {"els0": 32.5}
         assert json.loads(power.output)["els0"][
             "Laser0OpticalPowerMonitor"
-        ] == 9.1
+        ] == pytest.approx(9.590)
+
+    @pytest.mark.parametrize("power, expected", [(0.0, None), (1.0, 0.0), (10.0, 10.0)])
+    def test_els_output_power_converts_mw_to_dbm(self, power, expected):
+        with mock.patch.object(self.cpo.api, "get_per_lane_opt_power_monitor",
+                               return_value={"OptPowerMonitor1": power}):
+            result = invoke(["show", "els", "output-power", "0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"els0": {"OptPowerMonitor1": expected}}
+
+    def test_els_output_power_reports_read_failure(self):
+        with mock.patch.object(self.cpo.api, "get_per_lane_opt_power_monitor", return_value=None):
+            result = invoke(["show", "els", "output-power", "0"])
+        assert result.exit_code != 0
+        assert "ELSFP optical power is unavailable" in result.output
 
     def test_els_output_power_table_uses_measurement_precision(self):
         result = invoke(["show", "els", "output-power", "0"])
         assert result.exit_code == 0
-        assert "9.10" in result.output
-        assert "70.80" in result.output
+        assert "Output Power (dBm)" in result.output
+        assert "9.590" in result.output
+        assert "18.500" in result.output
 
         json_result = invoke([
             "show", "els", "output-power", "0", "--json"
         ])
         assert json.loads(json_result.output)["els0"][
             "Laser1OpticalPowerMonitor"
-        ] == 70.8
+        ] == pytest.approx(18.500)
 
     @pytest.mark.parametrize("present", [True, False])
     def test_interface_presence_calls_cpo_instead_of_endpoints(self, present):

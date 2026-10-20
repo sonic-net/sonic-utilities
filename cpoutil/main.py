@@ -10,6 +10,7 @@ from tabulate import tabulate
 
 from sonic_py_common import multi_asic
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
+from sonic_platform_base.sonic_xcvr.api.xcvr_api import XcvrApi
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
     CMIS_INFO_FIELD_MAP,
@@ -1621,18 +1622,24 @@ def show_els_output_power(els_index, json_output):
                 EXTERNAL_LASER_SOURCE, els_index):
             api = get_els_api(cpo, resource_id)
             lane_count = _get_els_lane_count(api.get_elsfp_info())
-            records[resource_id] = _filter_els_monitor_lanes(
+            values = _filter_els_monitor_lanes(
                 api.get_per_lane_opt_power_monitor(),
                 lane_count,
             )
+            if values is None:
+                raise CpoCommandError("ELSFP optical power is unavailable for '{}'".format(resource_id))
+            if isinstance(values, dict):
+                records[resource_id] = {lane: XcvrApi.mw_to_dbm(value) for lane, value in values.items()}
+            else:
+                records[resource_id] = [XcvrApi.mw_to_dbm(value) for value in values]
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records,
         json_output,
-        ("ELS", "Output Power (mW)"),
+        ("ELS", "Output Power (dBm)"),
         field_header="Laser",
-        floatfmt=".2f",
+        floatfmt=".3f",
     )
 
 
