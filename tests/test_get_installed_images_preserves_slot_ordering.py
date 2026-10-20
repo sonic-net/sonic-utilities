@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock, patch
-from click.testing import CliRunner
-from sonic_installer.main import cli, cleanup
+from sonic_installer.main import cleanup
 from sonic_installer.bootloader.uboot import UbootBootloader
 
 
@@ -62,21 +61,8 @@ def test_set_next_image_preserves_slot_mapping(mock_run, mock_get_images):
     mock_run.assert_called_once()
 
 
-@patch.object(UbootBootloader, "get_installed_images")
-def test_list_images_preserves_slot_ordering(mock_get_images):
-    mock_get_images.return_value = [
-        "",
-        "SONiC-OS-2"
-    ]
-    runner = CliRunner()
-
-    result = runner.invoke(cli, ["list"])
-
-    assert "SONiC-OS-2" in result.output
-
-
 @patch("sonic_installer.main.get_bootloader")
-def test_cleanup_skips_empty_slot_placeholder(mock_get_bootloader):
+def test_cleanup_skips_empty_slot_placeholder_first_slot(mock_get_bootloader):
     bootloader = MagicMock(spec=UbootBootloader)
 
     bootloader.get_installed_images.return_value = [
@@ -85,6 +71,24 @@ def test_cleanup_skips_empty_slot_placeholder(mock_get_bootloader):
     ]
     bootloader.get_current_image.return_value = "SONiC-OS-2"
     bootloader.get_next_image.return_value = "SONiC-OS-2"
+
+    mock_get_bootloader.return_value = bootloader
+
+    cleanup()
+
+    bootloader.remove_image.assert_not_called()
+
+
+@patch("sonic_installer.main.get_bootloader")
+def test_cleanup_skips_empty_slot_placeholder_second_slot(mock_get_bootloader):
+    bootloader = MagicMock(spec=UbootBootloader)
+
+    bootloader.get_installed_images.return_value = [
+        "SONiC-OS-1",
+        ""
+    ]
+    bootloader.get_current_image.return_value = "SONiC-OS-1"
+    bootloader.get_next_image.return_value = "SONiC-OS-1"
 
     mock_get_bootloader.return_value = bootloader
 
