@@ -21,13 +21,12 @@ from .common import (
     DOCKERDIR_NAME,
 )
 from .exception import SonicRuntimeException
-from . import secure_boot_db
+from . import secure_boot_db, secure_boot_keys
 
 SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
 LOG_WARN = logger.Logger.LOG_PRIORITY_WARNING
 LOG_NOTICE = logger.Logger.LOG_PRIORITY_NOTICE
-SECURE_BOOT_KEY_UPDATE_SCRIPT = "/usr/local/bin/secure_boot_enroll_key.sh"
 EFI_GLOBAL_GUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
 EFI_PK_PATH = "/sys/firmware/efi/efivars/PK-{}".format(EFI_GLOBAL_GUID)
 
@@ -541,10 +540,12 @@ def remove_secure_boot_platform_keys(auth_dir):
 
     for var_name, auth_file in updates:
         echo_and_log("Removing UEFI Secure Boot {} using {}...".format(var_name, auth_file))
-        run_command_or_raise(
-            [SECURE_BOOT_KEY_UPDATE_SCRIPT, var_name, auth_file],
-            capture=False,
-        )
+        try:
+            secure_boot_keys.update_secure_boot_key(var_name, auth_file)
+        except (secure_boot_db.ScriptError, OSError, subprocess.SubprocessError) as e:
+            message = f"Failed to remove UEFI Secure Boot {var_name}: {e}"
+            echo_and_log(message, LOG_ERR)
+            raise SonicRuntimeException(message) from e
 
 
 def is_secure_boot_pk_enrolled():

@@ -17,6 +17,7 @@ import zlib
 from pathlib import Path
 
 from . import secure_boot_db
+from .secure_boot_keys import ensure_efivars
 
 ENROLLMENT_AUTHORITIES = ("PK", "KEK")
 
@@ -74,20 +75,6 @@ def extract_db_auth(image_path, work):
             return auth
     except (zipfile.BadZipFile, EOFError, UnicodeDecodeError, NotImplementedError, zlib.error, lzma.LZMAError) as e:
         raise secure_boot_db.ScriptError(f"invalid installer/fs.zip: {e}") from e
-
-
-def ensure_efivars(config):
-    """Mount efivarfs when necessary before reading firmware authorities."""
-    if not config.efivars_dir.is_dir():
-        raise secure_boot_db.ScriptError(
-            f"efivars not available at {config.efivars_dir}, cannot enroll db certificate"
-        )
-    if not os.path.ismount(config.efivars_dir):
-        result = secure_boot_db.run(["mount", "-t", "efivarfs", "efivarfs", str(config.efivars_dir)])
-        if result.returncode:
-            raise secure_boot_db.ScriptError(
-                f"failed to mount efivarfs at {config.efivars_dir}: {result.stderr.strip()}"
-            )
 
 
 def persist_auth(auth, auth_dir):

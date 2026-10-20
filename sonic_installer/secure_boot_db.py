@@ -16,6 +16,7 @@ import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict, List
 
 PROG = Path(sys.argv[0]).name if sys.argv and sys.argv[0] else "remove_stale_db_certs.py"
 
@@ -43,6 +44,7 @@ DER_SHORT_FORM_MAX = 0x7F
 PKCS7_SIGNED_DATA_OID = bytes.fromhex("06092a864886f70d010702")
 
 AUTHORITY_VARIABLES = ("KEK",)
+COMMAND_TIMEOUT_SECS = 600
 FALLBACK_ESP_DIRS = ("BOOT", "boot")
 IGNORED_EFI_PREFIXES = ("grubnet", "mmx")
 
@@ -111,21 +113,23 @@ class AuthUpdate:
 
 @dataclass
 class Plan:
+    """Selected certificates and the boot-chain safety checks for a db reset."""
+
     sb_state: str
-    db_certs: list
-    crit_dir: Path
-    records: dict
-    crit_bins: list
-    used: list
-    drop: list
-    auth_map: dict
-    selected_auths: list
-    missing: list
-    crit_at_risk: int
+    db_certs: List[DbCert]
+    boot_critical_dir: Path
+    records: Dict[Path, List[DbCert]]
+    boot_critical_binaries: List[Path]
+    used: List[DbCert]
+    drop: List[DbCert]
+    auth_map: Dict[str, Path]
+    selected_auths: List[Path]
+    missing: List[DbCert]
+    boot_critical_binaries_at_risk: int
 
     @property
-    def crit_fail(self):
-        return self.crit_at_risk > 0
+    def boot_chain_at_risk(self) -> bool:
+        return self.boot_critical_binaries_at_risk > 0
 
 
 def warn(message):
@@ -133,7 +137,7 @@ def warn(message):
 
 
 def run(cmd, **kwargs):
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=COMMAND_TIMEOUT_SECS, **kwargs)
 
 
 def succeeds(cmd):
@@ -315,10 +319,10 @@ def build_auth_map(config, work):
     return auth_map, auth_fingerprints
 
 
-def check_boot_chain(crit_bins, records, reinstall_fps, auth_dir):
+def check_boot_chain(boot_critical_binaries, records, reinstall_fps, auth_dir):
     """Count boot-chain binaries that would be left without a reinstallable db signer."""
     at_risk = 0
-    for binary in crit_bins:
+    for binary in boot_critical_binaries:
         matched = records[binary]
         if not matched:
             if succeeds(["sbverify", "--list", str(binary)]):
@@ -334,25 +338,24 @@ def check_boot_chain(crit_bins, records, reinstall_fps, auth_dir):
                 print(f"         signed by db[{c.index}] {c.subject} sha256 {c.fingerprint}", file=sys.stderr)
                 print(f"         -> no matching .auth in {auth_dir} to reinstall it", file=sys.stderr)
             at_risk += 1
-    if not crit_bins:
+    if not boot_critical_binaries:
         warn("no boot-chain binaries were identified")
     return at_risk
 
 
-def analyze(config, work, images=None):
+def analyze(config, work, images=None) -> Plan:
     """Build a pruning plan for the supplied images, or query them for standalone use."""
     db_certs = load_db_certs(config, work)
     images = installed_images() if images is None else images
     if not images:
         raise ScriptError("sonic-installer returned no installed images, refusing to prune")
-    targets, crit_dir = collect_targets(config, images)
+    targets, boot_critical_dir = collect_targets(config, images)
 
     binaries = []
     for directory in targets:
         for binary in discover_binaries(directory):
             if binary not in binaries:
                 binaries.append(binary)
-    crit_bins = binaries
     if not binaries:
         raise ScriptError("no signed EFI binaries discovered in any target directory")
 
@@ -365,9 +368,10 @@ def analyze(config, work, images=None):
 
     return Plan(
         sb_state=secure_boot_state(config), db_certs=db_certs,
-        crit_dir=crit_dir, records=records, crit_bins=crit_bins, used=used,
+        boot_critical_dir=boot_critical_dir, records=records, boot_critical_binaries=binaries, used=used,
         drop=[c for c in db_certs if c not in used], auth_map=auth_map, selected_auths=selected,
-        missing=missing, crit_at_risk=check_boot_chain(crit_bins, records, reinstall_fps, config.auth_dir),
+        missing=missing,
+        boot_critical_binaries_at_risk=check_boot_chain(binaries, records, reinstall_fps, config.auth_dir),
     )
 
 
@@ -387,7 +391,7 @@ def print_plan(config, plan, commit, verbose):
         f"Auth directory       : {config.auth_dir}",
         f"Remove-all .auth      : {config.remove_all_auth}",
     ]
-    lines += [f"Boot-critical dir    : {plan.crit_dir} ({len(plan.crit_bins)} binaries)", "",
+    lines += [f"Boot-critical dir    : {plan.boot_critical_dir} ({len(plan.boot_critical_binaries)} binaries)", "",
               f"db certificates that SIGN an installed image and will be REINSTALLED ({len(plan.used)}):"]
     if not plan.used:
         lines.append("  (none matched - refusing to wipe db with nothing to reinstall)")
@@ -412,7 +416,8 @@ def print_plan(config, plan, commit, verbose):
     if plan.missing:
         warn(f"{len(plan.missing)} image-signing db cert(s) have NO matching .auth in {config.auth_dir} "
              "(see 'MISSING' above)")
-    print(f"PRUNE_PLAN missing={len(plan.missing)} essential_missing={plan.crit_at_risk} drop={len(plan.drop)} "
+    print(f"PRUNE_PLAN missing={len(plan.missing)} essential_missing={plan.boot_critical_binaries_at_risk} "
+          f"drop={len(plan.drop)} "
           f"reinstall={len(plan.selected_auths)} used={len(plan.used)} db={len(plan.db_certs)}")
 
 
@@ -453,33 +458,41 @@ def update_db(config, auth, append):
         succeeds(["chattr", "-i", str(variable)])
     sys.stdout.flush()
     cmd = ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"]
-    return subprocess.run(cmd).returncode == 0
+    return subprocess.run(cmd, timeout=COMMAND_TIMEOUT_SECS).returncode == 0
 
 
-def apply_plan(config, plan, work):
+def apply_plan(config, plan, work, verbose=True):
     """Replace db, reinstall selected signers and verify the resulting boot chain."""
-    print("Deleting all db certificates (applying remove-all .auth) ...")
+    if verbose:
+        print("Deleting all db certificates (applying remove-all .auth) ...")
     if not update_db(config, config.remove_all_auth, append=False):
         raise ScriptError(f"failed to apply remove-all .auth ({config.remove_all_auth}); "
                           "db unchanged or partially modified -- verify before rebooting")
-    print("  db emptied.")
+    if verbose:
+        print("  db emptied.")
 
-    print(f"Reinstalling {len(plan.selected_auths)} image-signing certificate(s) ...")
+        print(f"Reinstalling {len(plan.selected_auths)} image-signing certificate(s) ...")
     failed = []
     for auth in plan.selected_auths:
-        print(f"  appending: {auth}")
+        if verbose:
+            print(f"  appending: {auth}")
         if not update_db(config, auth, append=True):
             warn(f"failed to append {auth}")
             failed.append(auth)
 
-    print("\nVerifying db after reinstall ...")
+    if verbose:
+        print("\nVerifying db after reinstall ...")
     new_pems = [c.pem for c in read_efi_certificates(config, work, "db", "new-db")]
-    print(f"  db now holds {len(new_pems)} certificate(s).")
-    broken = [b for b in plan.crit_bins if not any(succeeds(["sbverify", "--cert", str(p), str(b)]) for p in new_pems)]
-    for binary in plan.crit_bins:
+    if verbose:
+        print(f"  db now holds {len(new_pems)} certificate(s).")
+    broken = [
+        b for b in plan.boot_critical_binaries
+        if not any(succeeds(["sbverify", "--cert", str(p), str(b)]) for p in new_pems)
+    ]
+    for binary in plan.boot_critical_binaries:
         if binary in broken:
             print(f"  ERR {binary} does NOT verify against the new db", file=sys.stderr)
-        else:
+        elif verbose:
             print(f"  OK  {binary} verifies against the new db")
     if broken:
         raise ScriptError("CRITICAL: a boot-chain binary no longer verifies against db. DO NOT REBOOT with "
@@ -510,9 +523,9 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
             print("Plan only - no changes made.")
             return 0
         if auto:
-            if not plan.used or plan.missing or plan.crit_fail:
+            if not plan.used or plan.missing or plan.boot_chain_at_risk:
                 warn(f"Secure Boot db prune skipped (unsafe plan: used={len(plan.used)} "
-                     f"missing={len(plan.missing)} essential_missing={plan.crit_at_risk})")
+                     f"missing={len(plan.missing)} essential_missing={plan.boot_critical_binaries_at_risk})")
                 return 0
             if not plan.drop:
                 print("No stale db certificates to prune.")
@@ -522,17 +535,17 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
             raise ScriptError("no db certificate signs any installed image; "
                               "refusing to delete db (nothing safe to reinstall)")
         if not commit:
-            if plan.crit_fail:
-                warn(f"{plan.crit_at_risk} boot-chain binaries would lose every db signer "
+            if plan.boot_chain_at_risk:
+                warn(f"{plan.boot_critical_binaries_at_risk} boot-chain binaries would lose every db signer "
                      "(essential db certificate missing); --commit would refuse")
             print("Dry-run complete. Re-run with --commit to delete all db certs and reinstall the")
             print(f"{len(plan.selected_auths)} image-signing certificate(s) listed above.")
             return 0
-        if plan.crit_fail:
+        if plan.boot_chain_at_risk:
             raise ScriptError("a boot-chain binary would lose every db signer. "
                               f"Refusing to touch db. Provide the missing .auth in {config.auth_dir}.")
         validate_updates(config, plan, work)
-        apply_plan(config, plan, work)
+        apply_plan(config, plan, work, verbose=not auto or verbose)
     return 0
 
 

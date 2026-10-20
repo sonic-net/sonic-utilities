@@ -3,7 +3,7 @@ import subprocess
 import sys
 import pytest
 from contextlib import contextmanager
-from sonic_installer.main import SECURE_BOOT_KEY_UPDATE_SCRIPT, sonic_installer
+from sonic_installer.main import sonic_installer
 from click.testing import CliRunner
 from unittest.mock import patch, Mock, call
 import sonic_installer.common as sonic_installer_common
@@ -257,10 +257,10 @@ def test_install(
 
 
 @patch("sonic_installer.main.get_bootloader")
-@patch("sonic_installer.main.run_command_or_raise")
+@patch("sonic_installer.main.secure_boot_keys.update_secure_boot_key")
 @patch("sonic_installer.main.run_command")
 @patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=True)
-def test_install_remove_pk(pk_enrolled, run_command, run_command_or_raise, get_bootloader, fs):
+def test_install_remove_pk(pk_enrolled, run_command, update_key, get_bootloader, fs):
     sonic_image_filename = "sonic.bin"
     image_version = "image_1"
     auth_dir = "/secure-boot-empty-keys"
@@ -285,10 +285,49 @@ def test_install_remove_pk(pk_enrolled, run_command, run_command_or_raise, get_b
     )
 
     assert result.exit_code == 0
-    assert run_command_or_raise.call_args_list == [
-        call([SECURE_BOOT_KEY_UPDATE_SCRIPT, "KEK", kek_auth], capture=False),
-        call([SECURE_BOOT_KEY_UPDATE_SCRIPT, "PK", pk_auth], capture=False),
+    assert update_key.call_args_list == [
+        call("KEK", kek_auth),
+        call("PK", pk_auth),
     ]
+
+
+@pytest.mark.parametrize("failed_key", ["KEK", "PK"])
+@pytest.mark.parametrize("error", [
+    secure_boot_db.ScriptError("firmware rejected update"),
+    OSError("missing efi-updatevar"),
+    subprocess.TimeoutExpired("efi-updatevar", 600),
+])
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.run_command")
+@patch("sonic_installer.main.is_secure_boot_pk_enrolled", return_value=True)
+@patch("sonic_installer.main.secure_boot_keys.update_secure_boot_key")
+def test_install_stops_when_key_removal_fails(
+        update_key, pk_enrolled, run_command, get_bootloader, fs, failed_key, error):
+    auth_dir = "/secure-boot-empty-keys"
+    kek_auth = os.path.join(auth_dir, "remove-all-kek.auth")
+    pk_auth = os.path.join(auth_dir, "remove-all-pk.auth")
+    fs.create_file("sonic.bin")
+    fs.create_file(kek_auth)
+    fs.create_file(pk_auth)
+    bootloader = get_bootloader.return_value
+    bootloader.get_binary_image_version.return_value = "installed-image"
+    bootloader.get_installed_images.return_value = ["installed-image"]
+    bootloader.set_default_image.return_value = True
+    update_key.side_effect = [error] if failed_key == "KEK" else [None, error]
+
+    result = CliRunner().invoke(
+        sonic_installer.commands["install"], ["sonic.bin", "-y", f"--remove-pk={auth_dir}"],
+    )
+
+    assert result.exit_code != 0
+    assert isinstance(result.exception, sonic_installer_common.SonicRuntimeException)
+    assert f"Failed to remove UEFI Secure Boot {failed_key}" in result.output
+    assert "Done" not in result.output
+    expected = [call("KEK", kek_auth)]
+    if failed_key == "PK":
+        expected.append(call("PK", pk_auth))
+    assert update_key.call_args_list == expected
+    run_command.assert_not_called()
 
 
 @patch("sonic_installer.main.get_bootloader")

@@ -136,6 +136,22 @@ def _run(capsys, *argv):
     return code, captured.out, captured.err
 
 
+def test_analyzed_plan_exposes_boot_chain_safety(env, tmp_path):
+    config = prune.Config.from_env()
+    plan = prune.analyze(config, tmp_path, images=["SONiC-OS-test"])
+    assert plan.boot_critical_dir == config.sonic_os_dir
+    assert set(plan.boot_critical_binaries) == {
+        config.host_path / "image-test" / "boot" / "vmlinuz-test",
+        config.sonic_os_dir / "shimx64.efi",
+        config.esp_path / "BOOT" / "BOOTX64.EFI",
+    }
+    assert set(plan.records) == set(plan.boot_critical_binaries)
+    assert plan.boot_critical_binaries_at_risk == 2
+    assert plan.boot_chain_at_risk is True
+    plan.boot_critical_binaries_at_risk = 0
+    assert plan.boot_chain_at_risk is False
+
+
 def test_plan_marks_installed_kernel_and_fallback_loader_as_essential(env, capsys):
     code, out, err = _run(capsys, "--plan")
     assert code == 0, err
@@ -159,6 +175,24 @@ def test_plan_does_not_check_tool_availability(env, capsys, monkeypatch):
     assert not env["marker"].exists()
 
 
+def test_run_sets_per_command_timeout(monkeypatch):
+    result = prune.subprocess.CompletedProcess(["openssl", "version"], 0, "OpenSSL", "")
+    run = Mock(return_value=result)
+    monkeypatch.setattr(prune.subprocess, "run", run)
+    assert prune.run(["openssl", "version"]) is result
+    run.assert_called_once_with(
+        ["openssl", "version"], capture_output=True, text=True, timeout=prune.COMMAND_TIMEOUT_SECS,
+    )
+    assert prune.COMMAND_TIMEOUT_SECS == 600
+
+
+def test_run_terminates_a_command_that_exceeds_its_timeout(monkeypatch):
+    monkeypatch.setattr(prune, "COMMAND_TIMEOUT_SECS", 0.1)
+    with pytest.raises(prune.subprocess.TimeoutExpired) as error:
+        prune.run([sys.executable, "-c", "import time; time.sleep(10)"])
+    assert error.value.timeout == 0.1
+
+
 @pytest.mark.parametrize("append", [False, True])
 @pytest.mark.parametrize("chattr_status,update_status", [(0, 0), (1, 0), (0, 1)])
 def test_update_db_calls_tools_directly(env, monkeypatch, append, chattr_status, update_status):
@@ -167,6 +201,7 @@ def test_update_db_calls_tools_directly(env, monkeypatch, append, chattr_status,
     calls = []
 
     def run(cmd, **kwargs):
+        assert kwargs["timeout"] == prune.COMMAND_TIMEOUT_SECS
         calls.append(cmd)
         status = chattr_status if cmd[0] == "chattr" else update_status
         return prune.subprocess.CompletedProcess(cmd, status)
@@ -181,6 +216,30 @@ def test_update_db_calls_tools_directly(env, monkeypatch, append, chattr_status,
         ["chattr", "-i", str(config.efivars_dir / f"db-{prune.VARIABLE_GUIDS['db']}")],
         ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"],
     ]
+
+
+@pytest.mark.parametrize("append", [False, True])
+def test_update_db_propagates_firmware_timeout(env, monkeypatch, append):
+    config = prune.Config.from_env()
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    cmd = ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"]
+    monkeypatch.setattr(prune, "succeeds", Mock(return_value=True))
+    run = Mock(side_effect=prune.subprocess.TimeoutExpired(cmd, prune.COMMAND_TIMEOUT_SECS))
+    monkeypatch.setattr(prune.subprocess, "run", run)
+    with pytest.raises(prune.subprocess.TimeoutExpired):
+        prune.update_db(config, auth, append)
+    run.assert_called_once_with(cmd, timeout=prune.COMMAND_TIMEOUT_SECS)
+
+
+def test_cli_reports_command_timeout(env, monkeypatch, capsys):
+    def run(cmd, **kwargs):
+        raise prune.subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(prune.subprocess, "run", run)
+    code, _, err = _run(capsys, "--auto")
+    assert code == 2
+    assert "timed out after 600 seconds" in err
+    assert not env["marker"].exists()
 
 
 def test_commit_rejects_remove_all_auth_with_nonempty_payload(env, capsys, monkeypatch):
@@ -259,6 +318,19 @@ def test_auto_skips_unsafe_plan_without_touching_db(env, capsys):
     assert not env["marker"].exists()
 
 
+def test_auto_verbose_restores_plan_output(env, capsys):
+    code, out, err = _run(capsys, "--auto")
+    assert code == 0
+    assert "SONiC db certificate reset plan" not in out
+    assert "prune skipped (unsafe plan" in err
+    code, out, err = _run(capsys, "--auto", "--verbose")
+    assert code == 0
+    assert "SONiC db certificate reset plan" in out
+    assert "Per-binary -> db certificate mapping:" in out
+    assert "prune skipped (unsafe plan" in err
+    assert not env["marker"].exists()
+
+
 def test_auto_rejects_conflicting_options(env, capsys):
     code, _, err = _run(capsys, "--auto", "--plan")
     assert code == 2
@@ -316,7 +388,7 @@ def test_direct_call_rejects_empty_image_list(env):
 
 
 def test_auto_skips_when_no_certificates_are_stale(env, monkeypatch, capsys):
-    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[])
+    plan = Mock(used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[])
     monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
     apply = Mock()
     monkeypatch.setattr(prune, "apply_plan", apply)
@@ -325,14 +397,24 @@ def test_auto_skips_when_no_certificates_are_stale(env, monkeypatch, capsys):
     apply.assert_not_called()
 
 
-def test_auto_validates_before_applying_safe_plan(env, monkeypatch):
-    plan = Mock(used=[Mock()], missing=[], crit_fail=False, drop=[Mock()])
+@pytest.mark.parametrize("auto", [False, True])
+@pytest.mark.parametrize("verbose", [False, True])
+def test_pruning_validates_before_applying_and_selects_output(env, monkeypatch, auto, verbose):
+    plan = Mock(used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[Mock()])
     monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+    print_plan = Mock()
+    monkeypatch.setattr(prune, "print_plan", print_plan)
     operations = Mock()
     monkeypatch.setattr(prune, "validate_updates", operations.validate)
     monkeypatch.setattr(prune, "apply_plan", operations.apply)
-    assert prune.prune_db_certificates(prune.Config.from_env(), auto=True) == 0
+    config = prune.Config.from_env()
+    assert prune.prune_db_certificates(config, commit=True, auto=auto, verbose=verbose) == 0
     assert [call[0] for call in operations.mock_calls] == ["validate", "apply"]
+    operations.apply.assert_called_once_with(*operations.validate.call_args.args, verbose=not auto or verbose)
+    if not auto or verbose:
+        print_plan.assert_called_once_with(config, plan, True, verbose)
+    else:
+        print_plan.assert_not_called()
 
 
 def test_cli_reports_missing_utilities(env, monkeypatch, capsys):
@@ -362,20 +444,31 @@ def test_installed_images_rejects_failed_query_even_with_image_output(monkeypatc
 
 
 @pytest.mark.parametrize("verifies", [False, True])
-def test_apply_plan_verifies_boot_chain_after_reinstall(env, tmp_path, monkeypatch, verifies):
+@pytest.mark.parametrize("verbose", [False, True])
+def test_apply_plan_verifies_boot_chain_after_reinstall(env, tmp_path, monkeypatch, capsys, verifies, verbose):
     config = prune.Config.from_env()
     auth = env["auth_dir"] / "DB-cert0.auth"
-    plan = Mock(selected_auths=[auth], crit_bins=[tmp_path / "kernel"])
+    plan = Mock(selected_auths=[auth], boot_critical_binaries=[tmp_path / "kernel"])
     update = Mock(return_value=True)
     monkeypatch.setattr(prune, "update_db", update)
     monkeypatch.setattr(prune, "read_efi_certificates", Mock(return_value=[Mock(pem=tmp_path / "cert.pem")]))
     verify = Mock(return_value=verifies)
     monkeypatch.setattr(prune, "succeeds", verify)
     if verifies:
-        prune.apply_plan(config, plan, tmp_path)
+        prune.apply_plan(config, plan, tmp_path, verbose=verbose)
     else:
         with pytest.raises(prune.ScriptError, match="DO NOT REBOOT"):
-            prune.apply_plan(config, plan, tmp_path)
+            prune.apply_plan(config, plan, tmp_path, verbose=verbose)
+    captured = capsys.readouterr()
+    assert ("Deleting all db certificates" in captured.out) is verbose
+    assert ("appending:" in captured.out) is verbose
+    assert ("Verifying db after reinstall" in captured.out) is verbose
+    if verifies:
+        assert "Done: db reset to 1 image-signing certificate(s); all boot-chain binaries verify." in captured.out
+        assert ("  OK " in captured.out) is verbose
+    else:
+        assert "does NOT verify against the new db" in captured.err
+        assert "Done:" not in captured.out
     assert update.call_args_list == [
         call(config, config.remove_all_auth, append=False), call(config, auth, append=True),
     ]
@@ -384,13 +477,15 @@ def test_apply_plan_verifies_boot_chain_after_reinstall(env, tmp_path, monkeypat
     ])
 
 
-def test_apply_plan_attempts_other_reinstalls_after_append_failure(env, tmp_path, monkeypatch):
+@pytest.mark.parametrize("verbose", [False, True])
+def test_apply_plan_attempts_other_reinstalls_after_append_failure(env, tmp_path, monkeypatch, capsys, verbose):
     plan = Mock(selected_auths=[tmp_path / "first.auth", tmp_path / "second.auth"],
-                crit_bins=[tmp_path / "kernel"])
+                boot_critical_binaries=[tmp_path / "kernel"])
     update = Mock(side_effect=[True, False, True])
     monkeypatch.setattr(prune, "update_db", update)
     monkeypatch.setattr(prune, "read_efi_certificates", Mock(return_value=[Mock(pem=tmp_path / "cert.pem")]))
     monkeypatch.setattr(prune, "succeeds", Mock(return_value=True))
     with pytest.raises(prune.ScriptError, match="one or more reinstall .auth files failed"):
-        prune.apply_plan(prune.Config.from_env(), plan, tmp_path)
+        prune.apply_plan(prune.Config.from_env(), plan, tmp_path, verbose=verbose)
     assert update.call_count == 3
+    assert "failed to append" in capsys.readouterr().err
