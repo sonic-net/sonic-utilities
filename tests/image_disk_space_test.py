@@ -68,7 +68,10 @@ def test_get_min_free_disk_missing_key_returns_none(
     )
 
 
-@pytest.mark.parametrize("bad_value", [0, -1, "bad", None])
+@pytest.mark.parametrize(
+    "bad_value",
+    [0, -1, "bad", None, True, False, 3.9, 5.0, float("inf"), float("-inf"), float("nan")],
+)
 @pytest.mark.parametrize(
     "image_type,key",
     [
@@ -97,6 +100,11 @@ def test_invalid_platform_json_value_returns_none(
         )
         is None
     )
+
+
+@pytest.mark.parametrize("value,expected", [(5, 5), ("5", 5), ("005", 5)])
+def test_positive_integer_settings(value, expected):
+    assert image_disk_space.get_optional_positive_int({"limit": value}, "limit") == expected
 
 
 def test_missing_platform_json_returns_none():

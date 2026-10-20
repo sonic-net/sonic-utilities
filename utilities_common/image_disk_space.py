@@ -95,8 +95,11 @@ def _get_optional_positive_int(
         return None
 
     try:
-        value = int(data[key])
-    except (TypeError, ValueError) as error:
+        raw_value = data[key]
+        if isinstance(raw_value, (bool, float)):
+            raise ValueError("expected a positive integer")
+        value = int(raw_value)
+    except (TypeError, ValueError, OverflowError) as error:
         logging.error(
             "Invalid %s=%s; skipping the %s: %s",
             key,

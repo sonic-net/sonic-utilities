@@ -223,32 +223,111 @@ function gnmi_reboot_dpu()
     fi
 }
 
+function check_dpu_online()
+{
+    local DPU_NAME=$1
+
+    # Check if the DPU operation status is online before rebooting
+    local oper_status
+    local status_output
+    local module_name
+    module_name=$(echo "$DPU_NAME" | tr '[:lower:]' '[:upper:]')
+    if ! status_output=$(show chassis modules status "$module_name"); then
+        log_message "ERROR: Failed to retrieve DPU status for ${DPU_NAME}."
+        return ${EXIT_ERROR}
+    fi
+    oper_status=$(echo "$status_output" | awk -F '[[:space:]][[:space:]]+' -v name="$module_name" '
+        { sub(/^[[:space:]]+/, ""); if ($1 == name) print $4 }
+    ')
+    log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
+    case "$oper_status" in
+        Online) return ${EXIT_SUCCESS} ;;
+        Offline) return ${EXIT_DPU_DOWN} ;;
+        *)
+            log_message "ERROR: Unknown DPU status for ${DPU_NAME}: '$oper_status'"
+            return ${EXIT_ERROR}
+            ;;
+    esac
+}
+
+function preflight_all_dpus()
+{
+    local NUM_DPU=$1
+    local dpu_index
+    local dpu_status
+
+    if [[ -z "$NUM_DPU" ]]; then
+        log_message "ERROR: Failed to retrieve number of DPUs or no DPUs found"
+        return ${EXIT_ERROR}
+    fi
+
+    for (( dpu_index=0; dpu_index<NUM_DPU; dpu_index++ )); do
+        check_dpu_online "dpu$dpu_index"
+        dpu_status=$?
+        if [[ $dpu_status -eq $EXIT_DPU_DOWN ]]; then
+            continue
+        elif [[ $dpu_status -ne $EXIT_SUCCESS ]]; then
+            return ${EXIT_ERROR}
+        fi
+        if ! check_dpu_reboot_disk_space "dpu$dpu_index"; then
+            log_message "ERROR: dpu$dpu_index reboot aborted due to insufficient free disk space"
+            return ${EXIT_ERROR}
+        fi
+    done
+    return ${EXIT_SUCCESS}
+}
+
+function prepare_smartswitch_reboot()
+{
+    MIDPLANE_DHCP_CHANGE_ATTEMPTED=no
+    preflight_all_dpus "$(get_num_dpus)" || return ${EXIT_ERROR}
+    MIDPLANE_DHCP_STATE=$(sonic-db-cli CONFIG_DB HGET "DHCP_SERVER_IPV4|bridge-midplane" "state")
+    if [ $? -ne 0 ] || [[ "$MIDPLANE_DHCP_STATE" != "enabled" && "$MIDPLANE_DHCP_STATE" != "disabled" ]]; then
+        log_message "ERROR: Reboot aborted: failed to retrieve midplane DHCP state"
+        return ${EXIT_ERROR}
+    fi
+    if [[ "$MIDPLANE_DHCP_STATE" == "enabled" ]]; then
+        MIDPLANE_DHCP_CHANGE_ATTEMPTED=yes
+        debug "SmartSwitch NPU: disable dhcp_server on bridge-midplane before reboot"
+        if ! config dhcp_server ipv4 disable bridge-midplane; then
+            log_message "ERROR: Failed to disable midplane DHCP; aborting reboot"
+            return ${EXIT_ERROR}
+        fi
+    fi
+    return ${EXIT_SUCCESS}
+}
+
+function restore_midplane_dhcp_on_failure()
+{
+    local exit_code=$1
+
+    if [[ $exit_code -ne $EXIT_SUCCESS && "$MIDPLANE_DHCP_CHANGE_ATTEMPTED" == "yes" ]]; then
+        config dhcp_server ipv4 enable bridge-midplane || \
+            log_message "ERROR: Failed to restore dhcp_server on bridge-midplane"
+    fi
+    return "$exit_code"
+}
+
 function reboot_dpu()
 {
     local DPU_NAME=$1
     local REBOOT_TYPE=$2
     local DPU_INDEX=${DPU_NAME//[!0-9]/}
+    local dpu_status
 
     log_message "User requested rebooting device ${DPU_NAME} ..."
 
-    # Check if the DPU operation status is online before rebooting
-    local oper_status
-    oper_status=$(show chassis modules status "${DPU_NAME^^}" | sed -n '/^ *DPU/ s/.*\s\+\(Online\|Offline\)\s\+.*/\1/p')
-    if [ $? -ne 0 ]; then
-        log_message "ERROR: Failed to retrieve DPU status."
-    else
-        log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
-        oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
-        if [ "$oper_status" != "online" ]; then
-            log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
-            return ${EXIT_DPU_DOWN}
-        fi
+    check_dpu_online "${DPU_NAME}"
+    dpu_status=$?
+    if [[ $dpu_status -ne $EXIT_SUCCESS ]]; then
+        return "$dpu_status"
     fi
 
-    check_dpu_reboot_disk_space "${DPU_NAME}"
-    if [ $? -ne 0 ]; then
-        log_message "ERROR: ${DPU_NAME} reboot aborted due to insufficient free disk space"
-        return ${EXIT_ERROR}
+    if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+        if ! check_dpu_reboot_disk_space "${DPU_NAME}"; then
+            log_message "ERROR: ${DPU_NAME} reboot aborted due to insufficient free disk space"
+            return ${EXIT_ERROR}
+        fi
     fi
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
@@ -321,11 +400,7 @@ function reboot_all_dpus() {
 
     local pid
 
-    # Wait on each PID individually so we can capture its exit status.
-    #
-    # This is required for the disk-space check. reboot_dpu() can now
-    # intentionally reject a reboot when the target DPU has insufficient
-    # space, and the parent must propagate that failure.
+    # Propagate worker failures while treating already-offline DPUs as skips.
     for pid in "${pids[@]}"; do
         local status=0
         wait "$pid" || status=$?
