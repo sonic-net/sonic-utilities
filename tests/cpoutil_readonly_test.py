@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import json
 import os
 import sys
@@ -638,3 +639,369 @@ class TestDirectPlatformApiCommands(object):
         result = invoke(["show", "oe", "status", "99"])
         assert result.exit_code != 0
         assert "Invalid oe index '99'" in result.output
+
+
+class DomOptoeEndpoint(cpoutil.OptoeEepromReadWriteMixin):
+    def __init__(self, path):
+        self.path = str(path)
+
+    def get_eeprom_path(self):
+        return self.path
+
+    def get_api(self):
+        return self.api
+
+
+class DomSnapshotApi:
+    def __init__(self, endpoint):
+        self.xcvr_eeprom = cpoutil.XcvrEeprom(endpoint.read_eeprom, endpoint.write_eeprom, None)
+
+    def get_transceiver_info(self):
+        return {"manufacturer": self.xcvr_eeprom.reader(0, 2).decode()}
+
+    get_elsfp_info = get_transceiver_info
+
+    def get_transceiver_dom_real_value(self):
+        return {"temperature": float(self.xcvr_eeprom.reader(0, 1)[0])}
+
+    get_elsfp_dom_real_value = get_transceiver_dom_real_value
+
+    def get_transceiver_threshold_info(self):
+        return {"temphighalarm": float(self.xcvr_eeprom.reader(1, 1)[0])}
+
+    def get_elsfp_threshold_info(self):
+        return {"temperature_alarm_high": float(self.xcvr_eeprom.reader(1, 1)[0])}
+
+
+class TestDomEepromSnapshot:
+    def endpoint(self, path):
+        endpoint = DomOptoeEndpoint(path)
+        endpoint.api = DomSnapshotApi(endpoint)
+        return endpoint
+
+    def test_global_dom_preserves_output_and_reads_shared_bytes_once(self, monkeypatch, tmp_path):
+        oe_file, els_file = tmp_path / "oe", tmp_path / "els"
+        oe_file.write_bytes(b"AB")
+        els_file.write_bytes(b"CD")
+        cpos = {}
+        endpoints = []
+        for port in range(1, 4):
+            oe, els = self.endpoint(oe_file), self.endpoint(els_file)
+            endpoints.extend([oe, els])
+            cpo = cpoutil.CpoBase(None, oe, els)
+            cpo.get_presence = mock.Mock(return_value=True)
+            cpos[port] = cpo
+        monkeypatch.setattr(cpoutil, "current_port_config", {
+            "Ethernet{}".format(index * 8): {"index": str(index + 1), "lanes": "1,2"}
+            for index in range(3)
+        })
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            PORT: cpos, OPTICAL_ENGINE: {"oe0": cpos[1]}, EXTERNAL_LASER_SOURCE: {"els0": cpos[1]},
+        })
+
+        @contextmanager
+        def no_snapshot():
+            yield lambda endpoint, api: None
+
+        with mock.patch.object(cpoutil, "_eeprom_read_snapshot", no_snapshot):
+            with mock.patch("builtins.open", wraps=open) as opened:
+                baseline = invoke(["show", "interface", "dom", "--json"])
+                baseline_reads = opened.call_count
+        with mock.patch("builtins.open", wraps=open) as opened:
+            optimized = invoke(["show", "interface", "dom", "--json"])
+            optimized_reads = opened.call_count
+        assert baseline.exit_code == optimized.exit_code == 0
+        assert json.loads(baseline.output) == json.loads(optimized.output)
+        assert baseline_reads == 18
+        assert optimized_reads == 2
+        for endpoint in endpoints:
+            assert endpoint.api.xcvr_eeprom.reader == endpoint.read_eeprom
+
+    def test_different_banks_and_paths_do_not_share_values(self, tmp_path):
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
+        first, second = tmp_path / "first", tmp_path / "second"
+        data = bytearray(0x30000)
+        bank0 = CmisPage.linear_offset(0x10, 0, 128)
+        bank1 = CmisPage.linear_offset(0x10, 1, 128)
+        assert bank0 != bank1
+        data[bank0] = 17
+        data[bank1] = 34
+        first.write_bytes(data)
+        data[bank0] = 51
+        second.write_bytes(data)
+        oe = self.endpoint(first)
+        peer = self.endpoint(first)
+        other = self.endpoint(second)
+        with cpoutil._eeprom_read_snapshot() as attach:
+            for endpoint in (oe, peer, other):
+                attach(endpoint, endpoint.api)
+            assert oe.api.xcvr_eeprom.reader(bank0, 1) == bytearray([17])
+            assert peer.api.xcvr_eeprom.reader(bank1, 1) == bytearray([34])
+            assert other.api.xcvr_eeprom.reader(bank0, 1) == bytearray([51])
+
+    def test_returned_buffers_are_not_shared(self, tmp_path):
+        path = tmp_path / "eeprom"
+        path.write_bytes(b"ABCD")
+        endpoint = self.endpoint(path)
+        read = endpoint.api.xcvr_eeprom
+        with cpoutil._eeprom_read_snapshot() as attach:
+            attach(endpoint, endpoint.api)
+            first = read.reader(0, 4)
+            first[0] = 0
+            second = read.reader(0, 4)
+            second[1] = 0
+            assert read.reader(0, 4) == bytearray(b"ABCD")
+
+    def test_failed_or_short_reads_are_not_cached(self, tmp_path):
+        path = tmp_path / "eeprom"
+        endpoint = self.endpoint(path)
+        read = endpoint.api.xcvr_eeprom
+        with cpoutil._eeprom_read_snapshot() as attach:
+            attach(endpoint, endpoint.api)
+            assert read.reader(0, 4) is None
+            path.write_bytes(b"AB")
+            assert read.reader(0, 4) == bytearray(b"AB")
+            path.write_bytes(b"WXYZ")
+            assert read.reader(0, 4) == bytearray(b"WXYZ")
+
+    def test_snapshot_expires_and_reader_restores_after_error(self, tmp_path):
+        path = tmp_path / "eeprom"
+        path.write_bytes(b"AB")
+        endpoint = self.endpoint(path)
+        read = endpoint.api.xcvr_eeprom
+        original = read.reader
+        with pytest.raises(RuntimeError, match="stop"):
+            with cpoutil._eeprom_read_snapshot() as attach:
+                attach(endpoint, endpoint.api)
+                attach(endpoint, endpoint.api)
+                assert read.reader(0, 2) == bytearray(b"AB")
+                raise RuntimeError("stop")
+        assert read.reader is original
+        path.write_bytes(b"CD")
+        with cpoutil._eeprom_read_snapshot() as attach:
+            attach(endpoint, endpoint.api)
+            assert read.reader(0, 2) == bytearray(b"CD")
+        assert read.reader is original
+
+    def test_custom_reader_is_not_wrapped(self, tmp_path):
+        endpoint = self.endpoint(tmp_path / "unused")
+        read = endpoint.api.xcvr_eeprom
+        reader = mock.Mock(return_value=bytearray(b"AB"))
+        read.reader = reader
+        with cpoutil._eeprom_read_snapshot() as attach:
+            attach(endpoint, endpoint.api)
+            assert read.reader is reader
+            assert read.reader(0, 2) == bytearray(b"AB")
+            assert read.reader(0, 2) == bytearray(b"AB")
+        assert reader.call_count == 2
+
+
+class TestApplicationEepromSnapshot:
+    @pytest.mark.parametrize("api_kind", ["cmis", "bailly"])
+    @pytest.mark.parametrize("port", [None, "Ethernet0"])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_reuses_file_reads_without_changing_application_output(
+            self, monkeypatch, tmp_path, api_kind, port, json_output):
+        from types import SimpleNamespace
+        from sonic_platform_base.sonic_xcvr.api.public.cmis import CmisApi
+        from sonic_platform_base.sonic_xcvr.api.broadcom.bailly import BaillyApi
+        from sonic_platform_base.sonic_xcvr.codes.broadcom.bailly import BaillyCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.broadcom.bailly import BaillyMemMap
+
+        path = tmp_path / "eeprom"
+        data = bytearray(1024 * 1024)
+        path.write_bytes(data)
+        entries, endpoints = [], []
+        expected = {0: list(range(8)), 1: [0, 7, 6, 5, 4, 3, 2, 1]}
+        api_class = CmisApi if api_kind == "cmis" else BaillyApi
+        for index, bank in enumerate((0, 1, 0)):
+            endpoint = DomOptoeEndpoint(path)
+            mem_map = BaillyMemMap(BaillyCodes, bank=bank, base_page=0)
+            for lane, application in enumerate(expected[bank], 1):
+                field = mem_map.get_field("{}_0_{}".format(consts.STAGED_CTRL_APSEL_FIELD, lane))
+                data[field.get_offset()] = application << 4
+            endpoint.api = api_class(cpoutil.XcvrEeprom(
+                endpoint.read_eeprom, endpoint.write_eeprom, mem_map))
+            endpoints.append(endpoint)
+            name = "Ethernet{}".format(index * 8)
+            entries.append((name, index + 1, SimpleNamespace(oe=endpoint), name))
+        path.write_bytes(data)
+        monkeypatch.setattr(cpoutil, "get_port_cpo_entries", lambda selected: [
+            entry for entry in entries if selected is None or entry[3] == selected
+        ])
+        # One breakout view and two full-bank views, including a shared bank.
+        monkeypatch.setattr(cpoutil, "get_cpo_lane_positions", lambda name: (
+            (0, 1, 2, 3) if name == "Ethernet0" else tuple(range(8))))
+        arguments = ["show", "interface", "speed", "application"]
+        if port is not None:
+            arguments.append(port)
+        if json_output:
+            arguments.append("--json")
+
+        @contextmanager
+        def no_snapshot():
+            yield lambda endpoint, api: None
+
+        with mock.patch.object(cpoutil, "_eeprom_read_snapshot", no_snapshot):
+            with mock.patch("builtins.open", wraps=open) as opened:
+                baseline = invoke(arguments)
+                baseline_reads = opened.call_count
+        with mock.patch("builtins.open", wraps=open) as opened:
+            optimized = invoke(arguments)
+            optimized_reads = opened.call_count
+        assert baseline.exit_code == optimized.exit_code == 0, (baseline.output, optimized.output)
+        assert baseline.output == optimized.output
+        if api_kind == "cmis" and port is not None:
+            # This single-bank public API path has no repeated addresses.
+            assert optimized_reads == baseline_reads
+        else:
+            assert optimized_reads < baseline_reads
+        for endpoint in endpoints:
+            assert endpoint.api.xcvr_eeprom.reader == endpoint.read_eeprom
+        if json_output:
+            records = json.loads(optimized.output)
+            assert records["Ethernet0"]["Application Select Controls"] == {
+                "lane{:02d}".format(lane): expected[0][lane] for lane in range(4)
+            }
+            if port is None:
+                assert records["Ethernet8"]["Application Select Controls"] == {
+                    "lane{:02d}".format(lane): application for lane, application in enumerate(expected[1])
+                }
+                assert records["Ethernet16"]["Application Select Controls"] == {
+                    "lane{:02d}".format(lane): application for lane, application in enumerate(expected[0])
+                }
+
+
+class TestLaneStatusEepromSnapshot:
+    def setup_method(self):
+        TestDirectPlatformApiCommands.setup_method(self)
+
+    @pytest.mark.parametrize("port", [None, "Ethernet0"])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_preserves_status_and_reduces_shared_oe_els_reads(self, tmp_path, port, json_output):
+        from sonic_platform_base.sonic_xcvr.api.public.cmis import CmisApi
+        from sonic_platform_base.sonic_xcvr.api.broadcom.bailly_elsfp import BaillyElsfpApi
+        from sonic_platform_base.sonic_xcvr.codes.broadcom.bailly import BaillyCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.broadcom.bailly import BaillyMemMap, BaillyElsfpMemMap
+        from sonic_platform_base.sonic_xcvr.fields.broadcom import bailly
+
+        path = tmp_path / "eeprom"
+        data = bytearray(1024 * 1024)
+        oe_map = BaillyMemMap(BaillyCodes, bank=0, base_page=0)
+        els_map = BaillyElsfpMemMap(BaillyCodes, base_page=0)
+        count_code = next(code for code, count in BaillyCodes.LASER_COUNT.items() if count == 8)
+        data[els_map.get_field(bailly.LASER_COUNT).get_offset()] = count_code
+        data[els_map.get_field(bailly.MODULE_LOW_POWER_STATE).get_offset()] = 2
+        data[els_map.get_field(bailly.LASER_ACTIVE_STATUS_7_0).get_offset()] = 0x0F
+        path.write_bytes(data)
+        oe, els = DomOptoeEndpoint(path), DomOptoeEndpoint(path)
+        oe.api = CmisApi(cpoutil.XcvrEeprom(oe.read_eeprom, oe.write_eeprom, oe_map))
+        els.api = BaillyElsfpApi(cpoutil.XcvrEeprom(els.read_eeprom, els.write_eeprom, els_map))
+        self.cpo.oe, self.cpo.elsfp = oe, els
+        arguments = ["show", "interface", "lane-status"]
+        if port is not None:
+            arguments.append(port)
+        if json_output:
+            arguments.append("--json")
+
+        @contextmanager
+        def no_snapshot():
+            yield lambda endpoint, api: None
+
+        with mock.patch.object(cpoutil, "_eeprom_read_snapshot", no_snapshot):
+            with mock.patch("builtins.open", wraps=open) as opened:
+                baseline = invoke(arguments)
+                before_reads = opened.call_count
+        with mock.patch("builtins.open", wraps=open) as opened:
+            optimized = invoke(arguments)
+            after_reads = opened.call_count
+        assert baseline.exit_code == optimized.exit_code == 0, (baseline.output, optimized.output)
+        assert baseline.output == optimized.output
+        assert after_reads < before_reads
+        for endpoint in (oe, els):
+            assert endpoint.api.xcvr_eeprom.reader == endpoint.read_eeprom
+        if json_output:
+            records = json.loads(optimized.output)
+            assert set(records) == ({"Ethernet0"} if port else {"Ethernet0", "Ethernet1"})
+            assert records["Ethernet0"]["ELS Status"]["module_state"] == "ModuleLowPwr"
+
+
+class TestFourReadOptimizations:
+    def setup_method(self):
+        TestDirectPlatformApiCommands.setup_method(self)
+
+
+    @pytest.mark.parametrize("command", ["lpmode", "tx-disable"])
+    @pytest.mark.parametrize("port", [None, "Ethernet0"])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_interface_snapshots_preserve_output_and_reuse_shared_reads(self, tmp_path, command, port, json_output):
+        from sonic_platform_base.sonic_xcvr.api.public.cmis import CmisApi
+        from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisMemMap
+
+        path = tmp_path / "eeprom"
+        data = bytearray(1024 * 1024)
+        mem_map = CmisMemMap(CmisCodes, bank=0)
+        data[mem_map.get_field(consts.TX_DISABLE_FIELD).get_offset()] = 2
+        path.write_bytes(data)
+        endpoint = DomOptoeEndpoint(path)
+        endpoint.api = CmisApi(cpoutil.XcvrEeprom(endpoint.read_eeprom, endpoint.write_eeprom, mem_map))
+        endpoint.api.get_lpmode_support = lambda: True
+        endpoint.api.get_tx_disable_support = lambda: True
+        self.cpo.oe = endpoint
+        self.cpo.get_lpmode = mock.Mock(side_effect=endpoint.api.get_lpmode)
+        arguments = ["show", "interface", command] + ([port] if port else [])
+        if json_output:
+            arguments.append("--json")
+
+        @contextmanager
+        def no_snapshot():
+            yield lambda endpoint, api=None: None
+
+        with mock.patch.object(cpoutil, "_eeprom_read_snapshot", no_snapshot):
+            with mock.patch("builtins.open", wraps=open) as opened:
+                baseline = invoke(arguments)
+                baseline_reads = opened.call_count
+        self.cpo.get_lpmode.reset_mock()
+        with mock.patch("builtins.open", wraps=open) as opened:
+            optimized = invoke(arguments)
+            optimized_reads = opened.call_count
+        assert baseline.exit_code == optimized.exit_code == 0, (baseline.output, optimized.output)
+        assert baseline.output == optimized.output
+        assert optimized_reads <= baseline_reads
+        if port is None:
+            assert optimized_reads < baseline_reads
+        if command == "lpmode":
+            assert self.cpo.get_lpmode.call_count == (1 if port else 2)
+        assert endpoint.api.xcvr_eeprom.reader == endpoint.read_eeprom
+
+    def test_lpmode_platform_hook_does_not_require_an_oe_api(self):
+        endpoint = mock.Mock()
+        endpoint.get_api.side_effect = AssertionError("unexpected API creation")
+        self.cpo.oe = endpoint
+        self.cpo.get_lpmode = mock.Mock(return_value=True)
+        result = invoke(["show", "interface", "lpmode", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"Ethernet0": True}
+        self.cpo.get_lpmode.assert_called_once_with()
+        endpoint.get_api.assert_not_called()
+
+    def test_optional_snapshot_api_failure_preserves_platform_hook(self, tmp_path):
+        endpoint = DomOptoeEndpoint(tmp_path / "unused")
+        endpoint.get_api = mock.Mock(side_effect=RuntimeError("API unavailable"))
+        self.cpo.oe = endpoint
+        self.cpo.get_lpmode = mock.Mock(return_value=False)
+        result = invoke(["show", "interface", "lpmode", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        self.cpo.get_lpmode.assert_called_once_with()
+
+    def test_lpmode_hook_failure_restores_reader(self, tmp_path):
+        endpoint = DomOptoeEndpoint(tmp_path / "unused")
+        endpoint.api = DomSnapshotApi(endpoint)
+        original = endpoint.api.xcvr_eeprom.reader
+        self.cpo.oe = endpoint
+        self.cpo.get_lpmode = mock.Mock(side_effect=OSError("hook failed"))
+        result = invoke(["show", "interface", "lpmode", "Ethernet0"])
+        assert result.exit_code != 0
+        assert "hook failed" in result.output
+        assert endpoint.api.xcvr_eeprom.reader == original

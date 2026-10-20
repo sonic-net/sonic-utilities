@@ -1,5 +1,6 @@
 """Command-line utility for Co-Packaged Optics devices."""
 
+from contextlib import contextmanager
 import json
 import math
 import re
@@ -11,6 +12,8 @@ from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from sonic_platform_base.sonic_xcvr.api.xcvr_api import XcvrApi
+from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin
+from sonic_platform_base.sonic_xcvr.xcvr_eeprom import XcvrEeprom
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
     CMIS_INFO_FIELD_MAP,
@@ -804,6 +807,60 @@ def _append_additional_dom_values(lines, values, displayed_keys):
             ))
 
 
+@contextmanager
+def _eeprom_read_snapshot():
+    """Reuse successful Optoe bytes for one read-only command invocation.
+
+    Absolute offsets already encode bank/page selection. Cache only the
+    unmodified community Optoe reader: custom platform readers may translate
+    offsets themselves and must retain their existing behavior.
+    """
+    images = {}
+    readers = {}
+
+    def attach(endpoint, api=None):
+        if api is None:
+            if (not isinstance(endpoint, OptoeEepromReadWriteMixin)
+                    or getattr(endpoint.read_eeprom, "__func__", None)
+                    is not OptoeEepromReadWriteMixin.read_eeprom):
+                return
+            try:
+                api = endpoint.get_api()
+            except Exception:
+                # A working platform hook must not depend on optional caching.
+                return
+        eeprom = getattr(api, "xcvr_eeprom", None)
+        if not isinstance(eeprom, XcvrEeprom) or id(eeprom) in readers:
+            return
+        reader = eeprom.reader
+        if (not isinstance(endpoint, OptoeEepromReadWriteMixin)
+                or getattr(reader, "__self__", None) is not endpoint
+                or getattr(reader, "__func__", None) is not OptoeEepromReadWriteMixin.read_eeprom):
+            return
+        path = endpoint.get_eeprom_path()
+        if not isinstance(path, str) or not path:
+            return
+        image = images.setdefault(path, {})
+
+        def read(offset, size):
+            addresses = range(offset, offset + size)
+            if size > 0 and all(address in image for address in addresses):
+                return bytearray(image[address] for address in addresses)
+            data = reader(offset, size)
+            if isinstance(data, (bytes, bytearray)) and size > 0 and len(data) == size:
+                image.update(zip(addresses, data))
+            return data
+
+        readers[id(eeprom)] = (eeprom, reader)
+        eeprom.reader = read
+
+    try:
+        yield attach
+    finally:
+        for eeprom, reader in readers.values():
+            eeprom.reader = reader
+
+
 def _read_dom_section(failures, endpoint, section, read):
     """Read one DOM section at the platform API boundary.
 
@@ -1284,13 +1341,15 @@ def show_interface_lpmode(port, json_output):
     """Display the low-power mode of each interface's CPO virtual module."""
     records = {}
     try:
-        for port_name, _, cpo in get_port_cpo_objects(port):
-            lpmode = _call_vmodule(cpo, "get_lpmode")
-            if not isinstance(lpmode, bool):
-                raise CpoCommandError(
-                    "CPO low-power mode is unavailable for '{}'".format(port_name)
-                )
-            records[port_name] = lpmode
+        with _eeprom_read_snapshot() as attach_snapshot:
+            for port_name, _, cpo in get_port_cpo_objects(port):
+                attach_snapshot(getattr(cpo, "oe", None))
+                lpmode = _call_vmodule(cpo, "get_lpmode")
+                if not isinstance(lpmode, bool):
+                    raise CpoCommandError(
+                        "CPO low-power mode is unavailable for '{}'".format(port_name)
+                    )
+                records[port_name] = lpmode
     except CpoCommandError as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1312,37 +1371,40 @@ def show_interface_dom(port, json_output):
     output = []
     failed_ports = []
     try:
-        for port_name, _, cpo in get_port_cpo_objects(port):
-            present = get_cpo_presence(cpo, port_name)
-            record = {"present": present, "oe": {}, "els": {}}
-            records[port_name] = record
-            if not present:
-                output.append(_format_interface_dom(port_name, record))
-                continue
-            oe_api = get_oe_api(cpo, port_name)
-            els_api = get_els_api(cpo, port_name)
+        with _eeprom_read_snapshot() as attach_snapshot:
+            for port_name, _, cpo in get_port_cpo_objects(port):
+                present = get_cpo_presence(cpo, port_name)
+                record = {"present": present, "oe": {}, "els": {}}
+                records[port_name] = record
+                if not present:
+                    output.append(_format_interface_dom(port_name, record))
+                    continue
+                oe_api = get_oe_api(cpo, port_name)
+                els_api = get_els_api(cpo, port_name)
+                attach_snapshot(cpo.oe, oe_api)
+                attach_snapshot(cpo.elsfp, els_api)
 
-            failures = []
-            record["oe"] = {
-                "info": _read_dom_section(failures, "OE", "info", oe_api.get_transceiver_info),
-                "dom": _read_dom_section(failures, "OE", "dom", oe_api.get_transceiver_dom_real_value),
-                "thresholds": _read_dom_section(
-                    failures, "OE", "thresholds", oe_api.get_transceiver_threshold_info),
-            }
-            els_info = _read_dom_section(failures, "ELS", "info", els_api.get_elsfp_info)
-            record["els"] = {
-                "info": els_info,
-                "dom": _filter_els_dom_lanes(
-                    _read_dom_section(failures, "ELS", "dom", els_api.get_elsfp_dom_real_value),
-                    _get_els_lane_count(els_info),
-                ),
-                "thresholds": _read_dom_section(
-                    failures, "ELS", "thresholds", els_api.get_elsfp_threshold_info),
-            }
-            if failures:
-                record["read_errors"] = failures
-                failed_ports.append("{} ({})".format(port_name, ", ".join(failures)))
-            output.append(_format_interface_dom(port_name, record))
+                failures = []
+                record["oe"] = {
+                    "info": _read_dom_section(failures, "OE", "info", oe_api.get_transceiver_info),
+                    "dom": _read_dom_section(failures, "OE", "dom", oe_api.get_transceiver_dom_real_value),
+                    "thresholds": _read_dom_section(
+                        failures, "OE", "thresholds", oe_api.get_transceiver_threshold_info),
+                }
+                els_info = _read_dom_section(failures, "ELS", "info", els_api.get_elsfp_info)
+                record["els"] = {
+                    "info": els_info,
+                    "dom": _filter_els_dom_lanes(
+                        _read_dom_section(failures, "ELS", "dom", els_api.get_elsfp_dom_real_value),
+                        _get_els_lane_count(els_info),
+                    ),
+                    "thresholds": _read_dom_section(
+                        failures, "ELS", "thresholds", els_api.get_elsfp_threshold_info),
+                }
+                if failures:
+                    record["read_errors"] = failures
+                    failed_ports.append("{} ({})".format(port_name, ", ".join(failures)))
+                output.append(_format_interface_dom(port_name, record))
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
@@ -1367,13 +1429,15 @@ def show_interface_tx_disable(port, json_output):
     """Display per-lane Tx disable status (true means disabled)."""
     records = {}
     try:
-        for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-            lane_positions = get_cpo_lane_positions(logical_port)
-            api = get_oe_api(cpo, port_name)
-            values = _select_lane_values(
-                api.get_tx_disable(), lane_positions
-            )
-            records[port_name] = values
+        with _eeprom_read_snapshot() as attach_snapshot:
+            for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
+                lane_positions = get_cpo_lane_positions(logical_port)
+                api = get_oe_api(cpo, port_name)
+                attach_snapshot(cpo.oe, api)
+                values = _select_lane_values(
+                    api.get_tx_disable(), lane_positions
+                )
+                records[port_name] = values
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
@@ -1407,37 +1471,39 @@ def show_interface_speed_application(port, json_output):
 
     records = {}
     try:
-        for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-            api = get_oe_api(cpo, port_name)
-            advertisements = api.get_application_advertisement()
-            active_applications = api.get_active_apsel_hostlane()
-            if not isinstance(advertisements, dict) or not isinstance(
-                    active_applications, dict):
-                raise CpoCommandError(
-                    "Speed APIs returned no data for '{}'".format(port_name)
-                )
+        with _eeprom_read_snapshot() as attach_snapshot:
+            for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
+                api = get_oe_api(cpo, port_name)
+                attach_snapshot(cpo.oe, api)
+                advertisements = api.get_application_advertisement()
+                active_applications = api.get_active_apsel_hostlane()
+                if not isinstance(advertisements, dict) or not isinstance(
+                        active_applications, dict):
+                    raise CpoCommandError(
+                        "Speed APIs returned no data for '{}'".format(port_name)
+                    )
 
-            configured = []
-            active = []
-            for lane in range(api.NUM_CHANNELS):
-                configured.append(api.get_application(lane))
-                active_application = active_applications.get(
-                    "{}{}".format(
-                        consts.ACTIVE_APSEL_HOSTLANE, lane + 1
+                configured = []
+                active = []
+                for lane in range(api.NUM_CHANNELS):
+                    configured.append(api.get_application(lane))
+                    active_application = active_applications.get(
+                        "{}{}".format(
+                            consts.ACTIVE_APSEL_HOSTLANE, lane + 1
+                        ),
+                        "N/A",
+                    )
+                    active.append(active_application)
+                lane_positions = get_cpo_lane_positions(logical_port)
+                records[port_name] = {
+                    "Application Advertisement": advertisements,
+                    "Application Select Controls": _select_lane_values(
+                        configured, lane_positions
                     ),
-                    "N/A",
-                )
-                active.append(active_application)
-            lane_positions = get_cpo_lane_positions(logical_port)
-            records[port_name] = {
-                "Application Advertisement": advertisements,
-                "Application Select Controls": _select_lane_values(
-                    configured, lane_positions
-                ),
-                "Active Application Control Set": _select_lane_values(
-                    active, lane_positions
-                ),
-            }
+                    "Active Application Control Set": _select_lane_values(
+                        active, lane_positions
+                    ),
+                }
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
@@ -1454,26 +1520,29 @@ def show_interface_lane_status(port, json_output):
     """Display OE datapath and ELS status."""
     records = {}
     try:
-        for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-            oe_api = get_oe_api(cpo, port_name)
-            els_api = get_els_api(cpo, port_name)
-            context = get_interface_context(logical_port, require_lasers=False)
-            laser_ids = context["laser_ids"]
-            records[port_name] = {
-                "Data Path State Indicator": _select_lane_values(
-                    oe_api.get_datapath_state(), context["lane_positions"]
-                ),
-                "ELS": context["mapping"].els_name.upper(),
-                "ELS Status": _normalize_els_status(
-                    els_api.get_elsfp_status()
-                ),
-                "ELS Lane State": _select_els_laser_values(
-                    els_api.get_per_lane_state(), laser_ids
-                ) if laser_ids is not None else {},
-                "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
-                "Lane Lasers": _lane_lasers(context),
-                "Shared ELS Lasers": list(context["shared_laser_ids"]),
-            }
+        with _eeprom_read_snapshot() as attach_snapshot:
+            for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
+                oe_api = get_oe_api(cpo, port_name)
+                els_api = get_els_api(cpo, port_name)
+                attach_snapshot(cpo.oe, oe_api)
+                attach_snapshot(cpo.elsfp, els_api)
+                context = get_interface_context(logical_port, require_lasers=False)
+                laser_ids = context["laser_ids"]
+                records[port_name] = {
+                    "Data Path State Indicator": _select_lane_values(
+                        oe_api.get_datapath_state(), context["lane_positions"]
+                    ),
+                    "ELS": context["mapping"].els_name.upper(),
+                    "ELS Status": _normalize_els_status(
+                        els_api.get_elsfp_status()
+                    ),
+                    "ELS Lane State": _select_els_laser_values(
+                        els_api.get_per_lane_state(), laser_ids
+                    ) if laser_ids is not None else {},
+                    "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
+                    "Lane Lasers": _lane_lasers(context),
+                    "Shared ELS Lasers": list(context["shared_laser_ids"]),
+                }
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
@@ -1618,20 +1687,22 @@ def show_els_output_power(els_index, json_output):
     """Display ELS output optical power."""
     records = {}
     try:
-        for resource_id, cpo in get_resource_cpo_objects(
-                EXTERNAL_LASER_SOURCE, els_index):
-            api = get_els_api(cpo, resource_id)
-            lane_count = _get_els_lane_count(api.get_elsfp_info())
-            values = _filter_els_monitor_lanes(
-                api.get_per_lane_opt_power_monitor(),
-                lane_count,
-            )
-            if values is None:
-                raise CpoCommandError("ELSFP optical power is unavailable for '{}'".format(resource_id))
-            if isinstance(values, dict):
-                records[resource_id] = {lane: XcvrApi.mw_to_dbm(value) for lane, value in values.items()}
-            else:
-                records[resource_id] = [XcvrApi.mw_to_dbm(value) for value in values]
+        with _eeprom_read_snapshot() as attach_snapshot:
+            for resource_id, cpo in get_resource_cpo_objects(
+                    EXTERNAL_LASER_SOURCE, els_index):
+                api = get_els_api(cpo, resource_id)
+                attach_snapshot(cpo.elsfp, api)
+                lane_count = _get_els_lane_count(api.get_elsfp_info())
+                values = _filter_els_monitor_lanes(
+                    api.get_per_lane_opt_power_monitor(),
+                    lane_count,
+                )
+                if values is None:
+                    raise CpoCommandError("ELSFP optical power is unavailable for '{}'".format(resource_id))
+                if isinstance(values, dict):
+                    records[resource_id] = {lane: XcvrApi.mw_to_dbm(value) for lane, value in values.items()}
+                else:
+                    records[resource_id] = [XcvrApi.mw_to_dbm(value) for value in values]
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
