@@ -22,10 +22,15 @@ def test_get_installed_images_preserves_slot_ordering(mock_popen):
 
     bootloader = UbootBootloader()
 
-    assert bootloader.get_installed_images() == [
+    installed_images = bootloader.get_installed_images()
+    assert installed_images == [
         "SONiC-OS-1",
         ""
     ]
+    bootloader.set_next_image(installed_images[0])
+
+    next_image=bootloader.get_next_image()
+    assert next_image == installed_images[0]
 
     # Case 2 First_slot no image and second_slot valid sonic image
     proc1 = MagicMock()
@@ -38,63 +43,13 @@ def test_get_installed_images_preserves_slot_ordering(mock_popen):
 
     bootloader = UbootBootloader()
 
-    assert bootloader.get_installed_images() == [
+    installed_images = bootloader.get_installed_images()
+    assert installed_images == [
         "",
         "SONiC-OS-2"
     ]
 
+    bootloader.set_next_image(installed_images[1])
 
-def test_get_next_image_preserves_slot_ordering_from_get_installed_images(mocker):
-    """
-    Order returned by get_installed_images() must be preserved.
-    Case:1 boot_next=sonic_image_1 should select the first element.
-    Case:2 boot_next=sonic_image_2 should select the second element.
-    """
-
-    # Case:1 boot_next=sonic_image_1 should select the first element.
-    bootloader = UbootBootloader()
-
-    mocker.patch.object(
-        bootloader,
-        "get_installed_images",
-        return_value=[
-            "SONiC-OS-1"
-            "",
-        ]
-    )
-
-    proc = mocker.Mock()
-    proc.communicate.return_value = ("run sonic_image_1\n", None)
-
-    mocker.patch(
-        "subprocess.Popen",
-        return_value=proc
-    )
-
-    assert (
-        bootloader.get_next_image()
-        == "SONiC-OS-1"
-    )
-
-    # Case:2 boot_next=sonic_image_2 should select the second element.
-    mocker.patch.object(
-        bootloader,
-        "get_installed_images",
-        return_value=[
-            "",
-            "SONiC-OS-2"
-        ]
-    )
-
-    proc = mocker.Mock()
-    proc.communicate.return_value = ("run sonic_image_2\n", None)
-
-    mocker.patch(
-        "subprocess.Popen",
-        return_value=proc
-    )
-
-    assert (
-        bootloader.get_next_image()
-        == "SONiC-OS-2"
-    )
+    next_image=bootloader.get_next_image()
+    assert next_image == installed_images[1]
