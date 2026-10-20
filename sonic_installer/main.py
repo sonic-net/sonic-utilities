@@ -788,7 +788,8 @@ def remove(image):
         echo_and_log('Cannot remove current image', LOG_ERR)
         sys.exit(1)
     # TODO: check if image is next boot or default boot and fix these
-    bootloader.remove_image(image)
+    if image:
+        bootloader.remove_image(image)
 
 
 # Retrieve version from binary image file and print to screen
