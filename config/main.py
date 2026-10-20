@@ -8380,7 +8380,14 @@ def del_vrf_vni_map(ctx, vrfname):
     if current_vni is None or str(current_vni) == '0':
         ctx.fail("VRF {} has no VNI mapping".format(vrfname))
 
-    config_db.mod_entry('VRF', vrfname, {"vni": 0})
+    if vrfname == 'default':
+        # The default VRF exists independently of CONFIG_DB. Its VRF row is a
+        # logical entry used only to carry the L3VNI mapping, so remove the row
+        # when the mapping is deleted. Named VRF rows must remain present and
+        # continue to use vni=0 to remove only their mapping.
+        config_db.mod_entry('VRF', vrfname, None)
+    else:
+        config_db.mod_entry('VRF', vrfname, {"vni": 0})
 
 #
 # 'route' group ('config route ...')
