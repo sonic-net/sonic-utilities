@@ -40,9 +40,8 @@ The daemon runs as root and forks a child per request. That child:
 1. Receives the caller's real stdin/stdout/stderr file descriptors via
    `SCM_RIGHTS`, so output streams to the caller's actual terminal
    (colors, `isatty()`, and prompts that just read/write those fds all
-   work as they do today). `less`/pagers that open `/dev/tty` directly
-   for job control are a partial exception -- see "Known limitations"
-   below.
+   work as they do today). When any of them is a terminal, the child gets
+   a fresh pty instead -- see "Terminal handling" below.
 2. Reads the caller's real uid/gid from `SO_PEERCRED` -- this is filled in
    by the kernel from the actual connecting process's credentials and
    **cannot be spoofed** by anything in the request payload.
@@ -63,6 +62,39 @@ authorization mechanism, which is `SO_PEERCRED` + `setuid` in the child,
 not the socket's filesystem permissions -- a caller connecting at all
 still gets checked and dropped to their real uid/gid before anything
 runs.
+
+## Terminal handling (pty mode)
+
+The forked child calls `setsid()` (so the whole command can be signalled as
+one process group), which leaves it without a controlling terminal, and the
+caller's terminal cannot be adopted: it already belongs to the caller's
+login session, and forcing `TIOCSCTTY` would evict the user's shell. Passing
+only the stdio fds therefore broke everything that needs a *controlling*
+terminal: `/dev/tty` (sudo/`getpass` password prompts, `ssh`), tty-generated
+signals (`SIGWINCH`, Ctrl-Z) and job control -- a pager left behind by
+Ctrl-Z kept reading the shell's keystrokes.
+
+So when any of the caller's stdin/stdout/stderr is a terminal, the daemon
+works like `docker exec -t` / `ssh -t`:
+
+- the supervisor allocates a **new pty**, copies the caller's termios
+  settings and window size onto it, and hands the master end to the client
+  (`SCM_RIGHTS`);
+- the command child `setsid()`s and claims the new pty as its controlling
+  terminal (`TIOCSCTTY` works on an unowned pty); its stdio is that pty
+  wherever the caller's was a terminal (redirected streams still use the
+  caller's own fds);
+- the client puts the real terminal in raw mode and proxies bytes both ways,
+  propagates `SIGWINCH` (window size), and restores the terminal on exit;
+- Ctrl-C reaches the command through the pty (`SIGINT` to its foreground
+  group) exactly as in a login; Ctrl-Z is recognised by the client, which
+  stops the command's group, restores the terminal and stops itself, so the
+  shell shows `Stopped` and `fg`/`bg` work;
+- if the client goes away (ssh drop) the pty hangs up and the command gets
+  `SIGHUP`, like a command whose terminal closed.
+
+Set `SONIC_CLI_DAEMON_PTY=0` to fall back to plain fd passing without the
+pty. Non-terminal callers never use the pty path.
 
 ## Known limitations
 
@@ -94,16 +126,15 @@ runs.
   Multi-asic `bgp@N.service` instances are not covered by the drop-in.
 - **Zombie reaping** relies on a `SIGCHLD` handler in the top-level daemon
   process; if you extend this code, keep that handler in place.
-- **Pagers/prompts that open `/dev/tty` directly** (e.g. `less`) don't
-  reliably get real job control. After `setsid()`, the command child has
-  no controlling terminal of its own, and claiming the inherited one
-  (`TIOCSCTTY`) only succeeds if it isn't already the controlling
-  terminal of another session -- for a normal interactive SSH/console
-  invocation it always already is (the caller's own login shell), so
-  this is a best-effort no-op for exactly the common case. Forcibly
-  stealing it (`TIOCSCTTY` with a nonzero arg) would "fix" this by
-  evicting the caller's own shell as that terminal's controlling
-  session, breaking their login session's job control to make one
-  command's pager slightly more correct -- not a trade worth making. If
-  a pager's behavior matters for a given invocation, disable the daemon
-  for it with `SONIC_CLI_DAEMON=0`.
+- **sudo's credential cache is per terminal.** In pty mode the command
+  runs on its own pty, so a `sudo -v` done earlier in the login shell does
+  not carry over: a user whose sudoers entry is *not* `NOPASSWD` is asked
+  for the password by each command that runs `sudo` internally (cold path:
+  only the first time within the `sudo` timeout). The default `admin`
+  account is `NOPASSWD: ALL` and is not affected.
+- **After Ctrl-Z/`fg` a pager is not redrawn** until a key is pressed
+  (the pager is stopped with `SIGSTOP`, so it does not see `SIGTSTP`).
+- **Terminal-less callers keep the old behavior.** If none of stdin,
+  stdout and stderr is a terminal (cron, scripts, `ssh host show ...`
+  without `-t`), the child still has no controlling terminal -- there is
+  no terminal for it to use.
