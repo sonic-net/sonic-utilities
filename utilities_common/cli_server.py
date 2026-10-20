@@ -519,12 +519,38 @@ def _module_file(modname):
     return getattr(mod, "__file__", None) if mod else None
 
 
+def _plugin_dirs():
+    """Directories the CLI trees discover plugins from at import time
+    (``show/plugins``, ``config/plugins``): hand-installed files and the
+    ones sonic-package-manager extracts for extensions end up here."""
+    dirs = []
+    for modname, _attr in PROG_LOADERS.values():
+        pkg = sys.modules.get(modname.rsplit(".", 1)[0] + ".plugins")
+        for path in getattr(pkg, "__path__", []) or []:
+            if os.path.isdir(path):
+                dirs.append(path)
+    return dirs
+
+
 def _snapshot_watch_mtimes():
     mtimes = {}
     for modname, _attr in PROG_LOADERS.values():
         path = _module_file(modname)
         if path and os.path.exists(path):
             mtimes[path] = os.stat(path).st_mtime
+    # Plugins are discovered once at import, so installing/upgrading/removing
+    # one (e.g. a sonic-package-manager extension) is invisible to the warm
+    # daemon. A directory's mtime moves when entries are added or removed;
+    # each plugin file's own mtime catches in-place upgrades.
+    for pdir in _plugin_dirs():
+        mtimes[pdir] = os.stat(pdir).st_mtime
+        for entry in os.listdir(pdir):
+            if entry.endswith(".py"):
+                fpath = os.path.join(pdir, entry)
+                try:
+                    mtimes[fpath] = os.stat(fpath).st_mtime
+                except OSError:
+                    pass
     return mtimes
 
 

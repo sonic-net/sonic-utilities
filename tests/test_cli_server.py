@@ -684,6 +684,65 @@ def test_watch_mtimes_changed_true_when_file_removed(tmp_path, monkeypatch):
     assert cli_server._watch_mtimes_changed() is True
 
 
+def _fake_plugin_pkgs(monkeypatch, tmp_path):
+    """Register fake show.plugins / config.plugins packages (module objects
+    with only __path__) so _plugin_dirs() sees tmp dirs, not the real tree."""
+    import types
+
+    dirs = {}
+    for name in ("show", "config"):
+        d = tmp_path / name / "plugins"
+        d.mkdir(parents=True)
+        mod = types.ModuleType(name + ".plugins")
+        mod.__path__ = [str(d)]
+        monkeypatch.setitem(sys.modules, name + ".plugins", mod)
+        dirs[name] = d
+    return dirs
+
+
+def test_snapshot_watch_covers_plugin_dirs_and_files(tmp_path, monkeypatch):
+    dirs = _fake_plugin_pkgs(monkeypatch, tmp_path)
+    (dirs["show"] / "a.py").write_text("x = 1\n")
+    (dirs["show"] / "notes.txt").write_text("not a plugin\n")
+
+    snap = cli_server._snapshot_watch_mtimes()
+
+    assert str(dirs["show"]) in snap
+    assert str(dirs["config"]) in snap
+    assert str(dirs["show"] / "a.py") in snap
+    assert str(dirs["show"] / "notes.txt") not in snap
+
+
+def test_plugin_added_removed_or_upgraded_marks_daemon_stale(tmp_path, monkeypatch):
+    import time
+
+    dirs = _fake_plugin_pkgs(monkeypatch, tmp_path)
+    plugin = dirs["show"] / "a.py"
+    plugin.write_text("x = 1\n")
+
+    def _rearm():
+        monkeypatch.setattr(cli_server, "_watch_mtimes", cli_server._snapshot_watch_mtimes())
+        assert cli_server._watch_mtimes_changed() is False
+
+    _rearm()
+    # install a new plugin (sonic-package-manager extract) -> dir mtime moves
+    time.sleep(0.02)
+    (dirs["config"] / "b.py").write_text("y = 1\n")
+    assert cli_server._watch_mtimes_changed() is True
+
+    _rearm()
+    # in-place upgrade of an existing plugin -> file mtime moves
+    time.sleep(0.02)
+    plugin.write_text("x = 2\n")
+    assert cli_server._watch_mtimes_changed() is True
+
+    _rearm()
+    # uninstall
+    time.sleep(0.02)
+    os.remove(plugin)
+    assert cli_server._watch_mtimes_changed() is True
+
+
 def test_reply_fallback_tolerates_request_that_arrives_late():
     """Re-exec race: the daemon answers 'fallback' (and starts closing)
     before a just-connected client has sent its request. The client's send
