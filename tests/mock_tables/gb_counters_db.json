@@ -60,5 +60,17 @@
         "FEC_POST_BER": "0",
         "FEC_PRE_BER_MAX": "N/A",
         "FEC_MAX_T": "0"
+    },
+    "PORT_PHY_ATTR:oid:0x1000000000001": {
+        "phy_rx_signal_detect": "{\"20\": [\"T\", 1678886400000, 2], \"21\": [\"T\", 0, 0]}",
+        "rx_lock_status": "{\"20\": [\"T\", 0, 0], \"21\": [\"T\", 0, 0]}",
+        "rx_snr": "{\"20\": 29.13, \"21\": 29.95}",
+        "rx_ffe_taps_list": "{\"0\": [{\"tap0\": -12}, {\"tap1\": 30}], \"1\": [{\"tap0\": -8}, {\"tap1\": 23}]}",
+        "pam4_eye_values": "{\"20\": {\"upper_ht\": 98, \"upper_wd\": -1, \"middle_ht\": 100, \"middle_wd\": -1, \"lower_ht\": 98, \"lower_wd\": -1}}"
+    },
+    "PORT_PHY_ATTR:oid:0x1000000000002": {
+        "phy_rx_signal_detect": "{\"0\": [\"T\", 0, 0], \"1\": [\"T\", 0, 0]}",
+        "rx_snr": "{\"0\": 30.66, \"1\": 30.53}",
+        "pam4_eye_values": "{\"0\": {\"upper_ht\": 102, \"upper_wd\": -1, \"middle_ht\": 104, \"middle_wd\": -1, \"lower_ht\": 102, \"lower_wd\": -1}}"
     }
 }
