@@ -782,10 +782,16 @@ def prune_stale_db_certs(bootloader):
     affects the image removal that already happened.
     """
     try:
-        if not bootloader.is_secure_upgrade_image_verification_supported():
+        config = secure_boot_db.Config.from_env()
+        secure_boot_db.ensure_efivars(config)
+        state = secure_boot_db.secure_boot_state(config)
+        if state != "enabled":
+            if state == "unknown":
+                echo_and_log("Warning: Secure Boot state is unknown; skipping db certificate pruning",
+                             LOG_WARN, fg="yellow")
             return
         secure_boot_db.prune_db_certificates(
-            secure_boot_db.Config.from_env(),
+            config,
             images=bootloader.get_installed_images(),
             auto=True,
         )
