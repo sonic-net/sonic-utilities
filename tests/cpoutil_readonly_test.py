@@ -309,7 +309,7 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.get_presence = mock.Mock(return_value=present)
         result = invoke(["show", "interface", "presence", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
-        assert json.loads(result.output) == {"Ethernet0": present}
+        assert json.loads(result.output) == {"Ethernet0": {"els": "ELS0", "present": present}}
         self.cpo.get_presence.assert_called_once_with()
         self.cpo.oe.get_presence.assert_not_called()
         self.cpo.elsfp.get_presence.assert_not_called()
@@ -317,13 +317,17 @@ class TestDirectPlatformApiCommands(object):
         table = invoke(["show", "interface", "presence", "Ethernet0"])
         assert ("Present" if present else "Not present") in table.output
         assert "Interface" in table.output
+        assert "ELS" in table.output and "ELS0" in table.output
 
     def test_presence_lists_all_interfaces_and_breakouts(self):
         result = invoke(["show", "interface", "presence", "--json"])
         assert result.exit_code == 0, result.output
-        assert json.loads(result.output) == {"Ethernet0": True, "Ethernet1": True}
+        assert json.loads(result.output) == {
+            "Ethernet0": {"els": "ELS0", "present": True},
+            "Ethernet1": {"els": "ELS0", "present": True},
+        }
         result = invoke(["show", "interface", "presence", "Ethernet1", "--json"])
-        assert json.loads(result.output) == {"Ethernet1": True}
+        assert json.loads(result.output) == {"Ethernet1": {"els": "ELS0", "present": True}}
 
     @pytest.mark.parametrize("command", ["presence", "dom"])
     @pytest.mark.parametrize("error", [NotImplementedError(), AttributeError(), OSError("read failed")])
@@ -331,7 +335,8 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.oe = mock.Mock()
         self.cpo.elsfp = mock.Mock()
         self.cpo.get_presence = mock.Mock(side_effect=error)
-        result = invoke(["show", "interface", command, "Ethernet0", "--json"])
+        path = ["show", "interface", "presence"] if command == "presence" else ["show", "interface", command]
+        result = invoke(path + ["Ethernet0", "--json"])
         assert result.exit_code != 0
         assert "CPO presence" in result.output and "Ethernet0" in result.output
         assert not self.cpo.oe.mock_calls
@@ -348,11 +353,18 @@ class TestDirectPlatformApiCommands(object):
     def test_inherited_presence_placeholder_is_reported_without_endpoint_reads(self, command):
         cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
         cpoutil.cpo_object_map[PORT][1] = cpo
-        result = invoke(["show", "interface", command, "Ethernet0"])
+        path = ["show", "interface", "presence"] if command == "presence" else ["show", "interface", command]
+        result = invoke(path + ["Ethernet0"])
         assert result.exit_code != 0
         assert "CPO presence is not implemented for 'Ethernet0'" in result.output
         assert not cpo.oe.mock_calls
         assert not cpo.elsfp.mock_calls
+
+    @pytest.mark.parametrize("path", [["show", "presence"], ["show", "els", "presence"]])
+    def test_presence_only_exists_under_interface(self, path):
+        result = invoke(path)
+        assert result.exit_code == 2
+        assert "No such command 'presence'" in result.output
 
     def test_els_lpmode_has_boolean_json_and_readable_table(self):
         result = invoke(["show", "els", "lpmode", "0", "--json"])

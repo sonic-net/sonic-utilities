@@ -17166,7 +17166,29 @@ Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS
 `Cable Type` and `Cable Length` lines. JSON retains the original `cable_type`
 and `cable_length` keys and values.
 
-**cpoutil show interface map|presence|dom|tx-disable|speed|lane-status|lpmode**
+**cpoutil show interface presence**
+
+Display CPO virtual-module presence by interface through the platform CPO object's
+`get_presence()` method. With no PORT, all CPO interfaces are listed; ordinary SFP
+interfaces are skipped. An explicitly selected SFP interface directs users to
+sfputil. The ELS column identifies the associated ELS from the CPO topology;
+presence still describes the CPO virtual module. JSON uses interface names as
+keys, each containing an `els` name and a boolean `present` value.
+
+- Usage:
+  ```
+  cpoutil show interface presence [PORT] [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil show interface presence Ethernet32
+  Interface    ELS    Presence
+  -----------  -----  ----------
+  Ethernet32   ELS1   Present
+  ```
+
+**cpoutil show interface map|dom|tx-disable|speed|lane-status|lpmode**
 
 These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.
 
@@ -17177,7 +17199,6 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
 - Usage:
   ```
   cpoutil show interface map [PORT] [--json]          # OE, bank, lanes, ELS and lasers of each interface
-  cpoutil show interface presence [PORT] [--json]     # CPO virtual-module presence
   cpoutil show interface dom [PORT] [--json]          # OE and ELS information, monitors and thresholds
   cpoutil show interface tx-disable [PORT] [--json]   # per-lane Tx disable status
   cpoutil show interface speed application [PORT] [--json]  # full configured and active applications per lane
@@ -17187,11 +17208,6 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
 
 - Example:
   ```
-  admin@sonic:~$ cpoutil show interface presence Ethernet32
-  Interface    Presence
-  -----------  ----------
-  Ethernet32   Present
-
   admin@sonic:~$ cpoutil show interface lpmode Ethernet448
   Interface    Low-power Mode
   -----------  ----------------

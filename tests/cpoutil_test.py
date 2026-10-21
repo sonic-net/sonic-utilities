@@ -604,9 +604,9 @@ def command_paths(command, path=()):
         yield from command_paths(child, path + (name,))
 
 
-HARDWARE_COMMANDS = [["show", "interface", "speed", "application"]] + [
+HARDWARE_COMMANDS = [["show", "interface", "presence"], ["show", "interface", "speed", "application"]] + [
     ["show", "interface", name] for name in
-    ("map", "presence", "dom", "tx-disable", "lane-status")
+    ("map", "dom", "tx-disable", "lane-status")
 ] + [
     ["show", "oe", name] for name in
     ("lpmode", "status", "temperature")

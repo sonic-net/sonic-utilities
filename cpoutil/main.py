@@ -1274,6 +1274,29 @@ def show_interface():
     """Display front-panel interface information."""
 
 
+@show_interface.command("presence")
+@click.argument("port", required=False)
+@output_option
+def show_interface_presence(port, json_output):
+    """Display CPO virtual-module presence for each interface."""
+    records = {}
+    try:
+        for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
+            present = get_cpo_presence(cpo, port_name)
+            mapping = get_cpo_interface_mapping(logical_port)
+            records[port_name] = {"els": mapping.els_name.upper(), "present": present}
+    except CpoCommandError as exc:
+        raise click.ClickException(str(exc))
+    if json_output:
+        click.echo(_json_records(records))
+    else:
+        rows = [
+            (port_name, record["els"], "Present" if record["present"] else "Not present")
+            for port_name, record in records.items()
+        ]
+        click.echo(tabulate(rows, headers=("Interface", "ELS", "Presence")))
+
+
 @show_interface.command("map")
 @click.argument("port", required=False)
 @click.option("-j", "--json", "json_output", is_flag=True,
@@ -1307,23 +1330,6 @@ def show_interface_map(port, json_output):
         }))
     else:
         click.echo(_format_map_table(records))
-
-
-@show_interface.command("presence")
-@click.argument("port", required=False)
-@output_option
-def show_interface_presence(port, json_output):
-    """Display CPO virtual-module presence for each interface."""
-    records = {}
-    try:
-        for port_name, _, cpo in get_port_cpo_objects(port):
-            records[port_name] = get_cpo_presence(cpo, port_name)
-    except CpoCommandError as exc:
-        raise click.ClickException(str(exc))
-    print_records(
-        records, json_output, ("Interface", "Presence"),
-        boolean_values=("Present", "Not present"),
-    )
 
 
 @show_interface.command("lpmode")
