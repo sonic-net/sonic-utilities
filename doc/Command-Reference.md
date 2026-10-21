@@ -17231,13 +17231,13 @@ These commands display Optical Engine state.
   OE7   ModuleReady
   ```
 
-**cpoutil show els lpmode|status|temperature|output-power**
+**cpoutil show els lpmode|status|temperature**
 
 These commands display External Laser Source state.
 
 - Usage:
   ```
-  cpoutil show els {lpmode|status|temperature|output-power} [ELS_INDEX] [--json]
+  cpoutil show els {lpmode|status|temperature} [ELS_INDEX] [--json]
   ```
 
 - Example:

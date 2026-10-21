@@ -11,7 +11,6 @@ from tabulate import tabulate
 
 from sonic_py_common import multi_asic
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
-from sonic_platform_base.sonic_xcvr.api.xcvr_api import XcvrApi
 from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin
 from sonic_platform_base.sonic_xcvr.xcvr_eeprom import XcvrEeprom
 from utilities_common import platform_sfputil_helper
@@ -532,24 +531,6 @@ def _filter_els_dom_lanes(values, lane_count):
     for key, value in values.items():
         match = re.search(r"lane(\d+)$", str(key), re.IGNORECASE)
         if match and int(match.group(1)) > lane_count:
-            continue
-        filtered[key] = value
-    return filtered
-
-
-def _filter_els_monitor_lanes(values, lane_count):
-    """Remove zero-based laser monitor fields outside the ELS lane count."""
-    if lane_count is None:
-        return values
-    if isinstance(values, (list, tuple)):
-        return values[:lane_count]
-    if not isinstance(values, dict):
-        return values
-
-    filtered = {}
-    for key, value in values.items():
-        match = re.search(r"Laser(\d+)", str(key), re.IGNORECASE)
-        if match and int(match.group(1)) >= lane_count:
             continue
         filtered[key] = value
     return filtered
@@ -1676,40 +1657,6 @@ def show_els_temperature(els_index, json_output):
     except (CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Temperature (C)"))
-
-
-@show_els.command("output-power")
-@click.argument("els_index", required=False)
-@output_option
-def show_els_output_power(els_index, json_output):
-    """Display ELS output optical power."""
-    records = {}
-    try:
-        with _eeprom_read_snapshot() as attach_snapshot:
-            for resource_id, cpo in get_resource_cpo_objects(
-                    EXTERNAL_LASER_SOURCE, els_index):
-                api = get_els_api(cpo, resource_id)
-                attach_snapshot(cpo.elsfp, api)
-                lane_count = api.get_lane_count()
-                values = _filter_els_monitor_lanes(
-                    api.get_per_lane_opt_power_monitor(),
-                    lane_count,
-                )
-                if values is None:
-                    raise CpoCommandError("ELSFP optical power is unavailable for '{}'".format(resource_id))
-                if isinstance(values, dict):
-                    records[resource_id] = {lane: XcvrApi.mw_to_dbm(value) for lane, value in values.items()}
-                else:
-                    records[resource_id] = [XcvrApi.mw_to_dbm(value) for value in values]
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(str(exc))
-    print_records(
-        records,
-        json_output,
-        ("ELS", "Output Power (dBm)"),
-        field_header="Laser",
-        floatfmt=".3f",
-    )
 
 
 def _require_success(result, action):

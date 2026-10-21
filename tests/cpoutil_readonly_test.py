@@ -234,18 +234,21 @@ class TestDirectPlatformApiCommands(object):
         assert result.exit_code == 0
         assert json.loads(result.output) == {"oe0": "ModuleReady"}
 
-    def test_els_commands_call_public_elsfp_api(self):
+    def test_els_temperature_calls_public_elsfp_api(self):
         with mock.patch.object(self.cpo.api, "get_module_temperature", return_value=32.5):
             temperature = invoke([
                 "show", "els", "temperature", "els0", "--json"
             ])
-        power = invoke([
-            "show", "els", "output-power", "0", "--json"
-        ])
         assert json.loads(temperature.output) == {"els0": 32.5}
-        assert json.loads(power.output)["els0"][
-            "Laser0OpticalPowerMonitor"
-        ] == pytest.approx(9.590)
+
+    def test_els_output_power_command_is_not_exposed(self):
+        help_result = invoke(["show", "els", "--help"])
+        assert help_result.exit_code == 0
+        assert "output-power" not in help_result.output
+        for suffix in (["0"], ["--help"]):
+            result = invoke(["show", "els", "output-power"] + suffix)
+            assert result.exit_code == 2
+            assert "No such command 'output-power'" in result.output
 
     @pytest.mark.parametrize("value", [0.0, -5.5, 32.5])
     @pytest.mark.parametrize("index", [None, "0"])
@@ -273,34 +276,6 @@ class TestDirectPlatformApiCommands(object):
             result = invoke(args)
         assert result.exit_code != 0
         assert "ELSFP temperature is unavailable for 'els0'" in result.output
-
-    @pytest.mark.parametrize("power, expected", [(0.0, None), (1.0, 0.0), (10.0, 10.0)])
-    def test_els_output_power_converts_mw_to_dbm(self, power, expected):
-        with mock.patch.object(self.cpo.api, "get_per_lane_opt_power_monitor",
-                               return_value={"OptPowerMonitor1": power}):
-            result = invoke(["show", "els", "output-power", "0", "--json"])
-        assert result.exit_code == 0, result.output
-        assert json.loads(result.output) == {"els0": {"OptPowerMonitor1": expected}}
-
-    def test_els_output_power_reports_read_failure(self):
-        with mock.patch.object(self.cpo.api, "get_per_lane_opt_power_monitor", return_value=None):
-            result = invoke(["show", "els", "output-power", "0"])
-        assert result.exit_code != 0
-        assert "ELSFP optical power is unavailable" in result.output
-
-    def test_els_output_power_table_uses_measurement_precision(self):
-        result = invoke(["show", "els", "output-power", "0"])
-        assert result.exit_code == 0
-        assert "Output Power (dBm)" in result.output
-        assert "9.590" in result.output
-        assert "18.500" in result.output
-
-        json_result = invoke([
-            "show", "els", "output-power", "0", "--json"
-        ])
-        assert json.loads(json_result.output)["els0"][
-            "Laser1OpticalPowerMonitor"
-        ] == pytest.approx(18.500)
 
     @pytest.mark.parametrize("present", [True, False])
     def test_interface_presence_calls_cpo_instead_of_endpoints(self, present):
@@ -997,27 +972,6 @@ class TestFourReadOptimizations:
             result = invoke(["show", "els", "lpmode", "0", "--json"])
         assert result.exit_code != 0
         assert "Traceback" not in result.output
-
-    @pytest.mark.parametrize("index", [None, "0"])
-    @pytest.mark.parametrize("json_output", [False, True])
-    def test_output_power_reads_lane_count_without_identity(self, index, json_output):
-        arguments = ["show", "els", "output-power"] + ([index] if index else [])
-        if json_output:
-            arguments.append("--json")
-        values = {"Laser0OpticalPowerMonitor": 1.25, "Laser1OpticalPowerMonitor": 2.5,
-                  "Laser2OpticalPowerMonitor": 9.0}
-        with mock.patch.object(self.cpo.api, "get_lane_count", return_value=2) as count:
-            with mock.patch.object(self.cpo.api, "get_elsfp_info", side_effect=AssertionError("identity read")):
-                with mock.patch.object(self.cpo.api, "get_per_lane_opt_power_monitor", return_value=values):
-                    result = invoke(arguments)
-        assert result.exit_code == 0, result.output
-        count.assert_called_once_with()
-        assert "Laser2" not in result.output
-        if json_output:
-            assert json.loads(result.output) == {"els0": {
-                "Laser0OpticalPowerMonitor": pytest.approx(0.969),
-                "Laser1OpticalPowerMonitor": pytest.approx(3.979),
-            }}
 
     @pytest.mark.parametrize("command", ["lpmode", "tx-disable"])
     @pytest.mark.parametrize("port", [None, "Ethernet0"])

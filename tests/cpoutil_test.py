@@ -612,7 +612,7 @@ HARDWARE_COMMANDS = [["show", "interface", "presence"], ["show", "interface", "s
     ("lpmode", "status", "temperature")
 ] + [
     ["show", "els", name] for name in
-    ("lpmode", "status", "temperature", "output-power")
+    ("lpmode", "status", "temperature")
 ] + [
     ["config", "interface", "tx-disable", "Ethernet0", "true"],
     ["config", "interface", "lpmode", "Ethernet0", "low"],
@@ -850,10 +850,6 @@ class TestHelperCoverage(object):
         assert "optical_power_lane3" not in cpoutil._filter_els_dom_lanes(
             {"optical_power_lane1": 1, "optical_power_lane3": 3}, 2
         )
-        assert list(cpoutil._filter_els_monitor_lanes([1, 2, 3], 2)) == [1, 2]
-        assert cpoutil._filter_els_monitor_lanes(
-            {"Laser0State": 1, "Laser2State": 2}, 2
-        ) == {"Laser0State": 1}
         assert cpoutil._select_lane_values({"DP2": 2, "DP1": 1}, (1,)) == {
             "lane01": 2
         }
@@ -939,7 +935,6 @@ class TestCommandCoverage(object):
             ["show", "els", "lpmode"],
             ["show", "els", "status"],
             ["show", "els", "temperature"],
-            ["show", "els", "output-power"],
         ],
     )
     def test_read_only_commands(self, coverage_environment, arguments):
