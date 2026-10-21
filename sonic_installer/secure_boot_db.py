@@ -264,6 +264,7 @@ def verify_db_auth(update, attributes, require_payload, trusted_pem, prefix):
     return succeeds([
         "openssl", "cms", "-verify", "-binary", "-inform", "DER", "-in", str(pkcs7), "-content", str(content),
         "-no_check_time", "-purpose", "any", "-partial_chain", "-CAfile", str(trusted_pem),
+        "-no-CApath", "-no-CAstore",
         "-out", "/dev/null",
     ])
 
