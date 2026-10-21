@@ -101,18 +101,17 @@ def get_routing_stack():
     # The bash one-liner below relies on a nested "bgp" docker container, which
     # only exists on a real SONiC device. On single-container images such as
     # docker-sonic-vs (used as cSONiC neighbors in the KVM testbed) there is no
-    # nested docker, so the command would emit "sudo: docker: command not found"
-    # on every show invocation. Skip it and keep the default ('frr') in that case.
-    if shutil.which('docker') is None:
-        return result
+    # nested docker, so only run the probe when docker is available.
+    if shutil.which('docker') is not None:
+        command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
-    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
-
-    try:
-        stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
-        result = stdout.rstrip('\n')
-    except Exception as err:
-        click.echo('Failed to get routing stack: {}'.format(err), err=True)
+        try:
+            stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
+            detected_stack = stdout.rstrip('\n')
+            if detected_stack:
+                result = detected_stack
+        except Exception as err:
+            click.echo('Failed to get routing stack: {}'.format(err), err=True)
 
     return result
 

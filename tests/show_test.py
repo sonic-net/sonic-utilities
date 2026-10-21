@@ -1900,6 +1900,14 @@ class TestCsonicNeighborEnv(object):
             assert show.get_routing_stack() == 'quagga'
             mock_check_output.assert_called_once()
 
+    def test_get_routing_stack_with_no_bgp_container_uses_default(self):
+        # When docker exists but no BGP container is found, keep the FRR default.
+        with mock.patch('show.main.shutil.which', return_value='/usr/bin/docker'), \
+                mock.patch('show.main.subprocess.check_output',
+                           return_value='') as mock_check_output:
+            assert show.get_routing_stack() == 'frr'
+            mock_check_output.assert_called_once()
+
     def test_run_bgp_show_command_falls_back_to_vtysh(self):
         # When 'rvtysh' is absent (docker-sonic-vs neighbor), run_bgp_show_command
         # must fall back to the plain 'vtysh' binary instead of 'rvtysh'.
