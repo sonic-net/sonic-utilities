@@ -1,4 +1,5 @@
 import pytest
+import json
 import logging
 import os
 import shutil
@@ -302,6 +303,12 @@ Trimmed Dropped Packets........................ 50
 Time Since Counters Last Cleared............... None
 """
 
+intf_counters_detailed_legacy_snapshot = intf_counters_detailed.replace(
+    "Unicast Packets Received....................... 4",
+    "Unicast Packets Received....................... 3").replace(
+    "Time Since Counters Last Cleared............... None",
+    "Time Since Counters Last Cleared............... 2026-01-01T00:00:00")
+
 intf_counters_on_sup = """\
        IFACE    STATE    RX_OK     RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK     TX_BPS    TX_UTIL\
     TX_ERR    TX_DRP    TX_OVR
@@ -563,6 +570,31 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_counters_detailed
+
+    def test_show_intf_counters_detailed_legacy_snapshot(self):
+        from utilities_common.portstat import NStats, counter_bucket_dict
+
+        # 'portstat -c' snapshots are keyed by NStats field names and can be left
+        # behind by an older release, which stored SAI_PORT_STAT_IP_IN_RECEIVES as rx_ovrrun
+        legacy_fields = list(NStats._fields)
+        ip_in_receives = next(pos for pos, cntrs in counter_bucket_dict.items()
+                              if cntrs == ['SAI_PORT_STAT_IP_IN_RECEIVES'])
+        legacy_fields[ip_in_receives] = 'rx_ovrrun'
+        legacy_cntr = dict.fromkeys(legacy_fields, '0')
+        legacy_cntr['rx_uca'] = '1'
+
+        remove_tmp_cnstat_file()
+        cnstat_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
+        with open(cnstat_file, 'w') as f:
+            json.dump({'time': '2026-01-01T00:00:00', 'Ethernet4': legacy_cntr}, f)
+        try:
+            return_code, result = get_result_and_return_code(['portstat', '-l', '-i', 'Ethernet4'])
+        finally:
+            remove_tmp_cnstat_file()
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_counters_detailed_legacy_snapshot
 
     def test_show_intf_rates(self):
         return_code, result = get_result_and_return_code(['portstat', '-R'])
