@@ -442,6 +442,29 @@ def routes():
     pass
 
 
+def pretty_print_local(table, r, nexthop_val, ifname_val):
+    nexthops = [nexthop.strip() for nexthop in nexthop_val.split(',')] if nexthop_val else []
+    interfaces = [interface.strip() for interface in ifname_val.split(',')] if ifname_val else []
+    if not nexthops:
+        nexthops = [""]
+
+    all_items = list(nexthops) + list(interfaces)
+    max_len = max((len(item) for item in all_items), default=0)
+    row_width = 2 if max_len > 15 else 3
+
+    max_entries = max(len(nexthops), len(interfaces))
+    i = 0
+    while i < max_entries:
+        r.append(",".join(nexthops[i:i + row_width]) if i < len(nexthops) else "")
+        if interfaces:
+            r.append(",".join(interfaces[i:i + row_width]) if i < len(interfaces) else "")
+        else:
+            r.append(ifname_val if i == 0 else "")
+        i += row_width
+        table.append(r)
+        r = ["", ""]
+
+
 def pretty_print(table, r, epval, mac_addr, vni, metric, state):
     endpoints = epval.split(',')
     row_width = 3
@@ -517,9 +540,9 @@ def _show_local_helper(vnet_name=None, appl_db=None):
         r = []
         r.extend(k.split(":", 2)[1:])
         val = appl_db.get_all(appl_db.APPL_DB, k)
-        r.append(val.get('nexthop'))
-        r.append(val.get('ifname'))
-        table.append(r)
+        nexthop_val = val.get('nexthop') or ''
+        ifname_val = val.get('ifname') or ''
+        pretty_print_local(table, r, nexthop_val, ifname_val)
 
     click.echo(tabulate(table, route_header))
 
