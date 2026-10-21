@@ -4,6 +4,7 @@ import shutil
 import stat
 import sys
 import struct
+import subprocess
 import uuid
 from types import ModuleType
 from unittest.mock import Mock, call
@@ -434,6 +435,40 @@ def test_cms_verification_rejects_corrupted_signature(tmp_path, signed_attribute
     assert not prune.verify_db_auth(
         prune.parse_auth(_auth(payload, corrupted)), attributes, bool(payload), trusted, prefix,
     )
+
+
+@pytest.mark.parametrize("attributes", [prune.DB_ATTR_REPLACE, prune.DB_ATTR_APPEND])
+def test_cms_verification_rejects_default_ca_directory_signer(tmp_path, monkeypatch, attributes):
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    signer = _make_cert("System trusted signer", key)
+    trusted = tmp_path / "KEK.pem"
+    trusted.write_bytes(_make_cert("Enrolled KEK").public_bytes(serialization.Encoding.PEM))
+    ca_dir = tmp_path / "system-cas"
+    ca_dir.mkdir()
+    signer_pem = ca_dir / "signer.pem"
+    signer_pem.write_bytes(signer.public_bytes(serialization.Encoding.PEM))
+    result = subprocess.run(
+        [REAL_OPENSSL, "x509", "-in", str(signer_pem), "-noout", "-subject_hash"],
+        check=True, capture_output=True, text=True,
+    )
+    (ca_dir / f"{result.stdout.strip()}.0").symlink_to(signer_pem)
+    monkeypatch.setenv("SSL_CERT_DIR", str(ca_dir))
+
+    payload = _esl(signer) if attributes == prune.DB_ATTR_APPEND else b""
+    timestamp = prune.parse_auth(_auth(payload)).timestamp
+    content = (
+        "db".encode("utf-16-le") + prune.EFI_IMAGE_SECURITY_DATABASE_GUID.bytes_le
+        + attributes.to_bytes(4, "little") + timestamp + payload
+    )
+    signature = (
+        pkcs7.PKCS7SignatureBuilder().set_data(content).add_signer(signer, key, hashes.SHA256())
+        .sign(serialization.Encoding.DER, [pkcs7.PKCS7Options.DetachedSignature, pkcs7.PKCS7Options.Binary])
+    )
+    update = prune.parse_auth(_auth(payload, signature))
+    assert not prune.verify_db_auth(update, attributes, bool(payload), trusted, tmp_path / "update")
+
+    trusted.write_bytes(signer.public_bytes(serialization.Encoding.PEM))
+    assert prune.verify_db_auth(update, attributes, bool(payload), trusted, tmp_path / "authorized-update")
 
 
 def test_pkcs7_wrapping_detection():
