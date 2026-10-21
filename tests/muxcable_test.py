@@ -678,15 +678,20 @@ class TestMuxcable(object):
         #show.muxcable.platform_sfputil.logical = mock.Mock(return_value=["Ethernet0", "Ethernet4"])
         print("SETUP")
 
-    def test_db_connect_uses_unix_socket(self):
+    @pytest.mark.parametrize('port,use_tcp', [(0, False), (6379, True)])
+    @pytest.mark.parametrize('namespace', ['', 'asic0'])
+    def test_db_connect_uses_configured_transport(self, port, use_tcp, namespace):
         connection = mock.Mock()
 
-        with mock.patch.object(muxcable.swsscommon, 'DBConnector',
-                               return_value=connection) as connector:
-            result = muxcable.db_connect('STATE_DB', 'asic0')
+        with mock.patch.object(muxcable.swsscommon.SonicDBConfig, 'getDbPort',
+                               return_value=port) as get_port, \
+                mock.patch.object(muxcable.swsscommon, 'DBConnector',
+                                  return_value=connection) as connector:
+            result = muxcable.db_connect('STATE_DB', namespace)
 
         assert result is connection
-        connector.assert_called_once_with('STATE_DB', 0, False, 'asic0')
+        get_port.assert_called_once_with('STATE_DB', namespace)
+        connector.assert_called_once_with('STATE_DB', 0, use_tcp, namespace)
 
     @mock.patch('show.muxcable.get_hwmode_mux_direction_port', mock.MagicMock(return_value=({ 0 :"active",
                                                                                               1  :"standby",

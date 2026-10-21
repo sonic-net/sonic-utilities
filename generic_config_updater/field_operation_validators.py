@@ -208,7 +208,8 @@ def buffer_profile_config_update_validator(scope, patch_element):
 
 
 def read_statedb_entry(scope, table, key, field):
-    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, False, scope)
+    use_tcp = swsscommon.SonicDBConfig.getDbPort(STATE_DB_NAME, scope) != 0
+    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, use_tcp, scope)
     tbl = swsscommon.Table(state_db, table)
     return tbl.hget(key, field)[1]
 
