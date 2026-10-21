@@ -604,9 +604,9 @@ def command_paths(command, path=()):
         yield from command_paths(child, path + (name,))
 
 
-HARDWARE_COMMANDS = [["show", "presence"], ["show", "interface", "speed", "application"]] + [
+HARDWARE_COMMANDS = [["show", "interface", "speed", "application"]] + [
     ["show", "interface", name] for name in
-    ("map", "dom", "tx-disable", "lane-status")
+    ("map", "presence", "dom", "tx-disable", "lane-status")
 ] + [
     ["show", "oe", name] for name in
     ("lpmode", "status", "temperature")
@@ -935,7 +935,7 @@ class TestCommandCoverage(object):
             ["show", "oe", "lpmode"],
             ["show", "oe", "status"],
             ["show", "oe", "temperature"],
-            ["show", "presence"],
+            ["show", "interface", "presence"],
             ["show", "els", "lpmode"],
             ["show", "els", "status"],
             ["show", "els", "temperature"],
