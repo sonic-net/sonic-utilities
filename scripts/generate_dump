@@ -2928,12 +2928,12 @@ main() {
         save_cmd "show interface status -d all" "interface.status" &
         save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
         save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
-        # Collect CPO or SFP EEPROM data
+        # Collect SFP EEPROM data; sfputil filters out CPO ports.
+        save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+        # CPO devices may coexist with pluggable transceivers.
         if python3 -I -c 'from sonic_py_common import device_info; import sys; sys.exit(0 if device_info.get_cpo_data() else 1)' 2>/dev/null; then
             save_cmd "cpoutil read-eeprom oe" "interface.cpo.oe.eeprom" &
             save_cmd "cpoutil read-eeprom els" "interface.cpo.els.eeprom" &
-        else
-            save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
         fi
         save_cmd "show interface link-training status" "interface.link_training.status" &
     fi
