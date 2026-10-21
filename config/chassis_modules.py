@@ -85,7 +85,7 @@ def check_config_module_state_with_timeout(ctx, db, chassis_module_name, state):
 
 def get_asic_list_from_db(chassisdb, chassis_module_name):
     asic_list = []
-    asics_keys_list = chassisdb.keys("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE*")
+    asics_keys_list = chassisdb.keys("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE*") or []
     for asic_key in asics_keys_list:
         name = chassisdb.get("CHASSIS_STATE_DB", asic_key, "name")
         if name == chassis_module_name:
