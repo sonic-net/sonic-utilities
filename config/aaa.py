@@ -11,9 +11,29 @@ ADHOC_VALIDATION = True
 RADIUS_MAXSERVERS = 8
 RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
+# Mirrors the src_intf union in sonic-system-radius.yang: leafrefs to these
+# tables, plus a name-only pattern for Vlan (the VLAN need not exist)
+RADIUS_SRC_INTF_TABLES = ('PORT', 'PORTCHANNEL', 'LOOPBACK_INTERFACE', 'MGMT_PORT')
+RADIUS_SRC_INTF_VLAN_PATTERN = r'Vlan([0-9]{1,3}|[1-3][0-9]{3}|40[0-8][0-9]|409[0-4])'
+RADIUS_SRC_INTF_MSG = ('Interface does not exist or is not supported (valid: '
+                       'Ethernet<id>/PortChannel<id>/Vlan<id>/Loopback<id>/eth0)')
 
 def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
+
+
+def is_valid_radius_source_interface(config_db, source_interface):
+    """Validate src_intf the same way as the src_intf union in sonic-system-radius.yang"""
+    if source_interface == 'eth0':
+        return True
+    if re.fullmatch(RADIUS_SRC_INTF_VLAN_PATTERN, source_interface):
+        return True
+    for table in RADIUS_SRC_INTF_TABLES:
+        for key in config_db.get_table(table):
+            name = key[0] if clicommon.is_ip_prefix_in_key(key) else key
+            if name == source_interface:
+                return True
+    return False
 
 
 def prompt_secret(text='Enter passkey', confirm=True):
@@ -576,6 +596,10 @@ def add(db, address, retransmit, timeout, key, prompt_key, confirm,
 
     config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
+    if ADHOC_VALIDATION and source_interface:
+        if not is_valid_radius_source_interface(config_db, source_interface):
+            ctx = click.get_current_context()
+            ctx.fail(RADIUS_SRC_INTF_MSG)
     old_data = config_db.get_table('RADIUS_SERVER')
     if address in old_data :
         click.echo('server %s already exists' % address)
@@ -597,19 +621,8 @@ def add(db, address, retransmit, timeout, key, prompt_key, confirm,
             data['passkey'] = key
         if use_mgmt_vrf :
             data['vrf'] = "mgmt"
-        if ADHOC_VALIDATION:
-            if source_interface :
-                if (source_interface.startswith("Ethernet") or \
-                    source_interface.startswith("PortChannel") or \
-                    source_interface.startswith("Vlan") or \
-                    source_interface.startswith("Loopback") or \
-                    source_interface == "eth0"):
-                    data['src_intf'] = source_interface
-                else:
-                    click.echo('Not supported interface name (valid interface name: Etherent<id>/PortChannel<id>/Vlan<id>/Loopback<id>/eth0)')
-        else:
-            if source_interface:
-                data['src_intf'] = source_interface
+        if source_interface:
+            data['src_intf'] = source_interface
         try:
             config_db.set_entry('RADIUS_SERVER', address, data)
         except ValueError as e:
@@ -634,3 +647,4 @@ def delete(db, address):
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 radius.add_command(delete)
+
