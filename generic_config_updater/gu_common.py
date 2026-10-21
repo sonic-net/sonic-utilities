@@ -435,6 +435,223 @@ def remove_empty_leaf_lists(config):
     return config
 
 
+def rewrite_patch_emptying_tables(patch, current_config, empty_tables, path_addressing=None):
+    """Rewrite key-level removes that empty a ConfigDB table into a table-level remove.
+
+    ConfigDB cannot store empty tables. Automation scripts may emit per-key
+    removes (for example /VLAN/Vlan10) without knowing whether those keys are
+    the last remaining entries. When every operation on an emptied table is a
+    key-level remove, replace those ops with {"op": "remove", "path": "/TABLE"}.
+
+    Any other operation (add, replace, table-level remove, field-level remove,
+    whole-config update) is left unchanged so existing apply-patch behavior is
+    preserved. RFC 6902 copy/move name their source in "from"; tables
+    referenced that way are not rewritten so later copy/move still have a
+    source. Extra "from" on other ops is ignored, matching JSON Patch.
+    """
+    if not empty_tables:
+        return patch
+
+    if path_addressing is None:
+        path_addressing = PathAddressing()
+
+    empty_tables = set(empty_tables)
+    parsed_ops = []
+    ops_by_table = {table: [] for table in empty_tables}
+    from_tables = set()
+
+    for operation in patch:
+        path = operation.get(OperationWrapper.PATH_KEYWORD, "")
+        tokens = path_addressing.get_path_tokens(path) if path else []
+        parsed_ops.append((operation, tokens))
+        if tokens and tokens[0] in empty_tables:
+            ops_by_table[tokens[0]].append((operation, tokens))
+
+        if operation.get(OperationWrapper.OP_KEYWORD) in ("copy", "move"):
+            from_path = operation.get(OperationWrapper.FROM_KEYWORD)
+            if from_path:
+                from_tokens = path_addressing.get_path_tokens(from_path)
+                if from_tokens and from_tokens[0] in empty_tables:
+                    from_tables.add(from_tokens[0])
+
+    tables_to_rewrite = set()
+    for table, table_ops in ops_by_table.items():
+        if table not in current_config or not table_ops or table in from_tables:
+            continue
+        if all(op.get(OperationWrapper.OP_KEYWORD) == "remove" and len(tokens) == 2
+               for op, tokens in table_ops):
+            tables_to_rewrite.add(table)
+
+    if not tables_to_rewrite:
+        return patch
+
+    new_ops = []
+    rewritten_tables = set()
+    for operation, tokens in parsed_ops:
+        if tokens and tokens[0] in tables_to_rewrite:
+            if tokens[0] not in rewritten_tables:
+                new_ops.append({
+                    OperationWrapper.OP_KEYWORD: "remove",
+                    OperationWrapper.PATH_KEYWORD: path_addressing.create_path([tokens[0]]),
+                })
+                rewritten_tables.add(tokens[0])
+            continue
+        new_ops.append(dict(operation))
+
+    return jsonpatch.JsonPatch(new_ops)
+
+
+def snapshot_table_keys(config, tables):
+    """Capture table keys from the ConfigDB snapshot used for a table-level rewrite."""
+    return {table: sorted((config.get(table) or {}).keys()) for table in tables}
+
+
+def table_level_remove_tables(patch, tables, path_addressing=None):
+    """Return tables that this patch removes at table level (/TABLE)."""
+    if not patch or not tables:
+        return []
+    if path_addressing is None:
+        path_addressing = PathAddressing()
+    table_set = set(tables)
+    found = []
+    for operation in patch:
+        try:
+            opd = dict(operation)
+        except (TypeError, ValueError):
+            continue
+        if opd.get(OperationWrapper.OP_KEYWORD) != "remove":
+            continue
+        path = opd.get(OperationWrapper.PATH_KEYWORD)
+        if not path:
+            continue
+        tokens = path_addressing.get_path_tokens(path)
+        if len(tokens) == 1 and tokens[0] in table_set:
+            found.append(tokens[0])
+    return found
+
+
+def validate_table_key_snapshot(config, table_key_snapshot, patch=None):
+    """Abort a table-level remove if live keys differ from the rewrite snapshot.
+
+    ConfigLock is a no-op, so remove /TABLE is only safe if the write-time
+    table keys still match the snapshot used to rewrite key-level removes.
+    When patch is given, only tables that this patch removes at table level
+    are checked, so later sequential changes are not compared against a
+    table that was already deleted.
+    """
+    if not table_key_snapshot:
+        return
+    tables = list(table_key_snapshot.keys())
+    if patch is not None:
+        tables = table_level_remove_tables(patch, tables)
+        if not tables:
+            return
+    for table in tables:
+        expected = set(table_key_snapshot.get(table, []))
+        live_keys = set((config.get(table) or {}).keys())
+        if live_keys != expected:
+            raise GenericConfigUpdaterError(
+                f"Refusing table-level remove of {table}: live keys "
+                f"{sorted(live_keys)} differ from rewrite snapshot {sorted(expected)}")
+
+
+def replace_rewritten_table_changes(changes, table_key_snapshot, path_addressing=None):
+    """Keep sorted changes, but apply rewritten tables as one table-level remove.
+
+    The sorter orders the removal of a rewritten table after its prerequisites,
+    for example PORT admin_status down and removal of BUFFER_PG entries that
+    reference PORT, and can split remove /TABLE into per-key removes plus a
+    later table remove. Every change stays in sorter order. Only the last
+    change that removes keys from, or removes, a rewritten table is altered:
+    its removes of that table become a single remove /TABLE, guarded by the
+    keys still present at that point.
+    """
+    if not table_key_snapshot:
+        return [(change, None) for change in changes]
+    if path_addressing is None:
+        path_addressing = PathAddressing()
+
+    def _operations(change):
+        patch = getattr(change, "patch", None)
+        try:
+            return list(patch) if patch is not None else None
+        except TypeError:
+            return None
+
+    def _removal_tokens(operation):
+        """Return path tokens if operation removes a rewritten table or one of its keys."""
+        try:
+            opd = dict(operation)
+        except (TypeError, ValueError):
+            return None
+        if opd.get(OperationWrapper.OP_KEYWORD) != "remove":
+            return None
+        path = opd.get(OperationWrapper.PATH_KEYWORD)
+        tokens = path_addressing.get_path_tokens(path) if path else []
+        if 1 <= len(tokens) <= 2 and tokens[0] in table_key_snapshot:
+            return tokens
+        return None
+
+    operations_per_change = [_operations(change) for change in changes]
+    deletion_point = {}
+    for index, operations in enumerate(operations_per_change):
+        for operation in operations or []:
+            tokens = _removal_tokens(operation)
+            if tokens:
+                deletion_point[tokens[0]] = index
+
+    remaining_keys = {table: set(keys) for table, keys in table_key_snapshot.items()}
+    result = []
+
+    def _forget_removed_key(tokens):
+        if tokens and len(tokens) == 2:
+            remaining_keys[tokens[0]].discard(tokens[1])
+
+    def _append_ops(ops):
+        if ops:
+            result.append((JsonChange(jsonpatch.JsonPatch(ops)), None))
+
+    def _append_atomic(tables):
+        atomic_ops = [{
+            OperationWrapper.OP_KEYWORD: "remove",
+            OperationWrapper.PATH_KEYWORD: path_addressing.create_path([table]),
+        } for table in tables]
+        snapshot = {table: sorted(remaining_keys[table]) for table in tables}
+        result.append((JsonChange(jsonpatch.JsonPatch(atomic_ops)), snapshot))
+
+    for index, (change, operations) in enumerate(zip(changes, operations_per_change)):
+        finishing = [table for table in table_key_snapshot if deletion_point.get(table) == index]
+        if operations is None or not finishing:
+            for operation in operations or []:
+                _forget_removed_key(_removal_tokens(operation))
+            result.append((change, None))
+            continue
+
+        prefix = []
+        suffix = []
+        seen_removal = False
+        for operation in operations:
+            tokens = _removal_tokens(operation)
+            if tokens and tokens[0] in finishing:
+                seen_removal = True
+                continue
+            _forget_removed_key(tokens)
+            try:
+                operation = dict(operation)
+            except (TypeError, ValueError):
+                pass
+            (suffix if seen_removal else prefix).append(operation)
+
+        _append_ops(prefix)
+        _append_atomic(finishing)
+        _append_ops(suffix)
+
+    missing = [table for table in table_key_snapshot if table not in deletion_point]
+    if missing:
+        _append_atomic(missing)
+    return result
+
+
 class PatchWrapper:
     def __init__(self, config_wrapper=None, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
@@ -507,6 +724,7 @@ class OperationWrapper:
     OP_KEYWORD = "op"
     PATH_KEYWORD = "path"
     VALUE_KEYWORD = "value"
+    FROM_KEYWORD = "from"
 
     def create(self, operation_type, path, value=None):
         op_type = operation_type.name.lower()
