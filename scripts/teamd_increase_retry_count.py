@@ -129,6 +129,14 @@ def main(probeOnly=False, namespace=""):
         netns.setns(namespace)
     if multi_asic.is_multi_asic():
         SonicDBConfig.initializeGlobalConfig()
+    # Find out which BGP sessions on active port channels are admin up. The shared helper
+    # goes through a circuitous sequence of steps:
+    #
+    # 1. Get the local IPv4/IPv6 address assigned to each port channel.
+    # 2. Find out which BGP session (in CONFIG_DB) has a local_addr attribute of the local
+    # IPv4/IPv6 address.
+    # 3. Check the admin_status field of that table in CONFIG_DB, falling back to
+    # DEVICE_METADATA.default_bgp_status (defaulting to "up") if it is not set.
     portChannels = get_retry_count_port_channels(namespace)
     if not portChannels:
         log.log_info("No port channels retrieved; exiting")
