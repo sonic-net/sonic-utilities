@@ -717,7 +717,7 @@ def set_default(image):
         print_deprecation_warning("set_default", "set-default")
 
     bootloader = get_bootloader()
-    if image not in bootloader.get_installed_images():
+    if not image or image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         raise click.Abort()
     bootloader.set_default_image(image)
@@ -733,7 +733,7 @@ def set_next_boot(image):
         print_deprecation_warning("set_next_boot", "set-next-boot")
 
     bootloader = get_bootloader()
-    if image not in bootloader.get_installed_images():
+    if not image or image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         sys.exit(1)
     bootloader.set_next_image(image)

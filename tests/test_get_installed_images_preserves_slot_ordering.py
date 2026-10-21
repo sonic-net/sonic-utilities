@@ -157,3 +157,39 @@ def test_remove_skip_empty_slot_placeholder(mock_get_bootloader, _mock_geteuid):
 
     assert result.exit_code == 0, result.output
     bootloader.remove_image.assert_not_called()
+
+
+@patch("sonic_installer.main.os.geteuid", return_value=0)
+@patch("sonic_installer.main.get_bootloader")
+def test_set_default_rejects_empty_slot(mock_get_bootloader, _mock_geteuid):
+
+    bootloader = MagicMock(spec=UbootBootloader)
+
+    bootloader.get_installed_images.return_value = ["", "SONiC-OS-2"]
+
+    mock_get_bootloader.return_value = bootloader
+
+    runner = CliRunner()
+
+    result = runner.invoke(sonic_installer, ["set-default", ""])
+
+    assert result.exit_code != 0, result.output
+    bootloader.set_default_image.assert_not_called()
+
+
+@patch("sonic_installer.main.os.geteuid", return_value=0)
+@patch("sonic_installer.main.get_bootloader")
+def test_set_next_boot_rejects_empty_slot(mock_get_bootloader, _mock_geteuid):
+
+    bootloader = MagicMock(spec=UbootBootloader)
+
+    bootloader.get_installed_images.return_value = ["", "SONiC-OS-2"]
+
+    mock_get_bootloader.return_value = bootloader
+
+    runner = CliRunner()
+
+    result = runner.invoke(sonic_installer, ["set-next-boot", ""])
+
+    assert result.exit_code != 0, result.output
+    bootloader.set_next_image.assert_not_called()
