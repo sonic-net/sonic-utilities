@@ -1,4 +1,5 @@
 import pytest
+import json
 import logging
 import os
 import shutil
@@ -269,10 +270,10 @@ Unicast Packets Received....................... 4
 Multicast Packets Received..................... 0
 Broadcast Packets Received..................... 0
 
-Jabbers Received............................... 0
-Fragments Received............................. 0
-Undersize Received............................. 0
-Overruns Received.............................. 0
+Jabbers Received............................... 11
+Fragments Received............................. 12
+Undersize Received............................. 13
+IPv4 Packets Received.......................... 1,234
 
 Packets Transmitted 64 Octets.................. 0
 Packets Transmitted 65-127 Octets.............. 0
@@ -563,6 +564,29 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_counters_detailed
+
+    def test_show_intf_counters_detailed_snapshot_keys(self):
+        from utilities_common.portstat import NStats
+
+        # 'portstat -c' saves counters keyed by NStats field names, and other components
+        # (e.g. gNMI show_client) read SAI_PORT_STAT_IP_IN_RECEIVES back as rx_ovrrun
+        snapshot_cntr = dict.fromkeys(NStats._fields, '0')
+        snapshot_cntr['rx_ovrrun'] = '234'
+
+        remove_tmp_cnstat_file()
+        cnstat_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
+        with open(cnstat_file, 'w') as f:
+            json.dump({'time': '2026-01-01T00:00:00', 'Ethernet4': snapshot_cntr}, f)
+        try:
+            return_code, result = get_result_and_return_code(['portstat', '-l', '-i', 'Ethernet4'])
+        finally:
+            remove_tmp_cnstat_file()
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        lines = result.splitlines()
+        assert "IPv4 Packets Received.......................... 1,000" in lines
+        assert "Time Since Counters Last Cleared............... 2026-01-01T00:00:00" in lines
 
     def test_show_intf_rates(self):
         return_code, result = get_result_and_return_code(['portstat', '-R'])
