@@ -1,5 +1,7 @@
 import os
+import shlex
 import shutil
+import sys
 from unittest.mock import Mock, patch, call
 
 # Import test module
@@ -9,6 +11,19 @@ installed_images = [
     f'{grub.IMAGE_PREFIX}expeliarmus-{grub.IMAGE_PREFIX}abcde',
     f'{grub.IMAGE_PREFIX}expeliarmus-abcde',
 ]
+
+
+def test_pruning_discovers_installed_images_through_grub(tmp_path, monkeypatch):
+    from sonic_installer import bootloader, secure_boot_db
+
+    config_dir = tmp_path / "grub"
+    config_dir.mkdir()
+    (config_dir / "grub.cfg").write_text("".join(f"menuentry '{image}' {{\n}}\n" for image in installed_images))
+    monkeypatch.setattr(grub, "HOST_PATH", str(tmp_path))
+    monkeypatch.setattr(bootloader, "BOOTLOADERS", [grub.GrubBootloader])
+    monkeypatch.setattr(secure_boot_db, "run", Mock(side_effect=AssertionError("unexpected subprocess")))
+    assert secure_boot_db.installed_images() == installed_images
+
 
 def test_set_default_image():
     image = installed_images[0]
@@ -40,6 +55,66 @@ def test_install_image():
         bootloader = grub.GrubBootloader()
         bootloader.install_image(image_path)
         mock_cmd.assert_has_calls(expected_calls)
+
+
+def test_install_image_passes_lock_only_to_installer(tmp_path, monkeypatch):
+    from sonic_installer import secure_boot_lock
+
+    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", tmp_path / "installer.lock")
+    with secure_boot_lock.installer_lock() as fd:
+        with patch.object(grub, "run_command") as command:
+            grub.GrubBootloader().install_image("sonic.bin")
+        installer, update_default = command.call_args_list
+        assert installer.args == (["bash", "sonic.bin"],)
+        assert installer.kwargs["pass_fds"] == (fd,)
+        assert installer.kwargs["env"][secure_boot_lock.LOCK_FD_ENV] == str(fd)
+        assert update_default == call(["grub-set-default", "--boot-directory=" + grub.HOST_PATH, "0"])
+
+
+def test_installer_child_pruning_reuses_shared_lock(tmp_path, monkeypatch):
+    from sonic_installer import common, secure_boot_lock
+
+    lock_path = tmp_path / "installer.lock"
+    marker = tmp_path / "pruned"
+    child = """
+import fcntl
+import sys
+from pathlib import Path
+from sonic_installer import secure_boot_lock as lock
+lock.LOCK_FILE = Path(sys.argv[1])
+flock = fcntl.flock
+def no_wait(fd, flags):
+    assert flags & fcntl.LOCK_NB, "installer child must reuse ownership without waiting"
+    return flock(fd, flags)
+lock.fcntl.flock = no_wait
+with lock.installer_lock():
+    Path(sys.argv[2]).write_text("pruned")
+"""
+    image = tmp_path / "image.sh"
+    image.write_text("exec " + shlex.join([sys.executable, "-c", child, str(lock_path), str(marker)]) + "\n")
+    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", lock_path)
+
+    def run(command, **kwargs):
+        if command[0] == "bash":
+            common.run_command(command, **kwargs)
+
+    monkeypatch.setattr(grub, "run_command", run)
+    with secure_boot_lock.installer_lock():
+        grub.GrubBootloader().install_image(str(image))
+    assert marker.read_text() == "pruned"
+
+
+def test_enrollment_passes_inherited_lock(tmp_path, monkeypatch):
+    from sonic_installer import secure_boot_lock
+
+    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", tmp_path / "installer.lock")
+    with secure_boot_lock.installer_lock() as fd:
+        with patch.object(grub.os.path, "exists", return_value=True):
+            with patch.object(grub.subprocess, "run", return_value=Mock(returncode=0, stdout=b"", stderr=b"")) as run:
+                assert grub.GrubBootloader().enroll_image_secure_boot_keys("sonic.bin")
+        assert run.call_args.kwargs["pass_fds"] == (fd,)
+        assert run.call_args.kwargs["env"][secure_boot_lock.LOCK_FD_ENV] == str(fd)
+
 
 @patch("sonic_installer.bootloader.grub.subprocess.call", Mock())
 @patch("sonic_installer.bootloader.grub.open")
