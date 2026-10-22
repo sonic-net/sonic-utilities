@@ -52,12 +52,42 @@ cpo_object_map = {
 
 CPO_INFO_FIELD_MAP = {
     **CMIS_INFO_FIELD_MAP,
+    'type_abbrv_name': 'Identifier Abbreviation',
+    'vdm_supported': 'VDM Supported',
+    'cdb_supported': 'CDB Supported',
+    'specification_compliance': 'Specification Compliance',
+    'cable_length': 'Cable Length',
     'lane_count': 'Laser Count',
     'control_mode': 'Control Mode',
     'max_optical_power': 'Maximum Optical Power',
     'min_optical_power': 'Minimum Optical Power',
     'max_laser_bias': 'Maximum Laser Bias',
     'min_laser_bias': 'Minimum Laser Bias',
+}
+
+
+CPO_INFO_LANE_FIELD_MAP = {
+    "fiber_mapping": "Fiber Mapping",
+    "frequency": "Frequency",
+}
+
+CPO_DOM_MODULE_MONITOR_MAP = {
+    **DOM_MODULE_MONITOR_MAP,
+    "laser_temperature": "Laser Temperature",
+}
+
+CPO_DOM_MODULE_THRESHOLD_MAP = {
+    **DOM_MODULE_THRESHOLD_MAP,
+    "lasertemphighalarm": "LaserTempHighAlarm",
+    "lasertemplowalarm": "LaserTempLowAlarm",
+    "lasertemphighwarning": "LaserTempHighWarning",
+    "lasertemplowwarning": "LaserTempLowWarning",
+}
+
+CPO_DOM_VALUE_UNIT_MAP = {**DOM_VALUE_UNIT_MAP, "laser_temperature": "C"}
+CPO_DOM_MODULE_THRESHOLD_UNIT_MAP = {
+    **DOM_MODULE_THRESHOLD_UNIT_MAP,
+    **{key: "C" for key in CPO_DOM_MODULE_THRESHOLD_MAP if key.startswith("lasertemp")},
 }
 
 
@@ -621,6 +651,16 @@ def _combine_cable_info(info):
     return combined
 
 
+def _info_field_label(key):
+    if key in CPO_INFO_FIELD_MAP:
+        return CPO_INFO_FIELD_MAP[key]
+    match = re.fullmatch(r"(fiber_mapping|frequency)_lane(\d+)", str(key))
+    if match:
+        field, lane = match.groups()
+        return "Laser {} {}".format(lane, CPO_INFO_LANE_FIELD_MAP[field])
+    return key
+
+
 def _format_cpo_info(info):
     indent = " " * 8
     if not isinstance(info, dict):
@@ -632,10 +672,12 @@ def _format_cpo_info(info):
         info,
         key=lambda key: (
             0 if key in CPO_INFO_FIELD_MAP else 1,
-            _natural_sort_key(CPO_INFO_FIELD_MAP.get(key, key)),
+            _natural_sort_key(_info_field_label(key)),
         ),
     )
     for key in keys:
+        if key == "N/A" and info[key] == "N/A":
+            continue
         if key == "application_advertisement":
             label = CPO_INFO_FIELD_MAP[key]
             values = format_application_advertisement(info[key])
@@ -648,9 +690,12 @@ def _format_cpo_info(info):
             )
             continue
         else:
-            label = CPO_INFO_FIELD_MAP.get(key, key)
+            label = _info_field_label(key)
             value = info.get(key, "N/A")
 
+        if value in (None, "N/A", "Unknown"):
+            lines.append("{}{}: {}".format(indent, label, "N/A" if value is None else value))
+            continue
         if key in (
                 "supported_max_tx_power", "supported_min_tx_power",
                 "max_optical_power", "min_optical_power"):
@@ -680,7 +725,7 @@ def _format_oe_dom(dom_values):
         lines,
         values,
         CMIS_DOM_CHANNEL_MONITOR_MAP,
-        DOM_VALUE_UNIT_MAP,
+        CPO_DOM_VALUE_UNIT_MAP,
     )
 
     lines.append("{}ChannelThresholdValues:".format(indent))
@@ -696,24 +741,24 @@ def _format_oe_dom(dom_values):
     _append_dom_values(
         lines,
         values,
-        DOM_MODULE_MONITOR_MAP,
-        DOM_VALUE_UNIT_MAP,
+        CPO_DOM_MODULE_MONITOR_MAP,
+        CPO_DOM_VALUE_UNIT_MAP,
     )
 
     lines.append("{}ModuleThresholdValues:".format(indent))
     _append_dom_values(
         lines,
         values,
-        DOM_MODULE_THRESHOLD_MAP,
-        DOM_MODULE_THRESHOLD_UNIT_MAP,
+        CPO_DOM_MODULE_THRESHOLD_MAP,
+        CPO_DOM_MODULE_THRESHOLD_UNIT_MAP,
         alignment=15,
     )
 
     displayed_keys = set().union(
         CMIS_DOM_CHANNEL_MONITOR_MAP,
         DOM_CHANNEL_THRESHOLD_MAP,
-        DOM_MODULE_MONITOR_MAP,
-        DOM_MODULE_THRESHOLD_MAP,
+        CPO_DOM_MODULE_MONITOR_MAP,
+        CPO_DOM_MODULE_THRESHOLD_MAP,
     )
     _append_additional_dom_values(lines, values, displayed_keys)
     return lines
@@ -752,7 +797,7 @@ def _format_els_dom(dom_values):
         els_monitor_units,
     )
 
-    lines.append("{}ELSFPThresholdValues:".format(indent))
+    lines.append("{}ThresholdValues:".format(indent))
     _append_dom_values(
         lines,
         values,

@@ -445,7 +445,7 @@ class TestDirectPlatformApiCommands(object):
         result = invoke(["show", "interface", "dom", "Ethernet0"])
         assert result.exit_code == 0, result.output
         els_section = result.output.split("    ELS:\n")[1]
-        _, thresholds = els_section.split("ELSFPThresholdValues:\n")
+        _, thresholds = els_section.split("        ThresholdValues:\n", 1)
         els_thresholds, cmis_thresholds = thresholds.split("CMISChannelThresholdValues:\n")
         assert [line.strip() for line in els_thresholds.strip().splitlines()] == [
             "TxBiasHighAlarm: 100.0mA", "TxBiasLowAlarm: 10.0mA",

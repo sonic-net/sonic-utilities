@@ -2198,7 +2198,11 @@ def test_cable_info_fields_are_combined(info, expected):
     for label, value in expected.items():
         if label.startswith("Length"):
             assert "{}: {}".format(label, value) in lines
-    assert not any(line.startswith(("Cable Type:", "Cable Length:")) for line in lines)
+    assert not any(line.startswith("Cable Type:") for line in lines)
+    if "cable_type" in info:
+        assert not any(line.startswith("Cable Length:") for line in lines)
+    elif "cable_length" in info:
+        assert "Cable Length: {}".format(info["cable_length"]) in lines
     assert info == original
 
 
@@ -2276,3 +2280,64 @@ def test_invalid_interface_does_not_query_sfp(coverage_environment, monkeypatch)
     assert result.exit_code != 0
     assert "Invalid port 'Ethernet100'" in result.output
     chassis.get_sfp.assert_not_called()
+
+
+@pytest.mark.parametrize("api_module, default_name", [
+    ("cmis", "CMIS_XCVR_INFO_DEFAULT_DICT"),
+    ("elsfp", "ELSFP_INFO_DEFAULT_DICT"),
+])
+def test_all_public_info_defaults_have_display_labels(api_module, default_name):
+    import importlib
+    module = importlib.import_module("sonic_platform_base.sonic_xcvr.api.public." + api_module)
+    fields = getattr(module, default_name)
+    assert set(fields) <= set(cpoutil.CPO_INFO_FIELD_MAP)
+
+
+@pytest.mark.parametrize("key, label", [
+    ("type_abbrv_name", "Identifier Abbreviation"),
+    ("vdm_supported", "VDM Supported"),
+    ("cdb_supported", "CDB Supported"),
+    ("specification_compliance", "Specification Compliance"),
+    ("fiber_mapping_lane9", "Laser 9 Fiber Mapping"),
+    ("frequency_lane16", "Laser 16 Frequency"),
+])
+def test_public_info_labels_preserve_api_keys(key, label):
+    info = {key: "example"}
+    assert "{}: example".format(label) in "\n".join(cpoutil._format_cpo_info(info))
+    assert info == {key: "example"}
+    assert json.loads(cpoutil._json_records(info)) == info
+
+
+def test_public_info_placeholders_have_no_units_or_na_heading():
+    info = {"max_laser_bias": "N/A", "min_optical_power": "N/A",
+            "cable_type": "N/A", "cable_length": "N/A"}
+    before = copy.deepcopy(info)
+    text = "\n".join(cpoutil._format_cpo_info(info))
+    assert "Maximum Laser Bias: N/A" in text
+    assert "Minimum Optical Power: N/A" in text
+    assert "N/AmA" not in text and "N/AdBm" not in text
+    assert "N/A: N/A" not in text
+    assert info == before
+
+
+def test_oe_public_laser_temperature_fields_are_mapped():
+    fields = {"laser_temperature": 42.5, "lasertemphighalarm": 80,
+              "lasertemplowalarm": -5, "lasertemphighwarning": 75,
+              "lasertemplowwarning": 0}
+    text = "\n".join(cpoutil._format_oe_dom(fields))
+    assert "Laser Temperature: 42.5C" in text
+    for key in fields:
+        assert key not in text
+    for label in ("LaserTempHighAlarm", "LaserTempLowAlarm",
+                  "LaserTempHighWarning", "LaserTempLowWarning"):
+        assert label in text
+    assert "AdditionalValues:" not in text
+
+
+def test_els_public_threshold_heading_and_vendor_extensions():
+    text = "\n".join(cpoutil._format_els_dom({"temperature_alarm_high": 75, "tec_current": 1.2}))
+    assert "        ThresholdValues:" in text
+    assert "ELSFPThresholdValues:" not in text
+    assert "TempHighAlarm: 75C" in text
+    assert "tec current: 1.2" in text
+    assert cpoutil._info_field_label("rlm_laser_lpmode_control") == "rlm_laser_lpmode_control"
