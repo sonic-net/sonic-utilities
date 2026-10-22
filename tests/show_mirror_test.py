@@ -17,6 +17,7 @@ class TestShowMirror(object):
         aclloader.configdb.set_entry("MIRROR_SESSION", "session2", {"direction": "BOTH", "dst_port": "Ethernet7", "src_port": "Ethernet8", "type": "SPAN"})
         aclloader.configdb.set_entry("MIRROR_SESSION", "session11", {"direction": "RX", "dst_port": "Ethernet9", "src_port": "Ethernet10", "type": "SPAN"})
         aclloader.configdb.set_entry("MIRROR_SESSION", "session15", {"direction": "TX", "dst_port": "Ethernet2", "src_port": "Ethernet3", "type": "SPAN"})
+        aclloader.configdb.set_entry("MIRROR_SESSION", "sflow0", {"direction": "RX", "type": "SFLOW", "src_ip": "10.1.1.1", "dst_ip": "10.2.2.2", "udp_dst_port": "6343", "dscp": "8", "ttl": "64", "src_port": "Ethernet0", "sample_rate": "1000", "truncate_size": "128"})
         aclloader.read_sessions_info()
         context = {
             "acl_loader": aclloader
@@ -35,6 +36,11 @@ session1   active     Ethernet30  Ethernet40  both
 session2   active     Ethernet7   Ethernet8   both
 session11  active     Ethernet9   Ethernet10  rx
 session15  active     Ethernet2   Ethernet3   tx
+
+SFLOW Sessions
+Name    Status    SRC IP    DST IP      UDP DST Port    DSCP    TTL  Queue    Policer    Monitor Port    SRC Port    Direction      Sample Rate    Truncate Size
+------  --------  --------  --------  --------------  ------  -----  -------  ---------  --------------  ----------  -----------  -------------  ---------------
+sflow0  active     10.1.1.1  10.2.2.2            6343       8     64                                      Ethernet0   rx                    1000              128
 """
         result = runner.invoke(acl_loader_show.cli.commands['show'].commands['session'], [], obj=context)
         assert result.exit_code == 0
