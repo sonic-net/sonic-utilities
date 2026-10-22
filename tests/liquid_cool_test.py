@@ -123,6 +123,22 @@ class TestLeakAction(object):
             'LEAK_CONTROL_POLICY', 'policy', {'system_minor_leak_action': 'syslog_only'}
         )
 
+    def test_leak_action_system_major_syslog_only(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['leak-action', 'system', 'major', 'syslog_only'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        mock_cfgdb.mod_entry.assert_called_once_with(
+            'LEAK_CONTROL_POLICY', 'policy', {'system_major_leak_action': 'syslog_only'}
+        )
+
+    def test_leak_action_rack_mgr_major_syslog_only(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['leak-action', 'rack_mgr', 'major', 'graceful_shutdown'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        mock_cfgdb.mod_entry.assert_called_once_with(
+            'LEAK_CONTROL_POLICY', 'policy', {'rack_mgr_major_alert_action': 'graceful_shutdown'}
+        )
+
     def test_leak_action_rack_mgr_critical_syslog_only(self):
         mock_cfgdb = MagicMock()
         result = self._invoke(['leak-action', 'rack_mgr', 'critical', 'syslog_only'], mock_cfgdb)
@@ -149,4 +165,48 @@ class TestLeakAction(object):
 
     def test_leak_action_missing_args(self):
         result = self._invoke(['leak-action', 'system', 'critical'])
+        assert result.exit_code != 0
+
+
+class TestMajorLeakThreshold(object):
+    """Tests for 'config liquid_cool major-leak-threshold' command"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+
+    def _invoke(self, args, cfgdb=None):
+        runner = CliRunner()
+        db = _make_mock_db(cfgdb)
+        return runner.invoke(liquid_cool, args, obj=db)
+
+    def test_major_leak_threshold_set(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['major-leak-threshold', '3'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        assert '3' in result.output
+        mock_cfgdb.mod_entry.assert_called_once_with(
+            'LEAK_CONTROL_POLICY', 'policy', {'system_major_leak_num_min_sensors': '3'}
+        )
+
+    def test_major_leak_threshold_floor_value(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['major-leak-threshold', '2'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        mock_cfgdb.mod_entry.assert_called_once_with(
+            'LEAK_CONTROL_POLICY', 'policy', {'system_major_leak_num_min_sensors': '2'}
+        )
+
+    def test_major_leak_threshold_below_floor_rejected(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['major-leak-threshold', '1'], mock_cfgdb)
+        assert result.exit_code != 0
+        mock_cfgdb.mod_entry.assert_not_called()
+
+    def test_major_leak_threshold_non_integer_rejected(self):
+        result = self._invoke(['major-leak-threshold', 'abc'])
+        assert result.exit_code != 0
+
+    def test_major_leak_threshold_missing_arg(self):
+        result = self._invoke(['major-leak-threshold'])
         assert result.exit_code != 0
