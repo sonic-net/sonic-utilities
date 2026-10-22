@@ -17162,9 +17162,9 @@ Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS
 
 ## CPO Utilities show commands
 
-`cpoutil show interface dom` displays cable type and cable length on separate
-`Cable Type` and `Cable Length` lines. JSON retains the original `cable_type`
-and `cable_length` keys and values.
+`cpoutil show interface dom` combines the API's cable length descriptor and
+value in both text and JSON output, for example `Length(km): 2` in text
+and `"Length(km)": 2` in JSON.
 
 **cpoutil show interface presence**
 

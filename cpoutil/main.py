@@ -52,8 +52,6 @@ cpo_object_map = {
 
 CPO_INFO_FIELD_MAP = {
     **CMIS_INFO_FIELD_MAP,
-    "cable_type": "Cable Type",
-    "cable_length": "Cable Length",
     'lane_count': 'Laser Count',
     'control_mode': 'Control Mode',
     'max_optical_power': 'Maximum Optical Power',
@@ -613,11 +611,22 @@ def _json_records(records):
     return json.dumps(_json_safe(_ordered_top_level(records)), indent=4, allow_nan=False)
 
 
+def _combine_cable_info(info):
+    """Use the API's cable length descriptor as the field name."""
+    if not isinstance(info, dict) or not info.get("cable_type"):
+        return info
+    combined = dict(info)
+    label = combined.pop("cable_type")
+    combined[label] = combined.pop("cable_length", "N/A")
+    return combined
+
+
 def _format_cpo_info(info):
     indent = " " * 8
     if not isinstance(info, dict):
         return ["{}EEPROM info: N/A".format(indent)]
 
+    info = _combine_cable_info(info)
     lines = []
     keys = sorted(
         info,
@@ -1343,7 +1352,7 @@ def show_interface_lpmode(port, json_output):
 def show_interface_dom(port, json_output):
     """Display CPO EEPROM information and monitoring data.
 
-    OE and ELS data retain public API field names in separate sections.
+    OE and ELS data use separate sections; cable length fields are combined.
     JSON includes presence and each endpoint's info, dom and thresholds.
     """
     records = {}
@@ -1365,14 +1374,15 @@ def show_interface_dom(port, json_output):
 
                 failures = []
                 record["oe"] = {
-                    "info": _read_dom_section(failures, "OE", "info", oe_api.get_transceiver_info),
+                    "info": _combine_cable_info(
+                        _read_dom_section(failures, "OE", "info", oe_api.get_transceiver_info)),
                     "dom": _read_dom_section(failures, "OE", "dom", oe_api.get_transceiver_dom_real_value),
                     "thresholds": _read_dom_section(
                         failures, "OE", "thresholds", oe_api.get_transceiver_threshold_info),
                 }
                 els_info = _read_dom_section(failures, "ELS", "info", els_api.get_elsfp_info)
                 record["els"] = {
-                    "info": els_info,
+                    "info": _combine_cable_info(els_info),
                     "dom": _filter_els_dom_lanes(
                         _read_dom_section(failures, "ELS", "dom", els_api.get_elsfp_dom_real_value),
                         _get_els_lane_count(els_info),

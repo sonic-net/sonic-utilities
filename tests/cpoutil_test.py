@@ -2183,21 +2183,40 @@ class TestEepromBankValidation:
         assert coverage_environment.writes == []
 
 
-@pytest.mark.parametrize("info", [
-    {"cable_type": "Length Cable Assembly(m)", "cable_length": 4.8},
-    {"cable_type": "Length(km)"},
-    {"cable_length": 2},
+@pytest.mark.parametrize("info, expected", [
+    ({"cable_type": "Length Cable Assembly(m)", "cable_length": 4.8},
+     {"Length Cable Assembly(m)": 4.8}),
+    ({"cable_type": "Length(km)", "cable_length": 0}, {"Length(km)": 0}),
+    ({"cable_type": "Length(km)"}, {"Length(km)": "N/A"}),
+    ({"cable_length": 2}, {"cable_length": 2}),
+    ({"manufacturer": "Vendor"}, {"manufacturer": "Vendor"}),
 ])
-def test_cable_info_fields_render_independently(info):
+def test_cable_info_fields_are_combined(info, expected):
     original = copy.deepcopy(info)
+    assert cpoutil._combine_cable_info(info) == expected
     lines = [line.strip() for line in cpoutil._format_cpo_info(info)]
-    for key, label in (("cable_type", "Cable Type"), ("cable_length", "Cable Length")):
-        if key in info:
-            assert "{}: {}".format(label, info[key]) in lines
-        else:
-            assert not any(line.startswith(label + ":") for line in lines)
+    for label, value in expected.items():
+        if label.startswith("Length"):
+            assert "{}: {}".format(label, value) in lines
+    assert not any(line.startswith(("Cable Type:", "Cable Length:")) for line in lines)
     assert info == original
-    assert json.loads(cpoutil._json_records({"info": info}))["info"] == original
+
+
+@pytest.mark.parametrize("endpoint", ["oe", "els"])
+def test_dom_combines_cable_fields_in_text_and_json(coverage_environment, monkeypatch, endpoint):
+    info = {"cable_type": "Length(km)", "cable_length": 2, "manufacturer": "Vendor"}
+    method = "get_transceiver_info" if endpoint == "oe" else "get_elsfp_info"
+    monkeypatch.setattr(coverage_environment.api, method, lambda: info)
+    result = invoke_coverage(["show", "interface", "dom", "Ethernet0", "--json"])
+    assert result.exit_code == 0, result.output
+    actual = json.loads(result.output)["Ethernet0"][endpoint]["info"]
+    assert actual == {"Length(km)": 2, "manufacturer": "Vendor"}
+    result = invoke_coverage(["show", "interface", "dom", "Ethernet0"])
+    assert result.exit_code == 0, result.output
+    assert "Length(km): 2" in result.output
+    assert "Cable Type:" not in result.output
+    assert "Cable Length:" not in result.output
+    assert info == {"cable_type": "Length(km)", "cable_length": 2, "manufacturer": "Vendor"}
 
 
 @pytest.mark.parametrize("command", [
