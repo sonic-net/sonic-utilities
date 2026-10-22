@@ -36,6 +36,12 @@ def log_error(msg):
     syslog.closelog()
 
 
+def log_warning(msg):
+    syslog.openlog(SYSLOG_ID)
+    syslog.syslog(syslog.LOG_WARNING, msg)
+    syslog.closelog()
+
+
 def getCmdOutput(cmd):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     return proc.communicate()[0], proc.returncode
@@ -59,15 +65,34 @@ def craft_lacp_packet(portChannelConfig, portName, preserve_retry_count=False):
     l4 = scapy.contrib.lacp.LACP()
     l4.version = 0x1
     if preserve_retry_count:
-        runner = portChannelConfig["runner"]
-        actor_retry_count = runner["retry_count"]
-        partner_retry_count = portConfig["runner"]["partner_retry_count"]
-        if (runner["enable_retry_count_feature"] is not True or
-                type(actor_retry_count) is not int or not 3 < actor_retry_count <= 255 or
-                type(partner_retry_count) is not int or not 0 < partner_retry_count <= 255):
-            raise ValueError(f"Invalid extended retry-count state for {portName}")
-        l4 = LACPRetryCount(
-            version=0xf1, actor_retry_count=actor_retry_count, partner_retry_count=partner_retry_count)
+        try:
+            runner = portChannelConfig["runner"]
+            if runner["enable_retry_count_feature"] is not True:
+                raise ValueError("Local retry-count feature is not enabled")
+            actor_retry_count = runner["retry_count"]
+            partner_retry_count = portConfig["runner"]["partner_retry_count"]
+            if (type(actor_retry_count) is not int or not 3 < actor_retry_count <= 255 or
+                    type(partner_retry_count) is not int or not 0 < partner_retry_count <= 255):
+                raise ValueError("Invalid extended retry-count state")
+            l4 = LACPRetryCount(
+                version=0xf1, actor_retry_count=actor_retry_count, partner_retry_count=partner_retry_count)
+        except (KeyError, TypeError, ValueError) as err:
+            # In the reboot sequence, orchagent has already been paused and shutdown
+            # must continue so the device can recover. Fall back to standard LACPDUs
+            # as a degraded mode. lag_keepalive sends once per second and is intended
+            # to run through the end of shutdown, whereas teamd is stopped earlier
+            # and, in slow-periodic mode, sends only once every 30 seconds. Continuing
+            # replay keeps the LAGs fresher than relying on teamd's last packet,
+            # attempting to reduce the risk of flapping without guaranteeing
+            # extended timeout protection.
+            # Local teamd state may not reflect the extended counts advertised to the peer:
+            # teamd_increase_retry_count.py can inject extended LACPDUs without changing
+            # local teamd's retry-count configuration. Any failure to configure native
+            # extended retry counts must be investigated upstream, not by stopping
+            # keepalive here.
+            log_warning(
+                f"Cannot preserve extended retry counts for {portName}: {err}; "
+                "using standard LACPDU without extended retry-count protection")
     l4.actor_system_priority = actorConfig["system_priority"]
     l4.actor_system = actorConfig["system"]
     l4.actor_key = actorConfig["key"]
