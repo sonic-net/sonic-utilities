@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+from copy import deepcopy
 from pathlib import Path
 from unittest import mock
 
@@ -77,6 +78,20 @@ def test_standard_packet_does_not_require_retry_state(keepalive, port_channel):
     assert bytes(packet)[72:] == bytes(52)
 
 
+@pytest.mark.parametrize("missing_counts", [False, True])
+def test_disabled_retry_feature_preserves_standard_packet(keepalive, port_channel, missing_counts):
+    port_channel["runner"]["enable_retry_count_feature"] = False
+    port_channel["runner"]["retry_count"] = 3
+    if missing_counts:
+        del port_channel["runner"]["retry_count"]
+        del port_channel["ports"]["Ethernet0"]["runner"]["partner_retry_count"]
+    standard = bytes(keepalive.craft_lacp_packet(port_channel, "Ethernet0"))
+    packet = keepalive.craft_lacp_packet(port_channel, "Ethernet0", True)
+
+    assert packet[LACP].version == 1
+    assert bytes(packet) == standard
+
+
 @pytest.mark.parametrize("new_version,reset", [(False, False), (True, False), (True, True)])
 def test_retry_helper_packet_behavior_is_unchanged(
         keepalive, lacp, port_channel, monkeypatch, new_version, reset):
@@ -103,21 +118,73 @@ def test_retry_helper_packet_behavior_is_unchanged(
     ("partner_retry_count", 0), ("partner_retry_count", 256),
     ("partner_retry_count", "7"), ("partner_retry_count", True),
 ])
-def test_invalid_retry_state_is_not_silently_downgraded(keepalive, port_channel, field, value):
+def test_invalid_retry_state_warns_and_uses_standard_packet(keepalive, port_channel, field, value):
     runner = (port_channel["ports"]["Ethernet0"]["runner"]
               if field == "partner_retry_count" else port_channel["runner"])
     runner[field] = value
-    with pytest.raises(ValueError, match="Invalid extended retry-count state"):
-        keepalive.craft_lacp_packet(port_channel, "Ethernet0", True)
+    standard = bytes(keepalive.craft_lacp_packet(port_channel, "Ethernet0"))
+    with mock.patch.object(keepalive.syslog, "syslog") as log:
+        for _ in range(3):
+            packet = keepalive.craft_lacp_packet(port_channel, "Ethernet0", True)
+            assert bytes(packet) == standard
+    assert log.call_count == 3
+    severity, message = log.call_args.args
+    assert severity == keepalive.syslog.LOG_WARNING
+    assert "Ethernet0" in message
+    assert "standard LACPDU" in message
 
 
-@pytest.mark.parametrize("field", ["retry_count", "enable_retry_count_feature", "partner_retry_count"])
-def test_missing_retry_state_requires_initialization_retry(keepalive, port_channel, field):
+@pytest.mark.parametrize("field", ["runner", "retry_count", "enable_retry_count_feature", "partner_retry_count"])
+def test_missing_retry_state_warns_and_uses_standard_packet(keepalive, port_channel, field):
     runner = (port_channel["ports"]["Ethernet0"]["runner"]
-              if field == "partner_retry_count" else port_channel["runner"])
+              if field == "partner_retry_count" else
+              port_channel if field == "runner" else port_channel["runner"])
     del runner[field]
-    with pytest.raises(KeyError):
+    standard = bytes(keepalive.craft_lacp_packet(port_channel, "Ethernet0"))
+    with mock.patch.object(keepalive.syslog, "syslog") as log:
+        for _ in range(3):
+            packet = keepalive.craft_lacp_packet(port_channel, "Ethernet0", True)
+            assert bytes(packet) == standard
+    assert log.call_count == 3
+    assert log.call_args.args[0] == keepalive.syslog.LOG_WARNING
+
+
+@pytest.mark.parametrize("runner", [None, [], "invalid"])
+def test_malformed_retry_state_uses_standard_packet(keepalive, port_channel, runner):
+    port_channel["runner"] = runner
+    standard = bytes(keepalive.craft_lacp_packet(port_channel, "Ethernet0"))
+    with mock.patch.object(keepalive.syslog, "syslog") as log:
+        packet = keepalive.craft_lacp_packet(port_channel, "Ethernet0", True)
+    assert bytes(packet) == standard
+    log.assert_called_once()
+
+
+def test_legacy_packet_errors_still_propagate(keepalive, port_channel):
+    del port_channel["ports"]["Ethernet0"]["runner"]["actor_lacpdu_info"]["system"]
+    with pytest.raises(KeyError, match="system"):
         keepalive.craft_lacp_packet(port_channel, "Ethernet0", True)
+
+
+def test_fallback_warns_during_construction_but_not_replay(keepalive, port_channel):
+    del port_channel["runner"]
+    port_channel["ports"]["Ethernet4"] = deepcopy(port_channel["ports"]["Ethernet0"])
+    packets = {}
+    with mock.patch.object(keepalive.syslog, "syslog") as log, \
+            mock.patch.object(keepalive, "log_info"), \
+            mock.patch.object(keepalive, "sendp") as send, \
+            mock.patch.object(keepalive.time, "sleep"):
+        for _ in range(3):
+            for port in ("Ethernet0", "Ethernet4"):
+                packet = keepalive.craft_lacp_packet(port_channel, port, True)
+                packets[port] = (mock.sentinel.socket, packet)
+        assert log.call_count == 6
+        assert "Ethernet0" in log.call_args_list[0].args[1]
+        assert "Ethernet4" in log.call_args_list[1].args[1]
+        keepalive.lag_keepalive(packets)
+        assert log.call_count == 6
+    assert send.call_count == 600
+    for _, packet in packets.values():
+        assert packet[LACP].version == 1
 
 
 @pytest.mark.parametrize("namespace", ["", "asic1"])
@@ -152,6 +219,54 @@ def test_member_selection_and_namespace(keepalive, port_channel, namespace, pres
         select.assert_called_once_with(namespace)
     else:
         select.assert_not_called()
+
+
+@pytest.mark.parametrize("namespace", ["", "asic1"])
+@pytest.mark.parametrize("retry_state", ["disabled", "missing", "invalid"])
+def test_mixed_retry_modes_initialize_all_members(keepalive, port_channel, namespace, retry_state):
+    configs = {}
+    members = [("PortChannel1", "Ethernet0"), ("PortChannel2", "Ethernet4"),
+               ("PortChannel3", "Ethernet8")]
+    for lag, port in members:
+        config = deepcopy(port_channel)
+        config["ports"] = {port: config["ports"].pop("Ethernet0")}
+        configs[lag] = config
+    if retry_state == "disabled":
+        configs["PortChannel2"]["runner"] = {"enable_retry_count_feature": False}
+    elif retry_state == "missing":
+        del configs["PortChannel2"]["runner"]
+    else:
+        configs["PortChannel2"]["runner"]["retry_count"] = 3
+    del configs["PortChannel2"]["ports"]["Ethernet4"]["runner"]["partner_retry_count"]
+    del configs["PortChannel3"]["runner"]
+    del configs["PortChannel3"]["ports"]["Ethernet8"]["runner"]["partner_retry_count"]
+    app_db = mock.MagicMock()
+    config_db = mock.MagicMock()
+    app_db.get_keys.return_value = members
+    app_db.get.return_value = "up"
+    config_db.get_entry.return_value = {"admin_status": "up"}
+
+    with mock.patch.object(keepalive, "ConfigDBConnector", side_effect=[app_db, config_db] * 2), \
+            mock.patch.object(keepalive, "get_retry_count_port_channels",
+                              return_value={"PortChannel1", "PortChannel2"}), \
+            mock.patch.object(keepalive, "get_port_channel_config",
+                              side_effect=lambda lag, ns: configs[lag]), \
+            mock.patch.object(keepalive.conf, "L2socket") as socket, \
+            mock.patch.object(keepalive.syslog, "syslog") as log:
+        for _ in range(2):
+            active, packets = keepalive.get_lacpdu_per_lag_member(namespace, True)
+
+    assert log.call_count == 2
+    assert log.call_args.args[0] == keepalive.syslog.LOG_WARNING
+    assert active == [port for _, port in members]
+    assert list(packets) == active
+    extended = bytes(packets["Ethernet0"][1])
+    assert extended[15] == 0xf1
+    assert extended[72:80] == bytes([0x80, 4, 5, 0, 0x81, 4, 7, 0])
+    for port in ("Ethernet4", "Ethernet8"):
+        assert packets[port][1][LACP].version == 1
+        assert bytes(packets[port][1])[72:] == bytes(52)
+    assert socket.call_args_list == [mock.call(iface=port) for port in active] * 2
 
 
 @pytest.mark.parametrize("default_status,neighbor_status,expected", [

@@ -1257,7 +1257,7 @@ fi
 # disable trap-handlers which were set before
 trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM
 
-# Cache LACPDUs only after teamd has negotiated the extended retry counts.
+# Cache LACPDUs after the retry-count increase step so extended counts can be preserved.
 execute_in_namespaces asic start_lag_keepalive
 
 if [ -x ${LOG_SSD_HEALTH} ]; then
