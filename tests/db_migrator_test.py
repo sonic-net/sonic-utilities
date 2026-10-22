@@ -760,6 +760,63 @@ class TestSflowSampleDirectionMigrator(object):
             diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
             assert not diff
 
+
+class TestConfigSourceSelection(object):
+    @staticmethod
+    def _write_json(filename, data):
+        with open(filename, 'w') as config_file:
+            json.dump(data, config_file)
+
+    def test_golden_source_ignores_existing_corrupt_minigraph(self, tmp_path):
+        import db_migrator
+
+        golden_config = {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "hostname": "golden-only"
+                }
+            }
+        }
+        golden_path = tmp_path / "custom-golden.json"
+        minigraph_path = tmp_path / "minigraph.xml"
+        self._write_json(str(golden_path), golden_config)
+        minigraph_path.write_text("<broken")
+
+        with mock.patch.object(db_migrator, 'MINIGRAPH_FILE', str(minigraph_path)), \
+                mock.patch.object(db_migrator, 'parse_xml') as mock_parse_xml:
+            dbmgtr = db_migrator.DBMigrator(
+                None,
+                config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
+                config_source_file=str(golden_path)
+            )
+
+        assert dbmgtr.config_src_data == golden_config
+        mock_parse_xml.assert_not_called()
+
+    def test_golden_source_requires_source_file(self, tmp_path):
+        import db_migrator
+
+        missing_path = tmp_path / "missing-golden.json"
+        with pytest.raises(RuntimeError, match="Required golden config file"):
+            db_migrator.DBMigrator(
+                None,
+                config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
+                config_source_file=str(missing_path)
+            )
+
+    def test_golden_source_rejects_malformed_source_file(self, tmp_path):
+        import db_migrator
+
+        malformed_path = tmp_path / "malformed-golden.json"
+        malformed_path.write_text("{")
+        with pytest.raises(RuntimeError, match="Failed to load golden config"):
+            db_migrator.DBMigrator(
+                None,
+                config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
+                config_source_file=str(malformed_path)
+            )
+
+
 class TestGoldenConfig(object):
     @classmethod
     def setup_class(cls):
@@ -836,6 +893,29 @@ class TestMain(object):
         mock_args.return_value = argparse.Namespace(namespace="asic0", operation='version_202411_02', socket=None)
         import db_migrator
         db_migrator.main()
+
+    def test_golden_source_arguments_are_forwarded(self):
+        import db_migrator
+
+        args = argparse.Namespace(
+            namespace=None,
+            operation='migrate',
+            socket=None,
+            config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
+            config_source_file='/tmp/custom-golden.json',
+            init_config_file='/tmp/custom-init.json'
+        )
+        with mock.patch('argparse.ArgumentParser.parse_args', return_value=args), \
+                mock.patch.object(db_migrator, 'DBMigrator') as mock_db_migrator:
+            db_migrator.main()
+
+        mock_db_migrator.assert_called_once_with(
+            None,
+            config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
+            config_source_file='/tmp/custom-golden.json',
+            init_config_file='/tmp/custom-init.json'
+        )
+        mock_db_migrator.return_value.migrate.assert_called_once_with()
 
 
 class TestGNMIMigrator(object):
