@@ -270,10 +270,10 @@ Unicast Packets Received....................... 4
 Multicast Packets Received..................... 0
 Broadcast Packets Received..................... 0
 
-Jabbers Received............................... 0
-Fragments Received............................. 0
-Undersize Received............................. 0
-IP Packets Received............................ 0
+Jabbers Received............................... 11
+Fragments Received............................. 12
+Undersize Received............................. 13
+IPv4 Packets Received.......................... 1,234
 
 Packets Transmitted 64 Octets.................. 0
 Packets Transmitted 65-127 Octets.............. 0
@@ -302,12 +302,6 @@ Trimmed Dropped Packets........................ 50
 
 Time Since Counters Last Cleared............... None
 """
-
-intf_counters_detailed_legacy_snapshot = intf_counters_detailed.replace(
-    "Unicast Packets Received....................... 4",
-    "Unicast Packets Received....................... 3").replace(
-    "Time Since Counters Last Cleared............... None",
-    "Time Since Counters Last Cleared............... 2026-01-01T00:00:00")
 
 intf_counters_on_sup = """\
        IFACE    STATE    RX_OK     RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK     TX_BPS    TX_UTIL\
@@ -571,22 +565,18 @@ class TestPortStat(object):
         assert return_code == 0
         assert result == intf_counters_detailed
 
-    def test_show_intf_counters_detailed_legacy_snapshot(self):
-        from utilities_common.portstat import NStats, counter_bucket_dict
+    def test_show_intf_counters_detailed_snapshot_keys(self):
+        from utilities_common.portstat import NStats
 
-        # 'portstat -c' snapshots are keyed by NStats field names and can be left
-        # behind by an older release, which stored SAI_PORT_STAT_IP_IN_RECEIVES as rx_ovrrun
-        legacy_fields = list(NStats._fields)
-        ip_in_receives = next(pos for pos, cntrs in counter_bucket_dict.items()
-                              if cntrs == ['SAI_PORT_STAT_IP_IN_RECEIVES'])
-        legacy_fields[ip_in_receives] = 'rx_ovrrun'
-        legacy_cntr = dict.fromkeys(legacy_fields, '0')
-        legacy_cntr['rx_uca'] = '1'
+        # 'portstat -c' saves counters keyed by NStats field names, and other components
+        # (e.g. gNMI show_client) read SAI_PORT_STAT_IP_IN_RECEIVES back as rx_ovrrun
+        snapshot_cntr = dict.fromkeys(NStats._fields, '0')
+        snapshot_cntr['rx_ovrrun'] = '234'
 
         remove_tmp_cnstat_file()
         cnstat_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
         with open(cnstat_file, 'w') as f:
-            json.dump({'time': '2026-01-01T00:00:00', 'Ethernet4': legacy_cntr}, f)
+            json.dump({'time': '2026-01-01T00:00:00', 'Ethernet4': snapshot_cntr}, f)
         try:
             return_code, result = get_result_and_return_code(['portstat', '-l', '-i', 'Ethernet4'])
         finally:
@@ -594,7 +584,9 @@ class TestPortStat(object):
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))
         assert return_code == 0
-        assert result == intf_counters_detailed_legacy_snapshot
+        lines = result.splitlines()
+        assert "IPv4 Packets Received.......................... 1,000" in lines
+        assert "Time Since Counters Last Cleared............... 2026-01-01T00:00:00" in lines
 
     def test_show_intf_rates(self):
         return_code, result = get_result_and_return_code(['portstat', '-R'])

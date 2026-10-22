@@ -17,8 +17,9 @@ from utilities_common.netstat import ns_diff, table_as_json, format_brate, forma
 """
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
-Field names are also saved in 'portstat -c' snapshots, so keep existing names
-(e.g. rx_ovrrun holds SAI_PORT_STAT_IP_IN_RECEIVES) to keep older snapshots readable
+Field names are also the keys of the 'portstat -c' / 'sonic-clear counters' JSON snapshot
+(/tmp/cache/portstat/<uid>/portstat), which other components also parse (e.g. gNMI show_client
+reads rx_ovrrun), so renaming an existing field breaks them (rx_ovrrun holds SAI_PORT_STAT_IP_IN_RECEIVES)
 """
 NStats = namedtuple("NStats", "rx_ok, rx_err, rx_drop, rx_ovr, tx_ok,\
                     tx_err, tx_drop, tx_ovr, rx_byt, tx_byt,\
@@ -495,7 +496,7 @@ class Portstat(object):
                                                                                       old_cntr['rx_frag'])))
             print("Undersize Received............................. {}".format(ns_diff(cntr['rx_usize'],
                                                                                       old_cntr['rx_usize'])))
-            print("IP Packets Received............................ {}".format(ns_diff(cntr["rx_ovrrun"],
+            print("IPv4 Packets Received.......................... {}".format(ns_diff(cntr["rx_ovrrun"],
                                                                                       old_cntr["rx_ovrrun"])))
 
             print("")
