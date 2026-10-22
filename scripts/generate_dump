@@ -46,6 +46,7 @@ NUM_ASICS=1
 HOME=${HOME:-/root}
 USER=${USER:-root}
 TIMEOUT_MIN="5"
+BMC_NOOP_TASK_ID="<task-id>"
 SKIP_BCMCMD=0
 SAVE_STDERR=true
 RETURN_CODE=$EXT_SUCCESS
@@ -2467,6 +2468,10 @@ trigger_bmc_debug_log_dump() {
         echo "INFO: BMC is not found on this platform. Skipping..."
         return
     fi
+    if $NOOP; then
+        echo "python3 /usr/local/bin/bmc_techsupport.py -m trigger"
+        return
+    fi
     # Trigger BMC redfish API to start BMC debug log dump task
     local task_id=$(python3 /usr/local/bin/bmc_techsupport.py -m trigger)
     echo "$task_id"
@@ -2491,6 +2496,12 @@ collect_bmc_files() {
 
     local bmc_debug_log_dump_task_id=$1
     local TARBALL_XZ="/tmp/bmc_debug_log_dump.tar.xz"
+
+    if $NOOP; then
+        echo "python3 /usr/local/bin/bmc_techsupport.py -m collect -p $TARBALL_XZ -t $bmc_debug_log_dump_task_id"
+        return
+    fi
+
     # Remove existing tarball files if they exist
     [ -f "$TARBALL_XZ" ] && rm -f "$TARBALL_XZ"
 
@@ -2894,9 +2905,15 @@ main() {
     start_t=$(date +%s%3N)
 
     # Trigger BMC debug log dump task - Must be the first task to run
-    bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
-    if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
-        echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+    if $NOOP; then
+        # stdout is command-substituted below, so the noop line is printed here
+        trigger_bmc_debug_log_dump
+        bmc_debug_log_dump_task_id="$BMC_NOOP_TASK_ID"
+    else
+        bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
+        if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
+            echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+        fi
     fi
 
     # Capture /proc state early
