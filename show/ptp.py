@@ -1,3 +1,5 @@
+import ast
+
 import click
 from natsort import natsorted
 from tabulate import tabulate
@@ -12,6 +14,20 @@ PORT_TABLE = "PORT"
 PTP_MODE_NONE = "none"
 NOT_SET = "not set"
 COUNTERS_PTP_TABLE = "COUNTERS_PTP"
+PTP_STATE_CONFIG_TABLE = "PTP_CONFIG"
+PTP_STATE_TIME_STATUS_TABLE = "PTP_TIME_STATUS"
+
+PTP_PORT_STATE_NAMES = {
+    1: "INITIALIZING",
+    2: "FAULTY",
+    3: "DISABLED",
+    4: "LISTENING",
+    5: "PRE_MASTER",
+    6: "MASTER",
+    7: "PASSIVE",
+    8: "UNCALIBRATED",
+    9: "SLAVE",
+}
 
 # linuxptp pmc GET PORT_STATS_NP: (display name, rx field, tx field)
 PTP_COUNTER_PAIRS = (
@@ -146,6 +162,214 @@ def _unicast_master_rows(tables, ip_entries):
         for address in addresses:
             rows.append([table_id, address])
     return rows
+
+
+def _parse_ptp_state_value(value):
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        parsed = ast.literal_eval(value)
+        if isinstance(parsed, (dict, list)):
+            return parsed
+    except (ValueError, SyntaxError, TypeError):
+        pass
+    return value
+
+
+def _ptp_deep_parse_state(value):
+    parsed = _parse_ptp_state_value(value)
+    if isinstance(parsed, dict):
+        return {k: _ptp_deep_parse_state(v) for k, v in parsed.items()}
+    if isinstance(parsed, list):
+        return [_ptp_deep_parse_state(item) for item in parsed]
+    return parsed
+
+
+def _ptp_parsed_field(entry, field):
+    """Parse a PTP STATE_DB field written by ptp telemetry (str() dict/list leaves)."""
+    if not entry:
+        return None
+    if field not in entry:
+        return None
+    return _ptp_deep_parse_state(entry[field])
+
+
+def _ptp_int_field(value):
+    if value is None or value == '' or value == NOT_SET:
+        return None
+    return int(value)
+
+
+def _offset_scaled_log_variance_ns2(oslv):
+    """Decode IEEE 1588 ClockQuality offsetScaledLogVariance to variance (ns^2)."""
+    val = _ptp_int_field(oslv)
+    if val is None:
+        return NOT_SET
+    scaled = val & 0xFF
+    s_log = (val >> 8) & 0xFF
+    if s_log >= 0x80:
+        s_log -= 0x100
+    return scaled * (2.0 ** s_log)
+
+
+def _cumulative_scaled_rate_offset_double_ppb(value):
+    """Decode TIME_STATUS_NP cumulativeScaledRateOffset (dimensionless rate offset in ppb)."""
+    val = _ptp_int_field(value)
+    if val is None:
+        return NOT_SET
+    return val * 1e9 / (2.0 ** 41)  # ppb
+
+
+def _format_ptp_double(value):
+    if value is NOT_SET:
+        return NOT_SET
+    if isinstance(value, float):
+        return '{:.6f}'.format(value)
+    return value
+
+
+def _state_db_table_keys(db, table_name):
+    sep = db.db.get_db_separator(db.db.STATE_DB)
+    prefix = table_name + sep
+    keys = []
+    for key in db.db.keys(db.db.STATE_DB, prefix + '*') or []:
+        entry_key = key[len(prefix):]
+        if entry_key:
+            keys.append(entry_key)
+    return natsorted(keys)
+
+
+def _state_db_entry(db, table_name, entry_key):
+    sep = db.db.get_db_separator(db.db.STATE_DB)
+    return db.db.get_all(db.db.STATE_DB, sep.join((table_name, entry_key))) or {}
+
+
+def _show_ptp_status(config, time_status):
+    default_ds = _ptp_parsed_field(config, 'default-ds') or {}
+    current_ds = _ptp_parsed_field(config, 'current-ds') or {}
+    parent_ds = _ptp_parsed_field(config, 'parent-ds') or {}
+    time_properties = _ptp_parsed_field(config, 'time-properties-ds') or {}
+
+    click.echo('Local Clock')
+
+    number_of_ports = default_ds.get('number-ports', 0)
+    if number_of_ports > 1:
+        clock_type = 'Boundary Clock'
+    elif number_of_ports == 1:
+        clock_type = 'Ordinary Clock'
+    else:
+        clock_type = 'Unknown'
+
+    clock_identity_str = default_ds.get('clock-identity', NOT_SET)
+    clock_quality = default_ds.get('clock-quality', {})
+    clock_class_str = clock_quality.get('clock-class', NOT_SET)
+    clock_accuracy_str = clock_quality.get('clock-accuracy', NOT_SET)
+
+    body = [
+        ['clock type', clock_type],
+        ['domain', default_ds.get('domain-number', NOT_SET)],
+        #['announce interval', config.get('announce-interval', NOT_SET)],
+        ['clock id', clock_identity_str],
+        ['clock class', clock_class_str],
+        ['clock accuracy', clock_accuracy_str],
+        ['clock priority1', default_ds.get('priority1', NOT_SET)],
+        ['clock priority2', default_ds.get('priority2', NOT_SET)],
+        ['steps removed', current_ds.get('steps-removed', NOT_SET)],
+    ]
+    click.echo(tabulate(body, ['Parameter', 'Value'], tablefmt='simple'))
+    click.echo('')
+
+    parent_port_identity = parent_ds.get('parent-port-identity', {})
+    parent_clock_identity_str = parent_port_identity.get('clock-identity', NOT_SET)
+
+    grandmaster_clock_quality = parent_ds.get('grandmaster-clock-quality', {})
+    grandmaster_clock_class_str = grandmaster_clock_quality.get('clock-class', NOT_SET)
+    grandmaster_clock_accuracy_str = grandmaster_clock_quality.get('clock-accuracy', NOT_SET)
+    grandmaster_clock_variance_str = _format_ptp_double(
+        _offset_scaled_log_variance_ns2(
+            grandmaster_clock_quality.get('offset-scaled-log-variance', NOT_SET),
+        ),
+    )
+
+    click.echo('Parent Clock')
+    body = [
+        #['ip address', parent_ds.get('ip-address', NOT_SET)],
+        ['parent clock id', parent_clock_identity_str],
+        ['gm clock id', parent_ds.get('grandmaster-identity', NOT_SET)],
+        ['gm clock class', grandmaster_clock_class_str],
+        ['gm clock accuracy', grandmaster_clock_accuracy_str],
+        ['gm clock variance', grandmaster_clock_variance_str],
+        ['gm clock priority1', parent_ds.get('grandmaster-priority1', NOT_SET)],
+        ['gm clock priority2', parent_ds.get('grandmaster-priority2', NOT_SET)],
+    ]
+    click.echo(tabulate(body, ['Parameter', 'Value'], tablefmt='simple'))
+    click.echo('')
+
+    click.echo('Time Properties')
+    body = [
+        ['time traceable', time_properties.get('time-traceable', NOT_SET)],
+        ['frequency traceable', time_properties.get('frequency-traceable', NOT_SET)],
+        ['time source', time_properties.get('time-source', NOT_SET)],
+        ['ptp timescale', time_properties.get('ptp-timescale', NOT_SET)],
+    ]
+    if time_properties.get('current-utc-offset-valid') == 'True':
+        body.append([
+            ['utc offset', time_properties.get('current-utc-offset', NOT_SET)]
+            ])
+
+    click.echo(tabulate(body, ['Parameter', 'Value'], tablefmt='simple'))
+    click.echo('')
+
+    click.echo('Time Status')
+    if not time_status:
+        click.echo('No time status available')
+        return
+
+    body = []
+    for field, label in (
+        ('master-offset', 'master offset'),
+        ('ingress-time', 'ingress time'),
+        ('cumulative-scaled-rate-offset', 'cumulative offset(ppb)'),
+        ('scaled-last-gm-phase-change', 'last GM phase change'),
+        ('gm-time-base-indicator', 'GM time base indicator'),
+        ('nanoseconds', 'nanoseconds'),
+        ('fractional-nanoseconds', 'fractional nanoseconds'),
+    ):
+        if field in time_status:
+            raw = time_status[field]
+            if field == 'cumulative-scaled-rate-offset':
+                display = _format_ptp_double(_cumulative_scaled_rate_offset_double_ppb(raw))
+            else:
+                display = raw
+            body.append([label, display])
+    if not body:
+        click.echo('No time status available')
+        return
+    click.echo(tabulate(body, ['Parameter', 'Value'], tablefmt='simple'))
+
+
+def show_ptp_status(db):
+    entry_keys = _state_db_table_keys(db, PTP_STATE_CONFIG_TABLE)
+
+    if not entry_keys:
+        click.echo("No PTP operational status in STATE_DB")
+        return
+
+    first_instance = True
+    for entry_key in entry_keys:
+        if not first_instance:
+            click.echo('')
+        first_instance = False
+
+        config = _state_db_entry(db, PTP_STATE_CONFIG_TABLE, entry_key)
+        time_status = _state_db_entry(db, PTP_STATE_TIME_STATUS_TABLE, entry_key)
+
+        click.echo("PTP Instance: {}".format(entry_key))
+        click.echo('')
+        
+        _show_ptp_status(config, time_status)
 
 
 def show_ptp_protocol_status(db):
@@ -306,6 +530,16 @@ def protocol():
 def protocol_status(db):
     """Show PTP domain, intervals, unicast master tables, and port master/slave roles"""
     show_ptp_protocol_status(db)
+
+
+#
+# 'status' command ("show ptp status")
+#
+@ptp.command('status')
+@clicommon.pass_db
+def status(db):
+    """Show PTP clock and port runtime status from STATE_DB"""
+    show_ptp_status(db)
 
 
 #

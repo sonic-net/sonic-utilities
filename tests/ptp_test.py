@@ -163,8 +163,27 @@ class TestShowPtpProtocolStatus(object):
             _clear_ptp_protocol_config(db)
 
 
+def _ptp_status_cmd():
+    return show.cli.commands["ptp"].commands["status"]
+
+
 def _ptp_counters_cmd():
     return show.cli.commands["ptp"].commands["counters"]
+
+
+def _set_ptp_state(db, table, entry_key, fields):
+    sep = db.db.get_db_separator(db.db.STATE_DB)
+    key = '{}{}{}'.format(table, sep, entry_key)
+    for field, value in fields.items():
+        db.db.set(db.db.STATE_DB, key, field, str(value))
+
+
+def _clear_ptp_state(db):
+    sep = db.db.get_db_separator(db.db.STATE_DB)
+    for table in ('PTP_CONFIG', 'PTP_TIME_STATUS'):
+        prefix = table + sep
+        for key in db.db.keys(db.db.STATE_DB, prefix + '*') or []:
+            db.db.delete(db.db.STATE_DB, key)
 
 
 def _set_ptp_counters(db, ifname, fields):
@@ -179,6 +198,77 @@ def _clear_ptp_counters(db):
     prefix = 'COUNTERS_PTP' + sep
     for key in db.db.keys(db.db.COUNTERS_DB, prefix + '*') or []:
         db.db.delete(db.db.COUNTERS_DB, key)
+
+
+class TestShowPtpStatus(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+    def test_show_ptp_status_empty(self):
+        db = Db()
+        _clear_ptp_state(db)
+        runner = CliRunner()
+        result = runner.invoke(_ptp_status_cmd(), [], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert "No PTP operational status in STATE_DB" in result.output
+
+    def test_show_ptp_status_operational(self):
+        db = Db()
+        _clear_ptp_state(db)
+        default_ds = {
+            'clock-identity': '00:11:22:ff:fe:33:44:55',
+            'domain-number': 24,
+        }
+        current_ds = {
+            'steps-removed': 1,
+            'offset-from-master': -42,
+            'mean-path-delay': 1200,
+        }
+        parent_ds = {
+            'grandmaster-identity': '00:aa:bb:ff:fe:cc:dd:ee',
+            'parent-port-identity': {
+                'clock-identity': '00:aa:bb:ff:fe:cc:dd:ee',
+                'port-number': 1,
+            },
+        }
+        port_list = [{
+            'port-number': 1,
+            'port-state': 9,
+            'log-sync-interval': -3,
+            'peer-mean-path-delay': 1200,
+        }]
+        _set_ptp_state(db, 'PTP_CONFIG', 'ptp|0', {
+            'instance-number': 0,
+            'default-ds': default_ds,
+            'current-ds': current_ds,
+            'parent-ds': parent_ds,
+            'port-ds-list': port_list,
+        })
+        _set_ptp_state(db, 'PTP_TIME_STATUS', 'ptp|0', {
+            'master-offset': -42,
+            'ingress-time': 999,
+        })
+        try:
+            runner = CliRunner()
+            result = runner.invoke(_ptp_status_cmd(), [], obj=db)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert "PTP Instance: ptp|0" in result.output
+            assert "00:11:22:ff:fe:33:44:55" in result.output
+            assert re.search(r"domain-number\s+24", result.output)
+            assert re.search(r"offset-from-master\s+-42", result.output)
+            assert "00:aa:bb:ff:fe:cc:dd:ee/1" in result.output
+            assert "SLAVE (9)" in result.output
+            assert re.search(r"master-offset\s+-42", result.output)
+            assert re.search(r"ingress-time\s+999", result.output)
+        finally:
+            _clear_ptp_state(db)
 
 
 class TestShowPtpCounters(object):
