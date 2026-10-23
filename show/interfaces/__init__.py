@@ -219,6 +219,9 @@ def tpid(interfacename, namespace, display, verbose):
 @click.pass_context
 def breakout(ctx):
     """Show Breakout Mode information by interfaces"""
+    if ctx.invoked_subcommand == 'supported-mode':
+        return
+
     # Reading data from Redis configDb
     config_db = ConfigDBConnector()
     config_db.connect()
@@ -308,6 +311,55 @@ def currrent_mode(ctx, interface):
     # Show current Breakout Mode for all interfaces
     for name in natsorted(list(cur_brkout_tbl.keys())):
         body.append([name, str(cur_brkout_tbl[name]['brkout_mode'])])
+    click.echo(tabulate(body, header, tablefmt="grid"))
+
+
+# 'breakout supported-mode' subcommand ("show interfaces breakout supported-mode")
+@breakout.command('supported-mode')
+@click.argument('interface', metavar='<interface_name>', required=False, type=str)
+@click.pass_context
+def supported_mode(ctx, interface):
+    """
+    Show supported Breakout modes by interface(s).
+
+    Args:
+        ctx: Click context for the breakout command group.
+        interface: Optional interface name to query.
+
+    Returns:
+        None.
+    """
+
+    platform_file = device_info.get_path_to_port_config_file()
+    platform_data = readJsonFile(platform_file)
+    platform_dict = platform_data.get('interfaces', {})
+
+    if not platform_dict:
+        click.echo("Can not load port config from {} file".format(platform_file))
+        raise click.Abort()
+
+    header = ['Interface', 'Supported Breakout Modes']
+    body = []
+    interface_names = [interface] if interface is not None else natsorted(platform_dict.keys())
+
+    for name in interface_names:
+        interface_data = platform_dict.get(name)
+        if interface_data is None:
+            body.append([name, "Not Available"])
+            continue
+
+        modes = interface_data.get('breakout_modes')
+        if isinstance(modes, dict):
+            modes = ",".join(modes.keys())
+        elif isinstance(modes, (list, tuple)):
+            modes = ",".join(str(mode) for mode in modes)
+        elif modes is not None:
+            modes = str(modes)
+        else:
+            modes = "Not Available"
+
+        body.append([name, modes])
+
     click.echo(tabulate(body, header, tablefmt="grid"))
 
 
