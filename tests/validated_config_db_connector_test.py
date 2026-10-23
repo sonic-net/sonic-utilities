@@ -82,3 +82,17 @@ class TestValidatedConfigDBConnector(TestCase):
                     validated_config_db_connector.ValidatedConfigDBConnector.apply_patch(mock.Mock(), SAMPLE_PATCH, SAMPLE_TABLE)
                 except Exception as ex:
                     assert False, "Exception {} thrown unexpectedly".format(ex)
+
+    def test_patch_goes_to_the_connector_namespace(self):
+        # GenericUpdater defaults to the host; a connector for asic0 must validate and write there.
+        for namespace, scope in (('asic0', 'asic0'), ('', ''), (None, '')):
+            connector = mock.Mock()
+            connector.namespace = namespace
+            with mock.patch('validated_config_db_connector.device_info.is_yang_config_validation_enabled',
+                            return_value=True), \
+                    mock.patch('validated_config_db_connector.GenericUpdater') as mock_generic_updater:
+                validated_connector = ValidatedConfigDBConnector(connector)
+                validated_connector.apply_patch(jsonpatch.JsonPatch(SAMPLE_PATCH), SAMPLE_TABLE)
+                validated_connector.validated_delete_table(SAMPLE_TABLE)
+
+            assert mock_generic_updater.call_args_list == [mock.call(scope=scope)] * 2, namespace

@@ -1,6 +1,8 @@
 import os
 from importlib import reload
 
+import mock
+
 from click.testing import CliRunner
 
 import config.main
@@ -65,6 +67,21 @@ class TestMultiAsicFdbMacSyncMode:
 
         result = runner.invoke(config.main.config.commands["fdb"], ["-n", "asic0", "mac-sync-mode", "kernel"], obj=db)
         assert result.exit_code == 0, result.output
+
+    def test_config_validated_write_targets_the_selected_namespace(self):
+        # With YANG validation on, the write goes through GenericUpdater, which must run in asic0.
+        runner = CliRunner()
+        db = Db()
+
+        with mock.patch('config.validated_config_db_connector.device_info.is_yang_config_validation_enabled',
+                        return_value=True), \
+                mock.patch('config.validated_config_db_connector.GenericUpdater') as mock_generic_updater:
+            result = runner.invoke(config.main.config.commands["fdb"], ["-n", "asic0", "mac-sync-mode", "fpm"], obj=db)
+
+        assert result.exit_code == 0, result.output
+        mock_generic_updater.assert_called_once_with(scope="asic0")
+        patch = mock_generic_updater.return_value.apply_patch.call_args[1]["patch"]
+        assert {"op": "add", "path": "/FDB_SYNC/global/mac_sync_mode", "value": "fpm"} in patch.patch
 
     def test_show_reads_the_selected_namespace(self):
         # asic0 runs fpm mode and the host has no FDB_SYNC entry.
