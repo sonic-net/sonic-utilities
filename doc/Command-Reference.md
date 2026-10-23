@@ -68,6 +68,9 @@
 * [DHCP Server](#dhcp-server)
   * [DHCP Server show commands](#dhcp-server-show-commands)
   * [DHCP Server config commands](#dhcp-server-config-commands)
+* [Device Local Diagnosis](#device-local-diagnosis)
+  * [DLDD show commands](#dldd-show-commands)
+  * [DLDD config commands](#dldd-config-commands)
 * [Drop Counters](#drop-counters)
   * [Drop Counter show commands](#drop-counters-show-commands)
   * [Drop Counter config commands](#drop-counters-config-commands)
@@ -5071,6 +5074,98 @@ This command is used to unbind dhcp option.
   config dhcp_server ipv4 option unbind Vlan1000 --all
 
   config dhcp_server ipv4 option unbind Vlan1000 option_1
+  ```
+
+## Device Local Diagnosis
+
+Device Local Diagnosis (DLDD) monitors platform health using the rules installed
+for the device. The commands below display service, rule, and fault state or set
+runtime configuration overrides.
+
+### DLDD show commands
+
+**show dldd status**
+
+Displays a compact service-health summary. Use `--detail` to include active-rule
+generation metadata and any rule or source exceptions.
+
+- Usage:
+  ```
+  show dldd status [--detail]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show dldd status
+  State    Heartbeat age            Rules    Faults    Rule errors    Source errors
+  -------  -----------------------  -------  --------  -------------  ---------------
+  OK       8 seconds (approximate)  3        0         0              0
+  ```
+
+**show dldd rules**
+
+Displays the number of loaded rules and details only for rules with runtime
+exceptions.
+
+- Usage:
+  ```
+  show dldd rules
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show dldd rules
+  Loaded rules: 3
+  No rule exceptions.
+  ```
+
+**show dldd faults**
+
+Displays active and retained inactive DLDD faults. Results can be filtered by
+status or component. `--detail` shows complete fault metadata, while `--json`
+emits structured output.
+
+- Usage:
+  ```
+  show dldd faults [--status ACTIVE|INACTIVE|UNSPECIFIED] [--component NAME] [--detail] [--json]
+  ```
+
+**show dldd config**
+
+Displays configured overrides alongside the effective runtime values.
+
+- Usage:
+  ```
+  show dldd config
+  ```
+
+### DLDD config commands
+
+The following commands update the global DLDD configuration in CONFIG_DB:
+
+| Command | Purpose |
+| --- | --- |
+| `config dldd threshold individual-max-failure COUNT` | Set consecutive failures tolerated for an individual rule or source. |
+| `config dldd threshold broken-rules-max COUNT` | Set the broken-rule count tolerated before service failure. |
+| `config dldd polling-interval redis SECONDS` | Set the Redis-source polling interval. |
+| `config dldd polling-interval file SECONDS` | Set the file-source polling interval. |
+| `config dldd polling-interval common SECONDS` | Set the common-source polling interval. |
+| `config dldd source-unavailable-grace-period SECONDS` | Set the source-unavailability grace period. |
+| `config dldd source-recovery-samples COUNT` | Set successful samples required to recover a source. |
+| `config dldd inactive-fault-retention-period SECONDS` | Set how long inactive faults are retained. |
+| `config dldd fault-evidence-ack-timeout SECONDS` | Set the initial fault-evidence acknowledgement timeout. |
+| `config dldd active-fault-recheck-interval SECONDS` | Set the active-fault recheck interval. |
+| `config dldd rules-inbox-settle-time SECONDS` | Set the rules-inbox stability window. |
+
+**config dldd clear-state**
+
+Stops DLDD, clears daemon-owned persisted state and status telemetry, and
+restarts the service if it was active. `--all` also clears DLDD-owned fault rows
+and diagnostic artifacts. Rules and configuration are preserved.
+
+- Usage:
+  ```
+  config dldd clear-state [--all] [-y|--yes]
   ```
 
 ## Drop Counters
