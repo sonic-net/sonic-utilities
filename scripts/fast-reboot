@@ -1353,14 +1353,26 @@ fi
 # Reboot: explicitly call Linux native reboot under sbin
 debug "Rebooting with ${REBOOT_METHOD} to ${NEXT_SONIC_IMAGE} ..."
 
-LOGS_ON_TMPFS=0
-df --output=fstype /var/log* | grep -c 'tmpfs' || LOGS_ON_TMPFS=$?
-if [[ LOGS_ON_TMPFS -eq 0 ]]; then
-    debug "Backup shutdown logs to /host/logs_before_reboot"
-    mkdir -p /host/logs_before_reboot || /bin/true
-    # maxdepth 2: find files within 2 nested directories (eg. /var/log/ and /var/log/swss/)
-    # mmin 30: find files written in past 30 minutes
-    find /var/log -maxdepth 2 -mmin -30 -type f | xargs -I {} cp {} /host/logs_before_reboot/ || /bin/true
+# If ram2disk is enabled, save logs via pre-shutdown instead of backing them up twice.
+if mountpoint -q /var/log.disk && systemctl is-enabled --quiet ram2disk.timer; then
+    if [[ -x /usr/local/bin/ram2disk.sh ]]; then
+        debug "Saving tmpfs logs to /var/log.disk before ${REBOOT_TYPE}"
+        /usr/local/bin/ram2disk.sh pre-shutdown || \
+            error "Failed to save tmpfs logs to /var/log.disk before ${REBOOT_TYPE}"
+    else
+        error "/var/log.disk is mounted but /usr/local/bin/ram2disk.sh is unavailable"
+    fi
+    sync
+else
+    LOGS_ON_TMPFS=0
+    df --output=fstype /var/log* | grep -c 'tmpfs' || LOGS_ON_TMPFS=$?
+    if [[ LOGS_ON_TMPFS -eq 0 ]]; then
+        debug "Backup shutdown logs to /host/logs_before_reboot"
+        mkdir -p /host/logs_before_reboot || /bin/true
+        # maxdepth 2: find files within 2 nested directories (eg. /var/log/ and /var/log/swss/)
+        # mmin 30: find files written in past 30 minutes
+        find /var/log -maxdepth 2 -mmin -30 -type f | xargs -I {} cp {} /host/logs_before_reboot/ || /bin/true
+    fi
 fi
 
 exec ${REBOOT_METHOD}
