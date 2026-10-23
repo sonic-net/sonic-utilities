@@ -596,15 +596,15 @@ class TestDirectPlatformApiCommands(object):
         assert values["Data Path State Indicator"]["lane00"] == \
             "DataPathActivated"
         assert values["ELS Status"] == {
-            "low_power_mode": False,
-            "interrupt_event": True,
+            "module_low_power_state": False,
+            "interrupt_status": True,
         }
         assert values["ELS Lane State"] == {
             "lane00": "Active",
             "lane01": "Inactive",
         }
 
-    def test_interrupt_event_normalizes_public_status(self):
+    def test_els_status_preserves_api_strings(self):
         with mock.patch.object(
                 self.cpo.api,
                 "get_elsfp_status",
@@ -617,9 +617,44 @@ class TestDirectPlatformApiCommands(object):
             ])
         status = json.loads(result.output)["Ethernet0"]["ELS Status"]
         assert status == {
-            "low_power_mode": False,
-            "interrupt_event": False,
+            "module_low_power_state": "High power mode",
+            "interrupt_status": "Interrupt event cleared",
         }
+
+    @pytest.mark.parametrize("json_output", [True, False])
+    def test_els_status_preserves_fields_and_only_maps_text_labels(self, json_output):
+        api_status = {
+            "module_state": "ModuleReady",
+            "module_fault_cause": "No Fault",
+            "module_low_power_state": "High power mode",
+            "interrupt_status": "Interrupt event cleared",
+            "enable_lane1": True,
+            "vendor_status": {"code": 3},
+        }
+        arguments = ["show", "interface", "lane-status", "Ethernet0"]
+        if json_output:
+            arguments.append("--json")
+        with mock.patch.object(self.cpo.api, "get_elsfp_status", return_value=api_status):
+            result = invoke(arguments)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            assert json.loads(result.output)["Ethernet0"]["ELS Status"] == api_status
+        else:
+            for label in ("Module State", "Module Fault Cause", "Module Low Power State",
+                          "Interrupt Status", "enable_lane1", "vendor_status"):
+                assert label in result.output
+            assert "High power mode" in result.output
+            assert "Interrupt event cleared" in result.output
+        assert api_status["module_low_power_state"] == "High power mode"
+        assert api_status["vendor_status"] == {"code": 3}
+
+    @pytest.mark.parametrize("status", [None, {}, False, "ModuleReady"])
+    def test_els_status_rejects_missing_or_invalid_result(self, status):
+        with mock.patch.object(self.cpo.api, "get_elsfp_status", return_value=status):
+            result = invoke(["show", "interface", "lane-status", "Ethernet0", "--json"])
+        assert result.exit_code != 0
+        assert "ELSFP status API returned no usable data" in result.output
+        assert "Ethernet0" in result.output
 
     def test_els_status_requires_independent_module_state(self):
         els_api = mock.Mock(spec=["get_module_state"])

@@ -34,6 +34,7 @@ from cpoutil.helper import (
     CPO_DOM_VALUE_UNIT_MAP,
     CPO_DOM_MODULE_THRESHOLD_UNIT_MAP,
     ELS_DOM_MONITOR_MAP,
+    ELS_STATUS_FIELD_MAP,
     ELS_THRESHOLD_MAP,
     ELS_DOM_MONITOR_UNIT_MAP,
     ELS_THRESHOLD_UNIT_MAP,
@@ -918,55 +919,6 @@ def _display_value(value, boolean_values=None):
     return value
 
 
-def _normalize_lpmode(value):
-    if isinstance(value, bool):
-        return value
-    normalized = str(value).strip().lower()
-    if normalized in ("low power mode", "low-power mode"):
-        return True
-    if normalized in ("high power mode", "full power mode"):
-        return False
-    raise CpoCommandError(
-        "Unable to normalize low-power mode value {!r}".format(value)
-    )
-
-
-def _normalize_interrupt_event(value):
-    if isinstance(value, bool):
-        return value
-    normalized = str(value).strip().lower()
-    if normalized in ("interrupt event occurred", "interrupt asserted"):
-        return True
-    if normalized in (
-            "interrupt event cleared", "interrupt cleared",
-            "interrupt not asserted"):
-        return False
-    raise CpoCommandError(
-        "Unable to normalize interrupt event value {!r}".format(value)
-    )
-
-
-def _normalize_els_status(status):
-    """Convert vendor ELS status fields to the cpoutil semantic contract."""
-    if not isinstance(status, dict):
-        raise CpoCommandError("The ELSFP status API returned no data")
-
-    normalized = {}
-    if status.get("module_state") is not None:
-        normalized["module_state"] = status["module_state"]
-    if "module_low_power_state" in status:
-        normalized["low_power_mode"] = _normalize_lpmode(
-            status["module_low_power_state"]
-        )
-    if "interrupt_status" in status:
-        normalized["interrupt_event"] = _normalize_interrupt_event(
-            status["interrupt_status"]
-        )
-    if not normalized:
-        raise CpoCommandError("The ELSFP status API returned no known fields")
-    return normalized
-
-
 def _display_field(field):
     parts = str(field).split(".")
     output = []
@@ -1143,11 +1095,8 @@ def print_lane_status_records(records, json_output):
                 status_rows.append((
                     interface,
                     els_id,
-                    _display_field(field),
-                    _display_value(
-                        status[field],
-                        ("On", "Off") if field == "low_power_mode" else None,
-                    ),
+                    ELS_STATUS_FIELD_MAP.get(field, field),
+                    _display_value(status[field]),
                 ))
         elif status is not None:
             status_rows.append((interface, els_id, "Status", status))
@@ -1472,14 +1421,17 @@ def show_interface_lane_status(port, json_output):
                 attach_snapshot(cpo.elsfp, els_api)
                 context = get_interface_context(logical_port, require_lasers=False)
                 laser_ids = context["laser_ids"]
+                els_status = els_api.get_elsfp_status()
+                if not isinstance(els_status, dict) or not els_status:
+                    raise CpoCommandError(
+                        "ELSFP status API returned no usable data for '{}'".format(port_name)
+                    )
                 records[port_name] = {
                     "Data Path State Indicator": _select_lane_values(
                         oe_api.get_datapath_state(), context["lane_positions"]
                     ),
                     "ELS": context["mapping"].els_name.upper(),
-                    "ELS Status": _normalize_els_status(
-                        els_api.get_elsfp_status()
-                    ),
+                    "ELS Status": els_status,
                     "ELS Lane State": _select_els_laser_values(
                         els_api.get_per_lane_state(), laser_ids
                     ) if laser_ids is not None else {},

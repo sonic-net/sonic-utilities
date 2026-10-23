@@ -56,6 +56,13 @@ ELS_DOM_MONITOR_MAP = {
     "icc": "Icc",
 }
 
+ELS_STATUS_FIELD_MAP = {
+    "module_state": "Module State",
+    "module_fault_cause": "Module Fault Cause",
+    "module_low_power_state": "Module Low Power State",
+    "interrupt_status": "Interrupt Status",
+}
+
 ELS_THRESHOLD_MAP = {
     "temperature_alarm_high": "TempHighAlarm",
     "temperature_alarm_low": "TempLowAlarm",
