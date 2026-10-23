@@ -33,10 +33,11 @@ VSENSOR1     759 mV        852       684             872            664      Fal
         result = runner.invoke(show.cli.commands["platform"].commands["current"])
         print(result.output)
         expected = """\
-  Sensor    Current    High TH    Low TH    Crit High TH    Crit Low TH    Warning          Timestamp
---------  ---------  ---------  --------  --------------  -------------  ---------  -----------------
-ISENSOR0     410 mA        440       320             460            300      False  20230704 17:38:04
-ISENSOR1     360 mA        440       320             460            300      False  20230704 17:38:04
+  Sensor      Current    High TH    Low TH    Crit High TH    Crit Low TH    Warning          Timestamp
+--------  -----------  ---------  --------  --------------  -------------  ---------  -----------------
+ISENSOR0       410 mA        440       320             460            300      False  20230704 17:38:04
+ISENSOR1       360 mA        440       320             460            300      False  20230704 17:38:04
+ISENSOR2  145750.0 mA  1532000.0       N/A       1596000.0            N/A      False  20230704 17:38:04
 """
 
         assert result.output == expected
