@@ -6,6 +6,9 @@ declare -r GNMI_REBOOT_TIMEOUT=60
 declare -r GNMI_STATUS_TIMEOUT=10
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
+declare -r REBOOT_STATUS_ACTIVE_RC=10
+declare -r REBOOT_STATUS_DEFAULT_RC=11
+declare -r REBOOT_STATUS_FAILURE_RC=12
 
 declare -r EXIT_DPU_DOWN=2
 
@@ -85,30 +88,47 @@ function get_reboot_status()
     local status_json
     status_json=$(awk '/^{.*}$/{json=$0} END{print json}' "$reboot_output_file")
     rm -f "$reboot_output_file"
-    local is_reboot_active
-    if [ -z "$status_json" ] || ! is_reboot_active=$(jq -r '
+    local reboot_state
+    if [ -z "$status_json" ] || ! reboot_state=$(jq -r '
         .status.status as $status
         |
         if .active == true then
-            true
+            "active"
         elif (.active == false and (has("status") | not))
             or $status == 1
             or $status == "STATUS_SUCCESS" then
-            false
+            "complete"
         elif $status == 2
             or $status == 3
             or $status == "STATUS_RETRIABLE_FAILURE"
             or $status == "STATUS_FAILURE" then
-            error("reboot failed with status: \($status)")
+            "failure:\($status)"
+        elif ((has("active") | not) or .active == false)
+            and ($status == null
+                or $status == 0
+                or $status == "STATUS_UNKNOWN") then
+            "default"
         else
             error("reboot not complete")
         end
     ' <<< "$status_json"); then
         return ${EXIT_ERROR}
     fi
-    if [ "$is_reboot_active" != "true" ]; then
-        return ${EXIT_SUCCESS}
-    fi
+    case "$reboot_state" in
+        complete)
+            return ${EXIT_SUCCESS}
+            ;;
+        active)
+            return ${REBOOT_STATUS_ACTIVE_RC}
+            ;;
+        default)
+            return ${REBOOT_STATUS_DEFAULT_RC}
+            ;;
+        failure:*)
+            log_message "ERROR: DPU reboot failed with status: ${reboot_state#failure:}"
+            return ${REBOOT_STATUS_FAILURE_RC}
+            ;;
+    esac
     return ${EXIT_ERROR}
 }
 
@@ -230,21 +250,13 @@ function wait_for_dpu_reboot_status()
 
     local poll_interval=5
     local deadline=$((SECONDS + dpu_halt_services_timeout))
+    local active_seen=false
     while true; do
         local remaining=$((deadline - SECONDS))
         if [ "$remaining" -le 0 ]; then
             break
         fi
-        local sleep_time=$poll_interval
-        if [ "$remaining" -lt "$sleep_time" ]; then
-            sleep_time=$remaining
-        fi
-        sleep "$sleep_time"
 
-        remaining=$((deadline - SECONDS))
-        if [ "$remaining" -le 0 ]; then
-            break
-        fi
         local status_timeout=$GNMI_STATUS_TIMEOUT
         if [ "$remaining" -lt "$status_timeout" ]; then
             status_timeout=$remaining
@@ -253,11 +265,34 @@ function wait_for_dpu_reboot_status()
         local reboot_status
         get_reboot_status "${dpu_ip}" "${port}" "$status_timeout"
         reboot_status=$?
-        if [ $reboot_status -eq ${EXIT_SUCCESS} ]; then
-            log_message "INFO: ${DPU_NAME} halted the services successfully"
-            return ${EXIT_SUCCESS}
-        fi
+        case "$reboot_status" in
+            "$EXIT_SUCCESS")
+                log_message "INFO: ${DPU_NAME} halted the services successfully"
+                return ${EXIT_SUCCESS}
+                ;;
+            "$REBOOT_STATUS_ACTIVE_RC")
+                active_seen=true
+                ;;
+            "$REBOOT_STATUS_DEFAULT_RC")
+                if [ "$active_seen" == "true" ]; then
+                    log_message "INFO: ${DPU_NAME} halted the services successfully"
+                    return ${EXIT_SUCCESS}
+                fi
+                ;;
+            "$REBOOT_STATUS_FAILURE_RC")
+                return ${EXIT_ERROR}
+                ;;
+        esac
 
+        remaining=$((deadline - SECONDS))
+        if [ "$remaining" -le 0 ]; then
+            break
+        fi
+        local sleep_time=$poll_interval
+        if [ "$remaining" -lt "$sleep_time" ]; then
+            sleep_time=$remaining
+        fi
+        sleep "$sleep_time"
     done
     log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
     return ${EXIT_ERROR}
