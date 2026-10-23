@@ -11,6 +11,73 @@ modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
 
+class TestBmcResetControl(object):
+    """Tests for the direct switch-host BMC reset command."""
+
+    @staticmethod
+    def _platform_with_bmc(bmc_device):
+        mock_sonic_platform = MagicMock()
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value.get_bmc.return_value = bmc_device
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+        return mock_sonic_platform
+
+    def test_reset(self):
+        runner = CliRunner()
+        bmc_device = MagicMock()
+        bmc_device.reset.return_value = True
+        with mock.patch.dict('sys.modules', {
+                'sonic_platform': self._platform_with_bmc(bmc_device)}):
+            result = runner.invoke(bmc.bmc, ['reset'])
+        assert result.exit_code == 0
+        assert 'BMC reset completed' in result.output
+        bmc_device.reset.assert_called_once_with()
+
+    def test_reset_control_is_unsupported_without_bmc(self):
+        runner = CliRunner()
+        with mock.patch.dict('sys.modules', {
+                'sonic_platform': self._platform_with_bmc(None)}):
+            result = runner.invoke(bmc.bmc, ['reset'])
+        assert result.exit_code != 0
+        assert 'not supported' in result.output
+
+    def test_reset_control_is_unsupported_when_not_implemented(self):
+        runner = CliRunner()
+        bmc_device = MagicMock()
+        bmc_device.reset.side_effect = NotImplementedError
+        with mock.patch.dict('sys.modules', {
+                'sonic_platform': self._platform_with_bmc(bmc_device)}):
+            result = runner.invoke(bmc.bmc, ['reset'])
+        assert result.exit_code == 1
+        assert 'BMC reset control is not supported on this platform' in result.output
+        assert 'BMC reset failed' not in result.output
+        assert 'BMC reset completed' not in result.output
+        bmc_device.reset.assert_called_once_with()
+
+    def test_reset_control_fails_when_platform_rejects_request(self):
+        runner = CliRunner()
+        bmc_device = MagicMock()
+        bmc_device.reset.return_value = False
+        with mock.patch.dict('sys.modules', {
+                'sonic_platform': self._platform_with_bmc(bmc_device)}):
+            result = runner.invoke(bmc.bmc, ['reset'])
+        assert result.exit_code != 0
+        assert 'BMC reset failed' in result.output
+        assert 'BMC reset completed' not in result.output
+        bmc_device.reset.assert_called_once_with()
+
+    def test_reset_reports_hardware_exception(self):
+        runner = CliRunner()
+        bmc_device = MagicMock()
+        bmc_device.reset.side_effect = RuntimeError('hardware failure')
+        with mock.patch.dict('sys.modules', {
+                'sonic_platform': self._platform_with_bmc(bmc_device)}):
+            result = runner.invoke(bmc.bmc, ['reset'])
+        assert result.exit_code != 0
+        assert 'BMC reset failed: hardware failure' in result.output
+        assert 'BMC reset completed' not in result.output
+        bmc_device.reset.assert_called_once_with()
+
 class TestBmcResetRootPassword(object):
     """Test class for 'config bmc reset-root-password' command"""
 
