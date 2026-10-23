@@ -1148,6 +1148,8 @@ def error_status(port, fetch_from_hardware):
         sys.exit(ERROR_INVALID_PORT)
 
     if port:
+        # Resolve only to reject CPO ports; this command does not need the
+        # physical-port list returned by the resolver.
         logical_port_name_to_physical_port_list(port)
 
     if fetch_from_hardware:
