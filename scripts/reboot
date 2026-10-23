@@ -402,6 +402,7 @@ fi
 if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
     VERBOSE=yes debug "Rebooting with platform ${PLATFORM} specific tool ..."
     ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} $@
+    PLATFORM_REBOOT_RC=$?
 
     # There are a couple reasons execution reaches here:
     #
@@ -413,7 +414,9 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
     # Sleep 1 second before calling /sbin/reboot to accommodate situation #1 above.
     sleep 1
 
-    VERBOSE=yes debug "Platform specific reboot failed!" >&2
+    if [[ "${PLATFORM_REBOOT_RC}" -ne ${EXIT_SUCCESS} ]]; then
+        VERBOSE=yes debug "Platform specific reboot failed!" >&2
+    fi
 fi
 
 VERBOSE=yes debug "Issuing OS-level reboot ..." >&2
