@@ -45,6 +45,7 @@ from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
 from utilities_common import hft as hft_common
+from utilities_common import port_mirror
 
 from .utils import log
 
@@ -74,6 +75,7 @@ from . import bgp_cli
 from . import stp
 from . import evpn_mh
 from . import llr
+from . import mirror_sample
 
 # mock masic APIs for unit test
 try:
@@ -3395,6 +3397,9 @@ def set_portchannel_retry_count(ctx, portchannel_name, retry_count):
 def mirror_session():
     pass
 
+
+mirror_session.add_command(mirror_sample.sample)
+
 #
 # 'add' subgroup ('config mirror_session add ...')
 #
@@ -3688,6 +3693,8 @@ def remove(session_name):
     """
     namespaces = multi_asic.get_all_namespaces()
     ctx = click.get_current_context()
+    port_mirror.validate_export_removal(
+        ctx, port_mirror.config_databases(connector_factory=ConfigDBConnector), session_name)
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
@@ -9659,6 +9666,7 @@ def sflow(ctx):
 @click.pass_context
 def enable(ctx):
     """Enable sFlow"""
+    port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
     config_db = ValidatedConfigDBConnector(ctx.obj['db'])
     sflow_tbl = config_db.get_table('SFLOW')
 
@@ -9690,6 +9698,7 @@ def enable(ctx):
 @click.pass_context
 def disable(ctx):
     """Disable sFlow"""
+    port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
     config_db = ValidatedConfigDBConnector(ctx.obj['db'])
     sflow_tbl = config_db.get_table('SFLOW')
 
@@ -9712,6 +9721,7 @@ def disable(ctx):
 @click.pass_context
 def polling_int(ctx, interval):
     """Set polling-interval for counter-sampling (0 to disable)"""
+    port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
     if ADHOC_VALIDATION:
         if interval not in range(5, 301) and interval != 0:
             ctx.fail("Polling interval must be between 5-300 (0 to disable)")
@@ -9743,6 +9753,7 @@ def is_port_egress_sflow_supported():
 @click.pass_context
 def global_sample_direction(ctx, direction):
     """Set sampling direction """
+    port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
     if ADHOC_VALIDATION:
         if direction:
             if direction not in ['rx', 'tx', 'both']:
@@ -9780,6 +9791,7 @@ def is_sflow_mirror_on_drop_supported():
 @click.pass_context
 def drop_monitor_limit(ctx, limit):
     """Enable and rate limit dropped packet notifications. (1-500, 0 to disable)"""
+    port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
     if ADHOC_VALIDATION:
         if is_sflow_mirror_on_drop_supported() == 'false':
             ctx.fail("Drop monitor is not supported on this platform")
@@ -10040,6 +10052,7 @@ def agent_id(ctx):
 @click.pass_context
 def add(ctx, ifname):
     """Add sFlow agent information"""
+    port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
     if ADHOC_VALIDATION:
         if ifname not in netifaces.interfaces():
             click.echo("Invalid interface name")
@@ -10078,6 +10091,7 @@ def delete(ctx):
         click.echo("sFlow agent not configured.")
         return
 
+    port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
     sflow_tbl['global'].pop('agent_id')
     try:
         config_db.set_entry('SFLOW', 'global', sflow_tbl['global'])

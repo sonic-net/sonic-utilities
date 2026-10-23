@@ -17,6 +17,7 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
 from utilities_common import hft as hft_common
+from utilities_common import port_mirror
 from utilities_common.db import Db
 from datetime import datetime
 import utilities_common.bgp_util as bgp_util
@@ -2454,9 +2455,34 @@ def radius(db):
 #
 @cli.command('mirror_session')
 @click.argument('session_name', required=False)
+@click.option('--session-name', 'explicit_session_name', help='Show an export session, including one named sample.')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def mirror_session(session_name, verbose):
-    """Show existing everflow sessions"""
+def mirror_session(session_name, verbose, explicit_session_name):
+    """Show mirror sessions, or use sample to show sampled source bindings."""
+    if explicit_session_name is not None:
+        if session_name is not None:
+            raise click.UsageError('Specify a positional session name or --session-name, not both.')
+        run_command(['acl-loader', 'show', 'session', explicit_session_name], display_cmd=verbose)
+        return
+    if session_name == 'sample':
+        rows = []
+        databases = port_mirror.config_databases()
+        for namespace, database in databases.items():
+            for key, value in database.get_table(port_mirror.SAMPLE_TABLE).items():
+                source, direction = port_mirror.binding_key(key)
+                row = [source, direction, value.get('mirror_session', ''),
+                       value.get('admin_state', 'down'), value.get('sample_rate', ''),
+                       value.get('truncate_size', 'Disabled')]
+                if len(databases) > 1:
+                    row.insert(0, namespace or 'host')
+                rows.append(row)
+        headers = ['Source Port', 'Direction', 'Mirror Session', 'Admin State',
+                   'Sample Rate', 'Truncate Size']
+        if len(databases) > 1:
+            headers.insert(0, 'Namespace')
+        click.echo('Sampled ERSPAN Bindings')
+        click.echo(tabulate(natsorted(rows), headers=headers))
+        return
     cmd = ['acl-loader', 'show', 'session']
 
     if session_name is not None:
