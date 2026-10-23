@@ -214,7 +214,7 @@ def get_port_config_entry(logical_port):
 def get_port_lanes(logical_port):
     """Return the ASIC lanes assigned to one active logical port."""
     entry = get_port_config_entry(logical_port)
-    return _parse_port_lanes(entry.get("lanes"), logical_port)
+    return entry["lanes"]
 
 
 def get_cpo_interface_mapping(logical_port):

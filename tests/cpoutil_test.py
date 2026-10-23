@@ -79,8 +79,8 @@ CPO_DATA = {
     },
     "interfaces": {
         "Ethernet8": {
-            "index": "2,2,2,2",
-            "lanes": "5,6,7,8",
+            "index": (2, 2, 2, 2),
+            "lanes": (5, 6, 7, 8),
             "associated_devices": [
                 {
                     "device_id": "oe0",
@@ -92,8 +92,8 @@ CPO_DATA = {
             ]
         },
         "Ethernet0": {
-            "index": "1,1,1,1",
-            "lanes": "1,2,3,4",
+            "index": (1, 1, 1, 1),
+            "lanes": (1, 2, 3, 4),
             "associated_devices": [
                 {
                     "device_id": "oe0",
@@ -105,8 +105,8 @@ CPO_DATA = {
             ]
         },
         "Ethernet16": {
-            "index": "3,3,3,3",
-            "lanes": "9,10,11,12",
+            "index": (3, 3, 3, 3),
+            "lanes": (9, 10, 11, 12),
             "associated_devices": [
                 {
                     "device_id": "oe1",
@@ -202,10 +202,10 @@ class TestPlatformObjectMapping(object):
             3: FakeCpo("cpo3"),
         })
         cpoutil.current_port_config = {
-            "Ethernet0": {"index": "1", "lanes": "1,2"},
-            "Ethernet1": {"index": "1", "lanes": "2", "subport": "2"},
-            "Ethernet8": {"index": "2", "lanes": "5,6,7,8"},
-            "Ethernet16": {"index": "3", "lanes": "9,10,11,12"},
+            "Ethernet0": {"index": (1,), "lanes": (1, 2)},
+            "Ethernet1": {"index": (1,), "lanes": (2,), "subport": "2"},
+            "Ethernet8": {"index": (2,), "lanes": (5, 6, 7, 8)},
+            "Ethernet16": {"index": (3,), "lanes": (9, 10, 11, 12)},
         }
 
     def test_builds_global_oe_els_port_map(self):
@@ -257,7 +257,7 @@ class TestMappingCommand(object):
     def test_show_single_interface_as_json(self):
         cpoutil.cpo_mapping = CpoMapping(CPO_DATA)
         cpoutil.current_port_config = {
-            "Ethernet8": {"index": "2", "lanes": "5,6,7,8"},
+            "Ethernet8": {"index": (2,), "lanes": (5, 6, 7, 8)},
         }
         oe = mock.Mock()
         oe.oe.get_api.return_value.get_max_supported_banks.return_value = 8
@@ -343,8 +343,8 @@ COVERAGE_CPO_DATA = {
     },
     "interfaces": {
         "Ethernet0": {
-            "index": "1",
-            "lanes": "1,2",
+            "index": (1,),
+            "lanes": (1, 2),
             "associated_devices": [
                 {
                     "device_id": "oe0",
@@ -404,8 +404,8 @@ COMMUNITY_DATA = {
 
 
 COVERAGE_PORT_CONFIG = {
-    "Ethernet0": {"index": "1", "lanes": "1,2"},
-    "Ethernet4": {"index": "2", "lanes": "3,4", "subport": "2"},
+    "Ethernet0": {"index": (1,), "lanes": (1, 2)},
+    "Ethernet4": {"index": (2,), "lanes": (3, 4), "subport": "2"},
 }
 
 
@@ -1408,9 +1408,9 @@ class TestExplicitLaserMapping:
 
     def test_noncontiguous_unequal_groups_select_exact_lasers(self, monkeypatch):
         self.configure(monkeypatch, self.nonuniform_topology(), {
-            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
-            "Ethernet1": {"index": "1", "lanes": "1,3,5"},
-            "Ethernet2": {"index": "1", "lanes": "2,4,6"},
+            "Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)},
+            "Ethernet1": {"index": (1,), "lanes": (1, 3, 5)},
+            "Ethernet2": {"index": (1,), "lanes": (2, 4, 6)},
         })
         assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
         assert cpoutil.get_cpo_laser_ids("Ethernet2") == ((1, 2), ())
@@ -1425,15 +1425,15 @@ class TestExplicitLaserMapping:
 
     def test_shared_laser_within_bank_is_reported(self, monkeypatch, coverage_environment):
         self.configure(monkeypatch, self.nonuniform_topology(), {
-            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
-            "Ethernet1": {"index": "1", "lanes": "1,3"},
+            "Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)},
+            "Ethernet1": {"index": (1,), "lanes": (1, 3)},
         })
         assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), (0,))
 
     def test_breakout_without_lane_mapping_cannot_resolve_lasers(self, monkeypatch, coverage_environment):
         self.configure(monkeypatch, COVERAGE_CPO_DATA, {
-            "Ethernet0": {"index": "1", "lanes": "1,2"},
-            "Ethernet1": {"index": "1", "lanes": "2"},
+            "Ethernet0": {"index": (1,), "lanes": (1, 2)},
+            "Ethernet1": {"index": (1,), "lanes": (2,)},
         })
         assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), ())
         with pytest.raises(cpoutil.CpoLaserResolutionError, match="laser_to_asic_lane_mapping"):
@@ -1443,14 +1443,14 @@ class TestExplicitLaserMapping:
         data = self.nonuniform_topology()
         del data["devices"]["els0"]["laser_to_asic_lane_mapping"]["3"]
         with pytest.raises(CpoMappingError, match="ASIC lanes without an ELS laser mapping"):
-            CpoMapping(data, {"Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"}})
+            CpoMapping(data, {"Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)}})
 
     @pytest.mark.parametrize("laser_map", [{"0": [1, 2]}, {"bad": [1, 2]}, {"1": []}, []])
     def test_invalid_explicit_mapping_is_rejected(self, laser_map):
         data = self.nonuniform_topology()
         data["devices"]["els0"]["laser_to_asic_lane_mapping"] = laser_map
         with pytest.raises(CpoMappingError):
-            CpoMapping(data, {"Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"}})
+            CpoMapping(data, {"Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)}})
 
     def test_normalized_integer_laser_ids_and_string_lanes(self, monkeypatch):
         data = self.nonuniform_topology()
@@ -1458,8 +1458,8 @@ class TestExplicitLaserMapping:
             1: "1,3,5", 2: "2", 3: "4,6",
         }
         self.configure(monkeypatch, data, {
-            "Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"},
-            "Ethernet1": {"index": "1", "lanes": "1,3,5"},
+            "Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)},
+            "Ethernet1": {"index": (1,), "lanes": (1, 3, 5)},
         })
         assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
 
@@ -1481,10 +1481,10 @@ def bank_cpos(monkeypatch):
 
 
 VMODULE_PORT_CONFIG = {
-    "Ethernet0": {"index": "1", "lanes": "1,2,3,4"},
-    "Ethernet4": {"index": "1", "lanes": "1,2,3,4"},
-    "Ethernet8": {"index": "2", "lanes": "5,6,7,8"},
-    "Ethernet16": {"index": "3", "lanes": "9,10,11,12"},
+    "Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4)},
+    "Ethernet4": {"index": (1,), "lanes": (1, 2, 3, 4)},
+    "Ethernet8": {"index": (2,), "lanes": (5, 6, 7, 8)},
+    "Ethernet16": {"index": (3,), "lanes": (9, 10, 11, 12)},
 }
 
 
@@ -1691,7 +1691,7 @@ class TestGangedPorts:
     @pytest.fixture
     def ganged(self, coverage_environment, monkeypatch):
         # Ethernet0 is ganged across physical ports 1 and 2.
-        monkeypatch.setattr(cpoutil, "current_port_config", {"Ethernet0": {"index": "1,2", "lanes": "1,2"}})
+        monkeypatch.setattr(cpoutil, "current_port_config", {"Ethernet0": {"index": (1, 2), "lanes": (1, 2)}})
         cpoutil.cpo_object_map[PORT][2] = coverage_environment
         return coverage_environment
 
@@ -1745,7 +1745,7 @@ class TestLaneStatusLaserAssociation:
         # laser 0 -> ASIC lanes 1, 3, 5; laser 1 -> lane 2; laser 2 -> lanes 4, 6
         TestExplicitLaserMapping.configure(
             monkeypatch, TestExplicitLaserMapping.nonuniform_topology(),
-            {"Ethernet0": {"index": "1", "lanes": "1,2,3,4,5,6"}})
+            {"Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)}})
         api = coverage_environment.api
         monkeypatch.setattr(api, "get_datapath_state", lambda: ["DataPathActivated"] * 6, raising=False)
         monkeypatch.setattr(api, "get_per_lane_state", lambda: dict(self.LASER_STATES), raising=False)
@@ -1780,7 +1780,7 @@ class TestLaneStatusLaserAssociation:
         data["devices"]["oe0"]["asic_lanes"] = [33, 34, 35, 36]
         data["devices"]["els0"]["laser_to_asic_lane_mapping"] = {"1": [33, 35], "2": [34, 36]}
         TestExplicitLaserMapping.configure(
-            monkeypatch, data, {"Ethernet0": {"index": "1", "lanes": "33,34,35,36"}})
+            monkeypatch, data, {"Ethernet0": {"index": (1,), "lanes": (33, 34, 35, 36)}})
         context = cpoutil.get_interface_context("Ethernet0")
         assert cpoutil._lane_lasers(context) == {"lane00": 0, "lane01": 1, "lane02": 0, "lane03": 1}
 
@@ -1807,8 +1807,8 @@ class TestBreakoutWithoutLaneMapping:
     """Display commands show unresolved lasers instead of aborting; controls still reject."""
 
     PORTS = {
-        "Ethernet0": {"index": "1", "lanes": "1"},
-        "Ethernet1": {"index": "1", "lanes": "2"},
+        "Ethernet0": {"index": (1,), "lanes": (1,)},
+        "Ethernet1": {"index": (1,), "lanes": (2,)},
     }
 
     @pytest.fixture
@@ -1852,7 +1852,7 @@ class TestBreakoutWithoutLaneMapping:
 
     def test_full_port_on_same_topology_still_resolves_lasers(self, coverage_environment, monkeypatch):
         TestExplicitLaserMapping.configure(
-            monkeypatch, COVERAGE_CPO_DATA, {"Ethernet0": {"index": "1", "lanes": "1,2"}})
+            monkeypatch, COVERAGE_CPO_DATA, {"Ethernet0": {"index": (1,), "lanes": (1, 2)}})
         result = invoke_coverage(["show", "interface", "map", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["Ethernet0"]["els"]["lasers"] == [0, 1]
@@ -1967,7 +1967,7 @@ class TestPortConfigurationSnapshot:
             value = list(lanes) if index % 2 else ",".join(map(str, lanes))
             tables[namespace][port] = {"lanes": value, "speed": "800000"}
             expected[port] = {"index": physical[port], "lanes": lanes}
-        tables[namespaces[0]]["NotInLogicalList"] = {"lanes": "999"}
+        tables[namespaces[0]]["NotInLogicalList"] = {"lanes": (999,)}
         databases = {namespace: mock.Mock() for namespace in namespaces}
         for namespace, database in databases.items():
             database.get_table.return_value = tables[namespace]
@@ -1991,7 +1991,7 @@ class TestPortConfigurationSnapshot:
         ports = ["Ethernet0", "Ethernet2"]
         self.configure(monkeypatch, shared_port_mapping, ports, {port: [1] for port in ports})
         read = mock.Mock(return_value={
-            "Ethernet0": {"lanes": "41,43"}, "Ethernet2": {"lanes": [42, 44]},
+            "Ethernet0": {"lanes": (41, 43)}, "Ethernet2": {"lanes": [42, 44]},
         })
         monkeypatch.setattr(cpoutil.multi_asic, "get_port_table", read)
         cpoutil.load_current_port_config()
@@ -2011,7 +2011,7 @@ class TestPortConfigurationSnapshot:
     def test_second_load_reads_fresh_lanes(self, monkeypatch, shared_port_mapping):
         self.configure(monkeypatch, shared_port_mapping, ["Ethernet0"], {"Ethernet0": [1]})
         read = mock.Mock(side_effect=[
-            {"Ethernet0": {"lanes": "1,2"}}, {"Ethernet0": {"lanes": "3,4"}},
+            {"Ethernet0": {"lanes": (1, 2)}}, {"Ethernet0": {"lanes": (3, 4)}},
         ])
         monkeypatch.setattr(cpoutil.multi_asic, "get_port_table", read)
         cpoutil.load_current_port_config()
@@ -2230,7 +2230,7 @@ def test_dom_combines_cable_fields_in_text_and_json(coverage_environment, monkey
     ["show", "interface", "lane-status"],
 ])
 def test_interface_sfp_selection_suggests_sfputil(coverage_environment, monkeypatch, command):
-    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": "9,10,11,12,13,14,15,16"}
+    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": (9, 10, 11, 12, 13, 14, 15, 16)}
     sfp = mock.Mock()
     chassis = mock.Mock()
     chassis.get_sfp.return_value = sfp
@@ -2246,7 +2246,7 @@ def test_interface_sfp_selection_suggests_sfputil(coverage_environment, monkeypa
 
 @pytest.mark.parametrize("error", [None, NotImplementedError, AttributeError, IndexError])
 def test_interface_missing_objects_are_not_mislabeled_sfp(coverage_environment, monkeypatch, error):
-    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": "9,10,11,12,13,14,15,16"}
+    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": (9, 10, 11, 12, 13, 14, 15, 16)}
     chassis = mock.Mock()
     chassis.get_sfp.return_value = None
     chassis.get_sfp.side_effect = error
@@ -2258,7 +2258,7 @@ def test_interface_missing_objects_are_not_mislabeled_sfp(coverage_environment, 
 
 
 def test_global_cpo_selection_skips_sfp_without_query(coverage_environment, monkeypatch):
-    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": "9,10,11,12,13,14,15,16"}
+    cpoutil.current_port_config["Ethernet8"] = {"index": [2], "lanes": (9, 10, 11, 12, 13, 14, 15, 16)}
     chassis = mock.Mock()
     monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
     entries = cpoutil.get_port_cpo_entries()

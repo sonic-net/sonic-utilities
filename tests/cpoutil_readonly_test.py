@@ -71,8 +71,8 @@ CPO_DATA = {
     },
     "interfaces": {
         "Ethernet0": {
-            "index": "1,1",
-            "lanes": "1,2",
+            "index": (1, 1),
+            "lanes": (1, 2),
             "associated_devices": [
                 {
                     "device_id": "oe0",
@@ -220,8 +220,8 @@ class TestDirectPlatformApiCommands(object):
         self.cpo = cpo
         cpoutil.cpo_mapping = CpoMapping(CPO_DATA)
         cpoutil.current_port_config = {
-            "Ethernet0": {"index": "1", "lanes": "1,2"},
-            "Ethernet1": {"index": "1", "lanes": "2", "subport": "2"},
+            "Ethernet0": {"index": (1,), "lanes": (1, 2)},
+            "Ethernet1": {"index": (1,), "lanes": (2,), "subport": "2"},
         }
         cpoutil.cpo_object_map = {
             OPTICAL_ENGINE: {"oe0": cpo},
@@ -710,7 +710,7 @@ class TestDomEepromSnapshot:
             cpo.get_presence = mock.Mock(return_value=True)
             cpos[port] = cpo
         monkeypatch.setattr(cpoutil, "current_port_config", {
-            "Ethernet{}".format(index * 8): {"index": str(index + 1), "lanes": "1,2"}
+            "Ethernet{}".format(index * 8): {"index": str(index + 1), "lanes": (1, 2)}
             for index in range(3)
         })
         monkeypatch.setattr(cpoutil, "cpo_object_map", {
