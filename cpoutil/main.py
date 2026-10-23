@@ -446,21 +446,6 @@ def get_cpo_presence(cpo, label):
     return present
 
 
-def get_els_lpmode(api):
-    """Read ELS low-power state without collecting per-laser status."""
-    module_state = api.get_module_state()
-    if module_state is None:
-        raise CpoCommandError("The ELSFP module state API returned no data")
-    normalized = str(module_state).strip().lower()
-    if normalized == "modulelowpwr":
-        return True
-    if normalized == "moduleready":
-        return False
-    raise CpoCommandError(
-        "Unable to normalize ELS module state {!r} as low-power mode".format(module_state)
-    )
-
-
 def _get_els_lane_count(info):
     """Return the number of lasers reported by the public ELSFP API."""
     if not isinstance(info, dict):
@@ -1525,10 +1510,17 @@ def show_oe_lpmode(oe_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
-            records[resource_id] = get_oe_api(
-                cpo, resource_id
-            ).get_lpmode()
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+            lpmode = cpo.oe.get_lpmode()
+            if not isinstance(lpmode, bool):
+                raise CpoCommandError(
+                    "OE get_lpmode returned invalid data for '{}'".format(resource_id)
+                )
+            records[resource_id] = lpmode
+    except (AttributeError, NotImplementedError) as exc:
+        raise click.ClickException(
+            "OE get_lpmode is not implemented for this platform"
+        ) from exc
+    except (CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records, json_output, ("OE", "Low-power Mode"),
@@ -1584,9 +1576,17 @@ def show_els_lpmode(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            api = get_els_api(cpo, resource_id)
-            records[resource_id] = get_els_lpmode(api)
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+            lpmode = cpo.elsfp.get_lpmode()
+            if not isinstance(lpmode, bool):
+                raise CpoCommandError(
+                    "ELS get_lpmode returned invalid data for '{}'".format(resource_id)
+                )
+            records[resource_id] = lpmode
+    except (AttributeError, NotImplementedError) as exc:
+        raise click.ClickException(
+            "ELS get_lpmode is not implemented for this platform"
+        ) from exc
+    except (CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records, json_output, ("ELS", "Low-power Mode"),

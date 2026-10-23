@@ -189,6 +189,9 @@ class FakeApi:
 
 
 class FakeCpo(cpoutil.CpoBase):
+    def get_lpmode(self):
+        return False
+
     def __init__(self):
         super().__init__(None, self, self)
         self.api = FakeApi()
@@ -348,13 +351,14 @@ class TestDirectPlatformApiCommands(object):
         table = invoke(["show", "els", "lpmode", "0"])
         assert "Off" in table.output
 
-    def test_els_lpmode_normalizes_vendor_decoder_strings(self):
+    def test_els_lpmode_rejects_platform_hook_strings(self):
         with mock.patch.object(
-                self.cpo.api,
-                "get_module_state",
-                return_value="ModuleLowPwr"):
+                self.cpo,
+                "get_lpmode",
+                return_value="Low Power Mode"):
             result = invoke(["show", "els", "lpmode", "0", "--json"])
-        assert json.loads(result.output) == {"els0": True}
+        assert result.exit_code != 0
+        assert "ELS get_lpmode returned invalid data" in result.output
 
     def test_interface_dom_calls_public_oe_and_els_apis(self):
         result = invoke([
@@ -949,14 +953,14 @@ class TestFourReadOptimizations:
     def setup_method(self):
         TestDirectPlatformApiCommands.setup_method(self)
 
-    @pytest.mark.parametrize("state, expected", [("ModuleLowPwr", True), ("ModuleReady", False)])
+    @pytest.mark.parametrize("state, expected", [(True, True), (False, False)])
     @pytest.mark.parametrize("index", [None, "0"])
     @pytest.mark.parametrize("json_output", [False, True])
-    def test_els_lpmode_reads_only_module_state(self, state, expected, index, json_output):
+    def test_els_lpmode_reads_only_endpoint_hook(self, state, expected, index, json_output):
         arguments = ["show", "els", "lpmode"] + ([index] if index else [])
         if json_output:
             arguments.append("--json")
-        with mock.patch.object(self.cpo.api, "get_module_state", return_value=state) as read:
+        with mock.patch.object(self.cpo, "get_lpmode", return_value=state) as read:
             with mock.patch.object(self.cpo.api, "get_elsfp_status", side_effect=AssertionError("aggregate read")):
                 result = invoke(arguments)
         assert result.exit_code == 0, result.output
@@ -968,7 +972,7 @@ class TestFourReadOptimizations:
 
     @pytest.mark.parametrize("state", [None, "ModuleFault", "ModulePwrUp", "Unknown", ""])
     def test_els_lpmode_does_not_treat_unavailable_state_as_full_power(self, state):
-        with mock.patch.object(self.cpo.api, "get_module_state", return_value=state):
+        with mock.patch.object(self.cpo, "get_lpmode", return_value=state):
             result = invoke(["show", "els", "lpmode", "0", "--json"])
         assert result.exit_code != 0
         assert "Traceback" not in result.output

@@ -537,6 +537,9 @@ class CoverageFakeEndpoint(object):
 
 
 class CoverageFakeCpo(cpoutil.CpoBase):
+    def get_lpmode(self):
+        return False
+
     def __init__(self):
         from sonic_platform_base.sonic_xcvr.codes.public.elsfp import ElsfpCodes
         from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.elsfp.elsfp import ElsfpMemMap
@@ -840,12 +843,6 @@ class TestHelperCoverage(object):
             cpoutil.get_cpo_presence(public_cpo, "Ethernet0")
 
     def test_normalizers_and_filters(self):
-        assert cpoutil.get_els_lpmode(
-            mock.Mock(get_module_state=lambda: "ModuleLowPwr")
-        ) is True
-        assert cpoutil.get_els_lpmode(
-            mock.Mock(get_module_state=lambda: "ModuleReady")
-        ) is False
         assert cpoutil._get_els_lane_count({"laser_count": "2"}) == 2
         assert "optical_power_lane3" not in cpoutil._filter_els_dom_lanes(
             {"optical_power_lane1": 1, "optical_power_lane3": 3}, 2
@@ -2341,3 +2338,69 @@ def test_els_public_threshold_heading_and_vendor_extensions():
     assert "TempHighAlarm: 75C" in text
     assert "tec current: 1.2" in text
     assert cpoutil._info_field_label("rlm_laser_lpmode_control") == "rlm_laser_lpmode_control"
+
+
+@pytest.mark.parametrize("resource, selected_name, label", [
+    ("oe", "oe", "OE"), ("els", "elsfp", "ELS"),
+])
+@pytest.mark.parametrize("low_power", [True, False])
+def test_endpoint_lpmode_query_uses_platform_hook(
+        coverage_environment, monkeypatch, resource, selected_name, label, low_power):
+    endpoints = {name: mock.Mock() for name in ("oe", "elsfp")}
+    for name, endpoint in endpoints.items():
+        endpoint.get_lpmode.return_value = low_power if name == selected_name else not low_power
+        endpoint.get_api.side_effect = AssertionError("CLI must not bypass the endpoint hook")
+    cpo = cpoutil.CpoBase(None, endpoints["oe"], endpoints["elsfp"])
+    monkeypatch.setitem(cpoutil.cpo_object_map[resource], resource + "0", cpo)
+    result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {resource + "0": low_power}
+    endpoints[selected_name].get_lpmode.assert_called_once_with()
+    endpoints["elsfp" if selected_name == "oe" else "oe"].get_lpmode.assert_not_called()
+    for endpoint in endpoints.values():
+        endpoint.get_api.assert_not_called()
+
+
+@pytest.mark.parametrize("resource, selected_name, label", [
+    ("oe", "oe", "OE"), ("els", "elsfp", "ELS"),
+])
+@pytest.mark.parametrize("failure", ["missing", "unimplemented", "hardware", "invalid"])
+def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
+        coverage_environment, monkeypatch, resource, selected_name, label, failure):
+    endpoint = mock.Mock()
+    if failure == "missing":
+        del endpoint.get_lpmode
+    elif failure == "unimplemented":
+        endpoint.get_lpmode.side_effect = NotImplementedError()
+    elif failure == "hardware":
+        endpoint.get_lpmode.side_effect = OSError("read failed")
+    else:
+        endpoint.get_lpmode.return_value = None
+    endpoint.get_api.side_effect = AssertionError("No API fallback")
+    cpo = cpoutil.CpoBase(None, endpoint if selected_name == "oe" else mock.Mock(),
+                          endpoint if selected_name == "elsfp" else mock.Mock())
+    monkeypatch.setitem(cpoutil.cpo_object_map[resource], resource + "0", cpo)
+    result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
+    assert result.exit_code != 0
+    assert "Traceback" not in result.output
+    if failure in ("missing", "unimplemented"):
+        assert label + " get_lpmode is not implemented" in result.output
+    endpoint.get_api.assert_not_called()
+
+
+@pytest.mark.parametrize("resource, endpoint_name", [("oe", "oe"), ("els", "elsfp")])
+@pytest.mark.parametrize("value", [None, 0, 1, "Low Power Mode", "High Power Mode", "False"])
+def test_endpoint_lpmode_rejects_non_boolean_values(
+        coverage_environment, monkeypatch, resource, endpoint_name, value):
+    endpoint = mock.Mock()
+    endpoint.get_lpmode.return_value = value
+    endpoint.get_api.side_effect = AssertionError("No API fallback")
+    cpo = cpoutil.CpoBase(None, endpoint if endpoint_name == "oe" else mock.Mock(),
+                          endpoint if endpoint_name == "elsfp" else mock.Mock())
+    monkeypatch.setitem(cpoutil.cpo_object_map[resource], resource + "0", cpo)
+    result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
+    assert result.exit_code != 0
+    assert "get_lpmode returned invalid data" in result.output
+    assert "Traceback" not in result.output
+    endpoint.get_lpmode.assert_called_once_with()
+    endpoint.get_api.assert_not_called()
