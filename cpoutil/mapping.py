@@ -15,6 +15,10 @@ class CpoMappingError(ValueError):
     """Raised when cpo.json does not describe a usable CPO topology."""
 
 
+class CpoLaserResolutionError(CpoMappingError):
+    """Raised when the topology cannot identify a logical subport's lasers."""
+
+
 def _parse_integer_list(value, field_name):
     if value is None:
         return ()
@@ -237,3 +241,103 @@ class CpoMapping:
         if port is not None:
             return [self.get_interface(port)]
         return [self.get_interface(name) for name in self.ports()]
+
+    def resolve_interface(self, logical_port, port_config):
+        """Resolve an active port against static interfaces using a PORT snapshot."""
+        port_name = str(logical_port)
+        if port_name in self._parsed_interfaces:
+            return self.get_interface(port_name)
+        if port_name.startswith("Ethernet"):
+            entry = port_config.get(port_name)
+            if entry is None:
+                raise CpoMappingError("Invalid port '{}'".format(port_name))
+            physical_ports = set(entry["index"])
+        else:
+            try:
+                physical_ports = {int(port_name)}
+            except ValueError as exc:
+                raise CpoMappingError("Invalid port '{}'".format(port_name)) from exc
+        matches = [mapping for mapping in self.get_interfaces()
+                   if physical_ports.intersection(mapping.physical_ports)]
+        if len(matches) != 1:
+            raise CpoMappingError("Unable to resolve '{}' to one CPO interface".format(port_name))
+        return matches[0]
+
+    def lane_positions(self, logical_port, port_config, mapping=None):
+        """Return zero-based OE lane positions using already-parsed active lanes."""
+        mapping = mapping or self.resolve_interface(logical_port, port_config)
+        port_name = str(logical_port)
+        if not port_name.startswith("Ethernet"):
+            return tuple(range(len(mapping.lanes)))
+        entry = port_config.get(port_name)
+        if entry is None:
+            raise CpoMappingError("No active PORT configuration found for '{}'".format(port_name))
+        port_lanes = set(entry["lanes"])
+        unknown_lanes = port_lanes.difference(mapping.lanes)
+        if unknown_lanes:
+            raise CpoMappingError("PORT '{}' lanes {} are outside CPO interface '{}'".format(
+                port_name, ",".join(str(lane) for lane in sorted(unknown_lanes)), mapping.port))
+        positions = tuple(index for index, lane in enumerate(mapping.lanes) if lane in port_lanes)
+        if not positions:
+            raise CpoMappingError("PORT '{}' has no lanes in CPO interface '{}'".format(port_name, mapping.port))
+        return positions
+
+    def lane_mask(self, logical_port, port_config, mapping=None):
+        return sum(1 << lane for lane in self.lane_positions(logical_port, port_config, mapping))
+
+    def _laser_selection(self, logical_port, mapping, lane_positions):
+        if not mapping.laser_ids:
+            return (), ()
+        selected_lanes = {mapping.lanes[index] for index in lane_positions}
+        if not mapping.laser_to_asic_lane_mapping:
+            if selected_lanes == set(mapping.lanes):
+                shared = {laser for other in self.get_interfaces()
+                          if other.port != mapping.port and other.els_id == mapping.els_id
+                          for laser in other.laser_ids}
+                return mapping.laser_ids, tuple(laser for laser in mapping.laser_ids if laser in shared)
+            raise CpoLaserResolutionError(
+                "CPO interface '{}' needs laser_to_asic_lane_mapping to resolve breakout port '{}'".format(
+                    mapping.port, logical_port))
+        selected, shared = [], []
+        for laser_id in mapping.laser_ids:
+            laser_lanes = set(mapping.laser_to_asic_lane_mapping[laser_id])
+            overlap = selected_lanes.intersection(laser_lanes)
+            if overlap:
+                selected.append(laser_id)
+                if overlap != laser_lanes:
+                    shared.append(laser_id)
+        return tuple(selected), tuple(shared)
+
+    def laser_selection(self, logical_port, port_config, mapping=None):
+        mapping = mapping or self.resolve_interface(logical_port, port_config)
+        return self._laser_selection(logical_port, mapping, self.lane_positions(logical_port, port_config, mapping))
+
+    def interface_context(self, logical_port, port_config, require_lasers=True):
+        """Return lane and laser associations without accessing platform objects."""
+        mapping = self.resolve_interface(logical_port, port_config)
+        positions = self.lane_positions(logical_port, port_config, mapping)
+        try:
+            laser_ids, shared_laser_ids = self._laser_selection(logical_port, mapping, positions)
+        except CpoLaserResolutionError:
+            if require_lasers:
+                raise
+            laser_ids, shared_laser_ids = None, ()
+        return {"mapping": mapping, "lane_positions": positions,
+                "lane_mask": sum(1 << lane for lane in positions),
+                "laser_ids": laser_ids, "shared_laser_ids": shared_laser_ids}
+
+    def ports_for_physical_ports(self, physical_ports, port_config):
+        physical_ports = set(physical_ports)
+        return sorted((port for port, entry in port_config.items()
+                       if physical_ports.intersection(entry["index"])), key=natural_sort_key)
+
+    def ports_for_resource(self, resource_type, resource_id, port_config):
+        if resource_type not in SUPPORTED_RESOURCE_TYPES:
+            raise CpoMappingError("unsupported CPO resource type '{}'".format(resource_type))
+        name = str(resource_id).lower()
+        if name.isdigit():
+            name = _resource_name(resource_type, name)
+        return self.ports_for_physical_ports(
+            (pport for mapping in self.get_interfaces()
+             if (mapping.oe_name if resource_type == OPTICAL_ENGINE else mapping.els_name) == name
+             for pport in mapping.physical_ports), port_config)

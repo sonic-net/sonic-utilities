@@ -887,7 +887,7 @@ class TestApplicationEepromSnapshot:
             entry for entry in entries if selected is None or entry[3] == selected
         ])
         # One breakout view and two full-bank views, including a shared bank.
-        monkeypatch.setattr(cpoutil, "get_cpo_lane_positions", lambda name: (
+        monkeypatch.setattr(cpoutil.cpo_mapping, "lane_positions", lambda name, port_config: (
             (0, 1, 2, 3) if name == "Ethernet0" else tuple(range(8))))
         arguments = ["show", "interface", "speed", "application"]
         if port is not None:

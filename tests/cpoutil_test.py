@@ -15,7 +15,7 @@ modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
 from cpoutil import main as cpoutil  # noqa: E402
-from cpoutil.mapping import CpoMapping, CpoMappingError  # noqa: E402
+from cpoutil.mapping import CpoMapping, CpoMappingError, CpoLaserResolutionError  # noqa: E402
 from cpoutil.mapping import (  # noqa: E402
     EXTERNAL_LASER_SOURCE,
     OPTICAL_ENGINE,
@@ -813,11 +813,11 @@ class TestHelperCoverage(object):
         assert result.output.count("Invalid port '{}'".format(port_name)) == 1
 
     def test_port_and_lane_helpers(self, coverage_environment):
-        assert cpoutil.get_cpo_interface_mapping("Ethernet0").physical_ports == (1,)
+        assert cpoutil.cpo_mapping.resolve_interface("Ethernet0", cpoutil.current_port_config).physical_ports == (1,)
         assert cpoutil.get_port_lanes("Ethernet0") == (1, 2)
-        assert cpoutil.get_cpo_lane_positions("Ethernet0") == (0, 1)
-        assert cpoutil.get_cpo_lane_mask("Ethernet0") == 3
-        assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), ())
+        assert cpoutil.cpo_mapping.lane_positions("Ethernet0", cpoutil.current_port_config) == (0, 1)
+        assert cpoutil.cpo_mapping.lane_mask("Ethernet0", cpoutil.current_port_config) == 3
+        assert cpoutil.cpo_mapping.laser_selection("Ethernet0", cpoutil.current_port_config) == ((0, 1), ())
         assert cpoutil.get_physical_port_name("Ethernet0", 2, True).endswith(
             "(ganged)"
         )
@@ -1409,8 +1409,8 @@ class TestExplicitLaserMapping:
             "Ethernet1": {"index": (1,), "lanes": (1, 3, 5)},
             "Ethernet2": {"index": (1,), "lanes": (2, 4, 6)},
         })
-        assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
-        assert cpoutil.get_cpo_laser_ids("Ethernet2") == ((1, 2), ())
+        assert cpoutil.cpo_mapping.laser_selection("Ethernet1", cpoutil.current_port_config) == ((0,), ())
+        assert cpoutil.cpo_mapping.laser_selection("Ethernet2", cpoutil.current_port_config) == ((1, 2), ())
 
     def test_shared_laser_across_banks_is_reported(self, monkeypatch, coverage_environment):
         data = json.loads(json.dumps(COMMUNITY_DATA))
@@ -1418,23 +1418,23 @@ class TestExplicitLaserMapping:
             "1": [1, 3], "2": [2], "3": [4],
         }
         self.configure(monkeypatch, data, COVERAGE_PORT_CONFIG)
-        assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), (0,))
+        assert cpoutil.cpo_mapping.laser_selection("Ethernet0", cpoutil.current_port_config) == ((0, 1), (0,))
 
     def test_shared_laser_within_bank_is_reported(self, monkeypatch, coverage_environment):
         self.configure(monkeypatch, self.nonuniform_topology(), {
             "Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)},
             "Ethernet1": {"index": (1,), "lanes": (1, 3)},
         })
-        assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), (0,))
+        assert cpoutil.cpo_mapping.laser_selection("Ethernet1", cpoutil.current_port_config) == ((0,), (0,))
 
     def test_breakout_without_lane_mapping_cannot_resolve_lasers(self, monkeypatch, coverage_environment):
         self.configure(monkeypatch, COVERAGE_CPO_DATA, {
             "Ethernet0": {"index": (1,), "lanes": (1, 2)},
             "Ethernet1": {"index": (1,), "lanes": (2,)},
         })
-        assert cpoutil.get_cpo_laser_ids("Ethernet0") == ((0, 1), ())
-        with pytest.raises(cpoutil.CpoLaserResolutionError, match="laser_to_asic_lane_mapping"):
-            cpoutil.get_cpo_laser_ids("Ethernet1")
+        assert cpoutil.cpo_mapping.laser_selection("Ethernet0", cpoutil.current_port_config) == ((0, 1), ())
+        with pytest.raises(CpoLaserResolutionError, match="laser_to_asic_lane_mapping"):
+            cpoutil.cpo_mapping.laser_selection("Ethernet1", cpoutil.current_port_config)
 
     def test_incomplete_explicit_lane_mapping_is_rejected(self):
         data = self.nonuniform_topology()
@@ -1458,7 +1458,7 @@ class TestExplicitLaserMapping:
             "Ethernet0": {"index": (1,), "lanes": (1, 2, 3, 4, 5, 6)},
             "Ethernet1": {"index": (1,), "lanes": (1, 3, 5)},
         })
-        assert cpoutil.get_cpo_laser_ids("Ethernet1") == ((0,), ())
+        assert cpoutil.cpo_mapping.laser_selection("Ethernet1", cpoutil.current_port_config) == ((0,), ())
 
 
 @pytest.fixture
@@ -1778,7 +1778,7 @@ class TestLaneStatusLaserAssociation:
         data["devices"]["els0"]["laser_to_asic_lane_mapping"] = {"1": [33, 35], "2": [34, 36]}
         TestExplicitLaserMapping.configure(
             monkeypatch, data, {"Ethernet0": {"index": (1,), "lanes": (33, 34, 35, 36)}})
-        context = cpoutil.get_interface_context("Ethernet0")
+        context = cpoutil.cpo_mapping.interface_context("Ethernet0", cpoutil.current_port_config)
         assert cpoutil._lane_lasers(context) == {"lane00": 0, "lane01": 1, "lane02": 0, "lane03": 1}
 
     def test_no_explicit_mapping_is_not_guessed(self, coverage_environment, monkeypatch):

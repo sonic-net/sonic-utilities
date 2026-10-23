@@ -64,10 +64,6 @@ class CpoCommandError(RuntimeError):
     """Raised when a CPO resource or platform API is unavailable."""
 
 
-class CpoLaserResolutionError(CpoCommandError):
-    """Raised when the topology cannot identify a subport's ELS lasers."""
-
-
 UNRESOLVED_LASERS = "N/A (needs laser_to_asic_lane_mapping)"
 
 
@@ -141,127 +137,6 @@ def get_port_lanes(logical_port):
     """Return the ASIC lanes assigned to one active logical port."""
     entry = get_port_config_entry(logical_port)
     return entry["lanes"]
-
-
-def get_cpo_interface_mapping(logical_port):
-    """Resolve an active logical subport to its static cpo.json interface."""
-    port_name = str(logical_port)
-    try:
-        return cpo_mapping.get_interface(port_name)
-    except KeyError:
-        pass
-
-    physical_ports = set(
-        platform_sfputil_helper.get_validated_physical_port_list(logical_port)
-    )
-    matches = [
-        mapping for mapping in cpo_mapping.get_interfaces()
-        if physical_ports.intersection(mapping.physical_ports)
-    ]
-    if len(matches) != 1:
-        raise CpoCommandError(
-            "Unable to resolve '{}' to one CPO interface".format(port_name)
-        )
-    return matches[0]
-
-
-def get_cpo_lane_positions(logical_port, mapping=None):
-    """Return zero-based OE lane positions assigned to a logical subport."""
-    mapping = mapping or get_cpo_interface_mapping(logical_port)
-    port_name = str(logical_port)
-    if not port_name.startswith("Ethernet"):
-        return tuple(range(len(mapping.lanes)))
-
-    port_lanes = set(get_port_lanes(port_name))
-    mapping_lanes = tuple(mapping.lanes)
-    unknown_lanes = port_lanes.difference(mapping_lanes)
-    if unknown_lanes:
-        raise CpoCommandError(
-            "PORT '{}' lanes {} are outside CPO interface '{}'".format(
-                port_name,
-                ",".join(str(lane) for lane in sorted(unknown_lanes)),
-                mapping.port,
-            )
-        )
-    positions = tuple(
-        index for index, lane in enumerate(mapping_lanes)
-        if lane in port_lanes
-    )
-    if not positions:
-        raise CpoCommandError(
-            "PORT '{}' has no lanes in CPO interface '{}'".format(
-                port_name, mapping.port
-            )
-        )
-    return positions
-
-
-def get_cpo_lane_mask(logical_port, mapping=None):
-    """Return the OE channel mask assigned to a logical subport."""
-    return sum(
-        1 << lane for lane in get_cpo_lane_positions(logical_port, mapping)
-    )
-
-
-def get_cpo_laser_ids(logical_port, mapping=None):
-    """Resolve ELS lasers using the explicit ASIC lane topology."""
-    mapping = mapping or get_cpo_interface_mapping(logical_port)
-    lane_positions = get_cpo_lane_positions(logical_port, mapping)
-    if not mapping.laser_ids:
-        return (), ()
-    selected_lanes = {mapping.lanes[index] for index in lane_positions}
-    if not mapping.laser_to_asic_lane_mapping:
-        # Legacy topologies list lasers for a whole interface, but cannot
-        # safely identify which lasers serve a breakout subport.
-        if selected_lanes == set(mapping.lanes):
-            shared = {
-                laser for other in cpo_mapping.get_interfaces()
-                if other.port != mapping.port and other.els_id == mapping.els_id
-                for laser in other.laser_ids
-            }
-            return mapping.laser_ids, tuple(
-                laser for laser in mapping.laser_ids if laser in shared
-            )
-        raise CpoLaserResolutionError(
-            "CPO interface '{}' needs laser_to_asic_lane_mapping to resolve "
-            "breakout port '{}'".format(mapping.port, logical_port)
-        )
-
-    selected = []
-    shared = []
-    for laser_id in mapping.laser_ids:
-        laser_lanes = set(mapping.laser_to_asic_lane_mapping[laser_id])
-        overlap = selected_lanes.intersection(laser_lanes)
-        if not overlap:
-            continue
-        selected.append(laser_id)
-        if overlap != laser_lanes:
-            shared.append(laser_id)
-    return tuple(selected), tuple(shared)
-
-
-def get_interface_context(logical_port, require_lasers=True):
-    """Resolve static CPO mapping and active breakout data for one port.
-
-    With require_lasers=False, a subport whose lasers the topology cannot
-    identify gets laser_ids None instead of an error. Only display paths may
-    use that; controls must know exactly which lasers they affect.
-    """
-    mapping = get_cpo_interface_mapping(logical_port)
-    lane_positions = get_cpo_lane_positions(logical_port, mapping)
-    try:
-        laser_ids, shared_laser_ids = get_cpo_laser_ids(logical_port, mapping)
-    except CpoLaserResolutionError:
-        if require_lasers:
-            raise
-        laser_ids, shared_laser_ids = None, ()
-    return {
-        "mapping": mapping,
-        "lane_positions": lane_positions,
-        "lane_mask": sum(1 << lane for lane in lane_positions),
-        "laser_ids": laser_ids,
-        "shared_laser_ids": shared_laser_ids,
-    }
 
 
 def load_cpo_object_map():
@@ -847,7 +722,7 @@ def _local_oe_bank(mapping):
 
 
 def _interface_mapping_record(logical_port):
-    context = get_interface_context(logical_port, require_lasers=False)
+    context = cpo_mapping.interface_context(logical_port, current_port_config, require_lasers=False)
     mapping = context["mapping"]
     oe_lanes = [mapping.lanes[index] for index in context["lane_positions"]]
     laser_ids = context["laser_ids"]
@@ -1177,9 +1052,9 @@ def show_interface_presence(port, json_output):
     try:
         for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
             present = get_cpo_presence(cpo, port_name)
-            mapping = get_cpo_interface_mapping(logical_port)
+            mapping = cpo_mapping.resolve_interface(logical_port, current_port_config)
             records[port_name] = {"els": mapping.els_name.upper(), "present": present}
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     if json_output:
         click.echo(_json_records(records))
@@ -1211,7 +1086,7 @@ def show_interface_map(port, json_output):
                         for physical in physical_ports):
                     continue
                 records.append(_interface_mapping_record(logical_port))
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
     if json_output:
@@ -1242,7 +1117,7 @@ def show_interface_lpmode(port, json_output):
                         "CPO low-power mode is unavailable for '{}'".format(port_name)
                     )
                 records[port_name] = lpmode
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records, json_output, ("Interface", "Low-power Mode"),
@@ -1302,7 +1177,7 @@ def show_interface_dom(port, json_output):
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     if json_output:
         click.echo(_json_records(records))
@@ -1324,7 +1199,7 @@ def show_interface_tx_disable(port, json_output):
     try:
         with _eeprom_read_snapshot() as attach_snapshot:
             for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-                lane_positions = get_cpo_lane_positions(logical_port)
+                lane_positions = cpo_mapping.lane_positions(logical_port, current_port_config)
                 api = get_oe_api(cpo, port_name)
                 attach_snapshot(cpo.oe, api)
                 values = _select_lane_values(
@@ -1335,7 +1210,7 @@ def show_interface_tx_disable(port, json_output):
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records,
@@ -1387,7 +1262,7 @@ def show_interface_speed_application(port, json_output):
                         "N/A",
                     )
                     active.append(active_application)
-                lane_positions = get_cpo_lane_positions(logical_port)
+                lane_positions = cpo_mapping.lane_positions(logical_port, current_port_config)
                 records[port_name] = {
                     "Application Advertisement": advertisements,
                     "Application Select Controls": _select_lane_values(
@@ -1401,7 +1276,7 @@ def show_interface_speed_application(port, json_output):
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     print_application_records(records, json_output)
 
@@ -1419,7 +1294,7 @@ def show_interface_lane_status(port, json_output):
                 els_api = get_els_api(cpo, port_name)
                 attach_snapshot(cpo.oe, oe_api)
                 attach_snapshot(cpo.elsfp, els_api)
-                context = get_interface_context(logical_port, require_lasers=False)
+                context = cpo_mapping.interface_context(logical_port, current_port_config, require_lasers=False)
                 laser_ids = context["laser_ids"]
                 els_status = els_api.get_elsfp_status()
                 if not isinstance(els_status, dict) or not els_status:
@@ -1443,7 +1318,7 @@ def show_interface_lane_status(port, json_output):
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     print_lane_status_records(records, json_output)
 
@@ -1472,7 +1347,7 @@ def show_oe_lpmode(oe_index, json_output):
         raise click.ClickException(
             "OE get_lpmode is not implemented for this platform"
         ) from exc
-    except (CpoCommandError, OSError) as exc:
+    except (CpoMappingError, CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records, json_output, ("OE", "Low-power Mode"),
@@ -1492,7 +1367,7 @@ def show_oe_status(oe_index, json_output):
             records[resource_id] = get_oe_api(
                 cpo, resource_id
             ).get_module_state()
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("OE", "Module State"))
 
@@ -1509,7 +1384,7 @@ def show_oe_temperature(oe_index, json_output):
             records[resource_id] = get_oe_api(
                 cpo, resource_id
             ).get_module_temperature()
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("OE", "Temperature (C)"))
 
@@ -1538,7 +1413,7 @@ def show_els_lpmode(els_index, json_output):
         raise click.ClickException(
             "ELS get_lpmode is not implemented for this platform"
         ) from exc
-    except (CpoCommandError, OSError) as exc:
+    except (CpoMappingError, CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records, json_output, ("ELS", "Low-power Mode"),
@@ -1559,7 +1434,7 @@ def show_els_status(els_index, json_output):
             if state is None:
                 raise CpoCommandError("The ELSFP module state API returned no data")
             records[resource_id] = state
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records,
@@ -1586,7 +1461,7 @@ def show_els_temperature(els_index, json_output):
                     )
                 )
             records[resource_id] = temperature
-    except (CpoCommandError, NotImplementedError, AttributeError) as exc:
+    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Temperature (C)"))
 
@@ -1620,10 +1495,6 @@ def _single_resource(resource_type, index):
     return objects[0]
 
 
-def _get_interface_mapping(port):
-    return get_cpo_interface_mapping(port)
-
-
 def _call_hook(target, method, label, *args):
     """Call a platform hook, reporting a missing or unimplemented hook."""
     function = getattr(target, method, None)
@@ -1645,30 +1516,6 @@ def _call_vmodule(cpo, method, *args):
     return _call_hook(cpo, method, "CPO", *args)
 
 
-def _ports_on_physical_ports(physical_ports):
-    """Return the logical ports that use any of the given physical ports."""
-    physical_ports = set(physical_ports)
-    return sorted(
-        (
-            port for port in current_port_config
-            if physical_ports.intersection(
-                platform_sfputil_helper.get_validated_physical_port_list(port)
-            )
-        ),
-        key=_natural_sort_key,
-    )
-
-
-def _controller_ports(oe_name):
-    """Return the logical ports served by one OE controller in the topology."""
-    return _ports_on_physical_ports(
-        physical_port
-        for mapping in cpo_mapping.get_interfaces()
-        if mapping.oe_name == oe_name
-        for physical_port in mapping.physical_ports
-    )
-
-
 def get_vmodule_targets(ports, per_controller):
     """Resolve the CPO objects a virtual-module command calls.
 
@@ -1687,13 +1534,13 @@ def get_vmodule_targets(ports, per_controller):
     for port in selected:
         port_cpos = get_port_cpo_objects(port)
         if per_controller:
-            oe_name = get_cpo_interface_mapping(port).oe_name
+            oe_name = cpo_mapping.resolve_interface(port, current_port_config).oe_name
             if oe_name not in targets:
-                targets[oe_name] = (oe_name.upper(), port_cpos[0][2], _controller_ports(oe_name))
+                targets[oe_name] = (oe_name.upper(), port_cpos[0][2], cpo_mapping.ports_for_resource(OPTICAL_ENGINE, oe_name, current_port_config))
             continue
         for _, physical_port, cpo in port_cpos:
             if physical_port not in targets:
-                affected = _ports_on_physical_ports([physical_port])
+                affected = cpo_mapping.ports_for_physical_ports([physical_port], current_port_config)
                 targets[physical_port] = (affected[0] if affected else port, cpo, affected)
     return sorted(targets.values(), key=lambda target: _natural_sort_key(target[0]))
 
@@ -1737,7 +1584,7 @@ def config_interface_tx_disable(port, state):
             "Enabling Tx-disable for" if disable else "Disabling Tx-disable for",
             "tx_disable", disable,
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -1760,7 +1607,7 @@ def config_interface_lpmode(port, mode):
             "Enabling low-power mode for" if low_power else "Disabling low-power mode for",
             "set_lpmode", low_power,
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -1776,7 +1623,7 @@ def config_interface_reset(port):
     try:
         targets = get_vmodule_targets(port, per_controller=True)
         _run_vmodule_action(targets, "Resetting", "reset")
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     click.echo(
         "Re-provision the affected ports (admin toggle): {}".format(
@@ -1806,11 +1653,11 @@ def config_oe_lpmode(oe_index, mode):
         _run_action(
             "{} low-power mode for {} ({})".format(
                 "Enabling" if low_power else "Disabling",
-                resource_id.upper(), ", ".join(_controller_ports(resource_id)),
+                resource_id.upper(), ", ".join(cpo_mapping.ports_for_resource(OPTICAL_ENGINE, resource_id, current_port_config)),
             ),
             lambda: _call_hook(getattr(cpo, "oe", None), "set_lpmode", "OE", low_power),
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -1826,7 +1673,7 @@ def config_oe_reset(oe_index):
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
         _run_action(
             "Resetting {} ({})".format(
-                resource_id.upper(), ", ".join(_controller_ports(resource_id))
+                resource_id.upper(), ", ".join(cpo_mapping.ports_for_resource(OPTICAL_ENGINE, resource_id, current_port_config))
             ),
             lambda: _call_hook(getattr(cpo, "oe", None), "reset", "OE"),
         )
@@ -1834,7 +1681,7 @@ def config_oe_reset(oe_index):
             "Affected ports may require application and datapath "
             "reprovisioning after the reset."
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -1862,7 +1709,7 @@ def config_els_lpmode(els_index, mode):
             ),
             lambda: _call_hook(getattr(cpo, "elsfp", None), "set_lpmode", "ELS", low_power),
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -1876,7 +1723,7 @@ def config_els_reset(els_index):
             "Resetting {}".format(resource_id.upper()),
             lambda: _call_hook(getattr(cpo, "elsfp", None), "reset", "ELS"),
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -2039,7 +1886,7 @@ def _write_resource_eeprom(resource_type, index, bank, page, offset, data):
 
 
 def _interface_eeprom_target(port, target, page=None):
-    mapping = _get_interface_mapping(port)
+    mapping = cpo_mapping.resolve_interface(port, current_port_config)
     if target == OPTICAL_ENGINE:
         bank = _local_oe_bank(mapping)
         if page is not None and (page < 0x10 or 0x9F <= page <= 0xAF):
@@ -2296,7 +2143,7 @@ def read_eeprom_interface(port, oe, els, page, offset, size):
         results = _read_resource_eeprom(
             target, index, bank, page, offset, size
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     for resource_id, data in results:
         _print_eeprom_data(
@@ -2330,7 +2177,7 @@ def read_eeprom_oe(index, bank, page, offset, size):
         results = _read_resource_eeprom(
             OPTICAL_ENGINE, index, target_bank, page, offset, size
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     for resource_id, data in results:
         _print_eeprom_data(
@@ -2364,7 +2211,7 @@ def read_eeprom_els(index, bank, page, offset, size):
         results = _read_resource_eeprom(
             EXTERNAL_LASER_SOURCE, index, target_bank, page, offset, size
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     for resource_id, data in results:
         _print_eeprom_data(
@@ -2397,7 +2244,7 @@ def write_eeprom_interface(port, oe, els, page, offset, data):
         _write_resource_eeprom(
             target, index, bank, page, offset, payload
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -2421,7 +2268,7 @@ def write_eeprom_oe(index, bank, page, offset, data):
         _write_resource_eeprom(
             OPTICAL_ENGINE, index, bank, page, offset, payload
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
@@ -2444,7 +2291,7 @@ def write_eeprom_els(index, bank, page, offset, data):
         _write_resource_eeprom(
             EXTERNAL_LASER_SOURCE, index, bank, page, offset, payload
         )
-    except CpoCommandError as exc:
+    except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
 
 
