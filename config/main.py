@@ -10766,7 +10766,8 @@ def motd(message):
 #
 
 @config.group()
-def fdb():
+@multi_asic_util.multi_asic_click_option_namespace(required=True)
+def fdb(namespace):
     """FDB (MAC) configuration tasks"""
     pass
 
@@ -10778,11 +10779,15 @@ def fdb():
 def mac_sync_mode(ctx, db, mode):
     """Select how MAC (FDB) state is synchronized with FRR"""
 
-    metadata = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
+    # Each ASIC's fpmsyncd and fdbsyncd read the CONFIG_DB of their namespace.
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+    cfgdb = db.cfgdb_clients[namespace]
+
+    metadata = cfgdb.get_entry('DEVICE_METADATA', 'localhost')
     if mode == 'kernel' and metadata.get('subtype') == 'L3EvpnMH':
         ctx.fail("An L3EvpnMH device synchronizes MACs over FPM only")
 
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
+    config_db = ValidatedConfigDBConnector(cfgdb)
     try:
         # TODO: use swsscommon.CFG_FDB_SYNC_TABLE_NAME once sonic-net/sonic-buildimage#29312 is merged.
         config_db.mod_entry('FDB_SYNC', 'global',

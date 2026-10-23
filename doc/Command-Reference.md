@@ -15164,12 +15164,12 @@ This command displays the default mac aging time on the switch
 
 **show mac sync-mode**
 
-This command displays how MAC (FDB) state is synchronized with FRR: `kernel` (through the Linux kernel bridge FDB) or `fpm` (over the FPM channel). It displays `kernel` when the mode is not configured, and always `fpm` on a device with the `L3EvpnMH` subtype. `show fdb mac-sync-mode` displays the same.
+This command displays how MAC (FDB) state is synchronized with FRR: `kernel` (through the Linux kernel bridge FDB) or `fpm` (over the FPM channel). It displays `kernel` when the mode is not configured, and always `fpm` on a device with the `L3EvpnMH` subtype. `show fdb mac-sync-mode` displays the same. On a multi-ASIC device each ASIC namespace has its own mode: `-n` selects one, and without it the mode of each namespace is displayed after its name.
 
 - Usage:
   ```
-  show mac sync-mode
-  show fdb mac-sync-mode
+  show mac [-n <namespace>] sync-mode
+  show fdb [-n <namespace>] mac-sync-mode
   ```
 
 - Example:
@@ -15196,11 +15196,11 @@ Clear the FDB table. On multi-ASIC platforms, clears FDB entries in all namespac
 
 **config fdb mac-sync-mode**
 
-This command selects how MAC (FDB) state is synchronized with FRR. `kernel`, the default, synchronizes it through the Linux kernel bridge FDB; `fpm` synchronizes it over the FPM channel. zebra and fpmsyncd pick up the mode when the bgp container restarts. A device with the `L3EvpnMH` subtype always uses `fpm`, so `kernel` is refused there.
+This command selects how MAC (FDB) state is synchronized with FRR. `kernel`, the default, synchronizes it through the Linux kernel bridge FDB; `fpm` synchronizes it over the FPM channel. zebra and fpmsyncd pick up the mode when the bgp container restarts. A device with the `L3EvpnMH` subtype always uses `fpm`, so `kernel` is refused there. On a multi-ASIC device the mode is set per ASIC namespace, which `-n` selects.
 
 - Usage:
   ```
-  config fdb mac-sync-mode <kernel|fpm>
+  config fdb [-n <namespace>] mac-sync-mode <kernel|fpm>
   ```
 
 - Example:
