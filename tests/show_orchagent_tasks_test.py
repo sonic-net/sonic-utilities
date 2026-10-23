@@ -75,10 +75,17 @@ def test_tasks_renders_table_sorted_by_total(fake_swsscommon):
     assert result.exit_code == 0, result.output
 
     lines = [ln for ln in result.output.splitlines() if ln.strip()]
-    # Multi-line headers (3 rows) + 5 data rows.
-    assert len(lines) >= 8
-    # The combined header text appears across the first few lines.
-    header_block = "\n".join(lines[:3])
+    # Header height is derived rather than hardcoded: the tallest header cell
+    # decides how many rows tabulate emits, so it changes whenever a header
+    # gains or loses a sub-line. Everything from the first recognised task
+    # name onward is the body.
+    task_names = ["RouteOrch", "PortsOrch", "flush", "logRotate", "NeverRan"]
+    first_data = next(i for i, ln in enumerate(lines)
+                      if ln.lstrip().split()[0] in task_names)
+    header_block = "\n".join(lines[:first_data])
+    body = lines[first_data:]
+
+    assert len(body) == len(task_names)
     assert "TASK" in header_block
     assert "RUN TIME" in header_block
     assert "median/q1/q3/max" in header_block
@@ -88,38 +95,33 @@ def test_tasks_renders_table_sorted_by_total(fake_swsscommon):
     assert "TOTAL" in header_block
 
     # Rows are sorted by total_run_ns descending.
-    body = lines[3:]
     order = []
-    for name in ["RouteOrch", "PortsOrch", "flush", "logRotate", "NeverRan"]:
+    for name in task_names:
         for i, line in enumerate(body):
             if line.lstrip().split()[:1] == [name]:
                 order.append((name, i))
                 break
-    assert len(order) == 5
-    assert [n for n, _ in order] == [
-        "RouteOrch", "PortsOrch", "flush", "logRotate", "NeverRan"
-    ]
+    assert len(order) == len(task_names)
+    assert [n for n, _ in order] == task_names
 
 
-def test_tasks_formats_quartet_in_ms(fake_swsscommon):
+def test_tasks_formats_quartet_autoscaled(fake_swsscommon):
     runner = CliRunner()
     result = runner.invoke(show_orchagent.orchagent, ["tasks"])
     assert result.exit_code == 0
 
-    # The new RUN TIME quartet replaces individual median/max/min columns.
-    # RouteOrch: median 1.80, q1 0.90, q3 3.20, max 47.00 (all ms).
-    assert "1.80/0.90/3.20/47000.00" not in result.output  # not millions
-    assert "1.80/0.90/3.20/47.00" in result.output
+    # Each value carries its own unit, so a quartet spanning sub-millisecond
+    # and tens-of-milliseconds stays legible. RouteOrch run time: median
+    # 1.8 ms, q1 900 us, q3 3.2 ms, max 47 ms.
+    assert "1.80ms/900us/3.20ms/47.0ms" in result.output
 
-    # PortsOrch sched: median 3.00, q1 1.50, q3 6.00, max 80.00 ms.
-    assert "3.00/1.50/6.00/80.00" in result.output
+    # PortsOrch run time is entirely sub-millisecond -- under the old fixed-ms
+    # format median/q1/q3 rendered as 0.00 and the column was unreadable.
+    assert "310us/180us/520us/4.10ms" in result.output
+    assert "0.00/0.00/0.00" not in result.output
 
-    # The new format drops the per-cell "ms" suffix (the unit appears
-    # only in the header sub-line "(in msec)").
-    body_lines = [ln for ln in result.output.splitlines()
-                  if ln and not ln.lstrip().startswith(("TASK", "median", "(in"))]
-    for ln in body_lines:
-        assert " ms" not in ln, f"unexpected 'ms' suffix in body row: {ln!r}"
+    # PortsOrch sched latency: median 3 ms, q1 1.5 ms, q3 6 ms, max 80 ms.
+    assert "3.00ms/1.50ms/6.00ms/80.0ms" in result.output
 
 
 def test_tasks_handles_zero_count_slot(fake_swsscommon):
@@ -169,18 +171,18 @@ def test_tasks_total_column_is_run_over_sched(fake_swsscommon):
     result = runner.invoke(show_orchagent.orchagent, ["tasks"])
     assert result.exit_code == 0
 
-    # TOTAL column is "<total_run>/<total_sched>" in ms, two decimals.
-    # RouteOrch: total_run = 18630 ms, total_sched = 40495 ms.
+    # TOTAL column is "<total_run>/<total_sched>", each auto-scaled.
+    # RouteOrch: total_run = 18.63 s, total_sched = 40.495 s.
     route_line = next(ln for ln in result.output.splitlines()
                       if ln.lstrip().split()[:1] == ["RouteOrch"])
     cols = route_line.split()
-    assert cols[5] == "18630.00/40495.00", f"unexpected total in {cols}"
+    assert cols[5] == "18.6s/40.5s", f"unexpected total in {cols}"
 
-    # PortsOrch: total_run = 3859.50, total_sched = 37347.00 ms.
+    # PortsOrch: total_run = 3.8595 s, total_sched = 37.347 s.
     ports_line = next(ln for ln in result.output.splitlines()
                       if ln.lstrip().split()[:1] == ["PortsOrch"])
     pcols = ports_line.split()
-    assert pcols[5] == "3859.50/37347.00"
+    assert pcols[5] == "3.86s/37.3s"
 
 
 def test_tasks_empty_reply_prints_only_headers(fake_swsscommon):
@@ -190,13 +192,14 @@ def test_tasks_empty_reply_prints_only_headers(fake_swsscommon):
     runner = CliRunner()
     result = runner.invoke(show_orchagent.orchagent, ["tasks"])
     assert result.exit_code == 0
-    # New format has a 3-line header (TASK row, sub-row "median/q1/q3/max",
-    # unit row "(in msec)") and no data rows.
+    # Two header rows (the TASK row and the "median/q1/q3/max" sub-row) and no
+    # data rows. There is no unit row: units travel with each value now, so
+    # the header carries no "(in msec)" line.
     lines = [ln for ln in result.output.splitlines() if ln.strip()]
-    assert len(lines) == 3
+    assert len(lines) == 2
     assert "TASK" in lines[0]
     assert "median/q1/q3/max" in lines[1]
-    assert "(in msec)" in lines[2]
+    assert "(in msec)" not in result.output
 
 
 def test_tasks_timeout_reports_error(fake_swsscommon):
@@ -296,3 +299,59 @@ def test_tasks_malformed_row_warns_and_skips(fake_swsscommon):
     # RouteOrch skipped -> not a data row.
     assert not any(ln.lstrip().split()[:1] == ["RouteOrch"]
                    for ln in result.output.splitlines())
+
+
+# ---------------------------------------------------------------------------
+# _fmt_duration: unit selection and 3-significant-figure rendering.
+#
+# Boundaries are pinned on both sides because the ladder is a tuple scan --
+# a refactor to log10 would be liable to drift at exactly 1000 ns / 1 s.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("ns,expected", [
+    # Zero is distinct from "-", which callers use for "no samples yet".
+    (0,                       "0ns"),
+    # ns tier renders as an integer -- source resolution is already 1 ns.
+    (1,                       "1ns"),
+    (850,                     "850ns"),
+    (999,                     "999ns"),
+    # us tier
+    (1_000,                   "1.00us"),
+    (3_100,                   "3.10us"),
+    (510_000,                 "510us"),
+    # 3-sig-fig rounding at the top of a tier legitimately yields four
+    # digits rather than rolling over to the next unit.
+    (999_999,                 "1000us"),
+    # ms tier
+    (1_000_000,               "1.00ms"),
+    (8_420_000,               "8.42ms"),
+    (95_200_000,              "95.2ms"),
+    # s tier
+    (1_000_000_000,           "1.00s"),
+    (45_200_000_000,          "45.2s"),
+    # Rounding-before-rollover at the s->m boundary: 59.95s rounds to the
+    # display value "60.0s" but stays in the s tier (below the 60 B ns
+    # threshold) -- it does NOT become "1.00m".
+    (59_950_000_000,          "60.0s"),
+    # Same behavior one tier down (ms->s): 999.5ms renders "1000ms".
+    (999_500_000,             "1000ms"),
+    # m / h / d tiers exist so the TOTAL column stays readable: total_sched_ns
+    # accumulates over daemon uptime.
+    (60_000_000_000,          "1.00m"),
+    (3_600_000_000_000,       "1.00h"),
+    (86_400_000_000_000,      "1.00d"),
+    (2_592_000_000_000_000,   "30.0d"),   # ~1 second/poll on a 30-day uptime
+])
+def test_fmt_duration_scales_and_labels(ns, expected):
+    assert show_orchagent._fmt_duration(ns) == expected
+
+
+def test_fmt_duration_negative_treated_as_zero():
+    # The daemon sends unsigned counters, but a version/format mismatch
+    # should not raise or emit a nonsense unit.
+    assert show_orchagent._fmt_duration(-1) == "0ns"
+
+
+def test_fmt_quartet_joins_four_autoscaled_values():
+    assert show_orchagent._fmt_quartet(1_800_000, 900_000,
+                                       3_200_000, 47_000_000) == \
+        "1.80ms/900us/3.20ms/47.0ms"
