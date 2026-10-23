@@ -250,6 +250,38 @@ class TestEVPNEthernetSegmentConfig():
         configure_esi_w_failure(runner, db, ["PortChannel02", "00:01:02:03:04:05:06:07:08:FF"],
                                 "The ESI '00:01:02:03:04:05:06:07:08:ff' is already in use by 'PortChannel01'")
 
+    # An Ethernet Segment may be configured in either mac_sync_mode; guard
+    # against a restriction being reintroduced.
+    def test_add_es_allowed_when_mac_sync_mode_fpm(self, cli_db_connection):
+        runner, db = cli_db_connection
+        db['config_db'].set_entry('FDB_SYNC', 'global', {'mac_sync_mode': 'fpm'})
+
+        result = runner.invoke(
+            config.config.commands["interface"].commands['evpn-esi'].commands["add"],
+            ["PortChannel01", "auto-system-mac"],
+            obj=db)
+
+        assert result.exit_code == 0, (
+            f"Got exit code {result.exit_code} - {result.output}, expected success"
+        )
+        assert "PortChannel01" in db['config_db'].get_table(EVPN_ES_TABLE), (
+            "Ethernet Segment was not written to CONFIG_DB"
+        )
+
+    def test_add_es_allowed_when_mac_sync_mode_kernel(self, cli_db_connection):
+        runner, db = cli_db_connection
+        db['config_db'].set_entry('FDB_SYNC', 'global', {'mac_sync_mode': 'kernel'})
+
+        result = runner.invoke(
+            config.config.commands["interface"].commands['evpn-esi'].commands["add"],
+            ["PortChannel01", "auto-system-mac"],
+            obj=db)
+
+        assert result.exit_code == 0, (
+            f"Got exit code {result.exit_code} - {result.output}, expected 0"
+        )
+        assert "PortChannel01" in db['config_db'].get_table(EVPN_ES_TABLE)
+
 
 def configure_df_pref(runner, db, interface_name, df_pref_value, df_pref_expected_valid):
     evpn_es_table = db['config_db'].get_table(EVPN_ES_TABLE)

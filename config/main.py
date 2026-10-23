@@ -10762,6 +10762,41 @@ def motd(message):
 
 
 #
+# 'fdb' group ('config fdb ...')
+#
+
+@config.group()
+@multi_asic_util.multi_asic_click_option_namespace(required=True)
+def fdb(namespace):
+    """FDB (MAC) configuration tasks"""
+    pass
+
+
+@fdb.command('mac-sync-mode')
+@click.argument('mode', metavar='<kernel|fpm>', required=True, type=click.Choice(['kernel', 'fpm']))
+@clicommon.pass_db
+@click.pass_context
+def mac_sync_mode(ctx, db, mode):
+    """Select how MAC (FDB) state is synchronized with FRR"""
+
+    # Each ASIC's fpmsyncd and fdbsyncd read the CONFIG_DB of their namespace.
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+    cfgdb = db.cfgdb_clients[namespace]
+
+    metadata = cfgdb.get_entry('DEVICE_METADATA', 'localhost')
+    if mode == 'kernel' and metadata.get('subtype') == 'L3EvpnMH':
+        ctx.fail("An L3EvpnMH device synchronizes MACs over FPM only")
+
+    config_db = ValidatedConfigDBConnector(cfgdb)
+    try:
+        # TODO: use swsscommon.CFG_FDB_SYNC_TABLE_NAME once sonic-net/sonic-buildimage#29312 is merged.
+        config_db.mod_entry('FDB_SYNC', 'global',
+                            {'mac_sync_mode': mode})
+    except (ValueError, JsonPatchConflict) as e:
+        ctx.fail("Failed to save to ConfigDB. Error: {}".format(e))
+
+
+#
 # 'vnet' group ('config vnet ...')
 #
 
