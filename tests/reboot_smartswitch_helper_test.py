@@ -6,7 +6,13 @@ from pathlib import Path
 SCRIPT = Path(__file__).parents[1] / "scripts" / "reboot_smartswitch_helper"
 
 
-def run_helper_function(tmp_path, function_call, docker_rc=0, fail_port=""):
+def run_helper_function(
+    tmp_path,
+    function_call,
+    docker_rc=0,
+    fail_port="",
+    docker_output='{"active":false,"status":{"status":1}}',
+):
     command_log = tmp_path / "command.log"
     platform_json = tmp_path / "platform.json"
     platform_json.write_text('{"dpu_halt_services_timeout": 6}')
@@ -32,7 +38,7 @@ get_gnmi_ports() {{ printf '8080\n50052\n'; }}
 '''
     env["DOCKER_RC"] = str(docker_rc)
     env["FAIL_PORT"] = fail_port
-    env["DOCKER_OUTPUT"] = '{"active":false,"status":{"status":1}}'
+    env["DOCKER_OUTPUT"] = docker_output
     result = subprocess.run(
         ["bash", "-c", script], env=env, capture_output=True, text=True
     )
@@ -101,43 +107,92 @@ get_reboot_status 169.254.200.1 50052
     assert result.returncode != 0
 
 
+def test_get_reboot_status_rejects_empty_output(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output="",
+    )
+    assert result.returncode != 0
+
+
+def test_get_reboot_status_reports_active_as_incomplete(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output=(
+            '{"active":true,"when":1,"reason":"User initiated reboot",'
+            '"count":1,"method":3,"status":{}}'
+        ),
+    )
+    assert result.returncode != 0
+
+
 def test_get_reboot_status_accepts_inactive_without_status(tmp_path):
-    script = f'''
-EXIT_SUCCESS=0
-EXIT_ERROR=1
-source "{SCRIPT}"
-timeout() {{ shift; docker "$@"; }}
-docker() {{ printf '{{"active":false}}\n'; }}
-get_reboot_status 169.254.200.1 50052
-'''
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"active":false}',
+    )
     assert result.returncode == 0
 
 
+def test_get_reboot_status_accepts_numeric_success_without_active(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output=(
+            '{"reason":"Halt reboot completed","count":1,"method":3,'
+            '"status":{"status":1}}'
+        ),
+    )
+    assert result.returncode == 0
+
+
+def test_get_reboot_status_accepts_named_success_without_active(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"status":{"status":"STATUS_SUCCESS"}}',
+    )
+    assert result.returncode == 0
+
+
+def test_get_reboot_status_rejects_default_status_without_active(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"status":{}}',
+    )
+    assert result.returncode != 0
+
+
 def test_get_reboot_status_rejects_unknown_status(tmp_path):
-    script = f'''
-EXIT_SUCCESS=0
-EXIT_ERROR=1
-source "{SCRIPT}"
-timeout() {{ shift; docker "$@"; }}
-docker() {{ printf '{{"active":false,"status":{{"status":0}}}}\n'; }}
-get_reboot_status 169.254.200.1 50052
-'''
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"active":false,"status":{"status":0}}',
+    )
     assert result.returncode != 0
 
 
 def test_get_reboot_status_rejects_failure_status(tmp_path):
-    script = f'''
-EXIT_SUCCESS=0
-EXIT_ERROR=1
-source "{SCRIPT}"
-timeout() {{ shift; docker "$@"; }}
-docker() {{ printf '{{"active":false,"status":{{"status":3}}}}\n'; }}
-get_reboot_status 169.254.200.1 50052
-'''
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"active":false,"status":{"status":3}}',
+    )
     assert result.returncode != 0
+
+
+def test_get_reboot_status_rejects_named_failure_status(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"status":{"status":"STATUS_FAILURE"}}',
+    )
+    assert result.returncode != 0
+    assert "reboot failed with status: STATUS_FAILURE" in result.stderr
 
 
 def test_get_gnmi_ports_orders_and_deduplicates(tmp_path):
