@@ -498,18 +498,8 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
 
 #
 def get_physical_port_name(logical_port, physical_port, ganged):
-    """
-        Returns:
-          port_num if physical
-          logical_port:port_num if logical port and is a ganged port
-          logical_port if logical and not ganged
-    """
-    if logical_port == physical_port:
-        return str(logical_port)
-    elif ganged:
-        return "{}:{} (ganged)".format(logical_port, physical_port)
-    else:
-        return logical_port
+    """Preserve the sfputil entry point while sharing port-label formatting."""
+    return platform_sfputil_helper.get_physical_port_name(logical_port, physical_port, ganged)
 
 
 def logical_port_name_to_physical_port_list(port_name):

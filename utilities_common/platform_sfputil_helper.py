@@ -156,12 +156,13 @@ def format_application_advertisement(advertisements):
 
 
 def get_physical_port_name(logical_port, physical_port, ganged):
-    """Return a physical port label, including its member index when ganged."""
+    """Return the legacy port label, retaining the caller's logical-port type."""
     if logical_port == physical_port:
         return str(logical_port)
-    if ganged:
+    elif ganged:
         return "{}:{} (ganged)".format(logical_port, physical_port)
-    return str(logical_port)
+    else:
+        return logical_port
 
 
 def convert_byte_to_valid_ascii_char(byte):

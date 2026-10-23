@@ -99,6 +99,7 @@ def test_eeprom_hexdump_layout(data, expected, start_newline):
 
 @pytest.mark.parametrize("logical, physical, ganged, expected", [
     (0, 0, False, "0"),
+    (0, 1, False, 0),
     (0, 0, True, "0"),
     ("Ethernet0", 1, False, "Ethernet0"),
     ("Ethernet0", 2, True, "Ethernet0:2 (ganged)"),
