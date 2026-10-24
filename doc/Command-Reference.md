@@ -11250,6 +11250,8 @@ This section explains the orchagent runtime introspection commands.
 
 This command displays the per-Executor execution-time statistics that orchagent maintains internally. Each row corresponds to one orchagent task (an `Orch` subclass or named periodic). Rows are sorted by total run time descending; ties break by task name.
 
+Ordinary users can run this command without changing its syntax or output.
+
 Columns:
 
 - `TASK` — Executor name.

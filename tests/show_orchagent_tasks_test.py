@@ -62,11 +62,37 @@ def fake_swsscommon():
 
     # Default to single-ASIC: one default namespace, no ASIC column.
     with mock.patch.object(show_orchagent, "swsscommon", fake), \
+         mock.patch.object(show_orchagent.os, "geteuid", return_value=0), \
          mock.patch.object(show_orchagent.multi_asic, "get_namespace_list",
                            return_value=['']), \
          mock.patch.object(show_orchagent.multi_asic, "is_multi_asic",
                            return_value=False):
         yield fake
+
+
+@pytest.mark.parametrize("namespace", [None, "asic0"])
+@pytest.mark.parametrize("status", [0, 1, 7])
+def test_ordinary_tasks_runs_only_the_named_display(fake_swsscommon, namespace, status):
+    args = ["tasks"] + (["--namespace", namespace] if namespace else [])
+    expected = ["/usr/bin/sudo", "-n", "/usr/local/bin/show", "orchagent", "tasks"]
+    if namespace:
+        expected += ["--namespace", namespace]
+    with mock.patch.object(show_orchagent.os, "geteuid", return_value=65534), \
+         mock.patch.object(show_orchagent.multi_asic, "is_multi_asic", return_value=bool(namespace)), \
+         mock.patch.object(show_orchagent.multi_asic, "get_namespace_list", return_value=[namespace or ""]), \
+         mock.patch.object(show_orchagent.subprocess, "call", return_value=status) as run:
+        result = CliRunner().invoke(show_orchagent.orchagent, args)
+    assert result.exit_code == status, result.output
+    run.assert_called_once_with(expected, close_fds=True)
+    fake_swsscommon.DBConnector.assert_not_called()
+
+
+def test_ordinary_tasks_does_not_connect_if_sudo_cannot_start(fake_swsscommon):
+    with mock.patch.object(show_orchagent.os, "geteuid", return_value=65534), \
+         mock.patch.object(show_orchagent.subprocess, "call", side_effect=OSError("missing sudo")):
+        result = CliRunner().invoke(show_orchagent.orchagent, ["tasks"])
+    assert result.exit_code != 0
+    fake_swsscommon.DBConnector.assert_not_called()
 
 
 def test_tasks_renders_table_sorted_by_total(fake_swsscommon):

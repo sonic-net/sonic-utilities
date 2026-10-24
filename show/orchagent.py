@@ -1,4 +1,6 @@
 import click
+import os
+import subprocess
 import sys
 
 from swsscommon import swsscommon
@@ -39,7 +41,7 @@ def _query_orchagent(op, namespace):
 
     Raises RuntimeError on timeout or transport error.
     """
-    db = swsscommon.DBConnector("APPL_DB", REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector("APPL_DB", REDIS_TIMEOUT_MSECS, swsscommon.SonicDBConfig.getDbPort('APPL_DB', namespace) != 0, namespace)
     producer = swsscommon.NotificationProducer(db, TASK_STATS_QUERY_CHANNEL)
     consumer = swsscommon.NotificationConsumer(db, TASK_STATS_REPLY_CHANNEL)
 
@@ -192,6 +194,12 @@ def orchagent():
 @multi_asic_click_option_namespace
 def tasks(namespace):
     """Show per-Executor execution timing in orchagent"""
+    if os.geteuid() != 0:
+        command = ["/usr/bin/sudo", "-n", "/usr/local/bin/show", "orchagent", "tasks"]
+        if namespace:
+            command.extend(["--namespace", namespace])
+        sys.exit(subprocess.call(command, close_fds=True))
+
     # get_namespace_list('' / None) -> [''] on single-ASIC, the per-ASIC
     # namespaces on multi-ASIC, and only the requested one when -n is given.
     # On a supervisor (fabric-only) it is empty, so this becomes a graceful
