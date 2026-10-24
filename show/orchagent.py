@@ -41,7 +41,9 @@ def _query_orchagent(op, namespace):
 
     Raises RuntimeError on timeout or transport error.
     """
-    db = swsscommon.DBConnector("APPL_DB", REDIS_TIMEOUT_MSECS, swsscommon.SonicDBConfig.getDbPort('APPL_DB', namespace) != 0, namespace)
+    db = swsscommon.DBConnector(
+        "APPL_DB", REDIS_TIMEOUT_MSECS,
+        swsscommon.SonicDBConfig.getDbPort('APPL_DB', namespace) != 0, namespace)
     producer = swsscommon.NotificationProducer(db, TASK_STATS_QUERY_CHANNEL)
     consumer = swsscommon.NotificationConsumer(db, TASK_STATS_REPLY_CHANNEL)
 
