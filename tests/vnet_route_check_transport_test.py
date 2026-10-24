@@ -45,6 +45,7 @@ def test_direct_call_uses_its_database_and_namespace(call, port):
     # running its other actions. The native connector has separate real tests.
     names = {node.id: "value:" + node.id for node in ast.walk(call)
              if isinstance(node, ast.Name)}
+
     def evaluate(node):
         return eval(compile(ast.Expression(node), "caller", "eval"), names)
 
