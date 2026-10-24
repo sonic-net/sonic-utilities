@@ -545,6 +545,99 @@ class TestSyslog:
         ) in mock_run.call_args_list
 
     @mock.patch('config.syslog.clicommon.run_command')
+    def test_enable_rate_limit_feature_single_asic_per_asic_scope(self, mock_run):
+        """
+        On a single-ASIC platform a feature that is marked with
+        has_global_scope=False and has_per_asic_scope=True (e.g. syncd) still
+        runs as a single container whose name equals the service name. The
+        enable/disable CLIs must operate on that container rather than
+        silently resolving to an empty list.
+        """
+        db = Db()
+        db.cfgdb.set_entry(FEATURE_TABLE, 'syncd', {
+            SUPPORT_RATE_LIMIT: 'true',
+            'state': 'enabled',
+            FEATURE_HAS_GLOBAL_SCOPE: 'False',
+            FEATURE_HAS_PER_ASIC_SCOPE: 'True',
+        })
+
+        runner = CliRunner()
+
+        mock_run.side_effect = lambda command, **kwargs: (
+            ('syncd', 0) if command[:2] == ['docker', 'ps'] else ('no such process', 0)
+        )
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["rate-limit-feature"].commands["enable"],
+            ['syncd'], obj=db
+        )
+        assert result.exit_code == SUCCESS, result.output
+        assert 'Enabling syslog rate limit feature for syncd' in result.output
+        assert 'Enabled syslog rate limit feature for syncd' in result.output
+        assert 'nothing to enable' not in result.output
+
+        commands_run = []
+        for call in mock_run.call_args_list:
+            args, kwargs = call
+            if not args:
+                continue
+            arg = args[0]
+            if isinstance(arg, list):
+                commands_run.append(arg)
+        assert ['docker', 'cp', '/usr/share/sonic/templates/containercfgd.conf',
+                'syncd:/etc/supervisor/conf.d/'] in commands_run
+        assert ['docker', 'exec', '-i', 'syncd', 'supervisorctl',
+                'start', 'containercfgd'] in commands_run
+
+        mock_run.reset_mock()
+        mock_run.side_effect = lambda command, **kwargs: (
+            ('syncd', 0) if command[:2] == ['docker', 'ps'] else ('something', 0)
+        )
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["rate-limit-feature"].commands["disable"],
+            ['syncd'], obj=db
+        )
+        assert result.exit_code == SUCCESS, result.output
+        assert 'Disabling syslog rate limit feature for syncd' in result.output
+        assert 'Disabled syslog rate limit feature for syncd' in result.output
+        assert 'nothing to disable' not in result.output
+
+        commands_run = []
+        for call in mock_run.call_args_list:
+            args, kwargs = call
+            if not args:
+                continue
+            arg = args[0]
+            if isinstance(arg, list):
+                commands_run.append(arg)
+        assert ['docker', 'exec', '-i', 'syncd', 'supervisorctl',
+                'stop', 'containercfgd'] in commands_run
+        assert ['docker', 'exec', '-i', 'syncd', 'rm', '-f',
+                '/etc/supervisor/conf.d/containercfgd.conf'] in commands_run
+
+    @mock.patch('config.syslog.clicommon.run_command')
+    def test_enable_rate_limit_feature_empty_feature_list(self, mock_run):
+        """
+        A feature that is neither globally- nor per-ASIC-scoped should not
+        silently no-op. It must return a clear message and touch nothing.
+        """
+        db = Db()
+        db.cfgdb.set_entry(FEATURE_TABLE, 'ghost', {
+            SUPPORT_RATE_LIMIT: 'true',
+            'state': 'enabled',
+            FEATURE_HAS_GLOBAL_SCOPE: 'False',
+            FEATURE_HAS_PER_ASIC_SCOPE: 'False',
+        })
+
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["rate-limit-feature"].commands["enable"],
+            ['ghost'], obj=db
+        )
+        assert result.exit_code == SUCCESS, result.output
+        assert 'nothing to enable' in result.output
+        mock_run.assert_not_called()
+
+    @mock.patch('config.syslog.clicommon.run_command')
     def test_config_log_level(self, mock_run):
         db = Db()
         db.cfgdb.set_entry('LOGGER', 'log1', {'require_manual_refresh': 'true'})
