@@ -71,6 +71,25 @@ EMPTY_DOM_VALUES = """        ChannelMonitorValues:
 
 """
 
+
+@pytest.fixture
+def pluggable_port_mapping(monkeypatch):
+    """Initialize port selection for callbacks invoked without their parent CLI."""
+    names = ("Ethernet0", "Ethernet4", "Ethernet8", "Ethernet12", "Ethernet16",
+             "Ethernet28", "Ethernet36", "Ethernet40", "Ethernet44")
+    physical_ports = {name: [index] for index, name in enumerate(names, start=1)}
+    ports = MagicMock()
+    ports.logical = list(names)
+    ports.is_logical_port.side_effect = lambda name: name in physical_ports
+    ports.get_logical_to_physical.side_effect = physical_ports.get
+    chassis = MagicMock()
+    chassis.get_cpo.return_value = None
+    monkeypatch.setattr(sfputil, "platform_sfputil", ports)
+    monkeypatch.setattr(sfputil, "platform_chassis", chassis)
+    monkeypatch.setattr(sfputil_debug.platform_sfputil_helper, "platform_sfputil", ports)
+    monkeypatch.setattr(sfputil_debug.platform_sfputil_helper, "platform_chassis", chassis)
+
+
 class TestSfputil(object):
     def test_format_dict_value_to_string(self):
         sorted_key_table = [
@@ -264,6 +283,20 @@ class TestSfputil(object):
         output = sfputil.convert_sfp_info_to_output_string(sfp_info_dict)
         assert output == expected_output
 
+    def test_convert_sfp_info_has_no_legacy_els_labels(self):
+        output = sfputil.convert_sfp_info_to_output_string({
+            "cmis_rev": "5.0",
+            "manufacturer": "test vendor",
+            "els_vendor_name": "legacy ELS vendor",
+            "rlm_laser_wavelength_grid": "legacy grid",
+        })
+        assert output == (
+            "        CMIS Revision: 5.0\n"
+            "        Vendor Name: test vendor\n"
+            "        els_vendor_name: legacy ELS vendor\n"
+            "        rlm_laser_wavelength_grid: legacy grid\n"
+        )
+
     @pytest.mark.parametrize("sfp_type, is_sfp_cmis, dom_info_dict, expected_output", [
         (
             'QSFP28 or later',
@@ -417,6 +450,8 @@ class TestSfputil(object):
             'CPO',
             True,
             {
+                'temperature': '42.0',
+                'RLM1Laser1Power': '7.0mW',
                 'els_temperature': '16.16',
                 'els_voltage': '3.396',
                 'els_temphighalarm': '80.0',
@@ -438,25 +473,8 @@ class TestSfputil(object):
         ChannelMonitorValues:
         ChannelThresholdValues:
         ModuleMonitorValues:
+                Temperature: 42.0C
         ModuleThresholdValues:
-        ELSMonitorValues:
-                ELS Temperature: 16.16C
-                ELS Vcc: 3.396Volts
-        ELSThresholdValues:
-                ELS TempHighAlarm: 80.0C
-                ELS TempHighWarning: 70.0C
-                ELS TempLowAlarm: -5.0C
-                ELS TempLowWarning: 0.0C
-                ELS TxBiasHighAlarm: 162.5mA
-                ELS TxBiasHighWarning: 156.248mA
-                ELS TxPowerHighAlarm: 7.0mW
-                ELS TxPowerHighWarning: 4.0mW
-                ELS TxPowerLowAlarm: -6.9mW
-                ELS TxPowerLowWarning: -2.9mW
-                ELS VccHighAlarm: 3.63Volts
-                ELS VccHighWarning: 3.465Volts
-                ELS VccLowAlarm: 2.97Volts
-                ELS VccLowWarning: 3.135Volts
 '''
         )])
     def test_convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict, expected_output):
@@ -479,7 +497,7 @@ class TestSfputil(object):
         assert result.output.rstrip() == 'sfputil version {}'.format(sfputil.VERSION)
 
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
-    def test_error_status_from_db(self):
+    def test_error_status_from_db(self, pluggable_port_mapping):
         db = Db()
         expected_output = [['Ethernet0', 'Blocking Error|High temperature'],
                            ['Ethernet4', 'OK'],
@@ -498,7 +516,7 @@ class TestSfputil(object):
         assert output == expected_output_ethernet0
 
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
-    def test_error_status_from_db_RJ45(self):
+    def test_error_status_from_db_RJ45(self, pluggable_port_mapping):
         db = Db()
         expected_output = [['Ethernet0', 'N/A'],
                            ['Ethernet4', 'N/A'],
@@ -2304,7 +2322,8 @@ EEPROM hexdump for port Ethernet4
 
     @patch('sfputil.debug.get_logical_list')
     @patch('sfputil.debug.get_sfp_object')
-    def test_debug_loopback_capability_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+    def test_debug_loopback_capability_all_ports(
+            self, mock_get_sfp_object, mock_get_logical_list, pluggable_port_mapping):
         mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-capability']
@@ -2428,7 +2447,8 @@ EEPROM hexdump for port Ethernet4
 
     @patch('sfputil.debug.get_logical_list')
     @patch('sfputil.debug.get_sfp_object')
-    def test_debug_loopback_status_all_ports(self, mock_get_sfp_object, mock_get_logical_list):
+    def test_debug_loopback_status_all_ports(
+            self, mock_get_sfp_object, mock_get_logical_list, pluggable_port_mapping):
         mock_get_logical_list.return_value = ['Ethernet0', 'Ethernet4', 'Ethernet8', 'Ethernet12']
         runner = CliRunner()
         cmd = sfputil.cli.commands['debug'].commands['loopback-status']
