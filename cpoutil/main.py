@@ -1536,7 +1536,10 @@ def get_vmodule_targets(ports, per_controller):
         if per_controller:
             oe_name = cpo_mapping.resolve_interface(port, current_port_config).oe_name
             if oe_name not in targets:
-                targets[oe_name] = (oe_name.upper(), port_cpos[0][2], cpo_mapping.ports_for_resource(OPTICAL_ENGINE, oe_name, current_port_config))
+                targets[oe_name] = (
+                    oe_name.upper(), port_cpos[0][2],
+                    cpo_mapping.ports_for_resource(OPTICAL_ENGINE, oe_name, current_port_config),
+                )
             continue
         for _, physical_port, cpo in port_cpos:
             if physical_port not in targets:
@@ -1653,7 +1656,8 @@ def config_oe_lpmode(oe_index, mode):
         _run_action(
             "{} low-power mode for {} ({})".format(
                 "Enabling" if low_power else "Disabling",
-                resource_id.upper(), ", ".join(cpo_mapping.ports_for_resource(OPTICAL_ENGINE, resource_id, current_port_config)),
+                resource_id.upper(),
+                ", ".join(cpo_mapping.ports_for_resource(OPTICAL_ENGINE, resource_id, current_port_config)),
             ),
             lambda: _call_hook(getattr(cpo, "oe", None), "set_lpmode", "OE", low_power),
         )
@@ -1673,7 +1677,8 @@ def config_oe_reset(oe_index):
         resource_id, cpo = _single_resource(OPTICAL_ENGINE, oe_index)
         _run_action(
             "Resetting {} ({})".format(
-                resource_id.upper(), ", ".join(cpo_mapping.ports_for_resource(OPTICAL_ENGINE, resource_id, current_port_config))
+                resource_id.upper(),
+                ", ".join(cpo_mapping.ports_for_resource(OPTICAL_ENGINE, resource_id, current_port_config))
             ),
             lambda: _call_hook(getattr(cpo, "oe", None), "reset", "OE"),
         )
