@@ -1477,7 +1477,8 @@ class DBMigrator():
         # vendors, probably Broadcom. This change can be checked with any specific vendor and if this works fine the platform
         # condition can be modified and extend. If no vendor has an issue with not clearing copp tables the condition can be
         # removed together with calling to migrate_copp_table function.
-        if self.asic_type != "mellanox":
+        warmreboot_state = self.stateDB.get(self.stateDB.STATE_DB, 'WARM_RESTART_ENABLE_TABLE|system', 'enable')
+        if self.asic_type != "mellanox" and not (self.asic_type == "cisco-8000" and warmreboot_state == 'true'):
             self.migrate_copp_table()
         if self.asic_type == "broadcom" and 'Force10-S6100' in str(self.hwsku):
             self.migrate_mgmt_ports_on_s6100()
