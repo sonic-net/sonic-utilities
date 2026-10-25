@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+
+"""SONiC Secure Boot backend selector entry point."""
+
+import sys
+
+from secure_boot.secure_boot_backend import main
+
+if __name__ == "__main__":
+    sys.exit(main())
