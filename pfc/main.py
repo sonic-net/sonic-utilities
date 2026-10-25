@@ -43,6 +43,10 @@ class Pfc(object):
         """
         PFC handler to configure asymmetric PFC.
         """
+        if interface not in self.config_db.get_keys(PORT_TABLE_NAME):
+            click.echo('Cannot find interface {0}'.format(interface))
+            return
+
         self.config_db.mod_entry(PORT_TABLE_NAME, interface, {'pfc_asym': pfc_asym})
         self.dump_config_to_json(PORT_TABLE_NAME, self.multi_asic.current_namespace)
 
