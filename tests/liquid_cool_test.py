@@ -203,6 +203,20 @@ class TestMajorLeakThreshold(object):
         assert result.exit_code != 0
         mock_cfgdb.mod_entry.assert_not_called()
 
+    def test_major_leak_threshold_max_value(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['major-leak-threshold', '4294967295'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        mock_cfgdb.mod_entry.assert_called_once_with(
+            'LEAK_CONTROL_POLICY', 'policy', {'system_major_leak_num_min_sensors': '4294967295'}
+        )
+
+    def test_major_leak_threshold_above_max_rejected(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['major-leak-threshold', '4294967296'], mock_cfgdb)
+        assert result.exit_code != 0
+        mock_cfgdb.mod_entry.assert_not_called()
+
     def test_major_leak_threshold_non_integer_rejected(self):
         result = self._invoke(['major-leak-threshold', 'abc'])
         assert result.exit_code != 0

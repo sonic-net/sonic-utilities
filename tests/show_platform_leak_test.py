@@ -75,7 +75,8 @@ class TestShowPlatformLeakControlPolicy(object):
         mock_db = MagicMock()
         mock_db.cfgdb = mock_cfgdb
 
-        with patch('utilities_common.db.Db', return_value=mock_db):
+        with patch('utilities_common.db.Db', return_value=mock_db), \
+                patch.object(show_platform, '_get_platform_major_leak_min_sensors', return_value=None):
             result = runner.invoke(
                 show_platform.platform.commands['leak'].commands['control-policy']
             )
