@@ -17,7 +17,7 @@ def processes():
 def summary(verbose):
     """Show processes info"""
     # Run top batch mode to prevent unexpected newline after each newline
-    cmd = ['ps', '-eo', 'pid,ppid,cmd,%mem,%cpu']
+    cmd = ['ps', '-eo', 'pid,ppid,comm,%mem,%cpu']
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
