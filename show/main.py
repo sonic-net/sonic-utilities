@@ -56,6 +56,7 @@ from . import gearbox
 from . import interfaces
 from . import kdump
 from . import kube
+from . import l3_admit
 from . import muxcable
 from . import nat
 from . import platform
@@ -337,6 +338,7 @@ cli.add_command(kdump.kdump)
 cli.add_command(interfaces.interfaces)
 cli.add_command(kdump.kdump)
 cli.add_command(kube.kubernetes)
+cli.add_command(l3_admit.l3_admit)
 cli.add_command(muxcable.muxcable)
 cli.add_command(nat.nat)
 cli.add_command(platform.platform)
