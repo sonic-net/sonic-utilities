@@ -5,6 +5,7 @@ import os
 import glob
 import sys
 import shutil
+import shlex
 import stat
 import subprocess
 import tempfile
@@ -317,9 +318,12 @@ class ServiceCreator:
         multi_instance_services = self.feature_registry.get_multi_instance_features()
         script_path = os.path.join(SERVICE_MGMT_SCRIPT_LOCATION, f'{name}.sh')
         scrip_template = get_tmpl_path(SERVICE_MGMT_SCRIPT_TEMPLATE)
+        quiescence_command = ' '.join(
+            shlex.quote(arg) for arg in package.manifest['service']['quiescence']['command'])
         render_ctx = {
             'source': get_tmpl_path(SERVICE_MGMT_SCRIPT_TEMPLATE),
             'manifest': package.manifest.unmarshal(),
+            'quiescence_command': quiescence_command,
             'multi_instance_services': multi_instance_services,
         }
         render_template(scrip_template, script_path, render_ctx, executable=True)

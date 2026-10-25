@@ -5,6 +5,8 @@
 #             auto-generated from {{ source }} by sonic-package-manager
 #
 
+{%- set quiescence = manifest.service.get('quiescence', {}) %}
+
 SERVICE="{{ manifest.service.name }}"
 NAMESPACE_PREFIX="asic"
 SONIC_DB_CLI="sonic-db-cli"
@@ -131,6 +133,21 @@ function wait() {
     fi
 }
 
+{%- if quiescence.get('command') %}
+function quiesce() {
+    # Warm/fast reboot keeps its existing immediate-kill path.
+    if [[ "$WARM_BOOT" == "true" ]] || [[ "$FAST_BOOT" == "true" ]]; then
+        return 0
+    fi
+    local target
+    target=$(/usr/local/bin/container id "${SERVICE}${DEV}") || return
+    [ -n "$target" ] || return 0
+    # A host-side timeout does not terminate an in-container docker exec process.
+    docker exec "$target" /usr/bin/timeout --kill-after=1s {{ quiescence.timeout }}s {{ quiescence_command }}
+}
+
+{%- endif %}
+
 function stop() {
     debug "Stopping ${SERVICE}$DEV service..."
 
@@ -160,7 +177,7 @@ debug "Fast boot flag: ${SERVICE}$DEV ${FAST_BOOT}."
 debug "Warm boot flag: ${SERVICE}$DEV ${WARM_BOOT}."
 
 case "$OP" in
-    start|wait|stop)
+    start|wait|stop{% if quiescence.get('command') %}|quiesce{% endif %})
         $1
         ;;
     *)

@@ -80,6 +80,17 @@ class ManifestSchema:
         def unmarshal(self, value):
             return value
 
+    class PositiveIntegerMarshaller(Marshaller):
+        """A nonzero timeout expressed in seconds."""
+
+        def marshal(self, value):
+            if type(value) is not int or value <= 0:
+                raise ManifestError('timeout must be a positive integer number of seconds')
+            return value
+
+        def unmarshal(self, value):
+            return value
+
     @dataclass
     class ListMarshaller(Marshaller):
         """ Returns a list. In case input is of other type it returns a list containing that single value. """
@@ -199,6 +210,10 @@ class ManifestSchema:
             ManifestArray('dependent-of', DefaultMarshaller(str)),
             ManifestField('post-start-action', DefaultMarshaller(str), ''),
             ManifestField('pre-shutdown-action', DefaultMarshaller(str), ''),
+            ManifestRoot('quiescence', [
+                ManifestArray('command', DefaultMarshaller(str)),
+                ManifestField('timeout', PositiveIntegerMarshaller(), 60),
+            ]),
             ManifestField('asic-service', DefaultMarshaller(bool), False),
             ManifestField('host-service', DefaultMarshaller(bool), True),
             ManifestField('delayed', DefaultMarshaller(bool), False),

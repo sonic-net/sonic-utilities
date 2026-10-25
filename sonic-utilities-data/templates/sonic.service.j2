@@ -3,6 +3,7 @@
 #             auto-generated from {{ source }} by sonic-package-manager
 #
 {%- set path = '/usr/local/bin' %}
+{%- set quiescence = manifest.service.get('quiescence', {}) %}
 {%- set multi_instance = multi_instance|default(False) %}
 {%- set multi_instance_services = multi_instance_services|default([]) %}
 [Unit]
@@ -30,6 +31,9 @@ Type={{ manifest.service.type }}
 {%- endif %}
 ExecStartPre={{path}}/{{manifest.service.name}}.sh start{% if multi_instance %} %i{% endif %}
 ExecStart={{path}}/{{manifest.service.name}}.sh wait{% if multi_instance %} %i{% endif %}
+{%- if quiescence.get('command') %}
+ExecStop=-/usr/bin/timeout {{ quiescence.timeout }}s {{path}}/{{manifest.service.name}}.sh quiesce{% if multi_instance %} %i{% endif %}
+{%- endif %}
 ExecStop={{path}}/{{manifest.service.name}}.sh stop{% if multi_instance %} %i{% endif %}
 RestartSec=30
 
