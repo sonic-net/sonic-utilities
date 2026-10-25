@@ -127,7 +127,7 @@ authentication.add_command(trace)
 @clicommon.pass_db
 def login(db, auth_protocol):
     """Switch login authentication [ {ldap, radius, tacacs+, local} | default ]"""
-    if len(auth_protocol) is 0:
+    if len(auth_protocol) == 0:
         click.echo('Argument "auth_protocol" is required')
         return
     elif len(auth_protocol) > 2:
