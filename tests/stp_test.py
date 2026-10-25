@@ -9,6 +9,7 @@ from config.stp import (
 
 import config.main as config
 import show.main as show
+import show.stp as show_stp
 from utilities_common.db import Db
 
 show_spanning_tree = """\
@@ -74,6 +75,20 @@ Root guard timeout: 30 secs
 Port             VLAN   Current State
 -------------------------------------------
 Ethernet4        100    Consistent state
+"""
+
+
+show_spanning_tree_loop_guard = """\
+Port             VLAN   Current State
+-------------------------------------------
+Ethernet0        100    Consistent state
+Ethernet0        None   Loop-inconsistent state
+"""
+
+
+show_spanning_tree_loop_guard_empty = """\
+Port             VLAN   Current State
+-------------------------------------------
 """
 
 
@@ -154,6 +169,64 @@ class TestStp(object):
             print(f'Error Output:\n{result.output}')
             assert result.exit_code == 0
             assert result.output == show_spanning_tree_root_guard
+
+    def test_show_spanning_tree_loop_guard(self):
+        cli_runner = CliRunner()
+        db = Db()
+
+        mock_cfg_db = MagicMock()
+        mock_appl_db = MagicMock()
+
+        mock_cfg_db.get_keys.return_value = ["Ethernet0"]
+        mock_cfg_db.get_entry.side_effect = lambda table, key: (
+            {"mode": "pvst"} if table == "STP" and key == "GLOBAL" else
+            {"loop_guard": "true", "enabled": "true"} if table == "STP_PORT" and key == "Ethernet0" else
+            {}
+        )
+
+        mock_appl_db.APPL_DB = "APPL_DB"
+        mock_appl_db.keys.return_value = [
+            "STP_VLAN_PORT_TABLE:Vlan100:Ethernet0",
+            "STP_VLAN_PORT_TABLE:Eth:Ethernet0"
+        ]
+
+        def get_all_side_effect(_db, key):
+            if "Vlan100" in key:
+                return {"loop_guard_active": "0"}
+            return {"loop_guard_active": "1"}
+
+        mock_appl_db.get_all.side_effect = get_all_side_effect
+
+        show_stp.g_stp_cfg_db = mock_cfg_db
+        show_stp.g_stp_appl_db = mock_appl_db
+
+        result = cli_runner.invoke(show.cli.commands["spanning-tree"].commands["loop_guard"], [], obj=db)
+
+        assert result.exit_code == 0
+        assert result.output == show_spanning_tree_loop_guard
+
+    def test_show_spanning_tree_loop_guard_no_vlan_entries(self):
+        cli_runner = CliRunner()
+        db = Db()
+
+        mock_cfg_db = MagicMock()
+        mock_appl_db = MagicMock()
+
+        mock_cfg_db.get_keys.return_value = ["Ethernet0"]
+        mock_cfg_db.get_entry.side_effect = lambda table, key: (
+            {"loop_guard": "true", "enabled": "true"} if table == "STP_PORT" and key == "Ethernet0" else {}
+        )
+
+        mock_appl_db.APPL_DB = "APPL_DB"
+        mock_appl_db.keys.return_value = []
+
+        show_stp.g_stp_cfg_db = mock_cfg_db
+        show_stp.g_stp_appl_db = mock_appl_db
+
+        result = cli_runner.invoke(show.cli.commands["spanning-tree"].commands["loop_guard"], [], obj=db)
+
+        assert result.exit_code == 0
+        assert result.output == show_spanning_tree_loop_guard_empty
 
     def test_disable_enable_global_pvst(self):
         cli_runner = CliRunner()
@@ -2188,6 +2261,75 @@ class TestStpInterfaceRootGuardDisable:
 
         assert result.exit_code != 0
         assert "Invalid interface" in result.output
+
+
+class TestStpInterfaceLoopGuard:
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.cfgdb = MagicMock()
+        self.db = Db()
+        self.db.cfgdb = self.cfgdb
+
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    def test_loop_guard_enable(self, mock_check_enabled, mock_check_valid):
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["interface"]
+            .commands["loop_guard"],
+            ["enable", "Ethernet0"],
+            obj=self.db
+        )
+
+        assert result.exit_code == 0
+        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {"loop_guard": "true"})
+        mock_check_enabled.assert_called_once()
+        mock_check_valid.assert_called_once()
+
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    def test_loop_guard_disable(self, mock_check_enabled, mock_check_valid):
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["interface"]
+            .commands["loop_guard"],
+            ["disable", "Ethernet0"],
+            obj=self.db
+        )
+
+        assert result.exit_code == 0
+        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {"loop_guard": "false"})
+        mock_check_enabled.assert_called_once()
+        mock_check_valid.assert_called_once()
+
+    @patch('config.stp.check_if_interface_is_valid', side_effect=click.ClickException("Invalid interface"))
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    def test_loop_guard_enable_invalid_interface(self, mock_check_enabled, mock_check_valid):
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["interface"]
+            .commands["loop_guard"],
+            ["enable", "Ethernet99"],
+            obj=self.db
+        )
+
+        assert result.exit_code != 0
+        assert "Invalid interface" in result.output
+
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface', side_effect=click.ClickException("STP not enabled"))
+    def test_loop_guard_enable_stp_not_enabled(self, mock_check_enabled, mock_check_valid):
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["interface"]
+            .commands["loop_guard"],
+            ["enable", "Ethernet0"],
+            obj=self.db
+        )
+
+        assert result.exit_code != 0
+        assert "STP not enabled" in result.output
+        mock_check_valid.assert_not_called()
 
 
 class TestStpInterfaceRootGuardEnable:
