@@ -62,8 +62,8 @@ def leak_action(db, policy_type, severity, action):
 
 @liquid_cool.command('major-leak-threshold')
 @clicommon.pass_db
-@click.argument('num_sensors', metavar='<N>', type=click.IntRange(min=MAJOR_LEAK_MIN_SENSORS_FLOOR,
-                                                                max=MAJOR_LEAK_MIN_SENSORS_CEILING))
+@click.argument('num_sensors', metavar='<N>',
+                type=click.IntRange(min=MAJOR_LEAK_MIN_SENSORS_FLOOR, max=MAJOR_LEAK_MIN_SENSORS_CEILING))
 def major_leak_threshold(db, num_sensors):
     """Configure MIN-N: the number of concurrent Minor leaks at or above which the
     system is classified as MAJOR_SYSTEM_LEAK (must be between 2 and 4294967295). This overrides the
