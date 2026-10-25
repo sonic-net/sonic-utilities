@@ -250,7 +250,7 @@ def main():
     delete_saved_stats = args.delete
     delete_all_stats = args.delete_all
     use_json = args.json
-    tag_name = args.tag if args.tag else ""
+    tag_name = args.tag
     wait_time_in_seconds = args.period
     tunnel_name = args.tunnel if args.tunnel else ""
     tunnel_type = args.type if args.type else ""
