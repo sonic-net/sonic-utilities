@@ -117,6 +117,19 @@ class TestShowPlatformLeakControlPolicy(object):
         assert 'system_major_leak_num_min_sensors: 4' in result.output
         mock_platform.assert_not_called()
 
+    def test_get_platform_major_leak_min_sensors_returns_platform_value(self):
+        fake = MagicMock()
+        liquid_cooling = fake.platform.Platform.return_value.get_chassis.return_value.get_liquid_cooling
+        liquid_cooling.return_value.get_major_leak_num_min_sensors.return_value = 3
+        with patch.dict(sys.modules, {'sonic_platform': fake}):
+            assert show_platform._get_platform_major_leak_min_sensors() == 3
+
+    def test_get_platform_major_leak_min_sensors_returns_none_on_error(self):
+        fake = MagicMock()
+        fake.platform.Platform.side_effect = RuntimeError("no platform")
+        with patch.dict(sys.modules, {'sonic_platform': fake}):
+            assert show_platform._get_platform_major_leak_min_sensors() is None
+
 
 class TestShowPlatformLeakRackManagerAlerts(object):
     """Tests for 'show platform leak rack-manager alerts'"""
