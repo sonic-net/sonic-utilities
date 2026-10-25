@@ -1,0 +1,9 @@
+{
+    "PORTCHANNEL": {
+        "PortChannel0001": {
+            "admin_status": "up",
+            "mtu": "9100",
+            "learn_mode": "disable"
+        }
+    }
+}
