@@ -244,12 +244,15 @@ class Watermarkstat(object):
                 header_idx_set.add(element_idx)
 
         if len(header_idx_set) == 0:
-            if counter_type != 'q_shared_multi':
-                print("Object map is empty!", file=sys.stderr)
-                sys.exit(1)
-            else:
+            if counter_type == 'q_shared_multi':
                 print("Object map from the COUNTERS_DB is empty because the multicast queues are not configured in the CONFIG_DB!")
                 sys.exit(0)
+            elif counter_type == 'q_shared_all':
+                print("Object map from the COUNTERS_DB is empty because queue type ALL is not configured in the CONFIG_DB!")
+                sys.exit(0)
+            else:
+                print("Object map is empty!", file=sys.stderr)
+                sys.exit(1)
 
         header_idx_list = list(header_idx_set)
         header_idx_list.sort()
