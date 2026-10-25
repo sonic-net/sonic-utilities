@@ -249,6 +249,80 @@ class TestConfigIP(object):
         assert result.exit_code != 0
         assert ERROR_MSG in result.output
 
+    def test_reject_duplicate_ip_across_vlan_interfaces(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+        add_command = config.config.commands["interface"].commands["ip"].commands["add"]
+
+        db.cfgdb.set_entry("VLAN", "Vlan3997", {"vlanid": "3997"})
+        db.cfgdb.set_entry("VLAN", "Vlan3998", {"vlanid": "3998"})
+
+        result = runner.invoke(add_command, ["Vlan3997", "192.0.2.1/24"], obj=obj)
+        assert result.exit_code == 0
+
+        result = runner.invoke(add_command, ["Vlan3998", "192.0.2.1/24"], obj=obj)
+        assert result.exit_code != 0
+        assert "IP address 192.0.2.1 is already configured on Vlan3997" in result.output
+
+        result = runner.invoke(add_command, ["Vlan3998", "192.0.2.1/32"], obj=obj)
+        assert result.exit_code != 0
+        assert "IP address 192.0.2.1 is already configured on Vlan3997" in result.output
+
+        result = runner.invoke(add_command, ["Vlan3997", "2001:db8::1/64"], obj=obj)
+        assert result.exit_code == 0
+
+        result = runner.invoke(add_command, ["Vlan3998", "2001:0DB8:0:0:0:0:0:1/128"], obj=obj)
+        assert result.exit_code != 0
+        assert "IP address 2001:db8::1 is already configured on Vlan3997" in result.output
+
+        vlan_interface_table = db.cfgdb.get_table("VLAN_INTERFACE")
+        assert "Vlan3998" not in vlan_interface_table
+        assert ("Vlan3998", "192.0.2.1/24") not in vlan_interface_table
+        assert ("Vlan3998", "192.0.2.1/32") not in vlan_interface_table
+        assert ("Vlan3998", "2001:db8::1/128") not in vlan_interface_table
+
+    def test_reject_duplicate_secondary_ip_across_vlan_interfaces(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+        add_command = config.config.commands["interface"].commands["ip"].commands["add"]
+
+        db.cfgdb.set_entry("VLAN", "Vlan3997", {"vlanid": "3997"})
+        db.cfgdb.set_entry("VLAN", "Vlan3998", {"vlanid": "3998"})
+
+        result = runner.invoke(add_command, ["Vlan3997", "192.0.2.1/24"], obj=obj)
+        assert result.exit_code == 0
+        result = runner.invoke(add_command, ["Vlan3998", "198.51.100.1/24"], obj=obj)
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            add_command, ["Vlan3998", "192.0.2.1/32", "--secondary"], obj=obj)
+        assert result.exit_code != 0
+        assert "IP address 192.0.2.1 is already configured on Vlan3997" in result.output
+        assert ("Vlan3998", "192.0.2.1/32") not in db.cfgdb.get_table("VLAN_INTERFACE")
+
+    def test_allow_duplicate_vlan_ip_in_different_vrfs(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+        add_command = config.config.commands["interface"].commands["ip"].commands["add"]
+
+        db.cfgdb.set_entry("VLAN", "Vlan3997", {"vlanid": "3997"})
+        db.cfgdb.set_entry("VLAN", "Vlan3998", {"vlanid": "3998"})
+        db.cfgdb.set_entry("VLAN_INTERFACE", "Vlan3997", {"vrf_name": "VrfA"})
+        db.cfgdb.set_entry("VLAN_INTERFACE", "Vlan3998", {"vrf_name": "VrfB"})
+
+        for ip_prefix in ("192.0.2.1/24", "2001:db8::1/64"):
+            result = runner.invoke(add_command, ["Vlan3997", ip_prefix], obj=obj)
+            assert result.exit_code == 0
+            result = runner.invoke(add_command, ["Vlan3998", ip_prefix], obj=obj)
+            assert result.exit_code == 0
+
+            vlan_interface_table = db.cfgdb.get_table("VLAN_INTERFACE")
+            assert ("Vlan3997", ip_prefix) in vlan_interface_table
+            assert ("Vlan3998", ip_prefix) in vlan_interface_table
+
     def test_add_interface_ipv4_invalid_mask(self):
         db = Db()
         runner = CliRunner()
