@@ -28,6 +28,7 @@ def generate_completions(output_dir):
                                  )
                         .source()
                         .replace("\r\n", "\n")
+                        .replace("$(env ", "$(")
                         )
                 with open(os.path.join(output_dir, prog), "w", newline="") as f:
                     f.write(content)
