@@ -1246,12 +1246,12 @@ class TestShowPlatform(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['tempershow'])
 
-    @patch('subprocess.check_call')
-    def test_firmware(self, mock_check_call):
+    @patch('utilities_common.cli.run_command')
+    def test_firmware(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['platform'].commands['firmware'])
         assert result.exit_code == 0
-        mock_check_call.assert_called_with(["sudo", "fwutil", "show"])
+        mock_run_command.assert_called_once_with(["sudo", "stdbuf", "-oL", "-eL", "fwutil", "show"])
 
     def teardown_method(self):
         print('TEAR DOWN')
