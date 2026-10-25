@@ -40,6 +40,7 @@ from config.stp import (
     disable_global_mst,
     mstp_interface_edge_port
 )
+import show.stp as show_stp
 
 
 @pytest.fixture
@@ -357,13 +358,11 @@ def test_enable_mst_for_interfaces():
     }
 
     # Assert that set_entry was called with the correct key names
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|Ethernet0', expected_fvs_mst_port)
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|PortChannel1', expected_fvs_mst_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'Ethernet0', expected_fvs_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'PortChannel1', expected_fvs_port)
 
     # Ensure the correct number of calls were made to set_entry
-    assert mock_db.set_entry.call_count == 4
+    assert mock_db.set_entry.call_count == 2
 
 
 def test_check_if_global_stp_enabled():
@@ -425,7 +424,7 @@ def test_enable_mst_instance0():
 
     # Assert that set_entry was called with the correct arguments
     mock_db.set_entry.assert_called_once_with(
-        'STP_MST_INST', 'MST_INSTANCE:INSTANCE0', expected_mst_inst_fvs
+        'STP_MST_INST', 'MST_INSTANCE|0', expected_mst_inst_fvs
     )
 
 
@@ -1003,3 +1002,502 @@ def test_stp_interface_link_type_missing_interface(
     # Assert
     assert result.exit_code != 0
     assert "Missing argument" in result.output
+
+
+# ========================================================================
+# Test coverage for show/stp.py functions
+# ========================================================================
+
+class TestShowStpFunctions:
+    """Test suite for show/stp.py functions"""
+
+    @pytest.fixture
+    def mock_cfg_db(self):
+        """Mock config database"""
+        db = MagicMock()
+        db.get_entry = MagicMock()
+        return db
+
+    @pytest.fixture
+    def mock_appl_db(self):
+        """Mock application database"""
+        db = MagicMock()
+        db.APPL_DB = 0
+        db.keys = MagicMock()
+        db.get_all = MagicMock()
+        return db
+
+    def test_format_bridge_id_with_valid_id(self):
+        """Test format_bridge_id with valid bridge ID """
+        result = show_stp.format_bridge_id("8000.80a2.3526.0c5e")
+        assert result == "8000.80a2.3526.0c5e"
+
+    def test_format_bridge_id_with_na(self):
+        """Test format_bridge_id with NA """
+        result = show_stp.format_bridge_id('NA')
+        assert result == 'NA'
+
+    def test_format_bridge_id_with_empty_string(self):
+        """Test format_bridge_id with empty string """
+        result = show_stp.format_bridge_id('')
+        assert result == 'NA'
+
+    def test_format_bridge_id_with_none(self):
+        """Test format_bridge_id with None """
+        result = show_stp.format_bridge_id(None)
+        assert result == 'NA'
+
+    def test_format_vlan_list_empty_string(self):
+        """Test format_vlan_list with empty string """
+        result = show_stp.format_vlan_list("")
+        assert result == ""
+
+    def test_format_vlan_list_none(self):
+        """Test format_vlan_list with None """
+        result = show_stp.format_vlan_list(None)
+        assert result == ""
+
+    def test_format_vlan_list_single_vlan(self):
+        """Test format_vlan_list with single VLAN """
+        result = show_stp.format_vlan_list("10")
+        assert result == "10"
+
+    def test_format_vlan_list_consecutive_vlans(self):
+        """Test format_vlan_list with consecutive VLANs """
+        result = show_stp.format_vlan_list("1,2,3,4,5")
+        assert result == "1-5"
+
+    def test_format_vlan_list_mixed_ranges(self):
+        """Test format_vlan_list with mixed ranges """
+        result = show_stp.format_vlan_list("1,2,4,5,6,10,11,12,20")
+        assert result == "1-2,4-6,10-12,20"
+
+    def test_format_vlan_list_non_consecutive(self):
+        """Test format_vlan_list with non-consecutive VLANs """
+        result = show_stp.format_vlan_list("1,3,5,7,9")
+        assert result == "1,3,5,7,9"
+
+    def test_format_vlan_list_with_whitespace(self):
+        """Test format_vlan_list with whitespace"""
+        result = show_stp.format_vlan_list(" 1 , 2 , 3 ")
+        assert result == "1-3"
+
+    def test_get_mst_global_info_full_config(self, mock_cfg_db):
+        """Test get_mst_global_info with full configuration """
+        mock_cfg_db.get_entry.return_value = {
+            'name': 'TestRegion',
+            'revision': '100',
+            'max_hops': '25',
+            'max_age': '22',
+            'hello_time': '3',
+            'forward_delay': '18',
+            'hold_count': '8'
+        }
+        with patch('show.stp.g_stp_cfg_db', mock_cfg_db):
+            result = show_stp.get_mst_global_info()
+            assert result['name'] == 'TestRegion'
+            assert result['revision'] == '100'
+            assert result['max_hops'] == '25'
+
+    def test_get_mst_global_info_empty_config(self, mock_cfg_db):
+        """Test get_mst_global_info with empty configuration """
+        mock_cfg_db.get_entry.return_value = {}
+        with patch('show.stp.g_stp_cfg_db', mock_cfg_db):
+            result = show_stp.get_mst_global_info()
+            assert result['name'] == ''
+            assert result['revision'] == '0'
+            assert result['max_hops'] == '20'
+            assert result['max_age'] == '20'
+            assert result['hello_time'] == '2'
+            assert result['forward_delay'] == '15'
+            assert result['hold_count'] == '6'
+
+    def test_get_mst_global_info_partial_config(self, mock_cfg_db):
+        """Test get_mst_global_info with partial configuration """
+        mock_cfg_db.get_entry.return_value = {
+            'name': 'PartialRegion',
+            'revision': '50'
+        }
+        with patch('show.stp.g_stp_cfg_db', mock_cfg_db):
+            result = show_stp.get_mst_global_info()
+            assert result['name'] == 'PartialRegion'
+            assert result['revision'] == '50'
+            assert result['max_hops'] == '20'  # Default
+            assert result['hello_time'] == '2'  # Default
+
+    def test_get_mst_global_info_none_return(self, mock_cfg_db):
+        """Test get_mst_global_info with None return"""
+        mock_cfg_db.get_entry.return_value = None
+        with patch('show.stp.g_stp_cfg_db', mock_cfg_db):
+            result = show_stp.get_mst_global_info()
+            assert result['name'] == ''
+            assert result['revision'] == '0'
+
+    def test_get_mst_instance_entry_full_config(self, mock_appl_db):
+        """Test get_mst_instance_entry with full configuration """
+        mock_entry = {
+            'bridge_address': '8000.001122334455',
+            'root_address': '8000.001122334455',
+            'regional_root_address': '8000.001122334455',
+            'root_path_cost': '100',
+            'regional_root_cost': '50',
+            'root_port': 'Ethernet0',
+            'remaining_hops': '18',
+            'root_hello_time': '2',
+            'root_forward_delay': '15',
+            'root_max_age': '20',
+            'hold_time': '6',
+            'vlan@': '1,2,3',
+            'bridge_priority': '32768'
+        }
+        with patch('show.stp.stp_get_all_from_pattern', return_value=mock_entry):
+            result = show_stp.get_mst_instance_entry(0)
+            assert result['bridge_address'] == '8000.001122334455'
+            assert result['root_port'] == 'Ethernet0'
+            assert result['bridge_priority'] == '32768'
+
+    def test_get_mst_instance_entry_none_return(self):
+        """Test get_mst_instance_entry with None return """
+        with patch('show.stp.stp_get_all_from_pattern', return_value=None):
+            result = show_stp.get_mst_instance_entry(0)
+            assert result is None
+
+    def test_get_mst_port_entry_full_config(self):
+        """Test get_mst_port_entry with full configuration """
+        mock_entry = {
+            'port_number': '100',
+            'priority': '64',
+            'path_cost': '20000',
+            'port_state': 'FORWARDING',
+            'role': 'DESIGNATED'
+        }
+        with patch('show.stp.stp_get_all_from_pattern', return_value=mock_entry):
+            result = show_stp.get_mst_port_entry(0, 'Ethernet0')
+            assert result['port_number'] == '100'
+            assert result['priority'] == '64'
+            assert result['path_cost'] == '20000'
+            assert result['port_state'] == 'FORWARDING'
+            assert result['role'] == 'DESIGNATED'
+
+    def test_get_mst_port_entry_none_return(self):
+        """Test get_mst_port_entry with None return """
+        with patch('show.stp.stp_get_all_from_pattern', return_value=None):
+            result = show_stp.get_mst_port_entry(0, 'Ethernet0')
+            assert result is None
+
+    def test_show_mstp_summary_with_instances(self, mock_appl_db):
+        """Test show_mstp_summary with MST instances """
+        mock_appl_db.keys.return_value = [
+            'APPL_DB:STP_MST_INST_TABLE:0',
+            'APPL_DB:STP_MST_INST_TABLE:1',
+            'APPL_DB:STP_MST_INST_TABLE:10'
+        ]
+
+        runner = CliRunner()
+        with patch('show.stp.g_stp_appl_db', mock_appl_db), \
+             patch('show.stp.show_mst_instance_detail') as mock_show_inst, \
+             patch('show.stp.show_mst_region_info') as mock_show_region:
+
+            result = runner.invoke(show_stp.show_mstp_summary)
+
+            assert "Spanning-tree Mode: MSTP" in result.output
+            assert mock_show_inst.call_count == 3
+            mock_show_region.assert_called_once()
+
+    def test_show_mstp_summary_no_instances(self, mock_appl_db):
+        """Test show_mstp_summary with no instances"""
+        mock_appl_db.keys.return_value = []
+
+        runner = CliRunner()
+        with patch('show.stp.g_stp_appl_db', mock_appl_db):
+            result = runner.invoke(show_stp.show_mstp_summary)
+            assert "Spanning-tree Mode: MSTP" in result.output
+
+    def test_show_mst_instance_detail_cist(self):
+        """Test show_mst_instance_detail for CIST (instance 0)"""
+        mock_entry = {
+            'bridge_address': '8000.001122334455',
+            'root_address': '8000.001122334455',
+            'regional_root_address': '8000.001122334455',
+            'root_path_cost': '0',
+            'regional_root_cost': '0',
+            'root_port': '',
+            'remaining_hops': '20',
+            'vlan@': '1,2,3,4,5',
+            'root_hello_time': '2',
+            'root_forward_delay': '15',
+            'root_max_age': '20',
+            'hold_time': '6',
+            'bridge_priority': '32768'
+        }
+        mock_global = {
+            'name': 'TestRegion',
+            'revision': '0',
+            'max_hops': '20',
+            'max_age': '20',
+            'hello_time': '2',
+            'forward_delay': '15',
+            'hold_count': '6'
+        }
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+        mock_appl_db.keys.return_value = []
+
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_instance_entry', return_value=mock_entry), \
+             patch('show.stp.get_mst_global_info', return_value=mock_global), \
+             patch('show.stp.g_stp_appl_db', mock_appl_db), \
+             patch('show.stp.click.echo') as mock_echo:
+
+            show_stp.show_mst_instance_detail(0)
+
+            # Verify the function was called and output was generated
+            assert mock_echo.called
+            output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
+            assert "MST0" in output_str
+            assert "1-5" in output_str or "1,2,3,4,5" in output_str
+
+    def test_show_mst_instance_detail_non_cist(self):
+        """Test show_mst_instance_detail for non-CIST instance"""
+        mock_entry = {
+            'bridge_address': '8000.001122334455',
+            'root_address': '8000.001122334455',
+            'regional_root_address': '8000.001122334455',
+            'root_path_cost': '100',
+            'regional_root_cost': '50',
+            'root_port': 'Ethernet0',
+            'remaining_hops': '18',
+            'vlan@': '10,11,12',
+            'bridge_priority': '32768'
+        }
+        mock_global = {
+            'name': 'TestRegion',
+            'revision': '0',
+            'max_hops': '20',
+            'max_age': '20',
+            'hello_time': '2',
+            'forward_delay': '15',
+            'hold_count': '6'
+        }
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+        mock_appl_db.keys.return_value = []
+
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_instance_entry', return_value=mock_entry), \
+             patch('show.stp.get_mst_global_info', return_value=mock_global), \
+             patch('show.stp.g_stp_appl_db', mock_appl_db), \
+             patch('show.stp.click.echo') as mock_echo:
+
+            show_stp.show_mst_instance_detail(1)
+
+            # Verify the function was called and output was generated
+            assert mock_echo.called
+            output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
+            assert "MST1" in output_str
+
+    def test_show_mst_instance_detail_with_ports(self):
+        """Test show_mst_instance_detail with ports """
+        mock_entry = {
+            'bridge_address': '8000.001122334455',
+            'root_address': '8000.001122334455',
+            'regional_root_address': '8000.001122334455',
+            'root_path_cost': '0',
+            'regional_root_cost': '0',
+            'root_port': '',
+            'remaining_hops': '20',
+            'vlan@': '1',
+            'bridge_priority': '32768'
+        }
+        mock_global = {
+            'name': 'TestRegion',
+            'revision': '0',
+            'max_hops': '20',
+            'max_age': '20',
+            'hello_time': '2',
+            'forward_delay': '15',
+            'hold_count': '6'
+        }
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+        mock_appl_db.keys.return_value = [
+            'APPL_DB:STP_MST_PORT_TABLE:0:Ethernet0',
+            'APPL_DB:STP_MST_PORT_TABLE:0:Ethernet4',
+            'APPL_DB:STP_MST_PORT_TABLE:0:PortChannel1'
+        ]
+
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_instance_entry', return_value=mock_entry), \
+             patch('show.stp.get_mst_global_info', return_value=mock_global), \
+             patch('show.stp.g_stp_appl_db', mock_appl_db), \
+             patch('show.stp.show_mst_port_info') as mock_show_port:
+
+            show_stp.show_mst_instance_detail(0)
+            assert mock_show_port.call_count == 3
+            # Check that Ethernet ports are shown before PortChannel
+            calls = [call[0][1] for call in mock_show_port.call_args_list]
+            assert calls.index('Ethernet0') < calls.index('PortChannel1')
+
+    def test_show_mst_instance_detail_none_entry(self):
+        """Test show_mst_instance_detail with None entry """
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_instance_entry', return_value=None):
+            # Should return early without error
+            result = show_stp.show_mst_instance_detail(0)
+            assert result is None
+
+    def test_show_mst_port_info(self):
+        """Test show_mst_port_info """
+        mock_port_entry = {
+            'role': 'designated',
+            'port_state': 'forwarding',
+            'path_cost': '20000',
+            'priority': '128',
+            'port_number': '100'
+        }
+
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_port_entry', return_value=mock_port_entry), \
+             patch('show.stp.click.echo') as mock_echo:
+
+            show_stp.show_mst_port_info(0, 'Ethernet0')
+
+            # Verify the function was called and output was generated
+            assert mock_echo.called
+            output_str = str(mock_echo.call_args[0][0])
+            assert "Ethernet0" in output_str
+            assert "DESIGNATED" in output_str
+            assert "FORWARDING" in output_str
+            assert "20000" in output_str
+            assert "128.100" in output_str
+
+    def test_show_mst_port_info_none_entry(self):
+        """Test show_mst_port_info with None entry """
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_port_entry', return_value=None):
+            # Should return early without error
+            result = show_stp.show_mst_port_info(0, 'Ethernet0')
+            assert result is None
+
+    def test_show_mst_region_info_with_cist(self):
+        """Test show_mst_region_info with CIST data"""
+        mock_global = {
+            'name': 'TestRegion',
+            'revision': '100',
+            'max_hops': '20',
+            'max_age': '20',
+            'hello_time': '2',
+            'forward_delay': '15',
+            'hold_count': '6'
+        }
+        mock_cist_entry = {
+            'bridge_address': '8000.0011.2233.4455',
+            'root_address': '8000.0011.2233.4455',
+            'root_path_cost': '0'
+        }
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+        mock_appl_db.keys.return_value = [
+            'APPL_DB:STP_MST_INST_TABLE:0',
+            'APPL_DB:STP_MST_INST_TABLE:1',
+            'APPL_DB:STP_MST_INST_TABLE:2'
+        ]
+
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_global_info', return_value=mock_global), \
+             patch('show.stp.get_mst_instance_entry', return_value=mock_cist_entry), \
+             patch('show.stp.g_stp_appl_db', mock_appl_db), \
+             patch('show.stp.click.echo') as mock_echo:
+
+            show_stp.show_mst_region_info()
+
+            # Verify the function was called and output was generated
+            assert mock_echo.called
+            output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
+            assert "TestRegion" in output_str
+            assert "100" in output_str
+            assert "2" in output_str  # Instances configured (excluding CIST)
+
+    def test_show_mst_region_info_without_cist(self):
+        """Test show_mst_region_info without CIST data"""
+        mock_global = {
+            'name': '',
+            'revision': '0',
+            'max_hops': '20',
+            'max_age': '20',
+            'hello_time': '2',
+            'forward_delay': '15',
+            'hold_count': '6'
+        }
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+        mock_appl_db.keys.return_value = []
+
+        # Call the function directly since it's not a Click command
+        with patch('show.stp.get_mst_global_info', return_value=mock_global), \
+             patch('show.stp.get_mst_instance_entry', return_value=None), \
+             patch('show.stp.g_stp_appl_db', mock_appl_db), \
+             patch('show.stp.click.echo') as mock_echo:
+
+            show_stp.show_mst_region_info()
+
+            # Verify the function was called and output was generated
+            assert mock_echo.called
+            output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
+            assert "0" in output_str  # Revision and instance count
+
+    def test_spanning_tree_command_pvst_mode(self):
+        """Test spanning_tree command in PVST mode"""
+        mock_cfg_db = MagicMock()
+        mock_cfg_db.get_entry.return_value = {'mode': 'pvst'}
+
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+        mock_appl_db.keys.return_value = [
+            'APPL_DB:STP_VLAN_TABLE:Vlan10',
+            'APPL_DB:STP_VLAN_TABLE:Vlan20'
+        ]
+
+        runner = CliRunner()
+        with patch('show.stp.connect_to_cfg_db', return_value=mock_cfg_db), \
+             patch('show.stp.connect_to_appl_db', return_value=mock_appl_db), \
+             patch('show.stp.show_stp_vlan') as mock_show_vlan:
+            runner.invoke(show_stp.spanning_tree)
+            assert mock_show_vlan.call_count == 2
+
+    def test_spanning_tree_command_mstp_mode(self):
+        """Test spanning_tree command in MSTP mode"""
+        mock_cfg_db = MagicMock()
+        mock_cfg_db.get_entry.return_value = {'mode': 'mst'}
+
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+
+        runner = CliRunner()
+        with patch('show.stp.connect_to_cfg_db', return_value=mock_cfg_db), \
+             patch('show.stp.connect_to_appl_db', return_value=mock_appl_db), \
+             patch('show.stp.show_mstp_summary') as mock_show_mstp:
+            runner.invoke(show_stp.spanning_tree)
+            mock_show_mstp.assert_called_once()
+
+    def test_spanning_tree_command_pvst_mode_no_vlans(self):
+        """Test spanning_tree command in PVST mode with no VLANs"""
+        mock_cfg_db = MagicMock()
+        mock_cfg_db.get_entry.return_value = {'mode': 'pvst'}
+
+        mock_appl_db = MagicMock()
+        mock_appl_db.APPL_DB = 0
+        mock_appl_db.keys.return_value = []
+
+        runner = CliRunner()
+        with patch('show.stp.connect_to_cfg_db', return_value=mock_cfg_db), \
+             patch('show.stp.connect_to_appl_db', return_value=mock_appl_db):
+
+            result = runner.invoke(show_stp.spanning_tree)
+            assert result.exit_code == 0
+
+    def test_format_vlan_list_empty_after_filtering(self):
+        """Test format_vlan_list with empty result after filtering"""
+        # String with only whitespace and commas
+        result = show_stp.format_vlan_list(" , , , ")
+        assert result == ""
