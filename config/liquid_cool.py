@@ -63,7 +63,9 @@ def leak_action(db, policy_type, severity, action):
 @click.argument('num_sensors', metavar='<N>', type=click.IntRange(min=MAJOR_LEAK_MIN_SENSORS_FLOOR))
 def major_leak_threshold(db, num_sensors):
     """Configure MIN-N: the number of concurrent Minor leaks at or above which the
-    system is classified as MAJOR_SYSTEM_LEAK (must be >= 2)"""
+    system is classified as MAJOR_SYSTEM_LEAK (must be >= 2). This overrides the
+    platform default and affects only the count rule; a Minor leak that stays on
+    beyond MAX-T is still classified as MAJOR."""
     db.cfgdb.mod_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY,
                        {MAJOR_LEAK_MIN_SENSORS_FIELD: str(num_sensors)})
     click.echo(f"Major leak threshold (MIN-N) set to '{num_sensors}'")

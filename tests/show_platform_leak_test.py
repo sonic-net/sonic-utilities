@@ -85,7 +85,7 @@ class TestShowPlatformLeakControlPolicy(object):
         assert 'power_off' in result.output
         assert 'syslog_only' in result.output
         # MAJOR action defaults are shown, but the MIN-N threshold is omitted
-        # when absent (platform does not support MAJOR classification).
+        # when no override is configured.
         assert 'system_major_leak_action' in result.output
         assert 'system_major_leak_num_min_sensors' not in result.output
 

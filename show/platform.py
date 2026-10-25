@@ -342,8 +342,8 @@ def leak_control_policy():
         major_action = entry.get('system_major_leak_action', 'syslog_only')
         click.echo(" system_major_leak_action        : {}".format(major_action))
         click.echo(" system_minor_leak_action        : {}".format(entry.get('system_minor_leak_action', 'syslog_only')))
-        # MIN-N threshold is only meaningful when the platform supports the MAJOR
-        # classification; it is omitted when absent (platform returns 0).
+        # MIN-N is a user override of the platform default for the count-based MAJOR
+        # rule; it is shown only when configured in CONFIG_DB.
         major_min_sensors = entry.get('system_major_leak_num_min_sensors')
         if major_min_sensors is not None:
             click.echo(" system_major_leak_num_min_sensors: {}".format(major_min_sensors))
