@@ -84,10 +84,37 @@ class TestShowPlatformLeakControlPolicy(object):
         assert 'enabled' in result.output
         assert 'power_off' in result.output
         assert 'syslog_only' in result.output
-        # MAJOR action defaults are shown, but the MIN-N threshold is omitted
-        # when no override is configured.
+        # MAJOR action defaults are shown; with no override and no platform value,
+        # MIN-N is reported as none.
         assert 'system_major_leak_action' in result.output
-        assert 'system_major_leak_num_min_sensors' not in result.output
+        assert 'system_major_leak_num_min_sensors: none' in result.output
+
+    def _invoke_policy(self, entry, platform_min):
+        mock_db = MagicMock()
+        mock_db.cfgdb.get_entry.return_value = entry
+        with patch('utilities_common.db.Db', return_value=mock_db), \
+                patch.object(show_platform, '_get_platform_major_leak_min_sensors',
+                             return_value=platform_min) as mock_platform:
+            result = CliRunner().invoke(
+                show_platform.platform.commands['leak'].commands['control-policy']
+            )
+        return result, mock_platform
+
+    def test_leak_control_policy_min_n_platform_default(self):
+        result, _ = self._invoke_policy({}, 3)
+        assert result.exit_code == 0
+        assert 'system_major_leak_num_min_sensors: 3' in result.output
+
+    def test_leak_control_policy_min_n_platform_zero(self):
+        result, _ = self._invoke_policy({}, 0)
+        assert result.exit_code == 0
+        assert 'system_major_leak_num_min_sensors: none' in result.output
+
+    def test_leak_control_policy_min_n_configured_overrides_platform(self):
+        result, mock_platform = self._invoke_policy({'system_major_leak_num_min_sensors': '4'}, 3)
+        assert result.exit_code == 0
+        assert 'system_major_leak_num_min_sensors: 4' in result.output
+        mock_platform.assert_not_called()
 
 
 class TestShowPlatformLeakRackManagerAlerts(object):
