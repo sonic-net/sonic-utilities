@@ -97,6 +97,9 @@
 * [Hash](#hash)
   * [Hash show commands](#hash-show-commands)
   * [Hash config commands](#hash-config-commands)
+* [HWSKU](#hwsku)
+  * [HWSKU show commands](#hwsku-show-commands)
+  * [HWSKU config commands](#hwsku-config-commands)
 * [ICMP](#icmp)
   * [ICMP show commands](#icmp-show-commands)
   * [ICMP clear commands](#icmp-clear-commands)
@@ -6883,6 +6886,80 @@ Enable/disable Fast Link-Up per interface.
   admin@sonic:~$ config interface fast-linkup Ethernet0 enabled
   admin@sonic:~$ config interface fast-linkup Ethernet4 disabled
   ```
+
+## HWSKU
+
+This section explains the commands used to list the HWSKUs available on the current platform and to switch the device to a different HWSKU.
+
+A directory under `/usr/share/sonic/device/<platform>/` is treated as a HWSKU if `sonic-cfggen -k <hwsku>` can find a port config for it: either `<hwsku>/port_config.ini`, or `<hwsku>/hwsku.json` together with a `platform.json` that defines `interfaces`. Multi-ASIC HWSKUs, which keep their port config in per-ASIC subdirectories, are not listed.
+
+### HWSKU show commands
+
+**show hwsku profiles**
+
+This command lists the HWSKUs available on the current platform and marks the one currently in use.
+
+- Usage:
+  ```
+  show hwsku profiles
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show hwsku profiles
+  Platform: x86_64-vendor_switch-r0
+
+  Available HWSKU Profiles:
+    * Vendor-Switch (current)
+    - Vendor-Switch-64x400G
+    - Vendor-Switch-128x200G
+  ```
+
+### HWSKU config commands
+
+**config hwsku load**
+
+This command generates a new `/etc/sonic/config_db.json` for the given HWSKU, replacing the manual `sonic-cfggen -H -k <hwsku> --print-data > /etc/sonic/config_db.json` workflow. It:
+
+1. Validates the HWSKU name against the HWSKUs available on the current platform (tab completion is supported).
+2. Backs up the current `/etc/sonic/config_db.json` to `/etc/sonic/backup_config/<current_hwsku>_<timestamp>.json`.
+3. Generates the new config with `sonic-cfggen -H -k <hwsku_name> --print-data`. If generation fails, the backup is restored.
+4. Optionally reloads the configuration (`config reload -y -f`).
+
+- Usage:
+  ```
+  config hwsku load [-y|--yes] [-r|--reload] <hwsku_name>
+  ```
+
+- Options:
+  - _-y, --yes_: do not prompt for confirmation
+  - _-r, --reload_: run `config reload` after the new config is generated
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config hwsku load Vendor-Switch-64x400G
+
+  This will:
+    1. Backup current config to /etc/sonic/backup_config/Vendor-Switch_20260101_120000.json
+    2. Generate new config for HWSKU 'Vendor-Switch-64x400G'
+    3. Skip reload (you will need to manually reload)
+
+  Do you want to continue? [y/N]: y
+
+  Loading hardware SKU: Vendor-Switch-64x400G
+  Config generated successfully
+
+  Hardware SKU 'Vendor-Switch-64x400G' config generated successfully!
+  Backup saved to: /etc/sonic/backup_config/Vendor-Switch_20260101_120000.json
+
+  To apply the new configuration, run: config reload -y
+  ```
+
+  ```
+  admin@sonic:~$ sudo config hwsku load Vendor-Switch-64x400G -y -r
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#hwsku)
 
 ## ICMP
 
