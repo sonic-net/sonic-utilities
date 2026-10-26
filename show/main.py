@@ -1309,7 +1309,7 @@ def get_mac_sync_mode(config_db):
     metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
     if metadata.get('subtype') == 'L3EvpnMH':
         return 'fpm'
-    # TODO: use swsscommon.CFG_FDB_SYNC_TABLE_NAME once sonic-net/sonic-buildimage#29312 is merged.
+    # TODO: use swsscommon.CFG_FDB_SYNC_TABLE_NAME once sonic-net/sonic-buildimage#30365 is merged.
     fdb_sync = config_db.get_entry('FDB_SYNC', 'global')
     return fdb_sync.get('mac_sync_mode', 'kernel')
 
