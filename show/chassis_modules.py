@@ -16,8 +16,11 @@ import utilities_common.cli as clicommon
 from sonic_py_common import multi_asic
 
 STATUS_OK = "ok"
+STATUS_FAILED = "failed"
 STATUS_ERROR = "error"
 STATUS_NOT_APPLICABLE = "not_applicable"
+
+_CONSISTENCY_CHECKER_EXIT_ERR = 1
 
 _CONSISTENCY_CHECKER_SCRIPT = "chassis_db_consistency_checker.py"
 _CONSISTENCY_CHECKER_TIMEOUT_SEC = 120
@@ -32,12 +35,12 @@ def _consistency_checker_script_path():
     )
 
 
-def _run_system_lag_consistency_checker(lag_id_only=False):
+def _run_system_lag_consistency_checker(lag_id_only=True):
     """Run chassis_db_consistency_checker --json and return parsed result."""
     script = _consistency_checker_script_path()
     cmd = [sys.executable, script, "--json"]
-    if lag_id_only:
-        cmd.append("--lag-id-only")
+    if not lag_id_only:
+        cmd.append("--check-lag-members")
     try:
         proc = subprocess.run(
             cmd,
@@ -62,6 +65,12 @@ def _run_system_lag_consistency_checker(lag_id_only=False):
         raise click.ClickException(
             f"{_CONSISTENCY_CHECKER_SCRIPT} returned invalid JSON: {exc}"
         )
+
+
+def _exit_for_consistency_status(status):
+    """Non-zero exit for mismatch or checker error (Monit uses the script, not show)."""
+    if status in (STATUS_FAILED, STATUS_ERROR):
+        sys.exit(_CONSISTENCY_CHECKER_EXIT_ERR)
 
 
 def _echo_indented_lines(lines, indent="    "):
@@ -526,34 +535,32 @@ def system_lags(systemlagname, asicname, linecardname, verbose):
 
 @chassis.command(name="system-lag-consistency")
 @click.option(
-    "--lag-id-only",
+    "--check-lag-members",
     is_flag=True,
-    help="Check SYSTEM_LAG_ID_TABLE only; skip lag member checks",
+    help="Also check SYSTEM_LAG_MEMBER_TABLE (default: SYSTEM_LAG_ID_TABLE only)",
 )
 @click.option("-j", "--json", "json_output", is_flag=True, help="Output in JSON format")
-def system_lag_consistency(json_output, lag_id_only):
+def system_lag_consistency(json_output, check_lag_members):
     """Verify system LAG consistency between CHASSIS_APP_DB and ASIC_DB.
 
-    Default: SYSTEM_LAG_ID_TABLE and SYSTEM_LAG_MEMBER_TABLE. With --lag-id-only,
-    SYSTEM_LAG_ID_TABLE only (VOQ chassis linecards).
+    Default: SYSTEM_LAG_ID_TABLE only (same as chassis_db_consistency_checker.py
+    and Monit). Use --check-lag-members for member checks (VOQ chassis linecards).
     """
 
-    result = _run_system_lag_consistency_checker(lag_id_only=lag_id_only)
+    result = _run_system_lag_consistency_checker(lag_id_only=not check_lag_members)
+    status = result["status"]
 
     if json_output:
         click.echo(clicommon.json_dump(result))
-        return
+    else:
+        lag_id_only_mode = result.get("lag_id_only", not check_lag_members)
+        if status == STATUS_NOT_APPLICABLE:
+            click.echo("System LAG consistency: not applicable")
+            click.echo(f"Reason: {result['reason']}")
+        elif status == STATUS_ERROR:
+            click.echo("System LAG consistency: error")
+            click.echo(f"Reason: {result['reason']}")
+        else:
+            _print_system_lag_consistency_text(result, lag_id_only_mode)
 
-    lag_id_only_mode = result.get("lag_id_only", lag_id_only)
-    status = result["status"]
-    if status == STATUS_NOT_APPLICABLE:
-        click.echo("System LAG consistency: not applicable")
-        click.echo(f"Reason: {result['reason']}")
-        return
-
-    if status == STATUS_ERROR:
-        click.echo("System LAG consistency: error")
-        click.echo(f"Reason: {result['reason']}")
-        return
-
-    _print_system_lag_consistency_text(result, lag_id_only_mode)
+    _exit_for_consistency_status(status)

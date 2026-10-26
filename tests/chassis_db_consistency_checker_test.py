@@ -363,8 +363,10 @@ def test_check_asic_namespace_lag_id_diff(mock_run_redis_dump, mock_multi_asic):
     assert result["lag_ids"]["extra_in_asic_db"] == ["263", "265", "266"]
 
 
-def test_get_lag_id_consistency_result_ok(mock_run_redis_dump, mock_multi_asic, mock_device_info):
-    result = chassis_db_consistency_checker.get_lag_id_consistency_result()
+def test_get_system_lag_consistency_result_ok_lag_id_only(
+    mock_run_redis_dump, mock_multi_asic, mock_device_info
+):
+    result = chassis_db_consistency_checker.get_system_lag_consistency_result()
     assert result["status"] == chassis_db_consistency_checker.STATUS_OK
     assert result["lag_id_only"] is True
     assert result["chassis_lag_id_count"] == 5
@@ -373,34 +375,56 @@ def test_get_lag_id_consistency_result_ok(mock_run_redis_dump, mock_multi_asic, 
     assert result["asics"]["asic0"]["lag_ids"]["extra_in_asic_db"] == []
 
 
-def test_get_lag_id_consistency_result_not_applicable(mock_device_info_supervisor):
-    result = chassis_db_consistency_checker.get_lag_id_consistency_result()
+def test_get_system_lag_consistency_result_not_applicable_on_supervisor(
+    mock_device_info_supervisor,
+):
+    result = chassis_db_consistency_checker.get_system_lag_consistency_result()
     assert result["status"] == chassis_db_consistency_checker.STATUS_NOT_APPLICABLE
     assert "supervisor" in result["reason"].lower()
 
 
-def test_json_output(monkeypatch, mock_run_redis_dump, mock_multi_asic, mock_device_info, capsys):
+def test_json_output_default_lag_id_only(
+    monkeypatch, mock_run_redis_dump, mock_multi_asic, mock_device_info, capsys
+):
     monkeypatch.setattr(sys, "argv", ["chassis_db_consistency_checker.py", "--json"])
     rc = chassis_db_consistency_checker.main()
     captured = capsys.readouterr()
     assert rc == 0
     payload = json.loads(captured.out)
     assert payload["status"] == chassis_db_consistency_checker.STATUS_OK
-    assert payload["lag_id_only"] is False
+    assert payload["lag_id_only"] is True
+    assert payload["chassis_lag_member_count"] == 0
 
 
-def test_json_output_lag_id_only(
+def test_json_output_check_lag_members(
     monkeypatch, mock_run_redis_dump, mock_multi_asic, mock_device_info, capsys
 ):
     monkeypatch.setattr(
-        sys, "argv", ["chassis_db_consistency_checker.py", "--lag-id-only", "--json"]
+        sys, "argv", ["chassis_db_consistency_checker.py", "--check-lag-members", "--json"]
     )
     rc = chassis_db_consistency_checker.main()
     captured = capsys.readouterr()
     assert rc == 0
     payload = json.loads(captured.out)
-    assert payload["lag_id_only"] is True
-    assert payload["chassis_lag_member_count"] == 0
+    assert payload["lag_id_only"] is False
+
+
+def test_non_voq_skips_redis_dump(monkeypatch, mock_device_info_no_voq):
+    def fail_if_redis_dump(*_args, **_kwargs):
+        raise AssertionError("run_redis_dump must not run on non-VOQ chassis")
+
+    monkeypatch.setattr(chassis_db_consistency_checker, "run_redis_dump", fail_if_redis_dump)
+    result = chassis_db_consistency_checker.get_system_lag_consistency_result(check_members=False)
+    assert result["status"] == chassis_db_consistency_checker.STATUS_NOT_APPLICABLE
+
+
+def test_supervisor_skips_redis_dump(monkeypatch, mock_device_info_supervisor):
+    def fail_if_redis_dump(*_args, **_kwargs):
+        raise AssertionError("run_redis_dump must not run on supervisor")
+
+    monkeypatch.setattr(chassis_db_consistency_checker, "run_redis_dump", fail_if_redis_dump)
+    result = chassis_db_consistency_checker.get_system_lag_consistency_result(check_members=False)
+    assert result["status"] == chassis_db_consistency_checker.STATUS_NOT_APPLICABLE
 
 
 def test_check_no_voq_chassis(monkeypatch, mock_run_redis_dump, mock_device_info_no_voq, caplog):
@@ -488,7 +512,7 @@ def test_redis_dump_no_output(monkeypatch, run_redis_dump_empty,
     monkeypatch.setattr(sys, "argv", ["chassis_db_consistency_checker.py"])
     rc = chassis_db_consistency_checker.main()
     assert rc == chassis_db_consistency_checker.RC_ERR
-    assert "No SYSTEM_LAG_ID_TABLE found in chassis_db" in caplog.text
+    assert "Failed to read SYSTEM_LAG_ID_TABLE from chassis_db" in caplog.text
 
 
 def test_run_redis_dump_failure(monkeypatch):
@@ -620,7 +644,9 @@ def test_get_system_lag_consistency_member_issues(
     monkeypatch, mock_member_consistency, mock_device_info
 ):
     lag_alias = "sonic-lc1-1|asic0|PortChannel112"
-    result = chassis_db_consistency_checker.get_system_lag_consistency_result()
+    result = chassis_db_consistency_checker.get_system_lag_consistency_result(
+        check_members=True,
+    )
     lag_members = result["asics"]["asic0"]["lag_members"]
 
     assert result["status"] == chassis_db_consistency_checker.STATUS_FAILED
@@ -700,7 +726,9 @@ def test_get_system_lag_consistency_unresolved_member(
 ):
     lag_alias = "sonic-lc1-1|asic0|PortChannel112"
     member_key = f"{lag_alias}:sonic-lc1-1|asic0|Ethernet8"
-    result = chassis_db_consistency_checker.get_system_lag_consistency_result()
+    result = chassis_db_consistency_checker.get_system_lag_consistency_result(
+        check_members=True,
+    )
     lag_members = result["asics"]["asic0"]["lag_members"]
 
     assert result["status"] == chassis_db_consistency_checker.STATUS_FAILED
@@ -713,3 +741,17 @@ def test_get_system_lag_consistency_unresolved_member(
             "system_port_aggregate_id": "262",
         },
     ]
+
+
+def test_empty_system_lag_id_table_ok(monkeypatch, mock_multi_asic, mock_device_info):
+    def _mock(cmd_args):
+        if "SYSTEM_LAG_ID_TABLE" in str(cmd_args):
+            return {"SYSTEM_LAG_ID_TABLE": {"value": {}}}
+        if "SAI_OBJECT_TYPE_LAG" in str(cmd_args):
+            return {}
+        return {}
+
+    monkeypatch.setattr(chassis_db_consistency_checker, "run_redis_dump", _mock)
+    result = chassis_db_consistency_checker.get_system_lag_consistency_result(check_members=False)
+    assert result["status"] == chassis_db_consistency_checker.STATUS_OK
+    assert result["chassis_lag_id_count"] == 0

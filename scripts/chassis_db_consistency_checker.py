@@ -20,23 +20,26 @@ Intended to run on line cards (not on the supervisor) of a VOQ chassis device.
 Consumers (same checker logic; different invocation and output):
 
 1. show CLI (``show chassis system-lag-consistency``) invokes this script with
-   ``--json``. The show command parses the JSON, prints human-readable output,
-   and always treats subprocess exit 0 as success (mismatches appear in the
-   result payload, not the exit code).
+   ``--json`` (LAG IDs only by default) or ``--json --check-lag-members``. The
+   show command parses the JSON, prints human-readable output, and always treats
+   subprocess exit 0 as success (mismatches appear in the result payload, not the
+   exit code).
 
-2. Monit or manual runs invoke the script without ``--json``. On mismatch,
-   CRITICAL messages are logged to syslog and the process exits with RC_ERR;
-   on success it exits RC_OK. Full member checks run several redis-dump calls
-   per ASIC namespace; size the Monit cycle accordingly on busy linecards.
+2. Monit invokes the script with no arguments (same as ``route_check.py``):
+   LAG ID check only. On mismatch, CRITICAL syslog and RC_ERR; on success RC_OK.
+   On non-VOQ devices and supervisors the script returns not_applicable and does
+   not access chassis_db or ASIC redis. Use ``--check-lag-members`` for a full
+   SYSTEM_LAG_MEMBER_TABLE check (heavier; not used by Monit).
 
 Usage:
-    python3 chassis_db_consistency_checker [--log-level LEVEL] [--lag-id-only] [--json]
+    python3 chassis_db_consistency_checker [--log-level LEVEL] [--check-lag-members] [--json]
 
 Arguments:
-    --log-level LEVEL   Set the logging level (DEBUG, INFO, WARNING, ERROR,
-                        CRITICAL). Default is WARNING.
-    --lag-id-only       Check SYSTEM_LAG_ID_TABLE only; skip lag member checks.
-    --json              Output structured consistency result as JSON and exit 0.
+    --log-level LEVEL     Set the logging level (DEBUG, INFO, WARNING, ERROR,
+                          CRITICAL). Default is WARNING.
+    --check-lag-members   Also check SYSTEM_LAG_MEMBER_TABLE vs ASIC LAG members.
+                          Default (Monit): SYSTEM_LAG_ID_TABLE only.
+    --json                Output structured consistency result as JSON and exit 0.
 
 """
 
@@ -152,12 +155,24 @@ def bidirectional_diff_has_mismatch(diff):
 
 
 def get_chassis_lag_db_table():
-    """Fetch and return the SYSTEM_LAG_ID_TABLE from chassis_db."""
+    """Fetch SYSTEM_LAG_ID_TABLE from chassis_db.
+
+    Returns:
+        dict: alias -> lag_id (may be empty when no LAGs are configured).
+        None: redis-dump failed or the table key is missing (transient / connectivity).
+    """
     chassis_db_raw = run_redis_dump_chassis_app("SYSTEM_LAG_ID_TABLE")
-    chassis_db_table = chassis_db_raw.get('SYSTEM_LAG_ID_TABLE', {}).get('value', {})
-    if not chassis_db_table:
-        logging.error("No SYSTEM_LAG_ID_TABLE found in chassis_db")
-        return {}
+    if not chassis_db_raw:
+        logging.error("Failed to read SYSTEM_LAG_ID_TABLE from chassis_db")
+        return None
+    entry = chassis_db_raw.get("SYSTEM_LAG_ID_TABLE")
+    if entry is None:
+        logging.error("No SYSTEM_LAG_ID_TABLE key in chassis_db")
+        return None
+    chassis_db_table = entry.get("value", {})
+    if not isinstance(chassis_db_table, dict):
+        logging.error("Invalid SYSTEM_LAG_ID_TABLE value in chassis_db")
+        return None
     return chassis_db_table
 
 
@@ -378,7 +393,7 @@ def check_asic_namespace(
     lag_ids_in_chassis_db,
     lag_id_table,
     chassis_members=None,
-    check_members=True,
+    check_members=False,
 ):
     """Check lag ID and optionally lag member consistency for one ASIC namespace."""
     lag_db_output = run_redis_dump_asic_namespace(asic_namespace, 1, "*SAI_OBJECT_TYPE_LAG:*")
@@ -391,7 +406,7 @@ def check_asic_namespace(
         "lag_id_count": len(lag_ids_in_asic_db),
         **format_bidirectional_diff(lag_id_missing, lag_id_extra),
     }
-    # --lag-id-only / Monit lagIdCheck: skip member redis dumps and comparisons.
+    # Default CLI / Monit: LAG IDs only; skip member redis dumps and comparisons.
     if not check_members:
         return {"lag_ids": lag_ids_result}
 
@@ -450,8 +465,12 @@ def _not_applicable_result(reason, lag_id_only=False):
     }
 
 
-def get_system_lag_consistency_result(check_members=True):
-    """Return structured system LAG consistency result for CLI or automation."""
+def get_system_lag_consistency_result(check_members=False):
+    """Return structured system LAG consistency result for CLI or automation.
+
+    Default matches Monit and the standalone script (LAG IDs only). Pass
+    check_members=True for SYSTEM_LAG_MEMBER_TABLE checks.
+    """
     # Internal flag is check_members; JSON/CLI surface the inverse as lag_id_only.
     lag_id_only = not check_members
 
@@ -462,10 +481,10 @@ def get_system_lag_consistency_result(check_members=True):
         return _not_applicable_result(REASON_NOT_ON_SUPERVISOR, lag_id_only=lag_id_only)
 
     chassis_db_lag_table = get_chassis_lag_db_table()
-    if not chassis_db_lag_table:
+    if chassis_db_lag_table is None:
         return {
             "status": STATUS_ERROR,
-            "reason": "No SYSTEM_LAG_ID_TABLE found in chassis_db",
+            "reason": "Unable to read SYSTEM_LAG_ID_TABLE from chassis_db",
             "lag_id_only": lag_id_only,
             "chassis_lag_id_count": 0,
             "chassis_lag_member_count": 0,
@@ -503,12 +522,6 @@ def get_system_lag_consistency_result(check_members=True):
         "chassis_lag_member_count": len(chassis_members),
         "asics": asics,
     }
-
-
-def get_lag_id_consistency_result():
-    """Return LAG ID consistency result without lag member checks."""
-    # Convenience entry for lag-id-only callers (e.g. future Monit lagIdCheck).
-    return get_system_lag_consistency_result(check_members=False)
 
 
 def _log_consistency_result(result):
@@ -598,15 +611,18 @@ def main():
     )
     parser.add_argument('--log-level', default='WARNING', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the logging level')
-    parser.add_argument('--lag-id-only', action='store_true',
-                        help='Check SYSTEM_LAG_ID_TABLE only; skip lag member checks')
+    parser.add_argument(
+        '--check-lag-members',
+        action='store_true',
+        help='Check SYSTEM_LAG_MEMBER_TABLE as well as SYSTEM_LAG_ID_TABLE',
+    )
     parser.add_argument('--json', action='store_true',
                         help='Output structured consistency result as JSON and exit 0')
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log_level))
 
-    # CLI --lag-id-only maps to skipping member checks inside get_system_lag_consistency_result().
-    check_members = not args.lag_id_only
+    # Default: LAG IDs only
+    check_members = args.check_lag_members
     result = get_system_lag_consistency_result(check_members=check_members)
 
     # show chassis system-lag-consistency: JSON payload, always exit 0; show prints text.

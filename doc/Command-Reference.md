@@ -42,6 +42,7 @@
 * [BGP](#bgp)
   * [BGP show commands](#bgp-show-commands)
   * [BGP config commands](#bgp-config-commands)
+* [Chassis system LAG consistency](#chassis-system-lag-consistency)
 * [Console](#console)
   * [Console show commands](#console-show-commands)
   * [Console config commands](#console-config-commands)
@@ -293,6 +294,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v13 | Oct-26-2026 | Add Chassis System Lag consistency check commands |
 | v12 | Jul-16-2026 | Add console mirror commands |
 | v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
@@ -18113,39 +18115,39 @@ Red Action.................. drop
 
 ## Chassis system LAG consistency
 
-VOQ chassis linecards only. Compares `CHASSIS_APP_DB` system LAG tables with local `ASIC_DB` on each ASIC namespace.
+VOQ chassis linecards only. Compares chassis_db system LAG tables with `ASIC_DB`
+on each ASIC namespace.
 
 **show chassis system-lag-consistency**
 
-- Full check: `SYSTEM_LAG_ID_TABLE` and `SYSTEM_LAG_MEMBER_TABLE` vs ASIC LAG / LAG member objects.
-- `--lag-id-only`: LAG ID table only (skips lag member checks).
-- `-j` / `--json`: structured JSON output (process exit code is always 0 with `--json`).
+- Default: `SYSTEM_LAG_ID_TABLE` only (same as the standalone script with no flags
+  and Monit `chassisLagIdCheck`).
+- `--check-lag-members`: also check `SYSTEM_LAG_MEMBER_TABLE`.
+- `-j` / `--json`: JSON from the checker (same payload as the script with `--json`).
+- Exit 0 for `ok` and `not_applicable`; exit 1 for `failed` and `error` (text or JSON).
+  Monit uses the standalone script, not this show command.
 
-Member status: chassis `disabled` is compared to ASIC `ingress_disable` / `egress_disable`.
-SWSS may leave both flags `false` on SYSTEM ports when chassis lists the member as
-disabled; symmetric flags (both true or both false) are treated as a match for
-`disabled`. Chassis `enabled` requires both ASIC disable flags to be false.
-
-Examples:
+Member status applies only with `--check-lag-members`; see
+`chassis_db_consistency_checker.py` for disable-flag matching rules.
 
 ```
 show chassis system-lag-consistency
-show chassis system-lag-consistency --lag-id-only
-show chassis system-lag-consistency --lag-id-only -j
+show chassis system-lag-consistency --check-lag-members
+show chassis system-lag-consistency -j
 ```
 
-The same logic is available as a standalone script:
+**Standalone script:** `/usr/local/bin/chassis_db_consistency_checker.py`
 
 ```
-/usr/local/bin/chassis_db_consistency_checker.py [--lag-id-only] [--json]
+chassis_db_consistency_checker.py [--log-level LEVEL] [--check-lag-members] [--json]
 ```
 
-Standalone script exit behavior (Monit / manual, without `--json`):
+- Default (no flags): LAG IDs only (Monit).
+ `--check-lag-members` adds member checks (same as **show** with that flag).
+- Without `--json`: exit 0 on success and not-applicable; non-zero on mismatch or redis errors (CRITICAL/ERROR syslog).
+- With `--json`: always exit 0; read `status` in the payload (`ok`, `failed`, `error`, `not_applicable`).
 
-- Mismatch: CRITICAL syslog messages and non-zero exit (`RC_ERR`).
-- Success: exit 0 (`RC_OK`).
-- Not applicable (non-VOQ or supervisor): exit 0 with informational log.
-- `--json`: always exit 0; mismatches appear in the JSON `status` field.
-
-Full member checks issue several `redis-dump` calls per ASIC namespace; allow
-enough time in Monit cycle intervals on busy linecards.
+Monit program `chassisLagIdCheck` in `/etc/monit/conf.d/sonic-host` runs the
+script with no arguments (like `routeCheck`). Non-VOQ and supervisor: exit 0.
+Empty `SYSTEM_LAG_ID_TABLE` is OK. `config reload` / `load_minigraph`
+unmonitor this check during restart.

@@ -143,22 +143,38 @@ def test_show_chassis_system_lag_consistency_ok(mock_consistency_ok):
     result = _invoke_consistency()
     assert result.exit_code == 0
     assert "System LAG consistency: OK" in result.output
+    assert "Mode: LAG ID only (lag members not checked)" in result.output
     assert "SYSTEM_LAG_ID_TABLE:      5 lag IDs" in result.output
-    assert "SYSTEM_LAG_MEMBER_TABLE:  2 lag members" in result.output
+    assert "SYSTEM_LAG_MEMBER_TABLE" not in result.output
     assert "ASIC namespace: asic0" in result.output
     assert "Lag IDs in ASIC_DB:      5 (0 mismatches)" in result.output
     assert "All ASIC namespaces are in sync with chassis_db." in result.output
 
 
+def test_show_chassis_system_lag_consistency_ok_with_members(mock_consistency_ok):
+    result = _invoke_consistency(["--check-lag-members"])
+    assert result.exit_code == 0
+    assert "System LAG consistency: OK" in result.output
+    assert "Mode: LAG ID only" not in result.output
+    assert "SYSTEM_LAG_MEMBER_TABLE:  2 lag members" in result.output
+
+
 def test_show_chassis_system_lag_consistency_failed(mock_consistency_failed):
     result = _invoke_consistency()
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "System LAG consistency: FAILED" in result.output
     assert "One or more ASIC namespaces are out of sync with chassis_db." in result.output
     assert "Lag IDs missing in ASIC_DB (in CHASSIS_DB - SYSTEM_LAG_ID_TABLE):" in result.output
     assert "    175" in result.output
     assert "Lag IDs extra in ASIC_DB (not in CHASSIS_DB - SYSTEM_LAG_ID_TABLE):" in result.output
     assert "    171" in result.output
+    assert "Lag members missing in ASIC_DB" not in result.output
+
+
+def test_show_chassis_system_lag_consistency_failed_with_members(mock_consistency_failed):
+    result = _invoke_consistency(["--check-lag-members"])
+    assert result.exit_code == 1
+    assert "System LAG consistency: FAILED" in result.output
     assert "Lag members missing in ASIC_DB (in CHASSIS_DB - SYSTEM_LAG_MEMBER_TABLE):" in result.output
     assert "    lag : port1" in result.output
     assert "Lag member status mismatch:" in result.output
@@ -174,7 +190,7 @@ def test_show_chassis_system_lag_consistency_not_applicable(mock_consistency_not
 
 def test_show_chassis_system_lag_consistency_error(mock_consistency_error):
     result = _invoke_consistency()
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "System LAG consistency: error" in result.output
     assert "No SYSTEM_LAG_ID_TABLE found in chassis_db" in result.output
 
@@ -185,34 +201,29 @@ def test_show_chassis_system_lag_consistency_json(mock_consistency_ok):
     payload = json.loads(result.output)
     assert payload["status"] == STATUS_OK
     assert payload["chassis_lag_id_count"] == 5
+    assert payload["chassis_lag_member_count"] == 0
+    assert payload["lag_id_only"] is True
+
+
+def test_show_chassis_system_lag_consistency_json_with_members(mock_consistency_ok):
+    result = _invoke_consistency(["--check-lag-members", "--json"])
+    payload = json.loads(result.output)
     assert payload["chassis_lag_member_count"] == 2
     assert payload["lag_id_only"] is False
 
 
-def test_show_chassis_system_lag_consistency_lag_id_only(mock_consistency_ok):
-    result = _invoke_consistency(["--lag-id-only"])
-    assert result.exit_code == 0
-    assert "Mode: LAG ID only (lag members not checked)" in result.output
-    assert "SYSTEM_LAG_MEMBER_TABLE" not in result.output
-    assert "Lag members in ASIC_DB" not in result.output
-    assert "ASIC namespace: asic0" in result.output
-    assert "Lag IDs in ASIC_DB:      5 (0 mismatches)" in result.output
-
-
-def test_show_chassis_system_lag_consistency_lag_id_only_json(mock_consistency_ok):
-    result = _invoke_consistency(["--lag-id-only", "--json"])
-    assert result.exit_code == 0
+def test_show_chassis_system_lag_consistency_json_failed(mock_consistency_failed):
+    result = _invoke_consistency(["--json"])
+    assert result.exit_code == 1
     payload = json.loads(result.output)
-    assert payload["lag_id_only"] is True
-    assert payload["chassis_lag_member_count"] == 0
-    assert "lag_members" not in payload["asics"]["asic0"]
+    assert payload["status"] == STATUS_FAILED
 
 
 def test_show_chassis_system_lag_consistency_lag_id_only_skips_member_output(
     mock_consistency_failed,
 ):
-    result = _invoke_consistency(["--lag-id-only"])
-    assert result.exit_code == 0
+    result = _invoke_consistency()
+    assert result.exit_code == 1
     assert "Lag IDs missing in ASIC_DB (in CHASSIS_DB - SYSTEM_LAG_ID_TABLE):" in result.output
     assert "    175" in result.output
     assert "Lag members missing in ASIC_DB" not in result.output
