@@ -1040,7 +1040,7 @@ def show():
 
 @show.group("interface")
 def show_interface():
-    """Display front-panel interface information."""
+    """Display information for front-panel CPO interfaces and their associated OE and ELS."""
 
 
 @show_interface.command("presence")
@@ -1571,14 +1571,23 @@ def config():
 
 @config.group("interface")
 def config_interface():
-    """Control a front-panel CPO interface."""
+    """Control hardware associated with a front-panel CPO interface.
+
+    Low-power mode and reset operate on the associated OE/ELS virtual module.
+    Tx-disable operates on every lane of the mapped OE bank instead.
+    """
 
 
 @config_interface.command("tx-disable")
 @click.argument("port")
 @click.argument("state", type=click.Choice(["true", "false"]))
 def config_interface_tx_disable(port, state):
-    """Enable or disable Tx-disable of a CPO virtual module."""
+    """Enable or disable Tx-disable on every lane of one OE bank.
+
+    PORT selects the mapped OE bank. All lanes of that bank are affected,
+    including other breakout subports sharing it; affected ports are listed.
+    The value true disables TX, and false enables TX.
+    """
     disable = state == "true"
     try:
         targets = get_vmodule_targets(port, per_controller=False)
@@ -1597,10 +1606,8 @@ def config_interface_tx_disable(port, state):
 def config_interface_lpmode(port, mode):
     """Set full-power or low-power mode of a CPO virtual module.
 
-    PORT is one or more comma-separated ports. The setting applies through the
-    CPO controller to every port it serves; the affected ports are listed. It
-    is not persistent: xcvrd restores full power when it next provisions the
-    ports.
+    This operation applies to the interface's associated OE and ELS.
+    All ports sharing the same CPO controller are affected.
     """
     low_power = mode == "low"
     try:
@@ -1619,9 +1626,8 @@ def config_interface_lpmode(port, mode):
 def config_interface_reset(port):
     """Reset a CPO virtual module through its controller.
 
-    PORT is one or more comma-separated ports. The reset applies through the
-    CPO controller to every port it serves; the affected ports are listed and
-    must be re-provisioned (admin toggle) after the reset.
+    This operation applies to the interface's associated OE and ELS.
+    All ports sharing the same CPO controller are affected.
     """
     try:
         targets = get_vmodule_targets(port, per_controller=True)
