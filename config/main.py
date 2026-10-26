@@ -3949,7 +3949,7 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
         namespace_list = multi_asic.get_namespaces_from_linux()
 
     buffer_model_updated = False
-    vendors_supporting_dynamic_buffer = ["mellanox", "barefoot"]
+    vendors_supporting_dynamic_buffer = ["mellanox"]
 
     for ns in namespace_list:
         if ns is DEFAULT_NAMESPACE:
