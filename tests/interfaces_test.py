@@ -393,7 +393,7 @@ signal local error                  0  Never
 
 # PHY Signal expected outputs
 phy_signal_all_options_output = """\
-Interface: Ethernet0
+Interface: Ethernet0 (ASIC)
 ================================================================================
 RX Signal Detect:    Current State    Changes    Last Change (UTC)
 -------------------  ---------------  ---------  -------------------
@@ -405,6 +405,24 @@ FEC Alignment Lock:    Current State    Changes    Last Change (UTC)
 Lane0:                 T*               10         2023-03-15 13:20:00
 Lane1:                 T                3          2023-03-15 13:20:00
 
+Interface: Ethernet0 (System)
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane20:              T                2          2023-03-15 13:20:00
+Lane21:              T                0          Never
+
+FEC Alignment Lock: No data available
+
+Interface: Ethernet0 (Line)
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane0:               T                0          Never
+Lane1:               T                0          Never
+
+FEC Alignment Lock: No data available
+
 """
 
 phy_signal_no_data_output = """\
@@ -414,7 +432,7 @@ Ensure 'counterpoll phy enable' has been run
 
 # PHY SERDES expected outputs
 phy_serdes_all_options_output = """\
-Interface: Ethernet0
+Interface: Ethernet0 (ASIC)
 ================================================================================
 RX SNR:
 --------------------------------------------------------------------------------
@@ -432,6 +450,28 @@ Lane    Tap0    Tap1
 0       -10     5
 1       -8      6
 
+Interface: Ethernet0 (System)
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  20     21
+SNR:   29.13  29.95
+
+RX VGA: No data available
+
+TX FIR Taps: No data available
+
+Interface: Ethernet0 (Line)
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  0      1
+SNR:   30.66  30.53
+
+RX VGA: No data available
+
+TX FIR Taps: No data available
+
 """
 
 phy_serdes_no_data_output = """\
@@ -441,23 +481,51 @@ Ensure 'counterpoll phy enable' has been run
 
 # PHY Signal alias mode expected output
 phy_signal_alias_mode_output = """\
-Interface: etp1
+Interface: etp1 (ASIC)
 ================================================================================
 RX Signal Detect:    Current State    Changes    Last Change (UTC)
 -------------------  ---------------  ---------  -------------------
 Lane0:               T                5          2023-03-15 13:20:00
 Lane1:               F                0          Never
 
+Interface: etp1 (System)
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane20:              T                2          2023-03-15 13:20:00
+Lane21:              T                0          Never
+
+Interface: etp1 (Line)
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane0:               T                0          Never
+Lane1:               T                0          Never
+
 """
 
 # PHY SERDES alias mode expected output
 phy_serdes_alias_mode_output = """\
-Interface: etp1
+Interface: etp1 (ASIC)
 ================================================================================
 RX SNR:
 --------------------------------------------------------------------------------
 Lane:  0      1      2      3
 SNR:   36697  35200  34500  36000
+
+Interface: etp1 (System)
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  20     21
+SNR:   29.13  29.95
+
+Interface: etp1 (Line)
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  0      1
+SNR:   30.66  30.53
 
 """
 
@@ -974,8 +1042,8 @@ class TestInterfaces(object):
         )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code != 0
-        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+        assert result.exit_code == 0
+        assert "No PHY attribute data available" in result.output
 
     def test_phy_signal_no_data(self):
         runner = CliRunner()
@@ -1023,6 +1091,55 @@ class TestInterfaces(object):
         assert result.exit_code == 0
 
     # PHY SERDES Tests
+    def test_phy_signal_rxlock_rxpcs(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0", "--rxlock", "--rxpcs"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "RX Lock Status:" in result.output
+        assert "Lane0:" in result.output
+        assert "PCS RX Link Status" in result.output
+
+    def test_phy_signal_gearbox_sections(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0", "--rxsig", "--rxlock"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Interface: Ethernet0 (ASIC)" in result.output
+        assert "Interface: Ethernet0 (System)" in result.output
+        assert "Interface: Ethernet0 (Line)" in result.output
+        assert "Lane20:" in result.output
+
+    def test_phy_serdes_rxffe_pam4eye(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet0", "--rxffe", "--pam4eye"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "RX FFE Taps:" in result.output
+        assert "PAM4 Eye Values:" in result.output
+        assert "Upper Ht" in result.output
+        assert "Interface: Ethernet0 (System)" in result.output
+        assert "Interface: Ethernet0 (Line)" in result.output
+
+    def test_phy_display_helpers_edge_cases(self):
+        import show.interfaces as show_interfaces
+        # Invalid JSON and missing data branches of the display helpers
+        show_interfaces.display_phy_pam4_eye_attribute("PAM4 Eye Values", None)
+        show_interfaces.display_phy_pam4_eye_attribute("PAM4 Eye Values", "not json")
+        show_interfaces.display_phy_pam4_eye_attribute("PAM4 Eye Values", "{}")
+        show_interfaces.display_phy_taps_attribute("RX FFE Taps", None)
+        show_interfaces.display_phy_taps_attribute("RX FFE Taps", "not json")
+        show_interfaces.display_phy_taps_attribute("RX FFE Taps", "{}")
+
     def test_phy_serdes_no_options(self):
         runner = CliRunner()
         result = runner.invoke(
@@ -1056,8 +1173,8 @@ class TestInterfaces(object):
         )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code != 0
-        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+        assert result.exit_code == 0
+        assert "No PHY SERDES data available" in result.output
 
     def test_phy_serdes_no_data(self):
         runner = CliRunner()
