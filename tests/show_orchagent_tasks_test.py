@@ -95,6 +95,22 @@ def test_ordinary_tasks_does_not_connect_if_sudo_cannot_start(fake_swsscommon):
     fake_swsscommon.DBConnector.assert_not_called()
 
 
+@pytest.mark.parametrize('command', ['orchagent', 'orch'])
+def test_root_show_entrypoint_reaches_ordinary_tasks_relay(fake_swsscommon, command):
+    from show import main as show
+
+    with mock.patch.object(show, 'Db', side_effect=PermissionError('reader socket denied')) as db, \
+         mock.patch.object(show, 'load_db_config'), \
+         mock.patch.object(show_orchagent.os, 'geteuid', return_value=65534), \
+         mock.patch.object(show_orchagent.subprocess, 'call', return_value=0) as run:
+        result = CliRunner().invoke(show.cli, [command, 'tasks'])
+    assert result.exit_code == 0, result.output
+    db.assert_not_called()
+    run.assert_called_once_with(
+        ['/usr/bin/sudo', '-n', '/usr/local/bin/show', 'orchagent', 'tasks'], close_fds=True)
+    fake_swsscommon.DBConnector.assert_not_called()
+
+
 def test_tasks_renders_table_sorted_by_total(fake_swsscommon):
     runner = CliRunner()
     result = runner.invoke(show_orchagent.orchagent, ["tasks"])
