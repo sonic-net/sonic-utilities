@@ -52,6 +52,8 @@ RETURN_CODE=$EXT_SUCCESS
 DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 IS_SUPERVISOR=false
+IS_CHASSIS_MODULE=false
+IS_VOQ_CHASSIS=false
 # True on a SONiC Switch-BMC (set below from switch_bmc=1 in platform_env.conf).
 # Switch data-plane collectors (ASIC/SDK, ports, FRR/BGP, STP, SAI) self-skip.
 # Distinct from is_bmc_supported() (Redfish debug-dump availability).
@@ -855,6 +857,59 @@ save_frr_info() {
 }
 
 ###############################################################################
+# Save chassis database CHASSIS_APP_DB and CHASSIS_STATE_DB
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_chassis_database_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_CHASSIS_MODULE; then
+        return
+    fi
+    if $IS_SUPERVISOR; then
+        # Supervisor, allways dump both database
+        save_redis "CHASSIS_APP_DB" "CHASSIS_APP_DB"  true
+        save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
+    else
+        # In LC, in case database-chassis is not reachable, ping CHASSIS_APP_DB first
+        ret=$(timeout 5 sonic-db-cli CHASSIS_APP_DB PING 2>/dev/null | grep -c True)
+        if [ $ret -gt 0 ]; then
+            save_redis "CHASSIS_APP_DB" "CHASSIS_APP_DB"  true
+            save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
+        fi
+    fi
+}
+
+###############################################################################
+# Save fabric info
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_fabric_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_VOQ_CHASSIS; then
+        return
+    fi
+
+    save_cmd "show fabric counters port" "fabric_counters.port"
+    save_cmd "show fabric counters queue" "fabric_counters.queue"
+    save_cmd "show fabric counters rate" "fabric_counters.rate"
+    save_cmd "show fabric isolation" "fabric_isolation"
+    save_cmd "show fabric monitor capacity" "fabric_monitor.capacity"
+    save_cmd "show fabric reachability" "fabric_reachability"
+    
+}
+
+    
+###############################################################################
 # Save Redis DB contents
 # Globals:
 #  None
@@ -869,7 +924,7 @@ save_redis_info() {
     save_redis "ASIC_DB"
     save_redis "COUNTERS_DB"
     # There are secrets in CONFIG_DB need to be cleanup.
-    save_redis "CONFIG_DB" "CONFIG_DB" remove_secret_from_config_db_dump
+    save_redis "CONFIG_DB" "CONFIG_DB" false remove_secret_from_config_db_dump
     save_redis "FLEX_COUNTER_DB"
     save_redis "STATE_DB"
     save_redis "APPL_STATE_DB"
@@ -1150,12 +1205,14 @@ save_proc_stats() {
 # Arguments:
 #  DB name: DB name
 #  Filename: Destination filename, if not given then filename would be DB name
+#  host_namespace: (OPTIONAL) default false. if true, only call save_cmd on host/default namespace 
 #  cleanup_method: (OPTIONAL) the cleanup method to procress dump file after it generated.
 # Returns:
 #  None
 ###############################################################################
 save_redis() {
-    local cleanup_method=${3:-dummy_cleanup_method}
+    local host_namespace=${3:-false}
+    local cleanup_method=${4:-dummy_cleanup_method}
     trap 'handle_error $? $LINENO' ERR
     local db_name=$1
     if [ $# -ge 2 ] && [ -n "$2" ]; then
@@ -1163,7 +1220,11 @@ save_redis() {
     else
         local dest_file_name="$db_name"
     fi
-    save_cmd_all_ns "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    if $host_namespace; then
+        save_cmd "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    else
+        save_cmd_all_ns "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    fi
 }
 
 ###############################################################################
@@ -1210,7 +1271,7 @@ get_route_table_size_by_asic_id_and_ipver() {
         return $RC
     fi
 
-    local route_tab_size=$(python3 -c "\
+    local route_tab_size=$(python3 -I -c "\
 import json
 with open('$filepath') as json_file:
     data = json.load(json_file)
@@ -1537,10 +1598,10 @@ collect_mellanox() {
     trap 'handle_error $? $LINENO' ERR
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
 
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local platform_folder="/usr/share/sonic/device/${platform}"
-    local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
-    local is_smartswitch=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
+    local hwsku=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local is_smartswitch=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
     local cmis_host_mgmt_files=(
         "pmon_daemon_control.json"
@@ -1664,8 +1725,8 @@ collect_mellanox() {
 ###############################################################################
 collect_nvidia_sdk_dumps() {
     trap 'handle_error $? $LINENO' ERR
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
-    local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local hwsku=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
     local def_dump_path="/var/log/mellanox/sdk-dumps"
     local sdk_dump_path=`cat /usr/share/sonic/device/${platform}/${hwsku}/sai.profile|grep "SAI_DUMP_STORE_PATH"|cut -d = -f2`
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
@@ -1828,9 +1889,9 @@ get_bcm_dnx_family() {
 collect_broadcom() {
     trap 'handle_error $? $LINENO' ERR
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
-    local hwsku=$(show platform summary --json | python -c 'import sys, json; \
+    local hwsku=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
     local hsdk=$(bcmcmd bsh -c SOC | grep 'Failed to execute')
 
@@ -2057,7 +2118,7 @@ collect_barefoot() {
 ###############################################################################
 collect_cisco_8000() {
     trap 'handle_error $? $LINENO' ERR
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
 
     if [ -d /usr/share/sonic/device/${platform} ]; then
@@ -2109,9 +2170,9 @@ collect_marvell_teralynx() {
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
 
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
-    local hwsku=$(show platform summary --json | python -c 'import sys, json; \
+    local hwsku=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
 
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
@@ -2260,6 +2321,7 @@ collect_nvidia_bmc_dump() {
     # times out. save_cmd tolerates fwutil failures without aborting the dump.
     save_cmd "fwutil show status"  "fwutil.status"
     save_cmd "fwutil show version" "fwutil.version"
+    save_cmd "get_component_versions.py" "component_versions"
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local HW_BMC_DUMP_FILE=/usr/bin/hw-management-bmc-generate-dump.sh
 
@@ -2389,7 +2451,7 @@ save_log_files() {
 #  0 if BMC is supported, 1 otherwise
 ###############################################################################
 is_bmc_supported() {
-    python3 -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
+    python3 -I -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
 }
 
 ###############################################################################
@@ -2606,7 +2668,7 @@ get_asic_count() {
     then
          redirect_eval=""
     fi
-    local cmd="python -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())'"
+    local cmd="python3 -I -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())'"
     echo `eval ${cmd} ${redirect_eval}`
 }
 
@@ -2757,7 +2819,7 @@ start_dpu_flow_dump() {
     fi
 
     local is_dpu
-    is_dpu=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_dpu())" 2>/dev/null) || is_dpu="False"
+    is_dpu=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.is_dpu())" 2>/dev/null) || is_dpu="False"
     if [[ "$is_dpu" != "True" ]]; then
         return
     fi
@@ -2875,7 +2937,7 @@ main() {
 
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
     local device_type=`sonic-db-cli CONFIG_DB hget 'DEVICE_METADATA|localhost' type`
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
 
     # 1st counter snapshot early (self-skips on a Switch-BMC); need 2 for a trend.
     save_counter_snapshot $asic 1
@@ -2891,6 +2953,9 @@ main() {
     wait
 
     save_chassis_modules_info &
+    wait
+    
+    save_fabric_info &
     wait
     
     save_platform_info &
@@ -2974,6 +3039,9 @@ main() {
     wait
     save_redis_info &
 
+    save_chassis_database_info &
+    wait
+    
     save_container_files &
 
     if $DEBUG_DUMP
@@ -3338,7 +3406,7 @@ fi
 ##
 ## Attempt Locking
 ##
-platform_name=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
+platform_name=$(show platform summary --json | python3 -I -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
 supervisor=0
 switch_bmc=0
 PLATFORM_ENV_CONF=/usr/share/sonic/device/${platform_name}/platform_env.conf
@@ -3352,7 +3420,19 @@ fi
 if [[ x"$switch_bmc" == x"1" ]]; then
     IS_SWITCH_BMC=true
 fi
-    
+CHASSIS_DB_CONF=/usr/share/sonic/device/${platform_name}/chassisdb.conf
+if [ -f "$CHASSIS_DB_CONF" ]; then
+    IS_CHASSIS_MODULE=true
+fi
+
+switch_type=$(sonic-db-cli CONFIG_DB hget "DEVICE_METADATA|localhost" "switch_type")
+
+# define IS_VOQ_CHASSIS for voq based platform (chassis or multi-asic Pizza Box)
+# This is for "show fabric ..." commands 
+if $IS_CHASSIS_MODULE && [[ x"$switch_type" == x"voq" || x"$switch_type" == x"fabric" ]]; then
+    IS_VOQ_CHASSIS=true
+fi
+
 if $MKDIR "${LOCKDIR}" &>/dev/null; then
     trap 'handle_exit' EXIT
     echo "$$" > "${PIDFILE}"
