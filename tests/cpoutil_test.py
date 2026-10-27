@@ -307,6 +307,45 @@ class TestMappingCommand(object):
             operation.assert_not_called()
 
 
+class TestElsLaserBankSelection:
+    @pytest.mark.parametrize("bank,lasers", [(0, (0, 7)), (1, (8, 15)), (2, (16, 23))])
+    def test_selects_only_lasers_from_the_api_bank(self, bank, lasers):
+        values = {"LaneState{}".format(lane + 1): "state-{}".format(lane) for lane in range(8)}
+        result = cpoutil._select_els_laser_values(values, lasers, bank)
+        assert result == {
+            "lane{:02d}".format(lasers[0]): "state-0",
+            "lane{:02d}".format(lasers[1]): "state-7",
+        }
+
+    @pytest.mark.parametrize("bank,laser", [(0, 8), (1, 7), (1, 16)])
+    def test_rejects_lasers_from_another_bank(self, bank, laser):
+        values = {"LaneState{}".format(lane + 1): "Active" for lane in range(8)}
+        with pytest.raises(cpoutil.CpoCommandError, match="requires bank.*but API uses bank"):
+            cpoutil._select_els_laser_values(values, (laser,), bank)
+
+    def test_missing_state_in_the_correct_bank_is_reported(self):
+        with pytest.raises(cpoutil.CpoCommandError, match="did not return data for ELS laser 15"):
+            cpoutil._select_els_laser_values({"LaneState1": "Active"}, (15,), 1)
+
+    @pytest.mark.parametrize("bank", [0, 1])
+    def test_lane_status_checks_the_selected_api_bank(self, coverage_environment, monkeypatch, bank):
+        data = copy.deepcopy(COVERAGE_CPO_DATA)
+        data["platform_data"]["interfaces"]["Ethernet0"]["laser_ids"] = [8, 9]
+        cpoutil.cpo_mapping = CpoMapping(data, COVERAGE_PORT_CONFIG)
+        eeprom = coverage_environment.api.xcvr_eeprom
+        mem_map = type(eeprom.mem_map)(eeprom.mem_map.codes, bank=bank)
+        monkeypatch.setattr(eeprom, "mem_map", mem_map)
+        result = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet0", "--json"])
+        if bank == 0:
+            assert result.exit_code == 1, result.output
+            assert "ELS laser 8 requires bank 1, but API uses bank 0" in result.output
+        else:
+            assert result.exit_code == 0, result.output
+            assert json.loads(result.output)["Ethernet0"]["ELS Lane State"] == {
+                "lane08": "Active", "lane09": "Inactive",
+            }
+
+
 class TestOeLocalBank(object):
     """Interface and full-dump EEPROM access must use the declared OE bank."""
 
@@ -885,7 +924,7 @@ class TestHelperCoverage(object):
             "lane01": 2
         }
         assert cpoutil._select_els_laser_values(
-            {"Laser0": "a", "Laser1": "b"}, (1,)
+            {"Laser0": "a", "Laser1": "b"}, (1,), 0
         ) == {"lane01": "b"}
 
     def test_formatters(self, capsys):

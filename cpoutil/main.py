@@ -12,6 +12,7 @@ from tabulate import tabulate
 
 from sonic_py_common import multi_asic
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
+from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.consts import CMIS_LANES_PER_BANK
 from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin
 from sonic_platform_base.sonic_xcvr.xcvr_eeprom import XcvrEeprom
 from utilities_common import platform_sfputil_helper
@@ -385,12 +386,19 @@ def _select_lane_values(values, lane_positions):
     return selected
 
 
-def _select_els_laser_values(values, laser_ids):
+def _select_els_laser_values(values, laser_ids, bank):
     """Select ELS lane states assigned to one logical interface."""
     normalized = _normalize_lane_values(values)
     selected = {}
     for laser in laser_ids:
-        source_key = "lane{:02d}".format(laser % 8)
+        laser_bank, local_lane = divmod(laser, CMIS_LANES_PER_BANK)
+        if laser_bank != bank:
+            raise CpoCommandError(
+                "ELS laser {} requires bank {}, but API uses bank {}".format(
+                    laser, laser_bank, bank
+                )
+            )
+        source_key = "lane{:02d}".format(local_lane)
         if source_key not in normalized:
             raise CpoCommandError(
                 "Platform API did not return data for ELS laser {}".format(
@@ -1297,7 +1305,7 @@ def show_interface_lane_status(port, json_output):
                     "ELS": context["mapping"].els_name.upper(),
                     "ELS Status": els_status,
                     "ELS Lane State": _select_els_laser_values(
-                        els_api.get_per_lane_state(), laser_ids
+                        els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
                     ) if laser_ids is not None else {},
                     "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
                     "Lane Lasers": _lane_lasers(context),

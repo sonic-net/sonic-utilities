@@ -100,6 +100,9 @@ CPO_DATA = {
 class FakeApi:
     NUM_CHANNELS = 2
 
+    def __init__(self):
+        self.xcvr_eeprom = mock.Mock(mem_map=mock.Mock(bank=0))
+
     def get_lpmode(self):
         return False
 
