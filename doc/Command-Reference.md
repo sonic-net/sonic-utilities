@@ -254,7 +254,6 @@
   * [Debug Dumps](#debug-dumps)
   * [Event Driven Techsupport Invocation](#event-driven-techsupport-invocation)
 * [Routing Stack](#routing-stack)
-* [Quagga BGP Show Commands](#Quagga-BGP-Show-Commands)
 * [ZTP Configuration And Show Commands](#ztp-configuration-and-show-commands)
   * [ZTP show commands](#ztp-show-commands)
   * [ZTP configuration commands](#ztp-configuration-commands)
@@ -628,8 +627,6 @@ This command displays relevant information as the SONiC and Linux kernel version
   docker-router-advertiser   latest              b1a62023958c        255MB
   docker-platform-monitor    HEAD.32-21ea29a     40b40a4b2164        287MB
   docker-platform-monitor    latest              40b40a4b2164        287MB
-  docker-fpm-quagga          HEAD.32-21ea29a     546036fe6838        282MB
-  docker-fpm-quagga          latest              546036fe6838        282MB
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#basic-show-commands)
 
@@ -3111,27 +3108,17 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
 
 ## BGP
 
-This section explains all the BGP show commands and BGP configuration commands in both "Quagga" and "FRR" routing software that are supported in SONiC.
-In 201811 and older versions "Quagga" was enabled by default. In current version "FRR" is enabled by default.
-Most of the FRR show commands start with "show bgp". Similar commands in Quagga starts with "show ip bgp". All sub-options supported in all these show commands are common for FRR and Quagga.
-Detailed show commands examples for Quagga are provided at the end of this document.This section captures only the commands supported by FRR.
+This section explains the BGP show and configuration commands supported by SONiC's FRR routing stack.
 
 ### BGP show commands
 
 
-**show bgp summary (Versions >= 201904 using default FRR routing stack)**
+**show ip bgp summary**
 
-**show ip bgp summary (Versions <= 201811 using Quagga routing stack)**
-
-This command displays the summary of all IPv4 & IPv6 bgp neighbors that are configured and the corresponding states.
+This command displays the summary of all configured IPv4 BGP neighbors and their states.
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
-  ```
-  show bgp summary
-  ```
-  *Versions <= 201811 using Quagga routing stack*
   ```
   show ip bgp summary
   ```
@@ -3155,72 +3142,26 @@ This command displays the summary of all IPv4 & IPv6 bgp neighbors that are conf
 
   Total number of neighbors 4
   ```
+**show ip bgp neighbors**
 
-- Example:
-  ```
-  admin@sonic:~$ show bgp summary
-
-  IPv4 Unicast Summary:
-  BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
-  BGP table version 6465
-  RIB entries 12807, using 2001 KiB of memory
-  Peers 4, using 83 KiB of memory
-  Peer groups 2, using 128 bytes of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd
-  10.0.0.57       4      64600    3995    4001        0    0    0 00:39:32         6400
-  10.0.0.59       4      64600    3995    3998        0    0    0 00:39:32         6400
-  10.0.0.61       4      64600    3995    4001        0    0    0 00:39:32         6400
-  10.0.0.63       4      64600    3995    3998        0    0    0 00:39:32         6400
-
-  Total number of neighbors 4
-
-  IPv6 Unicast Summary:
-  BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
-  BGP table version 12803
-  RIB entries 12805, using 2001 KiB of memory
-  Peers 4, using 83 KiB of memory
-  Peer groups 2, using 128 bytes of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd
-  fc00::72        4      64600    3995    5208        0    0    0 00:39:30         6400
-  fc00::76        4      64600    3994    5208        0    0    0 00:39:30         6400
-  fc00::7a        4      64600    3993    5208        0    0    0 00:39:30         6400
-  fc00::7e        4      64600    3993    5208        0    0    0 00:39:30         6400
-
-  Total number of neighbors 4
-  ```
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp summary" for Quagga.
-
-
-
-**show bgp neighbors (Versions >= 201904 using default FRR routing stack)**
-
-**show ip bgp neighbors (Versions <= 201811 using Quagga routing stack)**
-
-This command displays all the details of IPv4 & IPv6 BGP neighbors when no optional argument is specified.
+This command displays IPv4 BGP neighbor details when no optional argument is specified.
 
 When the optional argument IPv4_address is specified, it displays the detailed neighbor information about that specific IPv4 neighbor.
 
 Command has got additional optional arguments to display only the advertised routes, or the received routes, or all routes.
 
-In order to get details for an IPv6 neigbor, use "show bgp ipv6 neighbor <ipv6_address>" command.
+Use `show ipv6 bgp neighbors <ipv6-address>` to display details for an IPv6 neighbor.
 
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
-  ```
-  show bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
-  ```
-  *Versions <= 201811 using Quagga routing stack*
   ```
   show ip bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
   ```
 
 - Example:
   ```
-  admin@sonic:~$ show bgp neighbors
+  admin@sonic:~$ show ip bgp neighbors
   BGP neighbor is 10.0.0.57, remote AS 64600, local AS 65100, external link
   Description: ARISTA01T1
   BGP version 4, remote router ID 100.1.0.29, local router ID 10.1.0.32
@@ -3278,16 +3219,14 @@ Optionally, you can specify an IP address in order to display only that particul
 
 - Example:
   ```
-  admin@sonic:~$ show bgp neighbors 10.0.0.57
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57
 
-  admin@sonic:~$ show bgp neighbors 10.0.0.57 advertised-routes
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57 advertised-routes
 
-  admin@sonic:~$ show bgp neighbors 10.0.0.57 received-routes
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57 received-routes
 
-  admin@sonic:~$ show bgp neighbors 10.0.0.57 routes
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57 routes
   ```
-
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp neighbors" for Quagga.
 
 **show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
 
@@ -3322,26 +3261,19 @@ This command displays all the details of IPv4 Border Gateway Protocol (BGP) pref
   admin@sonic:~$ show ip bgp network 10.1.0.32/32 longer-prefixes
   ```
 
-**show bgp ipv6 summary (Versions >= 201904 using default FRR routing stack)**
-
-**show ipv6 bgp summary (Versions <= 201811 using Quagga routing stack)**
+**show ipv6 bgp summary**
 
 This command displays the summary of all IPv6 bgp neighbors that are configured and the corresponding states.
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
-  ```
-  show bgp ipv6 summary
-  ```
-  *Versions <= 201811 using Quagga routing stack*
   ```
   show ipv6 bgp summary
   ```
 
 - Example:
   ```
-  admin@sonic:~$ show bgp ipv6 summary
+  admin@sonic:~$ show ipv6 bgp summary
   BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
   BGP table version 12803
   RIB entries 12805, using 2001 KiB of memory
@@ -3356,39 +3288,25 @@ This command displays the summary of all IPv6 bgp neighbors that are configured 
 
   Total number of neighbors 4
   ```
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ipv6 bgp summary" for Quagga.
-
-
-
-**show bgp ipv6 neighbors (Versions >= 201904 using default FRR routing stack)**
-
-**show ipv6 bgp neighbors (Versions <= 201811 using Quagga routing stack)**
+**show ipv6 bgp neighbors**
 
 This command displays all the details of one particular IPv6 Border Gateway Protocol (BGP) neighbor. Option is also available to display only the advertised routes, or the received routes, or all routes.
 
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
-  ```
-  show bgp ipv6 neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
-  ```
-  *Versions <= 201811 using Quagga routing stack*
   ```
   show ipv6 bgp neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
   ```
 
 - Example:
   ```
-  admin@sonic:~$ show bgp ipv6 neighbors fc00::72 advertised-routes
+  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 advertised-routes
 
-  admin@sonic:~$ show bgp ipv6 neighbors fc00::72 received-routes
+  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 received-routes
 
-  admin@sonic:~$ show bgp ipv6 neighbors fc00::72 routes
+  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 routes
   ```
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp summary" for Quagga.
-
-
 **show ipv6 bgp network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
 
 This command displays all the details of IPv6 Border Gateway Protocol (BGP) prefixes.
@@ -8816,7 +8734,7 @@ The type of interfaces include the following.
 #### show ip protocol
 
 This command displays the route-map that is configured for the routing protocol.
-Refer the routing stack [Quagga Command Reference](https://www.nongnu.org/quagga/docs/quagga.pdf) or [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) to know more about this command.
+See the [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) for more information about this command.
 
 - Usage:
   ```
@@ -8956,7 +8874,7 @@ The type of interfaces include the following.
 **show ipv6 protocol**
 
 This command displays the route-map that is configured for the IPv6 routing protocol.
-Refer the routing stack [Quagga Command Reference](https://www.nongnu.org/quagga/docs/quagga.pdf) or [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) to know more about this command.
+See the [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) for more information about this command.
 
 
 - Usage:
@@ -13786,7 +13704,7 @@ This command is used to display the startup configuration for the BGP module.
 - Example:
   ```
   admin@sonic:~$ show startupconfiguration bgp
-  Routing-Stack is: quagga
+  Routing-Stack is: frr
   !
   ! =========== Managed by sonic-cfggen DO NOT edit manually! ====================
   ! generated by templates/quagga/bgpd.conf.j2 with config DB data
@@ -16697,231 +16615,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#troubl
 
 ## Routing Stack
 
-SONiC software is agnostic of the routing software that is being used in the device. For example, users can use either Quagga or FRR routing stack as per their requirement.
-A separate shell (vtysh) is provided to configure such routing stacks.
-Once if users go to "vtysh", they can use the routing stack specific commands as given in the following example.
-
-- Example (Quagga Routing Stack):
-  ```
-  admin@sonic:~$ vtysh
-
-  Hello, this is Quagga (version 0.99.24.1).
-  Copyright 1996-2005 Kunihiro Ishiguro, et al.
-
-  sonic# show route-map (This command displays the route-map that is configured for the routing protocol.)
-  ZEBRA:
-  route-map RM_SET_SRC, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      src 10.12.0.102
-    Call clause:
-    Action:
-      Exit routemap
-  ```
-
-Refer the routing stack [Quagga Command Reference](https://www.nongnu.org/quagga/docs/quagga.pdf) or [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) to know more about about the routing stack configuration.
+SONiC uses FRR as its routing stack. Use `vtysh` to access the FRR CLI and configure routing protocols. See the [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) for the available commands.
 
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#routing-stack)
 
-
-## Quagga BGP Show Commands
-
-**show ip bgp summary**
-
-This command displays the summary of all IPv4 bgp neighbors that are configured and the corresponding states.
-
-- Usage:
-  ```
-  show ip bgp summary
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show ip bgp summary
-  BGP router identifier 1.2.3.4, local AS number 65061
-  RIB entries 6124, using 670 KiB of memory
-  Peers 2, using 143 KiB of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd
-  192.168.1.161    4 65501   88698  102781        0    0    0 08w5d14h        2
-  192.168.1.163    4 65502   88698  102780        0    0    0 08w5d14h        2
-
-  Total number of neighbors 2
-  ```
-
-**show ip bgp neighbors**
-
-This command displays all the details of IPv4 & IPv6 BGP neighbors when no optional argument is specified.
-
-When the optional argument IPv4_address is specified, it displays the detailed neighbor information about that specific IPv4 neighbor.
-
-Command has got additional optional arguments to display only the advertised routes, or the received routes, or all routes.
-
-In order to get details for an IPv6 neigbor, use "show ipv6 bgp neighbor <ipv6_address>" command.
-
-- Usage:
-  ```
-  show ip bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show ip bgp neighbors
-  BGP neighbor is 192.168.1.161, remote AS 65501, local AS 65061, external link
-   Description: ARISTA01T0
-    BGP version 4, remote router ID 1.2.3.4
-    BGP state = Established, up for 08w5d14h
-    Last read 00:00:46, hold time is 180, keepalive interval is 60 seconds
-    Neighbor capabilities:
-      4 Byte AS: advertised and received
-      Dynamic: received
-      Route refresh: advertised and received(old & new)
-      Address family IPv4 Unicast: advertised and received
-      Graceful Restart Capabilty: advertised and received
-        Remote Restart timer is 120 seconds
-        Address families by peer:
-          IPv4 Unicast(not preserved)
-    Graceful restart informations:
-      End-of-RIB send: IPv4 Unicast
-      End-of-RIB received: IPv4 Unicast
-    Message statistics:
-      Inq depth is 0
-      Outq depth is 0
-                           Sent       Rcvd
-      Opens:                  1          1
-      Notifications:          0          0
-      Updates:            14066          3
-      Keepalives:         88718      88698
-      Route Refresh:          0          0
-      Capability:             0          0
-      Total:             102785      88702
-    Minimum time between advertisement runs is 30 seconds
-
-   For address family: IPv4 Unicast
-    Community attribute sent to this neighbor(both)
-    2 accepted prefixes
-
-    Connections established 1; dropped 0
-    Last reset never
-  Local host: 192.168.1.160, Local port: 32961
-  Foreign host: 192.168.1.161, Foreign port: 179
-  Nexthop: 192.168.1.160
-  Nexthop global: fe80::f60f:1bff:fe89:bc00
-  Nexthop local: ::
-  BGP connection: non shared network
-  Read thread: on  Write thread: off
-  ```
-
-Optionally, you can specify an IP address in order to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
-
-
-- Examples:
-  ```
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161
-
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161 advertised-routes
-
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161 received-routes
-
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161 routes
-  ```
-
-**show ipv6 bgp summary**
-
-This command displays the summary of all IPv4 bgp neighbors that are configured and the corresponding states.
-
-- Usage:
-  ```
-  show ipv6 bgp summary
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show ipv6 bgp summary
-  BGP router identifier 10.1.0.32, local AS number 65100
-  RIB entries 12809, using 1401 KiB of memory
-  Peers 8, using 36 KiB of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd
-  fc00::72        4 64600   12588   12591        0    0    0 06:51:17     6402
-  fc00::76        4 64600   12587    6190        0    0    0 06:51:28     6402
-  fc00::7a        4 64600   12587    9391        0    0    0 06:51:23     6402
-  fc00::7e        4 64600   12589   12592        0    0    0 06:51:25     6402
-
-  Total number of neighbors 4
-  ```
-
-**show ipv6 bgp neighbors**
-
-This command displays all the details of one particular IPv6 Border Gateway Protocol (BGP) neighbor. Option is also available to display only the advertised routes, or the received routes, or all routes.
-
-- Usage:
-  ```
-  show ipv6 bgp neighbors <ipv6-address> (advertised-routes | received-routes | routes)
-  ```
-
-- Examples:
-  ```
-  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 advertised-routes
-
-  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 received-routes
-
-  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 routes
-  ```
-
-**show route-map**
-
-This command displays the routing policy that takes precedence over the other route processes that are configured.
-
-- Usage:
-  ```
-  show route-map
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show route-map
-  ZEBRA:
-  route-map RM_SET_SRC, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      src 10.12.0.102
-    Call clause:
-    Action:
-      Exit routemap
-  ZEBRA:
-  route-map RM_SET_SRC6, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      src fc00:1::102
-    Call clause:
-    Action:
-      Exit routemap
-  BGP:
-  route-map FROM_BGP_SPEAKER_V4, permit, sequence 10
-    Match clauses:
-    Set clauses:
-    Call clause:
-    Action:
-      Exit routemap
-  BGP:
-  route-map TO_BGP_SPEAKER_V4, deny, sequence 10
-    Match clauses:
-    Set clauses:
-    Call clause:
-    Action:
-      Exit routemap
-  BGP:
-  route-map ISOLATE, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      as-path prepend 65000
-    Call clause:
-    Action:
-      Exit routemap
-  ```
-Go Back To [Beginning of the document](#) or [Beginning of this section](#quagga-bgp-show-commands)
 
 ## ZTP Configuration and Show Commands
 
