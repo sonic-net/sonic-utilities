@@ -4,10 +4,9 @@ import pytest
 
 from .cpoutil_test import coverage_environment as _coverage_environment
 from .cpoutil_test import invoke_coverage, shared_port_mapping  # noqa: F401
-from sonic_platform_base.sonic_xcvr.codes.broadcom.bailly import BaillyCodes
 from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
-from sonic_platform_base.sonic_xcvr.mem_maps.broadcom.bailly import BaillyElsfpMemMap
 from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisFlatMemMap, CmisMemMap
+from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
 
 
 coverage_environment = _coverage_environment
@@ -16,7 +15,10 @@ coverage_environment = _coverage_environment
 @pytest.fixture
 def endpoints(coverage_environment):
     cpo = coverage_environment
-    maps = {'oe': CmisMemMap(CmisCodes), 'els': BaillyElsfpMemMap(BaillyCodes, base_page=4)}
+    els_map = CmisMemMap(CmisCodes)
+    # Model an endpoint with remapped upper pages using public CMIS metadata.
+    els_map.pages = [CmisPage(CmisCodes, page=page) for page in (0xB4, 0xB5, 0xB6)]
+    maps = {'oe': CmisMemMap(CmisCodes), 'els': els_map}
     for name, attribute in (('oe', 'oe'), ('els', 'elsfp')):
         api = SimpleNamespace(
             xcvr_eeprom=SimpleNamespace(mem_map=maps[name], reader=cpo.read_eeprom),
