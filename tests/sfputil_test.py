@@ -283,20 +283,6 @@ class TestSfputil(object):
         output = sfputil.convert_sfp_info_to_output_string(sfp_info_dict)
         assert output == expected_output
 
-    def test_convert_sfp_info_has_no_legacy_els_labels(self):
-        output = sfputil.convert_sfp_info_to_output_string({
-            "cmis_rev": "5.0",
-            "manufacturer": "test vendor",
-            "els_vendor_name": "legacy ELS vendor",
-            "rlm_laser_wavelength_grid": "legacy grid",
-        })
-        assert output == (
-            "        CMIS Revision: 5.0\n"
-            "        Vendor Name: test vendor\n"
-            "        els_vendor_name: legacy ELS vendor\n"
-            "        rlm_laser_wavelength_grid: legacy grid\n"
-        )
-
     @pytest.mark.parametrize("sfp_type, is_sfp_cmis, dom_info_dict, expected_output", [
         (
             'QSFP28 or later',

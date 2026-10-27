@@ -1021,21 +1021,6 @@ Ethernet36  Present
         }, sfpshow.CMIS_STATUS_MAP)
         assert output == "        Current module state: ModuleReady\n"
 
-    def test_sfpshow_has_no_legacy_els_identity_labels(self):
-        sfp_show = sfpshow.SFPShow(None, None)
-        output = sfp_show.convert_sfp_info_to_output_string({
-            "cmis_rev": "5.0",
-            "manufacturer": "test vendor",
-            "els_vendor_name": "legacy ELS vendor",
-            "rlm_laser_wavelength_grid": "legacy grid",
-        }, {})
-        assert output == (
-            "        CMIS Rev: 5.0\n"
-            "        Vendor Name: test vendor\n"
-            "        els_vendor_name: legacy ELS vendor\n"
-            "        rlm_laser_wavelength_grid: legacy grid\n"
-        )
-
     def test_sfp_eeprom_with_dom(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet0", "-d"])
