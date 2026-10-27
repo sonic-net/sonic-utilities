@@ -16886,10 +16886,10 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#macsec
 # SFP Utilities Commands
  This sub-section explains the list of commands available for SFP utilities feature.
 
-On a CPO platform detected by `device_info.get_cpo_data()`, `sfputil` prints
-`cpo.json detected, current device is cpo device, please use cpoutil instead`
-and exits with status 5 before initializing the chassis or executing a subcommand.
-Use `cpoutil` to manage CPO devices. `sfputil --help` remains available.
+Use `sfputil` for SFP ports and `cpoutil` for CPO ports.
+Queries such as `sfputil show eeprom` and `sfputil show lpmode` filter out CPO ports
+when no port is specified. Explicitly selecting a CPO port for these queries reports
+`Error: Port '<port>' is a CPO port; please use cpoutil instead` and exits with status 1.
 
 ## SFP Utilities show commands
  
