@@ -4,9 +4,6 @@ import pytest
 
 from .cpoutil_test import coverage_environment as _coverage_environment
 from .cpoutil_test import invoke_coverage, shared_port_mapping  # noqa: F401
-from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
-from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisFlatMemMap, CmisMemMap
-from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
 
 
 coverage_environment = _coverage_environment
@@ -14,6 +11,11 @@ coverage_environment = _coverage_environment
 
 @pytest.fixture
 def endpoints(coverage_environment):
+    # conftest reloads platform modules between files; use the current classes.
+    from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisMemMap
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
+
     cpo = coverage_environment
     els_map = CmisMemMap(CmisCodes)
     # Model an endpoint with remapped upper pages using public CMIS metadata.
@@ -64,6 +66,9 @@ def test_undeclared_page_is_rejected_before_io(endpoints, operation, interface, 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
 @pytest.mark.parametrize('lower,offset,size', [(False, 0, 1), (False, 127, 2), (True, 128, 1), (True, 127, 2)])
 def test_page_half_is_enforced(endpoints, operation, lower, offset, size):
+    from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisFlatMemMap
+
     cpo, maps = endpoints
     mem_map = CmisFlatMemMap(CmisCodes)
     mem_map.pages = [mem_map.pages[0 if lower else 1]]
