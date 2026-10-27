@@ -2069,6 +2069,17 @@ def load(filename, yes):
             click.echo("The config_db file {} doesn't exist".format(file))
             return
 
+        # Validate config against YANG models before loading
+        try:
+            if not config_file_yang_validation(file):
+                click.secho("Invalid config file: '{}'!".format(file), fg='magenta')
+                return
+        except click.Abort:
+            raise
+        except Exception as e:
+            click.secho("Failed to validate config file {}: {}".format(file, str(e)), fg='magenta')
+            return
+
         if namespace is None:
             command = [str(SONIC_CFGGEN_PATH), '-j', file, '--write-to-db']
         else:
