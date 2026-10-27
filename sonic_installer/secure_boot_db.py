@@ -163,8 +163,16 @@ class Plan:
         return self.boot_critical_binaries_at_risk > 0
 
 
+def best_effort_print(message, *, file=None):
+    """Never let an unavailable output stream interrupt certificate restoration."""
+    try:
+        print(message, file=file, flush=True)
+    except (OSError, ValueError):
+        pass
+
+
 def warn(message):
-    print(f"{PROG}: warning: {message}", file=sys.stderr)
+    best_effort_print(f"{PROG}: warning: {message}", file=sys.stderr)
 
 
 def run(cmd, **kwargs):
@@ -298,14 +306,10 @@ def secure_boot_state(config):
 
 
 def ensure_efivars(config):
-    def populated():
-        return config.efivars_dir.is_dir() and any(config.efivars_dir.iterdir())
-
-    if not populated():
-        succeeds(["mount", "-t", "efivarfs", "efivarfs", str(config.efivars_dir)])
-    if not populated():
+    """Require efivars to be available without changing system mounts."""
+    if not config.efivars_dir.is_dir() or not any(config.efivars_dir.iterdir()):
         raise ScriptError(f"UEFI efivars not available at {config.efivars_dir} "
-                          "(not a UEFI system, or firmware access blocked)")
+                          "(not a UEFI system, efivarfs is not mounted, or firmware access blocked)")
 
 
 def load_db_certs(config, work):
@@ -330,7 +334,12 @@ def installed_images():
 
 def collect_targets(config, images):
     """Return ([boot directories], SONiC ESP directory)."""
-    targets = [config.host_path / f"{IMAGE_DIR_PREFIX}{image[len(IMAGE_PREFIX):]}" / "boot" for image in images]
+    targets = []
+    for image in images:
+        directory = config.host_path / f"{IMAGE_DIR_PREFIX}{image[len(IMAGE_PREFIX):]}" / "boot"
+        if not any(binary.name.startswith("vmlinuz-") for binary in discover_binaries(directory)):
+            raise ScriptError(f"no kernel found for installed image {image} in {directory}; refusing to prune")
+        targets.append(directory)
     targets += [config.esp_path / name for name in FALLBACK_ESP_DIRS if (config.esp_path / name).is_dir()]
 
     # ONIE installs shim and GRUB into EFI/SONiC-OS.
@@ -508,7 +517,10 @@ def update_db(config, auth, append):
             succeeds(["chattr", "-i", str(variable)])
         except subprocess.SubprocessError as e:
             warn(f"could not clear immutable flag on {variable}: {e}; attempting the firmware update")
-    sys.stdout.flush()
+    try:
+        sys.stdout.flush()
+    except (OSError, ValueError):
+        pass
     cmd = ["efi-updatevar"] + (["-a"] if append else []) + ["-f", str(auth), "db"]
     # A deadline must not kill a firmware write after db has been emptied.
     return subprocess.run(cmd).returncode == 0
@@ -517,18 +529,18 @@ def update_db(config, auth, append):
 def apply_plan(config, plan, work, verbose=True):
     """Apply the validated updates and verify the resulting boot chain."""
     if verbose:
-        print("Deleting all db certificates (applying remove-all .auth) ...")
+        best_effort_print("Deleting all db certificates (applying remove-all .auth) ...")
     if not update_db(config, config.remove_all_auth, append=False):
         raise ScriptError(f"failed to apply remove-all .auth ({config.remove_all_auth}); "
                           "db unchanged or partially modified -- verify before rebooting")
     if verbose:
-        print("  db emptied.")
+        best_effort_print("  db emptied.")
 
-        print(f"Reinstalling {len(plan.selected_auths)} image-signing certificate(s) ...")
+        best_effort_print(f"Reinstalling {len(plan.selected_auths)} image-signing certificate(s) ...")
     failed = []
     for auth in plan.selected_auths:
         if verbose:
-            print(f"  appending: {auth}")
+            best_effort_print(f"  appending: {auth}")
         failure = f"failed to append {auth}"
         try:
             if update_db(config, auth, append=True):
@@ -539,26 +551,27 @@ def apply_plan(config, plan, work, verbose=True):
         failed.append(auth)
 
     if verbose:
-        print("\nVerifying db after reinstall ...")
+        best_effort_print("\nVerifying db after reinstall ...")
     new_pems = [c.pem for c in read_efi_certificates(config, work, "db", "new-db")]
     if verbose:
-        print(f"  db now holds {len(new_pems)} certificate(s).")
+        best_effort_print(f"  db now holds {len(new_pems)} certificate(s).")
     broken = [
         b for b in plan.boot_critical_binaries
         if not any(succeeds(["sbverify", "--cert", str(p), str(b)]) for p in new_pems)
     ]
     for binary in plan.boot_critical_binaries:
         if binary in broken:
-            print(f"  ERR {binary} does NOT verify against the new db", file=sys.stderr)
+            best_effort_print(f"  ERR {binary} does NOT verify against the new db", file=sys.stderr)
         elif verbose:
-            print(f"  OK  {binary} verifies against the new db")
+            best_effort_print(f"  OK  {binary} verifies against the new db")
     if broken:
         raise ScriptError("CRITICAL: a boot-chain binary no longer verifies against db. DO NOT REBOOT with "
                           "Secure Boot enforcing. Re-enroll a valid image-signing db certificate before rebooting.")
     if failed:
         raise ScriptError("one or more reinstall .auth files failed to apply; "
                           "review the warnings above before rebooting")
-    print(f"\nDone: db reset to {len(new_pems)} image-signing certificate(s); all boot-chain binaries verify.")
+    best_effort_print(
+        f"\nDone: db reset to {len(new_pems)} image-signing certificate(s); all boot-chain binaries verify.")
 
 
 @locked
