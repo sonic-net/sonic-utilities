@@ -228,8 +228,10 @@ def test_set_default_image_setproper_image(mock_run_command, mock_get_images):
 @patch("sonic_installer.bootloader.uboot.run_command")
 def test_remove_image_removesproper_image(mock_run_command, mock_get_images):
 
-    subcmd = ['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_1']
-    expected_call = [call(subcmd)]
+    expected_call = [
+                     call(['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_1']),
+                     call(['/usr/bin/fw_setenv', 'sonic_version_2', 'NONE']),
+                    ]
 
     mock_get_images.return_value = ["SONiC-OS-10.22", "SONiC-OS-10.2"]
 
