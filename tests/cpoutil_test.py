@@ -2137,11 +2137,33 @@ class TestEepromBankValidation:
 
     def test_interface_shared_page_does_not_hide_capability_failure(
             self, coverage_environment, monkeypatch):
-        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: 0)
+        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: -1)
         result = invoke_coverage(["read-eeprom", "interface", "Ethernet0", "--oe",
                                   "-n", "1", "-o", "128", "-s", "1"])
         assert result.exit_code != 0
-        assert "Invalid OE bank count 0" in result.output
+        assert "Invalid OE bank count -1" in result.output
+        assert coverage_environment.reads == []
+
+    @pytest.mark.parametrize("advertised", [0, 1])
+    @pytest.mark.parametrize("arguments", [
+        ["show", "interface", "map", "Ethernet0"],
+        ["read-eeprom", "interface", "Ethernet0", "--oe", "-n", "1", "-o", "128", "-s", "1"],
+        ["read-eeprom", "oe", "-i", "0", "-n", "0x11", "-o", "128", "-s", "1"],
+    ])
+    def test_single_bank_oe_is_accepted(self, coverage_environment, monkeypatch, advertised, arguments):
+        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: advertised)
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
+        assert cpoutil._get_oe_bank_count("oe0", coverage_environment) == 1
+        assert cpoutil.cpo_oe_bank_counts["oe0"] == 1
+
+    @pytest.mark.parametrize("advertised", [0, 1])
+    def test_single_bank_oe_rejects_bank_one(self, coverage_environment, monkeypatch, advertised):
+        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: advertised)
+        result = invoke_coverage(["read-eeprom", "oe", "-i", "0", "-b", "1",
+                                  "-n", "0x11", "-o", "128", "-s", "1"])
+        assert result.exit_code == 1, result.output
+        assert "valid banks are 0-0" in result.output
         assert coverage_environment.reads == []
 
     def test_full_eeprom_shared_sections_use_bank_zero(self):

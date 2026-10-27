@@ -1800,12 +1800,15 @@ def _get_oe_bank_count(resource_id, cpo):
                 resource_id, exc
             )
         ) from exc
-    if bank_count <= 0:
+    if bank_count < 0:
         raise CpoCommandError(
             "Invalid OE bank count {} for '{}'".format(
                 bank_count, resource_id
             )
         )
+    elif bank_count == 0:
+        # TODO: get_max_supported_banks() should return 1 for flat memory instead of 0.
+        bank_count = 1
     cpo_oe_bank_counts[resource_id] = bank_count
     return bank_count
 
