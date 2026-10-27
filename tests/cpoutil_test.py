@@ -550,9 +550,14 @@ class CoverageFakeCpo(cpoutil.CpoBase):
 
         super().__init__(None, self, self)
         self.api = CoverageFakeApi()
-        self.api.xcvr_eeprom = mock.Mock(
-            mem_map=ElsfpMemMap(ElsfpCodes), reader=self.read_eeprom,
-        )
+        from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisMemMap
+
+        # This coverage fake supplies both OE and ELS APIs through one object.
+        mem_map = ElsfpMemMap(ElsfpCodes)
+        declared = {page.page for page in mem_map.pages}
+        mem_map.pages.extend(page for page in CmisMemMap(CmisCodes).pages if page.page not in declared)
+        self.api.xcvr_eeprom = mock.Mock(mem_map=mem_map, reader=self.read_eeprom)
         self.reads = []
         self.writes = []
 
@@ -1054,11 +1059,17 @@ class TestCommandCoverage(object):
             mem_map=ElsfpMemMap(ElsfpCodes),
             reader=coverage_environment.read_eeprom,
         )
+        from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisMemMap
+
         for arguments in (
             ["read-eeprom", "interface", "Ethernet0", "--oe"],
             ["read-eeprom", "oe", "-i", "0"],
             ["read-eeprom", "els", "-i", "0"],
         ):
+            coverage_environment.api.xcvr_eeprom.mem_map = (
+                ElsfpMemMap(ElsfpCodes) if arguments[1] == "els" else CmisMemMap(CmisCodes)
+            )
             result = invoke_coverage(arguments)
             assert result.exit_code == 0, result.output
             assert "EEPROM hexdump" in result.output
@@ -1137,7 +1148,8 @@ class TestCommandCoverage(object):
             reads.append((offset, size))
             return bytes([0x42] * size)
 
-        api = mock.Mock(xcvr_eeprom=mock.Mock(reader=api_reader))
+        api = mock.Mock(xcvr_eeprom=mock.Mock(
+            mem_map=mock.Mock(pages=[CmisPage(None, page=0xB4)]), reader=api_reader))
         els = CoverageFakeEndpoint(api)
         els.read_eeprom = mock.Mock(
             side_effect=AssertionError("ELS endpoint bypassed selected API reader")

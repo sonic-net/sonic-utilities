@@ -1778,6 +1778,32 @@ def _validate_eeprom_range(bank, page, offset, size):
         )
 
 
+def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
+    """Restrict raw access to pages and memory halves declared by the endpoint."""
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import CmisAdministrativeLowerPage
+
+    label = str(resource_id).upper()
+    api = get_oe_api(cpo, label) if resource_type == OPTICAL_ENGINE else get_els_api(cpo, label)
+    mem_map = getattr(getattr(api, "xcvr_eeprom", None), "mem_map", None)
+    pages = getattr(mem_map, "pages", None)
+    if not isinstance(pages, (list, tuple)) or not pages:
+        raise CpoCommandError("EEPROM memory map is unavailable for '{}'".format(label))
+    selected = [item for item in pages if item.page == page]
+    if not selected:
+        valid_pages = ", ".join("0x{:02x}".format(number) for number in sorted({item.page for item in pages}))
+        raise CpoCommandError(
+            "Page 0x{:02x} is not declared for '{}'; valid pages: {}".format(page, label, valid_pages)
+        )
+    has_lower = any(isinstance(item, CmisAdministrativeLowerPage) for item in selected)
+    has_upper = any(not isinstance(item, CmisAdministrativeLowerPage) for item in selected)
+    if (offset < EEPROM_PAGE_OFFSET and not has_lower
+            or offset + size > EEPROM_PAGE_OFFSET and not has_upper):
+        raise CpoCommandError(
+            "Page 0x{:02x} does not cover offsets 0x{:02x}-0x{:02x} for '{}'".format(
+                page, offset, offset + size - 1, label)
+        )
+
+
 def _validate_requested_eeprom_bank(bank, page):
     """Reject explicit nonzero banks on pages the CMIS reader treats as shared."""
     if bank != 0 and (page < 0x10 or 0x9F <= page <= 0xAF):
@@ -1890,6 +1916,7 @@ def _write_resource_eeprom(resource_type, index, bank, page, offset, data):
     """Write raw EEPROM bytes through one mapped CPO object."""
     _validate_eeprom_range(bank, page, offset, len(data))
     resource_id, cpo = _single_resource(resource_type, index)
+    _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, len(data))
     linear_offset = _eeprom_linear_offset(
         resource_type, resource_id, cpo, bank, page, offset
     )
@@ -1962,6 +1989,7 @@ def _resource_banks(resource_type, resource_id, requested_bank=None):
 def _read_one_eeprom(resource_type, resource_id, cpo,
                      bank, page, offset, size):
     _validate_eeprom_range(bank, page, offset, size)
+    _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size)
     linear_offset = _eeprom_linear_offset(
         resource_type, resource_id, cpo, bank, page, offset
     )
