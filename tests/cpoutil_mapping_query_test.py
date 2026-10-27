@@ -85,3 +85,45 @@ def test_mapping_validates_active_lanes_without_mutating_input(topology, lanes, 
     with pytest.raises(CpoMappingError, match=message):
         mapping.lane_positions("Ethernet2", ports)
     assert ports == before
+
+
+@pytest.mark.parametrize("resource_type", ["oe", "els"])
+@pytest.mark.parametrize("index", [0, 1, 17, 18])
+def test_device_ids_accept_zero_and_unpadded_numbers(resource_type, index):
+    name = "{}{}".format(resource_type.upper(), index)
+    assert CpoMapping._resource_index(name, resource_type) == index
+
+
+@pytest.mark.parametrize("resource_type", ["oe", "els"])
+@pytest.mark.parametrize("digits", ["00", "01", "017", "018"])
+def test_device_ids_reject_leading_zeros(resource_type, digits):
+    name = resource_type.upper() + digits
+    with pytest.raises(CpoMappingError, match="without leading zeros"):
+        CpoMapping._resource_index(name, resource_type)
+
+
+@pytest.mark.parametrize("device_id", ["OE17", "ELS18"])
+def test_topology_keeps_unpadded_resource_names_consistent(topology, device_id):
+    data, ports = topology
+    resource_type = "oe" if device_id.startswith("OE") else "els"
+    old_name = resource_type + "0"
+    data["devices"][device_id] = data["devices"].pop(old_name)
+    for association in data["interfaces"]["Ethernet0"]["associated_devices"]:
+        if association["device_id"] == old_name:
+            association["device_id"] = device_id
+    mapping = CpoMapping(data, ports)
+    name = device_id.lower()
+    interface = mapping.get_interface("Ethernet0")
+    assert getattr(interface, resource_type + "_name") == name
+    assert mapping.resource_ids(resource_type) == [name]
+    assert mapping.resolve_resource_ids(device_id, resource_type) == [name]
+    assert mapping.resolve_resource_ids(device_id.lstrip("OELS"), resource_type) == [name]
+
+
+@pytest.mark.parametrize("device_id", ["OE00", "ELS017"])
+def test_topology_rejects_padded_device_ids_at_load(topology, device_id):
+    data, ports = topology
+    old_name = "oe0" if device_id.startswith("OE") else "els0"
+    data["devices"][device_id] = data["devices"].pop(old_name)
+    with pytest.raises(CpoMappingError, match="without leading zeros"):
+        CpoMapping(data, ports)

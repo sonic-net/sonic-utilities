@@ -123,9 +123,11 @@ class CpoMapping:
 
     @staticmethod
     def _resource_index(resource_name, resource_type):
-        match = re.fullmatch(r"{}(\d+)".format(resource_type), str(resource_name), re.IGNORECASE)
+        match = re.fullmatch(r"{}(0|[1-9][0-9]*)".format(resource_type), str(resource_name), re.IGNORECASE)
         if not match:
-            raise CpoMappingError("invalid {} device id '{}'".format(resource_type, resource_name))
+            raise CpoMappingError(
+                "invalid {} device id '{}'; expected {}0, {}1, ... without leading zeros".format(
+                    resource_type, resource_name, resource_type, resource_type))
         return int(match.group(1))
 
     @staticmethod
