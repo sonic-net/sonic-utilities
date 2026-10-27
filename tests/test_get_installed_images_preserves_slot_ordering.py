@@ -193,3 +193,48 @@ def test_set_next_boot_rejects_empty_slot(mock_get_bootloader, _mock_geteuid):
 
     assert result.exit_code != 0, result.output
     bootloader.set_next_image.assert_not_called()
+
+
+@patch.object(UbootBootloader, "get_installed_images")
+@patch("sonic_installer.bootloader.uboot.run_command")
+def test_set_next_image_setproper_image(mock_run_command, mock_get_images):
+
+    mock_get_images.return_value = ["SONiC-OS-10.22", "SONiC-OS-10.2"]
+
+    bootloader = UbootBootloader()
+
+    bootloader.set_next_image("SONiC-OS-2")
+
+    mock_run_command.assert_called_once_with(
+        ['/usr/bin/fw_setenv', 'boot_once', 'run sonic_image_2']
+    )
+
+
+@patch.object(UbootBootloader, "get_installed_images")
+@patch("sonic_installer.bootloader.uboot.run_command")
+def test_set_default_image_setproper_image(mock_run_command, mock_get_images):
+
+    mock_get_images.return_value = ["SONiC-OS-10.22", "SONiC-OS-10.2"]
+
+    bootloader = UbootBootloader()
+
+    bootloader.set_default_image("SONiC-OS-2")
+
+    mock_run_command.assert_called_once_with(
+        ['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_2']
+
+
+@patch.object(UbootBootloader, "get_installed_images")
+@patch("sonic_installer.bootloader.uboot.run_command")
+def test_remove_image_setproper_image(mock_run_command, mock_get_images):
+
+    subcmd = ['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_1']
+    expected_call = [call(subcmd)]
+
+    mock_get_images.return_value = ["SONiC-OS-10.22", "SONiC-OS-10.2"]
+
+    bootloader = UbootBootloader()
+
+    bootloader.remove_image("SONiC-OS-2")
+
+    assert mock_run_command.call_args_list == expected_call

@@ -57,17 +57,17 @@ class UbootBootloader(OnieInstallerBootloader):
 
     def set_default_image(self, image):
         images = self.get_installed_images()
-        if image in images[0]:
+        if image == images[0]:
             run_command(['/usr/bin/fw_setenv', 'boot_next', "run sonic_image_1"])
-        elif image in images[1]:
+        elif image == images[1]:
             run_command(['/usr/bin/fw_setenv', 'boot_next', "run sonic_image_2"])
         return True
 
     def set_next_image(self, image):
         images = self.get_installed_images()
-        if image in images[0]:
+        if image == images[0]:
             run_command(['/usr/bin/fw_setenv', 'boot_once', "run sonic_image_1"])
-        elif image in images[1]:
+        elif image == images[1]:
             run_command(['/usr/bin/fw_setenv', 'boot_once', "run sonic_image_2"])
         return True
 
@@ -77,10 +77,12 @@ class UbootBootloader(OnieInstallerBootloader):
     def remove_image(self, image):
         click.echo('Updating next boot ...')
         images = self.get_installed_images()
-        if image in images[0]:
+        if not image or image not in images:
+            raise ValueError("Cannot remove an empty or unknown SONiC image")
+        if image == images[0]:
             run_command(['/usr/bin/fw_setenv', 'boot_next', "run sonic_image_2"])
             run_command(['/usr/bin/fw_setenv', 'sonic_version_1', "NONE"])
-        elif image in images[1]:
+        elif image == images[1]:
             run_command(['/usr/bin/fw_setenv', 'boot_next', "run sonic_image_1"])
             run_command(['/usr/bin/fw_setenv', 'sonic_version_2', "NONE"])
         image_dir = image.replace(IMAGE_PREFIX, IMAGE_DIR_PREFIX, 1)
