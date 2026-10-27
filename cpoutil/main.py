@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 import json
 import math
+import os
 import re
 import sys
 
@@ -44,6 +45,7 @@ from cpoutil.mapping import CpoMapping, CpoMappingError
 from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
 
 
+ERROR_PERMISSIONS = 1
 ERROR_INVALID_RESOURCE = 3
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
@@ -1030,7 +1032,13 @@ class CpoGroup(click.Group):
 
 @click.group(cls=CpoGroup, context_settings=CONTEXT_SETTINGS)
 def cli():
-    """Debug and manually provision Co-Packaged Optics devices."""
+    """Debug and manually provision Co-Packaged Optics devices.
+
+    Root privileges are required; run with sudo as a regular user.
+    """
+    if os.geteuid() != 0:
+        click.echo("Root privileges are required for this operation")
+        sys.exit(ERROR_PERMISSIONS)
 
 
 @cli.group()

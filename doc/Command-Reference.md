@@ -17149,6 +17149,8 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#sfp-ut
 
 This sub-section explains the commands available for Co-Packaged Optics (CPO) devices through `cpoutil`.
 
+Run `cpoutil` subcommands as root, using `sudo cpoutil ...` from a regular account. Like `sfputil`, a non-root invocation prints `Root privileges are required for this operation` and exits with status 1 before platform initialization. Top-level `cpoutil -h` and `cpoutil --help` remain available without root privileges.
+
 A CPO port is served by an Optical Engine (OE) and an External Laser Source (ELS). The platform describes the mapping between ports, OEs and ELS in `cpo.json`, and exposes each port as a CPO virtual module through `Chassis.get_cpo()`.
 
 The topology uses the community `devices` and `interfaces.associated_devices` format.
@@ -17182,7 +17184,7 @@ keys, each containing an `els` name and a boolean `present` value.
 
 - Example:
   ```
-  admin@sonic:~$ cpoutil show interface presence Ethernet32
+  admin@sonic:~$ sudo cpoutil show interface presence Ethernet32
   Interface    ELS    Presence
   -----------  -----  ----------
   Ethernet32   ELS1   Present
@@ -17208,7 +17210,7 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
 
 - Example:
   ```
-  admin@sonic:~$ cpoutil show interface lpmode Ethernet448
+  admin@sonic:~$ sudo cpoutil show interface lpmode Ethernet448
   Interface    Low-power Mode
   -----------  ----------------
   Ethernet448  Off
@@ -17225,7 +17227,7 @@ These commands display Optical Engine state.
 
 - Example:
   ```
-  admin@sonic:~$ cpoutil show oe status 7
+  admin@sonic:~$ sudo cpoutil show oe status 7
   OE    Module State
   ----  --------------
   OE7   ModuleReady
@@ -17242,7 +17244,7 @@ These commands display External Laser Source state.
 
 - Example:
   ```
-  admin@sonic:~$ cpoutil show els temperature 1
+  admin@sonic:~$ sudo cpoutil show els temperature 1
   ELS      Temperature (C)
   -----  -----------------
   ELS1                21.973
@@ -17270,10 +17272,10 @@ These are maintenance overrides and are not persistent: xcvrd restores full powe
 
 - Example:
   ```
-  admin@sonic:~$ cpoutil config interface lpmode Ethernet448 low
+  admin@sonic:~$ sudo cpoutil config interface lpmode Ethernet448 low
   Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... OK
 
-  admin@sonic:~$ cpoutil config interface tx-disable Ethernet448 true
+  admin@sonic:~$ sudo cpoutil config interface tx-disable Ethernet448 true
   Enabling Tx-disable for Ethernet448 (Ethernet448) ... OK
   ```
 
@@ -17291,7 +17293,7 @@ These commands control an Optical Engine or External Laser Source endpoint on it
 
 - Example (joint mode):
   ```
-  admin@sonic:~$ cpoutil config oe lpmode 7 low
+  admin@sonic:~$ sudo cpoutil config oe lpmode 7 low
   Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... Failed
   Error: OE set_lpmode is not implemented for this platform
   ```
@@ -17316,11 +17318,11 @@ Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages
 
 - Example:
   ```
-  admin@sonic:~$ cpoutil read-eeprom oe -i 0 -b 0 -n 0x11 -o 0x80 -s 16
+  admin@sonic:~$ sudo cpoutil read-eeprom oe -i 0 -b 0 -n 0x11 -o 0x80 -s 16
   EEPROM hexdump for OE0 bank 0h page 11h offset 80h size 16
           00000080 44 44 44 44 ff 00 00 00  00 00 00 00 00 00 00 00 |DDDD............|
 
-  admin@sonic:~$ cpoutil read-eeprom oe -i 0 -b 0 -n 0x11 -o 2 -s 1
+  admin@sonic:~$ sudo cpoutil read-eeprom oe -i 0 -b 0 -n 0x11 -o 2 -s 1
   Error: Invalid offset 0x02 for page 11h; valid range: 80h-FFh
   ```
 

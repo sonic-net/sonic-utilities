@@ -26,6 +26,7 @@ from cpoutil.mapping import (  # noqa: E402
 @pytest.fixture(autouse=True)
 def shared_port_mapping(monkeypatch):
     """Provide port data to the real shared logical-port resolver."""
+    monkeypatch.setattr(cpoutil.os, "geteuid", lambda: 0)
     ports = mock.Mock()
     ports.is_logical_port.side_effect = (
         lambda port: port in cpoutil.current_port_config
