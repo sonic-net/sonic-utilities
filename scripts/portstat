@@ -83,6 +83,14 @@ Examples:
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
     parser.add_argument('-l', '--detail', action='store_true', help='Display detailed statistics.')
     parser.add_argument('-nz','--non_zero', action='store_true', help='Display only non-zero counters')
+    parser.add_argument('-X', '--top_n', type=int, default=None,
+                        help='Show top N interfaces by traffic')
+    parser.add_argument('--sort', type=str, default='total',
+                        choices=['rx', 'tx', 'total', 'util'],
+                        help='Sort key for top N interfaces (default: total)')
+    parser.add_argument('--units', type=str, default='pps',
+                        choices=['bps', 'pps'],
+                        help='Units for ranking top N interfaces (default: pps)')
     args = parser.parse_args()
 
     save_fresh_stats = args.clear
@@ -130,6 +138,15 @@ Examples:
 
     portstat = Portstat(namespace, display_option)
     cnstat_dict, ratestat_dict = portstat.get_cnstat_dict()
+
+    # Top N interfaces by traffic
+    if args.top_n is not None:
+        if args.top_n <= 0:
+            print("Error: -X/--top_n must be a positive integer.", file=sys.stderr)
+            sys.exit(1)
+        portstat.top_n_diff_print(None, None, ratestat_dict,
+                                  args.top_n, args.sort, args.units, use_json)
+        sys.exit(0)
 
     # Now decide what information to display
     if raw_stats:
