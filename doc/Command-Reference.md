@@ -17160,7 +17160,7 @@ OE banks are local to each device and must be within its supported range; global
 
 `cpoutil` reads the hardware directly and controls it through the platform's CPO objects; it is a debug and manual-provisioning tool. The values that xcvrd publishes to STATE_DB for CPO ports remain available through `show interfaces transceiver`. On platforms without `cpo.json`, every hardware command exits with `Error: CPO topology is unavailable for this platform`; help remains available.
 
-Most `show` commands accept `-j, --json` for machine-readable output. OE and ELS indexes may be given as a number (`0`) or a name (`oe0`, `els0`); when omitted, all are shown.
+Most `show` commands accept `-j, --json` for machine-readable output. For OE and ELS `show` commands, indexes may be given as a number (`0`) or a name (`oe0`, `els0`); when omitted, all are shown.
 
 ## CPO Utilities show commands
 
@@ -17303,6 +17303,8 @@ These commands control an Optical Engine or External Laser Source endpoint on it
 **cpoutil read-eeprom|write-eeprom**
 
 These commands read or write raw EEPROM data of an OE, an ELS, or the OE/ELS mapped to an interface. Without page, offset and size, `read-eeprom` dumps the standard pages; `cpoutil read-eeprom` with no target dumps every OE and ELS.
+
+The `-i, --index` option requires an integer OE or ELS index, for example `-i 0`. Device names such as `oe0` and `els0` are not accepted.
 
 Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages accept offsets 0x80-0xFF. ELS access is limited to the ELS's own pages.
 
