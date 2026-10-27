@@ -19,6 +19,7 @@ REBOOT_METHOD="/sbin/kexec -e"
 ASSISTANT_IP_LIST=""
 ASSISTANT_SCRIPT="/usr/local/bin/neighbor_advertiser"
 LAG_KEEPALIVE_SCRIPT="/usr/local/bin/lag_keepalive.py"
+READ_ARISTA_7060_EEPROM_SCRIPT="/usr/local/bin/arista_7060_prefdl_gen.py"
 WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
@@ -50,6 +51,7 @@ EXIT_TEAMD_RETRY_COUNT_FAILURE=23
 EXIT_NO_MIRROR_SESSION_ACLS=24
 EXIT_PFC_STORM_DETECTED=25
 EXIT_LEFTOVER_CPA_TUNNEL=30
+EXIT_EEPROM_READ_FAILURE=50
 
 [ -f /usr/share/sonic/device/$PLATFORM/asic.conf ] && . /usr/share/sonic/device/$PLATFORM/asic.conf
 NUM_ASIC=${NUM_ASIC:-1}
@@ -333,6 +335,25 @@ function filter_asic_list()
 
         # Log the skipped ASICs
         debug "Skipping warm-reboot on ASICs: ${SKIP_ASIC_LIST}"
+    fi
+}
+
+# Create and populate /host/.system-prefdl if it does not already exist
+# Should only apply to Arista-7060CX-32S-*
+function arista_7060_gen_system_prefdl()
+{
+    local EEPROM_PLATFORM=$(sonic-db-cli CONFIG_DB HGET "DEVICE_METADATA|localhost" "hwsku")
+    if [[ "${EEPROM_PLATFORM}" == *"Arista-7060CX-32S-"* && ! -f "/host/.system-prefdl" ]]; then
+        if [ -f "/etc/sonic/.syseeprom" ]; then
+            cp /etc/sonic/.syseeprom /host/.system-prefdl
+            echo "/host/.system-prefdl not found - restored from /etc/sonic/.syseeprom"
+        else
+            if ! python3 "${READ_ARISTA_7060_EEPROM_SCRIPT}"; then
+                error "EEPROM read failed for HWSKU ${EEPROM_PLATFORM}"
+                exit "${EXIT_EEPROM_READ_FAILURE}"
+            fi
+            echo "/host/.system-prefdl not found - restored by reading from EEPROM"
+        fi
     fi
 }
 
@@ -919,6 +940,9 @@ EOF
 fi
 
 debug "Starting $REBOOT_TYPE"
+
+# Check if device is Arista-7060CX-32S and if system_prefdl generation is needed
+arista_7060_gen_system_prefdl
 
 # re-run the script in background mode with detaching from the terminal session
 if [[ x"${DETACH}" == x"yes" && x"${ALREADY_DETACHED}" == x"" ]]; then
