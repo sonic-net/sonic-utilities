@@ -739,7 +739,7 @@ def _interface_mapping_record(logical_port):
         "port": str(logical_port),
         "oe": {
             "id": mapping.oe_name.upper(),
-            "bank": _local_oe_bank(mapping),
+            "bank": mapping.oe_bank,
             "lanes": oe_lanes,
         },
         "els": els,

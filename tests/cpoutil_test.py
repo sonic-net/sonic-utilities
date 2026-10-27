@@ -279,6 +279,33 @@ class TestMappingCommand(object):
             "lasers": [4, 5, 6, 7],
         }
 
+    @pytest.mark.parametrize("port_arguments", [[], ["-p", "Ethernet0"]])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_map_does_not_access_unavailable_hardware(
+            self, coverage_environment, monkeypatch, port_arguments, json_output):
+        unavailable = AssertionError("Static mapping must not access hardware")
+        api = mock.Mock(side_effect=unavailable)
+        presence = mock.Mock(return_value=False)
+        read = mock.Mock(side_effect=unavailable)
+        banks = mock.Mock(side_effect=unavailable)
+        monkeypatch.setattr(coverage_environment, "get_api", api)
+        monkeypatch.setattr(coverage_environment, "get_presence", presence)
+        monkeypatch.setattr(coverage_environment, "read_eeprom", read)
+        monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", banks)
+        arguments = ["show", "interface", "map", *port_arguments]
+        if json_output:
+            arguments.append("--json")
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert record["oe"] == {"id": "OE0", "bank": 0, "lanes": [1, 2]}
+            assert record["els"]["id"] == "ELS0"
+        else:
+            assert "Ethernet0" in result.output and "OE0 bank0" in result.output
+        for operation in (api, presence, read, banks):
+            operation.assert_not_called()
+
 
 class TestOeLocalBank(object):
     """Interface and full-dump EEPROM access must use the declared OE bank."""
@@ -2080,7 +2107,6 @@ class TestEepromBankValidation:
 
     @pytest.mark.parametrize("advertised", [0, 1])
     @pytest.mark.parametrize("arguments", [
-        ["show", "interface", "map", "-p", "Ethernet0"],
         ["read-eeprom", "interface", "-p", "Ethernet0", "--oe", "-n", "1", "-o", "128", "-s", "1"],
         ["read-eeprom", "oe", "-i", "0", "-n", "0x11", "-o", "128", "-s", "1"],
     ])
