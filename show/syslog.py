@@ -15,6 +15,8 @@ SYSLOG_TABLE = "SYSLOG_SERVER"
 SYSLOG_SOURCE = "source"
 SYSLOG_PORT = "port"
 SYSLOG_VRF = "vrf"
+SYSLOG_SEVERITY = syslog_common.SYSLOG_FIELD_SEVERITY
+SYSLOG_FACILITY = syslog_common.SYSLOG_FIELD_FACILITY
 
 #
 # Syslog helpers ------------------------------------------------------------------------------------------------------
@@ -22,6 +24,14 @@ SYSLOG_VRF = "vrf"
 
 def format(header, body):
     return tabulate.tabulate(body, header, tablefmt="simple", numalign="left", stralign="left")
+
+
+def syslog_field_display(entry, field):
+    value = entry.get(field)
+    if value is None or value == "" or str(value).lower() == "none":
+        return "N/A"
+    return value
+
 
 #
 # Syslog CLI ----------------------------------------------------------------------------------------------------------
@@ -45,6 +55,8 @@ def syslog(db, ctx):
         "SOURCE IP",
         "PORT",
         "VRF",
+        "FACILITY",
+        "SEVERITY",
     ]
     body = []
 
@@ -55,6 +67,8 @@ def syslog(db, ctx):
             entry.get(SYSLOG_SOURCE, "N/A"),
             entry.get(SYSLOG_PORT, "N/A"),
             entry.get(SYSLOG_VRF, "N/A"),
+            syslog_field_display(entry, SYSLOG_FACILITY),
+            syslog_field_display(entry, SYSLOG_SEVERITY),
         ]
         body.append(row)
 

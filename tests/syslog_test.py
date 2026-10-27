@@ -166,6 +166,73 @@ class TestSyslog:
         assert ERROR_PATTERN_IP_FAMILY_MISMATCH in result.output
         assert result.exit_code == ERROR2
 
+    @mock.patch("utilities_common.cli.run_command", mock.MagicMock(return_value=None))
+    def test_config_syslog_add_with_selector(self):
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["add"],
+            ["10.1.1.1", "--facility", "local4", "--severity", "notice"],
+            obj=db,
+        )
+        assert result.exit_code == SUCCESS
+        entry = db.cfgdb.get_entry("SYSLOG_SERVER", "10.1.1.1")
+        assert entry["facility"] == "local4"
+        assert entry["severity"] == "notice"
+
+    @mock.patch("utilities_common.cli.run_command", mock.MagicMock(return_value=None))
+    def test_config_syslog_selector_set_and_del(self):
+        db = Db()
+        runner = CliRunner()
+
+        runner.invoke(
+            config.config.commands["syslog"].commands["add"], ["10.1.1.2"], obj=db
+        )
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["selector"].commands["set"],
+            ["10.1.1.2", "--facility", "daemon", "--severity", "warn"],
+            obj=db,
+        )
+        assert result.exit_code == SUCCESS
+        entry = db.cfgdb.get_entry("SYSLOG_SERVER", "10.1.1.2")
+        assert entry["facility"] == "daemon"
+        assert entry["severity"] == "warn"
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["selector"].commands["set"],
+            ["10.1.1.2", "--severity", "info"],
+            obj=db,
+        )
+        assert result.exit_code == SUCCESS
+        entry = db.cfgdb.get_entry("SYSLOG_SERVER", "10.1.1.2")
+        assert entry["facility"] == "daemon"
+        assert entry["severity"] == "info"
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["selector"].commands["del"],
+            ["10.1.1.2"],
+            obj=db,
+        )
+        assert result.exit_code == SUCCESS
+        entry = db.cfgdb.get_entry("SYSLOG_SERVER", "10.1.1.2")
+        assert "facility" not in entry or not entry.get("facility")
+        assert "severity" not in entry or not entry.get("severity")
+
+    def test_config_syslog_selector_set_requires_field(self):
+        db = Db()
+        runner = CliRunner()
+        runner.invoke(
+            config.config.commands["syslog"].commands["add"], ["10.1.1.3"], obj=db
+        )
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["selector"].commands["set"],
+            ["10.1.1.3"],
+            obj=db,
+        )
+        assert result.exit_code != SUCCESS
+        assert "At least one of --facility or --severity is required" in result.output
+
     def test_config_syslog_invalid_port(self):
         db = Db()
         runner = CliRunner()
