@@ -1806,6 +1806,19 @@
         "timestamp": "20230704 17:38:04",
         "warning_status": "False"
     },
+    "CURRENT_INFO|ISENSOR2": {
+        "critical_high_threshold": "1596000.0",
+        "critical_low_threshold": "N/A",
+        "current": "145750.0",
+        "unit": "mA",
+        "high_threshold": "1532000.0",
+        "is_replaceable": "False",
+        "low_threshold": "N/A",
+        "maximum_current": "146000.0",
+        "minimum_current": "145500.0",
+        "timestamp": "20230704 17:38:04",
+        "warning_status": "False"
+    },
     "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
         "fabric_capacity": "88632",
         "missing_capacity": "265896",
