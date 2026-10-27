@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from click.testing import CliRunner
 from sonic_installer.main import cleanup, sonic_installer
 from sonic_installer.bootloader.uboot import UbootBootloader
@@ -203,7 +203,7 @@ def test_set_next_image_setproper_image(mock_run_command, mock_get_images):
 
     bootloader = UbootBootloader()
 
-    bootloader.set_next_image("SONiC-OS-2")
+    bootloader.set_next_image("SONiC-OS-10.2")
 
     mock_run_command.assert_called_once_with(
         ['/usr/bin/fw_setenv', 'boot_once', 'run sonic_image_2']
@@ -218,7 +218,7 @@ def test_set_default_image_setproper_image(mock_run_command, mock_get_images):
 
     bootloader = UbootBootloader()
 
-    bootloader.set_default_image("SONiC-OS-2")
+    bootloader.set_default_image("SONiC-OS-10.2")
 
     mock_run_command.assert_called_once_with(
         ['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_2'])
@@ -226,7 +226,7 @@ def test_set_default_image_setproper_image(mock_run_command, mock_get_images):
 
 @patch.object(UbootBootloader, "get_installed_images")
 @patch("sonic_installer.bootloader.uboot.run_command")
-def test_remove_image_setproper_image(mock_run_command, mock_get_images):
+def test_remove_image_removesproper_image(mock_run_command, mock_get_images):
 
     subcmd = ['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_1']
     expected_call = [call(subcmd)]
@@ -235,6 +235,6 @@ def test_remove_image_setproper_image(mock_run_command, mock_get_images):
 
     bootloader = UbootBootloader()
 
-    bootloader.remove_image("SONiC-OS-2")
+    bootloader.remove_image("SONiC-OS-10.2")
 
     assert mock_run_command.call_args_list == expected_call
