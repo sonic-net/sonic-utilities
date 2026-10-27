@@ -9,6 +9,7 @@ mux ports should have correct neighbor/route entry in ASIC.
 import argparse
 import enum
 import functools
+import hashlib
 import ipaddress
 import json
 import logging
@@ -38,7 +39,7 @@ DB_READ_SCRIPT = """
 -- STATE_DB:
 --   - MUX_CABLE_TABLE
 -- ASIC_DB:
---   - ASIC_STATE (route entries, neighbor entries, nexthop entries)
+--   - ASIC_STATE (route entries, neighbor entries and their NO_HOST_ROUTE attribute, nexthop entries)
 --
 -- KEYS - None
 -- ARGV[1] - APPL_DB db index
@@ -89,6 +90,7 @@ local port_neighbor_modes   = {}
 local asic_fdb              = {}
 local asic_route_table      = {}
 local asic_neighbor_table   = {}
+local asic_no_host_route_neighbor_table = {}
 local asic_nexthop_table    = {}
 
 -- read from STATE_DB
@@ -171,6 +173,11 @@ local neighbor_entries = redis.call('KEYS', neighbor_prefix .. '*')
 for i, neighbor_entry in ipairs(neighbor_entries) do
     local neighbor_details = string.sub(neighbor_entry, string.len(neighbor_prefix) + 2)
     table.insert(asic_neighbor_table, neighbor_details)
+
+    -- a neighbor programmed with NO_HOST_ROUTE installs no host route, its prefix route forwards the traffic
+    if redis.call('HGET', neighbor_entry, 'SAI_NEIGHBOR_ENTRY_ATTR_NO_HOST_ROUTE') == 'true' then
+        table.insert(asic_no_host_route_neighbor_table, neighbor_details)
+    end
 end
 
 -- read ASIC nexthop table
@@ -199,6 +206,7 @@ result['port_neighbor_modes'] = port_neighbor_modes
 result['asic_fdb']          = asic_fdb
 result['asic_route_table']  = asic_route_table
 result['asic_neigh_table']  = asic_neighbor_table
+result['asic_no_host_route_neigh_table'] = asic_no_host_route_neighbor_table
 result['asic_nexthop_table'] = asic_nexthop_table
 
 return redis.status_reply(cjson.encode(result))
@@ -209,6 +217,9 @@ return redis.status_reply(cjson.encode(result))
 POST_FLUSH_CHECK_DELAY_SEC = 10
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
+# redis identifies a loaded script by the sha1 of the script body (EVALSHA), sha1 is not used for security here
+# nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+DB_READ_SCRIPT_SHA1 = hashlib.sha1(DB_READ_SCRIPT.encode(), usedforsecurity=False).hexdigest()
 ZERO_MAC = "00:00:00:00:00:00"
 NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
                                   "TUNNEL_IN_ASIC", "HWSTATUS"]
@@ -405,7 +416,9 @@ def read_tables_from_db(appl_db):
         return "1" in cmd_output
 
     db_read_script_sha1 = appl_db.get(DB_READ_SCRIPT_CONFIG_DB_KEY)
-    if ((not db_read_script_sha1) or (not _is_script_existed(db_read_script_sha1))):
+    # NOTE: the cached sha1 could belong to a previous version of this script that is
+    # still loaded in redis after this tool is updated, so only reuse the sha1 of this script.
+    if ((db_read_script_sha1 != DB_READ_SCRIPT_SHA1) or (not _is_script_existed(db_read_script_sha1))):
         db_read_script_sha1 = _load_script()
 
     redis_run_cmd = "EVALSHA %s 0" % db_read_script_sha1
@@ -420,6 +433,7 @@ def read_tables_from_db(appl_db):
     asic_route_table = tables["asic_route_table"]
     asic_neigh_table = tables["asic_neigh_table"]
     asic_nexthop_table = tables["asic_nexthop_table"]
+    asic_no_host_route_neigh_table = tables.get("asic_no_host_route_neigh_table", [])
     WRITE_LOG_DEBUG("neighbors: %s", json.dumps(neighbors, indent=4))
     WRITE_LOG_DEBUG("mux states: %s", json.dumps(mux_states, indent=4))
     WRITE_LOG_DEBUG("hw mux states: %s", json.dumps(hw_mux_states, indent=4))
@@ -428,8 +442,9 @@ def read_tables_from_db(appl_db):
     WRITE_LOG_DEBUG("ASIC route table: %s", json.dumps(asic_route_table, indent=4))
     WRITE_LOG_DEBUG("ASIC neigh table: %s", json.dumps(asic_neigh_table, indent=4))
     WRITE_LOG_DEBUG("ASIC nexthop table: %s", json.dumps(asic_nexthop_table, indent=4))
+    WRITE_LOG_DEBUG("ASIC no host route neigh table: %s", json.dumps(asic_no_host_route_neigh_table, indent=4))
     return neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, \
-        asic_neigh_table, asic_nexthop_table
+        asic_neigh_table, asic_nexthop_table, asic_no_host_route_neigh_table
 
 
 def get_if_br_oid_to_port_name_map():
@@ -484,7 +499,8 @@ def get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map):
 
 def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port_name_map,
                                asic_route_table, asic_neigh_table, asic_nexthop_table,
-                               mux_server_to_port_map, port_neighbor_modes):
+                               mux_server_to_port_map, port_neighbor_modes,
+                               asic_no_host_route_neigh_table=None):
     """Checks if neighbors are consistent with mux states."""
 
     # Parse route table to get route destinations and their nexthop types
@@ -514,6 +530,7 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
         route_to_nexthop_map[route_dest] = nexthop_type
 
     asic_neighs = set(json.loads(_)["ip"] for _ in asic_neigh_table)
+    asic_no_host_route_neighs = set(json.loads(_)["ip"] for _ in (asic_no_host_route_neigh_table or []))
 
     check_results = []
 
@@ -558,8 +575,14 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
         elif neighbor_mode == "host-route":
             neighbor_attrs = NEIGHBOR_ATTRIBUTES_HOST_ROUTE
         elif is_zero_mac:
-            neighbor_attrs = NEIGHBOR_ATTRIBUTES_HOST_ROUTE
-            neighbor_mode = "host-route"
+            # NOTE: zero-mac neighbors have no port to look up neighbor_mode, so check them
+            # as they are programmed in ASIC: a neighbor entry with NO_HOST_ROUTE is prefix-route.
+            if neighbor_ip in asic_no_host_route_neighs:
+                neighbor_attrs = NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE
+                neighbor_mode = "prefix-route"
+            else:
+                neighbor_attrs = NEIGHBOR_ATTRIBUTES_HOST_ROUTE
+                neighbor_mode = "host-route"
         else:
             WRITE_LOG_DEBUG("Skipping neighbor %s: unable to determine neighbor_mode (mac=%s, port=%s, mode=%s)",
                             neighbor_ip, mac, port_name if port_name else "N/A", neighbor_mode)
@@ -581,9 +604,12 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
         if is_zero_mac:
             # NOTE: for zero-mac neighbors, two situations:
             # 1. new neighbor just learnt, no neighbor entry in ASIC, tunnel route present in ASIC.
-            # 2. neighbor expired, neighbor entry still present in ASIC, no tunnel route in ASIC.
+            # 2. neighbor expired, neighbor entry still present in ASIC:
+            #    - host-route: the neighbor entry still installs the host route, no tunnel route in ASIC.
+            #    - prefix-route: the neighbor entry is programmed with NO_HOST_ROUTE and installs no
+            #      host route, so the prefix route must still be present in ASIC to forward the traffic.
             if neighbor_mode == "prefix-route":
-                check_result["HWSTATUS"] = check_result["NEIGHBOR_IN_ASIC"] or check_result["PREFIX_ROUTE"]
+                check_result["HWSTATUS"] = check_result["PREFIX_ROUTE"]
             else:
                 check_result["HWSTATUS"] = check_result["NEIGHBOR_IN_ASIC"] or check_result["TUNNEL_IN_ASIC"]
         else:
@@ -725,7 +751,7 @@ def parse_check_results(check_results):
 def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map):
     """Run the dualtor neighbor consistency check once."""
     neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, asic_neigh_table, \
-        asic_nexthop_table = read_tables_from_db(appl_db)
+        asic_nexthop_table, asic_no_host_route_neigh_table = read_tables_from_db(appl_db)
     mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
 
     return check_neighbor_consistency(
@@ -737,7 +763,8 @@ def run_neighbor_check(appl_db, mux_server_to_port_map, if_oid_to_port_name_map)
         asic_neigh_table,
         asic_nexthop_table,
         mux_server_to_port_map,
-        port_neighbor_modes
+        port_neighbor_modes,
+        asic_no_host_route_neigh_table
     )
 
 

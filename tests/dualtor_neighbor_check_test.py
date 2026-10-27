@@ -194,7 +194,8 @@ class TestDualtorNeighborCheck(object):
             {"ee:86:d8:46:7d:01": "1001"},
             [],
             [],
-            {}
+            {},
+            ["{\"ip\":\"192.168.0.2\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
         )
         expected_check_results = [{"NEIGHBOR": "192.168.0.2"}]
 
@@ -218,7 +219,8 @@ class TestDualtorNeighborCheck(object):
                 tables[6],
                 tables[7],
                 mux_server_to_port_map,
-                tables[3]
+                tables[3],
+                tables[8]
             )
 
     def test_main_skips_non_dualtor(self, mock_log_functions):
@@ -551,6 +553,7 @@ class TestDualtorNeighborCheck(object):
                 ["{\"ip\":\"192.168.0.23\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
             asic_nexthop_table = \
                 {'oid:0x40000000005c0': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP', 'nexthop_id': 'oid:0x40000000005c0'}}
+            asic_no_host_route_neigh_table = asic_neigh_table
             mock_run_command.side_effect = [
                 "c53fd5eaad68be1e66a2fe80cd20a9cb18c91259",
                 json.dumps(
@@ -562,7 +565,8 @@ class TestDualtorNeighborCheck(object):
                         "asic_fdb": asic_fdb,
                         "asic_route_table": asic_route_table,
                         "asic_neigh_table": asic_neigh_table,
-                        "asic_nexthop_table": asic_nexthop_table
+                        "asic_nexthop_table": asic_nexthop_table,
+                        "asic_no_host_route_neigh_table": asic_no_host_route_neigh_table
                     }
                 )
             ]
@@ -586,6 +590,7 @@ class TestDualtorNeighborCheck(object):
             assert asic_route_table == result[5]
             assert asic_neigh_table == result[6]
             assert asic_nexthop_table == result[7]
+            assert asic_no_host_route_neigh_table == result[8]
 
     def test_read_from_db_script_not_existed(self, mock_log_functions):
         with patch("dualtor_neighbor_check.run_command") as mock_run_command:
@@ -599,9 +604,10 @@ class TestDualtorNeighborCheck(object):
                 ["{\"ip\":\"192.168.0.23\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
             asic_nexthop_table = \
                 {'oid:0x40000000005c0': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP', 'nexthop_id': 'oid:0x40000000005c0'}}
+            asic_no_host_route_neigh_table = asic_neigh_table
             mock_run_command.side_effect = [
                 "(integer) 0",
-                "c53fd5eaad68be1e66a2fe80cd20a9cb18c91259",
+                dualtor_neighbor_check.DB_READ_SCRIPT_SHA1,
                 json.dumps(
                     {
                         "neighbors": neighbors,
@@ -611,21 +617,22 @@ class TestDualtorNeighborCheck(object):
                         "asic_fdb": asic_fdb,
                         "asic_route_table": asic_route_table,
                         "asic_neigh_table": asic_neigh_table,
-                        "asic_nexthop_table": asic_nexthop_table
+                        "asic_nexthop_table": asic_nexthop_table,
+                        "asic_no_host_route_neigh_table": asic_no_host_route_neigh_table
                     }
                 )
             ]
             mock_appl_db = MagicMock()
-            mock_appl_db.get = MagicMock(return_value="c53fd5eaad68be1e66a2fe80cd20a9cb18c91259")
+            mock_appl_db.get = MagicMock(return_value=dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
 
             result = dualtor_neighbor_check.read_tables_from_db(mock_appl_db)
 
             mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
             mock_run_command.assert_has_calls(
                 [
-                    call("sudo redis-cli SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
+                    call("sudo redis-cli SCRIPT EXISTS %s" % dualtor_neighbor_check.DB_READ_SCRIPT_SHA1),
                     call("sudo redis-cli SCRIPT LOAD \"%s\"" % dualtor_neighbor_check.DB_READ_SCRIPT),
-                    call("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+                    call("sudo redis-cli EVALSHA %s 0" % dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
                 ]
             )
             assert neighbors == result[0]
@@ -636,6 +643,7 @@ class TestDualtorNeighborCheck(object):
             assert asic_route_table == result[5]
             assert asic_neigh_table == result[6]
             assert asic_nexthop_table == result[7]
+            assert asic_no_host_route_neigh_table == result[8]
 
     def test_read_from_db_with_lua_cache(self, mock_log_functions):
         with patch("dualtor_neighbor_check.run_command") as mock_run_command:
@@ -649,6 +657,7 @@ class TestDualtorNeighborCheck(object):
                 ["{\"ip\":\"192.168.0.23\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
             asic_nexthop_table = \
                 {'oid:0x40000000005c0': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP', 'nexthop_id': 'oid:0x40000000005c0'}}
+            asic_no_host_route_neigh_table = asic_neigh_table
             mock_run_command.side_effect = [
                 "(integer) 1",
                 json.dumps(
@@ -660,20 +669,21 @@ class TestDualtorNeighborCheck(object):
                         "asic_fdb": asic_fdb,
                         "asic_route_table": asic_route_table,
                         "asic_neigh_table": asic_neigh_table,
-                        "asic_nexthop_table": asic_nexthop_table
+                        "asic_nexthop_table": asic_nexthop_table,
+                        "asic_no_host_route_neigh_table": asic_no_host_route_neigh_table
                     }
                 )
             ]
             mock_appl_db = MagicMock()
-            mock_appl_db.get = MagicMock(return_value="c53fd5eaad68be1e66a2fe80cd20a9cb18c91259")
+            mock_appl_db.get = MagicMock(return_value=dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
 
             result = dualtor_neighbor_check.read_tables_from_db(mock_appl_db)
 
             mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
             mock_run_command.assert_has_calls(
                 [
-                    call("sudo redis-cli SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
-                    call("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+                    call("sudo redis-cli SCRIPT EXISTS %s" % dualtor_neighbor_check.DB_READ_SCRIPT_SHA1),
+                    call("sudo redis-cli EVALSHA %s 0" % dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
                 ]
             )
             assert neighbors == result[0]
@@ -684,6 +694,42 @@ class TestDualtorNeighborCheck(object):
             assert asic_route_table == result[5]
             assert asic_neigh_table == result[6]
             assert asic_nexthop_table == result[7]
+            assert asic_no_host_route_neigh_table == result[8]
+
+    def test_read_from_db_reloads_outdated_lua_cache(self, mock_log_functions):
+        with patch("dualtor_neighbor_check.run_command") as mock_run_command:
+            asic_no_host_route_neigh_table = \
+                ["{\"ip\":\"192.168.0.102\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
+            mock_run_command.side_effect = [
+                dualtor_neighbor_check.DB_READ_SCRIPT_SHA1,
+                json.dumps(
+                    {
+                        "neighbors": {},
+                        "mux_states": {},
+                        "hw_mux_states": {},
+                        "port_neighbor_modes": {},
+                        "asic_fdb": {},
+                        "asic_route_table": [],
+                        "asic_neigh_table": asic_no_host_route_neigh_table,
+                        "asic_nexthop_table": {},
+                        "asic_no_host_route_neigh_table": asic_no_host_route_neigh_table
+                    }
+                )
+            ]
+            mock_appl_db = MagicMock()
+            # the cached sha1 belongs to a previous version of the script that is still loaded in redis
+            mock_appl_db.get = MagicMock(return_value="c53fd5eaad68be1e66a2fe80cd20a9cb18c91259")
+
+            result = dualtor_neighbor_check.read_tables_from_db(mock_appl_db)
+
+            mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
+            assert mock_run_command.call_args_list == [
+                call("sudo redis-cli SCRIPT LOAD \"%s\"" % dualtor_neighbor_check.DB_READ_SCRIPT),
+                call("sudo redis-cli EVALSHA %s 0" % dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
+            ]
+            mock_appl_db.set.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1",
+                                                     dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
+            assert asic_no_host_route_neigh_table == result[8]
 
     def test_get_mux_server_to_port_map(self, mock_log_functions):
         mux_cables = {
@@ -1315,3 +1361,115 @@ class TestDualtorNeighborCheck(object):
         assert res is False
         mock_log_warn.assert_has_calls(expected_log_warn_calls)
         mock_log_error.assert_has_calls(expected_log_error_calls)
+
+    @pytest.mark.parametrize("sai_nexthop_type,nexthop_type", [
+        ("SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP", "TUNNEL"),
+        ("SAI_NEXT_HOP_TYPE_IP", "NEIGHBOR")
+    ])
+    def test_check_neighbor_consistency_zero_mac_no_host_route_neighbor(self, mock_log_functions,
+                                                                        sai_nexthop_type, nexthop_type):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.102": "00:00:00:00:00:00"}
+        mux_states = {"Ethernet4": "active"}
+        hw_mux_states = {"Ethernet4": "active"}
+        port_neighbor_modes = {}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = [
+            {
+                "route_details": "{\"dest\":\"192.168.0.102/32\",\"switch_id\":\"oid:0x21000000000000\"," +
+                                 "\"vr\":\"oid:0x3000000000024\"}",
+                "nexthop_id": "oid:0x40000000005ae"
+            }
+        ]
+        asic_neigh_table = \
+            ["{\"ip\":\"192.168.0.102\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
+        asic_no_host_route_neigh_table = asic_neigh_table
+        asic_nexthop_table = {
+            "oid:0x40000000005ae": {"nexthop_type": sai_nexthop_type, "nexthop_id": "oid:0x40000000005ae"}
+        }
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.102", "00:00:00:00:00:00", "N/A", "N/A", "N/A", "yes", "yes", nexthop_type,
+                           "consistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call("Neighbors in PREFIX-ROUTE mode:"), call("=" * 80)]
+        expected_log_warn_calls.extend([call(line) for line in expected_log_output])
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            asic_nexthop_table,
+            mux_server_to_port_map,
+            port_neighbor_modes,
+            asic_no_host_route_neigh_table
+        )
+        res, _ = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_inconsistent_zero_mac_no_host_route_neighbor(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.102": "00:00:00:00:00:00", "192.168.0.103": "00:00:00:00:00:00"}
+        mux_states = {"Ethernet4": "standby"}
+        hw_mux_states = {"Ethernet4": "standby"}
+        port_neighbor_modes = {}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = [
+            "{\"ip\":\"192.168.0.102\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}",
+            "{\"ip\":\"192.168.0.103\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"
+        ]
+        # 192.168.0.102 is programmed with NO_HOST_ROUTE but its prefix route is missing, while
+        # 192.168.0.103 is an expired neighbor that still installs the host route
+        asic_no_host_route_neigh_table = asic_neigh_table[:1]
+        asic_nexthop_table = {}
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_prefix_route_output = ["192.168.0.102", "00:00:00:00:00:00", "N/A", "N/A", "N/A", "yes", "no", "N/A",
+                                        "inconsistent"]
+        expected_host_route_output = ["192.168.0.103", "00:00:00:00:00:00", "N/A", "N/A", "N/A", "yes", "no",
+                                      "consistent"]
+        expected_prefix_route_log_output = tabulate.tabulate(
+            [expected_prefix_route_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE,
+            tablefmt="simple"
+        ).split("\n")
+        expected_host_route_log_output = tabulate.tabulate(
+            [expected_host_route_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES_HOST_ROUTE,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_error_calls = [
+            call("Found neighbors that are inconsistent with mux states: %s", ["192.168.0.102"])
+        ]
+        expected_log_error_calls.extend([call("Failed PREFIX-ROUTE neighbors:")])
+        expected_log_error_calls.extend([call(line) for line in expected_prefix_route_log_output])
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            asic_nexthop_table,
+            mux_server_to_port_map,
+            port_neighbor_modes,
+            asic_no_host_route_neigh_table
+        )
+        res, failed_neighbors = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is False
+        assert [neighbor["NEIGHBOR"] for neighbor in failed_neighbors] == ["192.168.0.102"]
+        mock_log_warn.assert_has_calls([call(line) for line in expected_prefix_route_log_output])
+        mock_log_warn.assert_has_calls([call(line) for line in expected_host_route_log_output])
+        mock_log_error.assert_has_calls(expected_log_error_calls)
+        assert call("Failed HOST-ROUTE neighbors:") not in mock_log_error.call_args_list
