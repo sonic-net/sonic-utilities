@@ -189,6 +189,9 @@ class FakeApi:
 
 
 class FakeCpo(cpoutil.CpoBase):
+    def get_tx_disable(self):
+        return self.api.get_tx_disable()
+
     def get_lpmode(self):
         return False
 
@@ -533,6 +536,27 @@ class TestDirectPlatformApiCommands(object):
         assert json.loads(result.output) == {
             "Ethernet0": {"lane00": False, "lane01": True}
         }
+
+    @pytest.mark.parametrize("port", ["Ethernet0", "Ethernet1"])
+    def test_interface_tx_disable_uses_cpo_hook_without_oe_api(self, port):
+        self.cpo.get_tx_disable = mock.Mock(return_value=[True, False])
+        self.cpo.get_api = mock.Mock(side_effect=AssertionError("unexpected API access"))
+        result = invoke(["show", "interface", "tx-disable", port, "--json"])
+        assert result.exit_code == 0, result.output
+        expected = {"lane00": True, "lane01": False} if port == "Ethernet0" else {"lane01": False}
+        assert json.loads(result.output) == {port: expected}
+        self.cpo.get_tx_disable.assert_called_once_with()
+        self.cpo.get_api.assert_not_called()
+
+    @pytest.mark.parametrize("error, message", [
+        (NotImplementedError(), "get_tx_disable is not implemented"),
+        (OSError("control read failed"), "get_tx_disable failed: control read failed"),
+    ])
+    def test_interface_tx_disable_reports_hook_errors(self, error, message):
+        self.cpo.get_tx_disable = mock.Mock(side_effect=error)
+        result = invoke(["show", "interface", "tx-disable", "Ethernet0"])
+        assert result.exit_code == 1, result.output
+        assert message in result.output
 
     def test_interface_application_preserves_public_api_values(self):
         result = invoke([
@@ -1031,6 +1055,7 @@ class TestFourReadOptimizations:
         endpoint.api.get_tx_disable_support = lambda: True
         self.cpo.oe = endpoint
         self.cpo.get_lpmode = mock.Mock(side_effect=endpoint.api.get_lpmode)
+        self.cpo.get_tx_disable = mock.Mock(side_effect=endpoint.api.get_tx_disable)
         arguments = ["show", "interface", command] + ([port] if port else [])
         if json_output:
             arguments.append("--json")

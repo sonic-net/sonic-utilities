@@ -538,6 +538,9 @@ class CoverageFakeEndpoint(object):
 
 
 class CoverageFakeCpo(cpoutil.CpoBase):
+    def get_tx_disable(self):
+        return self.api.get_tx_disable()
+
     def get_lpmode(self):
         return False
 

@@ -1208,10 +1208,9 @@ def show_interface_tx_disable(port, json_output):
         with _eeprom_read_snapshot() as attach_snapshot:
             for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
                 lane_positions = cpo_mapping.lane_positions(logical_port, current_port_config)
-                api = get_oe_api(cpo, port_name)
-                attach_snapshot(cpo.oe, api)
+                attach_snapshot(getattr(cpo, "oe", None))
                 values = _select_lane_values(
-                    api.get_tx_disable(), lane_positions
+                    _call_vmodule(cpo, "get_tx_disable"), lane_positions
                 )
                 records[port_name] = values
     except (NotImplementedError, AttributeError) as exc:
