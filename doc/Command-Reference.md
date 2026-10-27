@@ -7253,6 +7253,8 @@ The "detailed" subcommand is used to display more detailed interface counters. A
     Time Since Counters Last Cleared............... None
   ```
 
+- NOTE: "Overruns Received" counts packets the port dropped on ingress because no buffer was available (`SAI_PORT_STAT_IN_DROPPED_PKTS`). It is polled by the `PORT_BUFFER_DROP` flex counter group, every 60 seconds by default (see `counterpoll port-buffer-drop`), so it can lag behind the other counters. It shows N/A on platforms that don't support this counter.
+
 - NOTE: Interface counters can be cleared by the user with the following command:
 
   ```
