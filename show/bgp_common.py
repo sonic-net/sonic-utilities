@@ -179,7 +179,8 @@ def print_ip_routes(route_info, filter_by_ip):
                 out_lines.append("  Last update {} ago\n".format(item['uptime']))
                 for nh in item['nexthops']:
                     if "directlyConnected" in nh:
-                        out_lines.append("  * directly connected, {}\n\n".format(nh['interfaceName']))
+                        # Match legacy print("  * directly connected, {}\n".format(...))
+                        out_lines.append("  * directly connected, {}\n".format(nh['interfaceName']))
                     else:
                         out_lines.append(get_nexthop_info_str(nh, True, is_voq_chassis=is_voq_chassis) + "\n")
                 out_lines.append("\n")
@@ -316,12 +317,11 @@ def merge_to_combined_route(combined_route, route, new_info_l, is_voq_chassis=No
                 additional_nh_l.append(nh)
 
             if len(additional_nh_l) > 0:
-                # Keep legacy behavior (intentional no-op expressions)
-                # to avoid changing JSON output semantics unexpectedly.
-                existing_entry['internalNextHopNum'] + len(additional_nh_l)
+                # FRR supplies these counters; keep them aligned with merged nexthops.
+                existing_entry['internalNextHopNum'] += len(additional_nh_l)
                 if (existing_entry['internalNextHopActiveNum'] > 0 and
                         new_info['internalNextHopActiveNum'] > 0):
-                    existing_entry['internalNextHopActiveNum'] + len(additional_nh_l)
+                    existing_entry['internalNextHopActiveNum'] += len(additional_nh_l)
                 existing_nh_list += additional_nh_l
     else:
         combined_route[route] = new_info_l
