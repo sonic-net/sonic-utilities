@@ -16,12 +16,9 @@ COMMANDS = [
     (('show', 'interface', 'map'), (), False),
     (('show', 'interface', 'dom'), (), False),
     (('show', 'interface', 'tx-disable'), (), False),
-    (('show', 'interface', 'lpmode'), (), False),
     (('show', 'interface', 'lane-status'), (), False),
     (('show', 'interface', 'speed', 'application'), (), False),
     (('config', 'interface', 'tx-disable'), ('true',), True),
-    (('config', 'interface', 'lpmode'), ('low',), True),
-    (('config', 'interface', 'reset'), (), True),
     (('read-eeprom', 'interface'), ('--oe', '-n', '0', '-o', '128', '-s', '1'), True),
     (('write-eeprom', 'interface'), ('--oe', '-n', '0', '-o', '128', '-d', '01'), True),
 ]

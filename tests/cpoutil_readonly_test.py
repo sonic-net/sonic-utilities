@@ -1008,7 +1008,7 @@ class TestLaneStatusEepromSnapshot:
             assert records["Ethernet0"]["ELS Status"]["module_state"] == "ModuleLowPwr"
 
 
-class TestFourReadOptimizations:
+class TestReadOptimizations:
     def setup_method(self):
         TestDirectPlatformApiCommands.setup_method(self)
 
@@ -1036,10 +1036,9 @@ class TestFourReadOptimizations:
         assert result.exit_code != 0
         assert "Traceback" not in result.output
 
-    @pytest.mark.parametrize("command", ["lpmode", "tx-disable"])
     @pytest.mark.parametrize("port", [None, "Ethernet0"])
     @pytest.mark.parametrize("json_output", [False, True])
-    def test_interface_snapshots_preserve_output_and_reuse_shared_reads(self, tmp_path, command, port, json_output):
+    def test_tx_disable_snapshot_preserves_output_and_reuses_shared_reads(self, tmp_path, port, json_output):
         from sonic_platform_base.sonic_xcvr.api.public.cmis import CmisApi
         from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
         from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisMemMap
@@ -1051,12 +1050,10 @@ class TestFourReadOptimizations:
         path.write_bytes(data)
         endpoint = DomOptoeEndpoint(path)
         endpoint.api = CmisApi(cpoutil.XcvrEeprom(endpoint.read_eeprom, endpoint.write_eeprom, mem_map))
-        endpoint.api.get_lpmode_support = lambda: True
         endpoint.api.get_tx_disable_support = lambda: True
         self.cpo.oe = endpoint
-        self.cpo.get_lpmode = mock.Mock(side_effect=endpoint.api.get_lpmode)
         self.cpo.get_tx_disable = mock.Mock(side_effect=endpoint.api.get_tx_disable)
-        arguments = ["show", "interface", command] + (["-p", port] if port else [])
+        arguments = ["show", "interface", "tx-disable"] + (["-p", port] if port else [])
         if json_output:
             arguments.append("--json")
 
@@ -1068,7 +1065,6 @@ class TestFourReadOptimizations:
             with mock.patch("builtins.open", wraps=open) as opened:
                 baseline = invoke(arguments)
                 baseline_reads = opened.call_count
-        self.cpo.get_lpmode.reset_mock()
         with mock.patch("builtins.open", wraps=open) as opened:
             optimized = invoke(arguments)
             optimized_reads = opened.call_count
@@ -1077,37 +1073,13 @@ class TestFourReadOptimizations:
         assert optimized_reads <= baseline_reads
         if port is None:
             assert optimized_reads < baseline_reads
-        if command == "lpmode":
-            assert self.cpo.get_lpmode.call_count == (1 if port else 2)
         assert endpoint.api.xcvr_eeprom.reader == endpoint.read_eeprom
-
-    def test_lpmode_platform_hook_does_not_require_an_oe_api(self):
-        endpoint = mock.Mock()
-        endpoint.get_api.side_effect = AssertionError("unexpected API creation")
-        self.cpo.oe = endpoint
-        self.cpo.get_lpmode = mock.Mock(return_value=True)
-        result = invoke(["show", "interface", "lpmode", "-p", "Ethernet0", "--json"])
-        assert result.exit_code == 0, result.output
-        assert json.loads(result.output) == {"Ethernet0": True}
-        self.cpo.get_lpmode.assert_called_once_with()
-        endpoint.get_api.assert_not_called()
 
     def test_optional_snapshot_api_failure_preserves_platform_hook(self, tmp_path):
         endpoint = DomOptoeEndpoint(tmp_path / "unused")
         endpoint.get_api = mock.Mock(side_effect=RuntimeError("API unavailable"))
         self.cpo.oe = endpoint
-        self.cpo.get_lpmode = mock.Mock(return_value=False)
-        result = invoke(["show", "interface", "lpmode", "-p", "Ethernet0", "--json"])
+        self.cpo.get_tx_disable = mock.Mock(return_value=[False, True])
+        result = invoke(["show", "interface", "tx-disable", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
-        self.cpo.get_lpmode.assert_called_once_with()
-
-    def test_lpmode_hook_failure_restores_reader(self, tmp_path):
-        endpoint = DomOptoeEndpoint(tmp_path / "unused")
-        endpoint.api = DomSnapshotApi(endpoint)
-        original = endpoint.api.xcvr_eeprom.reader
-        self.cpo.oe = endpoint
-        self.cpo.get_lpmode = mock.Mock(side_effect=OSError("hook failed"))
-        result = invoke(["show", "interface", "lpmode", "-p", "Ethernet0"])
-        assert result.exit_code != 0
-        assert "hook failed" in result.output
-        assert endpoint.api.xcvr_eeprom.reader == original
+        self.cpo.get_tx_disable.assert_called_once_with()

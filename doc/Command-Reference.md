@@ -17192,7 +17192,7 @@ keys, each containing an `els` name and a boolean `present` value.
   Ethernet32   ELS1   Present
   ```
 
-**cpoutil show interface map|dom|tx-disable|speed|lane-status|lpmode**
+**cpoutil show interface map|dom|tx-disable|speed|lane-status**
 
 These commands display per-interface CPO information. When `-p/--port` is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.
 
@@ -17207,15 +17207,15 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
   cpoutil show interface tx-disable [-p PORT] [--json]   # per-lane Tx disable status
   cpoutil show interface speed application [-p PORT] [--json]  # full configured and active applications per lane
   cpoutil show interface lane-status [-p PORT] [--json]  # OE datapath state and ELS lane state
-  cpoutil show interface lpmode [-p PORT] [--json]       # low-power mode of the CPO virtual module
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sudo cpoutil show interface lpmode -p Ethernet448
-  Interface    Low-power Mode
-  -----------  ----------------
-  Ethernet448  Off
+  admin@sonic:~$ sudo cpoutil show interface tx-disable -p Ethernet0
+  Interface    Lane    Tx Disable Status
+  -----------  ------  -------------------
+  Ethernet0    Lane 1  false
+  Ethernet0    Lane 2  true
   ```
 
 **cpoutil show oe lpmode|status|temperature**
@@ -17254,36 +17254,26 @@ These commands display External Laser Source state.
 
 ## CPO Utilities config commands
 
-**cpoutil config interface lpmode|reset|tx-disable**
+**cpoutil config interface tx-disable**
 
-These commands control a CPO virtual module. They call the platform's CPO object for the selected port (`CpoBase.set_lpmode()`, `reset()` and `tx_disable()`), and the platform decides how the hardware is controlled. When the platform does not implement a control, the command reports that it is not implemented.
+This command enables or disables Tx-disable on every lane of the mapped OE bank through the platform CPO object's `tx_disable()` method. The value `true` disables TX, and `false` enables TX. Unsupported platform controls report that they are not implemented.
 
-PORT is one port, or a comma-separated list. Each command lists the ports it affects:
-
-- `lpmode` and `reset` act through the CPO controller, so they apply to every port the controller serves, including breakout subports.
-- `tx-disable` acts on the port's CPO virtual module, so it applies to every port that shares it, such as breakout subports.
-
-These are maintenance overrides and are not persistent: xcvrd restores full power when it next provisions the ports. After a reset, the affected ports must be re-provisioned (for example, by an admin toggle).
+The required `-p, --port` option selects one interface or a comma-separated list. All interfaces sharing the selected OE bank are affected, including breakout subports; the command lists the affected interfaces.
 
 - Usage:
   ```
-  cpoutil config interface lpmode -p PORT {full|low}
-  cpoutil config interface reset -p PORT
   cpoutil config interface tx-disable -p PORT {true|false}
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sudo cpoutil config interface lpmode -p Ethernet448 low
-  Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... OK
-
   admin@sonic:~$ sudo cpoutil config interface tx-disable -p Ethernet448 true
   Enabling Tx-disable for Ethernet448 (Ethernet448) ... OK
   ```
 
 **cpoutil config oe|els lpmode|reset**
 
-These commands control an Optical Engine or External Laser Source endpoint on its own. They are for platforms that control the OE or ELS independently (separate mode), and call the endpoint's `OeBase`/`ElsfpBase` hooks. Platforms that control the CPO virtual module as a whole (joint mode) do not implement these hooks, so the commands report that they are not implemented; use `config interface` instead. After an OE reset, the OE's ports may need application and datapath re-provisioning.
+These commands control an Optical Engine or External Laser Source through the selected endpoint's `OeBase`/`ElsfpBase` hooks. Support depends on the platform; unsupported operations report that they are not implemented. After an OE reset, the OE's ports may need application and datapath re-provisioning.
 
 - Usage:
   ```
@@ -17293,7 +17283,7 @@ These commands control an Optical Engine or External Laser Source endpoint on it
   cpoutil config els reset ELS_INDEX
   ```
 
-- Example (joint mode):
+- Example (unsupported endpoint):
   ```
   admin@sonic:~$ sudo cpoutil config oe lpmode 7 low
   Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... Failed

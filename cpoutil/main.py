@@ -1111,31 +1111,6 @@ def show_interface_map(port, json_output):
         click.echo(_format_map_table(records))
 
 
-@show_interface.command("lpmode")
-@click.option("-p", "--port", metavar="PORT",
-              help="Front-panel interface; omit to display all CPO interfaces.")
-@output_option
-def show_interface_lpmode(port, json_output):
-    """Display the low-power mode of each interface's CPO virtual module."""
-    records = {}
-    try:
-        with _eeprom_read_snapshot() as attach_snapshot:
-            for port_name, _, cpo in get_port_cpo_objects(port):
-                attach_snapshot(getattr(cpo, "oe", None))
-                lpmode = _call_vmodule(cpo, "get_lpmode")
-                if not isinstance(lpmode, bool):
-                    raise CpoCommandError(
-                        "CPO low-power mode is unavailable for '{}'".format(port_name)
-                    )
-                records[port_name] = lpmode
-    except (CpoMappingError, CpoCommandError) as exc:
-        raise click.ClickException(str(exc))
-    print_records(
-        records, json_output, ("Interface", "Low-power Mode"),
-        boolean_values=("On", "Off"),
-    )
-
-
 @show_interface.command("dom")
 @click.option("-p", "--port", metavar="PORT",
               help="Front-panel interface; omit to display all CPO interfaces.")
@@ -1530,15 +1505,10 @@ def _call_vmodule(cpo, method, *args):
     return _call_hook(cpo, method, "CPO", *args)
 
 
-def get_vmodule_targets(ports, per_controller):
-    """Resolve the CPO objects a virtual-module command calls.
+def get_vmodule_targets(ports):
+    """Resolve selected interfaces to unique CPO objects for Tx-disable.
 
-    PORT is one or more comma-separated ports. Low-power mode and reset act
-    through the module controller: each controller is called once, on a
-    selected port's CPO object, and every port it serves is affected.
-    Tx-disable acts on each selected port's CPO object, affecting the ports
-    that share its physical port, such as breakout subports. Returns
-    (label, CPO object, affected ports) tuples.
+    Return each target with the interfaces sharing its physical port.
     """
     selected = [port.strip() for port in str(ports).split(",") if port.strip()]
     if not selected:
@@ -1547,14 +1517,6 @@ def get_vmodule_targets(ports, per_controller):
     targets = {}
     for port in selected:
         port_cpos = get_port_cpo_objects(port)
-        if per_controller:
-            oe_name = cpo_mapping.resolve_interface(port, current_port_config).oe_name
-            if oe_name not in targets:
-                targets[oe_name] = (
-                    oe_name.upper(), port_cpos[0][2],
-                    cpo_mapping.ports_for_resource(OPTICAL_ENGINE, oe_name, current_port_config),
-                )
-            continue
         for _, physical_port, cpo in port_cpos:
             if physical_port not in targets:
                 affected = cpo_mapping.ports_for_physical_ports([physical_port], current_port_config)
@@ -1585,11 +1547,7 @@ def config():
 
 @config.group("interface")
 def config_interface():
-    """Control hardware associated with a front-panel CPO interface.
-
-    Low-power mode and reset operate on the associated OE/ELS virtual module.
-    Tx-disable operates on every lane of the mapped OE bank instead.
-    """
+    """Control Tx-disable on the OE bank associated with a front-panel interface."""
 
 
 @config_interface.command("tx-disable")
@@ -1605,7 +1563,7 @@ def config_interface_tx_disable(port, state):
     """
     disable = state == "true"
     try:
-        targets = get_vmodule_targets(port, per_controller=False)
+        targets = get_vmodule_targets(port)
         _run_vmodule_action(
             targets,
             "Enabling Tx-disable for" if disable else "Disabling Tx-disable for",
@@ -1615,57 +1573,9 @@ def config_interface_tx_disable(port, state):
         raise click.ClickException(str(exc))
 
 
-@config_interface.command("lpmode")
-@click.option("-p", "--port", required=True, metavar="PORT",
-              help="Front-panel interface or comma-separated list of interfaces.")
-@click.argument("mode", type=click.Choice(["full", "low"]))
-def config_interface_lpmode(port, mode):
-    """Set full-power or low-power mode of a CPO virtual module.
-
-    This operation applies to the interface's associated OE and ELS.
-    All ports sharing the same CPO controller are affected.
-    """
-    low_power = mode == "low"
-    try:
-        targets = get_vmodule_targets(port, per_controller=True)
-        _run_vmodule_action(
-            targets,
-            "Enabling low-power mode for" if low_power else "Disabling low-power mode for",
-            "set_lpmode", low_power,
-        )
-    except (CpoMappingError, CpoCommandError) as exc:
-        raise click.ClickException(str(exc))
-
-
-@config_interface.command("reset")
-@click.option("-p", "--port", required=True, metavar="PORT",
-              help="Front-panel interface or comma-separated list of interfaces.")
-def config_interface_reset(port):
-    """Reset a CPO virtual module through its controller.
-
-    This operation applies to the interface's associated OE and ELS.
-    All ports sharing the same CPO controller are affected.
-    """
-    try:
-        targets = get_vmodule_targets(port, per_controller=True)
-        _run_vmodule_action(targets, "Resetting", "reset")
-    except (CpoMappingError, CpoCommandError) as exc:
-        raise click.ClickException(str(exc))
-    click.echo(
-        "Re-provision the affected ports (admin toggle): {}".format(
-            ", ".join(port for _, _, ports in targets for port in ports)
-        )
-    )
-
-
 @config.group("oe")
 def config_oe():
-    """Control an Optical Engine endpoint (separate mode).
-
-    These commands call the platform's OE endpoint hooks, which platforms that
-    control the OE independently implement. Use 'config interface' for the CPO
-    virtual module.
-    """
+    """Control an Optical Engine endpoint through its platform hooks."""
 
 
 @config_oe.command("lpmode")
@@ -1715,12 +1625,7 @@ def config_oe_reset(oe_index):
 
 @config.group("els")
 def config_els():
-    """Control an External Laser Source endpoint (separate mode).
-
-    These commands call the platform's ELS endpoint hooks, which platforms that
-    control the ELS independently implement. Use 'config interface' for the CPO
-    virtual module.
-    """
+    """Control an External Laser Source endpoint through its platform hooks."""
 
 
 @config_els.command("lpmode")
