@@ -10634,16 +10634,13 @@ While adding a new ERSPAN session, users need to configure the following fields 
 8) optional - List of source ports which can have both Ethernet and LAG ports.
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
 
-10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
-11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
 
-Per-source sampling policies can also be configured using `config mirror_session sample add`.
-The existing session-level sampling options remain supported during this incremental
-change. Existing configurations are not automatically migrated.
+Configure sampling rate and optional truncation using `config mirror_session sample add`.
+These settings are stored in `PORT_MIRROR_SAMPLE`, separately from the ERSPAN export session.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction]
   ```
 
 **config mirror_session sample**
@@ -10653,21 +10650,34 @@ port or PortChannel binding:
 
 ```text
 config mirror_session erspan add export1 10.0.0.1 10.0.0.2 8 64
-config mirror_session sample add export1 Ethernet0 both --sample-rate 5000 --truncate-size 128
-config mirror_session sample add export1 PortChannel1001 rx --sample-rate 1000 --disabled
+config mirror_session sample add export1 Ethernet0 both --sample_rate 5000 --truncate_size 128
+config mirror_session sample add export1 PortChannel1001 rx --sample_rate 1000 --disabled
 show mirror_session sample
 config mirror_session sample remove export1 Ethernet0 both
 ```
 
-Syntax:
+While adding sampled ERSPAN bindings, users need to configure the following fields:
 
-```text
-config mirror_session sample add <session_name> <port> <rx|tx|both> --sample-rate <N> [--truncate-size <bytes>] [--disabled]
-config mirror_session sample remove <session_name> <port> <rx|tx|both>
-```
+1) Session name - An existing ERSPAN export session without source port configuration.
+2) Source port list - A physical port or PortChannel, or a comma-separated list of source interfaces.
+3) Direction - Mirror session direction for the specified source ports. (Supported rx/tx/both)
+4) Sample rate - Required sampling rate shared by the specified sources. Valid range: 2..4294967295.
+5) optional - Truncate size in bytes. Valid range: 64..9216. When omitted, no truncation is requested.
+6) optional - Disabled. Create bindings with admin_state down instead of the CLI default up.
 
-- `--sample-rate` is required, in range 2..4294967295. Zero and one are invalid.
-- `--truncate-size` is optional, in range 64..9216. Omit it for no truncation.
+- Usage:
+  ```
+  config mirror_session sample add <session_name> <source-port-list> <direction> --sample_rate <N> [--truncate_size <bytes>] [--disabled]
+  config mirror_session sample remove <session_name> <source-port-list> <direction>
+  ```
+
+- `--sample_rate` is required, in range 2..4294967295. Zero and one are invalid.
+- `<source-port-list>` accepts one source or a comma-separated list of physical ports and
+  PortChannels, such as `Ethernet0,Ethernet4`. All sources receive the same policy.
+  Each source/direction is stored as a separate entry; a list is never stored in a key.
+  Empty list elements, duplicate sources after alias resolution, and overlapping
+  PortChannel/member sources within the request are rejected.
+- `--truncate_size` is optional, in range 64..9216. Omit it for no truncation.
 - Bindings default to `admin_state=up`; `--disabled` stores `down`.
 - `both` creates separate `rx` and `tx` entries. Both are checked before writes;
   duplicate keys and overlapping PortChannel/member ownership are rejected.
@@ -10675,6 +10685,12 @@ config mirror_session sample remove <session_name> <port> <rx|tx|both>
 - A binding must reference an existing ERSPAN session without a `src_port` field.
 - Removal checks references before deleting. `both` removes whichever matching
   directional entries exist, but rejects any mismatched reference without deletion.
+  Every requested source must have at least one matching entry in the selected
+  direction(s), otherwise nothing is deleted.
+- All requested sources are resolved and checked for references, conflicts, and
+  applicable capabilities before writes. With YANG validation enabled, bindings
+  are submitted in one GCU patch per namespace. Cross-namespace writes are sequential,
+  not an atomic transaction.
 - Remove and re-add a binding to change its policy. Removing bindings retains the
   export; export deletion is rejected while sampled or ACL references remain.
 - Explicit `SFLOW|global` configuration and sampled bindings are mutually exclusive

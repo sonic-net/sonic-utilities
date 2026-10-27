@@ -1,5 +1,6 @@
 #!/usr/sbin/env python
 
+import builtins
 import click
 import datetime
 import ipaddress
@@ -16,11 +17,12 @@ import copy
 import tempfile
 import sonic_yang
 
+import jsonpatch
 from jsonpatch import JsonPatchConflict
-from jsonpointer import JsonPointerException
+from jsonpointer import JsonPointer, JsonPointerException
 from collections import OrderedDict
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
-from generic_config_updater.gu_common import HOST_NAMESPACE
+from generic_config_updater.gu_common import HOST_NAMESPACE, GenericConfigUpdaterError
 from generic_config_updater.main import (
     apply_patch_from_file as _gcu_apply_patch_from_file
 )
@@ -75,7 +77,6 @@ from . import bgp_cli
 from . import stp
 from . import evpn_mh
 from . import llr
-from . import mirror_sample
 
 # mock masic APIs for unit test
 try:
@@ -136,19 +137,6 @@ SAMPLE_RATE_MIN = 2
 SAMPLE_RATE_MAX = 0xFFFFFFFF  # uint32 max
 TRUNCATE_SIZE_MIN = 64
 TRUNCATE_SIZE_MAX = 9216
-
-
-def validate_sample_rate(ctx, param, value):
-    if value != 0 and (value < SAMPLE_RATE_MIN or value > SAMPLE_RATE_MAX):
-        raise click.BadParameter(
-            f"must be 0 or in range {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX} (uint32 max)")
-    return value
-
-
-def validate_truncate_size(ctx, param, value):
-    if value != 0 and (value < TRUNCATE_SIZE_MIN or value > TRUNCATE_SIZE_MAX):
-        raise click.BadParameter(f"must be 0 or in range {TRUNCATE_SIZE_MIN}..{TRUNCATE_SIZE_MAX}")
-    return value
 
 
 DSCP_RANGE = click.IntRange(min=0, max=63)
@@ -3398,7 +3386,184 @@ def mirror_session():
     pass
 
 
-mirror_session.add_command(mirror_sample.sample)
+# Sampled source bindings: config mirror_session sample add/remove
+def mirror_sample_source_database(ctx, databases, port, removing=False):
+    """Resolve a physical port or logical PortChannel in front-end namespaces."""
+    candidates = []
+    front = {ns: db for ns, db in databases.items() if ns} or databases
+    for namespace, database in front.items():
+        ports = database.get_table('PORT')
+        channels = database.get_table('PORTCHANNEL')
+        stored_source = removing and any(
+            port_mirror.binding_key(key)[0] == port
+            for key in database.get_keys(port_mirror.SAMPLE_TABLE))
+        if port in ports or port in channels or stored_source:
+            candidates.append((namespace, database, port))
+        elif clicommon.get_interface_naming_mode() == 'alias':
+            candidates.extend((namespace, database, name) for name, entry in ports.items()
+                              if entry.get('alias') == port)
+    if len(candidates) != 1:
+        ctx.fail(f'Source interface {port} must identify one physical port or PortChannel '
+                 'in a front-end ASIC namespace.')
+    return candidates[0]
+
+
+def validate_mirror_sample_capabilities(ctx, namespace, directions, truncate_size):
+    """Allow absent discovery fields, but report STATE_DB access failures."""
+    try:
+        state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        state_db.connect(state_db.STATE_DB, False)
+        fields = [('rx', 'PORT_INGRESS_SAMPLE_MIRROR_CAPABLE'),
+                  ('tx', 'PORT_EGRESS_SAMPLE_MIRROR_CAPABLE')]
+        unsupported = [direction for direction, field in fields
+                       if direction in directions and
+                       state_db.get(state_db.STATE_DB, 'SWITCH_CAPABILITY|switch', field) == 'false']
+        truncation_unsupported = truncate_size is not None and state_db.get(
+            state_db.STATE_DB, 'SWITCH_CAPABILITY|switch', 'SAMPLEPACKET_TRUNCATION_CAPABLE') == 'false'
+    except Exception as error:
+        ctx.fail(f'Unable to read sampled mirror capabilities: {error}')
+    if unsupported:
+        ctx.fail(f"Sampled mirror direction '{unsupported[0]}' is not supported by the ASIC")
+    if truncation_unsupported:
+        ctx.fail('Sampled mirror truncation is not supported by the ASIC')
+
+
+def resolve_mirror_sample_sources(ctx, databases, ports, removing=False):
+    """Resolve a comma-separated list and reject duplicate canonical sources."""
+    names = [name.strip() for name in ports.split(',')]
+    if not builtins.all(names):
+        ctx.fail('Source port list must not contain empty entries.')
+    sources = []
+    seen = set()
+    for name in names:
+        namespace, database, port = mirror_sample_source_database(ctx, databases, name, removing=removing)
+        key = (namespace, port)
+        if key in seen:
+            ctx.fail(f'Source interface {port} occurs more than once in the port list.')
+        seen.add(key)
+        sources.append((namespace, database, port))
+    return sources
+
+
+def validate_mirror_sample_source_overlap(ctx, database, port, directions, pending_keys=()):
+    """Prevent a logical LAG and its members from owning the same attachment."""
+    members = [port_mirror.binding_key(key) for key in database.get_keys('PORTCHANNEL_MEMBER')]
+    physical_ports = {member for lag, member in members if lag == port} or {port}
+    for key in list(database.get_keys(port_mirror.SAMPLE_TABLE)) + list(pending_keys):
+        source, direction = port_mirror.binding_key(key)
+        if direction not in directions:
+            continue
+        existing_ports = {member for lag, member in members if lag == source} or {source}
+        if source == port or physical_ports & existing_ports:
+            ctx.fail(f'Sampled mirror binding {source}|{direction} already owns this source/direction. '
+                     'Remove the existing binding first.')
+
+
+def apply_mirror_sample_bindings(ctx, database, namespace, entries):
+    """Submit all requested bindings in this namespace as one validated patch."""
+    try:
+        if device_info.is_yang_config_validation_enabled(database):
+            current = database.get_table(port_mirror.SAMPLE_TABLE)
+            target = dict(current)
+            operations = []
+            if not current and any(value is not None for _, value in entries):
+                operations.append({'op': 'add', 'path': '/' + port_mirror.SAMPLE_TABLE, 'value': {}})
+            for key, value in entries:
+                path = JsonPointer.from_parts([port_mirror.SAMPLE_TABLE, '|'.join(key)]).path
+                if value is None:
+                    target.pop(key, None)
+                    target.pop('|'.join(key), None)
+                    operations.append({'op': 'remove', 'path': path})
+                else:
+                    target[key] = value
+                    operations.append({'op': 'add', 'path': path, 'value': value})
+            if not target:
+                operations = [{'op': 'remove', 'path': '/' + port_mirror.SAMPLE_TABLE}]
+            GenericUpdater(scope=namespace).apply_patch(
+                patch=jsonpatch.JsonPatch(operations), config_format=ConfigFormat.CONFIGDB,
+                verbose=False, dry_run=False, ignore_non_yang_tables=False,
+                ignore_paths=None, sort=True)
+        else:
+            # All requested keys and references have been checked before this loop.
+            for key, value in entries:
+                database.set_entry(port_mirror.SAMPLE_TABLE, key, value)
+    except (ValueError, jsonpatch.JsonPatchException, GenericConfigUpdaterError) as error:
+        ctx.fail(f'Invalid ConfigDB. Error: {error}')
+
+
+@mirror_session.group(cls=clicommon.AbbreviationGroup, name='sample')
+def sample():
+    """Configure per-port sampled ERSPAN bindings."""
+
+
+@sample.command('add')
+@click.argument('session_name')
+@click.argument('port', metavar='<port_list>')
+@click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
+@click.option('--sample_rate', required=True, type=click.IntRange(SAMPLE_RATE_MIN, SAMPLE_RATE_MAX))
+@click.option('--truncate_size', type=click.IntRange(TRUNCATE_SIZE_MIN, TRUNCATE_SIZE_MAX), default=None)
+@click.option('--disabled', is_flag=True, help='Create a disabled binding (admin_state=down).')
+@click.pass_context
+def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, disabled):
+    """Attach comma-separated sources with the same sampling policy to an ERSPAN export."""
+    databases = port_mirror.config_databases()
+    for database in databases.values():
+        if 'global' in database.get_keys('SFLOW'):
+            ctx.fail(port_mirror.EXCLUSION_ERROR)
+    sources = resolve_mirror_sample_sources(ctx, databases, port)
+    directions = ['rx', 'tx'] if direction == 'both' else [direction]
+    value = {'mirror_session': session_name, 'sample_rate': str(sample_rate),
+             'admin_state': 'down' if disabled else 'up'}
+    if truncate_size is not None:
+        value['truncate_size'] = str(truncate_size)
+    grouped = {}
+    for namespace, database, source in sources:
+        if namespace not in grouped:
+            session = database.get_entry('MIRROR_SESSION', session_name)
+            if not session:
+                ctx.fail(f'Mirror session {session_name} does not exist in the source namespace.')
+            if session.get('type', 'ERSPAN') != 'ERSPAN':
+                ctx.fail('A sampled binding must reference an ERSPAN session.')
+            if 'src_port' in session:
+                ctx.fail('A sampled export session must not configure src_port.')
+            validate_mirror_sample_capabilities(ctx, namespace, directions, truncate_size)
+            grouped[namespace] = []
+        entries = grouped[namespace]
+        validate_mirror_sample_source_overlap(ctx, database, source, directions, [key for key, _ in entries])
+        entries.extend(((source, d), dict(value)) for d in directions)
+    # Validate every source, including cross-namespace requests, before writes.
+    for namespace, entries in grouped.items():
+        apply_mirror_sample_bindings(ctx, databases[namespace], namespace, entries)
+
+
+@sample.command('remove')
+@click.argument('session_name')
+@click.argument('port', metavar='<port_list>')
+@click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
+@click.pass_context
+def sample_remove(ctx, session_name, port, direction):
+    """Remove bindings for comma-separated sources without deleting their export."""
+    databases = port_mirror.config_databases()
+    # Use a stored canonical source name even if the interface was removed.
+    sources = resolve_mirror_sample_sources(ctx, databases, port, removing=True)
+    directions = ['rx', 'tx'] if direction == 'both' else [direction]
+    grouped = {}
+    for namespace, database, source in sources:
+        entries = []
+        for item in directions:
+            key = (source, item)
+            entry = database.get_entry(port_mirror.SAMPLE_TABLE, key)
+            if not entry:
+                continue
+            if entry.get('mirror_session') != session_name:
+                ctx.fail(f'Binding {source}|{item} references a different mirror session.')
+            entries.append((key, None))
+        if not entries:
+            ctx.fail(f'No matching sampled mirror binding exists for {source} {direction}.')
+        grouped.setdefault(namespace, []).extend(entries)
+    for namespace, entries in grouped.items():
+        apply_mirror_sample_bindings(ctx, databases[namespace], namespace, entries)
+
 
 #
 # 'add' subgroup ('config mirror_session add ...')
@@ -3439,20 +3604,13 @@ def erspan(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-@click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
-              help="Sampling rate (1-in-N), 2..4294967295. 0 disables sampling")
-@click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
-              help="Truncation size in bytes, 64..9216. 0 disables truncation")
-def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
-               sample_rate, truncate_size):
+def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction):
     """ Add ERSPAN mirror session """
     add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
-               queue, policer, src_port, direction,
-               sample_rate, truncate_size)
+               queue, policer, src_port, direction)
 
 
-def gather_session_info(session_info, policer, queue, src_port, direction,
-                        sample_rate=0, truncate_size=0):
+def gather_session_info(session_info, policer, queue, src_port, direction):
     if policer:
         session_info['policer'] = policer
 
@@ -3465,18 +3623,11 @@ def gather_session_info(session_info, policer, queue, src_port, direction,
             direction = "both"
         session_info['direction'] = direction.upper()
 
-    if sample_rate:
-        session_info['sample_rate'] = str(sample_rate)
-
-    if truncate_size:
-        session_info['truncate_size'] = str(truncate_size)
-
     return session_info
 
 
 def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
-               policer, src_port=None, direction=None,
-               sample_rate=0, truncate_size=0):
+               policer, src_port=None, direction=None):
     session_info = {
             "type" : "ERSPAN",
             "src_ip": src_ip,
@@ -3488,8 +3639,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
     if gre_type is not None:
         session_info['gre_type'] = gre_type
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction,
-                                       sample_rate, truncate_size)
+    session_info = gather_session_info(session_info, policer, queue, src_port, direction)
     raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
