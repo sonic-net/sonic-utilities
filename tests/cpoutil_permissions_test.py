@@ -9,7 +9,7 @@ from cpoutil import main as cpoutil
 @pytest.mark.parametrize("arguments", [
     ["show", "interface", "presence"],
     ["show", "interface", "map"],
-    ["config", "interface", "reset", "Ethernet0"],
+    ["config", "interface", "reset", "-p", "Ethernet0"],
     ["read-eeprom", "els"],
     ["write-eeprom", "els", "-i", "0", "-n", "0xb0", "-o", "132", "-d", "01"],
     ["show", "--help"],

@@ -267,7 +267,7 @@ class TestMappingCommand(object):
         with mock.patch("cpoutil.main.initialize_platform"):
             result = CliRunner().invoke(
                 cpoutil.cli,
-                ["show", "interface", "map", "Ethernet8", "--json"],
+                ["show", "interface", "map", "-p", "Ethernet8", "--json"],
             )
         assert result.exit_code == 0
         payload = json.loads(result.output)
@@ -302,19 +302,19 @@ class TestOeLocalBank(object):
         assert cpoutil._resource_banks(OPTICAL_ENGINE, "oe0") == [topology_bank]
 
         result = invoke_coverage(
-            ["write-eeprom", "interface", "Ethernet0", "--oe", "-n", "0x10", "-o", "0x82", "-d", "ff"])
+            ["write-eeprom", "interface", "-p", "Ethernet0", "--oe", "-n", "0x10", "-o", "0x82", "-d", "ff"])
         assert result.exit_code == 0, result.output
         assert [offset for offset, _, _ in coverage_environment.writes] == [
             topology_bank * 0x10000 + 0x10 * 0x100 + 0x82]
 
         coverage_environment.reads.clear()
-        result = invoke_coverage(["read-eeprom", "interface", "Ethernet0", "--oe"])
+        result = invoke_coverage(["read-eeprom", "interface", "-p", "Ethernet0", "--oe"])
         assert result.exit_code == 0, result.output
         assert "Upper page 10h bank {:x}h".format(topology_bank) in result.output
 
     def test_map_reports_local_bank(self, coverage_environment, sparse_bank):
         sparse_bank(4)
-        result = invoke_coverage(["show", "interface", "map", "Ethernet0", "--json"])
+        result = invoke_coverage(["show", "interface", "map", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["Ethernet0"]["oe"]["bank"] == 4
 
@@ -626,18 +626,18 @@ HARDWARE_COMMANDS = [["show", "interface", "presence"], ["show", "interface", "s
     ["show", "els", name] for name in
     ("lpmode", "status", "temperature")
 ] + [
-    ["config", "interface", "tx-disable", "Ethernet0", "true"],
-    ["config", "interface", "lpmode", "Ethernet0", "low"],
-    ["config", "interface", "reset", "Ethernet0"],
+    ["config", "interface", "tx-disable", "-p", "Ethernet0", "true"],
+    ["config", "interface", "lpmode", "-p", "Ethernet0", "low"],
+    ["config", "interface", "reset", "-p", "Ethernet0"],
     ["config", "oe", "lpmode", "0", "full"],
     ["config", "oe", "reset", "0"],
     ["config", "els", "lpmode", "0", "full"],
     ["config", "els", "reset", "0"],
     ["read-eeprom"],
-    ["read-eeprom", "interface", "Ethernet0", "--oe"],
+    ["read-eeprom", "interface", "-p", "Ethernet0", "--oe"],
     ["read-eeprom", "oe"],
     ["read-eeprom", "els"],
-    ["write-eeprom", "interface", "Ethernet0", "--oe", "-n", "0", "-o", "0", "-d", "00"],
+    ["write-eeprom", "interface", "-p", "Ethernet0", "--oe", "-n", "0", "-o", "0", "-d", "00"],
     ["write-eeprom", "oe", "-i", "0", "-n", "0", "-o", "0", "-d", "00"],
     ["write-eeprom", "els", "-i", "0", "-n", "0", "-o", "0", "-d", "00"],
 ]
@@ -665,8 +665,8 @@ class TestCommandInitialization:
         initialize.assert_not_called()
 
     @pytest.mark.parametrize("arguments", [
-        ["show", "interface", "tx_disable", "Ethernet0"],
-        ["config", "interface", "tx_disable", "Ethernet0", "true"],
+        ["show", "interface", "tx_disable", "-p", "Ethernet0"],
+        ["config", "interface", "tx_disable", "-p", "Ethernet0", "true"],
     ])
     def test_tx_disable_rejects_underscore_command(self, monkeypatch, arguments):
         initialize = mock.Mock(side_effect=AssertionError("invalid command accessed hardware"))
@@ -681,7 +681,7 @@ class TestCommandInitialization:
         initialize = mock.Mock(side_effect=AssertionError("invalid state accessed hardware"))
         monkeypatch.setattr(cpoutil, "initialize_platform", initialize)
         result = invoke_coverage([
-            "config", "interface", "tx-disable", "Ethernet0", state
+            "config", "interface", "tx-disable", "-p", "Ethernet0", state
         ])
         assert result.exit_code == 2
         assert "Invalid value" in result.output
@@ -816,7 +816,7 @@ class TestHelperCoverage(object):
     @pytest.mark.parametrize("port_name", ["Ethernet999", "not-a-port"])
     def test_invalid_port_error_is_printed_once(self, coverage_environment, port_name):
         result = CliRunner().invoke(
-            cpoutil.cli, ["show", "interface", "map", port_name]
+            cpoutil.cli, ["show", "interface", "map", "-p", port_name]
         )
         assert result.exit_code != 0
         assert result.output.count("Invalid port '{}'".format(port_name)) == 1
@@ -929,11 +929,11 @@ class TestCommandCoverage(object):
         "arguments",
         [
             ["show", "interface", "map"],
-            ["show", "interface", "dom", "Ethernet0"],
-            ["show", "interface", "dom", "Ethernet0", "--json"],
-            ["show", "interface", "tx-disable", "Ethernet0"],
-            ["show", "interface", "speed", "application", "Ethernet0"],
-            ["show", "interface", "lane-status", "Ethernet0"],
+            ["show", "interface", "dom", "-p", "Ethernet0"],
+            ["show", "interface", "dom", "-p", "Ethernet0", "--json"],
+            ["show", "interface", "tx-disable", "-p", "Ethernet0"],
+            ["show", "interface", "speed", "application", "-p", "Ethernet0"],
+            ["show", "interface", "lane-status", "-p", "Ethernet0"],
             ["show", "oe", "lpmode"],
             ["show", "oe", "status"],
             ["show", "oe", "temperature"],
@@ -950,9 +950,9 @@ class TestCommandCoverage(object):
     @pytest.mark.parametrize(
         "arguments",
         [
-            ["config", "interface", "tx-disable", "Ethernet0", "true"],
-            ["config", "interface", "lpmode", "Ethernet0", "low"],
-            ["config", "interface", "reset", "Ethernet0"],
+            ["config", "interface", "tx-disable", "-p", "Ethernet0", "true"],
+            ["config", "interface", "lpmode", "-p", "Ethernet0", "low"],
+            ["config", "interface", "reset", "-p", "Ethernet0"],
             ["config", "oe", "lpmode", "0", "low"],
             ["config", "oe", "lpmode", "0", "full"],
             ["config", "oe", "reset", "0"],
@@ -1018,17 +1018,17 @@ class TestCommandCoverage(object):
     @pytest.mark.parametrize(
         "arguments",
         [
-            ["read-eeprom", "interface", "Ethernet0", "--oe",
+            ["read-eeprom", "interface", "-p", "Ethernet0", "--oe",
              "-n", "0", "-o", "0", "-s", "16"],
-            ["read-eeprom", "interface", "Ethernet0", "--els",
+            ["read-eeprom", "interface", "-p", "Ethernet0", "--els",
              "-n", "0x1a", "-o", "0x80", "-s", "16"],
             ["read-eeprom", "oe", "-i", "0", "-b", "0",
              "-n", "0", "-o", "0", "-s", "16"],
             ["read-eeprom", "els", "-i", "0",
              "-n", "0x1a", "-o", "0x80", "-s", "16"],
-            ["write-eeprom", "interface", "Ethernet0", "--oe",
+            ["write-eeprom", "interface", "-p", "Ethernet0", "--oe",
              "-n", "0", "-o", "0x80", "-d", "01 02"],
-            ["write-eeprom", "interface", "Ethernet0", "--els",
+            ["write-eeprom", "interface", "-p", "Ethernet0", "--els",
              "-n", "0x1a", "-o", "0x80", "-d", "01 02"],
             ["write-eeprom", "oe", "-i", "0", "-b", "0",
              "-n", "0", "-o", "0x80", "-d", "01 02"],
@@ -1063,7 +1063,7 @@ class TestCommandCoverage(object):
         from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisMemMap
 
         for arguments in (
-            ["read-eeprom", "interface", "Ethernet0", "--oe"],
+            ["read-eeprom", "interface", "-p", "Ethernet0", "--oe"],
             ["read-eeprom", "oe", "-i", "0"],
             ["read-eeprom", "els", "-i", "0"],
         ):
@@ -1358,7 +1358,7 @@ class TestOptionalElsApis:
 
     @pytest.mark.parametrize("arguments", [
         ["show", "els", "status", "0"],
-        ["show", "interface", "lane-status", "Ethernet0"],
+        ["show", "interface", "lane-status", "-p", "Ethernet0"],
     ])
     def test_unsupported_els_reads_do_not_change_oe(
             self, coverage_environment, monkeypatch, arguments):
@@ -1522,18 +1522,18 @@ class TestVmoduleControls:
         assert json.loads(result.output) == {
             "Ethernet0": False, "Ethernet4": False, "Ethernet8": False, "Ethernet16": True,
         }
-        table = invoke_coverage(["show", "interface", "lpmode", "Ethernet16"])
+        table = invoke_coverage(["show", "interface", "lpmode", "-p", "Ethernet16"])
         assert table.exit_code == 0, table.output
         assert "Ethernet16" in table.output and "On" in table.output
 
     def test_show_lpmode_rejects_unavailable_state(self, vmodules):
         vmodules[2].get_lpmode.return_value = None
-        result = invoke_coverage(["show", "interface", "lpmode", "Ethernet8"])
+        result = invoke_coverage(["show", "interface", "lpmode", "-p", "Ethernet8"])
         assert result.exit_code != 0
         assert "unavailable for 'Ethernet8'" in result.output
 
     def test_dedicated_controller(self, vmodules):
-        result = invoke_coverage(["config", "interface", "lpmode", "Ethernet16", "low"])
+        result = invoke_coverage(["config", "interface", "lpmode", "-p", "Ethernet16", "low"])
         assert result.exit_code == 0, result.output
         assert "Enabling low-power mode for OE1 (Ethernet16) ... OK" in result.output
         vmodules[3].set_lpmode.assert_called_once_with(True)
@@ -1541,7 +1541,7 @@ class TestVmoduleControls:
 
     @pytest.mark.parametrize("ports", ["Ethernet8", "Ethernet4", "Ethernet0,Ethernet4,Ethernet8"])
     def test_one_port_controls_its_controller_once(self, vmodules, ports):
-        result = invoke_coverage(["config", "interface", "lpmode", ports, "low"])
+        result = invoke_coverage(["config", "interface", "lpmode", "-p", ports, "low"])
         assert result.exit_code == 0, result.output
         assert "Enabling low-power mode for OE0 (Ethernet0, Ethernet4, Ethernet8) ... OK" in result.output
         calls = [cpo.set_lpmode.call_args_list for cpo in vmodules.values()]
@@ -1560,7 +1560,7 @@ class TestVmoduleControls:
 
     @pytest.mark.parametrize("port", ["Ethernet0", "Ethernet4"])
     def test_tx_disable_acts_on_the_port_cpo_object(self, vmodules, port):
-        result = invoke_coverage(["config", "interface", "tx-disable", port, "true"])
+        result = invoke_coverage(["config", "interface", "tx-disable", "-p", port, "true"])
         assert result.exit_code == 0, result.output
         # Breakout subports share the physical port's CPO object.
         assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
@@ -1571,7 +1571,7 @@ class TestVmoduleControls:
 
     def test_tx_disable_calls_each_cpo_object_once(self, vmodules):
         result = invoke_coverage(
-            ["config", "interface", "tx-disable", "Ethernet0,Ethernet4,Ethernet8", "false"])
+            ["config", "interface", "tx-disable", "-p", "Ethernet0,Ethernet4,Ethernet8", "false"])
         assert result.exit_code == 0, result.output
         assert "Disabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
         assert "Disabling Tx-disable for Ethernet8 (Ethernet8) ... OK" in result.output
@@ -1580,9 +1580,9 @@ class TestVmoduleControls:
         vmodules[3].tx_disable.assert_not_called()
 
     @pytest.mark.parametrize("command, method", [
-        (["config", "interface", "lpmode", "Ethernet0,Ethernet16", "low"], "set_lpmode"),
-        (["config", "interface", "reset", "Ethernet0,Ethernet16"], "reset"),
-        (["config", "interface", "tx-disable", "Ethernet0,Ethernet16", "true"], "tx_disable"),
+        (["config", "interface", "lpmode", "-p", "Ethernet0,Ethernet16", "low"], "set_lpmode"),
+        (["config", "interface", "reset", "-p", "Ethernet0,Ethernet16"], "reset"),
+        (["config", "interface", "tx-disable", "-p", "Ethernet0,Ethernet16", "true"], "tx_disable"),
     ])
     def test_hardware_error_is_reported_with_completed_targets(self, vmodules, command, method):
         getattr(vmodules[3], method).side_effect = OSError(5, "I2C read failed")
@@ -1595,24 +1595,24 @@ class TestVmoduleControls:
 
     def test_tx_disable_partial_failure_names_completed_targets(self, vmodules):
         vmodules[3].tx_disable.return_value = False
-        result = invoke_coverage(["config", "interface", "tx-disable", "Ethernet0,Ethernet16", "true"])
+        result = invoke_coverage(["config", "interface", "tx-disable", "-p", "Ethernet0,Ethernet16", "true"])
         assert result.exit_code != 0
         assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet4) ... OK" in result.output
         assert "Enabling Tx-disable for Ethernet16 (Ethernet16) ... Failed" in result.output
         assert "already applied to Ethernet0" in result.output
 
     def test_reset_reports_ports_to_reprovision(self, vmodules):
-        result = invoke_coverage(["config", "interface", "reset", "Ethernet16"])
+        result = invoke_coverage(["config", "interface", "reset", "-p", "Ethernet16"])
         assert result.exit_code == 0, result.output
         assert "Resetting OE1 (Ethernet16) ... OK" in result.output
         assert "Re-provision the affected ports (admin toggle): Ethernet16" in result.output
         vmodules[3].reset.assert_called_once_with()
 
     @pytest.mark.parametrize("command", [
-        ["config", "interface", "lpmode", "Ethernet16", "low"],
-        ["config", "interface", "reset", "Ethernet16"],
-        ["config", "interface", "tx-disable", "Ethernet16", "true"],
-        ["show", "interface", "lpmode", "Ethernet16"],
+        ["config", "interface", "lpmode", "-p", "Ethernet16", "low"],
+        ["config", "interface", "reset", "-p", "Ethernet16"],
+        ["config", "interface", "tx-disable", "-p", "Ethernet16", "true"],
+        ["show", "interface", "lpmode", "-p", "Ethernet16"],
     ])
     @pytest.mark.parametrize("unsupported", ["missing", "not_implemented"])
     def test_unsupported_platform(self, vmodules, command, unsupported):
@@ -1629,14 +1629,14 @@ class TestVmoduleControls:
 
     def test_failed_control_is_reported(self, vmodules):
         vmodules[3].set_lpmode.return_value = False
-        result = invoke_coverage(["config", "interface", "lpmode", "Ethernet16", "low"])
+        result = invoke_coverage(["config", "interface", "lpmode", "-p", "Ethernet16", "low"])
         assert result.exit_code != 0
         assert "OE1 (Ethernet16) ... Failed" in result.output
 
     def test_partial_failure_names_completed_controllers(self, vmodules):
         vmodules[3].set_lpmode.return_value = False
         result = invoke_coverage(
-            ["config", "interface", "lpmode", "Ethernet0,Ethernet4,Ethernet8,Ethernet16", "low"])
+            ["config", "interface", "lpmode", "-p", "Ethernet0,Ethernet4,Ethernet8,Ethernet16", "low"])
         assert result.exit_code != 0
         assert "OE0 (Ethernet0, Ethernet4, Ethernet8) ... OK" in result.output
         assert "already applied to OE0" in result.output
@@ -1648,10 +1648,10 @@ class TestEepromPageOffset:
     @pytest.mark.parametrize("arguments", [
         ["read-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "2", "-s", "1"],
         ["read-eeprom", "els", "-i", "0", "-n", "0x1a", "-o", "0x7f", "-s", "1"],
-        ["read-eeprom", "interface", "Ethernet0", "--oe", "-n", "0x11", "-o", "2", "-s", "1"],
+        ["read-eeprom", "interface", "-p", "Ethernet0", "--oe", "-n", "0x11", "-o", "2", "-s", "1"],
         ["write-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "2", "-d", "ff"],
         ["write-eeprom", "els", "-i", "0", "-n", "0x1a", "-o", "0x7f", "-d", "ff"],
-        ["write-eeprom", "interface", "Ethernet0", "--oe", "-n", "0x11", "-o", "2", "-d", "ff"],
+        ["write-eeprom", "interface", "-p", "Ethernet0", "--oe", "-n", "0x11", "-o", "2", "-d", "ff"],
     ])
     def test_lower_offset_on_nonzero_page_is_rejected(self, coverage_environment, arguments):
         page = int(arguments[arguments.index("-n") + 1], 0)
@@ -1736,13 +1736,13 @@ class TestInterfaceElsEepromBank:
 
     def test_read_uses_bank_zero(self, community):
         result = invoke_coverage(
-            ["read-eeprom", "interface", "Ethernet0", "--els", "-n", "0x1a", "-o", "0x80", "-s", "2"])
+            ["read-eeprom", "interface", "-p", "Ethernet0", "--els", "-n", "0x1a", "-o", "0x80", "-s", "2"])
         assert result.exit_code == 0, result.output
         assert community.reads == [(0x1a * 0x100 + 0x80, 2)]
 
     def test_write_uses_bank_zero(self, community):
         result = invoke_coverage(
-            ["write-eeprom", "interface", "Ethernet0", "--els", "-n", "0x1a", "-o", "0x80", "-d", "01"])
+            ["write-eeprom", "interface", "-p", "Ethernet0", "--els", "-n", "0x1a", "-o", "0x80", "-d", "01"])
         assert result.exit_code == 0, result.output
         assert [offset for offset, _, _ in community.writes] == [0x1a * 0x100 + 0x80]
 
@@ -1770,7 +1770,7 @@ class TestLaneStatusLaserAssociation:
     ]
 
     def test_json_carries_the_topology_association(self, nonuniform):
-        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet0", "--json"])
+        result = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         record = json.loads(result.output)["Ethernet0"]
         assert record["Lane Lasers"] == {
@@ -1778,7 +1778,7 @@ class TestLaneStatusLaserAssociation:
         }
 
     def test_table_shows_the_correct_laser_and_state_in_every_row(self, nonuniform):
-        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet0"])
+        result = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         rows = [line.split() for line in result.output.splitlines() if line.startswith("Ethernet0")]
         lane_rows = [row for row in rows if "DataPathActivated" in row]
@@ -1803,11 +1803,11 @@ class TestLaneStatusLaserAssociation:
         monkeypatch.setattr(api, "get_datapath_state", lambda: ["DataPathActivated"] * 2, raising=False)
         monkeypatch.setattr(api, "get_per_lane_state",
                             lambda: {"LaneState1": "Active", "LaneState2": "Inactive"}, raising=False)
-        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet0", "--json"])
+        result = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["Ethernet0"]["Lane Lasers"] == {"lane00": None, "lane01": None}
 
-        table = invoke_coverage(["show", "interface", "lane-status", "Ethernet0"])
+        table = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet0"])
         assert table.exit_code == 0, table.output
         lane_rows = [line.split() for line in table.output.splitlines()
                      if line.startswith("Ethernet0") and "DataPathActivated" in line]
@@ -1842,12 +1842,12 @@ class TestBreakoutWithoutLaneMapping:
         assert records["Ethernet1"]["oe"]["lanes"] == [2]
         assert all(record["els"]["lasers"] is None for record in records.values())
 
-        table = invoke_coverage(["show", "interface", "map", "Ethernet1"])
+        table = invoke_coverage(["show", "interface", "map", "-p", "Ethernet1"])
         assert table.exit_code == 0, table.output
         assert cpoutil.UNRESOLVED_LASERS in table.output
 
     def test_lane_status_shows_no_guessed_laser_state(self, breakout):
-        result = invoke_coverage(["show", "interface", "lane-status", "Ethernet1", "--json"])
+        result = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet1", "--json"])
         assert result.exit_code == 0, result.output
         record = json.loads(result.output)["Ethernet1"]
         assert record["Data Path State Indicator"] == {"lane01": "DataPathActivated"}
@@ -1866,13 +1866,13 @@ class TestBreakoutWithoutLaneMapping:
     def test_full_port_on_same_topology_still_resolves_lasers(self, coverage_environment, monkeypatch):
         TestExplicitLaserMapping.configure(
             monkeypatch, COVERAGE_CPO_DATA, {"Ethernet0": {"index": (1,), "lanes": (1, 2)}})
-        result = invoke_coverage(["show", "interface", "map", "Ethernet0", "--json"])
+        result = invoke_coverage(["show", "interface", "map", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["Ethernet0"]["els"]["lasers"] == [0, 1]
 
     def test_tx_disable_uses_the_cpo_object_without_laser_mapping(self, breakout, monkeypatch):
         monkeypatch.setattr(breakout, "tx_disable", mock.Mock(return_value=True), raising=False)
-        result = invoke_coverage(["config", "interface", "tx-disable", "Ethernet1", "true"])
+        result = invoke_coverage(["config", "interface", "tx-disable", "-p", "Ethernet1", "true"])
         assert result.exit_code == 0, result.output
         assert "Enabling Tx-disable for Ethernet0 (Ethernet0, Ethernet1) ... OK" in result.output
         breakout.tx_disable.assert_called_once_with(True)
@@ -1898,7 +1898,7 @@ class TestDomJsonAndReadFailures:
             "optical_power_warn_low": float("nan"),
             "temperature_alarm_high": 75.0,
         })
-        result = invoke_coverage(["show", "interface", "dom", "Ethernet0", "--json"])
+        result = invoke_coverage(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         thresholds = strict_json(result.output)["Ethernet0"]["els"]["thresholds"]
         assert thresholds == {
@@ -1924,7 +1924,7 @@ class TestDomJsonAndReadFailures:
                 raise failure
             return failure
         monkeypatch.setattr(coverage_environment.api, method, read)
-        arguments = ["show", "interface", "dom", "Ethernet0"] + (["--json"] if json_output else [])
+        arguments = ["show", "interface", "dom", "-p", "Ethernet0"] + (["--json"] if json_output else [])
         result = invoke_coverage(arguments)
         assert result.exit_code != 0
         assert isinstance(result.exception, SystemExit)    # no traceback
@@ -1937,14 +1937,14 @@ class TestDomJsonAndReadFailures:
 
     def test_empty_thresholds_are_not_a_failure(self, coverage_environment, monkeypatch):
         monkeypatch.setattr(coverage_environment.api, "get_elsfp_threshold_info", lambda: {})
-        result = invoke_coverage(["show", "interface", "dom", "Ethernet0", "--json"])
+        result = invoke_coverage(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert "read_errors" not in strict_json(result.output)["Ethernet0"]
 
     def test_unsupported_read_is_still_reported_as_not_implemented(self, coverage_environment, monkeypatch):
         monkeypatch.setattr(coverage_environment.api, "get_transceiver_info",
                             mock.Mock(side_effect=NotImplementedError("info")))
-        result = invoke_coverage(["show", "interface", "dom", "Ethernet0"])
+        result = invoke_coverage(["show", "interface", "dom", "-p", "Ethernet0"])
         assert result.exit_code != 0
         assert "This functionality is not implemented" in result.output
 
@@ -2135,7 +2135,7 @@ class TestEepromBankValidation:
         assert cpoutil._interface_eeprom_target(
             "Ethernet0", OPTICAL_ENGINE, page=page) == (0, expected_bank)
         assert cpoutil._interface_eeprom_target("Ethernet0", OPTICAL_ENGINE) == (0, 1)
-        arguments = [operation, "interface", "Ethernet0", "--oe",
+        arguments = [operation, "interface", "-p", "Ethernet0", "--oe",
                      "-n", str(page), "-o", "128"]
         arguments += ["-s", "1"] if operation == "read-eeprom" else ["-d", "ff"]
         result = invoke_coverage(arguments)
@@ -2150,7 +2150,7 @@ class TestEepromBankValidation:
     def test_interface_shared_page_does_not_hide_capability_failure(
             self, coverage_environment, monkeypatch):
         monkeypatch.setattr(coverage_environment.api, "get_max_supported_banks", lambda: -1)
-        result = invoke_coverage(["read-eeprom", "interface", "Ethernet0", "--oe",
+        result = invoke_coverage(["read-eeprom", "interface", "-p", "Ethernet0", "--oe",
                                   "-n", "1", "-o", "128", "-s", "1"])
         assert result.exit_code != 0
         assert "Invalid OE bank count -1" in result.output
@@ -2158,8 +2158,8 @@ class TestEepromBankValidation:
 
     @pytest.mark.parametrize("advertised", [0, 1])
     @pytest.mark.parametrize("arguments", [
-        ["show", "interface", "map", "Ethernet0"],
-        ["read-eeprom", "interface", "Ethernet0", "--oe", "-n", "1", "-o", "128", "-s", "1"],
+        ["show", "interface", "map", "-p", "Ethernet0"],
+        ["read-eeprom", "interface", "-p", "Ethernet0", "--oe", "-n", "1", "-o", "128", "-s", "1"],
         ["read-eeprom", "oe", "-i", "0", "-n", "0x11", "-o", "128", "-s", "1"],
     ])
     def test_single_bank_oe_is_accepted(self, coverage_environment, monkeypatch, advertised, arguments):
@@ -2246,11 +2246,11 @@ def test_dom_combines_cable_fields_in_text_and_json(coverage_environment, monkey
     info = {"cable_type": "Length(km)", "cable_length": 2, "manufacturer": "Vendor"}
     method = "get_transceiver_info" if endpoint == "oe" else "get_elsfp_info"
     monkeypatch.setattr(coverage_environment.api, method, lambda: info)
-    result = invoke_coverage(["show", "interface", "dom", "Ethernet0", "--json"])
+    result = invoke_coverage(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
     assert result.exit_code == 0, result.output
     actual = json.loads(result.output)["Ethernet0"][endpoint]["info"]
     assert actual == {"Length(km)": 2, "manufacturer": "Vendor"}
-    result = invoke_coverage(["show", "interface", "dom", "Ethernet0"])
+    result = invoke_coverage(["show", "interface", "dom", "-p", "Ethernet0"])
     assert result.exit_code == 0, result.output
     assert "Length(km): 2" in result.output
     assert "Cable Type:" not in result.output
@@ -2270,7 +2270,7 @@ def test_interface_sfp_selection_suggests_sfputil(coverage_environment, monkeypa
     chassis = mock.Mock()
     chassis.get_sfp.return_value = sfp
     monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
-    result = invoke_coverage(command + ["Ethernet8"])
+    result = invoke_coverage(command + ["-p", "Ethernet8"])
     assert result.exit_code != 0
     assert "Port 'Ethernet8' is an SFP port; please use sfputil instead" in result.output
     chassis.get_sfp.assert_called_once_with(2)
@@ -2286,7 +2286,7 @@ def test_interface_missing_objects_are_not_mislabeled_sfp(coverage_environment, 
     chassis.get_sfp.return_value = None
     chassis.get_sfp.side_effect = error
     monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
-    result = invoke_coverage(["show", "interface", "tx-disable", "Ethernet8"])
+    result = invoke_coverage(["show", "interface", "tx-disable", "-p", "Ethernet8"])
     assert result.exit_code != 0
     assert "No CPO or SFP object is available for port 'Ethernet8'" in result.output
     assert "please use sfputil" not in result.output
@@ -2311,7 +2311,7 @@ def test_cpo_selection_does_not_query_sfp(coverage_environment, monkeypatch):
 def test_invalid_interface_does_not_query_sfp(coverage_environment, monkeypatch):
     chassis = mock.Mock()
     monkeypatch.setattr(cpoutil, "platform_chassis", chassis)
-    result = invoke_coverage(["show", "interface", "tx-disable", "Ethernet100"])
+    result = invoke_coverage(["show", "interface", "tx-disable", "-p", "Ethernet100"])
     assert result.exit_code != 0
     assert "Invalid port 'Ethernet100'" in result.output
     chassis.get_sfp.assert_not_called()

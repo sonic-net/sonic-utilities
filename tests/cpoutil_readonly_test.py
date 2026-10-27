@@ -288,14 +288,14 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.oe = mock.Mock(get_presence=mock.Mock(return_value=not present))
         self.cpo.elsfp = mock.Mock(get_presence=mock.Mock(return_value=not present))
         self.cpo.get_presence = mock.Mock(return_value=present)
-        result = invoke(["show", "interface", "presence", "Ethernet0", "--json"])
+        result = invoke(["show", "interface", "presence", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output) == {"Ethernet0": {"els": "ELS0", "present": present}}
         self.cpo.get_presence.assert_called_once_with()
         self.cpo.oe.get_presence.assert_not_called()
         self.cpo.elsfp.get_presence.assert_not_called()
 
-        table = invoke(["show", "interface", "presence", "Ethernet0"])
+        table = invoke(["show", "interface", "presence", "-p", "Ethernet0"])
         assert ("Present" if present else "Not present") in table.output
         assert "Interface" in table.output
         assert "ELS" in table.output and "ELS0" in table.output
@@ -307,7 +307,7 @@ class TestDirectPlatformApiCommands(object):
             "Ethernet0": {"els": "ELS0", "present": True},
             "Ethernet1": {"els": "ELS0", "present": True},
         }
-        result = invoke(["show", "interface", "presence", "Ethernet1", "--json"])
+        result = invoke(["show", "interface", "presence", "-p", "Ethernet1", "--json"])
         assert json.loads(result.output) == {"Ethernet1": {"els": "ELS0", "present": True}}
 
     @pytest.mark.parametrize("command", ["presence", "dom"])
@@ -317,7 +317,7 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.elsfp = mock.Mock()
         self.cpo.get_presence = mock.Mock(side_effect=error)
         path = ["show", "interface", "presence"] if command == "presence" else ["show", "interface", command]
-        result = invoke(path + ["Ethernet0", "--json"])
+        result = invoke(path + ["-p", "Ethernet0", "--json"])
         assert result.exit_code != 0
         assert "CPO presence" in result.output and "Ethernet0" in result.output
         assert not self.cpo.oe.mock_calls
@@ -326,7 +326,7 @@ class TestDirectPlatformApiCommands(object):
     @pytest.mark.parametrize("value", [None, 1, "False"])
     def test_invalid_presence_result_is_not_reported_as_present(self, value):
         self.cpo.get_presence = mock.Mock(return_value=value)
-        result = invoke(["show", "interface", "presence", "Ethernet0"])
+        result = invoke(["show", "interface", "presence", "-p", "Ethernet0"])
         assert result.exit_code != 0
         assert "CPO presence API returned invalid data" in result.output
 
@@ -335,7 +335,7 @@ class TestDirectPlatformApiCommands(object):
         cpo = cpoutil.CpoBase(None, mock.Mock(), mock.Mock())
         cpoutil.cpo_object_map[PORT][1] = cpo
         path = ["show", "interface", "presence"] if command == "presence" else ["show", "interface", command]
-        result = invoke(path + ["Ethernet0"])
+        result = invoke(path + ["-p", "Ethernet0"])
         assert result.exit_code != 0
         assert "CPO presence is not implemented for 'Ethernet0'" in result.output
         assert not cpo.oe.mock_calls
@@ -365,7 +365,7 @@ class TestDirectPlatformApiCommands(object):
 
     def test_interface_dom_calls_public_oe_and_els_apis(self):
         result = invoke([
-            "show", "interface", "dom", "Ethernet0", "--json"
+            "show", "interface", "dom", "-p", "Ethernet0", "--json"
         ])
         assert result.exit_code == 0, result.output
         values = json.loads(result.output)["Ethernet0"]
@@ -386,7 +386,7 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.elsfp = mock.Mock()
         self.cpo.oe.get_api.return_value = self.cpo.api
         self.cpo.elsfp.get_api.return_value = self.cpo.api
-        result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
+        result = invoke(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         self.cpo.get_presence.assert_called_once_with()
         self.cpo.oe.get_presence.assert_not_called()
@@ -397,7 +397,7 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.get_presence = mock.Mock(return_value=False)
         self.cpo.oe = mock.Mock()
         self.cpo.elsfp = mock.Mock()
-        args = ["show", "interface", "dom", "Ethernet0"] + (["--json"] if json_output else [])
+        args = ["show", "interface", "dom", "-p", "Ethernet0"] + (["--json"] if json_output else [])
         result = invoke(args)
         assert result.exit_code == 0, result.output
         if json_output:
@@ -414,7 +414,7 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.api.get_elsfp_dom_real_value = mock.Mock(return_value={
             "temperature": 32.5, "optical_power_lane1": -1.2, "optical_power_lane3": -8.0,
         })
-        result = invoke(["show", "interface", "dom", "Ethernet0"])
+        result = invoke(["show", "interface", "dom", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         oe_section, els_section = result.output.split("    ELS:\n")
         assert "    OE:\n" in oe_section and "Example OE" in oe_section
@@ -438,7 +438,7 @@ class TestDirectPlatformApiCommands(object):
                 values = {"shared_name": "{} {}".format(endpoint, section)}
                 source_values[endpoint][section] = values
                 setattr(self.cpo.api, method, mock.Mock(return_value=values))
-        result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
+        result = invoke(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         values = json.loads(result.output)["Ethernet0"]
         for endpoint in ("oe", "els"):
@@ -449,7 +449,7 @@ class TestDirectPlatformApiCommands(object):
 
     def test_dom_formats_complete_public_els_thresholds(self, public_els_threshold_api):
         self.cpo.api.get_elsfp_threshold_info = public_els_threshold_api.get_elsfp_threshold_info
-        result = invoke(["show", "interface", "dom", "Ethernet0"])
+        result = invoke(["show", "interface", "dom", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         els_section = result.output.split("    ELS:\n")[1]
         _, thresholds = els_section.split("        ThresholdValues:\n", 1)
@@ -477,7 +477,7 @@ class TestDirectPlatformApiCommands(object):
 
     def test_dom_json_retains_distinct_public_els_thresholds(self, public_els_threshold_api):
         self.cpo.api.get_elsfp_threshold_info = public_els_threshold_api.get_elsfp_threshold_info
-        result = invoke(["show", "interface", "dom", "Ethernet0", "--json"])
+        result = invoke(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         record = json.loads(result.output)["Ethernet0"]
         thresholds = record["els"]["thresholds"]
@@ -495,7 +495,7 @@ class TestDirectPlatformApiCommands(object):
             "txpowerhighalarm": "Unknown", "txpowerlowalarm": "N/A",
             "txbiashighalarm": "20mA", "rxpowerhighalarm": "3.01dBm", "extra_limit": 7,
         })
-        result = invoke(["show", "interface", "dom", "Ethernet0"])
+        result = invoke(["show", "interface", "dom", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         els_section = result.output.split("    ELS:\n")[1]
         assert "TxPowerHighAlarm: Unknown" in els_section
@@ -506,7 +506,7 @@ class TestDirectPlatformApiCommands(object):
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([
-            "show", "interface", "tx-disable", "Ethernet1", "--json"
+            "show", "interface", "tx-disable", "-p", "Ethernet1", "--json"
         ])
         assert json.loads(result.output) == {
             "Ethernet1": {
@@ -515,7 +515,7 @@ class TestDirectPlatformApiCommands(object):
         }
 
         table = invoke([
-            "show", "interface", "tx-disable", "Ethernet1"
+            "show", "interface", "tx-disable", "-p", "Ethernet1"
         ])
         assert table.exit_code == 0, table.output
         assert table.output.splitlines()[0].split() == [
@@ -524,14 +524,14 @@ class TestDirectPlatformApiCommands(object):
         assert table.output.splitlines()[2].split() == ["Ethernet1", "Lane", "2", "true"]
 
     def test_interface_tx_disable_displays_both_boolean_states(self):
-        table = invoke(["show", "interface", "tx-disable", "Ethernet0"])
+        table = invoke(["show", "interface", "tx-disable", "-p", "Ethernet0"])
         assert table.exit_code == 0, table.output
         assert [row.split() for row in table.output.splitlines()[2:]] == [
             ["Ethernet0", "Lane", "1", "false"],
             ["Ethernet0", "Lane", "2", "true"],
         ]
 
-        result = invoke(["show", "interface", "tx-disable", "Ethernet0", "--json"])
+        result = invoke(["show", "interface", "tx-disable", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output) == {
             "Ethernet0": {"lane00": False, "lane01": True}
@@ -541,7 +541,7 @@ class TestDirectPlatformApiCommands(object):
     def test_interface_tx_disable_uses_cpo_hook_without_oe_api(self, port):
         self.cpo.get_tx_disable = mock.Mock(return_value=[True, False])
         self.cpo.get_api = mock.Mock(side_effect=AssertionError("unexpected API access"))
-        result = invoke(["show", "interface", "tx-disable", port, "--json"])
+        result = invoke(["show", "interface", "tx-disable", "-p", port, "--json"])
         assert result.exit_code == 0, result.output
         expected = {"lane00": True, "lane01": False} if port == "Ethernet0" else {"lane01": False}
         assert json.loads(result.output) == {port: expected}
@@ -554,13 +554,13 @@ class TestDirectPlatformApiCommands(object):
     ])
     def test_interface_tx_disable_reports_hook_errors(self, error, message):
         self.cpo.get_tx_disable = mock.Mock(side_effect=error)
-        result = invoke(["show", "interface", "tx-disable", "Ethernet0"])
+        result = invoke(["show", "interface", "tx-disable", "-p", "Ethernet0"])
         assert result.exit_code == 1, result.output
         assert message in result.output
 
     def test_interface_application_preserves_public_api_values(self):
         result = invoke([
-            "show", "interface", "speed", "application", "Ethernet0", "--json"
+            "show", "interface", "speed", "application", "-p", "Ethernet0", "--json"
         ])
         assert result.exit_code == 0, result.output
         values = json.loads(result.output)["Ethernet0"]
@@ -571,7 +571,7 @@ class TestDirectPlatformApiCommands(object):
         }
 
     def test_application_table_has_four_columns_and_full_interface_names(self):
-        result = invoke(["show", "interface", "speed", "application", "Ethernet0"])
+        result = invoke(["show", "interface", "speed", "application", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         assert result.output.splitlines()[0].split("  ")[0] == "Interface"
         assert "Configured Application" in result.output
@@ -586,7 +586,7 @@ class TestDirectPlatformApiCommands(object):
 
     def test_breakout_application_does_not_require_els_lane_mapping(self):
         result = invoke([
-            "show", "interface", "speed", "application", "Ethernet1", "--json"
+            "show", "interface", "speed", "application", "-p", "Ethernet1", "--json"
         ])
         assert result.exit_code == 0, result.output
         values = json.loads(result.output)["Ethernet1"]
@@ -599,7 +599,7 @@ class TestDirectPlatformApiCommands(object):
     @pytest.mark.parametrize("application", [0, 15])
     def test_unadvertised_application_keeps_the_selected_id(self, monkeypatch, application):
         monkeypatch.setattr(self.cpo.api, "get_application", lambda lane: application)
-        result = invoke(["show", "interface", "speed", "application", "Ethernet1"])
+        result = invoke(["show", "interface", "speed", "application", "-p", "Ethernet1"])
         assert result.exit_code == 0, result.output
         assert "{}: N/A".format(application) in result.output
 
@@ -608,13 +608,13 @@ class TestDirectPlatformApiCommands(object):
         monkeypatch.setattr(self.cpo.api, "get_application_advertisement", lambda: {
             str(key): value for key, value in advertisements.items()
         })
-        result = invoke(["show", "interface", "speed", "application", "Ethernet1"])
+        result = invoke(["show", "interface", "speed", "application", "-p", "Ethernet1"])
         assert result.exit_code == 0, result.output
         assert advertisements[2]["host_electrical_interface_id"] in result.output
 
     def test_interface_lane_status_uses_public_elsfp_api(self):
         result = invoke([
-            "show", "interface", "lane-status", "Ethernet0", "--json"
+            "show", "interface", "lane-status", "-p", "Ethernet0", "--json"
         ])
         values = json.loads(result.output)["Ethernet0"]
         assert values["Data Path State Indicator"]["lane00"] == \
@@ -637,7 +637,7 @@ class TestDirectPlatformApiCommands(object):
                     "interrupt_status": "Interrupt event cleared",
                 }):
             result = invoke([
-                "show", "interface", "lane-status", "Ethernet0", "--json"
+                "show", "interface", "lane-status", "-p", "Ethernet0", "--json"
             ])
         status = json.loads(result.output)["Ethernet0"]["ELS Status"]
         assert status == {
@@ -655,7 +655,7 @@ class TestDirectPlatformApiCommands(object):
             "enable_lane1": True,
             "vendor_status": {"code": 3},
         }
-        arguments = ["show", "interface", "lane-status", "Ethernet0"]
+        arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
         if json_output:
             arguments.append("--json")
         with mock.patch.object(self.cpo.api, "get_elsfp_status", return_value=api_status):
@@ -675,7 +675,7 @@ class TestDirectPlatformApiCommands(object):
     @pytest.mark.parametrize("status", [None, {}, False, "ModuleReady"])
     def test_els_status_rejects_missing_or_invalid_result(self, status):
         with mock.patch.object(self.cpo.api, "get_elsfp_status", return_value=status):
-            result = invoke(["show", "interface", "lane-status", "Ethernet0", "--json"])
+            result = invoke(["show", "interface", "lane-status", "-p", "Ethernet0", "--json"])
         assert result.exit_code != 0
         assert "ELSFP status API returned no usable data" in result.output
         assert "Ethernet0" in result.output
@@ -915,7 +915,7 @@ class TestApplicationEepromSnapshot:
             (0, 1, 2, 3) if name == "Ethernet0" else tuple(range(8))))
         arguments = ["show", "interface", "speed", "application"]
         if port is not None:
-            arguments.append(port)
+            arguments.extend(["-p", port])
         if json_output:
             arguments.append("--json")
 
@@ -982,7 +982,7 @@ class TestLaneStatusEepromSnapshot:
         self.cpo.oe, self.cpo.elsfp = oe, els
         arguments = ["show", "interface", "lane-status"]
         if port is not None:
-            arguments.append(port)
+            arguments.extend(["-p", port])
         if json_output:
             arguments.append("--json")
 
@@ -1056,7 +1056,7 @@ class TestFourReadOptimizations:
         self.cpo.oe = endpoint
         self.cpo.get_lpmode = mock.Mock(side_effect=endpoint.api.get_lpmode)
         self.cpo.get_tx_disable = mock.Mock(side_effect=endpoint.api.get_tx_disable)
-        arguments = ["show", "interface", command] + ([port] if port else [])
+        arguments = ["show", "interface", command] + (["-p", port] if port else [])
         if json_output:
             arguments.append("--json")
 
@@ -1086,7 +1086,7 @@ class TestFourReadOptimizations:
         endpoint.get_api.side_effect = AssertionError("unexpected API creation")
         self.cpo.oe = endpoint
         self.cpo.get_lpmode = mock.Mock(return_value=True)
-        result = invoke(["show", "interface", "lpmode", "Ethernet0", "--json"])
+        result = invoke(["show", "interface", "lpmode", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output) == {"Ethernet0": True}
         self.cpo.get_lpmode.assert_called_once_with()
@@ -1097,7 +1097,7 @@ class TestFourReadOptimizations:
         endpoint.get_api = mock.Mock(side_effect=RuntimeError("API unavailable"))
         self.cpo.oe = endpoint
         self.cpo.get_lpmode = mock.Mock(return_value=False)
-        result = invoke(["show", "interface", "lpmode", "Ethernet0", "--json"])
+        result = invoke(["show", "interface", "lpmode", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         self.cpo.get_lpmode.assert_called_once_with()
 
@@ -1107,7 +1107,7 @@ class TestFourReadOptimizations:
         original = endpoint.api.xcvr_eeprom.reader
         self.cpo.oe = endpoint
         self.cpo.get_lpmode = mock.Mock(side_effect=OSError("hook failed"))
-        result = invoke(["show", "interface", "lpmode", "Ethernet0"])
+        result = invoke(["show", "interface", "lpmode", "-p", "Ethernet0"])
         assert result.exit_code != 0
         assert "hook failed" in result.output
         assert endpoint.api.xcvr_eeprom.reader == original

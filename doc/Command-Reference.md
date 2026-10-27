@@ -17162,6 +17162,8 @@ OE banks are local to each device and must be within its supported range; global
 
 Most `show` commands accept `-j, --json` for machine-readable output. For OE and ELS `show` commands, indexes may be given as a number (`0`) or a name (`oe0`, `els0`); when omitted, all are shown.
 
+Select front-panel interfaces with `-p, --port`; positional port arguments are not accepted. The option is optional for `show interface` commands and required for `config interface` and `read-eeprom/write-eeprom interface` commands.
+
 ## CPO Utilities show commands
 
 `cpoutil show interface dom` combines the API's cable length descriptor and
@@ -17171,7 +17173,7 @@ and `"Length(km)": 2` in JSON.
 **cpoutil show interface presence**
 
 Display CPO virtual-module presence by interface through the platform CPO object's
-`get_presence()` method. With no PORT, all CPO interfaces are listed; ordinary SFP
+`get_presence()` method. With no `-p/--port`, all CPO interfaces are listed; ordinary SFP
 interfaces are skipped. An explicitly selected SFP interface directs users to
 sfputil. The ELS column identifies the associated ELS from the CPO topology;
 presence still describes the CPO virtual module. JSON uses interface names as
@@ -17179,12 +17181,12 @@ keys, each containing an `els` name and a boolean `present` value.
 
 - Usage:
   ```
-  cpoutil show interface presence [PORT] [--json]
+  cpoutil show interface presence [-p PORT] [--json]
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sudo cpoutil show interface presence Ethernet32
+  admin@sonic:~$ sudo cpoutil show interface presence -p Ethernet32
   Interface    ELS    Presence
   -----------  -----  ----------
   Ethernet32   ELS1   Present
@@ -17192,7 +17194,7 @@ keys, each containing an `els` name and a boolean `present` value.
 
 **cpoutil show interface map|dom|tx-disable|speed|lane-status|lpmode**
 
-These commands display per-interface CPO information. When PORT is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.
+These commands display per-interface CPO information. When `-p/--port` is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.
 
 `show interface speed application` displays four columns: Interface, Lane, Configured Application, and Active Application. Each application is displayed as `AppSel: Host interface / Media interface`, using the complete descriptions returned by the public API. It does not infer a numeric link speed. JSON preserves the complete `Application Advertisement` and the per-lane AppSel IDs under `Application Select Controls` and `Active Application Control Set`. Breakout subports display only their own lanes.
 
@@ -17200,17 +17202,17 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
 
 - Usage:
   ```
-  cpoutil show interface map [PORT] [--json]          # OE, bank, lanes, ELS and lasers of each interface
-  cpoutil show interface dom [PORT] [--json]          # OE and ELS information, monitors and thresholds
-  cpoutil show interface tx-disable [PORT] [--json]   # per-lane Tx disable status
-  cpoutil show interface speed application [PORT] [--json]  # full configured and active applications per lane
-  cpoutil show interface lane-status [PORT] [--json]  # OE datapath state and ELS lane state
-  cpoutil show interface lpmode [PORT] [--json]       # low-power mode of the CPO virtual module
+  cpoutil show interface map [-p PORT] [--json]          # OE, bank, lanes, ELS and lasers of each interface
+  cpoutil show interface dom [-p PORT] [--json]          # OE and ELS information, monitors and thresholds
+  cpoutil show interface tx-disable [-p PORT] [--json]   # per-lane Tx disable status
+  cpoutil show interface speed application [-p PORT] [--json]  # full configured and active applications per lane
+  cpoutil show interface lane-status [-p PORT] [--json]  # OE datapath state and ELS lane state
+  cpoutil show interface lpmode [-p PORT] [--json]       # low-power mode of the CPO virtual module
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sudo cpoutil show interface lpmode Ethernet448
+  admin@sonic:~$ sudo cpoutil show interface lpmode -p Ethernet448
   Interface    Low-power Mode
   -----------  ----------------
   Ethernet448  Off
@@ -17265,17 +17267,17 @@ These are maintenance overrides and are not persistent: xcvrd restores full powe
 
 - Usage:
   ```
-  cpoutil config interface lpmode PORT {full|low}
-  cpoutil config interface reset PORT
-  cpoutil config interface tx-disable PORT {true|false}
+  cpoutil config interface lpmode -p PORT {full|low}
+  cpoutil config interface reset -p PORT
+  cpoutil config interface tx-disable -p PORT {true|false}
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sudo cpoutil config interface lpmode Ethernet448 low
+  admin@sonic:~$ sudo cpoutil config interface lpmode -p Ethernet448 low
   Enabling low-power mode for OE7 (Ethernet448, Ethernet456, Ethernet464, Ethernet472, Ethernet480, Ethernet488, Ethernet496, Ethernet504) ... OK
 
-  admin@sonic:~$ sudo cpoutil config interface tx-disable Ethernet448 true
+  admin@sonic:~$ sudo cpoutil config interface tx-disable -p Ethernet448 true
   Enabling Tx-disable for Ethernet448 (Ethernet448) ... OK
   ```
 
@@ -17312,10 +17314,10 @@ Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages
   ```
   cpoutil read-eeprom oe [-i OE_INDEX] [-b BANK] [-n PAGE -o OFFSET -s SIZE]
   cpoutil read-eeprom els [-i ELS_INDEX] [-n PAGE -o OFFSET -s SIZE]
-  cpoutil read-eeprom interface PORT {--oe|--els} [-n PAGE -o OFFSET -s SIZE]
+  cpoutil read-eeprom interface -p PORT {--oe|--els} [-n PAGE -o OFFSET -s SIZE]
   cpoutil write-eeprom oe -i OE_INDEX [-b BANK] -n PAGE -o OFFSET -d DATA
   cpoutil write-eeprom els -i ELS_INDEX -n PAGE -o OFFSET -d DATA
-  cpoutil write-eeprom interface PORT {--oe|--els} -n PAGE -o OFFSET -d DATA
+  cpoutil write-eeprom interface -p PORT {--oe|--els} -n PAGE -o OFFSET -d DATA
   ```
 
 - Example:

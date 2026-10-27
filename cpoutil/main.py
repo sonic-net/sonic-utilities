@@ -1052,7 +1052,8 @@ def show_interface():
 
 
 @show_interface.command("presence")
-@click.argument("port", required=False)
+@click.option("-p", "--port", metavar="PORT",
+              help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_presence(port, json_output):
     """Display CPO virtual-module presence for each interface."""
@@ -1075,7 +1076,8 @@ def show_interface_presence(port, json_output):
 
 
 @show_interface.command("map")
-@click.argument("port", required=False)
+@click.option("-p", "--port", metavar="PORT",
+              help="Front-panel interface; omit to display all CPO interfaces.")
 @click.option("-j", "--json", "json_output", is_flag=True,
               help="Display machine-readable JSON output.")
 def show_interface_map(port, json_output):
@@ -1110,7 +1112,8 @@ def show_interface_map(port, json_output):
 
 
 @show_interface.command("lpmode")
-@click.argument("port", required=False)
+@click.option("-p", "--port", metavar="PORT",
+              help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_lpmode(port, json_output):
     """Display the low-power mode of each interface's CPO virtual module."""
@@ -1134,7 +1137,8 @@ def show_interface_lpmode(port, json_output):
 
 
 @show_interface.command("dom")
-@click.argument("port", required=False)
+@click.option("-p", "--port", metavar="PORT",
+              help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_dom(port, json_output):
     """Display CPO EEPROM information and monitoring data.
@@ -1199,7 +1203,8 @@ def show_interface_dom(port, json_output):
 
 
 @show_interface.command("tx-disable")
-@click.argument("port", required=False)
+@click.option("-p", "--port", metavar="PORT",
+              help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_tx_disable(port, json_output):
     """Display per-lane Tx disable status (true means disabled)."""
@@ -1234,7 +1239,8 @@ def show_interface_speed():
 
 
 @show_interface_speed.command("application")
-@click.argument("port", required=False)
+@click.option("-p", "--port", metavar="PORT",
+              help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_speed_application(port, json_output):
     """Display configured and active Application selections per lane.
@@ -1289,7 +1295,8 @@ def show_interface_speed_application(port, json_output):
 
 
 @show_interface.command("lane-status")
-@click.argument("port", required=False)
+@click.option("-p", "--port", metavar="PORT",
+              help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_lane_status(port, json_output):
     """Display OE datapath and ELS status."""
@@ -1586,12 +1593,13 @@ def config_interface():
 
 
 @config_interface.command("tx-disable")
-@click.argument("port")
+@click.option("-p", "--port", required=True, metavar="PORT",
+              help="Front-panel interface or comma-separated list of interfaces.")
 @click.argument("state", type=click.Choice(["true", "false"]))
 def config_interface_tx_disable(port, state):
     """Enable or disable Tx-disable on every lane of one OE bank.
 
-    PORT selects the mapped OE bank. All lanes of that bank are affected,
+    -p/--port selects the mapped OE bank. All lanes of that bank are affected,
     including other breakout subports sharing it; affected ports are listed.
     The value true disables TX, and false enables TX.
     """
@@ -1608,7 +1616,8 @@ def config_interface_tx_disable(port, state):
 
 
 @config_interface.command("lpmode")
-@click.argument("port")
+@click.option("-p", "--port", required=True, metavar="PORT",
+              help="Front-panel interface or comma-separated list of interfaces.")
 @click.argument("mode", type=click.Choice(["full", "low"]))
 def config_interface_lpmode(port, mode):
     """Set full-power or low-power mode of a CPO virtual module.
@@ -1629,7 +1638,8 @@ def config_interface_lpmode(port, mode):
 
 
 @config_interface.command("reset")
-@click.argument("port")
+@click.option("-p", "--port", required=True, metavar="PORT",
+              help="Front-panel interface or comma-separated list of interfaces.")
 def config_interface_reset(port):
     """Reset a CPO virtual module through its controller.
 
@@ -2168,7 +2178,8 @@ def read_eeprom(ctx):
 
 
 @read_eeprom.command("interface")
-@click.argument("port")
+@click.option("-p", "--port", required=True, metavar="PORT",
+              help="Front-panel interface.")
 @click.option("--oe", is_flag=True, help="Read the mapped Optical Engine.")
 @click.option("--els", is_flag=True, help="Read the mapped External Laser Source.")
 @click.option("-n", "--page", required=False, type=_parse_integer,
@@ -2275,7 +2286,8 @@ def write_eeprom():
 
 
 @write_eeprom.command("interface")
-@click.argument("port")
+@click.option("-p", "--port", required=True, metavar="PORT",
+              help="Front-panel interface.")
 @click.option("--oe", is_flag=True, help="Write the mapped Optical Engine.")
 @click.option("--els", is_flag=True, help="Write the mapped External Laser Source.")
 @click.option("-n", "--page", required=True, type=_parse_integer,

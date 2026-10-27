@@ -29,7 +29,7 @@ def endpoints(coverage_environment):
 
 def command(operation, target, interface, page, offset=128, size=1):
     arguments = [operation]
-    arguments += ['interface', 'Ethernet0', '--' + target] if interface else [target, '-i', '0']
+    arguments += ['interface', '-p', 'Ethernet0', '--' + target] if interface else [target, '-i', '0']
     arguments += ['-n', hex(page), '-o', str(offset)]
     arguments += ['-s', str(size)] if operation == 'read-eeprom' else ['-d', '01' * size]
     return arguments
