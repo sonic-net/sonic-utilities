@@ -221,7 +221,7 @@ def test_set_default_image_setproper_image(mock_run_command, mock_get_images):
     bootloader.set_default_image("SONiC-OS-2")
 
     mock_run_command.assert_called_once_with(
-        ['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_2']
+        ['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_2'])
 
 
 @patch.object(UbootBootloader, "get_installed_images")
