@@ -189,6 +189,26 @@ db.write_bytes(bytes(4) + previous + auth.read_bytes()[{payload_offset}:])
     return config
 
 
+@pytest.mark.parametrize("state", ["missing", "empty", "populated"])
+def test_ensure_efivars_never_attempts_mount(tmp_path, monkeypatch, state):
+    efivars = tmp_path / "efivars"
+    if state != "missing":
+        efivars.mkdir()
+    if state == "populated":
+        (efivars / "variable").write_bytes(b"data")
+    monkeypatch.setenv("SONIC_EFIVARS_DIR", str(efivars))
+    run = Mock()
+    monkeypatch.setattr(prune, "run", run)
+    config = prune.Config.from_env()
+
+    if state == "populated":
+        prune.ensure_efivars(config)
+    else:
+        with pytest.raises(prune.ScriptError, match="UEFI efivars not available"):
+            prune.ensure_efivars(config)
+    run.assert_not_called()
+
+
 def test_pruning_holds_lock_from_discovery_through_verification(safe_updates, monkeypatch):
     phases = []
 
@@ -324,6 +344,38 @@ def test_plan_fails_closed_when_no_boot_loader_is_found(env, capsys):
     assert code != 0
     assert "no boot loader found" in err
     assert not env["marker"].exists()
+
+
+@pytest.mark.parametrize("mode", ["--plan", "--commit", "--auto"])
+@pytest.mark.parametrize("boot_state", ["missing", "empty", "efi-only"])
+def test_missing_kernel_in_any_installed_image_blocks_pruning(
+        env, bootloader, capsys, mode, boot_state):
+    config = prune.Config.from_env()
+    bootloader.return_value.get_installed_images.return_value = ["SONiC-OS-test", "SONiC-OS-other"]
+    directory = config.host_path / "image-other" / "boot"
+    if boot_state != "missing":
+        directory.mkdir(parents=True)
+    if boot_state == "efi-only":
+        (directory / "shimx64.efi").write_text("binary")
+
+    code, _, err = _run(capsys, mode)
+    assert code == 2
+    assert "no kernel found for installed image SONiC-OS-other" in err
+    assert str(directory) in err
+    assert not env["marker"].exists()
+
+
+def test_plan_includes_kernels_from_every_installed_image(env, tmp_path):
+    config = prune.Config.from_env()
+    kernel = config.host_path / "image-other" / "boot" / "vmlinuz-test"
+    kernel.parent.mkdir(parents=True)
+    kernel.write_text("binary")
+
+    plan = prune.analyze(config, tmp_path, images=["SONiC-OS-test", "SONiC-OS-other"])
+    for image in ("test", "other"):
+        binary = config.host_path / f"image-{image}" / "boot" / "vmlinuz-test"
+        assert binary in plan.boot_critical_binaries
+        assert plan.records[binary]
 
 
 def test_uninspectable_kernel_is_reported_distinctly_and_blocks_commit(env, capsys, monkeypatch):
@@ -666,6 +718,49 @@ def test_failed_append_restores_other_signers_and_warns_against_reboot(env, safe
     assert prune.read_efi_variable(safe_updates, "db") == _esl(env["certs"][1])
     assert "failed to append" in err and "DO NOT REBOOT" in err
     assert "Done:" not in out
+
+
+@pytest.mark.parametrize("mode", ["--commit", "--auto", "--verbose-auto"])
+@pytest.mark.parametrize("failure", ["write", "flush", "closed"])
+def test_stdout_failure_after_wipe_does_not_interrupt_restoration(
+        env, safe_updates, monkeypatch, mode, failure):
+    stdout = Mock(wraps=sys.stdout)
+    if failure == "closed":
+        stdout.write.side_effect = ValueError("I/O operation on closed file")
+    else:
+        getattr(stdout, failure).side_effect = BrokenPipeError("output consumer exited")
+    update = prune.update_db
+    read = Mock(wraps=prune.read_efi_certificates)
+    monkeypatch.setattr(prune, "read_efi_certificates", read)
+    with monkeypatch.context() as output_patch:
+        def break_stdout_after_wipe(config, auth, append):
+            result = update(config, auth, append)
+            if not append:
+                output_patch.setattr(sys, "stdout", stdout)
+            return result
+
+        output_patch.setattr(prune, "update_db", break_stdout_after_wipe)
+        argv = ["--auto", "-v"] if mode == "--verbose-auto" else [mode]
+        assert prune.main(argv) == 0
+    assert env["marker"].read_text().splitlines() == [
+        "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
+    ]
+    assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
+    assert any(args[2:] == ("db", "new-db") for args, _ in read.call_args_list)
+
+
+def test_broken_stderr_does_not_abandon_remaining_reinstalls(env, safe_updates, monkeypatch):
+    monkeypatch.setenv("FAIL_AUTH", "DB-cert0.auth")
+    stderr = Mock()
+    stderr.write.side_effect = BrokenPipeError("error consumer exited")
+    with monkeypatch.context() as output_patch:
+        output_patch.setattr(sys, "stderr", stderr)
+        with pytest.raises(prune.ScriptError, match="DO NOT REBOOT"):
+            prune.prune_db_certificates(safe_updates, auto=True)
+    assert env["marker"].read_text().splitlines() == [
+        "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
+    ]
+    assert prune.read_efi_variable(safe_updates, "db") == _esl(env["certs"][1])
 
 
 @pytest.mark.parametrize("error", [OSError("cannot start writer"), prune.subprocess.TimeoutExpired("writer", 600)])
