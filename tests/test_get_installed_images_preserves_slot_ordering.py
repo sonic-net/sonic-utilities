@@ -225,18 +225,29 @@ def test_set_default_image_setproper_image(mock_run_command, mock_get_images):
 
 
 @patch.object(UbootBootloader, "get_installed_images")
+@patch("sonic_installer.bootloader.uboot.subprocess.call")
 @patch("sonic_installer.bootloader.uboot.run_command")
-def test_remove_image_removesproper_image(mock_run_command, mock_get_images):
+def test_remove_image_removes_proper_image(
+        mock_run_command,
+        mock_subprocess_call,
+        mock_get_images):
 
-    expected_call = [
-                     call(['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_1']),
-                     call(['/usr/bin/fw_setenv', 'sonic_version_2', 'NONE']),
-                    ]
-
-    mock_get_images.return_value = ["SONiC-OS-10.22", "SONiC-OS-10.2"]
+    mock_get_images.return_value = [
+        "SONiC-OS-10.22",
+        "SONiC-OS-10.2"
+    ]
 
     bootloader = UbootBootloader()
 
     bootloader.remove_image("SONiC-OS-10.2")
 
-    assert mock_run_command.call_args_list == expected_call
+    expected_calls = [
+        call(['/usr/bin/fw_setenv', 'boot_next', 'run sonic_image_1']),
+        call(['/usr/bin/fw_setenv', 'sonic_version_2', 'NONE']),
+    ]
+
+    assert mock_run_command.call_args_list == expected_calls
+
+    mock_subprocess_call.assert_called_once_with(
+        ['rm', '-rf', '/host/image-10.2']
+    )
