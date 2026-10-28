@@ -17,6 +17,9 @@ from utilities_common.netstat import ns_diff, table_as_json, format_brate, forma
 """
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
+
+The field names are also the keys of the snapshot saved by 'portstat -c' / 'sonic-clear counters',
+which other components parse, so don't rename them. rx_ovrrun holds SAI_PORT_STAT_IN_DROPPED_PKTS.
 """
 NStats = namedtuple("NStats", "rx_ok, rx_err, rx_drop, rx_ovr, tx_ok,\
                     tx_err, tx_drop, tx_ovr, rx_byt, tx_byt,\
@@ -105,7 +108,7 @@ counter_bucket_dict = {
         38: ['SAI_PORT_STAT_ETHER_STATS_JABBERS'],
         39: ['SAI_PORT_STAT_ETHER_STATS_FRAGMENTS'],
         40: ['SAI_PORT_STAT_ETHER_STATS_UNDERSIZE_PKTS'],
-        41: ['SAI_PORT_STAT_IP_IN_RECEIVES'],
+        41: ['SAI_PORT_STAT_IN_DROPPED_PKTS'],
         42: ['SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES'],
         43: ['SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES'],
         44: ['SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS'],
