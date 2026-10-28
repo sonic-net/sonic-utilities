@@ -293,6 +293,20 @@ class TestBgpCommonHelpers(object):
         assert combined[prefix][0]['internalNextHopNum'] == 2
         assert combined[prefix][0]['internalNextHopActiveNum'] == 2
 
+    def test_merge_active_nexthop_count_excludes_inactive_added(self):
+        prefix = '10.0.0.0/24'
+        combined = {}
+        _merge(combined, prefix, _bgp_route_entry(prefix, '10.0.0.1', 'Ethernet0'))
+        second = _bgp_route_entry(prefix, '10.0.0.2', 'Ethernet4')
+        second['nexthops'].append(
+            {'ip': '10.0.0.3', 'interfaceName': 'Ethernet8', 'flags': 0})
+        second['internalNextHopNum'] = 2
+        second['internalNextHopActiveNum'] = 1
+        _merge(combined, prefix, second)
+        assert len(combined[prefix][0]['nexthops']) == 3
+        assert combined[prefix][0]['internalNextHopNum'] == 3
+        assert combined[prefix][0]['internalNextHopActiveNum'] == 2
+
     def test_merge_skips_duplicate_inactive_nexthop_ip(self):
         prefix = '10.0.0.0/24'
         with_inactive = _bgp_route_entry(prefix, '10.0.0.1', 'Ethernet20')

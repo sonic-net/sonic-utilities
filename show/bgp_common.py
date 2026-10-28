@@ -319,10 +319,11 @@ def merge_to_combined_route(combined_route, route, new_info_l, is_voq_chassis=No
 
             if len(additional_nh_l) > 0:
                 # FRR supplies these counters; keep them aligned with merged nexthops.
+                additional_active_cnt = sum(1 for nh in additional_nh_l if 'active' in nh)
                 existing_entry['internalNextHopNum'] += len(additional_nh_l)
                 if (existing_entry['internalNextHopActiveNum'] > 0 and
                         new_info['internalNextHopActiveNum'] > 0):
-                    existing_entry['internalNextHopActiveNum'] += len(additional_nh_l)
+                    existing_entry['internalNextHopActiveNum'] += additional_active_cnt
                 existing_nh_list += additional_nh_l
     else:
         combined_route[route] = new_info_l
