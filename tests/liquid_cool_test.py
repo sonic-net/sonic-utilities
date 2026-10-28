@@ -197,6 +197,15 @@ class TestMajorLeakThreshold(object):
             'LEAK_CONTROL_POLICY', 'policy', {'system_major_leak_num_min_sensors': '2'}
         )
 
+    def test_major_leak_threshold_default_removes_override(self):
+        mock_cfgdb = MagicMock()
+        result = self._invoke(['major-leak-threshold', 'default'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        assert 'platform default' in result.output
+        mock_cfgdb.mod_entry.assert_called_once_with(
+            'LEAK_CONTROL_POLICY', 'policy', {'system_major_leak_num_min_sensors': None}
+        )
+
     def test_major_leak_threshold_below_floor_rejected(self):
         mock_cfgdb = MagicMock()
         result = self._invoke(['major-leak-threshold', '1'], mock_cfgdb)

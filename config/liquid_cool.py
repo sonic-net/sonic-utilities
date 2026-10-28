@@ -62,13 +62,23 @@ def leak_action(db, policy_type, severity, action):
 
 @liquid_cool.command('major-leak-threshold')
 @clicommon.pass_db
-@click.argument('num_sensors', metavar='<N>',
-                type=click.IntRange(min=MAJOR_LEAK_MIN_SENSORS_FLOOR, max=MAJOR_LEAK_MIN_SENSORS_CEILING))
+@click.argument('num_sensors', metavar='<N|default>')
 def major_leak_threshold(db, num_sensors):
     """Configure MIN-N: the number of concurrent Minor leaks at or above which the
     system is classified as MAJOR_SYSTEM_LEAK (must be between 2 and 4294967295). This overrides the
     platform default and affects only the count rule; a Minor leak that stays on
-    beyond MAX-T is still classified as MAJOR."""
+    beyond MAX-T is still classified as MAJOR. Use 'default' to remove the override and
+    return to the platform default."""
+    if num_sensors.lower() == 'default':
+        db.cfgdb.mod_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY,
+                           {MAJOR_LEAK_MIN_SENSORS_FIELD: None})
+        click.echo("Major leak threshold (MIN-N) reset to the platform default")
+        return
+    if not (num_sensors.isdigit() and
+            MAJOR_LEAK_MIN_SENSORS_FLOOR <= int(num_sensors) <= MAJOR_LEAK_MIN_SENSORS_CEILING):
+        raise click.BadParameter(
+            f"must be 'default' or an integer between {MAJOR_LEAK_MIN_SENSORS_FLOOR} "
+            f"and {MAJOR_LEAK_MIN_SENSORS_CEILING}")
     db.cfgdb.mod_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY,
-                       {MAJOR_LEAK_MIN_SENSORS_FIELD: str(num_sensors)})
+                       {MAJOR_LEAK_MIN_SENSORS_FIELD: str(int(num_sensors))})
     click.echo(f"Major leak threshold (MIN-N) set to '{num_sensors}'")
