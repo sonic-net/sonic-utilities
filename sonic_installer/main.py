@@ -703,7 +703,8 @@ def list_command():
     click.echo("Next: " + nextimage)
     click.echo("Available: ")
     for image in images:
-        click.echo(image)
+        if image:
+            click.echo(image)
 
 
 # Set default image for boot
@@ -716,7 +717,7 @@ def set_default(image):
         print_deprecation_warning("set_default", "set-default")
 
     bootloader = get_bootloader()
-    if image not in bootloader.get_installed_images():
+    if not image or image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         raise click.Abort()
     bootloader.set_default_image(image)
@@ -732,7 +733,7 @@ def set_next_boot(image):
         print_deprecation_warning("set_next_boot", "set-next-boot")
 
     bootloader = get_bootloader()
-    if image not in bootloader.get_installed_images():
+    if not image or image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         sys.exit(1)
     bootloader.set_next_image(image)
@@ -787,7 +788,8 @@ def remove(image):
         echo_and_log('Cannot remove current image', LOG_ERR)
         sys.exit(1)
     # TODO: check if image is next boot or default boot and fix these
-    bootloader.remove_image(image)
+    if image:
+        bootloader.remove_image(image)
 
 
 # Retrieve version from binary image file and print to screen
@@ -820,7 +822,7 @@ def cleanup():
     nextimage = bootloader.get_next_image()
     image_removed = 0
     for image in images:
-        if image != curimage and image != nextimage:
+        if image and image != curimage and image != nextimage:
             echo_and_log("Removing image %s" % image)
             bootloader.remove_image(image)
             image_removed += 1
