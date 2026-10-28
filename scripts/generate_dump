@@ -335,6 +335,38 @@ dummy_cleanup_method() {
 }
 
 ###############################################################################
+# Save a show CLI that supports -d all / -n asicN (T2 / multi-ASIC).
+# Collects a combined dump plus one file per ASIC so internal links and
+# per-namespace counters are present in show tech.
+# Globals:
+#  NUM_ASICS
+# Arguments:
+#  cmd: show command without display/namespace flags
+#  filename: dump filename under $BASE/dump
+#  extra_opts: (OPTIONAL) extra flags, typically "-d all"
+# Returns:
+#  None
+###############################################################################
+save_show_cli_all() {
+    trap 'handle_error $? $LINENO' ERR
+    local cmd="$1"
+    local filename="$2"
+    local extra_opts="${3:-}"
+    local full_cmd="$cmd"
+    if [ -n "$extra_opts" ]; then
+        full_cmd="$cmd $extra_opts"
+    fi
+
+    save_cmd "$full_cmd" "$filename"
+    if [[ ( "$NUM_ASICS" > 1 ) ]] ; then
+      for (( i=0; i<$NUM_ASICS; i++ ))
+      do
+          save_cmd "$full_cmd -n asic$i" "${filename}.asic$i"
+      done
+    fi
+}
+
+###############################################################################
 # Runs a given command in all namespaces in case of multi ASIC platform, in
 # default (host) namespace in single ASIC platform
 # Globals:
@@ -2693,8 +2725,10 @@ save_counter_snapshot() {
     counter_t=$(date +'%d/%m/%Y %H:%M:%S:%6N')
 
     save_cmd "echo $counter_t" "date.counter_$idx"
-    save_cmd "show interface counters" "interface.counters_$idx"
-    save_cmd "show interface counters fec-stats" "interface.counters.fec-stats_$idx"
+    # -d all includes internal links on LC and avoids empty LC counter-table
+    # collection on T2 RP. One file per ASIC when multi-ASIC.
+    save_show_cli_all "show interface counters" "interface.counters_$idx" "-d all"
+    save_show_cli_all "show interface counters fec-stats" "interface.counters.fec-stats_$idx" "-d all"
 
     # Batch size selected to 8 to not overload CPU
     local fec_histogram_batch_size=8
@@ -2727,7 +2761,7 @@ save_counter_snapshot() {
     done
 
     if ! $IS_SUPERVISOR; then
-       save_cmd "show queue counters" "queue.counters_$idx"
+       save_show_cli_all "show queue counters" "queue.counters_$idx" "-d all"
     fi
     save_redis "COUNTERS_DB" "COUNTERS_DB_$idx"
 
@@ -2987,19 +3021,13 @@ main() {
     wait
 
     # Generic L3 summary (incl. management interfaces) - keep on all platforms.
-    save_cmd "show ip interface -d all" "ip.interface" &
+    save_show_cli_all "show ip interface" "ip.interface" "-d all" &
     if ! $IS_SWITCH_BMC; then
         # Front-panel interface/transceiver collectors - none on a Switch-BMC.
-        save_cmd "show interface status -d all" "interface.status" &
+        save_show_cli_all "show interface status" "interface.status" "-d all" &
         save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
         save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
-        # Collect SFP EEPROM data; sfputil filters out CPO ports.
         save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
-        # CPO devices may coexist with pluggable transceivers.
-        if python3 -I -c 'from sonic_py_common import device_info; import sys; sys.exit(0 if device_info.get_cpo_data() else 1)' 2>/dev/null; then
-            save_cmd "cpoutil read-eeprom oe" "interface.cpo.oe.eeprom" &
-            save_cmd "cpoutil read-eeprom els" "interface.cpo.els.eeprom" &
-        fi
         save_cmd "show interface link-training status" "interface.link_training.status" &
     fi
     save_gearbox_data &
