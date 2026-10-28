@@ -430,6 +430,57 @@ swss            OK                OK                  -              -
                         dpu_list = get_all_dpu_options()
                         print(dpu_list)
 
+    def test_health_summary_bmc(self):
+        from show.system_health import display_system_health_summary
+        import io
+        from contextlib import redirect_stdout
+
+        # BMC with data and timestamp
+        stat = {
+            'Services': {'pmon': {'status': 'OK', 'message': '', 'type': 'Process'}},
+            'Hardware': {'trayLeak': {'status': 'OK', 'message': '', 'type': 'Sensor'}},
+            'BMC': {
+                'BMC-LastUpdate': {'status': 'OK', 'message': 'Last updated: 2026-09-30T10:00:00Z', 'type': 'BMC'},
+                'BMC-RefreshInterval': {'status': 'OK', 'message': 'BMC Refresh Interval: 300s', 'type': 'BMC'},
+                'Services|pmon': {'status': 'Not OK', 'message': 'pmon is not running', 'type': 'BMC'},
+            },
+        }
+        f = io.StringIO()
+        with redirect_stdout(f):
+            display_system_health_summary(stat, 'green')
+        output = f.getvalue()
+        assert 'BMC:' in output
+        assert 'Status: Not OK' in output
+        assert 'Last Updated: 2026-09-30T10:00:00Z' in output
+        assert 'BMC Refresh Interval: 300s' in output
+        assert 'pmon is not running' in output
+
+        # BMC connection failure — no timestamp
+        stat['BMC'] = {
+            'BMC-Connectivity': {'status': 'Not OK',
+                                 'message': 'Cannot connect to BMC Redis',
+                                 'type': 'BMC'},
+        }
+        f = io.StringIO()
+        with redirect_stdout(f):
+            display_system_health_summary(stat, 'green')
+        output = f.getvalue()
+        assert 'Cannot connect' in output
+        assert 'Last Updated' not in output
+
+        # BMC link down — instant failure from platform API pre-check
+        stat['BMC'] = {
+            'BMC-Connectivity': {'status': 'Not OK',
+                                 'message': 'bmc0 link is down',
+                                 'type': 'BMC'},
+        }
+        f = io.StringIO()
+        with redirect_stdout(f):
+            display_system_health_summary(stat, 'red')
+        output = f.getvalue()
+        assert 'bmc0 link is down' in output
+        assert 'Last Updated' not in output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
