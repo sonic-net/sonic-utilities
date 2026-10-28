@@ -201,6 +201,28 @@ class TestSetFeatureStateUnit(object):
         with pytest.raises(Exception, match="state is not available in any namespace"):
             set_feature_state(cfgdb_clients, 'bgp', 'disabled', False)
 
+    def test_set_feature_state_always_enabled(self):
+        from config.feature import set_feature_state
+
+        mock_cfgdb = mock.MagicMock()
+        mock_cfgdb.get_entry.return_value = {'state': 'always_enabled'}
+        cfgdb_clients = {'': mock_cfgdb}
+
+        with pytest.raises(Exception, match="state is always enabled and can not be modified"):
+            set_feature_state(cfgdb_clients, 'database', 'disabled', False)
+        mock_cfgdb.mod_entry.assert_not_called()
+
+    def test_set_feature_state_always_disabled(self):
+        from config.feature import set_feature_state
+
+        mock_cfgdb = mock.MagicMock()
+        mock_cfgdb.get_entry.return_value = {'state': 'always_disabled'}
+        cfgdb_clients = {'': mock_cfgdb}
+
+        with pytest.raises(Exception, match="state is always disabled and can not be modified"):
+            set_feature_state(cfgdb_clients, 'mux', 'enabled', False)
+        mock_cfgdb.mod_entry.assert_not_called()
+
     def test_set_feature_state_partial_missing_state_key(self):
         from config.feature import set_feature_state
 
