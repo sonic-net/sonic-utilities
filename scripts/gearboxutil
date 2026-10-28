@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
 import sys
 from datetime import datetime
@@ -22,6 +23,8 @@ except KeyError:
     pass
 
 from swsscommon.swsscommon import SonicV2Connector
+from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 
 
 # ========================== Common gearbox-utils logic ==========================
@@ -73,18 +76,18 @@ def get_appl_key_attr(db, key, attr, lane_count=1):
 
     return val
 
-def db_connect_appl():
-    appl_db = SonicV2Connector(use_unix_socket_path=False)
+def db_connect_appl(namespace=""):
+    appl_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=False)
     if appl_db is None:
         return None
     appl_db.connect(appl_db.APPL_DB)
     return appl_db
 
-def db_connect_state():
+def db_connect_state(namespace=""):
     """
     Connect to REDIS STATE DB and get optics info
     """
-    state_db = SonicV2Connector(use_unix_socket_path=False)
+    state_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=False)
     if state_db is None:
         return None
     state_db.connect(state_db.STATE_DB, False)   # Make one attempt only
@@ -164,8 +167,8 @@ class PhyStatus(object):
         sorted_table = natsorted(table)
         print(tabulate(sorted_table, phy_header_status, tablefmt="simple", stralign='right'))
 
-    def __init__(self):
-        self.appl_db = db_connect_appl()
+    def __init__(self, namespace=""):
+        self.appl_db = db_connect_appl(namespace)
         if self.appl_db is None:
             return
 
@@ -221,8 +224,8 @@ class InterfaceStatus(object):
         sorted_table = natsorted(table)
         print(tabulate(sorted_table, intf_header_status, tablefmt="simple", stralign='right'))
 
-    def __init__(self):
-        self.appl_db = db_connect_appl()
+    def __init__(self, namespace=""):
+        self.appl_db = db_connect_appl(namespace)
         if self.appl_db is None:
             return
 
@@ -246,18 +249,22 @@ FEC_HISTOGRAM_TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 class InterfaceFecStats(object):
 
-    def __init__(self, port_name=None, display_type='stats'):
+    def __init__(self, port_name=None, display_type='stats', namespace=""):
         """
         Initialize and display FEC information
         Args:
             port_name: Optional port name to filter (e.g., "Ethernet0")
                       If None, display for all ports
             display_type: 'histogram' or 'stats'
+            namespace: ASIC namespace, or an empty string for the default instance
         """
         self.port_name = port_name
         self.display_type = display_type
-        self.gb_db = SonicV2Connector(use_unix_socket_path=False)
-        self.appl_db = SonicV2Connector(use_unix_socket_path=False)
+        self.namespace = namespace
+        self.gb_db = SonicV2Connector(
+            namespace=namespace, use_unix_socket_path=False)
+        self.appl_db = SonicV2Connector(
+            namespace=namespace, use_unix_socket_path=False)
         
         if self.gb_db is None or self.appl_db is None:
             print("Error: Failed to connect to database")
@@ -316,7 +323,8 @@ class InterfaceFecStats(object):
         port_name_map = self.get_port_name_map()
         
         if not port_name_map:
-            print("Error: No port name mapping found in GB_COUNTERS_DB")
+            print("Error: No COUNTERS_PORT_NAME_MAP found in GB_COUNTERS_DB "
+                  f"for namespace {self.namespace or 'default'}")
             return None
         
         # If specific port requested, filter to that port (both line and system)
@@ -327,7 +335,8 @@ class InterfaceFecStats(object):
                     matching_ports[full_port_name] = oid
             
             if not matching_ports:
-                print(f"Error: Port '{self.port_name}' not found in GB_COUNTERS_DB")
+                print(f"Error: Port '{self.port_name}' not found in GB_COUNTERS_DB "
+                      f"for namespace {self.namespace or 'default'}")
                 base_ports = set()
                 for port in port_name_map.keys():
                     if port.endswith('_line'):
@@ -463,56 +472,51 @@ class InterfaceFecStats(object):
             traceback.print_exc()
 
 def main(args):
-    """
-    Usage:
-        gearboxutil phys status
-        gearboxutil interfaces status
-        gearboxutil interfaces fec-histogram [<port_name>]
-        gearboxutil interfaces fec-stats [<port_name>]
-    
-    Examples:
-        gearboxutil interfaces fec-histogram                # Show histogram for all ports
-        gearboxutil interfaces fec-histogram Ethernet0      # Show histogram for Ethernet0 (line and system)
-        gearboxutil interfaces fec-stats                    # Show FEC stats for all ports
-        gearboxutil interfaces fec-stats Ethernet0          # Show FEC stats for Ethernet0 (line and system)
-    """
+    """Display gearbox status and FEC counters in the selected ASIC namespace."""
+    parser = argparse.ArgumentParser(
+        description=main.__doc__,
+        epilog=("Examples:\n"
+                "  gearboxutil -n asic1 interfaces fec-stats Ethernet996\n"
+                "  gearboxutil interfaces fec-histogram Ethernet996 -n asic1\n"
+                "  gearboxutil -n asic0 interfaces status\n"
+                "  gearboxutil -n asic0 phys status"),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "-n", "--namespace",
+        help="ASIC namespace, e.g. asic0 or asic1; required on multi-ASIC systems")
+    parser.add_argument("group", choices=("phys", "interfaces"))
+    parser.add_argument("command", choices=("status", "fec-stats", "fec-histogram"))
+    parser.add_argument("port_name", nargs="?", help="Optional Ethernet port for FEC commands")
+    options = parser.parse_intermixed_args(args)
 
-    if len(args) == 0:
-        print("No valid arguments provided")
-        print(main.__doc__)
-        return
+    if options.group == "phys" and options.command != "status":
+        parser.error("phys supports only the status command")
+    if options.command == "status" and options.port_name is not None:
+        parser.error("status does not accept a port name")
 
-    cmd1 = args[0]
-    if cmd1 != "phys" and cmd1 != "interfaces":
-        print("No valid command provided")
-        print(main.__doc__)
-        return
+    if options.namespace is None:
+        if multi_asic.is_multi_asic():
+            parser.error("-n/--namespace is required on multi-ASIC systems")
+        namespace = ""
+    else:
+        namespaces = multi_asic.get_namespace_list()
+        if options.namespace not in namespaces:
+            available = ", ".join(ns for ns in namespaces if ns) or "default"
+            parser.error(f"Unknown namespace '{options.namespace}'; available: {available}")
+        namespace = options.namespace
 
-    if len(args) < 2:
-        print("No valid command provided")
-        print(main.__doc__)
-        return
+    # Named ASIC connections require database_global.json to be initialized.
+    load_db_config()
 
-    cmd2 = args[1]
-    if cmd2 not in ["status", "fec-histogram", "fec-stats"]:
-        print("No valid command provided")
-        print(main.__doc__)
-        return
+    if options.group == "phys":
+        PhyStatus(namespace=namespace)
+    elif options.command == "status":
+        InterfaceStatus(namespace=namespace)
+    else:
+        display_type = "stats" if options.command == "fec-stats" else "histogram"
+        InterfaceFecStats(options.port_name, display_type=display_type, namespace=namespace)
+    return 0
 
-    if cmd1 == "phys" and cmd2 == "status":
-        PhyStatus()
-    elif cmd1 == "interfaces" and cmd2 == "status":
-        InterfaceStatus()
-    elif cmd1 == "interfaces" and cmd2 == "fec-histogram":
-        # Optional port name parameter
-        port_name = args[2] if len(args) > 2 else None
-        InterfaceFecStats(port_name, display_type='histogram')
-    elif cmd1 == "interfaces" and cmd2 == "fec-stats":
-        # Optional port name parameter
-        port_name = args[2] if len(args) > 2 else None
-        InterfaceFecStats(port_name, display_type='stats')
-
-    sys.exit(0)
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))
