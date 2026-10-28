@@ -361,7 +361,7 @@ class TestBgpCommonHelpers(object):
             bgp_common.print_ip_routes(detail_route, filter_by_ip=True)
         nh = {'ip': '10.0.0.1', 'interfaceName': 'PortChannel0002', 'flags': 0, 'active': True}
         nh_line = bgp_common.get_nexthop_info_str(nh, True, is_voq_chassis=False)
-        assert detail == (
+        assert buf.getvalue() == (
             "Routing entry for 192.168.0.1/32\n"
             '  Known via "bgp", distance 20, metric 0, best\n'
             "  Last update 01:00:00 ago\n"

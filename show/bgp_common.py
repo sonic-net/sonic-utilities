@@ -52,6 +52,7 @@ def get_mpls_label_strgs(label_list):
             label_str_2_return += "/" + label_string
     return label_str_2_return
 
+
 def get_nexthop_info_str(nxhp_info, filterByIp, is_voq_chassis=None):
     str_2_return = ""
     if "ip" in nxhp_info:
@@ -179,8 +180,8 @@ def print_ip_routes(route_info, filter_by_ip):
                 out_lines.append("  Last update {} ago\n".format(item['uptime']))
                 for nh in item['nexthops']:
                     if "directlyConnected" in nh:
-                        # Match legacy print("  * directly connected, {}\n".format(...))
-                        out_lines.append("  * directly connected, {}\n".format(nh['interfaceName']))
+                        # Legacy used print("...\n"), which emitted an extra newline.
+                        out_lines.append("  * directly connected, {}\n\n".format(nh['interfaceName']))
                     else:
                         out_lines.append(get_nexthop_info_str(nh, True, is_voq_chassis=is_voq_chassis) + "\n")
                 out_lines.append("\n")
