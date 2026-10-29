@@ -1402,6 +1402,34 @@ class TestShow(object):
         mock_run_command.assert_called_with(['pfcwd', 'show', 'stats', '-d', 'all'], display_cmd=True)
 
     @patch('show.main.run_command')
+    def test_show_pfcwd_stats_history(self, mock_run_command):
+        # --verbose must not print the command line ahead of the JSON
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["pfcwd"].commands['stats'], ['--history', '--json', '--verbose'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['pfcwd', 'show', 'stats', '-d', 'all', '--history', '--json'], display_cmd=False)
+
+    def test_show_pfcwd_stats_history_help(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["pfcwd"].commands['stats'], ['--help'])
+        assert result.exit_code == 0
+        assert '--history' in result.output
+        assert '--json' in result.output
+
+    @patch('show.main.run_command')
+    def test_show_pfcwd_stats_history_filter_and_count(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["pfcwd"].commands['stats'],
+            ['--history', '--count', '3', 'Ethernet0:3', 'Ethernet4'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['pfcwd', 'show', 'stats', '-d', 'all', '--history', '--count', '3',
+             'Ethernet0:3', 'Ethernet4'], display_cmd=False)
+
+    @patch('show.main.run_command')
     def test_show_watermark_telemetry_interval(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["watermark"].commands['telemetry'].commands['interval'])

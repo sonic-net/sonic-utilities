@@ -11027,8 +11027,24 @@ This command shows current PFC Watchdog statistics (storms detected, packets dro
 
 - Usage:
   ```
-  show pfcwd stats
+  show pfcwd stats [--history [--count <n>] [--json]] [<queue>|<port> ...]
   ```
+
+  With `--history`, the command lists recent PFC storms, newest first (ordered by detection time; a storm still in progress shows `-` in RESTORED, and a storm whose handling was ended by a swss cold start, such as `config reload`, shows `interrupted`), instead of the cumulative statistics. Without arguments it shows the 5 most recent storms on the switch. Given queues (`Ethernet0:3`) or ports (`Ethernet0`), it shows every stored storm of those queues. `--count <n>` sets the number of storms shown in either case. The storms are read from the STATE_DB table `PFC_WD_STORM_HISTORY`, which has one entry per `<port>|<queue>` in which orchagent keeps the last 10 storms of that queue. Each row gives the queue, the storm number on that queue, detection time, restoration time, duration and the TX/TX-DROP and RX/RX-DROP packet counts of that storm. Storm numbers count from 1 per queue and restart when the queue's history is cleared, which happens when the watchdog is removed from the port (`config pfcwd stop`). `--history` cannot be combined with `-e` or `--check-storm`. `--json` (valid only with `--history`) prints the same entries as a flat `storms` list in JSON format, with the recovery mechanism (`software`, `hardware`, or `unknown` before orchagent has reported it).
+
+- Example:
+  ```
+  admin@sonic:~$ show pfcwd stats --history
+        QUEUE    #                     DETECTED                     RESTORED    DURATION(ms)    TX/TX-DROP    RX/RX-DROP
+  -----------  ---  ---------------------------  ---------------------------  --------------  ------------  ------------
+  Ethernet0:3    1  2025-10-21T03:33:49.123456Z                            -               -           -/-           -/-
+  Ethernet4:3    2  2025-10-21T02:26:40.000000Z  2025-10-21T02:26:40.310000Z             310       640/640       512/512
+  Ethernet8:4    4  2025-10-21T02:00:00.000000Z  2025-10-21T02:00:00.120000Z             120         80/80         40/40
+  Ethernet8:4    3  2025-10-21T01:43:20.000000Z  2025-10-21T01:43:20.150000Z             150       100/100         50/50
+  Ethernet4:3    1  2025-10-21T01:26:40.000000Z  2025-10-21T01:26:40.475000Z             475     1200/1200       980/980
+  ```
+
+  Timestamps are ISO-8601 UTC with microsecond resolution and record when orchagent observed the detection/restoration, not the hardware's own instant; in hardware mode this trails the ASIC's detection by up to one watchdog scan interval.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#pfc-watchdog-commands)
 

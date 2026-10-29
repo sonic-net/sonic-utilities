@@ -769,15 +769,29 @@ def config(namespace, display, verbose):
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--history', is_flag=True,
+              help='Show recent PFC storms, newest first: the 5 most recent on the switch, '
+                   'or every stored storm of the given queues or ports')
+@click.option('--count', type=click.IntRange(min=1), default=None, help='Number of storms to show (with --history)')
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def stats(namespace, display, verbose):
+@click.argument('queues', nargs=-1)
+def stats(namespace, display, history, count, json_output, verbose, queues):
     """Show pfc watchdog stats"""
 
     cmd = ['pfcwd', 'show', 'stats', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if history:
+        cmd += ['--history']
+    if count is not None:
+        cmd += ['--count', str(count)]
+    if json_output:
+        cmd += ['--json']
+    cmd += list(queues)
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 #
 # 'watermark' group ("show watermark telemetry interval")
