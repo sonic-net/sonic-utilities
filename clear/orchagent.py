@@ -18,6 +18,8 @@ REDIS_TIMEOUT_MSECS = 0
 def _send_clear(namespace):
     # orchagent runs per-ASIC on multi-ASIC platforms, so target the right
     # namespace's APPL_DB ('' for the default/single-ASIC DB).
+    if namespace and not swsscommon.SonicDBConfig.isGlobalInit():
+        swsscommon.SonicDBConfig.initializeGlobalConfig()
     db = swsscommon.DBConnector(
         "APPL_DB", REDIS_TIMEOUT_MSECS,
         swsscommon.SonicDBConfig.getDbPort('APPL_DB', namespace) != 0, namespace)

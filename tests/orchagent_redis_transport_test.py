@@ -75,3 +75,41 @@ def test_direct_call_uses_its_database_and_namespace(call, port):
         assert connections[0][2] is (port != 0)
         if len(call.args) > 3:
             assert connections[0][3] == namespace
+
+
+@pytest.mark.parametrize('namespace', ['', 'asic0', 'asic3'])
+@pytest.mark.parametrize('initialized', [False, True])
+@pytest.mark.parametrize('port', [0, 6379])
+def test_clear_initializes_namespace_metadata_before_selecting_transport(namespace, initialized, port):
+    tree = ast.parse((ROOT / 'clear/orchagent.py').read_text())
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                    and node.name == '_send_clear')
+    statements = []
+    for node in function.body:
+        statements.append(node)
+        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'db'
+                                               for target in node.targets):
+            break
+    state = {'initialized': initialized, 'initializations': 0}
+    calls = []
+
+    def initialize():
+        state['initializations'] += 1
+        state['initialized'] = True
+
+    def get_port(database, selected_namespace):
+        assert (database, selected_namespace) == ('APPL_DB', namespace)
+        assert not namespace or state['initialized'], 'Namespace metadata was read before initialization'
+        return port
+
+    values = dict(namespace=namespace, REDIS_TIMEOUT_MSECS=0,
+                  swsscommon=SimpleNamespace(
+                      DBConnector=lambda *args: calls.append(args),
+                      SonicDBConfig=SimpleNamespace(
+                          isGlobalInit=lambda: state['initialized'],
+                          initializeGlobalConfig=initialize, getDbPort=get_port)))
+    code = compile(ast.Module(body=statements, type_ignores=[]), 'clear-init', 'exec')
+    exec(code, values)
+    exec(code, values)
+    assert calls == [('APPL_DB', 0, port != 0, namespace)] * 2
+    assert state['initializations'] == int(bool(namespace) and not initialized)
