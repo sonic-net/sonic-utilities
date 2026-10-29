@@ -88,7 +88,7 @@ def test_clear_initializes_namespace_metadata_before_selecting_transport(namespa
     for node in function.body:
         statements.append(node)
         if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'db'
-                                               for target in node.targets):
+                                                for target in node.targets):
             break
     state = {'initialized': initialized, 'initializations': 0}
     calls = []
