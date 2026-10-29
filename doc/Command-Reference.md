@@ -233,6 +233,7 @@
     * [VLAN Config commands](#vlan-config-commands)
   * [FDB](#fdb)
     * [FDB show commands](#fdb-show-commands)
+    * [FDB config commands](#fdb-config-commands)
 * [VxLAN & Vnet](#vxlan--vnet)
   * [VxLAN](#vxlan)
     * [VxLAN show commands](#vxlan-show-commands)
@@ -14801,6 +14802,22 @@ This command displays the default mac aging time on the switch
   Aging time for switch is 600 seconds
   ```
 
+**show mac sync-mode**
+
+This command displays how MAC (FDB) state is synchronized with FRR: `kernel` (through the Linux kernel bridge FDB) or `fpm` (over the FPM channel). It displays `kernel` when the mode is not configured, and always `fpm` on a device with the `L3EvpnMH` subtype. `show fdb mac-sync-mode` displays the same. On a multi-ASIC device each ASIC namespace has its own mode: `-n` selects one, and without it the mode of each namespace is displayed after its name.
+
+- Usage:
+  ```
+  show mac [-n <namespace>] sync-mode
+  show fdb [-n <namespace>] mac-sync-mode
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show mac sync-mode
+  fpm
+  ```
+
 **sonic-clear fdb all**
 
 Clear the FDB table. On multi-ASIC platforms, clears FDB entries in all namespaces. The fdbclear script (when run directly) supports -n <namespace> or -n all to clear a specific namespace or all namespaces.
@@ -14813,6 +14830,23 @@ Clear the FDB table. On multi-ASIC platforms, clears FDB entries in all namespac
   ```
   admin@sonic:~$ sonic-clear fdb all
   FDB entries are cleared.
+  ```
+
+#### FDB config commands
+
+**config fdb mac-sync-mode**
+
+This command selects how MAC (FDB) state is synchronized with FRR. `kernel`, the default, synchronizes it through the Linux kernel bridge FDB; `fpm` synchronizes it over the FPM channel. zebra and fpmsyncd pick up the mode when the bgp container restarts. A device with the `L3EvpnMH` subtype always uses `fpm`, so `kernel` is refused there. On a multi-ASIC device the mode is set per ASIC namespace, which `-n` selects.
+
+- Usage:
+  ```
+  config fdb [-n <namespace>] mac-sync-mode <kernel|fpm>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config fdb mac-sync-mode fpm
+  admin@sonic:~$ sudo config save -y
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vlan--FDB)

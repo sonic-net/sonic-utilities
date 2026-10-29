@@ -1293,6 +1293,57 @@ def aging_time(ctx):
             click.echo("Aging time for {} is {} seconds".format(key.split(':')[-1], fdb_aging_time))
         else:
             click.echo("Aging time not configured for the {}".format(key.split(':')[-1]))
+
+
+@mac.command('sync-mode')
+@clicommon.pass_db
+@click.pass_context
+def mac_sync_mode_mac(ctx, db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
+    show_mac_sync_mode(ctx, db)
+
+
+#
+# 'fdb' group ("show fdb ...")
+#
+
+@cli.group(cls=clicommon.AliasedGroup)
+@multi_asic_util.multi_asic_click_option_namespace
+def fdb(namespace):
+    """Show FDB (MAC) configuration"""
+    pass
+
+
+def get_mac_sync_mode(config_db):
+    # An L3EvpnMH device always synchronizes MACs over FPM, whatever FDB_SYNC says.
+    metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
+    if metadata.get('subtype') == 'L3EvpnMH':
+        return 'fpm'
+    # TODO: use swsscommon.CFG_FDB_SYNC_TABLE_NAME once sonic-net/sonic-buildimage#30365 is merged.
+    fdb_sync = config_db.get_entry('FDB_SYNC', 'global')
+    return fdb_sync.get('mac_sync_mode', 'kernel')
+
+
+def show_mac_sync_mode(ctx, db):
+    # Each ASIC has its own mode, in the CONFIG_DB of its namespace: the one selected, or all of them.
+    try:
+        ns_list = multi_asic_util.multi_asic_get_ns_list(multi_asic_util.get_namespace_from_ctx())
+    except ValueError as e:
+        ctx.fail(str(e))
+
+    for ns in ns_list:
+        mode = get_mac_sync_mode(db.cfgdb_clients[ns])
+        click.echo("{}: {}".format(ns, mode) if len(ns_list) > 1 else mode)
+
+
+@fdb.command('mac-sync-mode')
+@clicommon.pass_db
+@click.pass_context
+def mac_sync_mode(ctx, db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
+    show_mac_sync_mode(ctx, db)
+
+
 #
 # 'show route-map' command ("show route-map")
 #
