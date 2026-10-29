@@ -10933,6 +10933,12 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#orchag
 # PFC Watchdog Commands
 Detailed description of the PFC Watchdog can be found on [this wiki page](https://github.com/sonic-net/SONiC/wiki/PFC-Watchdog)
 
+When the platform runs the PFC watchdog in hardware (`RECOVERY_MECHANISM` is `HARDWARE` in STATE_DB `PFC_WD_STATE_TABLE|PFC_WD`):
+- `config pfcwd start` rejects detection and restoration times outside the range the hardware reports, and an action that differs from the hardware's (`drop` when `--action` is not given) unless no port is configured or the only configured port is being reconfigured, since the hardware uses one action for all ports.
+- `config pfcwd stop` is refused while any of the selected queues is stormed.
+- `config pfcwd interval` and `config pfcwd big_red_switch` are not supported.
+- `config pfcwd start_default` uses 200 ms detection and restoration times on every port, without scaling by port count, and removes a polling interval left by the software watchdog. Like `config pfcwd start`, it is refused when the hardware uses an action other than `drop` and ports are configured.
+
 **config pfcwd start \<arguments\>**
 
 This command starts PFC Watchdog
@@ -11014,16 +11020,16 @@ Additionally if the number of ports the watchdog is enabled on exceeds 32, all t
 
 **show pfcwd config**
 
-This command shows current PFC Watchdog configuration
+This command shows current PFC Watchdog configuration. In hardware mode it prints `Recovery mode: hardware` above the table. `--json` prints the configuration in JSON format, with the recovery mode (on multi-ASIC systems the polling interval and BIG_RED_SWITCH are given per ASIC namespace), and in hardware mode the supported timer ranges and the per-port values and status programmed in hardware.
 
 - Usage:
   ```
-  show pfcwd config
+  show pfcwd config [--json]
   ```
 
 **show pfcwd stats**
 
-This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc)
+This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc). In hardware mode the RX columns show `N/A`, since the hardware watchdog does not count RX.
 
 - Usage:
   ```
