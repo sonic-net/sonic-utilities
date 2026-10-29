@@ -588,6 +588,17 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["PORT"]["POLL_INTERVAL"]
 
+    def test_port_interval_help_describes_fec_flr_window(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            counterpoll.cli.commands["port"].commands["interval"],
+            ["--help"]
+        )
+
+        assert result.exit_code == 0
+        assert "FEC FLR window" in result.output
+        assert "secondary poll factor" in result.output
+
     def test_port_secondary_poll_factor(self):
         runner = CliRunner()
         configdb = mock.Mock()
@@ -603,6 +614,18 @@ class TestCounterpoll(object):
         configdb.mod_entry.assert_called_once_with(
             "FLEX_COUNTER_TABLE", "PORT", {"SECONDARY_POLL_FACTOR": 4}
         )
+
+    def test_port_secondary_poll_factor_help_describes_default_window(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
+            ["--help"]
+        )
+
+        assert result.exit_code == 0
+        assert "FEC FLR window" in result.output
+        assert "default factor of 120" in result.output
+        assert "default 1000-ms" in result.output
 
     def test_port_secondary_poll_factor_must_be_positive(self):
         runner = CliRunner()

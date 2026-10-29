@@ -115,7 +115,11 @@ def port(ctx, namespace):
 @click.argument('poll_interval', type=click.IntRange(100, 30000))
 @click.pass_context
 def port_interval(ctx, poll_interval):
-    """ Set port counter query interval """
+    """ Set port counter query interval.
+
+    The FEC FLR window is this interval multiplied by the secondary poll
+    factor.
+    """
     port_info = {}
     if poll_interval is not None:
         port_info['POLL_INTERVAL'] = poll_interval
@@ -125,7 +129,12 @@ def port_interval(ctx, poll_interval):
 @port.command('secondary-poll-factor')
 @click.argument('factor', type=click.IntRange(min=1))
 def secondary_poll_factor(factor):
-    """ Set port counter secondary poll factor """
+    """ Set port counter secondary poll factor.
+
+    The FEC FLR window is the port polling interval multiplied by this factor.
+    The default factor of 120 gives a 120-second window at the default 1000-ms
+    port polling interval.
+    """
     configdb = ConfigDBConnector()
     configdb.connect()
     port_info = {}
