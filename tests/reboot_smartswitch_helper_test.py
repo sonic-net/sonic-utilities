@@ -17,6 +17,9 @@ def run_helper_function(tmp_path, function_call, docker_rc=0, fail_port=""):
 EXIT_SUCCESS=0
 EXIT_ERROR=1
 source "{SCRIPT}"
+unset SECONDS
+SECONDS=0
+sleep() {{ SECONDS=$((SECONDS + $1)); }}
 docker() {{
     printf '%s\n' "$*" >> "$COMMAND_LOG"
     printf '%s\n' "$DOCKER_OUTPUT"
@@ -86,6 +89,18 @@ def test_gnmi_reboot_dpu_falls_back_to_native_port(tmp_path):
     assert "-target 169.254.200.1:50052" in command_lines[3]
     assert "-rpc RebootStatus" in command_lines[3]
     assert sum("-rpc Reboot " in f"{line} " for line in command_lines) == 1
+
+
+def test_gnmi_reboot_dpu_times_out_if_services_remain_active(tmp_path):
+    result, commands = run_helper_function(
+        tmp_path,
+        """DOCKER_OUTPUT='{"active":true}'; gnmi_reboot_dpu dpu0""",
+        fail_port="8080",
+    )
+    assert result.returncode != 0
+    assert "-target 169.254.200.1:50052" in commands
+    assert "-rpc RebootStatus" in commands
+    assert "Timeout waiting for dpu0 to finish halting the services" in result.stderr
 
 
 def test_get_reboot_status_rejects_malformed_output(tmp_path):
