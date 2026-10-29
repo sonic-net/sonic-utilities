@@ -74,6 +74,7 @@ from . import bgp_cli
 from . import stp
 from . import evpn_mh
 from . import llr
+from . import bridge_port_protection
 
 # mock masic APIs for unit test
 try:
@@ -1878,7 +1879,7 @@ def check_dhcpv4_relay_dependencies(db, object_name, object_type):
 
 
 # This is our main entrypoint - the main 'config' command
-@click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
+@click.group(cls=bridge_port_protection.BridgePortProtectionGroup, context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 def config(ctx):
     """SONiC command line - 'config' command"""
@@ -3071,6 +3072,10 @@ def portchannel(db, ctx, namespace):
     config_db.connect()
     ctx.obj = {'db': config_db, 'namespace': str(namespace), 'db_wrap': db}
 
+
+portchannel.add_command(bridge_port_protection.protection)
+
+
 @portchannel.command('add')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
 @click.option('--min-links', default=1, type=click.IntRange(1,1024))
@@ -3115,6 +3120,12 @@ def remove_portchannel(ctx, portchannel_name):
     """Remove port channel"""
 
     db = ValidatedConfigDBConnector(ctx.obj['db'])
+    # Test key presence: a defaults-only protection row decodes to {}.
+    # Enforce this dependency with both ad-hoc and YANG validation modes.
+    if portchannel_name in db.get_table(bridge_port_protection.TABLE):
+        ctx.fail("{} has bridge-port protection configured. Remove protection "
+                 "configuration before deleting the PortChannel."
+                 .format(portchannel_name))
     if ADHOC_VALIDATION:
         if is_portchannel_name_valid(portchannel_name) != True:
             ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
