@@ -10206,13 +10206,13 @@ This command displays all the mirror sessions that are configured.
   ```
   admin@sonic:~$ show mirror_session
   ERSPAN Sessions
-  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ------     --------  --------   --------  -----  ------  -----  -------  ---------  --------------  ----------  -----------
+  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  ---------  --------  ---------  --------  -----  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
   everflow0  active    10.1.0.32  10.0.0.7
 
   SPAN Sessions
-  Name    Status    DST Port    SRC Port       Direction
-  ------  --------  ----------  -------------  -----------
+  Name    Status    DST Port    SRC Port       Direction    Queue    Label    Policer
+  ------  --------  ----------  -------------  -----------  -------  -------  ---------
   port0   active    Ethernet0   PortChannel10  rx
   ```
 
@@ -10239,39 +10239,40 @@ While adding a new ERSPAN session, users need to configure the following fields 
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
 10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
 11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
+12) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>] [--label <label>]
   ```
 
   The following command is also supported to be backward compatible.
   This command will be deprecated in future releases.
   ```
-  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue]
+  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [--label <label>]
   ```
 
 - Example:
   ```
   root@T1-2:~# config mirror_session add mrr_legacy 1.2.3.4 20.21.22.23 8 100 0x6558 0
   root@T1-2:~# show mirror_session
-  Name         Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------    --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_legacy   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0
+  Name        Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  ----------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  mrr_legacy  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0
 
 
-  root@T1-2:~# config mirror_session erspan add mrr_abcd 1.2.3.4 20.21.22.23 8 100 0x6558 0
+  root@T1-2:~# config mirror_session erspan add mrr_abcd 1.2.3.4 20.21.22.23 8 100 0x6558 0 --label erspan_label
   root@T1-2:~# show mirror_session
-  Name       Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------  --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_abcd   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label         Policer    Sample Rate    Truncate Size
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  ------------  ---------  -------------  ---------------
+  mrr_abcd  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                                           erspan_label
   root@T1-2:~#
 
   root@T1-2:~# config mirror_session erspan add mrr_port 1.2.3.4 20.21.22.23 8 100 0x6558 0 Ethernet0
   root@T1-2:~# show mirror_session
-  Name       Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------  --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_port   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0                                   Ethernet0   both
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  mrr_port  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                  Ethernet0   both
   root@T1-2:~#
   ```
 
@@ -10281,19 +10282,20 @@ While adding a new SPAN session, users need to configure the following fields th
 3) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
 4) optional - Queue in which packets shall be sent out of the device. Valid values 0 to 7 for most of the devices. Users need to know their device and the number of queues supported in that device.
 5) optional - Policer which will be used to control the rate at which frames are mirrored.
+6) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
 
 - Usage:
   ```
-  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [policer <policer_name>]
+  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [policer <policer_name>] [--label <label>]
   ```
 
 - Example:
   ```
-  root@T1-2:~# config mirror_session span add port0 Ethernet0 Ethernet4,PortChannel001,Ethernet8
+  root@T1-2:~# config mirror_session span add port0 Ethernet0 Ethernet4,PortChannel001,Ethernet8 --label span_label
   root@T1-2:~# show mirror_session
-  Name    Status    DST Port    SRC Port                           Direction
-  ------  --------  ----------  ---------------------------------  -----------
-  port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both
+  Name    Status    DST Port    SRC Port                           Direction    Queue    Label       Policer
+  ------  --------  ----------  ---------------------------------  -----------  -------  ----------  ---------
+  port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both                  span_label
   root@T1-2:~#
   ```
 
