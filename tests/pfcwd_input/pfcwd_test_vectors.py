@@ -113,6 +113,21 @@ Ethernet4:3  operational                        2/2       100/100       100/100 
 Ethernet8:4      stormed                        3/2       100/300       100/300              0/200              0/200
 """
 
+pfcwd_show_stats_hw_mode_output = """\
+      QUEUE       STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
+-----------  -----------  -------------------------  ------------  ------------  -----------------  -----------------
+Ethernet0:3      stormed                        1/0       100/300           N/A              0/200                N/A
+Ethernet4:3  operational                        2/2       100/100           N/A                0/0                N/A
+Ethernet8:4      stormed                        3/2       100/300           N/A              0/200                N/A
+"""
+
+pfcwd_show_stats_hw_mode_rx_only_output = """\
+      QUEUE    STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
+-----------  --------  -------------------------  ------------  ------------  -----------------  -----------------
+Ethernet0:3   stormed                        1/0       100/300           N/A              0/200                N/A
+Ethernet8:4   stormed                        3/2       100/300           N/A              0/200                N/A
+"""
+
 pfcwd_show_stats_single_queue_output="""\
       QUEUE    STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
 -----------  --------  -------------------------  ------------  ------------  -----------------  -----------------

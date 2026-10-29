@@ -11029,7 +11029,7 @@ This command shows current PFC Watchdog configuration. In hardware mode it print
 
 **show pfcwd stats**
 
-This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc)
+This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc). In hardware mode the RX columns show `N/A`, since the hardware watchdog does not count RX.
 
 - Usage:
   ```

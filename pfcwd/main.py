@@ -148,6 +148,7 @@ class PfcwdCli(object):
                 self.multi_asic.current_namespace,
                 self.multi_asic.display_option
             )
+        hw_mode = self.is_hw_mode()
 
         for queue in queues:
             stats_list = []
@@ -162,9 +163,13 @@ class PfcwdCli(object):
             if stats is None:
                 continue
             for stat in STATS_DESCRIPTION:
+                # The hardware watchdog does not count RX
+                if hw_mode and stat[0].startswith('RX'):
+                    stats_list.append('N/A')
+                    continue
                 line = stats.get(stat[1], '0') + '/' + stats.get(stat[2], '0')
                 stats_list.append(line)
-            if stats_list != ['0/0'] * len(STATS_DESCRIPTION) or empty:
+            if any(line not in ('0/0', 'N/A') for line in stats_list) or empty:
                 table.append(
                     [queue, stats.get('PFC_WD_STATUS', 'N/A')] + stats_list
                 )

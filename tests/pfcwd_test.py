@@ -71,6 +71,18 @@ def _hw_get_all_forward(self, db_id, key):
     return _hw_get_all(self, db_id, key)
 
 
+def _hw_get_all_rx_only(self, db_id, key):
+    """Hardware mode where Ethernet4:3 has only RX counts."""
+    oid = self.get('COUNTERS_DB', 'COUNTERS_QUEUE_NAME_MAP', 'Ethernet4:3')
+    if db_id == 'COUNTERS_DB' and key == 'COUNTERS:' + oid:
+        return {
+            'PFC_WD_STATUS': 'operational',
+            'PFC_WD_QUEUE_STATS_RX_PACKETS': '5',
+            'PFC_WD_QUEUE_STATS_RX_DROPPED_PACKETS': '5',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
 def _hw_get_all_no_ranges(self, db_id, key):
     """Hardware mode without reported ranges."""
     if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
@@ -104,6 +116,22 @@ class TestPfcwd(object):
 
     def test_pfcwd_show_stats(self):
         self.executor(test_vectors.testData['pfcwd_show_stats'])
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_stats_hw_mode(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["stats"], [], obj=Db())
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_stats_hw_mode_output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_rx_only)
+    def test_pfcwd_show_stats_hw_mode_rx_only_queue_is_empty(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["stats"], [], obj=Db())
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_stats_hw_mode_rx_only_output
 
     def test_pfcwd_show_stats_single_queue(self):
         self.executor(test_vectors.testData['pfcwd_show_stats_single_queue'])
