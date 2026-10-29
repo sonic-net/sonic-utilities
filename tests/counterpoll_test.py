@@ -19,10 +19,10 @@ from .mock_tables import dbconnector
 
 import counterpoll.main as counterpoll
 
-expected_counterpoll_show = """Type                  Interval (in ms)    Status
---------------------  ------------------  --------
+expected_counterpoll_show = """Type                  Interval (in ms)    Status    Secondary Poll Factor
+--------------------  ------------------  --------  -----------------------
 QUEUE_STAT            10000               enable
-PORT_STAT             1000                enable
+PORT_STAT             1000                enable    default (120)
 PORT_BUFFER_DROP      60000               enable
 PHY                   10000               enable
 QUEUE_WATERMARK_STAT  default (60000)     enable
@@ -39,10 +39,10 @@ SWITCH_STAT           60000               enable
 LLR_STAT              10000               enable
 """
 
-expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status
---------------------  ------------------  --------
+expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status    Secondary Poll Factor
+--------------------  ------------------  --------  -----------------------
 QUEUE_STAT            10000               enable
-PORT_STAT             1000                enable
+PORT_STAT             1000                enable    default (120)
 PORT_BUFFER_DROP      60000               enable
 PHY                   10000               enable
 QUEUE_WATERMARK_STAT  default (60000)     enable
@@ -100,8 +100,7 @@ class TestCounterpoll(object):
         assert result.exit_code == 0
         port_line = next(line for line in result.output.splitlines()
                          if line.startswith("PORT_STAT"))
-        assert "1000 (Secondary: 4)" in port_line
-        assert port_line.endswith("enable")
+        assert port_line.split() == ["PORT_STAT", "1000", "enable", "4"]
 
     def test_port_buffer_drop_interval(self):
         runner = CliRunner()
