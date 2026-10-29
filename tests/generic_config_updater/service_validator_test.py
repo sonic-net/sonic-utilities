@@ -192,6 +192,13 @@ test_rsyslog_data = [
                 "10.13.14.17": {} } },
             "upd": {},
             "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
+        },
+        {
+            "old": {},
+            "upd": { "SYSLOG_SERVER": {
+                "10.0.0.5": { "protocol": "tls", "tls_profile_id": "siem-east",
+                              "tls_permitted_peers": "syslog.example.com", "port": "6514" } } },
+            "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
         }
     ]
 
@@ -488,6 +495,35 @@ class TestServiceValidator(unittest.TestCase):
                     subprocess_calls.append({"cmd": c, "rc": 0})
 
             ntp_validator(entry["old"], entry["upd"], None)
+
+        subprocess_calls = []
+        subprocess_call_index = 0
+        rc = rsyslog_validator(
+            {},
+            {"SYSLOG_SERVER": {"10.0.0.5": {"protocol": "tls"}}},
+            None,
+        )
+        self.assertFalse(rc)
+
+        # TLS with a profile but no permitted peers is rejected
+        subprocess_calls = []
+        subprocess_call_index = 0
+        rc = rsyslog_validator(
+            {},
+            {"SYSLOG_SERVER": {"10.0.0.5": {"protocol": "tls", "tls_profile_id": "siem-east"}}},
+            None,
+        )
+        self.assertFalse(rc)
+
+        # tls_permitted_peers without TLS is rejected
+        subprocess_calls = []
+        subprocess_call_index = 0
+        rc = rsyslog_validator(
+            {},
+            {"SYSLOG_SERVER": {"10.0.0.5": {"protocol": "udp", "tls_permitted_peers": "syslog.example.com"}}},
+            None,
+        )
+        self.assertFalse(rc)
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_port_speed_change_validator(self, mock_subprocess):

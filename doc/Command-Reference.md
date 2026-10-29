@@ -13830,10 +13830,18 @@ This command displays configured syslog servers.
 - Example:
   ```
   admin@sonic:~$ show syslog
-  SERVER IP    SOURCE IP    PORT    VRF
-  -----------  -----------  ------  -------
-  2.2.2.2      1.1.1.1      514     default
+  SERVER IP    SOURCE IP    PORT    VRF      PROTOCOL    TLS PROFILE ID    PERMITTED PEERS             TLS APPLIED    FAILURE REASON
+  -----------  -----------  ------  -------  ----------  ----------------  --------------------------  -------------  ----------------
+  2.2.2.2      1.1.1.1      514     default  udp         N/A               N/A                         N/A            N/A
+  10.0.0.5     N/A          6514    N/A      tls         siem-east         syslog-east.example.com     true           NONE
+  10.0.0.8     N/A          6514    N/A      tls         no-certs          syslog-nocerts.example.com  false          NO_CERTIFICATE
   ```
+
+  For `tls` servers, `TLS APPLIED` and `FAILURE REASON` come from STATE_DB `SYSLOG_SERVER|<server>`
+  (`applied_transport_security`, `failure_reason`). `FAILURE REASON` is one of `NONE`, `NO_PROFILE`,
+  `NO_PERMITTED_PEERS`, `NO_CERTIFICATE` (PEMs missing under `/etc/sonic/ssl-certs/<tls_profile_id>/`)
+  or `RSYSLOG_APPLY_FAILED`. Both columns show `N/A` for non-TLS servers, or when no state has been
+  published yet.
 
 **show syslog rate-limit-host**
 
@@ -13934,11 +13942,22 @@ Note that more that one syslog server can be added in the device.
   - _source_: syslog source IP address
   - _port_: syslog server UDP port
   - _vrf_: syslog VRF device
+  - _protocol_: transport protocol (`udp`, `tcp` or `tls`); `tls` is TCP with the rsyslog ossl stream driver
+  - _tls-profile-id_: SSL profile id whose PEMs (`ca-bundle.pem`, `cert.pem`, `key.pem`) are under `/etc/sonic/ssl-certs/<id>/`; required with `--protocol tls`, must not be `gnxi`
+  - _tls-permitted-peers_: comma-separated server certificate names the syslog server must present (DNS names, optionally with a leading wildcard such as `*.example.com`); required with `--protocol tls`. The server's certificate name is checked against this list (rsyslog `x509/name` authentication)
+    Note: with rsyslog 8.2504 and earlier, a wildcard entry (for example `*.example.com`) is matched only against the server certificate subject CN, never against its SAN DNS names, and each `*` stands for exactly one DNS label. A certificate whose host name is only in the SAN (the usual case) therefore fails with `peer name not authorized` unless the exact SAN DNS name is listed. Prefer exact names.
 
 - Example:
   ```
   admin@sonic:~$ sudo config syslog add 2.2.2.2 --source 1.1.1.1 --port 514 --vrf default
   Running command: systemctl reset-failed rsyslog-config
+  Running command: systemctl restart rsyslog-config
+  ```
+
+  TLS example (port defaults to 6514):
+  ```
+  admin@sonic:~$ sudo config syslog add 10.0.0.5 --protocol tls --tls-profile-id siem-east --tls-permitted-peers syslog-east.example.com
+  Running command: systemctl reset-failed rsyslog-config rsyslog
   Running command: systemctl restart rsyslog-config
   ```
 
