@@ -90,12 +90,12 @@ Ethernet0      drop               600                 600    disable
 Ethernet4      drop               600                 600    disable
 """
 
-pfcwd_show_config_empty_output="""\
+pfcwd_show_config_empty_output = """\
   PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ------  --------  ----------------  ------------------  ---------
 """
 
-pfcwd_show_config_invalid_port_output=(
+pfcwd_show_config_invalid_port_output = (
     "Changed polling interval to 600ms\n" + pfcwd_show_config_empty_output
 )
 
