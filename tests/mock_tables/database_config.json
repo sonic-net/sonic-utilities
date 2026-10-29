@@ -72,6 +72,11 @@
             "separator": ":",
             "instance" : "redis"
         },
+        "APPL_STATE_DB" : {
+            "id" : 14,
+            "separator": ":",
+            "instance" : "redis"
+        },
         "BMP_STATE_DB" : {
             "id" : 20,
             "separator": "|",
