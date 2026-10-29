@@ -587,7 +587,7 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["PORT"]["POLL_INTERVAL"]
 
-    def test_port_interval_help_describes_fec_flr_window(self):
+    def test_port_interval_help_describes_resulting_window(self):
         runner = CliRunner()
         result = runner.invoke(
             counterpoll.cli.commands["port"].commands["interval"],
@@ -595,7 +595,7 @@ class TestCounterpoll(object):
         )
 
         assert result.exit_code == 0
-        assert "FEC FLR window" in result.output
+        assert "resulting polling window" in result.output
         assert "secondary poll factor" in result.output
 
     def test_port_secondary_poll_factor(self):
@@ -622,7 +622,7 @@ class TestCounterpoll(object):
         )
 
         assert result.exit_code == 0
-        assert "FEC FLR window" in result.output
+        assert "resulting polling window" in result.output
         assert "default factor of 120" in result.output
         assert "default 1000-ms" in result.output
 
