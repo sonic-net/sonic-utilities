@@ -49,6 +49,8 @@
   * [Console clear commands](#console-clear-commands)
   * [Console mirror commands](#console-mirror-commands)
   * [DPU serial console utility](#dpu-serial-console-utility)
+* [Counter polling](#counter-polling)
+  * [Counter polling config commands](#counter-polling-config-commands)
 * [CRM](#crm)
   * [CRM show commands](#crm-show-commands)
 * [CMIS firmware upgrade](#cmis-firmware-upgrade)
@@ -3744,6 +3746,41 @@ Optionally, user may overwrite TTY device for experiment.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#console)
+
+## Counter polling
+
+### Counter polling config commands
+
+**counterpoll port secondary-poll-factor**
+
+This command sets the secondary poll factor used to determine the resulting
+polling window for port counters. The factor must be a positive integer greater
+than or equal to 1.
+
+The values are related as follows:
+
+```
+polling window = port polling interval x secondary poll factor
+```
+
+The default factor is 120, which produces a 120-second polling window with the
+default 1000-ms port polling interval. Changing the port polling interval
+changes the resulting polling window proportionally.
+
+- Usage:
+  ```
+  counterpoll port secondary-poll-factor <factor>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo counterpoll port secondary-poll-factor 120
+  ```
+
+The configured factor is displayed in the `Secondary Poll Factor` column of
+`counterpoll show`.
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#counter-polling)
 
 ## CRM
 
