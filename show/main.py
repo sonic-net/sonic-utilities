@@ -783,7 +783,6 @@ def stats(namespace, display, verbose):
 
     run_command(cmd, display_cmd=verbose)
 
-
 #
 # 'watermark' group ("show watermark telemetry interval")
 #

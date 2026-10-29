@@ -61,11 +61,8 @@ Ethernet4      drop               200                 200    disable
 Ethernet8      drop               600                 600    disable
 """
 
-# HW mode: per-port entries use unscaled DEFAULT_*_TIME (200ms) regardless of
-# port count; PFC_WD|GLOBAL is NOT written in HW mode (orchagent rejects it),
-# so POLL_INTERVAL stays at the fixture's pre-existing 600ms.
+# HW mode: unscaled 200 ms on every port; PFC_WD|GLOBAL is not written or shown
 pfcwd_show_start_default_hw_mode = """\
-Changed polling interval to 600ms
 Recovery mode: hardware
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
@@ -424,10 +421,6 @@ Ethernet-BP256      drop               200                 200    disable
 
 # Test vectors for show pfcwd config in hardware recovery mode
 pfcwd_show_config_hw_mode = """\
-Changed polling interval to 199ms on asic0
-BIG_RED_SWITCH status is enable on asic0
-Changed polling interval to 199ms on asic1
-BIG_RED_SWITCH status is enable on asic1
 Recovery mode: hardware
           PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 --------------  --------  ----------------  ------------------  ---------
@@ -437,12 +430,4 @@ Recovery mode: hardware
   Ethernet-BP4      drop               200                 200    disable
 Ethernet-BP256      drop               200                 200    disable
 Ethernet-BP260      drop               200                 200    disable
-"""
-
-# Test vectors for global action validation
-pfcwd_action_mismatch_multiple_ports = """\
-Error: Action mismatch. Hardware PFC watchdog requires all ports to use the same action.
-Current global action: drop
-Requested action: forward
-Please use action 'drop' or remove all existing ports first.
 """

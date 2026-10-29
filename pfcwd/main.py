@@ -220,12 +220,17 @@ class PfcwdCli(object):
         if hw_mode:
             self.is_hardware_mode = True
 
-        if 'poll_interval' not in self.json_globals:
-            glob_entry = self.config_db.get_entry(
-                CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
-            )
-            self.json_globals['poll_interval'] = glob_entry.get('POLL_INTERVAL')
-            self.json_globals['big_red_switch'] = glob_entry.get('BIG_RED_SWITCH')
+        glob_entry = self.config_db.get_entry(
+            CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
+        )
+        for key, field in (('poll_interval', 'POLL_INTERVAL'),
+                           ('big_red_switch', 'BIG_RED_SWITCH')):
+            if self.multi_asic.is_multi_asic:
+                # PFC_WD|GLOBAL is per ASIC
+                self.json_globals.setdefault(key, {})[
+                    self.multi_asic.current_namespace] = glob_entry.get(field)
+            else:
+                self.json_globals[key] = glob_entry.get(field)
         if hw_mode and 'hw_detection_time_ms' not in self.json_globals:
             try:
                 self.json_globals['hw_detection_time_ms'] = {
@@ -282,7 +287,9 @@ class PfcwdCli(object):
             "" if current_ns is None or current_ns == "" else " on {}".format(
                 current_ns
             )
-        if poll_interval is not None and not self.json_output_mode:
+        # The hardware watchdog ignores PFC_WD|GLOBAL
+        show_global = not self.json_output_mode and not hw_mode
+        if poll_interval is not None and show_global:
             click.echo(
                 "Changed polling interval to {}ms{}".format(
                     poll_interval, asic_namesapce
@@ -293,7 +300,7 @@ class PfcwdCli(object):
             CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
         ).get('BIG_RED_SWITCH')
 
-        if big_red_switch is not None and not self.json_output_mode:
+        if big_red_switch is not None and show_global:
             click.echo("BIG_RED_SWITCH status is {}{}".format(
                 big_red_switch, asic_namesapce
             ))
@@ -316,9 +323,7 @@ class PfcwdCli(object):
             click.echo(json.dumps(result, indent=4, sort_keys=True))
             return
         if self.is_hardware_mode:
-            # The only difference from software mode: name the recovery mode.
-            # Per-port hardware values stay in --json so the columns, and the
-            # parsers that depend on them, are untouched.
+            # Hardware values are in --json only, so the table columns are unchanged
             click.echo("Recovery mode: hardware")
         click.echo(tabulate(
             self.table, CONFIG_HEADER, stralign='right', numalign='right',
@@ -407,58 +412,39 @@ class PfcwdCli(object):
         if pfc_stat_history:
             pfcwd_info["pfc_stat_history"] = "enable"
 
-        # Validate against hardware limits if in HW recovery mode
         hw_limits = self.get_hw_recovery_limits()
-        if hw_limits:
-            if not (hw_limits['detection_min'] <= detection_time <= hw_limits['detection_max']):
-                click.echo(
-                    "Error: detection_time {}ms is outside hardware supported "
-                    "range [{}-{}]ms".format(
-                        detection_time,
-                        hw_limits['detection_min'],
-                        hw_limits['detection_max']
-                    ),
-                    err=True
-                )
-                sys.exit(1)
+        if hw_limits is not None:
+            for name, value in (('detection', detection_time),
+                                ('restoration', pfcwd_info['restoration_time'])):
+                low = hw_limits[name + '_min']
+                high = hw_limits[name + '_max']
+                if low is None or high is None:
+                    continue
+                if not low <= value <= high:
+                    click.echo(
+                        "Error: {}_time {}ms is outside hardware supported "
+                        "range [{}-{}]ms".format(name, value, low, high),
+                        err=True
+                    )
+                    sys.exit(1)
 
-            if not (hw_limits['restoration_min'] <= restoration_time <= hw_limits['restoration_max']):
-                click.echo(
-                    "Error: restoration_time {}ms is outside hardware supported "
-                    "range [{}-{}]ms".format(
-                        restoration_time,
-                        hw_limits['restoration_min'],
-                        hw_limits['restoration_max']
-                    ),
-                    err=True
-                )
-                sys.exit(1)
-
-            # Validate action consistency for hardware mode
             if action:
                 current_global_action = self.get_hw_global_action()
                 if current_global_action and current_global_action != action:
-                    # Get all currently configured ports
+                    # The hardware uses one action for all ports
                     pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
                     configured_ports = set(entry for entry in pfcwd_table if 'Ethernet' in entry)
 
-                    # Resolve which ports will be reconfigured
                     all_ports = get_all_ports(
                         self.db, self.multi_asic.current_namespace,
                         self.multi_asic.display_option
                     )
 
                     if len(ports) == 0 or "all" in ports:
-                        # Reconfiguring all ports - this is allowed
                         ports_being_reconfigured = set(all_ports)
                     else:
-                        # Specific ports being reconfigured
                         ports_being_reconfigured = set(ports)
-
-                    # Ports that will remain with old action (not being reconfigured)
                     ports_with_old_action = configured_ports - ports_being_reconfigured
-
-                    # Block if there are other ports that would remain with different action
                     if len(ports_with_old_action) > 0:
                         click.echo(
                             "Error: Action mismatch. Hardware PFC watchdog requires all ports "
@@ -481,43 +467,40 @@ class PfcwdCli(object):
         if hw_limits:
             click.echo("Configuration submitted. Run 'show pfcwd config' to verify hardware programming.")
 
-    def get_hw_recovery_limits(self):
-        """Get hardware recovery time limits from STATE_DB.
-
-        Returns a dict with limits if hardware mode is enabled, None otherwise.
-        """
-        entry = self.db.get_all(self.db.STATE_DB, 'PFC_WD_STATE_TABLE|PFC_WD')
-        if not entry:
-            return None
-
+    def get_hw_state(self):
+        """Return the STATE_DB PFC_WD_STATE_TABLE|PFC_WD entry in hardware mode, else None."""
+        entry = self.db.get_all(
+            self.db.STATE_DB, STATE_DB_PFC_WD_STATE_TABLE + '|PFC_WD'
+        ) or {}
         if entry.get('RECOVERY_MECHANISM', '').upper() != 'HARDWARE':
             return None
+        return entry
 
-        try:
-            return {
-                'detection_min': int(entry.get('DETECTION_TIME_MIN', 0)),
-                'detection_max': int(entry.get('DETECTION_TIME_MAX', 0)),
-                'restoration_min': int(entry.get('RESTORATION_TIME_MIN', 0)),
-                'restoration_max': int(entry.get('RESTORATION_TIME_MAX', 0)),
-            }
-        except (ValueError, TypeError):
+    def get_hw_recovery_limits(self):
+        """Return the hardware timer limits in hardware mode, else None; an unreported limit is None."""
+        entry = self.get_hw_state()
+        if entry is None:
             return None
+
+        def limit(field):
+            try:
+                return int(entry[field])
+            except (KeyError, TypeError, ValueError):
+                return None
+
+        return {
+            'detection_min': limit('DETECTION_TIME_MIN'),
+            'detection_max': limit('DETECTION_TIME_MAX'),
+            'restoration_min': limit('RESTORATION_TIME_MIN'),
+            'restoration_max': limit('RESTORATION_TIME_MAX'),
+        }
 
     def get_hw_global_action(self):
-        """Get current global action from STATE_DB for hardware mode.
-
-        Returns the current action string if hardware mode is enabled and action is set,
-        None otherwise (including when action is UNKNOWN or empty).
-        """
-        entry = self.db.get_all(self.db.STATE_DB, 'PFC_WD_STATE_TABLE|PFC_WD')
-        if not entry:
+        """Return the action programmed in hardware, or None if unknown or not in hardware mode."""
+        entry = self.get_hw_state()
+        if entry is None:
             return None
-
-        if entry.get('RECOVERY_MECHANISM', '').upper() != 'HARDWARE':
-            return None
-
         action = entry.get('DLR_PACKET_ACTION', '')
-        # Return None for UNKNOWN or empty, otherwise return the action in lowercase
         if action.upper() in ['UNKNOWN', '']:
             return None
         return action.lower()
@@ -573,14 +556,7 @@ class PfcwdCli(object):
             )
 
     def get_stormed_queues(self, ports):
-        """Get list of queues in stormed state for given ports.
-
-        Args:
-            ports: List of port names to check
-
-        Returns:
-            List of queue names (port:queue_index) that are in stormed state
-        """
+        """Return the queues (port:index) of the given ports that are stormed."""
         stormed_queues = []
 
         all_queues = get_all_queues(
@@ -625,7 +601,6 @@ class PfcwdCli(object):
         if len(ports) == 0:
             ports = all_ports
 
-        # For hardware mode, check if any queues are in stormed state
         if self.get_hw_recovery_limits() is not None:
             stormed_queues = self.get_stormed_queues(ports)
             if stormed_queues:
@@ -682,9 +657,7 @@ class PfcwdCli(object):
 
         hw_recovery_limits = self.get_hw_recovery_limits()
 
-        # In hardware mode the per-port timers are programmed on dedicated HW
-        # resources, so the port-count scaling used in software mode does not
-        # apply. Use the baseline DEFAULT_*_TIME on every port.
+        # Hardware timers are per port, so they are not scaled by port count
         if hw_recovery_limits is not None:
             detection_time = DEFAULT_DETECTION_TIME
             restoration_time = DEFAULT_RESTORATION_TIME
@@ -707,16 +680,20 @@ class PfcwdCli(object):
         for port in active_ports:
             self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite=True)
 
-        # HW PFCWD orchagent rejects writes to PFC_WD|GLOBAL with task_invalid_entry
-        # ('GLOBAL configuration is not supported for hardware-based PFC watchdog').
-        # Skip the GLOBAL write in HW mode -- POLL_INTERVAL is irrelevant when HW
-        # timers run on dedicated SAI resources.
+        # The hardware watchdog ignores PFC_WD|GLOBAL
         if hw_recovery_limits is None:
             pfcwd_info = {}
             pfcwd_info['POLL_INTERVAL'] = poll_interval
             self.config_db.mod_entry(
                 CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
             )
+        else:
+            # Drop a polling interval left by the software watchdog
+            global_entry = self.config_db.get_entry(CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL")
+            if global_entry.pop('POLL_INTERVAL', None) is not None:
+                self.config_db.set_entry(
+                    CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", global_entry or None
+                )
 
     @multi_asic_util.run_on_multi_asic
     def counter_poll(self, counter_poll):
@@ -730,6 +707,14 @@ class PfcwdCli(object):
     def big_red_switch(self, big_red_switch):
         if os.geteuid() != 0:
             sys.exit("Root privileges are required for this operation")
+
+        if self.get_hw_recovery_limits() is not None:
+            click.echo(
+                "Error: This command is not supported with hardware based PFC watchdog",
+                err=True
+            )
+            sys.exit(1)
+
         pfcwd_info = {}
         if big_red_switch is not None:
             pfcwd_info['BIG_RED_SWITCH'] = big_red_switch

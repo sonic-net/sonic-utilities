@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import sys
 from unittest.mock import patch, MagicMock
@@ -11,18 +12,11 @@ from utilities_common.db import Db
 from .pfcwd_input import pfcwd_test_vectors as test_vectors
 
 
-# Override only the PFC_WD_STATE_TABLE global entry for hardware-mode tests
 _orig_sonic_get_all = swsscommon.SonicV2Connector.get_all
 
 
 def _hw_get_all(self, db_id, key):
-    """
-    Test-only override for STATE_DB hardware mode entries.
-
-    Returns hardware mode metadata and per-port hardware state matching
-    the multi-asic test environment where ports are configured with
-    200ms detection/restoration times.
-    """
+    """Hardware mode, with every configured port programmed at 200 ms."""
     if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
         return {
             'RECOVERY_MECHANISM': 'HARDWARE',
@@ -33,9 +27,7 @@ def _hw_get_all(self, db_id, key):
             'DLR_PACKET_ACTION': 'drop',
         }
 
-    # Return per-port hardware state for PFC_WD_HW_STATE entries
     if db_id == 'STATE_DB' and key.startswith('PFC_WD_HW_STATE|'):
-        # Simulate orchagent having programmed the hardware for all configured ports
         return {
             'status': 'configured',
             'hw_detection_time': '200',
@@ -43,6 +35,27 @@ def _hw_get_all(self, db_id, key):
         }
 
     return _orig_sonic_get_all(self, db_id, key)
+
+
+def _hw_get_all_narrow(self, db_id, key):
+    """Hardware mode with ranges narrower than the CLI's own limits."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '100',
+            'DETECTION_TIME_MAX': '1500',
+            'RESTORATION_TIME_MIN': '100',
+            'RESTORATION_TIME_MAX': '1000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_no_ranges(self, db_id, key):
+    """Hardware mode where orchagent could not read the ranges from SAI."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {'RECOVERY_MECHANISM': 'HARDWARE'}
+    return _hw_get_all(self, db_id, key)
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -685,13 +698,7 @@ class TestPfcwd(object):
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     @patch('pfcwd.main.os.geteuid', MagicMock(return_value=0))
     def test_pfcwd_stop_hardware_mode_stormed_blocked(self):
-        """pfcwd stop in hardware mode is blocked while any queue is stormed.
-
-        Single-asic mock COUNTERS_DB has Ethernet0:3 and Ethernet8:4 in stormed
-        state (see pfcwd_show_stats_output vector), so stop without arguments
-        (i.e. stop all ports) must fail with exit 1 and list both stormed
-        queues in the error message.
-        """
+        """HW mode: stop is refused while Ethernet0:3 and Ethernet8:4 are stormed."""
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
@@ -710,12 +717,7 @@ class TestPfcwd(object):
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     @patch('pfcwd.main.os.geteuid', MagicMock(return_value=0))
     def test_pfcwd_stop_hardware_mode_no_storm(self):
-        """pfcwd stop in hardware mode succeeds for ports with no stormed queues.
-
-        Ethernet4:3 is operational in the single-asic mock COUNTERS_DB;
-        stopping Ethernet4 in HW mode should pass the storm check and complete
-        with exit 0.
-        """
+        """HW mode: stop succeeds for Ethernet4, which has no stormed queue."""
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
@@ -731,16 +733,7 @@ class TestPfcwd(object):
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     @patch('pfcwd.main.os')
     def test_pfcwd_start_default_hardware_mode(self, mock_os):
-        """In hardware mode, start_default installs unscaled DEFAULT_*_TIME regardless
-        of port count, and does not touch PFC_WD|GLOBAL.
-
-        With 512 ports, software mode would scale detection/restoration to 3200ms and
-        cap poll_interval at 1000ms (multiply=16). Hardware mode skips the scaling
-        because the per-port timers run on dedicated HW resources, and skips the
-        GLOBAL write entirely because the HW PFCWD orchagent rejects writes to
-        PFC_WD|GLOBAL. POLL_INTERVAL therefore stays at the fixture's pre-existing
-        600ms.
-        """
+        """HW mode: unscaled 200 ms defaults on 512 ports and no PFC_WD|GLOBAL write."""
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
@@ -767,6 +760,28 @@ class TestPfcwd(object):
         )
         assert result.exit_code == 0
         assert result.output == test_vectors.pfcwd_show_start_default_hw_mode
+        # the software watchdog's POLL_INTERVAL is removed
+        assert 'POLL_INTERVAL' not in db.cfgdb.get_entry("PFC_WD", "GLOBAL")
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_hardware_mode_keeps_big_red_switch(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        db.cfgdb.set_entry("PFC_WD", "GLOBAL", {'POLL_INTERVAL': '600', 'BIG_RED_SWITCH': 'enable'})
+        result = CliRunner().invoke(pfcwd.cli.commands["start_default"], [], obj=db)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL") == {'BIG_RED_SWITCH': 'enable'}
+
+    def test_pfcwd_show_config_json_single_asic(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["config"], ["--json"], obj=Db())
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "software"
+        assert data["poll_interval"] == "600"
+        assert data["big_red_switch"] is None
 
     @classmethod
     def teardown_class(cls):
@@ -1215,9 +1230,7 @@ class TestMultiAsicPfcwdShow(object):
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     def test_pfcwd_show_config_hardware_mode(self):
-        """HW mode: the config table is identical to software mode; the only
-        difference is the recovery mode line above it. Per-port hardware
-        values are reported by --json, not by new columns."""
+        """HW mode: the software-mode table under a recovery mode line."""
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
@@ -1249,8 +1262,9 @@ class TestMultiAsicPfcwdShow(object):
         assert data["mode"] == "hardware"
         assert data["hw_detection_time_ms"] == {"min": 100, "max": 5000}
         assert data["hw_restoration_time_ms"] == {"min": 100, "max": 60000}
-        assert data["poll_interval"] == "199"
-        assert data["big_red_switch"] == "enable"
+        # PFC_WD|GLOBAL is per ASIC
+        assert data["poll_interval"] == {"asic0": "199", "asic1": "199"}
+        assert data["big_red_switch"] == {"asic0": "enable", "asic1": "enable"}
         port = data["ports"]["Ethernet0"]
         assert port["action"] == "drop"
         assert port["detection_time"] == "200"
@@ -1277,15 +1291,10 @@ class TestMultiAsicPfcwdShow(object):
         assert data["mode"] == "software"
         assert "hw_detection_time_ms" not in data
         assert "hw_restoration_time_ms" not in data
-        assert data["poll_interval"] == "199"
+        assert data["poll_interval"] == {"asic0": "199", "asic1": "199"}
         for port_cfg in data["ports"].values():
             assert "hw_status" not in port_cfg
             assert "hw_detection_time" not in port_cfg
-
-    def test_pfcwd_status_command_removed(self):
-        """The standalone status CLI is gone; info lives in show config."""
-        import pfcwd.main as pfcwd
-        assert 'status' not in pfcwd.cli.commands['show'].commands
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     @patch('pfcwd.main.os')
@@ -1304,19 +1313,17 @@ class TestMultiAsicPfcwdShow(object):
         print(result.output)
         assert result.exit_code == 0
         assert "Run 'show pfcwd config' to verify hardware programming" in result.output
-        assert "show pfcwd status" not in result.output
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     @patch('pfcwd.main.os')
     def test_pfcwd_start_action_override_multiple_ports_blocked(self, mock_os):
-        """Test that action override is blocked when multiple ports are configured"""
+        """HW mode: a different action is refused while other ports keep the current one."""
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
 
         mock_os.geteuid.return_value = 0
 
-        # First, configure Ethernet0 with 'drop' action
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             ["--action", "drop", "--restoration-time", "600", "Ethernet0", "600"],
@@ -1325,7 +1332,6 @@ class TestMultiAsicPfcwdShow(object):
         print(result.output)
         assert result.exit_code == 0
 
-        # Configure Ethernet4 with 'drop' action
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             ["--action", "drop", "--restoration-time", "600", "Ethernet4", "600"],
@@ -1334,7 +1340,6 @@ class TestMultiAsicPfcwdShow(object):
         print(result.output)
         assert result.exit_code == 0
 
-        # Now try to configure Ethernet-BP0 with 'forward' action - should fail
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             ["--action", "forward", "--restoration-time", "600", "Ethernet-BP0", "600"],
@@ -1345,6 +1350,79 @@ class TestMultiAsicPfcwdShow(object):
         assert "Error: Action mismatch" in result.output
         assert "Current global action: drop" in result.output
         assert "Requested action: forward" in result.output
+
+    def _start(self, args):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["start"], args, obj=Db())
+        print(result.output)
+        return result
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_default_restoration(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "Ethernet0", "600"])
+        assert result.exit_code == 0
+        assert "default to 2 times detection time: 1200 ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_default_restoration_out_of_range(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "Ethernet0", "600"])
+        assert result.exit_code == 1
+        assert "restoration_time 1200ms is outside hardware supported range [100-1000]ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_detection_out_of_range(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "600", "Ethernet0", "1600"])
+        assert result.exit_code == 1
+        assert "detection_time 1600ms is outside hardware supported range [100-1500]ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_restoration_out_of_range(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "1200", "Ethernet0", "600"])
+        assert result.exit_code == 1
+        assert "restoration_time 1200ms is outside hardware supported range [100-1000]ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_no_ranges)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_without_ranges(self, mock_os):
+        # orchagent skips the range check when SAI did not report the ranges
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "1200", "Ethernet0", "1600"])
+        assert result.exit_code == 0
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_action_change_on_all_ports(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "forward", "--restoration-time", "600", "all", "600"])
+        assert result.exit_code == 0
+        assert "Action mismatch" not in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_interval_hw_mode_refused(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        result = CliRunner().invoke(pfcwd.cli.commands["interval"], ["200"], obj=Db())
+        assert result.exit_code == 1
+        assert "not supported with hardware based PFC watchdog" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_big_red_switch_hw_mode_refused(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        result = CliRunner().invoke(pfcwd.cli.commands["big_red_switch"], ["enable"], obj=db)
+        assert result.exit_code == 1
+        assert "not supported with hardware based PFC watchdog" in result.output
 
     @classmethod
     def teardown_class(cls):

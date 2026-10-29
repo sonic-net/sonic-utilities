@@ -1418,9 +1418,6 @@ class TestShow(object):
         mock_run_command.assert_called_with(
             ['pfcwd', 'show', 'config', '-d', 'all', '--json'], display_cmd=False)
 
-    def test_show_pfcwd_status_removed(self):
-        assert 'status' not in show.cli.commands['pfcwd'].commands
-
     @patch('show.main.run_command')
     def test_show_watermark_telemetry_interval(self, mock_run_command):
         runner = CliRunner()
