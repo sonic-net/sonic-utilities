@@ -121,10 +121,40 @@ pfcwd_show_stats_invalid_queue_output="""\
 -------  --------  -------------------------  ------------  ------------  -----------------  -----------------
 """
 
+show_pfcwd_history_masic_all = (
+    "         QUEUE    #                     DETECTED                   "
+    "  RESTORED    DURATION(ms)    TX/TX-DROP    RX/RX-DROP\n"
+    "--------------  ---  ---------------------------"
+    "  ---------------------------  --------------  ------------  ------------\n"
+    "Ethernet-BP0:3    1  2025-10-20T22:41:40.000000Z"
+    "  2025-10-20T22:41:40.100000Z             100          10/5         20/15\n"
+    "   Ethernet0:3    1  2025-10-20T22:40:00.000000Z"
+    "  2025-10-20T22:40:00.500000Z             500      1000/900       800/700\n"
+)
+
 pfc_is_not_enabled = "SKIPPED: PFC is not enabled on port: Ethernet8\n"
 pfc_is_not_enabled_masic = "SKIPPED: PFC is not enabled on port: Ethernet-BP260\n"
 
+# "show stats --history": 5 most recent of the 7 valid storms in the mock STATE_DB,
+# newest first. Ethernet0:3 #1 is open, Ethernet4:3 #2 has no duration/packet fields,
+# Ethernet8:4 #1/#2 fall below the cap; junk fields and keys are skipped.
+pfcwd_show_history_output = """\
+      QUEUE    #                     DETECTED                     RESTORED    DURATION(ms)    TX/TX-DROP    RX/RX-DROP
+-----------  ---  ---------------------------  ---------------------------  --------------  ------------  ------------
+Ethernet0:3    1  2025-10-21T03:33:49.123456Z                            -               -           -/-           -/-
+Ethernet4:3    2  2025-10-21T02:26:40.000000Z  2025-10-21T02:26:40.100000Z               -           -/-           -/-
+Ethernet8:4    4  2025-10-21T02:00:00.000000Z  2025-10-21T02:00:00.120000Z             120         80/80         40/40
+Ethernet8:4    3  2025-10-21T01:43:20.000000Z  2025-10-21T01:43:20.150000Z             150       100/100         50/50
+Ethernet4:3    1  2025-10-21T01:26:40.000000Z  2025-10-21T01:26:40.475000Z             475     1200/1200       980/980
+"""
+
 testData = {
+             'pfcwd_show_history': [
+                 {'cmd': ['show', 'stats'],
+                  'args': ['--history'],
+                  'rc': 0,
+                  'rc_output': pfcwd_show_history_output}
+             ],
              'pfcwd_show_config' :  [ {'cmd' : ['show', 'config'],
                                        'args': [],
                                        'rc': 0,
@@ -407,4 +437,10 @@ BIG_RED_SWITCH status is enable on asic1
      Ethernet0      drop               200                 200    disable
   Ethernet-BP0      drop               200                 200    disable
 Ethernet-BP256      drop               200                 200    disable
+"""
+
+show_pfcwd_history_masic = """\
+      QUEUE    #                     DETECTED                     RESTORED    DURATION(ms)    TX/TX-DROP    RX/RX-DROP
+-----------  ---  ---------------------------  ---------------------------  --------------  ------------  ------------
+Ethernet0:3    1  2025-10-20T22:40:00.000000Z  2025-10-20T22:40:00.500000Z             500      1000/900       800/700
 """
