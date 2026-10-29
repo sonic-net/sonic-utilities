@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import IO, Optional
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
-                    DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging
+                    DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging, \
+                    PathAddressing, rewrite_patch_emptying_tables, replace_rewritten_table_changes, \
+                    snapshot_table_keys, table_level_remove_tables
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
@@ -103,7 +105,8 @@ class PatchApplier:
         self.patchsorter = patchsorter if patchsorter is not None else StrictPatchSorter(self.config_wrapper, self.patch_wrapper)
         self.changeapplier = changeapplier if changeapplier is not None else ChangeApplier(scope=self.scope)
 
-    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None,
+              rewrite_emptying_tables=False):
         scope = self.scope if self.scope else HOST_NAMESPACE
         self.logger.log_notice(f"{scope}: Patch application starting.")
         self.logger.log_notice(f"{scope}: Patch: {patch}")
@@ -116,9 +119,52 @@ class PatchApplier:
         self.logger.log_notice(f"{scope}: simulating the target full config after applying the patch.")
         target_config = self.patch_wrapper.simulate_config_db_patch(patch, old_config)
 
-        # Validate all JsonPatch operations on specified fields
+        # Validate all JsonPatch operations on specified fields using the original
+        # simulated transition. Rewriting emptying key-removes to a table-level
+        # remove first would drop protected child paths (for example
+        # /LOOPBACK_INTERFACE/Loopback0) from the diff used by this check.
         self.logger.log_notice(f"{scope}: validating all JsonPatch operations are permitted on the specified fields")
         self.config_wrapper.validate_field_operation(old_config, target_config)
+
+        # ConfigDB cannot store empty tables. apply-patch may emit per-key
+        # removes (for example /VLAN/Vlan10) without knowing they delete the last
+        # remaining entries. Rewrite is off by default so config replace /
+        # rollback keep EmptyTableError before any write. apply-patch opts in
+        # with rewrite_emptying_tables=True.
+        table_key_snapshot = None
+        empty_tables = self.config_wrapper.get_empty_tables(target_config)
+        if empty_tables and rewrite_emptying_tables:
+            rewritten_patch = rewrite_patch_emptying_tables(
+                patch, old_config, empty_tables, PathAddressing())
+            if [dict(op) for op in rewritten_patch] != [dict(op) for op in patch]:
+                # remove /TABLE deletes every live key. ConfigLock is a no-op, so
+                # re-read ConfigDB and only rewrite tables that still empty.
+                # Capture those keys and re-check them in ChangeApplier against
+                # the same ConfigDB read used for the write.
+                live_config = self.config_wrapper.get_config_db_as_json()
+                live_target = self.patch_wrapper.simulate_config_db_patch(patch, live_config)
+                live_empty = set(self.config_wrapper.get_empty_tables(live_target))
+                still_empty = [table for table in empty_tables if table in live_empty]
+                if still_empty:
+                    rewritten_patch = rewrite_patch_emptying_tables(
+                        patch, live_config, still_empty, PathAddressing())
+                    if [dict(op) for op in rewritten_patch] != [dict(op) for op in patch]:
+                        empty_tables_txt = ", ".join(still_empty)
+                        self.logger.log_notice(
+                            f"{scope}: key-level removes would empty table"
+                            f"{'s' if len(still_empty) != 1 else ''} {empty_tables_txt}; "
+                            f"rewriting to table-level remove. Rewritten patch: {rewritten_patch}")
+                        patch = rewritten_patch
+                        target_config = self.patch_wrapper.simulate_config_db_patch(
+                            patch, live_config)
+                        rewritten_tables = table_level_remove_tables(
+                            rewritten_patch, still_empty)
+                        table_key_snapshot = snapshot_table_keys(
+                            live_config, rewritten_tables)
+                    else:
+                        target_config = live_target
+                else:
+                    target_config = live_target
 
         # Validate target config does not have empty tables since they do not show up in ConfigDb
         self.logger.log_notice(f"""{scope}: validating target config does not have empty tables,
@@ -141,13 +187,29 @@ class PatchApplier:
         self.logger.log_notice(f"The {scope} patch was converted into {changes_len} " \
                           f"change{'s' if changes_len != 1 else ''}{':' if changes_len > 0 else '.'}")
 
-        # Apply changes in order
-        self.logger.log_notice(f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} " \
-                               f"in order{':' if changes_len > 0 else '.'}")
+        # Apply changes in sorter order. A rewritten table is one remove /TABLE
+        # at the last sorter step that removes it or its keys, so prerequisites
+        # such as admin-down and leafref removal run first. That remove is
+        # checked against the same ConfigDB read used for the write.
         current_config = old_config
-        for change in changes:
+        if table_key_snapshot:
+            self.logger.log_notice(
+                f"{scope}: applying rewritten table-level remove atomically "
+                f"in the sorted sequence.")
+            steps = replace_rewritten_table_changes(
+                changes, table_key_snapshot, PathAddressing())
+        else:
+            self.logger.log_notice(
+                f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} "
+                f"in order{':' if changes_len > 0 else '.'}")
+            steps = [(change, None) for change in changes]
+        for change, snapshot in steps:
             self.logger.log_notice(f"  * {change}")
-            current_config = self.changeapplier.apply(current_config, change)
+            if snapshot:
+                current_config = self.changeapplier.apply(
+                    current_config, change, table_key_snapshot=snapshot)
+            else:
+                current_config = self.changeapplier.apply(current_config, change)
 
         # Validate config updated successfully
         self.logger.log_notice(f"{scope}: verifying patch updates are reflected on ConfigDB.")
@@ -422,8 +484,11 @@ class Decorator(PatchApplier, ConfigReplacer, FileSystemConfigRollbacker):
         self.decorated_config_replacer = decorated_config_replacer
         self.decorated_config_rollbacker = decorated_config_rollbacker
 
-    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
-        self.decorated_patch_applier.apply(patch, sort, trace_io=trace_io)
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None,
+              rewrite_emptying_tables=False):
+        self.decorated_patch_applier.apply(
+            patch, sort, trace_io=trace_io,
+            rewrite_emptying_tables=rewrite_emptying_tables)
 
     def replace(self, target_config, trace_io: Optional[IO] = None):
         self.decorated_config_replacer.replace(target_config, trace_io=trace_io)
@@ -453,9 +518,12 @@ class SonicYangDecorator(Decorator):
         self.patch_wrapper = patch_wrapper
         self.config_wrapper = config_wrapper
 
-    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None,
+              rewrite_emptying_tables=False):
         config_db_patch = self.patch_wrapper.convert_sonic_yang_patch_to_config_db_patch(patch)
-        Decorator.apply(self, config_db_patch, sort, trace_io=trace_io)
+        Decorator.apply(
+            self, config_db_patch, sort, trace_io=trace_io,
+            rewrite_emptying_tables=rewrite_emptying_tables)
 
     def replace(self, target_config, trace_io: Optional[IO] = None):
         config_db_target_config = self.config_wrapper.convert_sonic_yang_to_config_db(target_config)
@@ -476,8 +544,11 @@ class ConfigLockDecorator(Decorator):
                            scope=scope)
         self.config_lock = config_lock
 
-    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
-        self.execute_write_action(Decorator.apply, self, patch, sort, trace_io=trace_io)
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None,
+              rewrite_emptying_tables=False):
+        self.execute_write_action(
+            Decorator.apply, self, patch, sort, trace_io=trace_io,
+            rewrite_emptying_tables=rewrite_emptying_tables)
 
     def replace(self, target_config, trace_io: Optional[IO] = None):
         self.execute_write_action(Decorator.replace, self, target_config, trace_io=trace_io)
@@ -656,7 +727,8 @@ class GenericUpdater:
             ignore_non_yang_tables,
             ignore_paths,
         )
-        patch_applier.apply(patch, sort, trace_io=trace_io)
+        patch_applier.apply(patch, sort, trace_io=trace_io,
+                            rewrite_emptying_tables=True)
 
     def replace(
         self,
