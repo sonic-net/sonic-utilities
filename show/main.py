@@ -768,7 +768,8 @@ def config(namespace, display, json_output, verbose):
     if json_output:
         cmd += ['--json']
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
