@@ -754,7 +754,6 @@ class RemoveCreateOnlyDependencyMoveValidator:
         # Note: group is not used by this validator
         current_config = diff.current_config
         target_config = diff.target_config # Final config after applying whole patch
-        reload_config = True
 
         processed_tables = set()
         for path in self.create_only_filter.get_paths(current_config):
@@ -785,17 +784,12 @@ class RemoveCreateOnlyDependencyMoveValidator:
                     continue
 
                 if not self._validate_member(tokens, member_name,
-                                             current_config, target_config, simulated_config,
-                                             reload_config=reload_config):
+                                             current_config, target_config, simulated_config):
                     return False, None
-
-                # After first call, no need to reload again
-                reload_config = False
 
         return True, None
 
-    def _validate_member(self, tokens, member_name, current_config, target_config, simulated_config,
-                         reload_config: bool = True):
+    def _validate_member(self, tokens, member_name, current_config, target_config, simulated_config):
         table_to_check, create_only_field = tokens[0], tokens[-1]
 
         current_field = self._get_create_only_field(
@@ -824,8 +818,7 @@ class RemoveCreateOnlyDependencyMoveValidator:
 
         member_path = f"/{table_to_check}/{member_name}"
         try:
-            ref_paths = self.path_addressing.find_ref_paths(
-                member_path, simulated_config, reload_config=reload_config)
+            ref_paths = self.path_addressing.find_ref_paths(member_path, simulated_config)
         except (ValueError, KeyError) as e:
             # An unresolvable or malformed reference against the simulated intermediate config
             # raises here. The motivating case: a create-only field change (e.g. a PORT breakout
@@ -988,26 +981,24 @@ class NoDependencyMoveValidator:
         self.logger = genericUpdaterLogging.get_logger(title="Patch Sorter - NoDependency")
 
     def validate(self, group: JsonMoveGroup, diff, simulated_config) -> Tuple[bool, Optional[str]]:
-        reload_config = True
         # Note: all moves in a group are guaranteed to be the same operation type
         for move in group:
-            if not self.__validate_move(move, diff, simulated_config, reload_config=reload_config):
+            if not self.__validate_move(move, diff, simulated_config):
                 return False, None
-            reload_config = False
         return True, None
 
-    def __validate_move(self, move, diff, simulated_config, reload_config: bool = True):
+    def __validate_move(self, move, diff, simulated_config):
         operation_type = move.op_type
         path = move.path
 
         if operation_type == OperationType.ADD:
             # For add operation, we check the simulated config has no dependencies between nodes under the added path
-            if not self._validate_paths_config([path], simulated_config, reload_config,
+            if not self._validate_paths_config([path], simulated_config,
                                                reject_on_unresolvable_ref=True):
                 return False
         elif operation_type == OperationType.REMOVE:
             # For remove operation, we check the current config has no dependencies between nodes under the removed path
-            if not self._validate_paths_config([path], diff.current_config, reload_config):
+            if not self._validate_paths_config([path], diff.current_config):
                 return False
         elif operation_type == OperationType.REPLACE:
             if not self._validate_replace(move, diff, simulated_config):
@@ -1054,11 +1045,11 @@ class NoDependencyMoveValidator:
         # so _currently_loaded_hash will match and find_ref_paths skips loadData.
         # Then validate deleted_paths against current_config (requires a fresh loadData).
         # This ordering gives 2 loadData calls instead of 3 for REPLACE operations.
-        if not self._validate_paths_config(added_paths, simulated_config, reload_config=True,
+        if not self._validate_paths_config(added_paths, simulated_config,
                                            reject_on_unresolvable_ref=True):
             return False
 
-        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config=True):
+        if not self._validate_paths_config(deleted_paths, diff.current_config):
             return False
 
         return True
@@ -1125,7 +1116,7 @@ class NoDependencyMoveValidator:
 
         return deleted_paths, added_paths
 
-    def _validate_paths_config(self, paths, config, reload_config: bool = True,
+    def _validate_paths_config(self, paths, config,
                                reject_on_unresolvable_ref: bool = False):
         """
         validates all config under paths do not have config and its references
@@ -1138,11 +1129,14 @@ class NoDependencyMoveValidator:
         than aborting. When 'config' is diff.current_config (a valid committed state) the flag stays
         False: such an error there is genuine and must surface instead of being silently swallowed.
         Scope is limited to reference-resolution errors; a loadData failure
-        (sonic_yang.SonicYangException) is not caught because the config is already loaded into the sy
-        singleton by FullConfigMoveValidator, so find_ref_paths skips loadData for it.
+        (sonic_yang.SonicYangException) is never caught here. Both configs that reach this method
+        are ones that load: simulated_config has just been validated by FullConfigMoveValidator,
+        and diff.current_config is a committed state. Whether find_ref_paths reloads either of
+        them is its own business. A load that does fail is therefore genuine and must abort the
+        sort rather than be swallowed as a rejected move.
         """
         try:
-            refs = self.path_addressing.find_ref_paths(paths, config, reload_config=reload_config)
+            refs = self.path_addressing.find_ref_paths(paths, config)
         except (ValueError, KeyError) as e:
             if reject_on_unresolvable_ref:
                 self.logger.log_debug(
@@ -1684,7 +1678,6 @@ class RemoveCreateOnlyDependencyMoveGenerator:
     def generate(self, diff):
         current_config = diff.current_config
         target_config = diff.target_config # Final config after applying whole patch
-        reload_config = True
 
         for path in self.create_only_filter.get_paths(current_config):
             tokens = self.path_addressing.get_path_tokens(path)
@@ -1701,18 +1694,13 @@ class RemoveCreateOnlyDependencyMoveGenerator:
             tokens.pop()
 
             # First see if there are any dependents for the exact path
-            for move in self.__remove_dependents(diff, tokens, reload_config=reload_config,
-                                                 remove_parent=False):
+            for move in self.__remove_dependents(diff, tokens, remove_parent=False):
                 yield move
-
-            # No need to reload config after first call
-            reload_config = False
 
             yield self.__remove_nonempty(diff, tokens)
 
             # If that didn't work, likely the parents of the dependent path needs to be removed.
-            for move in self.__remove_dependents(diff, tokens, reload_config=reload_config,
-                                                 remove_parent=True):
+            for move in self.__remove_dependents(diff, tokens, remove_parent=True):
                 yield move
 
             # Remove self again after removing the parents of dependents
@@ -1748,7 +1736,6 @@ class RemoveCreateOnlyDependencyMoveGenerator:
         self,
         diff: Diff,
         tokens: List[str],
-        reload_config: bool,
         remove_parent: bool,
         recursion_depth: int = 0,
     ):
@@ -1757,14 +1744,14 @@ class RemoveCreateOnlyDependencyMoveGenerator:
 
         config = diff.current_config
         path = self.path_addressing.create_path(tokens)
-        ref_paths = self.path_addressing.find_ref_paths(path, config, reload_config)
+        ref_paths = self.path_addressing.find_ref_paths(path, config)
         for ref in ref_paths:
             ref_tokens = self.path_addressing.get_path_tokens(ref)
             if remove_parent:
                 ref_tokens.pop()
 
             # Recurse since there could be a dependency chain
-            for move in self.__remove_dependents(diff, ref_tokens, reload_config=False,
+            for move in self.__remove_dependents(diff, ref_tokens,
                                                  remove_parent=remove_parent, recursion_depth=recursion_depth+1):
                 yield move
 
@@ -2157,7 +2144,7 @@ class DeleteRefsMoveExtender:
         if operation_type != OperationType.REMOVE:
             return
 
-        for ref_path in self.path_addressing.find_ref_paths(move.path, diff.current_config, reload_config=True):
+        for ref_path in self.path_addressing.find_ref_paths(move.path, diff.current_config):
             yield JsonMove(diff, OperationType.REMOVE, self.path_addressing.get_path_tokens(ref_path))
 
 

@@ -1268,7 +1268,7 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         # (simulated_config is value-distinct from current_config here: it carries the added ACL_TABLE).
         self.assertFalse(self.validator.validate(move, diff, simulated_config)[0])
         self.validator.path_addressing.find_ref_paths.assert_called_once_with(
-            ["/ACL_TABLE"], simulated_config, reload_config=True)
+            ["/ACL_TABLE"], simulated_config)
 
     def test_validate__unresolvable_ref_in_simulated_config__replace_rejected(self):
         # REPLACE is the operation type for a PORT breakout (rewriting lanes while an ACL reference
@@ -1292,7 +1292,7 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         # config is caught (the two configs are value-distinct: simulated carries the added ACL_TABLE).
         self.assertFalse(self.validator.validate(move, diff, simulated_config)[0])
         self.validator.path_addressing.find_ref_paths.assert_called_once_with(
-            ["/ACL_TABLE"], simulated_config, reload_config=True)
+            ["/ACL_TABLE"], simulated_config)
 
     def test_validate__value_error_on_current_config__propagates(self):
         # A check against diff.current_config (a valid committed state) is not simulated, so a
@@ -1316,7 +1316,7 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         # simulated_config: the re-raise must be the guaranteed-current-config path, not a lucky
         # raise that a config swap could mask. Configs are value-distinct (current has ACL_TABLE).
         self.validator.path_addressing.find_ref_paths.assert_called_once_with(
-            ["/ACL_TABLE"], diff.current_config, reload_config=True)
+            ["/ACL_TABLE"], diff.current_config)
 
     def test_validate__add_full_config_has_dependencies__failure(self):
         # Arrange
@@ -1480,7 +1480,7 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         # Track which config is passed to find_ref_paths in call order
         configs_seen = []
 
-        def track_find_ref_paths(paths, config, reload_config=True):
+        def track_find_ref_paths(paths, config):
             configs_seen.append(config)
             return []  # no refs → validation passes
         mock_pa.find_ref_paths = MagicMock(side_effect=track_find_ref_paths)
@@ -2182,7 +2182,7 @@ class RemoveCreateOnlyDependencyMoveValidator(unittest.TestCase):
         # find_ref_paths call raising, resolved against the simulated (intermediate) config. Asserting
         # the exact arguments also catches a regression that swapped simulated_config <-> current_config.
         self.validator.path_addressing.find_ref_paths.assert_called_once_with(
-            "/PORT/Ethernet312", simulated_config, reload_config=True)
+            "/PORT/Ethernet312", simulated_config)
 
     def test_validate__keyerror_in_simulated_config__move_rejected(self):
         # find_ref_paths also raises KeyError (not just ValueError) when a referenced path's table
@@ -2215,7 +2215,7 @@ class RemoveCreateOnlyDependencyMoveValidator(unittest.TestCase):
         # Must not raise; the move is rejected so the DFS can backtrack.
         self.assertFalse(self.validator.validate(move, diff, simulated_config)[0])
         self.validator.path_addressing.find_ref_paths.assert_called_once_with(
-            "/PORT/Ethernet312", simulated_config, reload_config=True)
+            "/PORT/Ethernet312", simulated_config)
 
     def _run_single_test(self, test_case):
         # Arrange
