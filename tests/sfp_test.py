@@ -60,6 +60,10 @@ Ethernet0: SFP EEPROM detected
                 TxBiasHighWarning : 9.5000mA
                 TxBiasLowAlarm    : 0.5000mA
                 TxBiasLowWarning  : 1.0000mA
+                TxPowerHighAlarm  : 5.3999dBm
+                TxPowerHighWarning: 2.4000dBm
+                TxPowerLowAlarm   : -11.4026dBm
+                TxPowerLowWarning : -8.4013dBm
         ModuleMonitorValues:
                 Temperature: 30.9258C
                 Vcc: 3.2824Volts
@@ -720,6 +724,10 @@ Ethernet0: SFP EEPROM detected
                 TxBiasHighWarning : 9.5000mA
                 TxBiasLowAlarm    : 0.5000mA
                 TxBiasLowWarning  : 1.0000mA
+                TxPowerHighAlarm  : 5.3999dBm
+                TxPowerHighWarning: 2.4000dBm
+                TxPowerLowAlarm   : -11.4026dBm
+                TxPowerLowWarning : -8.4013dBm
         ModuleMonitorValues:
                 Temperature: 30.9258C
                 Vcc: 3.2824Volts
