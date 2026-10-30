@@ -28,8 +28,10 @@ def set_feature_state(cfgdb_clients, name, state, block):
     if len(entry_data_set) > 1:
         raise Exception("Feature '{}' state is not consistent across namespaces".format(name))
 
-    if entry_data_set.pop() == "always_enabled":
-        raise Exception("Feature '{}' state is always enabled and can not be modified".format(name))
+    current_state = entry_data_set.pop()
+    if current_state in ("always_enabled", "always_disabled"):
+        readable_state = current_state.replace('_', ' ')
+        raise Exception("Feature '{}' state is {} and can not be modified".format(name, readable_state))
 
     for ns, cfgdb in cfgdb_clients.items():
         try:
