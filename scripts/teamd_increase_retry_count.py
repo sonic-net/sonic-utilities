@@ -88,6 +88,7 @@ class LacpPacketListenThread(Thread):
         self.targetMacAddress = targetMacAddress
         self.sendReadyEvent = sendReadyEvent
         self.detectedNewVersion = False
+        self.error = None
 
     def lacpPacketCallback(self, pkt):
         if pkt["LACPRetryCount"].version == 0xf1:
@@ -95,8 +96,42 @@ class LacpPacketListenThread(Thread):
         return self.detectedNewVersion
 
     def run(self):
-        sniff(stop_filter=self.lacpPacketCallback, iface=self.port, filter="ether proto {} and ether src {}".format(LACP_ETHERTYPE, self.targetMacAddress),
-                store=0, timeout=30, started_callback=self.sendReadyEvent.set)
+        try:
+            sniff(stop_filter=self.lacpPacketCallback, iface=self.port,
+                  filter="ether proto {} and ether src {}".format(
+                      LACP_ETHERTYPE, self.targetMacAddress),
+                  store=0, timeout=30,
+                  started_callback=self.sendReadyEvent.set)
+        except Exception as error:
+            self.error = error
+        finally:
+            # Unblock the sender when capture setup fails before Scapy invokes
+            # started_callback. The probe worker records that failure.
+            self.sendReadyEvent.set()
+
+
+class PortChannelProbeThread(Thread):
+    def __init__(self, portChannel, namespace, lldpInfo):
+        Thread.__init__(self)
+        self.portChannel = portChannel
+        self.namespace = namespace
+        self.lldpInfo = lldpInfo
+        self.success = False
+        self.error = None
+
+    def run(self):
+        try:
+            self.success = probePortChannel(
+                self.portChannel, self.namespace, self.lldpInfo
+            )
+        except Exception as error:
+            self.error = error
+            log.log_error(
+                "ERROR: Failed to probe port channel {}: {}".format(
+                    self.portChannel, error
+                ),
+                also_print_to_console=True,
+            )
 
 
 def getPortChannels(namespace=""):
@@ -240,6 +275,131 @@ def getCmdOutput(cmd):
     return proc.communicate()[0], proc.returncode
 
 
+def probePortChannel(portChannel, namespace, lldpInfo):
+    config = getPortChannelConfig(portChannel, namespace)
+    for portName in config["ports"].keys():
+        if "runner" not in config["ports"][portName] or \
+                "partner_lacpdu_info" not in config["ports"][portName]["runner"] or \
+                "actor_lacpdu_info" not in config["ports"][portName]["runner"]:
+            log.log_error("ERROR: Missing information from teamd about {}; skipping".format(portName))
+            return False
+
+        interfaceLldpInfo = [k for k in lldpInfo["lldp"]["interface"] if portName in k]
+        if not interfaceLldpInfo:
+            log.log_warning("WARNING: No LLDP info available for {}; skipping".format(portName))
+            continue
+        interfaceLldpInfo = interfaceLldpInfo[0][portName]
+        peerName = list(interfaceLldpInfo["chassis"].keys())[0]
+        peerInfo = interfaceLldpInfo["chassis"][peerName]
+        if "descr" not in peerInfo:
+            log.log_warning("WARNING: No peer description available via LLDP for {}; skipping".format(portName))
+            continue
+        if "sonic" not in peerInfo["descr"].lower():
+            log.log_warning("WARNING: Peer device is not a SONiC device; skipping")
+            return False
+
+        sendReadyEvent = Event()
+        lacpThread = LacpPacketListenThread(
+            portName,
+            config["ports"][portName]["runner"]["partner_lacpdu_info"]["system"],
+            sendReadyEvent,
+        )
+        probePacket = craftLacpPacket(config, portName)
+        resetProbePacket = craftLacpPacket(config, portName, newVersion=False)
+        probeSent = False
+        probeFailed = False
+        resetSucceeded = True
+        try:
+            lacpThread.start()
+            sendReadyEvent.wait()
+            if lacpThread.error is not None:
+                raise lacpThread.error
+
+            # Mark the probe before sendp so that even a partial-send failure
+            # is followed by a standard-version reset.
+            probeSent = True
+            sendp(probePacket, iface=portName)
+            lacpThread.join()
+            if lacpThread.error is not None:
+                raise lacpThread.error
+        except Exception as error:
+            probeFailed = True
+            log.log_error(
+                "ERROR: Failed probing {} on {}: {}".format(
+                    portName, portChannel, error
+                )
+            )
+        finally:
+            if lacpThread.is_alive():
+                lacpThread.join()
+            if probeSent:
+                try:
+                    # Allow the peer to process this PortChannel's probe, then
+                    # restore standard LACP without waiting for slower peers.
+                    time.sleep(2)
+                    sendp(resetProbePacket, iface=portName, count=2, inter=0.5)
+                except Exception as error:
+                    resetSucceeded = False
+                    log.log_error(
+                        "ERROR: Failed resetting {} on {}: {}".format(
+                            portName, portChannel, error
+                        )
+                    )
+
+        if not probeFailed and lacpThread.detectedNewVersion and resetSucceeded:
+            log.log_notice(
+                "SUCCESS: Peer device {} is running version of SONiC with teamd retry count feature".format(
+                    peerName
+                ),
+                also_print_to_console=True,
+            )
+            return True
+
+        if not probeFailed and resetSucceeded:
+            log.log_warning(
+                "WARNING: Peer device {} is running version of SONiC without teamd retry count feature".format(
+                    peerName
+                ),
+                also_print_to_console=True,
+            )
+        return False
+
+    log.log_warning(
+        "WARNING: No information available about peer device on port channel {}".format(
+            portChannel
+        ),
+        also_print_to_console=True,
+    )
+    return False
+
+
+def probePortChannels(portChannels, namespace=""):
+    lldpInfo = getLldpNeighbors(namespace)
+    if not lldpInfo:
+        log.log_error(
+            "ERROR: Failed to get LLDP neighbors; make sure lldp container is running",
+            also_print_to_console=True,
+        )
+        return sorted(portChannels)
+
+    # Probe every PortChannel independently and concurrently. Unsupported
+    # peers can consume the full 30-second receive window, so serial probes
+    # delay warm reboot by that amount once per active PortChannel.
+    probes = [
+        PortChannelProbeThread(portChannel, namespace, lldpInfo)
+        for portChannel in sorted(portChannels)
+    ]
+    for probe in probes:
+        probe.start()
+    for probe in probes:
+        probe.join()
+
+    return sorted(
+        probe.portChannel
+        for probe in probes
+        if probe.error is not None or not probe.success
+    )
+
 def main(probeOnly=False, namespace=""):
     if os.geteuid() != 0:
         log.log_error("Root privileges required for this operation", also_print_to_console=True)
@@ -252,71 +412,18 @@ def main(probeOnly=False, namespace=""):
     if not portChannels:
         log.log_info("No port channels retrieved; exiting")
         return
-    failedPortChannels = []
     if probeOnly:
-        for portChannel in portChannels:
-            config = getPortChannelConfig(portChannel)
-            lldpInfo = getLldpNeighbors(namespace)
-            if not lldpInfo:
-                log.log_error(f"ERROR: Failed to get LLDP neighbors for port channel {portChannel}; "
-                              "make sure lldp container is running", also_print_to_console=True)
-                failedPortChannels.append(portChannel)
-                continue
-            portChannelChecked = False
-            for portName in config["ports"].keys():
-                if not "runner" in config["ports"][portName] or \
-                        not "partner_lacpdu_info" in config["ports"][portName]["runner"] or \
-                        not "actor_lacpdu_info" in config["ports"][portName]["runner"]:
-                    log.log_error("ERROR: Missing information from teamd about {}; skipping".format(portName))
-                    failedPortChannels.append(portChannel)
-                    break
-
-                interfaceLldpInfo = [k for k in lldpInfo["lldp"]["interface"] if portName in k]
-                if not interfaceLldpInfo:
-                    log.log_warning("WARNING: No LLDP info available for {}; skipping".format(portName))
-                    continue
-                interfaceLldpInfo = interfaceLldpInfo[0][portName]
-                peerName = list(interfaceLldpInfo["chassis"].keys())[0]
-                peerInfo = interfaceLldpInfo["chassis"][peerName]
-                if "descr" not in peerInfo:
-                    log.log_warning("WARNING: No peer description available via LLDP for {}; skipping".format(portName))
-                    continue
-                portChannelChecked = True
-                if "sonic" not in peerInfo["descr"].lower():
-                    log.log_warning("WARNING: Peer device is not a SONiC device; skipping")
-                    failedPortChannels.append(portChannel)
-                    break
-
-                sendReadyEvent = Event()
-
-                # Start sniffing thread
-                lacpThread = LacpPacketListenThread(portName, config["ports"][portName]["runner"]["partner_lacpdu_info"]["system"], sendReadyEvent)
-                lacpThread.start()
-
-                # Generate and send probe packet after sniffing has started
-                probePacket = craftLacpPacket(config, portName)
-                sendReadyEvent.wait()
-                sendp(probePacket, iface=portName)
-
-                lacpThread.join()
-
-                resetProbePacket = craftLacpPacket(config, portName, newVersion=False)
-                # 2-second sleep for making sure all processing is done on the peer device
-                time.sleep(2)
-                sendp(resetProbePacket, iface=portName, count=2, inter=0.5)
-
-                if lacpThread.detectedNewVersion:
-                    log.log_notice("SUCCESS: Peer device {} is running version of SONiC with teamd retry count feature".format(peerName), also_print_to_console=True)
-                    break
-                else:
-                    log.log_warning("WARNING: Peer device {} is running version of SONiC without teamd retry count feature".format(peerName), also_print_to_console=True)
-                    failedPortChannels.append(portChannel)
-                    break
-            if not portChannelChecked:
-                log.log_warning("WARNING: No information available about peer device on port channel {}".format(portChannel), also_print_to_console=True)
-                failedPortChannels.append(portChannel)
+        failedPortChannels = probePortChannels(portChannels, namespace)
         if failedPortChannels:
-            log.log_error("ERROR: There are port channels/peer devices that failed the probe: {}".format(failedPortChannels), also_print_to_console=True)
+            # The default reboot path is best-effort: it skips retry-count
+            # negotiation when any peer is unsupported and continues. Keep
+            # this a warning; strict -N mode turns the non-zero result into a
+            # fatal reboot error in fast-reboot.
+            log.log_warning(
+                "WARNING: There are port channels/peer devices that failed "
+                "the probe: {}".format(failedPortChannels),
+                also_print_to_console=True,
+            )
             sys.exit(2)
     else:
         global revertTeamdRetryCountChanges
