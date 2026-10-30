@@ -59,6 +59,40 @@ def get_config_db_from_context(ctx):
     return multi_asic.connect_config_db_for_ns(namespace)
 
 
+def set_vlan_admin_status(ctx, vid, admin_status):
+    """Set the administrative status of an existing VLAN."""
+    if not vid.isdigit():
+        ctx.fail("{} is not integer".format(vid))
+
+    vlan_id = int(vid)
+    if not clicommon.is_vlanid_in_range(vlan_id):
+        ctx.fail("Invalid VLAN ID {} (2-4094)".format(vlan_id))
+
+    config_db = get_config_db_from_context(ctx)
+    vlan_name = 'Vlan{}'.format(vlan_id)
+    if not clicommon.check_if_vlanid_exist(config_db, vlan_name):
+        ctx.fail("{} does not exist".format(vlan_name))
+
+    log.log_info("'vlan {} {}' executing...".format(admin_status, vlan_id))
+    config_db.mod_entry('VLAN', vlan_name, {'admin_status': admin_status})
+
+
+@vlan.command('shutdown')
+@click.argument('vid', metavar='<vid>', required=True)
+@click.pass_context
+def shutdown_vlan(ctx, vid):
+    """Shut down a VLAN."""
+    set_vlan_admin_status(ctx, vid, 'down')
+
+
+@vlan.command('startup')
+@click.argument('vid', metavar='<vid>', required=True)
+@click.pass_context
+def startup_vlan(ctx, vid):
+    """Start up a VLAN."""
+    set_vlan_admin_status(ctx, vid, 'up')
+
+
 def get_namespace_from_context(ctx):
     """Extract namespace from context object."""
     if isinstance(ctx.obj, dict):
