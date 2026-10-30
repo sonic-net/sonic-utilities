@@ -567,3 +567,169 @@ def test_source_list_cross_namespace_prevalidation(database, monkeypatch, proble
         assert other.get_keys('PORT_MIRROR_SAMPLE') == [('Ethernet4', 'rx')]
     else:
         assert not database.writes and not other.writes
+
+
+def _run_sampling_lock_command(command, args, database, results, ready=None, release=None, pause_table=None):
+    """Run the actual decorated CLI callback in a separate process."""
+    if ready is not None:
+        get_keys = database.get_keys
+
+        def paused_get_keys(table):
+            keys = get_keys(table)
+            if table == pause_table:
+                ready.set()
+                if not release.wait(10):
+                    raise RuntimeError('Timed out waiting for competing CLI')
+            return keys
+
+        database.get_keys = paused_get_keys
+    result = CliRunner().invoke(command, args, obj={'db': database})
+    results.put((result.exit_code, result.output, database.writes))
+
+
+@pytest.mark.parametrize('holder', ['sample', 'sflow'])
+def test_sampling_lock_serializes_independent_cli_processes(database, monkeypatch, holder):
+    import multiprocessing
+
+    # Both child processes inherit the same isolated lock path and initial DB.
+    # Pause the first command between its conflict read and its configuration write.
+    monkeypatch.setattr(config, 'ValidatedConfigDBConnector', lambda db: db)
+    database.mod_entry = database.set_entry
+    sample = (config.config.commands['mirror_session'].commands['sample'].commands['add'],
+              ['export1', 'Ethernet4', 'rx', '--sample_rate', '5000'])
+    sflow = (config.config.commands['sflow'].commands['disable'], [])
+    first, second = (sample, sflow) if holder == 'sample' else (sflow, sample)
+    pause_table = 'SFLOW' if holder == 'sample' else 'PORT_MIRROR_SAMPLE'
+    mp = multiprocessing.get_context('fork')
+    ready, release = mp.Event(), mp.Event()
+    first_results, second_results = mp.Queue(), mp.Queue()
+    first_process = mp.Process(target=_run_sampling_lock_command,
+                               args=(*first, database, first_results, ready, release, pause_table))
+    second_process = mp.Process(target=_run_sampling_lock_command,
+                                args=(*second, database, second_results))
+    try:
+        first_process.start()
+        assert ready.wait(10), 'First CLI did not reach its protected conflict read'
+        second_process.start()
+        code, output, writes = second_results.get(timeout=10)
+        second_process.join(10)
+        assert second_process.exitcode == 0
+        assert code != 0
+        assert 'Failed to acquire lock' in output
+        assert writes == []
+        release.set()
+        code, output, writes = first_results.get(timeout=10)
+        first_process.join(10)
+        assert first_process.exitcode == 0
+        assert code == 0, output
+        assert writes
+        assert {table for table, _, _ in writes} == {
+            'PORT_MIRROR_SAMPLE' if holder == 'sample' else 'SFLOW'}
+    finally:
+        release.set()
+        for process in (first_process, second_process):
+            if process.pid is not None:
+                process.join(2)
+                if process.is_alive():
+                    process.terminate()
+                    process.join(5)
+        first_results.close()
+        second_results.close()
+
+
+@pytest.mark.parametrize('path,args', [
+    (['mirror_session', 'sample', 'add'], ['export1', 'Ethernet4', 'rx', '--sample_rate', '2']),
+    (['mirror_session', 'sample', 'remove'], ['export1', 'Ethernet4', 'rx']),
+    (['sflow', 'enable'], []),
+    (['sflow', 'disable'], []),
+    (['sflow', 'polling-interval'], ['20']),
+    (['sflow', 'sample-direction'], ['rx']),
+    (['sflow', 'drop-monitor-limit'], ['0']),
+    (['sflow', 'agent-id', 'add'], ['Ethernet0']),
+    (['sflow', 'agent-id', 'del'], []),
+])
+def test_sampling_commands_share_lock_before_any_db_access(database, path, args):
+    from utilities_common.flock import acquire_flock, release_flock
+
+    command = config.config
+    for part in path:
+        command = command.commands[part]
+    with open(config.SAMPLING_CONFIG_LOCK, 'a+') as lock:
+        assert acquire_flock(lock.fileno(), 0)
+        try:
+            with mock.patch.object(database, 'get_keys', side_effect=AssertionError('Unexpected DB read')):
+                result = CliRunner().invoke(command, args, obj={'db': database})
+            assert result.exit_code != 0
+            assert 'Failed to acquire lock' in result.output
+            assert not database.writes
+        finally:
+            release_flock(lock.fileno())
+
+
+@pytest.mark.parametrize('failure', ['conflict', 'write_error'])
+def test_sample_command_failure_releases_lock(database, monkeypatch, failure):
+    from utilities_common.flock import acquire_flock, release_flock
+
+    if failure == 'conflict':
+        database.tables['SFLOW'] = {'global': {'admin_state': 'down'}}
+    else:
+        monkeypatch.setattr(database, 'set_entry', mock.Mock(side_effect=RuntimeError('DB write failed')))
+    result = invoke(['sample', 'add', 'export1', 'Ethernet4', 'rx', '--sample_rate', '2'])
+    assert result.exit_code != 0
+    assert not database.writes
+    if failure == 'conflict':
+        assert 'cannot coexist' in result.output
+    else:
+        assert isinstance(result.exception, RuntimeError)
+    with open(config.SAMPLING_CONFIG_LOCK, 'a+') as lock:
+        assert acquire_flock(lock.fileno(), 0)
+        release_flock(lock.fileno())
+
+
+def test_sflow_conflict_failure_releases_lock(database):
+    from utilities_common.flock import acquire_flock, release_flock
+
+    database.tables['PORT_MIRROR_SAMPLE'] = {('Ethernet4', 'rx'): {'admin_state': 'down'}}
+    result = CliRunner().invoke(config.config.commands['sflow'].commands['disable'], [], obj={'db': database})
+    assert result.exit_code != 0
+    assert 'cannot coexist' in result.output
+    assert not database.writes
+    with open(config.SAMPLING_CONFIG_LOCK, 'a+') as lock:
+        assert acquire_flock(lock.fileno(), 0)
+        release_flock(lock.fileno())
+
+
+def test_sampling_lock_held_for_every_namespace_write(database, monkeypatch):
+    from utilities_common.flock import acquire_flock, release_flock
+
+    other = Database()
+    database.tables['PORT'] = {'Ethernet0': {}}
+    other.tables['PORT'] = {'Ethernet4': {}}
+    database.tables['PORTCHANNEL'] = {}
+    other.tables['PORTCHANNEL'] = {}
+    monkeypatch.setattr(port_mirror, 'config_databases', lambda: {'asic0': database, 'asic1': other})
+    checked = []
+
+    def guarded_writer(db, namespace):
+        write = db.set_entry
+
+        def write_under_lock(table, key, value):
+            with open(config.SAMPLING_CONFIG_LOCK, 'a+') as lock:
+                acquired = acquire_flock(lock.fileno(), 0)
+                if acquired:
+                    release_flock(lock.fileno())
+                assert not acquired, 'Sampling lock released before namespace write'
+            checked.append(namespace)
+            write(table, key, value)
+
+        return write_under_lock
+
+    monkeypatch.setattr(database, 'set_entry', guarded_writer(database, 'asic0'))
+    monkeypatch.setattr(other, 'set_entry', guarded_writer(other, 'asic1'))
+    result = invoke(['sample', 'add', 'export1', 'Ethernet0,Ethernet4', 'both', '--sample_rate', '2'])
+    assert result.exit_code == 0, result.output
+    assert checked == ['asic0', 'asic0', 'asic1', 'asic1']
+    checked.clear()
+    result = invoke(['sample', 'remove', 'export1', 'Ethernet0,Ethernet4', 'both'])
+    assert result.exit_code == 0, result.output
+    assert checked == ['asic0', 'asic0', 'asic1', 'asic1']

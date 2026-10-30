@@ -10699,6 +10699,10 @@ While adding sampled ERSPAN bindings, users need to configure the following fiel
   while bindings exist. Disabling sFlow does not remove its global configuration;
   remove that configuration, for example with a valid GCU patch, before adding bindings.
   SFLOW_SESSION and collector configuration alone do not trigger this exclusion.
+  Sample add/remove and sFlow global writers share `/etc/sonic/sampling.lock`
+  across their conflict checks and writes in all affected namespaces. If another
+  protected command holds the lock, the command fails before changing configuration
+  and can be retried. This lock does not serialize standalone GCU or direct Redis writes.
 
 `show mirror_session sample` reports configuration, one row per source/direction:
 

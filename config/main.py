@@ -148,8 +148,11 @@ ADHOC_VALIDATION = True
 if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
     temp_system_reload_lockfile = tempfile.NamedTemporaryFile()
     SYSTEM_RELOAD_LOCK = temp_system_reload_lockfile.name
+    temp_sampling_lockfile = tempfile.NamedTemporaryFile()
+    SAMPLING_CONFIG_LOCK = temp_sampling_lockfile.name
 else:
     SYSTEM_RELOAD_LOCK = "/etc/sonic/reload.lock"
+    SAMPLING_CONFIG_LOCK = "/etc/sonic/sampling.lock"
 
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
@@ -3504,6 +3507,7 @@ def sample():
 @click.option('--truncate_size', type=click.IntRange(TRUNCATE_SIZE_MIN, TRUNCATE_SIZE_MAX), default=None)
 @click.option('--disabled', is_flag=True, help='Create a disabled binding (admin_state=down).')
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, disabled):
     """Attach comma-separated sources with the same sampling policy to an ERSPAN export."""
     databases = port_mirror.config_databases()
@@ -3541,6 +3545,7 @@ def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, d
 @click.argument('port', metavar='<port_list>')
 @click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_remove(ctx, session_name, port, direction):
     """Remove bindings for comma-separated sources without deleting their export."""
     databases = port_mirror.config_databases()
@@ -9814,6 +9819,7 @@ def sflow(ctx):
 #
 @sflow.command()
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def enable(ctx):
     """Enable sFlow"""
     port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
@@ -9846,6 +9852,7 @@ def enable(ctx):
 #
 @sflow.command()
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def disable(ctx):
     """Disable sFlow"""
     port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
@@ -9869,6 +9876,7 @@ def disable(ctx):
 @click.argument('interval',  metavar='<polling_interval>', required=True,
                 type=int)
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def polling_int(ctx, interval):
     """Set polling-interval for counter-sampling (0 to disable)"""
     port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
@@ -9901,6 +9909,7 @@ def is_port_egress_sflow_supported():
 @sflow.command('sample-direction')
 @click.argument('direction',  metavar='<sample_direction>', required=True, type=str)
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def global_sample_direction(ctx, direction):
     """Set sampling direction """
     port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
@@ -9939,6 +9948,7 @@ def is_sflow_mirror_on_drop_supported():
 @sflow.command('drop-monitor-limit')
 @click.argument('limit', metavar='<packet_per_second>', required=True, type=int)
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def drop_monitor_limit(ctx, limit):
     """Enable and rate limit dropped packet notifications. (1-500, 0 to disable)"""
     port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
@@ -10200,6 +10210,7 @@ def agent_id(ctx):
 @agent_id.command()
 @click.argument('ifname', metavar='<interface_name>', required=True)
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def add(ctx, ifname):
     """Add sFlow agent information"""
     port_mirror.reject_sflow_global_with_sample_bindings(ctx, ctx.obj['db'])
@@ -10229,6 +10240,7 @@ def add(ctx, ifname):
 #
 @agent_id.command('del')
 @click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def delete(ctx):
     """Delete sFlow agent information"""
     config_db = ValidatedConfigDBConnector(ctx.obj['db'])
