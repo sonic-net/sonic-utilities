@@ -97,6 +97,13 @@ LLR_PORT_TABLE_PREFIX = "LLR_PORT_TABLE:"
 LLR_CAPABILITIES_KEY = "PORT_COUNTER_CAPABILITIES|LLR"
 LLR_CACHE_APP = "llrstat"
 
+# LLR operational hardware status: COUNTERS_DB fields (populated by syncd's
+# flex-counter engine) and their SAI enum-name prefixes to strip for display.
+LLR_TX_STATUS_FIELD = "SAI_PORT_ATTR_LLR_TX_STATUS"
+LLR_RX_STATUS_FIELD = "SAI_PORT_ATTR_LLR_RX_STATUS"
+LLR_TX_STATUS_PREFIX = "SAI_PORT_LLR_TX_STATUS_"
+LLR_RX_STATUS_PREFIX = "SAI_PORT_LLR_RX_STATUS_"
+
 
 def _connect_db(namespace):
     """Create a SonicV2Connector for the given namespace."""
@@ -183,6 +190,20 @@ class Llrstat(object):
         ) or {}
         return entry
 
+    def _get_hw_status(self, port_oid, sai_field, prefix):
+        # Operational LLR HW state from COUNTERS_DB, enum prefix stripped for
+        # display (e.g. "SAI_PORT_LLR_TX_STATUS_ADVANCE" -> "ADVANCE").
+        if not port_oid:
+            return STATUS_NA
+        val = self.counters_db.get(
+            self.counters_db.COUNTERS_DB,
+            "{}{}".format(COUNTER_TABLE_PREFIX, port_oid),
+            sai_field,
+        )
+        if not val:
+            return STATUS_NA
+        return val[len(prefix):] if val.startswith(prefix) else val
+
     def get_llr_ports(self, interface_name=None):
         llr_ports = self._get_llr_ports()
         if interface_name:
@@ -204,8 +225,8 @@ class Llrstat(object):
             print("No LLR ports configured.")
             return
 
-        rx_header = ["Port Rx", "STATUS"] + [name for _, name in LLR_RX_SUMMARY_COUNTERS]
-        tx_header = ["Port Tx", "STATUS"] + [name for _, name in LLR_TX_COUNTERS]
+        rx_header = ["Port Rx", "STATUS", "HW Status"] + [name for _, name in LLR_RX_SUMMARY_COUNTERS]
+        tx_header = ["Port Tx", "STATUS", "HW Status"] + [name for _, name in LLR_TX_COUNTERS]
         rx_rows = []
         tx_rows = []
 
@@ -214,8 +235,10 @@ class Llrstat(object):
             entry = self._get_port_status(port)
             rx_status = "Enable" if entry.get("llr_local") == "enabled" else "Disable"
             tx_status = "Enable" if entry.get("llr_remote") == "enabled" else "Disable"
+            rx_hw = self._get_hw_status(port_oid, LLR_RX_STATUS_FIELD, LLR_RX_STATUS_PREFIX)
+            tx_hw = self._get_hw_status(port_oid, LLR_TX_STATUS_FIELD, LLR_TX_STATUS_PREFIX)
 
-            rx_row = [port, rx_status]
+            rx_row = [port, rx_status, rx_hw]
             for sai_name, _ in LLR_RX_SUMMARY_COUNTERS:
                 if self._is_supported(sai_name):
                     rx_row.append(self._get_counter(port_oid, sai_name, port))
@@ -223,7 +246,7 @@ class Llrstat(object):
                     rx_row.append(STATUS_NA)
             rx_rows.append(rx_row)
 
-            tx_row = [port, tx_status]
+            tx_row = [port, tx_status, tx_hw]
             for sai_name, _ in LLR_TX_COUNTERS:
                 if self._is_supported(sai_name):
                     tx_row.append(self._get_counter(port_oid, sai_name, port))
@@ -262,6 +285,12 @@ class Llrstat(object):
             port_oid = self.port_name_map.get(port)
             print("LLR Counters - {}".format(port))
             print("-" * (16 + len(port)))
+
+            tx_hw = self._get_hw_status(port_oid, LLR_TX_STATUS_FIELD, LLR_TX_STATUS_PREFIX)
+            rx_hw = self._get_hw_status(port_oid, LLR_RX_STATUS_FIELD, LLR_RX_STATUS_PREFIX)
+            print("{} {} {}".format("LLR TX HW Status", "." * max(1, 60 - len("LLR TX HW Status")), tx_hw))
+            print("{} {} {}".format("LLR RX HW Status", "." * max(1, 60 - len("LLR RX HW Status")), rx_hw))
+            print()
 
             line(port_oid, port, "LLR_INIT      CtrlOS Transmitted",               "SAI_PORT_STAT_LLR_TX_INIT_CTL_OS")
             line(port_oid, port, "LLR_INIT_ECHO CtrlOS Transmitted",               "SAI_PORT_STAT_LLR_TX_INIT_ECHO_CTL_OS")
