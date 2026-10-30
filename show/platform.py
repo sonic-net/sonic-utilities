@@ -329,6 +329,17 @@ def leak():
     pass
 
 
+def _get_platform_major_leak_min_sensors():
+    """Return the platform's default MIN-N, or None if it cannot be retrieved."""
+    try:
+        import sonic_platform
+        chassis = sonic_platform.platform.Platform().get_chassis()
+        liquid_cooling = chassis.get_liquid_cooling()
+        return int(liquid_cooling.get_major_leak_num_min_sensors())
+    except Exception:
+        return None
+
+
 @leak.command('control-policy')
 def leak_control_policy():
     """Show leak control policy configuration"""
@@ -336,15 +347,27 @@ def leak_control_policy():
         from utilities_common.db import Db
         db = Db()
         entry = db.cfgdb.get_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY)
-        click.echo(" system_leak_policy              : {}".format(entry.get('system_leak_policy', 'enabled')))
+        click.echo(" system_leak_policy               : {}".format(entry.get('system_leak_policy', 'enabled')))
         critical_action = entry.get('system_critical_leak_action', 'power_off')
-        click.echo(" system_critical_leak_action     : {}".format(critical_action))
-        click.echo(" system_minor_leak_action        : {}".format(entry.get('system_minor_leak_action', 'syslog_only')))
-        click.echo(" rack_mgr_leak_policy            : {}".format(entry.get('rack_mgr_leak_policy', 'enabled')))
+        click.echo(" system_critical_leak_action      : {}".format(critical_action))
+        major_action = entry.get('system_major_leak_action', 'syslog_only')
+        click.echo(" system_major_leak_action         : {}".format(major_action))
+        minor_action = entry.get('system_minor_leak_action', 'syslog_only')
+        click.echo(" system_minor_leak_action         : {}".format(minor_action))
+        # MIN-N: the CONFIG_DB value if configured, else the platform default (0 = none).
+        major_min_sensors = entry.get('system_major_leak_num_min_sensors')
+        if major_min_sensors is None:
+            major_min_sensors = _get_platform_major_leak_min_sensors()
+        if not major_min_sensors or int(major_min_sensors) == 0:
+            major_min_sensors = 'none'
+        click.echo(" system_major_leak_num_min_sensors: {}".format(major_min_sensors))
+        click.echo(" rack_mgr_leak_policy             : {}".format(entry.get('rack_mgr_leak_policy', 'enabled')))
         rack_critical_action = entry.get('rack_mgr_critical_alert_action', 'syslog_only')
-        click.echo(" rack_mgr_critical_alert_action  : {}".format(rack_critical_action))
+        click.echo(" rack_mgr_critical_alert_action   : {}".format(rack_critical_action))
+        rack_major_action = entry.get('rack_mgr_major_alert_action', 'syslog_only')
+        click.echo(" rack_mgr_major_alert_action      : {}".format(rack_major_action))
         rack_minor_action = entry.get('rack_mgr_minor_alert_action', 'syslog_only')
-        click.echo(" rack_mgr_minor_alert_action     : {}".format(rack_minor_action))
+        click.echo(" rack_mgr_minor_alert_action      : {}".format(rack_minor_action))
     except Exception as e:
         click.echo(f"Error: Failed to retrieve leak control policy: {e}", err=True)
 

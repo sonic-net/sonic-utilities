@@ -41,9 +41,12 @@ class TestShowPlatformLeakControlPolicy(object):
         mock_cfgdb.get_entry.return_value = {
             'system_leak_policy': 'enabled',
             'system_critical_leak_action': 'power_off',
+            'system_major_leak_action': 'syslog_only',
             'system_minor_leak_action': 'syslog_only',
+            'system_major_leak_num_min_sensors': '2',
             'rack_mgr_leak_policy': 'disabled',
             'rack_mgr_critical_alert_action': 'syslog_only',
+            'rack_mgr_major_alert_action': 'syslog_only',
             'rack_mgr_minor_alert_action': 'syslog_only',
         }
         mock_db = MagicMock()
@@ -59,6 +62,11 @@ class TestShowPlatformLeakControlPolicy(object):
         assert 'rack_mgr_leak_policy' in result.output
         assert 'disabled' in result.output
         assert 'power_off' in result.output
+        # MAJOR fields must be surfaced
+        assert 'system_major_leak_action' in result.output
+        assert 'rack_mgr_major_alert_action' in result.output
+        # MIN-N threshold is shown when present
+        assert 'system_major_leak_num_min_sensors' in result.output
 
     def test_leak_control_policy_empty_db(self):
         runner = CliRunner()
@@ -67,7 +75,8 @@ class TestShowPlatformLeakControlPolicy(object):
         mock_db = MagicMock()
         mock_db.cfgdb = mock_cfgdb
 
-        with patch('utilities_common.db.Db', return_value=mock_db):
+        with patch('utilities_common.db.Db', return_value=mock_db), \
+                patch.object(show_platform, '_get_platform_major_leak_min_sensors', return_value=None):
             result = runner.invoke(
                 show_platform.platform.commands['leak'].commands['control-policy']
             )
@@ -76,6 +85,50 @@ class TestShowPlatformLeakControlPolicy(object):
         assert 'enabled' in result.output
         assert 'power_off' in result.output
         assert 'syslog_only' in result.output
+        # MAJOR action defaults are shown; with no override and no platform value,
+        # MIN-N is reported as none.
+        assert 'system_major_leak_action' in result.output
+        assert 'system_major_leak_num_min_sensors: none' in result.output
+
+    def _invoke_policy(self, entry, platform_min):
+        mock_db = MagicMock()
+        mock_db.cfgdb.get_entry.return_value = entry
+        with patch('utilities_common.db.Db', return_value=mock_db), \
+                patch.object(show_platform, '_get_platform_major_leak_min_sensors',
+                             return_value=platform_min) as mock_platform:
+            result = CliRunner().invoke(
+                show_platform.platform.commands['leak'].commands['control-policy']
+            )
+        return result, mock_platform
+
+    def test_leak_control_policy_min_n_platform_default(self):
+        result, _ = self._invoke_policy({}, 3)
+        assert result.exit_code == 0
+        assert 'system_major_leak_num_min_sensors: 3' in result.output
+
+    def test_leak_control_policy_min_n_platform_zero(self):
+        result, _ = self._invoke_policy({}, 0)
+        assert result.exit_code == 0
+        assert 'system_major_leak_num_min_sensors: none' in result.output
+
+    def test_leak_control_policy_min_n_configured_overrides_platform(self):
+        result, mock_platform = self._invoke_policy({'system_major_leak_num_min_sensors': '4'}, 3)
+        assert result.exit_code == 0
+        assert 'system_major_leak_num_min_sensors: 4' in result.output
+        mock_platform.assert_not_called()
+
+    def test_get_platform_major_leak_min_sensors_returns_platform_value(self):
+        fake = MagicMock()
+        liquid_cooling = fake.platform.Platform.return_value.get_chassis.return_value.get_liquid_cooling
+        liquid_cooling.return_value.get_major_leak_num_min_sensors.return_value = 3
+        with patch.dict(sys.modules, {'sonic_platform': fake}):
+            assert show_platform._get_platform_major_leak_min_sensors() == 3
+
+    def test_get_platform_major_leak_min_sensors_returns_none_on_error(self):
+        fake = MagicMock()
+        fake.platform.Platform.side_effect = RuntimeError("no platform")
+        with patch.dict(sys.modules, {'sonic_platform': fake}):
+            assert show_platform._get_platform_major_leak_min_sensors() is None
 
 
 class TestShowPlatformLeakRackManagerAlerts(object):
