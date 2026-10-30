@@ -3602,6 +3602,155 @@ class DeleteRefsMoveExtender(unittest.TestCase):
             moves_ops.extend(move.patch)
         self.assertCountEqual(ex_ops, moves_ops)
 
+
+class DfsTestDiff:
+    def __init__(self, state, goal):
+        self.state = state
+        self.goal = goal
+        self.current_config = {"state": state}
+        self.target_config = {"state": goal}
+
+    def __hash__(self):
+        return hash(self.state)
+
+    def has_no_diff(self):
+        return self.state == self.goal
+
+
+class DfsTestMove:
+    generator_name = "test"
+
+    def __init__(self, name, target, source=None, valid=True, error=None):
+        self.name = name
+        self.target = target
+        self.source = source
+        self.valid = valid
+        self.error = error
+
+    def get_jsonpatch(self):
+        return jsonpatch.JsonPatch([{"op": "test", "path": "/state", "value": self.name}])
+
+
+class DfsTestMoveWrapper:
+    def __init__(self, graph, goal):
+        self.graph = graph
+        self.goal = goal
+
+    def generate(self, diff):
+        return iter(self.graph.get(diff.state, []))
+
+    def validate(self, move, diff):
+        if move.source is not None and move.source != diff.state:
+            raise AssertionError(f"Move {move.name} evaluated against state {diff.state}")
+        return move.valid, move.error
+
+    def simulate(self, move, diff, in_place=False):
+        if in_place:
+            raise AssertionError("DfsSorter must not simulate moves in-place")
+        return DfsTestDiff(move.target, self.goal)
+
+
+class TestDfsSorter(unittest.TestCase):
+    def test_sort__deep_path__does_not_exceed_recursion_limit(self):
+        depth = 2000
+        moves = [DfsTestMove(str(state), state + 1, source=state) for state in range(depth)]
+        graph = {state: [moves[state]] for state in range(depth)}
+        sorter = ps.DfsSorter(DfsTestMoveWrapper(graph, depth))
+
+        actual = sorter.sort(DfsTestDiff(0, depth))
+
+        self.assertEqual(moves, actual)
+
+    def test_sort__no_diff__returns_empty_list(self):
+        sorter = ps.DfsSorter(DfsTestMoveWrapper({}, 0))
+
+        actual = sorter.sort(DfsTestDiff(0, 0))
+
+        self.assertEqual([], actual)
+
+    def test_sort__no_valid_path__returns_none(self):
+        move = DfsTestMove("dead-end", 1, source=0)
+        sorter = ps.DfsSorter(DfsTestMoveWrapper({0: [move]}, 2))
+
+        actual = sorter.sort(DfsTestDiff(0, 2))
+
+        self.assertIsNone(actual)
+
+    def test_sort__backtracks_from_empty_child__uses_parent_diff_for_sibling(self):
+        dead_end = DfsTestMove("dead-end", 1, source=0)
+        valid = DfsTestMove("valid", 2, source=0)
+        sorter = ps.DfsSorter(DfsTestMoveWrapper({0: [dead_end, valid]}, 2))
+
+        actual = sorter.sort(DfsTestDiff(0, 2))
+
+        self.assertEqual([valid], actual)
+
+    def test_sort__backtracks_multiple_levels__removes_abandoned_moves(self):
+        first_dead_end = DfsTestMove("first-dead-end", 1, source=0)
+        second_dead_end = DfsTestMove("second-dead-end", 2, source=1)
+        valid = DfsTestMove("valid", 3, source=0)
+        graph = {
+            0: [first_dead_end, valid],
+            1: [second_dead_end],
+        }
+        sorter = ps.DfsSorter(DfsTestMoveWrapper(graph, 3))
+
+        actual = sorter.sort(DfsTestDiff(0, 3))
+
+        self.assertEqual([valid], actual)
+
+    def test_sort__multi_level_success__marks_entire_trace_valid(self):
+        first = DfsTestMove("first", 1, source=0)
+        second = DfsTestMove("second", 2, source=1)
+        third = DfsTestMove("third", 3, source=2)
+        graph = {
+            0: [first],
+            1: [second],
+            2: [third],
+        }
+        sorter = ps.DfsSorter(DfsTestMoveWrapper(graph, 3), path_trace=True)
+
+        actual = sorter.sort(DfsTestDiff(0, 3))
+
+        self.assertEqual([first, second, third], actual)
+        first_trace = sorter.path_tracker.children[0]
+        second_trace = first_trace.children[0]
+        third_trace = second_trace.children[0]
+        self.assertEqual(ps.PatchStatus.VALID, first_trace.status)
+        self.assertEqual(ps.PatchStatus.VALID, second_trace.status)
+        self.assertEqual(ps.PatchStatus.VALID, third_trace.status)
+
+    def test_sort__path_trace_disabled__does_not_create_trace(self):
+        move = DfsTestMove("valid", 1, source=0)
+        sorter = ps.DfsSorter(DfsTestMoveWrapper({0: [move]}, 1))
+
+        actual = sorter.sort(DfsTestDiff(0, 1))
+
+        self.assertEqual([move], actual)
+        self.assertIsNone(sorter.path_tracker)
+
+    def test_sort__branching_paths__preserves_order_and_trace_statuses(self):
+        dead_end = DfsTestMove("dead-end", 1, source=0)
+        revisit = DfsTestMove("revisit", 0, source=1)
+        invalid = DfsTestMove("invalid", 2, source=0, valid=False, error="invalid move")
+        valid = DfsTestMove("valid", 3, source=0)
+        graph = {
+            0: [dead_end, invalid, valid],
+            1: [revisit],
+        }
+        sorter = ps.DfsSorter(DfsTestMoveWrapper(graph, 3), path_trace=True)
+
+        actual = sorter.sort(DfsTestDiff(0, 3))
+
+        self.assertEqual([valid], actual)
+        trace = sorter.path_tracker
+        self.assertEqual(ps.PatchStatus.PATH_ISSUE, trace.children[0].status)
+        self.assertEqual(ps.PatchStatus.RECURSE_REJECT, trace.children[0].children[0].status)
+        self.assertEqual(ps.PatchStatus.INVALID, trace.children[1].status)
+        self.assertEqual("invalid move", trace.children[1].error)
+        self.assertEqual(ps.PatchStatus.VALID, trace.children[2].status)
+
+
 class TestSortAlgorithmFactory(unittest.TestCase):
     def test_dfs_sorter(self):
         self.verify(ps.Algorithm.DFS, ps.DfsSorter)
