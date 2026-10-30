@@ -291,14 +291,14 @@ def show_stp_bpdu_guard(ctx):
     ifname_all = g_stp_cfg_db.get_keys("STP_PORT")
     for ifname in ifname_all:
         cfg_entry = g_stp_cfg_db.get_entry("STP_PORT", ifname)
-        if cfg_entry['bpdu_guard'] == 'true' and cfg_entry['enabled'] == 'true':
+        if cfg_entry.get('bpdu_guard') == 'true' and cfg_entry.get('enabled') == 'true':
             if print_header:
                 click.echo("{:17}{:13}{}".format("PortNum", "Shutdown", "Port Shut"))
                 click.echo("{:17}{:13}{}".format("", "Configured", "due to BPDU guard"))
                 click.echo("-------------------------------------------")
                 print_header = 0
 
-            if cfg_entry['bpdu_guard_do_disable'] == 'true':
+            if cfg_entry.get('bpdu_guard_do_disable') == 'true':
                 disabled = 'No'
                 keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_PORT_TABLE:{}".format(ifname))
                 # only 1 key per ifname is expected in BPDU_GUARD_TABLE.
@@ -312,6 +312,9 @@ def show_stp_bpdu_guard(ctx):
                 click.echo("{:17}{:13}{}".format(ifname, "No", "NA"))
 
 
+spanning_tree.add_command(show_stp_bpdu_guard, 'bpdu-guard')
+
+
 @spanning_tree.command('root_guard')
 @click.pass_context
 def show_stp_root_guard(ctx):
@@ -321,10 +324,15 @@ def show_stp_root_guard(ctx):
     ifname_all = g_stp_cfg_db.get_keys("STP_PORT")
     for ifname in ifname_all:
         entry = g_stp_cfg_db.get_entry("STP_PORT", ifname)
-        if entry['root_guard'] == 'true' and entry['enabled'] == 'true':
+        if entry.get('root_guard') == 'true' and entry.get('enabled') == 'true':
             if print_header:
                 global_entry = g_stp_cfg_db.get_entry("STP", "GLOBAL")
-                click.echo("Root guard timeout: {} secs".format(global_entry['rootguard_timeout']))
+                # PVST enable seeds rootguard_timeout; MSTP has no timer-based
+                # root-guard recovery, so the field is absent and the line is
+                # meaningless there — print it only when it exists.
+                if 'rootguard_timeout' in global_entry:
+                    click.echo("Root guard timeout: {} secs".format(
+                        global_entry['rootguard_timeout']))
                 click.echo("")
                 click.echo("{:17}{:7}{}".format("Port", "VLAN", "Current State"))
                 click.echo("-------------------------------------------")
@@ -335,18 +343,22 @@ def show_stp_root_guard(ctx):
             keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_VLAN_PORT_TABLE:*:{}".format(ifname))
             if keys:
                 for key in keys:
-                    entry = g_stp_appl_db.get_all(g_stp_appl_db.APPL_DB, key)
-                    if entry and 'root_guard_timer' in entry:
-                        if entry['root_guard_timer'] == '0':
+                    appdb_entry = g_stp_appl_db.get_all(g_stp_appl_db.APPL_DB, key)
+                    if appdb_entry and 'root_guard_timer' in appdb_entry:
+                        if appdb_entry['root_guard_timer'] == '0':
                             state = 'Consistent state'
                         else:
-                            state = 'Inconsistent state ({} seconds left on timer)'.format(entry['root_guard_timer'])
+                            state = 'Inconsistent state ({} seconds left on timer)'.format(
+                                appdb_entry['root_guard_timer'])
 
                         vlanid = re.search(':Vlan(.*):', key)
                         if vlanid:
                             click.echo("{:17}{:7}{}".format(ifname, vlanid.group(1), state))
                         else:
                             click.echo("{:17}{:7}{}".format(ifname, vlanid, state))
+
+
+spanning_tree.add_command(show_stp_root_guard, 'root-guard')
 
 
 @spanning_tree.group('statistics', cls=clicommon.AliasedGroup, invoke_without_command=True)

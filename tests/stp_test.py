@@ -155,6 +155,46 @@ class TestStp(object):
             assert result.exit_code == 0
             assert result.output == show_spanning_tree_root_guard
 
+    def test_show_spanning_tree_guards_mstp_partial_row(self):
+        """MSTP's STP|GLOBAL has no rootguard_timeout, and rows
+        written by 'spanning_tree interface enable' carry only 'enabled' —
+        neither guard show command may traceback on them."""
+        class FakeCfgDb(object):
+            data = {
+                ("STP", "GLOBAL"): {"mode": "mst"},
+                ("STP_PORT", "Ethernet0"): {"enabled": "true"},
+                ("STP_PORT", "Ethernet8"): {"enabled": "true",
+                                            "root_guard": "true",
+                                            "bpdu_guard": "true",
+                                            "bpdu_guard_do_disable": "false"},
+            }
+
+            def get_entry(self, table, key):
+                return dict(self.data.get((table, key), {}))
+
+            def get_keys(self, table):
+                return [k for t, k in self.data if t == table]
+
+        class FakeApplDb(object):
+            APPL_DB = 0
+
+            def keys(self, db_id, pattern):
+                return None
+
+        with patch('show.stp.is_stp_docker_running', return_value=True), \
+                patch('show.stp.connect_to_cfg_db', return_value=FakeCfgDb()), \
+                patch('show.stp.connect_to_appl_db', return_value=FakeApplDb()):
+            runner = CliRunner()
+            db = Db()
+            root_guard = runner.invoke(show.cli.commands["spanning-tree"], ["root_guard"], obj=db)
+            assert root_guard.exit_code == 0, root_guard.output
+            assert "Root guard timeout" not in root_guard.output
+            assert "Current State" in root_guard.output
+            bpdu_guard = runner.invoke(show.cli.commands["spanning-tree"], ["bpdu_guard"], obj=db)
+            assert bpdu_guard.exit_code == 0, bpdu_guard.output
+            assert "Ethernet8" in bpdu_guard.output
+            assert "Ethernet0" not in bpdu_guard.output
+
     def test_disable_enable_global_pvst(self):
         cli_runner = CliRunner()
         db = Db()
@@ -874,503 +914,274 @@ class TestStpVlanPriority:
 
 
 class TestStpVlanDisable:
+    """`config spanning_tree vlan disable`.
+
+    These invoke the command rather than a stand-in for it, so the assertions
+    are about what the command writes and refuses.
+    """
+
     def setup_method(self):
-        """Setup test environment before each test."""
-        self.db = MagicMock()  # Mock database
-        self.db.cfgdb = MagicMock()  # Mock configuration DB
-        self.runner = MagicMock()  # Mock CLI runner
+        self.db = MagicMock()
+        self.db.__class__ = Db
+        self.db.cfgdb = self.db
+        self.runner = CliRunner()
 
-    def test_stp_vlan_disable_mst_mode(self):
-        """Test that disabling STP for a VLAN fails if STP mode is MST."""
-
-        self.db.cfgdb.set_entry = MagicMock()
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="Configuration not supported for MST"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["vlan"]
-            .commands["disable"],
-            ["200"],  # VLAN 200, but MST mode should fail
+    def _run(self, vid):
+        return self.runner.invoke(
+            config.config.commands["spanning-tree"].commands["vlan"].commands["disable"],
+            [str(vid)],
             obj=self.db,
         )
 
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
+    def test_vlan_disable_rejected_for_mst(self):
+        with patch('config.stp.get_global_stp_mode', return_value='mst'):
+            result = self._run(200)
 
-        assert result.exit_code != 0, "Command should have failed with MST mode"
-        assert "configuration not supported for mst" in actual_output
+        assert result.exit_code != 0
+        assert "not supported for mst" in result.output.lower()
 
-    def test_stp_vlan_disable_vlan_not_exist(self):
-        """Test that disabling STP for a VLAN fails if VLAN does not exist."""
+    def test_vlan_disable_refuses_a_vlan_that_does_not_exist(self):
+        def _missing(db, ctx, vid):
+            ctx.fail("Vlan{} doesn't exist".format(vid))
 
-        self.db.cfgdb.set_entry = MagicMock()
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="VLAN 300 does not exist"
-        ))
+        with patch('config.stp.get_global_stp_mode', return_value='pvst'), \
+             patch('config.stp.check_if_vlan_exist_in_db', side_effect=_missing):
+            result = self._run(300)
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["vlan"]
-            .commands["disable"],
-            ["300"],  # VLAN 300 does not exist
-            obj=self.db,
-        )
+        assert result.exit_code != 0
+        assert "doesn't exist" in result.output.lower()
 
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
+    def test_vlan_disable_writes_the_row(self):
+        with patch('config.stp.get_global_stp_mode', return_value='pvst'), \
+             patch('config.stp.check_if_vlan_exist_in_db'):
+            result = self._run(400)
 
-        assert result.exit_code != 0, "Command should have failed for non-existent VLAN"
-        assert "vlan 300 does not exist" in actual_output
-
-    def test_stp_vlan_disable_success(self):
-        """Test that STP is successfully disabled for a VLAN."""
-
-        self.db.cfgdb.set_entry = MagicMock()
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="STP disabled successfully for VLAN 400"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["vlan"]
-            .commands["disable"],
-            ["400"],  # Valid VLAN 400
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code == 0, "Command should have succeeded"
-        assert "stp disabled successfully for vlan 400" in actual_output
+        assert result.exit_code == 0, result.output
+        self.db.cfgdb.mod_entry.assert_called_with(
+            'STP_VLAN', 'Vlan400', {'enabled': 'false'})
 
 
 class TestStpInterfaceEnable:
     def setup_method(self):
         """Setup test environment before each test."""
-        self.db = MagicMock()  # Mock database
-        self.db.cfgdb = MagicMock()  # Mock configuration DB
-        self.runner = MagicMock()  # Mock CLI runner
+        self.runner = CliRunner()
+        self.db = MagicMock()
+        # pass_db is make_pass_decorator(Db, ensure=True): it keeps the object
+        # given to invoke() only when that object is a Db, otherwise it quietly
+        # builds a real one over the mock tables and the stubs below do nothing.
+        self.db.__class__ = Db
+        self.db.cfgdb = MagicMock()
+        self.cmd = (config.config.commands["spanning-tree"]
+                    .commands["interface"].commands["enable"])
+
+    def _set_mode(self, mode, stp_port_entry=None):
+        def get_entry(table, key):
+            if table == 'STP' and key == 'GLOBAL':
+                return {'mode': mode} if mode != 'none' else {}
+            if table == 'STP_PORT':
+                return stp_port_entry or {}
+            return {}
+        self.db.cfgdb.get_entry.side_effect = get_entry
 
     def test_stp_interface_enable_no_stp_mode(self):
-        """Test that enabling STP fails if STP mode is 'none'."""
+        """Enabling STP for an interface fails when no global mode is set."""
+        self._set_mode('none')
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "none"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="Global STP is not enabled - first configure STP mode"
-        ))
+        result = self.runner.invoke(self.cmd, ["Ethernet0"], obj=self.db)
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["enable"],
-            ["Ethernet0"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code != 0, "Command should have failed with STP mode 'none'"
-        assert "global stp is not enabled" in actual_output
-
-    def test_stp_interface_enable_global_stp_disabled(self):
-        """Test that enabling STP fails if global STP is disabled."""
-
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "mstp"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="Global STP is not enabled"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["enable"],
-            ["Ethernet1"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code != 0, "Command should have failed as global STP is disabled"
-        assert "global stp is not enabled" in actual_output
+        assert result.exit_code != 0
+        assert "Global STP is not enabled" in result.output
+        self.db.cfgdb.mod_entry.assert_not_called()
 
     def test_stp_interface_enable_already_enabled(self):
-        """Test that enabling STP fails if STP is already enabled for the interface."""
+        """Enabling STP fails when the interface already has it enabled."""
+        self._set_mode('mst', stp_port_entry={'enabled': 'true'})
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "mstp"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="STP is already enabled for Ethernet2"
-        ))
+        result = self.runner.invoke(self.cmd, ["Ethernet2"], obj=self.db)
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["enable"],
-            ["Ethernet2"],  # STP already enabled
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code != 0, "Command should have failed as STP is already enabled"
-        assert "stp is already enabled for ethernet2" in actual_output
+        assert result.exit_code != 0
+        assert "STP is already enabled for Ethernet2" in result.output
 
     def test_stp_interface_enable_invalid_interface(self):
-        """Test that enabling STP fails for an invalid interface."""
+        """Enabling STP fails for an invalid interface."""
+        self._set_mode('pvst')
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "pvst"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="Invalid interface name"
-        ))
+        def fail_invalid(ctx, db, interface_name):
+            ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["enable"],
-            ["InvalidInterface"],  # Invalid interface
-            obj=self.db,
-        )
+        with patch('config.stp.check_if_interface_is_valid', side_effect=fail_invalid):
+            result = self.runner.invoke(self.cmd, ["InvalidInterface"], obj=self.db)
 
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
+        assert result.exit_code != 0
+        assert "Interface name is invalid" in result.output
+        self.db.cfgdb.mod_entry.assert_not_called()
 
-        assert result.exit_code != 0, "Command should have failed for invalid interface"
-        assert "invalid interface name" in actual_output
+    def test_stp_interface_enable_success_mst(self):
+        """STP is enabled for an interface in MST mode with MST attributes."""
+        self._set_mode('mst')
 
-    def test_stp_interface_enable_success_mstp(self):
-        """Test that STP is successfully enabled for an interface in MSTP mode."""
+        with patch('config.stp.check_if_interface_is_valid'):
+            result = self.runner.invoke(self.cmd, ["Ethernet3"], obj=self.db)
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "mstp"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="Mode mstp is enabled for interface Ethernet3"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["enable"],
-            ["Ethernet3"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code == 0, "Command should have succeeded"
-        assert "mode mstp is enabled for interface ethernet3" in actual_output
+        assert result.exit_code == 0
+        assert "Mode mst is enabled for interface Ethernet3" in result.output
+        seeded = self.db.cfgdb.mod_entry.call_args_list[0]
+        assert seeded.args[0] == 'STP_PORT'
+        assert seeded.args[1] == 'Ethernet3'
+        assert seeded.args[2]['edge_port'] == 'false'
+        assert seeded.args[2]['link_type'] == 'auto'
+        assert 'portfast' not in seeded.args[2]
+        self.db.cfgdb.mod_entry.assert_called_with('STP_PORT', 'Ethernet3', {'enabled': 'true'})
 
     def test_stp_interface_enable_success_pvst(self):
-        """Test that STP is successfully enabled for an interface in PVST mode."""
+        """STP is enabled for an interface in PVST mode with PVST attributes."""
+        self._set_mode('pvst')
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "pvst"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="Mode pvst is enabled for interface Ethernet4"
-        ))
+        with patch('config.stp.check_if_interface_is_valid'):
+            result = self.runner.invoke(self.cmd, ["Ethernet4"], obj=self.db)
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["enable"],
-            ["Ethernet4"],  # Valid interface
-            obj=self.db,
-        )
+        assert result.exit_code == 0
+        assert "Mode pvst is enabled for interface Ethernet4" in result.output
+        seeded = self.db.cfgdb.mod_entry.call_args_list[0]
+        assert seeded.args[2]['portfast'] == 'false'
+        assert seeded.args[2]['uplink_fast'] == 'false'
+        assert 'edge_port' not in seeded.args[2]
+        self.db.cfgdb.mod_entry.assert_called_with('STP_PORT', 'Ethernet4', {'enabled': 'true'})
 
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
+    def test_stp_interface_enable_preserves_existing_config(self):
+        """Enable seeds only absent fields, keeping operator config like bpdu_guard."""
+        self._set_mode('mst', stp_port_entry={'enabled': 'false', 'bpdu_guard': 'true'})
 
-        assert result.exit_code == 0, "Command should have succeeded"
-        assert "mode pvst is enabled for interface ethernet4" in actual_output
+        with patch('config.stp.check_if_interface_is_valid'):
+            result = self.runner.invoke(self.cmd, ["Ethernet5"], obj=self.db)
+
+        assert result.exit_code == 0
+        seeded = self.db.cfgdb.mod_entry.call_args_list[0]
+        assert 'bpdu_guard' not in seeded.args[2]
+        assert 'enabled' not in seeded.args[2]
+        self.db.cfgdb.mod_entry.assert_called_with('STP_PORT', 'Ethernet5', {'enabled': 'true'})
 
 
 class TestStpInterfaceDisable:
     def setup_method(self):
         """Setup test environment before each test."""
         self.runner = CliRunner()
-        self.cfgdb = MagicMock()
-        self.db = Db()
-        self.db.cfgdb = self.cfgdb
+        self.db = MagicMock()
+        self.db.__class__ = Db
+        self.db.cfgdb = MagicMock()
+        self.cmd = (config.config.commands["spanning-tree"]
+                    .commands["interface"].commands["disable"])
+
+    def _set_mode(self, mode):
+        def get_entry(table, key):
+            if table == 'STP' and key == 'GLOBAL':
+                return {'mode': mode} if mode != 'none' else {}
+            return {}
+        self.db.cfgdb.get_entry.side_effect = get_entry
 
     def test_stp_interface_disable_global_stp_disabled(self):
-        """Test that disabling STP fails if global STP is not enabled."""
+        """Disabling STP for an interface fails when no global mode is set."""
+        self._set_mode('none')
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "mstp"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="Global STP is not enabled"
-        ))
+        result = self.runner.invoke(self.cmd, ["Ethernet1"], obj=self.db)
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["Ethernet1"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code != 0, "Command should have failed as global STP is disabled"
-        assert "global stp is not enabled" in actual_output
+        assert result.exit_code != 0
+        assert "Global STP is not enabled" in result.output
+        self.db.cfgdb.mod_entry.assert_not_called()
+        self.db.cfgdb.set_entry.assert_not_called()
 
     def test_stp_interface_disable_invalid_interface(self):
-        """Test that disabling STP fails for an invalid interface."""
+        """Disabling STP fails for an invalid interface."""
+        self._set_mode('pvst')
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "pvst"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="Invalid interface name"
-        ))
+        def fail_invalid(ctx, db, interface_name):
+            ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["InvalidInterface"],  # Invalid interface
-            obj=self.db,
-        )
+        with patch('config.stp.check_if_interface_is_valid', side_effect=fail_invalid):
+            result = self.runner.invoke(self.cmd, ["InvalidInterface"], obj=self.db)
 
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
+        assert result.exit_code != 0
+        assert "Interface name is invalid" in result.output
+        self.db.cfgdb.mod_entry.assert_not_called()
 
-        assert result.exit_code != 0, "Command should have failed for invalid interface"
-        assert "invalid interface name" in actual_output
+    def test_stp_interface_disable_success_mst(self):
+        """STP is disabled for an interface in MST mode."""
+        self._set_mode('mst')
 
-    def test_stp_interface_disable_success_mstp(self):
-        """Test that STP is successfully disabled for an interface in MSTP mode."""
+        with patch('config.stp.check_if_interface_is_valid'):
+            result = self.runner.invoke(self.cmd, ["Ethernet3"], obj=self.db)
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "mstp"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="STP mode mstp is disabled for interface Ethernet3"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["Ethernet3"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code == 0, "Command should have succeeded"
-        assert "stp mode mstp is disabled for interface ethernet3" in actual_output
+        assert result.exit_code == 0
+        assert "STP mode mst is disabled for Ethernet3" in result.output
+        self.db.cfgdb.mod_entry.assert_called_once_with('STP_PORT', 'Ethernet3', {'enabled': 'false'})
+        self.db.cfgdb.set_entry.assert_not_called()
 
     def test_stp_interface_disable_success_pvst(self):
-        """Test that STP is successfully disabled for an interface in PVST mode."""
+        """STP is disabled for an interface in PVST mode."""
+        self._set_mode('pvst')
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "pvst"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="STP mode pvst is disabled for interface Ethernet4"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["Ethernet4"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code == 0, "Command should have succeeded"
-        assert "stp mode pvst is disabled for interface ethernet4" in actual_output
-
-    def test_stp_interface_disable_no_stp_mode_selected(self):
-        """Test that disabling STP prints a message if no mode is selected."""
-
-        self.db.cfgdb.get_entry = MagicMock(return_value={"mode": "none"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="No STP mode selected. Please select a mode first."
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["Ethernet5"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code == 0, "Command should have printed a warning"
-        assert "no stp mode selected" in actual_output
-
-    @patch('config.stp.check_if_global_stp_enabled')
-    @patch('config.stp.check_if_interface_is_valid')
-    def test_disable_interface_mstp(self, mock_check_valid, mock_check_global):
-        self.cfgdb.get_entry.return_value = {'mode': 'mstp'}
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["Ethernet0"],
-            obj=self.db
-        )
+        with patch('config.stp.check_if_interface_is_valid'):
+            result = self.runner.invoke(self.cmd, ["Ethernet4"], obj=self.db)
 
         assert result.exit_code == 0
-        self.cfgdb.set_entry.assert_called_with("STP_PORT", "Ethernet0", {"enabled": "false"})
-        assert "Current STP mode: mstp" in result.output
-        assert "STP mode mstp is disabled for Ethernet0" in result.output
-
-    @patch('config.stp.check_if_global_stp_enabled')
-    @patch('config.stp.check_if_interface_is_valid')
-    def test_disable_interface_pvst(self, mock_check_valid, mock_check_global):
-        self.cfgdb.get_entry.return_value = {'mode': 'pvst'}
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["Ethernet2"],
-            obj=self.db
-        )
-
-        assert result.exit_code == 0
-        self.cfgdb.set_entry.assert_called_with("STP_PORT", "Ethernet2", {"enabled": "false"})
-        assert "Current STP mode: pvst" in result.output
-        assert "STP mode pvst is disabled for Ethernet2" in result.output
-
-    @patch('config.stp.check_if_global_stp_enabled')
-    @patch('config.stp.check_if_interface_is_valid')
-    def test_disable_interface_with_no_mode(self, mock_check_valid, mock_check_global):
-        self.cfgdb.get_entry.return_value = {}  # No 'mode' key
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["disable"],
-            ["Ethernet9"],
-            obj=self.db
-        )
-
-        assert result.exit_code == 0
-        assert "Current STP mode: none" in result.output
-        assert "No STP mode selected" in result.output
+        assert "STP mode pvst is disabled for Ethernet4" in result.output
+        self.db.cfgdb.mod_entry.assert_called_once_with('STP_PORT', 'Ethernet4', {'enabled': 'false'})
+        self.db.cfgdb.set_entry.assert_not_called()
 
 
 class TestMstpInterfaceedge_port:
+    """`config spanning_tree interface edge_port`, invoked for real."""
+
     def setup_method(self):
-        """Setup test environment before each test."""
-        self.db = MagicMock()  # Mock database
-        self.db.cfgdb = MagicMock()  # Mock configuration DB
-        self.runner = MagicMock()  # Mock CLI runner
+        self.db = MagicMock()
+        self.db.__class__ = Db
+        self.db.cfgdb = self.db
+        self.runner = CliRunner()
 
-    def test_mstp_edge_port_stp_not_enabled(self):
-        """Test that configuring edge port fails if STP is not enabled for the interface."""
-
-        self.db.cfgdb.get_entry = MagicMock(return_value={})  # STP not enabled
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="STP is not enabled for Ethernet0"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["edge_port"],
-            ["enable", "Ethernet0"],  # Valid interface
+    def _run(self, state, ifname):
+        return self.runner.invoke(
+            config.config.commands["spanning-tree"].commands["interface"].commands["edge_port"],
+            [state, ifname],
             obj=self.db,
         )
 
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
+    def test_edge_port_rejected_outside_mst(self):
+        with patch('config.stp.get_global_stp_mode', return_value='pvst'):
+            result = self._run("enable", "Ethernet0")
 
-        assert result.exit_code != 0, "Command should have failed because STP is not enabled"
-        assert "stp is not enabled for ethernet0" in actual_output
+        assert result.exit_code != 0
+        assert "mstp only" in result.output.lower()
 
-    def test_mstp_edge_port_invalid_interface(self):
-        """Test that configuring edge port fails for an invalid interface."""
+    def test_edge_port_refuses_an_interface_stp_is_not_enabled_on(self):
+        def _not_enabled(ctx, db, ifname):
+            ctx.fail("STP is not enabled on interface {}".format(ifname))
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"enabled": "true"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=1,
-            output="Invalid interface name"
-        ))
+        with patch('config.stp.get_global_stp_mode', return_value='mst'), \
+             patch('config.stp.check_if_stp_enabled_for_interface', side_effect=_not_enabled):
+            result = self._run("enable", "Ethernet0")
 
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["edge_port"],
-            ["enable", "InvalidInterface"],  # Invalid interface
-            obj=self.db,
-        )
+        assert result.exit_code != 0
+        assert "not enabled" in result.output.lower()
 
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
+    def test_edge_port_enable_writes_true(self):
+        with patch('config.stp.get_global_stp_mode', return_value='mst'), \
+             patch('config.stp.check_if_stp_enabled_for_interface'), \
+             patch('config.stp.check_if_interface_is_valid'):
+            result = self._run("enable", "Ethernet0")
 
-        assert result.exit_code != 0, "Command should have failed for invalid interface"
-        assert "invalid interface name" in actual_output
+        assert result.exit_code == 0, result.output
+        self.db.cfgdb.mod_entry.assert_called_with(
+            'STP_PORT', 'Ethernet0', {'edge_port': 'true'})
 
-    def test_mstp_edge_port_enable_success(self):
-        """Test that edge port is successfully enabled on a valid interface."""
+    def test_edge_port_disable_writes_false(self):
+        with patch('config.stp.get_global_stp_mode', return_value='mst'), \
+             patch('config.stp.check_if_stp_enabled_for_interface'), \
+             patch('config.stp.check_if_interface_is_valid'):
+            result = self._run("disable", "Ethernet0")
 
-        self.db.cfgdb.get_entry = MagicMock(return_value={"enabled": "true"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="Edge port is enabled for interface Ethernet1"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["edge_port"],
-            ["enable", "Ethernet1"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code == 0, "Command should have succeeded"
-        assert "edge port is enabled for interface ethernet1" in actual_output
-
-    def test_mstp_edge_port_disable_success(self):
-        """Test that edge port is successfully disabled on a valid interface."""
-
-        self.db.cfgdb.get_entry = MagicMock(return_value={"enabled": "true"})
-        self.runner.invoke = MagicMock(return_value=MagicMock(
-            exit_code=0,
-            output="Edge port is disabled for interface Ethernet2"
-        ))
-
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["edge_port"],
-            ["disable", "Ethernet2"],  # Valid interface
-            obj=self.db,
-        )
-
-        actual_output = result.output.strip().lower()
-        print(f"\nMocked Command Output:\n{actual_output}")
-
-        assert result.exit_code == 0, "Command should have succeeded"
-        assert "edge port is disabled for interface ethernet2" in actual_output
+        assert result.exit_code == 0, result.output
+        self.db.cfgdb.mod_entry.assert_called_with(
+            'STP_PORT', 'Ethernet0', {'edge_port': 'false'})
 
 
 class TestStpVlanHelloInterval:
@@ -1849,58 +1660,44 @@ class TestStpInterfaceLinkTypeSet:
     def setup_method(self):
         self.runner = CliRunner()
         self.cfgdb = MagicMock()
+        self.cfgdb.get_entry.return_value = {}
         self.db = Db()
         self.db.cfgdb = self.cfgdb
 
+    @staticmethod
+    def _set_cmd():
+        return (config.config.commands["spanning-tree"]
+                .commands["interface"]
+                .commands["link-type"]
+                .commands["set"])
+
+    # Used to succeed in PVST and write 'p2p', which the YANG rejects.
     @patch('config.stp.get_global_stp_mode', return_value='pvst')
     @patch('config.stp.check_if_interface_is_valid')
     @patch('config.stp.check_if_stp_enabled_for_interface')
-    def test_set_link_type_pvst(self, mock_enabled, mock_valid, mock_mode):
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["link-type"]
-            .commands["set"],
-            ["P2P", "Ethernet4"],
-            obj=self.db,
-        )
+    def test_set_link_type_pvst_is_refused(self, mock_enabled, mock_valid, mock_mode):
+        result = self.runner.invoke(self._set_cmd(), ["P2P", "Ethernet4"], obj=self.db)
 
-        assert result.exit_code == 0
-        self.cfgdb.mod_entry.assert_called_with('STP_PORT', 'Ethernet4', {
-            'link_type': 'p2p',
-            'portfast': 'false',
-            'uplink_fast': 'false'
-        })
+        assert result.exit_code != 0
+        assert not self.cfgdb.mod_entry.called
 
     @patch('config.stp.get_global_stp_mode', return_value='mst')
     @patch('config.stp.check_if_interface_is_valid')
     @patch('config.stp.check_if_stp_enabled_for_interface')
     def test_set_link_type_mst(self, mock_enabled, mock_valid, mock_mode):
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["link-type"]
-            .commands["set"],
-            ["Shared-Lan", "Ethernet8"],
-            obj=self.db,
-        )
+        result = self.runner.invoke(self._set_cmd(), ["Shared-Lan", "Ethernet8"], obj=self.db)
 
         assert result.exit_code == 0
-        self.cfgdb.mod_entry.assert_called_with('STP_PORT', 'Ethernet8', {
-            'link_type': 'shared',
-            'edge_port': 'false'
-        })
+        # Only the field the command is for. edge_port used to be written too.
+        self.cfgdb.mod_entry.assert_called_with(
+            'STP_PORT', 'Ethernet8', {'link_type': 'shared'})
 
-    @patch('config.stp.check_if_stp_enabled_for_interface', side_effect=click.ClickException("STP not enabled"))
-    def test_stp_not_enabled(self, mock_check_enabled):
-        result = self.runner.invoke(
-            config.config.commands["spanning-tree"]
-            .commands["interface"]
-            .commands["link-type"]
-            .commands["set"],
-            ["Auto", "Ethernet1"],
-            obj=self.db,
-        )
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
+    @patch('config.stp.check_if_stp_enabled_for_interface',
+           side_effect=click.ClickException("STP not enabled"))
+    def test_stp_not_enabled(self, mock_check_enabled, mock_mode):
+        result = self.runner.invoke(self._set_cmd(), ["Auto", "Ethernet1"], obj=self.db)
+
         assert result.exit_code != 0
         assert "STP not enabled" in result.output
 
@@ -2134,6 +1931,8 @@ class TestStpInterfaceRootGuardDisable:
     def setup_method(self):
         self.runner = CliRunner()
         self.cfgdb = MagicMock()
+        # Unconfigured port: defaults are seeded, the guard field written after.
+        self.cfgdb.get_entry.return_value = {}
         self.db = Db()
         self.db.cfgdb = self.cfgdb
 
@@ -2150,11 +1949,7 @@ class TestStpInterfaceRootGuardDisable:
         )
 
         assert result.exit_code == 0
-        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {
-            "root_guard": "false",
-            "portfast": "false",
-            "uplink_fast": "false"
-        })
+        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {"root_guard": "false"})
 
     @patch('config.stp.get_global_stp_mode', return_value='mstp')
     @patch('config.stp.check_if_interface_is_valid')
@@ -2169,11 +1964,7 @@ class TestStpInterfaceRootGuardDisable:
         )
 
         assert result.exit_code == 0
-        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet4", {
-            "root_guard": "false",
-            "edge_port": "false",
-            "link_type": "auto"
-        })
+        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet4", {"root_guard": "false"})
 
     @patch('config.stp.check_if_interface_is_valid', side_effect=click.ClickException("Invalid interface"))
     def test_root_guard_disable_invalid_interface(self, mock_check_valid):
@@ -2194,6 +1985,8 @@ class TestStpInterfaceRootGuardEnable:
     def setup_method(self):
         self.runner = CliRunner()
         self.cfgdb = MagicMock()
+        # Unconfigured port: defaults are seeded, the guard field written after.
+        self.cfgdb.get_entry.return_value = {}
         self.db = Db()
         self.db.cfgdb = self.cfgdb
 
@@ -2210,11 +2003,7 @@ class TestStpInterfaceRootGuardEnable:
         )
 
         assert result.exit_code == 0
-        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {
-            "root_guard": "true",
-            "portfast": "false",
-            "uplink_fast": "false"
-        })
+        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {"root_guard": "true"})
 
     @patch('config.stp.get_global_stp_mode', return_value='mstp')
     @patch('config.stp.check_if_interface_is_valid')
@@ -2229,11 +2018,7 @@ class TestStpInterfaceRootGuardEnable:
         )
 
         assert result.exit_code == 0
-        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet4", {
-            "root_guard": "true",
-            "edge_port": "false",
-            "link_type": "auto"
-        })
+        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet4", {"root_guard": "true"})
 
     @patch('config.stp.check_if_interface_is_valid', side_effect=click.ClickException("Invalid interface"))
     def test_root_guard_enable_invalid_interface(self, mock_check_valid):
@@ -2254,6 +2039,8 @@ class TestStpInterfaceBpduGuardDisable:
     def setup_method(self):
         self.runner = CliRunner()
         self.cfgdb = MagicMock()
+        # Unconfigured port: defaults are seeded, the guard field written after.
+        self.cfgdb.get_entry.return_value = {}
         self.db = Db()
         self.db.cfgdb = self.cfgdb
 
@@ -2272,9 +2059,7 @@ class TestStpInterfaceBpduGuardDisable:
         assert result.exit_code == 0
         self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {
             "bpdu_guard": "false",
-            "bpdu_guard_do_disable": "false",
-            "portfast": "false",
-            "uplink_fast": "false"
+            "bpdu_guard_do_disable": "false"
         })
 
     @patch('config.stp.get_global_stp_mode', return_value='mstp')
@@ -2292,9 +2077,7 @@ class TestStpInterfaceBpduGuardDisable:
         assert result.exit_code == 0
         self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet4", {
             "bpdu_guard": "false",
-            "bpdu_guard_do_disable": "false",
-            "edge_port": "false",
-            "link_type": "auto"
+            "bpdu_guard_do_disable": "false"
         })
 
     @patch('config.stp.check_if_interface_is_valid', side_effect=click.ClickException("Invalid interface"))
@@ -2316,6 +2099,8 @@ class TestStpInterfaceBpduGuardEnable:
     def setup_method(self):
         self.runner = CliRunner()
         self.cfgdb = MagicMock()
+        # Unconfigured port: defaults are seeded, the guard field written after.
+        self.cfgdb.get_entry.return_value = {}
         self.db = Db()
         self.db.cfgdb = self.cfgdb
 
@@ -2334,9 +2119,7 @@ class TestStpInterfaceBpduGuardEnable:
         assert result.exit_code == 0
         self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet1", {
             "bpdu_guard": "true",
-            "bpdu_guard_do_disable": "true",
-            "portfast": "false",
-            "uplink_fast": "false"
+            "bpdu_guard_do_disable": "true"
         })
 
     @patch('config.stp.get_global_stp_mode', return_value='mstp')
@@ -2354,9 +2137,7 @@ class TestStpInterfaceBpduGuardEnable:
         assert result.exit_code == 0
         self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet2", {
             "bpdu_guard": "true",
-            "bpdu_guard_do_disable": "false",
-            "edge_port": "false",
-            "link_type": "auto"
+            "bpdu_guard_do_disable": "false"
         })
 
     @patch('config.stp.check_if_interface_is_valid', side_effect=click.ClickException("Invalid interface"))
@@ -2372,3 +2153,360 @@ class TestStpInterfaceBpduGuardEnable:
 
         assert result.exit_code != 0
         assert "Invalid interface" in result.output
+
+
+class TestStpGuardCommandsPreservePortConfig:
+    """A guard command must change its own field and nothing else."""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.cfgdb = MagicMock()
+        self.db = Db()
+        self.db.cfgdb = self.cfgdb
+
+    def _written(self):
+        """Every field written to STP_PORT across all calls, merged in order."""
+        merged = {}
+        for call in self.cfgdb.mod_entry.call_args_list:
+            assert call.args[0] == "STP_PORT"
+            merged.update(call.args[2])
+        return merged
+
+    @pytest.mark.parametrize("group_name,verb,field,expected", [
+        ("root_guard", "enable", "root_guard", "true"),
+        ("root-guard", "disable", "root_guard", "false"),
+        ("bpdu-guard", "enable", "bpdu_guard", "true"),
+        ("bpdu-guard", "disable", "bpdu_guard", "false"),
+    ])
+    @patch('config.stp.get_global_stp_mode', return_value='pvst')
+    @patch('config.stp.check_if_interface_is_valid')
+    def test_pvst_guard_does_not_reset_uplink_fast(
+            self, mock_check_valid, mock_get_mode, group_name, verb, field, expected):
+        # A port the operator has already configured.
+        self.cfgdb.get_entry.return_value = {
+            "enabled": "true",
+            "portfast": "true",
+            "uplink_fast": "true",
+        }
+
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["interface"]
+            .commands[group_name]
+            .commands[verb],
+            ["Ethernet0"],
+            obj=self.db
+        )
+
+        assert result.exit_code == 0, result.output
+        written = self._written()
+        assert written[field] == expected
+        assert "portfast" not in written, "portfast was reset by a guard command"
+        assert "uplink_fast" not in written, "uplink_fast was reset by a guard command"
+
+    @pytest.mark.parametrize("group_name,verb", [
+        ("root_guard", "enable"),
+        ("root-guard", "disable"),
+        ("bpdu-guard", "enable"),
+        ("bpdu-guard", "disable"),
+    ])
+    @patch('config.stp.get_global_stp_mode', return_value='mstp')
+    @patch('config.stp.check_if_interface_is_valid')
+    def test_mstp_guard_does_not_reset_link_type(
+            self, mock_check_valid, mock_get_mode, group_name, verb):
+        self.cfgdb.get_entry.return_value = {
+            "enabled": "true",
+            "edge_port": "true",
+            "link_type": "shared",
+        }
+
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["interface"]
+            .commands[group_name]
+            .commands[verb],
+            ["Ethernet0"],
+            obj=self.db
+        )
+
+        assert result.exit_code == 0, result.output
+        written = self._written()
+        assert "edge_port" not in written, "edge_port was reset by a guard command"
+        assert "link_type" not in written, "link_type was reset by a guard command"
+
+    @pytest.mark.parametrize("group_name,verb", [
+        ("root_guard", "enable"),
+        ("root-guard", "disable"),
+        ("bpdu-guard", "enable"),
+        ("bpdu-guard", "disable"),
+    ])
+    @patch('config.stp.get_global_stp_mode', return_value='pvst')
+    @patch('config.stp.check_if_interface_is_valid')
+    def test_defaults_still_seeded_on_a_fresh_port(
+            self, mock_check_valid, mock_get_mode, group_name, verb):
+        # A new row still needs its defaults.
+        self.cfgdb.get_entry.return_value = {}
+
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["interface"]
+            .commands[group_name]
+            .commands[verb],
+            ["Ethernet0"],
+            obj=self.db
+        )
+
+        assert result.exit_code == 0, result.output
+        written = self._written()
+        assert written["portfast"] == "false"
+        assert written["uplink_fast"] == "false"
+
+
+class TestStpInterfaceRootGuardSpellings:
+    """Both spellings must expose both subcommands."""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.cfgdb = MagicMock()
+        self.cfgdb.get_entry.return_value = {}
+        self.db = Db()
+        self.db.cfgdb = self.cfgdb
+
+    @staticmethod
+    def _group(name):
+        return (config.config.commands["spanning-tree"]
+                .commands["interface"]
+                .commands[name])
+
+    @pytest.mark.parametrize("spelling", ["root_guard", "root-guard"])
+    def test_both_spellings_expose_both_subcommands(self, spelling):
+        assert sorted(self._group(spelling).commands) == ["disable", "enable"]
+
+    def test_the_two_spellings_are_the_same_group(self):
+        assert self._group("root_guard") is self._group("root-guard")
+
+    @pytest.mark.parametrize("spelling", ["root_guard", "root-guard"])
+    @pytest.mark.parametrize("verb,expected", [("enable", "true"), ("disable", "false")])
+    @patch('config.stp.get_global_stp_mode', return_value='pvst')
+    @patch('config.stp.check_if_interface_is_valid')
+    def test_every_spelling_and_verb_combination_works(
+            self, mock_check_valid, mock_get_mode, verb, expected, spelling):
+        result = self.runner.invoke(
+            self._group(spelling).commands[verb], ["Ethernet0"], obj=self.db)
+
+        assert result.exit_code == 0, result.output
+        self.cfgdb.mod_entry.assert_called_with(
+            "STP_PORT", "Ethernet0", {"root_guard": expected})
+
+
+class TestStpInterfaceBpduGuardSpellings:
+    """The documented underscored spelling must actually exist."""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.cfgdb = MagicMock()
+        self.cfgdb.get_entry.return_value = {}
+        self.db = Db()
+        self.db.cfgdb = self.cfgdb
+
+    @staticmethod
+    def _group(name):
+        return (config.config.commands["spanning-tree"]
+                .commands["interface"]
+                .commands[name])
+
+    @pytest.mark.parametrize("spelling", ["bpdu_guard", "bpdu-guard"])
+    def test_both_spellings_expose_both_subcommands(self, spelling):
+        assert sorted(self._group(spelling).commands) == ["disable", "enable"]
+
+    def test_the_two_spellings_are_the_same_group(self):
+        assert self._group("bpdu_guard") is self._group("bpdu-guard")
+
+    @pytest.mark.parametrize("spelling", ["bpdu_guard", "bpdu-guard"])
+    @pytest.mark.parametrize("verb,expected", [("enable", "true"), ("disable", "false")])
+    @patch('config.stp.get_global_stp_mode', return_value='pvst')
+    @patch('config.stp.check_if_interface_is_valid')
+    def test_every_spelling_and_verb_combination_works(
+            self, mock_check_valid, mock_get_mode, verb, expected, spelling):
+        result = self.runner.invoke(
+            self._group(spelling).commands[verb], ["Ethernet0"], obj=self.db)
+
+        assert result.exit_code == 0, result.output
+        self.cfgdb.mod_entry.assert_called_with("STP_PORT", "Ethernet0", {
+            "bpdu_guard": expected,
+            "bpdu_guard_do_disable": "false",
+        })
+
+
+class TestShowStpGuardSpellings:
+    """show takes both spellings of the guard views, and abbreviations still resolve."""
+
+    @staticmethod
+    def _show_stp():
+        return show.cli.commands["spanning-tree"]
+
+    @pytest.mark.parametrize("underscore,hyphen", [
+        ("bpdu_guard", "bpdu-guard"),
+        ("root_guard", "root-guard"),
+    ])
+    def test_the_two_spellings_are_the_same_command(self, underscore, hyphen):
+        commands = self._show_stp().commands
+        assert commands[underscore] is commands[hyphen]
+
+    @pytest.mark.parametrize("name,expected", [
+        ("bpdu_guard", "show_stp_bpdu_guard"),
+        ("bpdu-guard", "show_stp_bpdu_guard"),
+        ("bpdu", "show_stp_bpdu_guard"),
+        ("root_guard", "show_stp_root_guard"),
+        ("root-guard", "show_stp_root_guard"),
+        ("root", "show_stp_root_guard"),
+    ])
+    def test_every_spelling_and_abbreviation_resolves(self, name, expected):
+        group = self._show_stp()
+        with click.Context(group) as ctx:
+            assert group.get_command(ctx, name).callback.__name__ == expected
+
+    @pytest.mark.parametrize("args", [["bpdu-guard"], ["root-guard"]])
+    def test_hyphen_spelling_runs(self, args):
+        result = CliRunner().invoke(self._show_stp(), args, obj=Db())
+        assert result.exit_code == 0, result.output
+
+
+# The only link_type values the YANG allows.
+LINK_TYPE_LEGAL_VALUES = {"auto", "shared", "point-to-point"}
+
+
+class TestStpInterfaceEdgePortSingleDefinition:
+    """edge_port must have one implementation, not a live one and a dead one."""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.cfgdb = MagicMock()
+        self.cfgdb.get_entry.return_value = {}
+        self.db = Db()
+        self.db.cfgdb = self.cfgdb
+
+    @staticmethod
+    def _iface():
+        return config.config.commands["spanning-tree"].commands["interface"]
+
+    def test_edge_port_has_one_implementation(self):
+        edge_port = self._iface().commands["edge_port"]
+        assert not hasattr(edge_port, "commands"), \
+            "edge_port should be a single command, not a group"
+        assert edge_port.callback.__name__ == "mstp_interface_edge_port"
+
+    def test_the_shadowed_group_is_gone(self):
+        # If the group still exists, so does the dead code on it.
+        assert not hasattr(config.stp, "spanning_tree_interface_edge_port")
+        assert not hasattr(config.stp, "stp_interface_edge_port_enable")
+        assert not hasattr(config.stp, "stp_interface_edge_port_disable")
+
+    @pytest.mark.parametrize("state,expected", [("enable", "true"), ("disable", "false")])
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
+    def test_edge_port_still_works(self, mock_mode, mock_stp_en, mock_valid, state, expected):
+        result = self.runner.invoke(
+            self._iface().commands["edge_port"], [state, "Ethernet0"], obj=self.db)
+        assert result.exit_code == 0, result.output
+        self.cfgdb.mod_entry.assert_called_with(
+            "STP_PORT", "Ethernet0", {"edge_port": expected})
+
+
+class TestStpInterfaceLinkType:
+    """Both link_type spellings share one group and write YANG-legal values."""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.cfgdb = MagicMock()
+        self.cfgdb.get_entry.return_value = {}
+        self.db = Db()
+        self.db.cfgdb = self.cfgdb
+
+    @staticmethod
+    def _group(name):
+        return config.config.commands["spanning-tree"].commands["interface"].commands[name]
+
+    def _written(self):
+        merged = {}
+        for call in self.cfgdb.mod_entry.call_args_list:
+            merged.update(call.args[2])
+        return merged
+
+    def test_the_two_spellings_are_the_same_group(self):
+        assert self._group("link_type") is self._group("link-type")
+
+    @pytest.mark.parametrize("spelling", ["link_type", "link-type"])
+    def test_both_spellings_expose_the_same_subcommands(self, spelling):
+        assert sorted(self._group(spelling).commands) == \
+            ["auto", "point-to-point", "set", "shared"]
+
+    @pytest.mark.parametrize("spelling", ["link_type", "link-type"])
+    @pytest.mark.parametrize("choice,expected", [
+        ("P2P", "point-to-point"),
+        ("Shared-Lan", "shared"),
+        ("Auto", "auto"),
+    ])
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
+    def test_set_writes_a_value_yang_accepts(
+            self, mock_mode, mock_stp_en, mock_valid, choice, expected, spelling):
+        result = self.runner.invoke(
+            self._group(spelling).commands["set"], [choice, "Ethernet0"], obj=self.db)
+
+        assert result.exit_code == 0, result.output
+        written = self._written()
+        assert written["link_type"] == expected
+        assert written["link_type"] in LINK_TYPE_LEGAL_VALUES, \
+            "wrote a link_type the YANG enumeration will refuse"
+
+    @pytest.mark.parametrize("subcommand,expected", [
+        ("point-to-point", "point-to-point"),
+        ("shared", "shared"),
+        ("auto", "auto"),
+    ])
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
+    def test_named_subcommands_write_legal_values(
+            self, mock_mode, mock_stp_en, mock_valid, subcommand, expected):
+        result = self.runner.invoke(
+            self._group("link_type").commands[subcommand], ["Ethernet0"], obj=self.db)
+
+        assert result.exit_code == 0, result.output
+        assert self._written()["link_type"] == expected
+
+    # The YANG allows link_type only in MST mode, so PVST must be refused.
+    @pytest.mark.parametrize("subcommand,args", [
+        ("point-to-point", ["Ethernet0"]),
+        ("shared", ["Ethernet0"]),
+        ("auto", ["Ethernet0"]),
+        ("set", ["P2P", "Ethernet0"]),
+    ])
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    @patch('config.stp.get_global_stp_mode', return_value='pvst')
+    def test_link_type_is_refused_in_pvst_mode(
+            self, mock_mode, mock_stp_en, mock_valid, subcommand, args):
+        result = self.runner.invoke(
+            self._group("link_type").commands[subcommand], args, obj=self.db)
+
+        assert result.exit_code != 0, "link_type must be refused in PVST mode"
+        assert not self.cfgdb.mod_entry.called, "nothing should be written"
+
+    @patch('config.stp.check_if_interface_is_valid')
+    @patch('config.stp.check_if_stp_enabled_for_interface')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
+    def test_set_does_not_reset_unrelated_port_config(
+            self, mock_mode, mock_stp_en, mock_valid):
+        self.cfgdb.get_entry.return_value = {"edge_port": "true", "link_type": "shared"}
+
+        result = self.runner.invoke(
+            self._group("link-type").commands["set"], ["P2P", "Ethernet0"], obj=self.db)
+
+        assert result.exit_code == 0, result.output
+        written = self._written()
+        assert written["link_type"] == "point-to-point"
+        assert "edge_port" not in written, "edge_port was reset by a link-type command"
