@@ -377,8 +377,10 @@ class ConsolePortInfo(object):
                 self._update_state(IDLE_FLAG, "", "")
 
     def _update_state(self, state, pid, date, line_num=None):
-        self._info[CUR_STATE_KEY] = self._db_utils.update_state(
-            self.line_num if line_num is None else line_num, state, pid, date)
+        target_line = self.line_num if line_num is None else line_num
+        updated_state = self._db_utils.update_state(target_line, state, pid, date)
+        if target_line == self.line_num:
+            self._info[CUR_STATE_KEY] = updated_state
 
 class ConsoleSession(object):
     """

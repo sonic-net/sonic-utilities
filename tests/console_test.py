@@ -1143,6 +1143,23 @@ class TestConsutilLib(object):
         assert port.session_pid == "223"
         assert port.session_start_date == "2020/11/2"
 
+    @mock.patch(
+        'consutil.lib.SysInfoProvider.list_active_console_processes',
+        mock.MagicMock(return_value={
+            "1": ("111", "2020/11/1"),
+            "2": ("222", "2020/11/2"),
+        }),
+    )
+    def test_console_port_info_refresh_keeps_target_line_state(self):
+        db = Db()
+
+        port = ConsolePortInfo(DbUtils(db), {"LINE": "1"})
+        port.refresh()
+
+        assert port.busy
+        assert port.session_pid == "111"
+        assert port.session_start_date == "2020/11/1"
+
     @mock.patch('consutil.lib.SysInfoProvider.list_active_console_processes',
                 mock.MagicMock(return_value={"2": ("223", "2020/11/2")}))
     def test_console_port_info_refresh_without_session_idle(self):
@@ -1260,6 +1277,24 @@ class TestConsutilLib(object):
 
         port.refresh = mock.MagicMock(return_value=None)
         assert port.clear_session()
+
+    def test_console_port_info_clear_session_kills_target_line_only(self):
+        db = Db()
+        port = ConsolePortInfo(DbUtils(db), {"LINE": "72", "baud_rate": "9600"})
+        active_processes = {
+            "72": ("100", "2020/11/1"),
+            "62": ("200", "2020/11/2"),
+        }
+
+        with mock.patch(
+            'consutil.lib.SysInfoProvider.list_active_console_processes',
+            return_value=active_processes,
+        ), mock.patch('consutil.lib.SysInfoProvider.run_command') as run_command:
+            assert port.clear_session()
+
+        run_command.assert_called_once_with(
+            ['sudo', 'kill', '-SIGTERM', '100']
+        )
 
     def test_console_port_info_clear_session_with_existing_session(self):
         db = Db()
