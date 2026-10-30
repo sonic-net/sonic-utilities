@@ -199,12 +199,31 @@ class TestMajorLeakThreshold(object):
 
     def test_major_leak_threshold_default_removes_override(self):
         mock_cfgdb = MagicMock()
+        mock_cfgdb.get_entry.return_value = {
+            'system_major_leak_num_min_sensors': '3', 'system_leak_policy': 'enabled'}
         result = self._invoke(['major-leak-threshold', 'default'], mock_cfgdb)
         assert result.exit_code == 0, result.output
         assert 'platform default' in result.output
-        mock_cfgdb.mod_entry.assert_called_once_with(
-            'LEAK_CONTROL_POLICY', 'policy', {'system_major_leak_num_min_sensors': None}
+        mock_cfgdb.set_entry.assert_called_once_with(
+            'LEAK_CONTROL_POLICY', 'policy', {'system_leak_policy': 'enabled'}
         )
+        mock_cfgdb.mod_entry.assert_not_called()
+
+    def test_major_leak_threshold_default_last_field_deletes_entry(self):
+        mock_cfgdb = MagicMock()
+        mock_cfgdb.get_entry.return_value = {'system_major_leak_num_min_sensors': '3'}
+        result = self._invoke(['major-leak-threshold', 'default'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        mock_cfgdb.set_entry.assert_called_once_with('LEAK_CONTROL_POLICY', 'policy', None)
+
+    def test_major_leak_threshold_default_without_override_is_noop(self):
+        mock_cfgdb = MagicMock()
+        mock_cfgdb.get_entry.return_value = {'system_leak_policy': 'enabled'}
+        result = self._invoke(['major-leak-threshold', 'default'], mock_cfgdb)
+        assert result.exit_code == 0, result.output
+        assert 'platform default' in result.output
+        mock_cfgdb.set_entry.assert_not_called()
+        mock_cfgdb.mod_entry.assert_not_called()
 
     def test_major_leak_threshold_below_floor_rejected(self):
         mock_cfgdb = MagicMock()

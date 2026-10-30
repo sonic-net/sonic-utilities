@@ -70,8 +70,12 @@ def major_leak_threshold(db, num_sensors):
     beyond MAX-T is still classified as MAJOR. Use 'default' to remove the override and
     return to the platform default."""
     if num_sensors.lower() == 'default':
-        db.cfgdb.mod_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY,
-                           {MAJOR_LEAK_MIN_SENSORS_FIELD: None})
+        entry = db.cfgdb.get_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY)
+        if MAJOR_LEAK_MIN_SENSORS_FIELD in entry:
+            remaining_entry = dict(entry)
+            remaining_entry.pop(MAJOR_LEAK_MIN_SENSORS_FIELD)
+            db.cfgdb.set_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY,
+                               remaining_entry if remaining_entry else None)
         click.echo("Major leak threshold (MIN-N) reset to the platform default")
         return
     if not (num_sensors.isdigit() and
