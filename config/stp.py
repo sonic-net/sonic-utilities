@@ -187,11 +187,44 @@ def validate_params(forward_delay, max_age, hello_time):
         return False
 
 
+STP_TIMER_DEFAULTS = {
+    "forward_delay": STP_DEFAULT_FORWARD_DELAY,
+    "max_age": STP_DEFAULT_MAX_AGE,
+    "hello_time": STP_DEFAULT_HELLO_INTERVAL,
+}
+
+
+def resolve_timer(entry, field, fallback):
+    """Read one timer, falling back when the row does not carry it.
+
+    A row holding only the leaves an operator set is the normal shape:
+    GCU and other YANG-driven tools write nothing for a field left at its
+    YANG default. The
+    daemon runs with the default in that case, so validation has to compare
+    against the same value rather than against None.
+    """
+    value = entry.get(field)
+    if value is None or value == "":
+        return fallback
+    return value
+
+
+def resolve_vlan_timer(stp_vlan_entry, stp_global_entry, field):
+    """A per-VLAN timer follows the global one, which follows the default."""
+    return resolve_timer(
+        stp_vlan_entry, field,
+        resolve_timer(stp_global_entry, field, STP_TIMER_DEFAULTS[field]))
+
+
 def is_valid_stp_vlan_parameters(ctx, db, vlan_name, param_type, new_value):
     stp_vlan_entry = db.get_entry('STP_VLAN', vlan_name)
-    cfg_vlan_forward_delay = stp_vlan_entry.get("forward_delay")
-    cfg_vlan_max_age = stp_vlan_entry.get("max_age")
-    cfg_vlan_hello_time = stp_vlan_entry.get("hello_time")
+    stp_global_entry = db.get_entry('STP', "GLOBAL")
+    cfg_vlan_forward_delay = resolve_vlan_timer(
+        stp_vlan_entry, stp_global_entry, "forward_delay")
+    cfg_vlan_max_age = resolve_vlan_timer(
+        stp_vlan_entry, stp_global_entry, "max_age")
+    cfg_vlan_hello_time = resolve_vlan_timer(
+        stp_vlan_entry, stp_global_entry, "hello_time")
     ret_val = False
     if param_type == "forward_delay":
         ret_val = validate_params(new_value, cfg_vlan_max_age, cfg_vlan_hello_time)
@@ -206,9 +239,12 @@ def is_valid_stp_vlan_parameters(ctx, db, vlan_name, param_type, new_value):
 
 def is_valid_stp_global_parameters(ctx, db, param_type, new_value):
     stp_global_entry = db.get_entry('STP', "GLOBAL")
-    cfg_forward_delay = stp_global_entry.get("forward_delay")
-    cfg_max_age = stp_global_entry.get("max_age")
-    cfg_hello_time = stp_global_entry.get("hello_time")
+    cfg_forward_delay = resolve_timer(
+        stp_global_entry, "forward_delay", STP_DEFAULT_FORWARD_DELAY)
+    cfg_max_age = resolve_timer(
+        stp_global_entry, "max_age", STP_DEFAULT_MAX_AGE)
+    cfg_hello_time = resolve_timer(
+        stp_global_entry, "hello_time", STP_DEFAULT_HELLO_INTERVAL)
     ret_val = False
     if param_type == "forward_delay":
         ret_val = validate_params(new_value, cfg_max_age, cfg_hello_time)

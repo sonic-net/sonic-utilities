@@ -600,6 +600,83 @@ class TestStpVlanForwardDelay:
         assert updated_vlan_entry.get("forward_delay") == "11", "Forward delay was not updated!"
 
 
+class TestStpTimerPartialRow:
+    """A row that carries only the leaves an operator set is the normal shape.
+
+    GCU and other YANG-driven tools write nothing for a field left at its
+    YANG default, so the timer
+    validation has to cope with siblings that are simply absent.
+    """
+
+    def setup_method(self):
+        self.runner = CliRunner()
+        self.db = Db()
+
+    def _pvst_vlan(self, stp_vlan_fields):
+        self.db.cfgdb.set_entry('STP', "GLOBAL", {"mode": "pvst"})
+        self.db.cfgdb.set_entry('VLAN', "Vlan100", {"vlanid": "100"})
+        self.db.cfgdb.set_entry('STP_VLAN', "Vlan100", stp_vlan_fields)
+
+    def _run(self, command, args):
+        return self.runner.invoke(
+            config.config.commands["spanning-tree"].commands["vlan"].commands[command],
+            args,
+            obj=self.db,
+        )
+
+    def test_vlan_hello_time_on_row_without_sibling_timers(self):
+        """A row with enabled and priority, no timers."""
+        self._pvst_vlan({"enabled": "true", "priority": "4096"})
+
+        result = self._run("hello", ["100", "2"])
+
+        assert not isinstance(result.exception, TypeError), result.output
+        assert result.exit_code == 0, result.output
+        assert self.db.cfgdb.get_entry('STP_VLAN', "Vlan100").get("hello_time") == "2"
+
+    def test_vlan_forward_delay_on_row_without_sibling_timers(self):
+        self._pvst_vlan({"enabled": "true"})
+
+        result = self._run("forward_delay", ["100", "15"])
+
+        assert not isinstance(result.exception, TypeError), result.output
+        assert result.exit_code == 0, result.output
+        assert self.db.cfgdb.get_entry('STP_VLAN', "Vlan100").get("forward_delay") == "15"
+
+    def test_vlan_max_age_on_row_without_sibling_timers(self):
+        self._pvst_vlan({"enabled": "true"})
+
+        result = self._run("max_age", ["100", "20"])
+
+        assert not isinstance(result.exception, TypeError), result.output
+        assert result.exit_code == 0, result.output
+        assert self.db.cfgdb.get_entry('STP_VLAN', "Vlan100").get("max_age") == "20"
+
+    def test_vlan_timer_still_rejects_a_value_breaking_the_relation(self):
+        """Falling back to defaults must not weaken the check."""
+        self._pvst_vlan({"enabled": "true"})
+
+        # Defaults are forward_delay 15, hello_time 2. max_age 40 breaks
+        # 2*(15-1) >= 40, so this must still be refused.
+        result = self._run("max_age", ["100", "40"])
+
+        assert result.exit_code != 0
+        assert "not met" in result.output
+
+    def test_vlan_timer_uses_the_global_value_before_the_default(self):
+        """A global timer that is set is what the daemon runs with."""
+        self.db.cfgdb.set_entry('STP', "GLOBAL", {"mode": "pvst", "forward_delay": "4"})
+        self.db.cfgdb.set_entry('VLAN', "Vlan100", {"vlanid": "100"})
+        self.db.cfgdb.set_entry('STP_VLAN', "Vlan100", {"enabled": "true"})
+
+        # With the global forward_delay of 4, 2*(4-1) = 6, so max_age 20 fails
+        # where it would have passed against the default of 15.
+        result = self._run("max_age", ["100", "20"])
+
+        assert result.exit_code != 0
+        assert "not met" in result.output
+
+
 class TestStpVlanMaxAge:
     """Test cases for STP VLAN max age configuration."""
 
