@@ -452,6 +452,54 @@ class TestVlan(object):
         assert result.exit_code == 0
         assert result.output == show_vlan_config_in_alias_mode_output
 
+    def test_show_vlan_brief_single_vlan(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], ["1000"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        # Only the requested VLAN and its members are shown
+        assert "1000" in result.output
+        assert "Ethernet4" in result.output
+        assert "Ethernet16" in result.output
+        # Other VLANs are filtered out
+        assert "2000" not in result.output
+        assert "3000" not in result.output
+        assert "4000" not in result.output
+        assert "Ethernet24" not in result.output
+        assert "PortChannel1001" not in result.output
+
+    def test_show_vlan_brief_single_vlan_not_found(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], ["9999"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == "VLAN 9999 doesn't exist\n"
+
+    def test_show_vlan_config_single_vlan(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["vlan"].commands["config"], ["2000"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        # Only the requested VLAN and its members are shown
+        assert "Vlan2000" in result.output
+        assert "Ethernet24" in result.output
+        assert "Ethernet28" in result.output
+        # Other VLANs are filtered out
+        assert "Vlan1000" not in result.output
+        assert "Vlan3000" not in result.output
+        assert "Vlan4000" not in result.output
+
+    def test_show_vlan_config_single_vlan_not_found(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["vlan"].commands["config"], ["9999"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == "VLAN 9999 doesn't exist\n"
+
     def test_switchport_status(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"], ["etp33"])
