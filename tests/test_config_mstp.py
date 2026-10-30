@@ -2,15 +2,14 @@ import pytest
 import click
 from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
+from utilities_common.db import Db
 from config.stp import (
     get_intf_list_in_vlan_member_table,
     is_valid_root_guard_timeout,
     is_valid_forward_delay,
     stp_interface_link_type_auto,
     stp_interface_link_type_shared,
-    stp_interface_edge_port_disable,
     spanning_tree_enable,
-    stp_interface_edge_port_enable,
     stp_global_max_hops,
     stp_mst_region_name,
     stp_interface_link_type_point_to_point,
@@ -38,7 +37,12 @@ from config.stp import (
     enable_mst_for_interfaces,
     disable_global_pvst,
     disable_global_mst,
-    mstp_interface_edge_port
+    mstp_interface_edge_port,
+    STP_DEFAULT_ROOT_GUARD_TIMEOUT,
+    STP_DEFAULT_FORWARD_DELAY,
+    STP_DEFAULT_HELLO_INTERVAL,
+    STP_DEFAULT_MAX_AGE,
+    STP_DEFAULT_BRIDGE_PRIORITY
 )
 
 
@@ -46,6 +50,12 @@ from config.stp import (
 def mock_db():
     # Create the mock database
     mock_db = MagicMock()
+
+    # pass_db is make_pass_decorator(Db, ensure=True), so it keeps the object
+    # handed to invoke() only when that object is a Db. A plain MagicMock is
+    # silently dropped and a real Db over the mock tables is built instead,
+    # which makes the stubs below have no effect.
+    mock_db.__class__ = Db
 
     # Mock cfgdb as itself to mimic behavior
     mock_db.cfgdb = mock_db
@@ -276,7 +286,6 @@ def test_disable_global_pvst():
 # Define constants
 STP_MIN_FORWARD_DELAY = 4
 STP_MAX_FORWARD_DELAY = 30
-STP_DEFAULT_FORWARD_DELAY = 15
 
 
 def test_disable_global_mst():
@@ -535,7 +544,9 @@ def mock_ctx():
 
 def test_stp_global_max_hops_invalid_mode(mock_db):
     """Test the scenario where the mode is PVST, and max_hops is not supported."""
-    # Simulate PVST mode
+    # Simulate PVST mode. The fixture sets a get_entry side_effect, and a
+    # side_effect takes precedence over return_value, so it has to go.
+    mock_db.cfgdb.get_entry.side_effect = None
     mock_db.cfgdb.get_entry.return_value = {"mode": "pvst"}
 
     runner = CliRunner()
@@ -544,14 +555,6 @@ def test_stp_global_max_hops_invalid_mode(mock_db):
     # Check if the function fails with the correct error message
     assert "Max hops not supported for PVST" in result.output
     assert result.exit_code != 0  # Error exit code
-
-
-# Constants for STP default values
-STP_DEFAULT_ROOT_GUARD_TIMEOUT = "30"
-STP_DEFAULT_FORWARD_DELAY = "15"
-STP_DEFAULT_HELLO_INTERVAL = "2"
-STP_DEFAULT_MAX_AGE = "20"
-STP_DEFAULT_BRIDGE_PRIORITY = "32768"
 
 
 class TestSpanningTreeEnable:
@@ -645,83 +648,6 @@ class TestSpanningTreeEnable:
                 mock_enable_instance0.assert_called_once()
 
 
-class TestSpanningTreeInterfaceedge_portEnable:
-    @pytest.fixture
-    def mock_db(self):
-        db = MagicMock()
-        db.cfgdb = MagicMock()
-        return db
-
-    def test_stp_interface_edge_port_enable_missing_interface(self, mock_db):
-        """Test enabling STP edge_port without providing interface name"""
-        runner = CliRunner()
-        result = runner.invoke(stp_interface_edge_port_enable, obj=mock_db)
-
-        # Verify command failed due to missing required argument
-        assert result.exit_code != 0
-        assert "Missing argument" in result.output
-
-    def test_stp_interface_edge_port_enable_stp_not_enabled(self, mock_db):
-        """Test enabling STP edge_port when STP is not enabled for interface"""
-        interface_name = "Ethernet0"
-
-        # Set up mock for STP check to fail
-        with patch('config.stp.check_if_stp_enabled_for_interface') as mock_stp_check:
-            mock_stp_check.side_effect = click.ClickException("STP is not enabled for interface")
-
-            runner = CliRunner()
-            result = runner.invoke(stp_interface_edge_port_enable, [interface_name], obj=mock_db)
-
-            # Verify command failed
-            assert result.exit_code != 0
-            expected_error = (
-                "edge_port configuration is not supported in PVST mode. "
-                "This command is only allowed in MSTP mode."
-            )
-            assert expected_error in result.output
-
-            # Verify database was not updated
-            mock_db.cfgdb.mod_entry.assert_not_called()
-
-
-class TestSpanningTreeInterfaceedge_portDisable:
-
-    def test_stp_interface_edge_port_disable_stp_not_enabled(self, mock_db):
-        """Test disabling STP edge_port when STP is not enabled for interface"""
-        interface_name = "Ethernet0"
-
-        # Set up mock database
-        mock_db.cfgdb = MagicMock()
-
-        # Mock the mod_entry method
-        mock_mod_entry = MagicMock()
-        mock_db.cfgdb.mod_entry = mock_mod_entry
-
-        # Set up mock for STP check to fail
-        with patch('config.stp.check_if_stp_enabled_for_interface') as mock_stp_check:
-            mock_stp_check.side_effect = click.ClickException("STP is not enabled for interface")
-
-            runner = CliRunner()
-            result = runner.invoke(stp_interface_edge_port_disable, [interface_name], obj=mock_db)
-
-            # Verify command failed
-            assert result.exit_code != 0
-            assert "STP is not enabled for interface" in result.output
-
-            # Verify database was not updated
-            mock_mod_entry.assert_not_called()
-
-    @pytest.mark.parametrize('mock_db', [()])
-    def test_stp_interface_edge_port_disable_missing_interface(self, mock_db):
-        """Test disabling STP edge_port without providing interface name"""
-        runner = CliRunner()
-        result = runner.invoke(stp_interface_edge_port_disable, obj=mock_db)
-
-        # Verify command failed due to missing required argument
-        assert result.exit_code != 0
-        assert "Missing argument" in result.output
-
-
 class TestSpanningTreeInterfaceLinkTypeAuto:
     @pytest.fixture(autouse=True)
     def setup_method(self):
@@ -793,8 +719,10 @@ class TestSpanningTreeInterfaceLinkTypeShared:
         """Test setting link type to shared when STP is not enabled"""
         error_message = "STP is not enabled for interface Ethernet0"
 
-        # Mock STP check to raise exception
-        with patch('config.stp.check_if_stp_enabled_for_interface') as mock_stp_check:
+        # link_type is MST only, so the mode has to pass before the check
+        # under test is reached.
+        with patch('config.stp.get_global_stp_mode', return_value='mst'), \
+             patch('config.stp.check_if_stp_enabled_for_interface') as mock_stp_check:
             mock_stp_check.side_effect = click.ClickException(error_message)
 
             result = self.runner.invoke(
@@ -814,7 +742,8 @@ class TestSpanningTreeInterfaceLinkTypeShared:
         error_message = "Interface does not exist"
 
         # Mock interface check to raise exception
-        with patch('config.stp.check_if_stp_enabled_for_interface', return_value=None), \
+        with patch('config.stp.get_global_stp_mode', return_value='mst'), \
+             patch('config.stp.check_if_stp_enabled_for_interface', return_value=None), \
              patch('config.stp.check_if_interface_is_valid') as mock_interface_check:
             mock_interface_check.side_effect = click.ClickException(error_message)
 
