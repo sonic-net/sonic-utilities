@@ -704,6 +704,9 @@ HARDWARE_COMMANDS = [["show", "interface", "presence"], ["show", "interface", "s
     ["write-eeprom", "interface", "-p", "Ethernet0", "--oe", "-n", "0", "-o", "0", "-d", "00"],
     ["write-eeprom", "oe", "-i", "0", "-n", "0", "-o", "0", "-d", "00"],
     ["write-eeprom", "els", "-i", "0", "-n", "0", "-o", "0", "-d", "00"],
+] + [
+    ["firmware", command, endpoint, "0"] + (["--raw", __file__] if command in ("upgrade", "download") else [])
+    for command in ("upgrade", "download", "run", "commit") for endpoint in ("oe", "els")
 ]
 
 
@@ -775,6 +778,13 @@ class TestCommandInitialization:
         ["config", "oe", "reset"],
         ["config", "oe", "lpmode", "0", "invalid"],
         ["read-eeprom", "oe", "--page", "invalid"],
+        ["firmware", "upgrade", "els", "0"],
+        ["firmware", "upgrade", "els", "0", "--raw", "/nonexistent/fw.bin"],
+        ["firmware", "upgrade", "oe", "all"],
+        ["firmware", "download", "els", "0", "--raw", "/nonexistent/fw.bin"],
+        ["firmware", "run", "els"],
+        ["firmware", "commit", "oe"],
+        ["firmware", "download", "oe", "all", "--raw", "/nonexistent/fw.bin"],
     ])
     def test_invalid_arguments_do_not_load_platform(self, monkeypatch, arguments):
         initialize = mock.Mock(side_effect=AssertionError("invalid arguments accessed hardware"))
@@ -802,6 +812,12 @@ class TestCommandInitialization:
         monkeypatch.setattr(sys, "argv", ["cpoutil", "show", "oe", "status"])
         assert cpoutil.main() == cpoutil.ERROR_INVALID_RESOURCE
         assert "Error: unavailable" in capsys.readouterr().err
+
+    def test_entry_point_reports_interrupt(self, monkeypatch, capsys):
+        monkeypatch.setattr(cpoutil, "initialize_platform", mock.Mock(side_effect=KeyboardInterrupt))
+        monkeypatch.setattr(sys, "argv", ["cpoutil", "show", "oe", "status"])
+        assert cpoutil.main() == 1
+        assert capsys.readouterr().err.strip() == "Aborted!"
 
 
 class TestCommunityMappingCoverage(object):
@@ -2429,3 +2445,410 @@ def test_endpoint_lpmode_rejects_non_boolean_values(
     assert "Traceback" not in result.output
     endpoint.get_lpmode.assert_called_once_with()
     endpoint.get_api.assert_not_called()
+
+
+FIRMWARE_INFO = {
+    "Image A Version": "1.2.0",
+    "Image B Version": "1.1.0",
+    "Factory Image Version": "1.0.0",
+    "Running Image": "A",
+    "Committed Image": "A",
+    "Active Firmware": "1.2.0",
+    "Inactive Firmware": "1.1.0",
+}
+
+# FIRMWARE_INFO as `show fwversion --json` reports it, with the banks added.
+FIRMWARE_INFO_JSON = {
+    "Image A Version": "1.2.0",
+    "Image B Version": "1.1.0",
+    "Factory Image Version": "1.0.0",
+    "Running Image": "A",
+    "Committed Image": "A",
+    "Active Firmware": "1.2.0",
+    "Active Bank": "A",
+    "Inactive Firmware": "1.1.0",
+    "Inactive Bank": "B",
+}
+
+
+class FirmwareEndpoint(object):
+    """OE or ELS endpoint double with firmware hooks that record their calls."""
+
+    def __init__(self, blocks=(100, 28)):
+        self.blocks = blocks
+        self.calls = []
+        self.run_firmware = mock.Mock(return_value=True)
+        self.commit_firmware = mock.Mock(return_value=True)
+        self.get_firmware_info = mock.Mock(return_value=dict(FIRMWARE_INFO))
+
+    def _transfer(self, method, file_path):
+        self.calls.append((method, file_path))
+        for block in self.blocks:
+            yield block
+
+    def download_firmware(self, file_path):
+        return self._transfer("download_firmware", file_path)
+
+    def upgrade_firmware(self, file_path):
+        return self._transfer("upgrade_firmware", file_path)
+
+
+TRANSFER_COMMANDS = [
+    ("upgrade", "upgrade_firmware", "Upgrading"),
+    ("download", "download_firmware", "Downloading"),
+]
+ACTION_COMMANDS = [
+    ("run", "run_firmware", "Running"),
+    ("commit", "commit_firmware", "Committing"),
+]
+ENDPOINTS = [("oe", "OE"), ("els", "ELS")]
+
+
+class TestFirmwareCommands:
+    @pytest.fixture
+    def endpoints(self, monkeypatch):
+        """Two OEs and two ELSs, each with its own firmware endpoint double."""
+        endpoints = {
+            name: FirmwareEndpoint() for name in ("oe0", "oe1", "els0", "els1")
+        }
+        monkeypatch.setattr(cpoutil, "cpo_mapping", CpoMapping(CPO_DATA))
+        monkeypatch.setattr(cpoutil, "cpo_object_map", {
+            OPTICAL_ENGINE: {
+                "oe0": cpoutil.CpoBase(None, endpoints["oe0"], endpoints["els0"]),
+                "oe1": cpoutil.CpoBase(None, endpoints["oe1"], endpoints["els1"]),
+            },
+            EXTERNAL_LASER_SOURCE: {
+                "els0": cpoutil.CpoBase(None, endpoints["oe0"], endpoints["els0"]),
+                "els1": cpoutil.CpoBase(None, endpoints["oe1"], endpoints["els1"]),
+            },
+            PORT: {},
+        })
+        monkeypatch.setattr(cpoutil, "initialize_platform", lambda: None)
+        return endpoints
+
+    @pytest.fixture
+    def image(self, tmp_path):
+        path = tmp_path / "fw.bin"
+        path.write_bytes(b"\0" * 128)
+        return str(path)
+
+    @staticmethod
+    def untouched(endpoint):
+        return (endpoint.calls == []
+                and not endpoint.run_firmware.called
+                and not endpoint.commit_firmware.called)
+
+    @pytest.mark.parametrize("command, method, verb", TRANSFER_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("style", ["number", "lower", "upper"])
+    def test_transfer_one(self, endpoints, image, command, method, verb, endpoint, kind, style):
+        selector = {"number": "1", "lower": f"{endpoint}1", "upper": f"{kind}1"}[style]
+        result = invoke_coverage(["firmware", command, endpoint, selector, "--raw", image])
+        assert result.exit_code == 0, result.output
+        assert endpoints[endpoint + "1"].calls == [(method, image)]
+        assert endpoints[endpoint + "0"].calls == []
+        other = "els" if endpoint == "oe" else "oe"
+        assert self.untouched(endpoints[other + "0"]) and self.untouched(endpoints[other + "1"])
+        assert f"{verb} {kind}1 firmware ... OK (128 bytes)" in result.output
+
+    @pytest.mark.parametrize("command, method, verb", TRANSFER_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("selector", ["all", "ALL"])
+    def test_transfer_all(self, endpoints, image, command, method, verb, endpoint, kind, selector):
+        result = invoke_coverage(["firmware", command, endpoint, selector, "--raw", image])
+        assert result.exit_code == 0, result.output
+        assert endpoints[endpoint + "0"].calls == [(method, image)]
+        assert endpoints[endpoint + "1"].calls == [(method, image)]
+        assert result.output.index(kind + "0") < result.output.index(kind + "1")
+
+    @pytest.mark.parametrize("command, method, verb", ACTION_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_run_and_commit(self, endpoints, command, method, verb, endpoint, kind):
+        result = invoke_coverage(["firmware", command, endpoint, "0"])
+        assert result.exit_code == 0, result.output
+        getattr(endpoints[endpoint + "0"], method).assert_called_once_with()
+        getattr(endpoints[endpoint + "1"], method).assert_not_called()
+        assert f"{verb} {kind}0 firmware ... OK" in result.output
+
+        result = invoke_coverage(["firmware", command, endpoint, "all"])
+        assert result.exit_code == 0, result.output
+        assert getattr(endpoints[endpoint + "0"], method).call_count == 2
+        getattr(endpoints[endpoint + "1"], method).assert_called_once_with()
+
+    @pytest.mark.parametrize("arguments", [
+        ["upgrade", "els", "7", "--raw"],
+        ["download", "els", "oe0", "--raw"],
+        ["run", "els", "7"],
+        ["commit", "els", "x"],
+        ["upgrade", "oe", "7", "--raw"],
+        ["download", "oe", "els0", "--raw"],
+        ["run", "oe", "7"],
+        ["commit", "oe", "x"],
+    ])
+    def test_invalid_index(self, endpoints, image, arguments):
+        if arguments[-1] == "--raw":
+            arguments = arguments + [image]
+        result = invoke_coverage(["firmware"] + arguments)
+        assert result.exit_code != 0
+        assert f"Invalid {arguments[1]} index" in result.output
+        assert all(self.untouched(endpoint) for endpoint in endpoints.values())
+
+    @pytest.mark.parametrize("command, method", [
+        ("upgrade", "upgrade_firmware"),
+        ("download", "download_firmware"),
+        ("run", "run_firmware"),
+        ("commit", "commit_firmware"),
+    ])
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("unsupported", ["missing", "not_implemented"])
+    def test_unsupported_platform(self, endpoints, image, monkeypatch, command, method,
+                                  endpoint, kind, unsupported):
+        def not_implemented(*args):
+            raise NotImplementedError()
+
+        def not_implemented_transfer(*args):
+            raise NotImplementedError()
+            yield  # pragma: no cover - a generator hook fails on its first block
+
+        target = endpoints[endpoint + "0"]
+        if unsupported == "missing":
+            monkeypatch.setattr(target, method, None)
+        else:
+            transfer = method in ("download_firmware", "upgrade_firmware")
+            monkeypatch.setattr(target, method, not_implemented_transfer if transfer else not_implemented)
+        arguments = ["firmware", command, endpoint, "0"]
+        if command in ("upgrade", "download"):
+            arguments += ["--raw", image]
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert f"{kind} {method} is not implemented for this platform" in result.output
+        assert "OK" not in result.output
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_transfer_failure_continues_with_remaining_targets(self, endpoints, image, monkeypatch, endpoint, kind):
+        def broken(file_path):
+            yield 64
+            raise RuntimeError("CDB status 0x45")
+
+        monkeypatch.setattr(endpoints[endpoint + "0"], "upgrade_firmware", broken)
+        result = invoke_coverage(["firmware", "upgrade", endpoint, "all", "--raw", image])
+        assert result.exit_code != 0
+        assert f"Upgrading {kind}0 firmware failed: CDB status 0x45" in result.output
+        assert endpoints[endpoint + "1"].calls == [("upgrade_firmware", image)]
+        assert f"{kind} firmware upgrade failed for {kind}0; completed for {kind}1" in result.output
+
+    @pytest.mark.parametrize("command, method, verb", TRANSFER_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_interrupted_transfer_is_closed(self, endpoints, image, monkeypatch, command, method, verb,
+                                            endpoint, kind):
+        finished = []
+        transfers = []
+
+        def blocks(file_path):
+            try:
+                yield 64
+                # Not a byte count, so cpoutil fails before the transfer ends.
+                yield "garbage"
+                yield 64
+            finally:
+                finished.append(file_path)
+
+        def transfer(file_path):
+            # Keep the generator alive, as a retained traceback would.
+            transfers.append(blocks(file_path))
+            return transfers[-1]
+
+        monkeypatch.setattr(endpoints[endpoint + "0"], method, transfer)
+        result = invoke_coverage(["firmware", command, endpoint, "0", "--raw", image])
+        assert result.exit_code != 0
+        assert f"{verb} {kind}0 firmware failed" in result.output
+        assert finished == [image]
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("returned", [False, None])
+    def test_transfer_hook_without_progress_is_a_failure(self, endpoints, image, monkeypatch,
+                                                         endpoint, kind, returned):
+        monkeypatch.setattr(endpoints[endpoint + "0"], "download_firmware", mock.Mock(return_value=returned))
+        result = invoke_coverage(["firmware", "download", endpoint, "0", "--raw", image])
+        assert result.exit_code != 0
+        assert f"Downloading {kind}0 firmware failed" in result.output
+
+    @pytest.mark.parametrize("command, method, verb", ACTION_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("failure", [False, OSError("I2C error"), RuntimeError("CDB status 0x45")])
+    def test_run_and_commit_failures(self, endpoints, command, method, verb, endpoint, kind, failure):
+        hook = getattr(endpoints[endpoint + "0"], method)
+        if isinstance(failure, Exception):
+            hook.side_effect = failure
+        else:
+            hook.return_value = failure
+        result = invoke_coverage(["firmware", command, endpoint, "all"])
+        assert result.exit_code != 0
+        assert not isinstance(result.exception, (OSError, RuntimeError))
+        if isinstance(failure, Exception):
+            assert str(failure) in result.output
+        assert f"failed for {kind}0; completed for {kind}1" in result.output
+        getattr(endpoints[endpoint + "1"], method).assert_called_once_with()
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_operations_are_logged(self, endpoints, image, monkeypatch, endpoint, kind):
+        log = mock.Mock()
+        monkeypatch.setattr(cpoutil, "log", log)
+        result = invoke_coverage(["firmware", "upgrade", endpoint, "0", "--raw", image])
+        assert result.exit_code == 0, result.output
+        log.log_notice.assert_any_call(f"{kind} firmware upgrade started on {kind}0 with fw.bin (128 bytes)")
+        log.log_notice.assert_any_call(f"{kind} firmware upgrade completed on {kind}0")
+
+    @pytest.mark.parametrize("command, method, verb", ACTION_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_actions_log_no_image(self, endpoints, monkeypatch, command, method, verb, endpoint, kind):
+        log = mock.Mock()
+        monkeypatch.setattr(cpoutil, "log", log)
+        result = invoke_coverage(["firmware", command, endpoint, "0"])
+        assert result.exit_code == 0, result.output
+        log.log_notice.assert_any_call(f"{kind} firmware {command} started on {kind}0")
+
+    @pytest.mark.parametrize("command, method, verb", TRANSFER_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("interruption", [KeyboardInterrupt, click.Abort])
+    def test_interrupted_operation_is_logged(self, endpoints, image, monkeypatch, command, method, verb,
+                                             endpoint, kind, interruption):
+        log = mock.Mock()
+        monkeypatch.setattr(cpoutil, "log", log)
+        closed = []
+
+        def blocks(file_path):
+            try:
+                yield 64
+                raise interruption()
+            finally:
+                closed.append(file_path)
+
+        monkeypatch.setattr(endpoints[endpoint + "1"], method, blocks)
+        result = invoke_coverage(["firmware", command, endpoint, "all", "--raw", image])
+        assert result.exit_code != 0
+        assert closed == [image]
+        log.log_error.assert_called_once_with(
+            f"{kind} firmware {command} aborted on {kind}1; completed for {kind}0")
+        assert mock.call(f"{kind} firmware {command} completed on {kind}1") not in log.log_notice.call_args_list
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_interrupted_first_target_has_no_completed_list(self, endpoints, monkeypatch, endpoint, kind):
+        log = mock.Mock()
+        monkeypatch.setattr(cpoutil, "log", log)
+        endpoints[endpoint + "0"].run_firmware.side_effect = KeyboardInterrupt
+        result = invoke_coverage(["firmware", "run", endpoint, "all"])
+        assert result.exit_code != 0
+        log.log_error.assert_called_once_with(f"{kind} firmware run aborted on {kind}0")
+        assert not endpoints[endpoint + "1"].run_firmware.called
+
+
+class TestFirmwareVersionCommands:
+    endpoints = TestFirmwareCommands.endpoints
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_show_one(self, endpoints, endpoint, kind):
+        result = invoke_coverage(["show", endpoint, "fwversion", "1"])
+        assert result.exit_code == 0, result.output
+        assert result.output.splitlines() == [
+            f"{kind}1:",
+            "  Image A Version: 1.2.0",
+            "  Image B Version: 1.1.0",
+            "  Factory Image Version: 1.0.0",
+            "  Running Image: A",
+            "  Committed Image: A",
+            "  Active Firmware: 1.2.0 (Bank A)",
+            "  Inactive Firmware: 1.1.0 (Bank B)",
+        ]
+        endpoints[endpoint + "1"].get_firmware_info.assert_called_once_with()
+        endpoints[endpoint + "0"].get_firmware_info.assert_not_called()
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_show_running_image_b(self, endpoints, endpoint, kind):
+        endpoints[endpoint + "1"].get_firmware_info.return_value = dict(
+            FIRMWARE_INFO, **{"Running Image": "B", "Active Firmware": "1.1.0", "Inactive Firmware": "1.2.0"})
+        result = invoke_coverage(["show", endpoint, "fwversion", "1"])
+        assert result.exit_code == 0, result.output
+        assert "  Active Firmware: 1.1.0 (Bank B)\n  Inactive Firmware: 1.2.0 (Bank A)\n" in result.output
+        result = invoke_coverage(["show", endpoint, "fwversion", "1", "--json"])
+        info = json.loads(result.output)[f"{endpoint}1"]
+        assert (info["Active Bank"], info["Inactive Bank"]) == ("B", "A")
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_show_no_running_image(self, endpoints, endpoint, kind):
+        endpoints[endpoint + "1"].get_firmware_info.return_value = dict(
+            FIRMWARE_INFO, **{"Running Image": "N/A", "Active Firmware": "N/A", "Inactive Firmware": "N/A"})
+        result = invoke_coverage(["show", endpoint, "fwversion", "1"])
+        assert result.exit_code == 0, result.output
+        assert "  Active Firmware: N/A\n  Inactive Firmware: N/A\n" in result.output
+        assert "Bank" not in result.output
+        result = invoke_coverage(["show", endpoint, "fwversion", "1", "--json"])
+        info = json.loads(result.output)[f"{endpoint}1"]
+        assert (info["Active Bank"], info["Inactive Bank"]) == ("N/A", "N/A")
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_show_all(self, endpoints, endpoint, kind):
+        endpoints[endpoint + "1"].get_firmware_info.return_value = {
+            "Active Firmware": "2.1", "Inactive Firmware": "N/A",
+        }
+        result = invoke_coverage(["show", endpoint, "fwversion"])
+        assert result.exit_code == 0, result.output
+        assert result.output.index(f"{kind}0:") < result.output.index(f"{kind}1:")
+        assert result.output.endswith(f"{kind}1:\n  Active Firmware: 2.1\n  Inactive Firmware: N/A\n")
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_show_json(self, endpoints, endpoint, kind):
+        result = invoke_coverage(["show", endpoint, "fwversion", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {f"{endpoint}0": FIRMWARE_INFO_JSON, f"{endpoint}1": FIRMWARE_INFO_JSON}
+        assert list(json.loads(result.output)[f"{endpoint}0"]) == list(FIRMWARE_INFO_JSON)
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("failure, message", [
+        (RuntimeError("Another firmware operation is in progress"),
+         "Failed to get {kind}0 firmware info: Another firmware operation is in progress"),
+        (OSError("I2C error"), "Failed to get {kind}0 firmware info: {kind} get_firmware_info failed: I2C error"),
+        (NotImplementedError(),
+         "Failed to get {kind}0 firmware info: {kind} get_firmware_info is not implemented for this platform"),
+    ])
+    def test_failure_continues_with_remaining_targets(self, endpoints, endpoint, kind, failure, message):
+        endpoints[endpoint + "0"].get_firmware_info.side_effect = failure
+        result = invoke_coverage(["show", endpoint, "fwversion"])
+        assert result.exit_code != 0
+        assert not isinstance(result.exception, (OSError, RuntimeError, NotImplementedError))
+        assert f"Error: {message.format(kind=kind)}" in result.output
+        assert f"{kind}1:" in result.output
+        assert f"Failed to get {kind} firmware version for {kind}0" in result.output
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_json_with_a_failed_target(self, endpoints, endpoint, kind):
+        endpoints[endpoint + "0"].get_firmware_info.side_effect = RuntimeError("busy")
+        result = invoke_coverage(["show", endpoint, "fwversion", "--json"])
+        assert result.exit_code != 0
+        assert f"Error: Failed to get {kind}0 firmware info: busy" in result.output
+        assert json.loads(result.output[result.output.index("{"):result.output.rindex("}") + 1]) == {
+            f"{endpoint}1": FIRMWARE_INFO_JSON}
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("returned", [None, "1.0"])
+    def test_no_data_is_a_failure(self, endpoints, endpoint, kind, returned):
+        endpoints[endpoint + "0"].get_firmware_info.return_value = returned
+        result = invoke_coverage(["show", endpoint, "fwversion", "0"])
+        assert result.exit_code != 0
+        assert f"{kind} get_firmware_info returned no data" in result.output
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_missing_endpoint(self, endpoints, monkeypatch, endpoint, kind):
+        attribute = "oe" if endpoint == "oe" else "elsfp"
+        cpo = cpoutil.cpo_object_map[OPTICAL_ENGINE if endpoint == "oe" else EXTERNAL_LASER_SOURCE][f"{endpoint}0"]
+        monkeypatch.setattr(cpo, attribute, None)
+        result = invoke_coverage(["show", endpoint, "fwversion", "0"])
+        assert result.exit_code != 0
+        assert f"{kind}0 endpoint is unavailable" in result.output
+
+    @pytest.mark.parametrize("endpoint", ["oe", "els"])
+    @pytest.mark.parametrize("index", ["7", "all"])
+    def test_invalid_index(self, endpoints, endpoint, index):
+        result = invoke_coverage(["show", endpoint, "fwversion", index])
+        assert result.exit_code != 0
+        assert f"Invalid {endpoint} index" in result.output

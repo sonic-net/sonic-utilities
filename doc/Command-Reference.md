@@ -17361,6 +17361,91 @@ Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages
   Error: Invalid offset 0x02 for page 11h; valid range: 80h-FFh
   ```
 
+**cpoutil firmware upgrade|download|run|commit**
+
+These commands manage OE and ELS firmware from a raw firmware binary through the platform's OE and ELS endpoints. An OE or ELS is selected by its index; `all` selects every OE or every ELS in the system. `upgrade` downloads the image to the inactive bank, runs it and commits it; `download`, `run` and `commit` perform one step each. Targets are processed in turn; a failure on one does not stop the others, and the command exits non-zero naming the failed and completed targets. Running new firmware may disrupt traffic on the ports the OE or ELS serves. A platform that does not implement a firmware operation reports it as not implemented. Each operation is logged to syslog with the target and, for `upgrade` and `download`, the image file name and size; an interrupted (Ctrl-C) operation is logged as aborted, with the targets that completed. `cpoutil` does not inspect the image; validating it is left to the OE or ELS during the download. Each step can be verified with `cpoutil show {oe|els} fwversion`.
+
+- Usage:
+  ```
+  cpoutil firmware upgrade  {oe|els} <index>|all --raw <fw.bin>
+  cpoutil firmware download {oe|els} <index>|all --raw <fw.bin>
+  cpoutil firmware run      {oe|els} <index>|all
+  cpoutil firmware commit   {oe|els} <index>|all
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil firmware upgrade els 0 --raw els_fw.bin
+  Upgrading ELS0 firmware  [####################################]  100%
+  Upgrading ELS0 firmware ... OK (262144 bytes)
+
+  admin@sonic:~$ cpoutil firmware upgrade oe all --raw oe_fw.bin
+  Upgrading OE0 firmware  [####################################]  100%
+  Upgrading OE0 firmware ... OK (524288 bytes)
+  Upgrading OE1 firmware  [####################################]  100%
+  Upgrading OE1 firmware ... OK (524288 bytes)
+
+  admin@sonic:~$ cpoutil firmware download els all --raw els_fw.bin
+  Downloading ELS0 firmware  [####################################]  100%
+  Downloading ELS0 firmware ... OK (262144 bytes)
+  Downloading ELS1 firmware  [####################################]  100%
+  Downloading ELS1 firmware ... OK (262144 bytes)
+
+  admin@sonic:~$ cpoutil firmware run els all
+  Running ELS0 firmware ... OK
+  Running ELS1 firmware ... OK
+
+  admin@sonic:~$ cpoutil firmware commit els all
+  Committing ELS0 firmware ... OK
+  Committing ELS1 firmware ... OK
+
+  admin@sonic:~$ cpoutil firmware run els 0
+  Running ELS0 firmware ... Failed
+  Error: Running ELS0 firmware failed: CDB status 0x45
+  Error: ELS firmware run failed for ELS0
+  ```
+
+**cpoutil show oe|els fwversion**
+
+This command displays the firmware versions of an OE or ELS, or of every OE or ELS when no index is given; like the other `cpoutil show oe` and `cpoutil show els` commands, it does not take `all`. When the device supports CDB firmware management, it shows the image A, image B and factory image versions, the running and committed images, and the active and inactive firmware versions, as `sfputil show fwversion` does, with the bank that holds each of the active and inactive firmware: the running image is the active bank, the other image the inactive bank. Otherwise it shows only the active and inactive firmware versions read from the EEPROM; a version that the EEPROM does not report is N/A. When the running image is not known, as with the EEPROM versions, the bank is not shown in the text output and is N/A in the JSON output (`Active Bank`, `Inactive Bank`). Targets are processed in turn; a failure on one does not stop the others, and the command exits non-zero naming the failed targets. While a firmware operation is in progress, a platform that serializes firmware operations reports the targets as busy.
+
+- Usage:
+  ```
+  cpoutil show oe fwversion  [OE_INDEX] [--json]
+  cpoutil show els fwversion [ELS_INDEX] [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ cpoutil show els fwversion 0
+  ELS0:
+    Image A Version: 1.2.0
+    Image B Version: 1.1.0
+    Factory Image Version: 1.0.0
+    Running Image: A
+    Committed Image: A
+    Active Firmware: 1.2.0 (Bank A)
+    Inactive Firmware: 1.1.0 (Bank B)
+
+  admin@sonic:~$ cpoutil show oe fwversion
+  OE0:
+    Active Firmware: 2.1
+    Inactive Firmware: 2.0
+  OE1:
+    Active Firmware: 2.1
+    Inactive Firmware: 2.1
+
+  admin@sonic:~$ cpoutil show oe fwversion 0 --json
+  {
+      "oe0": {
+          "Active Firmware": "2.1",
+          "Active Bank": "N/A",
+          "Inactive Firmware": "2.0",
+          "Inactive Bank": "N/A"
+      }
+  }
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#cpo-utilities-commands)
 
 # Static DNS Commands
