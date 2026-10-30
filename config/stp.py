@@ -314,6 +314,20 @@ def interface_enable_stp(db, interface_name):
         seed_stp_port_defaults(db, interface_name, STP_PORT_DEFAULT_FVS)
 
 
+def interface_remove_stp(db, interface_name):
+    # Drop every STP row keyed on an interface that is going away. Leaving a
+    # VLAN keeps a customized row (see disable_stp_on_vlan_port), but once the
+    # interface itself is deleted the row is unreachable from the STP CLI and
+    # would silently re-apply to a later interface of the same name.
+    # STP_VLAN_PORT leafrefs STP_PORT/ifname, so it has to go first.
+    for vlan_name in get_vlan_list_from_stp_vlan_intf_table(db, interface_name):
+        key = vlan_name + '|' + interface_name
+        if db.get_entry('STP_VLAN_PORT', key):
+            db.set_entry('STP_VLAN_PORT', key, None)
+    if db.get_entry('STP_PORT', interface_name):
+        db.set_entry('STP_PORT', interface_name, None)
+
+
 def is_vlan_configured_interface(db, interface_name):
     intf_to_vlan_list = get_vlan_list_for_interface(db, interface_name)
     if intf_to_vlan_list:  # if empty
