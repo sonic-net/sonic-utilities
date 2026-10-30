@@ -240,6 +240,8 @@
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
     * [Vnet config commands](#vnet-config-commands)
+* [Tunnel](#tunnel)
+  * [Tunnel show commands](#tunnel-show-commands)
 * [Warm Reboot](#warm-reboot)
 * [Warm Restart](#warm-restart)
   * [Warm Restart show commands](#warm-restart-show-commands)
@@ -298,6 +300,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v13 | Oct-15-2026 | Add `show tunnel counters` command with IPinIP support |
 | v12 | Jul-16-2026 | Add console mirror commands |
 | v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
@@ -15166,6 +15169,45 @@ This command deletes a vnet route with vnet-name and prefix. It deletes all rout
 On multi-ASIC platforms, `config vnet` also uses a group-level `-n <namespace>` option and the namespace must be placed before the subcommand.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
+
+## Tunnel
+
+This section explains the tunnel show commands.
+
+### Tunnel show commands
+
+**show tunnel counters**
+
+This command displays packet and byte counters for the tunnels on the device, across all tunnel types (VxLAN and IPinIP). In the unfiltered view a `TYPE` column labels each tunnel's type. Use `-T`/`--type` to restrict the output to a single tunnel type, or pass a tunnel name to display counters for a single tunnel. `show vxlan counters` is equivalent to `show tunnel counters --type vxlan`.
+
+- Usage:
+
+  ```
+  show tunnel [ -n <namespace> ] counters [<tunnel_name>] [-T|--type <vxlan|ipinip>] [-p <period>] [--verbose]
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show tunnel counters
+          IFACE    TYPE    RX_PKTS    RX_BYTES      RX_PPS    TX_PKTS    TX_BYTES    TX_PPS
+  -------------  ------  ---------  ----------  ----------  ---------  ----------  --------
+  IPINIP_TUNNEL  ipinip        226       40961  10261.00/s          0           0    0.00/s
+          vtep1   vxlan        452       81922  20523.00/s        154       23434  201.00/s
+  ```
+
+- Example (restricted to a single type; the `TYPE` column is omitted):
+
+  ```
+  admin@sonic:~$ show tunnel counters --type ipinip
+          IFACE    RX_PKTS    RX_BYTES      RX_PPS    TX_PKTS    TX_BYTES    TX_PPS
+  -------------  ---------  ----------  ----------  ---------  ----------  --------
+  IPINIP_TUNNEL        226       40961  10261.00/s          0           0    0.00/s
+  ```
+
+For `show tunnel counters <tunnel_name>` without `-n` on a multi-ASIC platform, the CLI searches all namespaces and only runs `tunnelstat` in namespaces where that tunnel is present.
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#tunnel)
 
 ## Warm Reboot
 
