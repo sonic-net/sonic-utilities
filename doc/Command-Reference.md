@@ -10237,13 +10237,94 @@ While adding a new ERSPAN session, users need to configure the following fields 
 7) optional - Policer which will be used to control the rate at which frames are mirrored.
 8) optional - List of source ports which can have both Ethernet and LAG ports.
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
-10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
-11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
+
+
+Configure sampling rate and optional truncation using `config mirror_session sample add`.
+These settings are stored in `PORT_MIRROR_SAMPLE`, separately from the ERSPAN export session.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction]
   ```
+
+**config mirror_session sample**
+
+Create a destination-only ERSPAN export (no source port), then add a physical
+port or PortChannel binding:
+
+```text
+config mirror_session erspan add export1 10.0.0.1 10.0.0.2 8 64
+config mirror_session sample add export1 Ethernet0 both --sample_rate 5000 --truncate_size 128
+config mirror_session sample add export1 PortChannel1001 rx --sample_rate 1000 --disabled
+show mirror_session sample
+config mirror_session sample remove export1 Ethernet0 both
+```
+
+While adding sampled ERSPAN bindings, users need to configure the following fields:
+
+1) Session name - An existing ERSPAN export session without source port configuration.
+2) Source port list - A physical port or PortChannel, or a comma-separated list of source interfaces.
+3) Direction - Mirror session direction for the specified source ports. (Supported rx/tx/both)
+4) Sample rate - Required sampling rate shared by the specified sources. Valid range: 2..4294967295.
+5) optional - Truncate size in bytes. Valid range: 64..9216. When omitted, no truncation is requested.
+6) optional - Disabled. Create bindings with admin_state down instead of the CLI default up.
+
+- Usage:
+  ```
+  config mirror_session sample add <session_name> <source-port-list> <direction> --sample_rate <N> [--truncate_size <bytes>] [--disabled]
+  config mirror_session sample remove <session_name> <source-port-list> <direction>
+  ```
+
+- `--sample_rate` is required, in range 2..4294967295. Zero and one are invalid.
+- `<source-port-list>` accepts one source or a comma-separated list of physical ports and
+  PortChannels, such as `Ethernet0,Ethernet4`. All sources receive the same policy.
+  Each source/direction is stored as a separate entry; a list is never stored in a key.
+  Empty list elements, duplicate sources after alias resolution, and overlapping
+  PortChannel/member sources within the request are rejected.
+- `--truncate_size` is optional, in range 64..9216. Omit it for no truncation.
+- Bindings default to `admin_state=up`; `--disabled` stores `down`.
+- `both` creates separate `rx` and `tx` entries. Both are checked before writes;
+  duplicate keys and overlapping PortChannel/member ownership are rejected.
+- PortChannels are stored as logical bindings, not expanded into member entries.
+- A binding must reference an existing ERSPAN session without a `src_port` field.
+- Removal checks references before deleting. `both` removes whichever matching
+  directional entries exist, but rejects any mismatched reference without deletion.
+  Every requested source must have at least one matching entry in the selected
+  direction(s), otherwise nothing is deleted.
+- All requested sources are resolved and checked for references, conflicts, and
+  applicable capabilities before writes. With YANG validation enabled, bindings
+  are submitted in one GCU patch per namespace. Cross-namespace writes are sequential,
+  not an atomic transaction.
+- Remove and re-add a binding to change its policy. Removing bindings retains the
+  export; export deletion is rejected while sampled or ACL references remain.
+- Explicit `SFLOW|global` configuration and sampled bindings are mutually exclusive
+  system-wide, even when disabled. Global sFlow commands (including `disable`,
+  polling interval, sample direction, drop monitor limit and agent ID) reject writes
+  while bindings exist. Disabling sFlow does not remove its global configuration;
+  remove that configuration, for example with a valid GCU patch, before adding bindings.
+  SFLOW_SESSION and collector configuration alone do not trigger this exclusion.
+  Sample add/remove and sFlow global writers share `/etc/sonic/sampling.lock`
+  across their conflict checks and writes in all affected namespaces. If another
+  protected command holds the lock, the command fails before changing configuration
+  and can be retried. This lock does not serialize standalone GCU or direct Redis writes.
+
+`show mirror_session sample` reports configuration, one row per source/direction:
+
+```text
+Sampled ERSPAN Bindings
+Source Port      Direction    Mirror Session    Admin State      Sample Rate  Truncate Size
+---------------  -----------  ----------------  -------------  -------------  ---------------
+Ethernet0        rx           export1           up                      5000  128
+Ethernet0        tx           export1           up                      5000  128
+PortChannel1001  rx           export1           down                    1000  Disabled
+```
+
+Multi-ASIC output includes a Namespace column. The `sample` argument selects this
+binding display; use `show mirror_session --session-name sample` to inspect an existing export
+whose name is literally `sample`. Plain `show mirror_session` retains the existing
+session display. Capability checks reject explicit unsupported sampling directions
+or truncation. Absent capability fields are tolerated for older images;
+STATE_DB access failures are reported before writing configuration.
 
   The following command is also supported to be backward compatible.
   This command will be deprecated in future releases.
