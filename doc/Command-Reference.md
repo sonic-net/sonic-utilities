@@ -2743,7 +2743,7 @@ This command displays the IS-IS Link-State Database (LSDB).
 
 - Usage:
   ```
-  show isis database [detail] [--json]
+  show isis database [--json]
   ```
 
 - Example:

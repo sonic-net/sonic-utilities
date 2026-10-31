@@ -15,6 +15,8 @@ def run_vtysh_command(vtysh_cmd, namespace=None):
     cmd += ['-c', vtysh_cmd]
 
     output, ret = clicommon.run_command(cmd, return_cmd=True)
+    if ret != 0:
+        raise click.ClickException("vtysh command failed with exit code {}".format(ret))
     return output
 
 

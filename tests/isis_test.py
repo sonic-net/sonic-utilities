@@ -172,3 +172,16 @@ class TestIsis(object):
         result = runner.invoke(self.show_isis_neighbor, ["--json"])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', 'show isis neighbor json'], return_cmd=True)
+
+        # show isis database
+        mock_run_command.return_value = ("IS-IS database mock", 0)
+        result = runner.invoke(self.show_isis_database, [])
+        assert result.exit_code == 0
+        assert "IS-IS database mock" in result.output
+        mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', 'show isis database'], return_cmd=True)
+
+        # vtysh errors must be reported to the CLI caller
+        mock_run_command.return_value = ("", 1)
+        result = runner.invoke(self.show_isis_database, [])
+        assert result.exit_code != 0
+        assert "vtysh command failed" in result.output
