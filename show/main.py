@@ -319,7 +319,10 @@ def cli(ctx):
 
     # Load database config files
     load_db_config()
-    ctx.obj = Db()
+    # Orchagent commands open their own namespace-specific connection after
+    # the authorized display relay. Do not connect as the invoking reader.
+    if ctx.command.get_command(ctx, ctx.invoked_subcommand) is not orchagent.orchagent:
+        ctx.obj = Db()
 
 # Add groups from other modules
 cli.add_command(acl.acl)
