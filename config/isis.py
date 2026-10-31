@@ -457,4 +457,3 @@ def interface_isis_passive(ctx, interface_name, mode):
     except Exception as e:
         log.log_error("Failed to configure IS-IS passive mode on interface {}: {}".format(interface_name, str(e)))
         ctx.fail(str(e))
-
