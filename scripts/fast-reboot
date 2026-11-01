@@ -24,7 +24,7 @@ WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
-HWSKU=$(sonic-db-cli CONFIG_DB HGET "DEVICE_METADATA|localhost" "hwsku")
+HWSKU=$(sonic-db-cli -s CONFIG_DB HGET "DEVICE_METADATA|localhost" "hwsku")
 PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
 LOG_SSD_HEALTH="/usr/local/bin/log_ssd_health"
 SSD_UTIL="/usr/local/bin/ssdutil"
@@ -165,7 +165,7 @@ function execute_in_namespaces()
                     # Remove failed ASIC from the list
                     ASIC_LIST=(${ASIC_LIST[@]/$dev})
                     # Disable fast/warm-reboot for the failed ASIC
-                    sonic-db-cli -n "asic$dev" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
+                    sonic-db-cli -s -n "asic$dev" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
                     config warm_restart disable system -n "asic$dev" &>/dev/null || /bin/true
                 fi
             fi
@@ -179,7 +179,7 @@ function execute_in_namespaces()
 function is_asic_service()
 {
     local -r service=$1
-    local -r has_per_asic_scope=$(sonic-db-cli CONFIG_DB hget "FEATURE|$service" has_per_asic_scope)
+    local -r has_per_asic_scope=$(sonic-db-cli -s CONFIG_DB hget "FEATURE|$service" has_per_asic_scope)
     [[ x"${has_per_asic_scope,,}" == x"true" ]] && echo 1 || echo 0
 }
 
@@ -187,7 +187,7 @@ function is_asic_service()
 function is_global_service()
 {
     local -r service=$1
-    local -r has_global_scope=$(sonic-db-cli CONFIG_DB hget "FEATURE|$service" has_global_scope)
+    local -r has_global_scope=$(sonic-db-cli -s CONFIG_DB hget "FEATURE|$service" has_global_scope)
     [[ x"${has_global_scope,,}" == x"true" ]] && echo 1 || echo 0
 }
 
@@ -387,7 +387,7 @@ function arista_7060_gen_system_prefdl()
 function clear_fast_boot_table()
 {
     #update FAST_RESTART_ENABLE_TABLE to false
-    sonic-db-cli -n "$NETNS" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
+    sonic-db-cli -s -n "$NETNS" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
 }
 
 function clear_boot()
@@ -424,7 +424,7 @@ function init_warm_reboot_states()
     # the current DB contents will likely mark warm reboot is done.
     # Clear these states so that the next boot up image won't get confused.
     if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
-        sonic-db-cli -n "$NETNS" STATE_DB eval "
+        sonic-db-cli -s -n "$NETNS" STATE_DB eval "
             for _, key in ipairs(redis.call('keys', 'WARM_RESTART_TABLE|*')) do
                 redis.call('hdel', key, 'state')
             end
@@ -437,11 +437,11 @@ function initialize_pre_shutdown()
 {
     debug "Initialize pre-shutdown ..."
     TABLE="WARM_RESTART_TABLE|warm-shutdown"
-    RESTORE_COUNT=$(sonic-db-cli -n "$NETNS" STATE_DB hget "${TABLE}" restore_count)
+    RESTORE_COUNT=$(sonic-db-cli -s -n "$NETNS" STATE_DB hget "${TABLE}" restore_count)
     if [[ -z "$RESTORE_COUNT" ]]; then
-        sonic-db-cli -n "$NETNS" STATE_DB hset "${TABLE}" "restore_count" "0" > /dev/null
+        sonic-db-cli -s -n "$NETNS" STATE_DB hset "${TABLE}" "restore_count" "0" > /dev/null
     fi
-    sonic-db-cli -n "$NETNS" STATE_DB hset "${TABLE}" "state" "requesting" > /dev/null
+    sonic-db-cli -s -n "$NETNS" STATE_DB hset "${TABLE}" "state" "requesting" > /dev/null
 }
 
 function request_pre_shutdown()
@@ -476,7 +476,7 @@ function wait_for_pre_shutdown_complete_or_fail()
     while [[ ${elapsed_time} -lt 60 ]]; do
         # timeout doesn't work with -i option of "docker exec". Therefore we have
         # to invoke docker exec directly below.
-        STATE=$(sonic-db-cli -n "$NETNS" STATE_DB hget "${TABLE}" state; if [[ $? == 124 ]]; then echo "timed out"; fi)
+        STATE=$(sonic-db-cli -s -n "$NETNS" STATE_DB hget "${TABLE}" state; if [[ $? == 124 ]]; then echo "timed out"; fi)
         if [[ x"${STATE}" == x"timed out" ]]; then
             retrycount+=1
             debug "Timed out getting pre-shutdown state, retry count ${retrycount} ..."
@@ -504,21 +504,21 @@ function backup_database()
 
     if [[ "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
         # Advanced reboot: dump state to host disk
-        sonic-db-cli -n "$NETNS" ASIC_DB FLUSHDB > /dev/null
-        sonic-db-cli -n "$NETNS" COUNTERS_DB FLUSHDB > /dev/null
-        sonic-db-cli -n "$NETNS" FLEX_COUNTER_DB FLUSHDB > /dev/null
+        sonic-db-cli -s -n "$NETNS" ASIC_DB FLUSHDB > /dev/null
+        sonic-db-cli -s -n "$NETNS" COUNTERS_DB FLUSHDB > /dev/null
+        sonic-db-cli -s -n "$NETNS" FLEX_COUNTER_DB FLUSHDB > /dev/null
     fi
 
     if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
         # Flush RESTAP_DB in fast-reboot to avoid stale status
-        sonic-db-cli -n "$NETNS" RESTAPI_DB FLUSHDB > /dev/null
+        sonic-db-cli -s -n "$NETNS" RESTAPI_DB FLUSHDB > /dev/null
     fi
 
     # Dump redis content to a file 'dump.rdb' in warmboot directory
     local -r warm_dir="$WARM_DIR$DEV"
     mkdir -p $warm_dir
     # Delete keys in stateDB except FDB_TABLE|*, MIRROR_SESSION_TABLE|*, WARM_RESTART_ENABLE_TABLE|*, FG_ROUTE_TABLE|*
-    sonic-db-cli -n "$NETNS" STATE_DB eval "
+    sonic-db-cli -s -n "$NETNS" STATE_DB eval "
         for _, k in ipairs(redis.call('keys', '*')) do
             if string.match(k, 'PORT_TABLE|Ethernet') then
                 for i, f in ipairs(redis.call('hgetall', k)) do
@@ -565,7 +565,7 @@ function check_mirror_session_acls()
     while [[ ${elapsed_time} -lt 10 ]]; do
 	CHECK_ACL_ENTRIES=0
         retry_count=$((retry_count + 1))
-        ACL_OUTPUT=$(sonic-db-cli ASIC_DB KEYS "*" | grep SAI_OBJECT_TYPE_ACL_ENTRY) || CHECK_ACL_ENTRIES=$?
+        ACL_OUTPUT=$(sonic-db-cli -s ASIC_DB KEYS "*" | grep SAI_OBJECT_TYPE_ACL_ENTRY) || CHECK_ACL_ENTRIES=$?
 	if [[ ${CHECK_ACL_ENTRIES} -ne 0 ]]; then
 	    debug "Failed to retrieve SAI_OBJECT_TYPE_ACL_ENTRY from redis, retrying... (Attempt: ${retry_count})"
 	    sleep 0.1
@@ -580,7 +580,7 @@ function check_mirror_session_acls()
 	    continue
 	fi
         for ACL_ENTRY in ${ACL_ENTRIES[@]}; do
-            ACL_PRIORITY=$(sonic-db-cli ASIC_DB HGET ${ACL_ENTRY} SAI_ACL_ENTRY_ATTR_PRIORITY)
+            ACL_PRIORITY=$(sonic-db-cli -s ASIC_DB HGET ${ACL_ENTRY} SAI_ACL_ENTRY_ATTR_PRIORITY)
             if [[ ${ACL_PRIORITY} -eq 8888 ]]; then
                 ACL_ARP="found"
             fi
@@ -929,8 +929,8 @@ function save_counters_folder() {
 }
 
 function check_warm_restart_in_progress() {
-    sonic-db-cli -n "$NETNS" STATE_DB keys "WARM_RESTART_ENABLE_TABLE|*" | while read key ; do
-        if [ -n "$key" ] && [[ x"$(sonic-db-cli -n "$NETNS" STATE_DB hget $key enable)" == x"true" ]]; then
+    sonic-db-cli -s -n "$NETNS" STATE_DB keys "WARM_RESTART_ENABLE_TABLE|*" | while read key ; do
+        if [ -n "$key" ] && [[ x"$(sonic-db-cli -s -n "$NETNS" STATE_DB hget $key enable)" == x"true" ]]; then
             if [[ x"${FORCE}" == x"yes" ]]; then
                 debug "Ignoring warm restart flag for ${key#*|}"
             else
@@ -1018,7 +1018,7 @@ check_conflict_boot_in_fw_update
 
 function enable_fast_boot()
 {
-    sonic-db-cli -n "$NETNS" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "true" &>/dev/null || /bin/true
+    sonic-db-cli -s -n "$NETNS" STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "true" &>/dev/null || /bin/true
     config warm_restart enable -n "$NETNS" system
 }
 

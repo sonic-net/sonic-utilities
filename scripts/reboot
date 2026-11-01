@@ -256,7 +256,7 @@ function linecard_reboot_notify_supervisor()
 {
     is_linecard=$(python3 -I -c 'from sonic_py_common import device_info; print("True") if device_info.is_chassis() == True and device_info.is_supervisor() == False else print("False")')
     if [ $is_linecard == "True" ]; then
-        key=$(sonic-db-cli STATE_DB keys "CHASSIS_MODULE_TABLE|LINE-CARD*")
+        key=$(sonic-db-cli -s STATE_DB keys "CHASSIS_MODULE_TABLE|LINE-CARD*")
         status=$?
         if [ $status -eq 0 ]; then
             module="${key#CHASSIS_MODULE_TABLE}"

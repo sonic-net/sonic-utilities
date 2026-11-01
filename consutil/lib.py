@@ -81,9 +81,9 @@ fi
 console_state_set() {
     local ln="$1" st="$2" pid="${3:-}" start="${4:-}"
     local key="CONSOLE_PORT|${ln}"
-    sonic-db-cli STATE_DB hset "$key" state "$st" > /dev/null 2>&1 || true
-    sonic-db-cli STATE_DB hset "$key" pid "$pid" > /dev/null 2>&1 || true
-    sonic-db-cli STATE_DB hset "$key" start_time "$start" > /dev/null 2>&1 || true
+    sonic-db-cli -s STATE_DB hset "$key" state "$st" > /dev/null 2>&1 || true
+    sonic-db-cli -s STATE_DB hset "$key" pid "$pid" > /dev/null 2>&1 || true
+    sonic-db-cli -s STATE_DB hset "$key" start_time "$start" > /dev/null 2>&1 || true
 }
 
 restore_tty() {
