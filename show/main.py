@@ -368,6 +368,7 @@ if is_gearbox_configured():
 
 # bgp module
 cli.add_command(bgp_cli.BGP)
+cli.add_command(isis.isis)
 
 #
 # 'vrf' command ("show vrf")

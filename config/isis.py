@@ -132,7 +132,10 @@ def isis_net(ctx, db, net_title, vrf):
 
     cfg = db.cfgdb.get_config()
     if table not in cfg or key not in cfg[table]:
-        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first using 'config isis enable {}'".format(vrf, vrf))
+        ctx.fail(
+            "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
+            "'config isis enable {}'".format(vrf, vrf)
+        )
 
     data = cfg[table][key]
     data["net_title"] = net_title
@@ -158,7 +161,10 @@ def isis_level(ctx, db, level, vrf):
 
     cfg = db.cfgdb.get_config()
     if table not in cfg or key not in cfg[table]:
-        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first using 'config isis enable {}'".format(vrf, vrf))
+        ctx.fail(
+            "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
+            "'config isis enable {}'".format(vrf, vrf)
+        )
 
     data = cfg[table][key]
     data["level"] = level
@@ -184,7 +190,10 @@ def isis_hostname(ctx, db, state, vrf):
 
     cfg = db.cfgdb.get_config()
     if table not in cfg or key not in cfg[table]:
-        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first using 'config isis enable {}'".format(vrf, vrf))
+        ctx.fail(
+            "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
+            "'config isis enable {}'".format(vrf, vrf)
+        )
 
     data = cfg[table][key]
     data["dynamic_hostname"] = "true" if state == "enabled" else "false"
@@ -381,7 +390,10 @@ def interface_isis_metric(ctx, interface_name, metric_val):
 
     cfg = db.get_config()
     if table not in cfg or key not in cfg[table]:
-        ctx.fail("IS-IS routing is not enabled on interface {}. Please enable it first using 'config interface isis enable {}'".format(interface_name, interface_name))
+        ctx.fail(
+            "IS-IS routing is not enabled on interface {}. Please enable it first using "
+            "'config interface isis enable {}'".format(interface_name, interface_name)
+        )
 
     data = cfg[table][key]
     data["metric"] = str(metric_val)
@@ -413,7 +425,10 @@ def interface_isis_circuit_type(ctx, interface_name, circuit_type):
 
     cfg = db.get_config()
     if table not in cfg or key not in cfg[table]:
-        ctx.fail("IS-IS routing is not enabled on interface {}. Please enable it first using 'config interface isis enable {}'".format(interface_name, interface_name))
+        ctx.fail(
+            "IS-IS routing is not enabled on interface {}. Please enable it first using "
+            "'config interface isis enable {}'".format(interface_name, interface_name)
+        )
 
     data = cfg[table][key]
     data["circuit_type"] = circuit_type
@@ -445,7 +460,10 @@ def interface_isis_passive(ctx, interface_name, mode):
 
     cfg = db.get_config()
     if table not in cfg or key not in cfg[table]:
-        ctx.fail("IS-IS routing is not enabled on interface {}. Please enable it first using 'config interface isis enable {}'".format(interface_name, interface_name))
+        ctx.fail(
+            "IS-IS routing is not enabled on interface {}. Please enable it first using "
+            "'config interface isis enable {}'".format(interface_name, interface_name)
+        )
 
     data = cfg[table][key]
     data["passive"] = "true" if mode == "enable" else "false"

@@ -1,5 +1,4 @@
 import os
-import pytest
 from unittest import mock
 from click.testing import CliRunner
 

@@ -1955,6 +1955,9 @@ config.add_command(dns.dns)
 # Switchport module
 config.add_command(switchport.switchport)
 
+# add isis commands
+config.add_command(isis.ISIS)
+
 @config.command()
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false,
                 expose_value=False, prompt='Existing files will be overwritten, continue?')

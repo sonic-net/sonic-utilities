@@ -1,5 +1,4 @@
 import click
-import sys
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic
