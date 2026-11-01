@@ -2,7 +2,7 @@
 from __future__ import print_function
 import sys
 from sonic_py_common import multi_asic
-from sonic_py_common.redis_auth import connection_kwargs
+from swsscommon.redis import connection_pool
 from swsscommon.swsscommon import SonicDBConfig, SonicDBKey
 import redis
 import argparse
@@ -75,15 +75,12 @@ def centralize_to_target_db(target_dbname, namespace):
 
         dbid = SonicDBConfig.getDbId(dbname, key)
 
-        source = redis.Redis(unix_socket_path=dbsocket, db=dbid,
-                             **connection_kwargs(unix_socket_path=dbsocket))
-        target = redis.Redis(unix_socket_path=target_dbsocket, db=dbid,
-                             **connection_kwargs(unix_socket_path=target_dbsocket))
+        source = redis.Redis(connection_pool=connection_pool(unix_socket_path=dbsocket, db=dbid))
+        target = redis.Redis(connection_pool=connection_pool(unix_socket_path=target_dbsocket, db=dbid))
         copy_database(source, target)
 
     #SAVE rdb file
-    target = redis.Redis(unix_socket_path=target_dbsocket,
-                         **connection_kwargs(unix_socket_path=target_dbsocket))
+    target = redis.Redis(connection_pool=connection_pool(unix_socket_path=target_dbsocket))
     target.save()
 
 def main():

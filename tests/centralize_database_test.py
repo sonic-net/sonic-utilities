@@ -95,16 +95,22 @@ def test_centralize_to_target_db_copies_remote_socket_and_saves():
         side_effect=[source, copy_target, save_target],
     ) as redis_client, mock.patch.object(
         centralize_database, 'copy_database'
-    ) as copy_database:
+    ) as copy_database, mock.patch.object(
+        centralize_database, 'connection_pool',
+        side_effect=[mock.sentinel.source_pool, mock.sentinel.target_pool, mock.sentinel.save_pool]
+    ) as pools:
         centralize_database.centralize_to_target_db('APPL_DB', 'asic0')
 
     initialize_global.assert_called_once_with()
-    assert redis_client.call_args_list == [
-        mock.call(
-            unix_socket_path='/var/run/redis-state/redis.sock', db=6
-        ),
+    assert pools.call_args_list == [
+        mock.call(unix_socket_path='/var/run/redis-state/redis.sock', db=6),
         mock.call(unix_socket_path='/var/run/redis/redis.sock', db=6),
         mock.call(unix_socket_path='/var/run/redis/redis.sock'),
+    ]
+    assert redis_client.call_args_list == [
+        mock.call(connection_pool=mock.sentinel.source_pool),
+        mock.call(connection_pool=mock.sentinel.target_pool),
+        mock.call(connection_pool=mock.sentinel.save_pool),
     ]
     copy_database.assert_called_once_with(source, copy_target)
     save_target.save.assert_called_once_with()
