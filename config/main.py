@@ -5363,6 +5363,9 @@ def interface(ctx, namespace):
     ctx.obj = {'config_db': config_db, 'namespace': str(namespace)}
 
 
+interface.add_command(isis.INTERFACE_ISIS)
+
+
 @config.group(cls=clicommon.AliasedGroup, name='switch-fast-linkup', context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 def switch_fast_linkup_group(ctx):
