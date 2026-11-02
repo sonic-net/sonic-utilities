@@ -1,5 +1,6 @@
 import datetime
 import ctypes
+import os
 import shutil
 import stat
 import sys
@@ -17,7 +18,6 @@ from cryptography.hazmat.primitives.serialization import pkcs7
 from cryptography.x509.oid import NameOID
 
 from sonic_installer import secure_boot_db as prune
-from sonic_installer import secure_boot_lock
 
 X509_GUID = prune.EFI_CERT_X509_GUID.bytes_le
 OWNER_GUID = uuid.UUID(int=1).bytes_le
@@ -106,7 +106,6 @@ def bootloader(monkeypatch):
 def env(tmp_path, monkeypatch, certs, bootloader):
     """A fake device: cert0 signs shim, cert1 signs the kernel and fallback loader; only cert0
     has a reinstall .auth, so the kernel and fallback loader are at risk."""
-    monkeypatch.setattr(secure_boot_lock, "LOCK_FILE", tmp_path / "installer.lock")
     cert0, cert1 = certs
     host, esp = tmp_path / "host", tmp_path / "esp" / "EFI"
     efivars, auth_dir = tmp_path / "efivars", tmp_path / "db-auth"
@@ -207,26 +206,6 @@ def test_ensure_efivars_never_attempts_mount(tmp_path, monkeypatch, state):
         with pytest.raises(prune.ScriptError, match="UEFI efivars not available"):
             prune.ensure_efivars(config)
     run.assert_not_called()
-
-
-def test_pruning_holds_lock_from_discovery_through_verification(safe_updates, monkeypatch):
-    phases = []
-
-    def checked(name, original):
-        def wrapper(*args, **kwargs):
-            assert secure_boot_lock.current_lock_fd() is not None
-            phases.append(name)
-            return original(*args, **kwargs)
-        return wrapper
-
-    for name in ("installed_images", "load_db_certs", "validate_updates", "update_db", "read_efi_certificates"):
-        monkeypatch.setattr(prune, name, checked(name, getattr(prune, name)))
-    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
-    assert phases[0] == "load_db_certs"
-    assert "installed_images" in phases and "validate_updates" in phases
-    assert phases.count("update_db") == 3
-    assert phases[-1] == "read_efi_certificates"
-    assert secure_boot_lock.current_lock_fd() is None
 
 
 def test_analyzed_plan_exposes_boot_chain_safety(env, tmp_path):
@@ -836,25 +815,129 @@ def test_validation_timeout_does_not_warn_of_firmware_changes(env, safe_updates,
     assert not env["marker"].exists()
 
 
-def test_sigterm_during_updates_warns_and_restores_signal_handler(env, safe_updates, monkeypatch, capsys):
-    monkeypatch.setattr(prune.signal, "getsignal", Mock(return_value=prune.signal.SIG_DFL))
-    handler = Mock()
-    monkeypatch.setattr(prune.signal, "signal", handler)
+@pytest.mark.parametrize("signum", [prune.signal.SIGTERM, prune.signal.SIGINT])
+@pytest.mark.parametrize("phase", ["wipe", "append"])
+def test_cancellation_restores_certificates_before_propagating(
+        env, safe_updates, monkeypatch, capsys, signum, phase):
+    original = prune.signal.getsignal(signum)
+    original_mask = prune.signal.pthread_sigmask(prune.signal.SIG_BLOCK, [])
     update = prune.update_db
+    read = Mock(wraps=prune.read_efi_certificates)
+    monkeypatch.setattr(prune, "read_efi_certificates", read)
 
-    def terminate_after_wipe(config, auth, append):
+    def cancel_during_update(config, auth, append):
         result = update(config, auth, append)
-        handler.call_args.args[1](prune.signal.SIGTERM, None)
+        if (phase == "wipe" and not append) or (phase == "append" and auth.name == "DB-cert0.auth"):
+            os.kill(os.getpid(), signum)
+            os.kill(os.getpid(), signum)
         return result
 
-    monkeypatch.setattr(prune, "update_db", terminate_after_wipe)
-    with pytest.raises(SystemExit) as error:
+    monkeypatch.setattr(prune, "update_db", cancel_during_update)
+    expected = KeyboardInterrupt if signum == prune.signal.SIGINT else SystemExit
+    with pytest.raises(expected) as error:
         prune.prune_db_certificates(safe_updates, auto=True)
-    assert error.value.code == 143
-    assert prune.read_efi_variable(safe_updates, "db") == b""
+    if signum == prune.signal.SIGTERM:
+        assert error.value.code == 143
+    assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
+    assert env["marker"].read_text().splitlines() == [
+        "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
+    ]
+    assert any(args[2:] == ("db", "new-db") for args, _ in read.call_args_list)
+    assert "DO NOT REBOOT" not in capsys.readouterr().err
+    assert prune.signal.getsignal(signum) == original
+    assert prune.signal.pthread_sigmask(prune.signal.SIG_BLOCK, []) == original_mask
+
+
+@pytest.mark.parametrize("signum", [prune.signal.SIGTERM, prune.signal.SIGINT])
+def test_custom_cancellation_handler_runs_after_restoration(env, safe_updates, monkeypatch, signum):
+    calls = []
+
+    def caller_handler(received, frame):
+        assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
+        calls.append(received)
+
+    original = prune.signal.signal(signum, caller_handler)
+    update = prune.update_db
+
+    def cancel_after_wipe(config, auth, append):
+        result = update(config, auth, append)
+        if not append:
+            os.kill(os.getpid(), signum)
+            assert not calls
+        return result
+
+    monkeypatch.setattr(prune, "update_db", cancel_after_wipe)
+    try:
+        assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+        assert calls == [signum]
+        assert prune.signal.getsignal(signum) is caller_handler
+    finally:
+        prune.signal.signal(signum, original)
+
+
+@pytest.mark.parametrize("signum", [prune.signal.SIGTERM, prune.signal.SIGINT])
+def test_process_group_cancellation_does_not_kill_firmware_writer(env, safe_updates, signum):
+    writer = env["fake_bin"] / "efi-updatevar"
+    contents = writer.read_text()
+    writer.write_text(contents.replace(
+        "previous = db.read_bytes()",
+        f"if '-a' not in sys.argv:\n    os.killpg(os.getpgrp(), {int(signum)})\nprevious = db.read_bytes()",
+    ))
+    child = """
+import signal
+from sonic_installer import secure_boot_db as prune
+prune.os.geteuid = lambda: 0
+signal.signal(signal.SIGTERM, signal.SIG_DFL)
+signal.signal(signal.SIGINT, signal.default_int_handler)
+try:
+    prune.prune_db_certificates(prune.Config.from_env(), images=["SONiC-OS-test"], auto=True)
+except KeyboardInterrupt:
+    raise SystemExit(130)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", child], capture_output=True, text=True, start_new_session=True, timeout=30,
+    )
+    assert result.returncode == 128 + signum, result.stderr
+    assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
+    assert env["marker"].read_text().splitlines() == [
+        "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
+    ]
+    assert "all boot-chain binaries verify" in result.stdout
+    assert "DO NOT REBOOT" not in result.stderr
+
+
+def test_restoration_error_takes_priority_over_pending_cancellation(env, safe_updates, monkeypatch, capsys):
+    monkeypatch.setenv("FAIL_AUTH", "DB-cert0.auth")
+    original = prune.signal.getsignal(prune.signal.SIGTERM)
+    original_mask = prune.signal.pthread_sigmask(prune.signal.SIG_BLOCK, [])
+    update = prune.update_db
+
+    def cancel_after_wipe(config, auth, append):
+        result = update(config, auth, append)
+        if not append:
+            os.kill(os.getpid(), prune.signal.SIGTERM)
+        return result
+
+    monkeypatch.setattr(prune, "update_db", cancel_after_wipe)
+    with pytest.raises(prune.ScriptError, match="DO NOT REBOOT"):
+        prune.prune_db_certificates(safe_updates, auto=True)
+    assert env["marker"].read_text().splitlines() == [
+        "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
+    ]
+    assert prune.read_efi_variable(safe_updates, "db") == _esl(env["certs"][1])
     assert "DO NOT REBOOT" in capsys.readouterr().err
-    assert handler.call_count == 2
-    handler.assert_called_with(prune.signal.SIGTERM, prune.signal.SIG_DFL)
+    assert prune.signal.getsignal(prune.signal.SIGTERM) == original
+    assert prune.signal.pthread_sigmask(prune.signal.SIG_BLOCK, []) == original_mask
+
+
+def test_cancellation_before_writes_is_not_deferred(env, safe_updates, monkeypatch):
+    def cancel_validation(*args):
+        prune.signal.raise_signal(prune.signal.SIGINT)
+
+    monkeypatch.setattr(prune, "validate_updates", cancel_validation)
+    with pytest.raises(KeyboardInterrupt):
+        prune.prune_db_certificates(safe_updates, auto=True)
+    assert not env["marker"].exists()
 
 
 def test_pruning_preserves_existing_signal_handler(safe_updates, monkeypatch):

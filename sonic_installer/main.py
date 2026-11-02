@@ -29,7 +29,6 @@ from .common import (
 )
 from .exception import SonicRuntimeException
 from . import secure_boot_db
-from .secure_boot_lock import locked
 
 SYSLOG_IDENTIFIER = "sonic-installer"
 LOG_ERR = logger.Logger.LOG_PRIORITY_ERROR
@@ -572,7 +571,6 @@ def sonic_installer():
               cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
 @click.argument('url')
-@locked
 def install(url, force, skip_platform_check=False, skip_migration=False, skip_package_migration=False,
             skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None, available_mem_threshold=None):
     """ Install image from local binary or URL"""
@@ -775,7 +773,6 @@ def get_fips(image):
        click.echo("FIPS is disabled")
 
 
-@locked
 def prune_stale_db_certs(bootloader):
     """ Trim the UEFI db to certificates that still sign an installed image.
 
@@ -806,7 +803,6 @@ def prune_stale_db_certs(bootloader):
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
               expose_value=False, prompt='Image will be removed, continue?')
 @click.argument('image')
-@locked
 def remove(image):
     """ Uninstall image """
     bootloader = get_bootloader()
@@ -846,7 +842,6 @@ def binary_version(binary_image_path):
 @sonic_installer.command('cleanup')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
               expose_value=False, prompt='Remove images which are not current and next, continue?')
-@locked
 def cleanup():
     """ Remove installed images which are not current and next """
     bootloader = get_bootloader()

@@ -26,11 +26,11 @@ import sys
 import tempfile
 import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
-from .secure_boot_lock import locked
 
 PROG = Path(sys.argv[0]).name if sys.argv and sys.argv[0] else "remove_stale_db_certs.py"
 
@@ -574,7 +574,48 @@ def apply_plan(config, plan, work, verbose=True):
         f"\nDone: db reset to {len(new_pems)} image-signing certificate(s); all boot-chain binaries verify.")
 
 
-@locked
+@contextmanager
+def defer_cancellation():
+    """Deliver cancellation only after firmware restoration and verification finish."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    handlers = {}
+    pending = []
+    previous_mask = None
+
+    def remember(signum, frame):
+        if not pending:
+            pending.append((signum, frame))
+
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            handler = signal.getsignal(signum)
+            if handler != signal.SIG_IGN:
+                handlers[signum] = handler
+                signal.signal(signum, remember)
+        # Children inherit the mask, so terminal signals cannot kill a firmware writer either.
+        if handlers:
+            previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, handlers)
+        yield
+    finally:
+        try:
+            if previous_mask is not None:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        finally:
+            for signum, handler in handlers.items():
+                signal.signal(signum, handler)
+
+    if pending:
+        signum, frame = pending[0]
+        handler = handlers[signum]
+        if callable(handler):
+            handler(signum, frame)
+        else:
+            raise SystemExit(128 + signum)
+
+
 def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, auto=False, verbose=False):
     """Analyze or prune db; automatic mode modifies only safe plans with stale certificates."""
     if auto and plan_only:
@@ -624,21 +665,14 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
                               f"Refusing to touch db. Provide the missing .auth in {config.auth_dir}.")
         validate_updates(config, plan, work)
         completed = False
-        handle_sigterm = (threading.current_thread() is threading.main_thread()
-                          and signal.getsignal(signal.SIGTERM) == signal.SIG_DFL)
         try:
-            if handle_sigterm:
-                signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
-            apply_plan(config, plan, work, verbose=not auto or verbose)
-            completed = True
+            with defer_cancellation():
+                apply_plan(config, plan, work, verbose=not auto or verbose)
+                completed = True
         finally:
-            try:
-                if not completed:
-                    warn("Secure Boot db update did not complete. DO NOT REBOOT until db has been "
-                         "verified and any missing image-signing certificates have been restored.")
-            finally:
-                if handle_sigterm:
-                    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            if not completed:
+                warn("Secure Boot db update did not complete. DO NOT REBOOT until db has been "
+                     "verified and any missing image-signing certificates have been restored.")
     return 0
 
 
