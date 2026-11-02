@@ -1,10 +1,11 @@
+import json
 import os
 import pytest
 
 import show.main as show
 
 from click.testing import CliRunner
-from config.main import config
+from config.main import config, config_file_yang_validation
 from utilities_common.db import Db
 
 
@@ -209,3 +210,14 @@ class TestFdbMacSyncModeShow:
             f"Found unexpected {MAC_SYNC_MODE_FIELD} {result.output.strip()} on an "
             f"{L3_EVPN_MH_SUBTYPE} device, expected 'fpm'"
         )
+
+
+# config reload validates the saved config against the installed YANG models and aborts on a table that has none,
+# so this fails until the FDB_SYNC model of sonic-net/sonic-buildimage#30365 is installed.
+class TestFdbSyncYangModel:
+    @pytest.mark.parametrize("mac_sync_mode", ["kernel", "fpm"])
+    def test_saved_mac_sync_mode_passes_config_reload_validation(self, tmp_path, mac_sync_mode):
+        config_file = tmp_path / "config_db.json"
+        config_file.write_text(json.dumps({FDB_SYNC_TABLE: {FDB_SYNC_KEY: {MAC_SYNC_MODE_FIELD: mac_sync_mode}}}))
+
+        assert config_file_yang_validation(str(config_file))
