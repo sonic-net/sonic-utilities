@@ -4,6 +4,10 @@ declare -ra COMMON_GNMI_PORTS=(8080 50052)
 declare -r GNMI_PROBE_TIMEOUT=10
 declare -r GNMI_REBOOT_TIMEOUT=60
 declare -r GNMI_STATUS_TIMEOUT=10
+declare -r GNOI_STATUS_UNKNOWN=0
+declare -r GNOI_STATUS_SUCCESS=1
+declare -r GNOI_STATUS_RETRIABLE_FAILURE=2
+declare -r GNOI_STATUS_FAILURE=3
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 declare -r REBOOT_STATUS_ACTIVE_RC=10
@@ -89,23 +93,28 @@ function get_reboot_status()
     status_json=$(awk '/^{.*}$/{json=$0} END{print json}' "$reboot_output_file")
     rm -f "$reboot_output_file"
     local reboot_state
-    if [ -z "$status_json" ] || ! reboot_state=$(jq -r '
+    if [ -z "$status_json" ] || ! reboot_state=$(jq -r \
+        --argjson status_unknown "$GNOI_STATUS_UNKNOWN" \
+        --argjson status_success "$GNOI_STATUS_SUCCESS" \
+        --argjson status_retriable_failure "$GNOI_STATUS_RETRIABLE_FAILURE" \
+        --argjson status_failure "$GNOI_STATUS_FAILURE" \
+        '
         .status.status as $status
         |
         if .active == true then
             "active"
         elif (.active == false and (has("status") | not))
-            or $status == 1
+            or $status == $status_success
             or $status == "STATUS_SUCCESS" then
             "complete"
-        elif $status == 2
-            or $status == 3
+        elif $status == $status_retriable_failure
+            or $status == $status_failure
             or $status == "STATUS_RETRIABLE_FAILURE"
             or $status == "STATUS_FAILURE" then
             "failure:\($status)"
         elif ((has("active") | not) or .active == false)
             and ($status == null
-                or $status == 0
+                or $status == $status_unknown
                 or $status == "STATUS_UNKNOWN") then
             "default"
         else
