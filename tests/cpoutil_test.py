@@ -977,7 +977,6 @@ class TestHelperCoverage(object):
                 "Ethernet0": {
                     "Data Path State Indicator": {"lane00": "Active"},
                     "ELS": "ELS0",
-                    "ELS Status": {"module_state": "Ready"},
                     "ELS Lane State": {"lane00": "Active"},
                     "ELS Lasers": [0],
                     "Shared ELS Lasers": [],
@@ -1736,7 +1735,7 @@ class TestInterfaceElsEepromBank:
 
 
 class TestLaneStatusLaserAssociation:
-    """Each displayed OE lane must show the laser the topology associates with it."""
+    """Display OE lanes and selected ELS lasers in separate tables."""
 
     # Laser states chosen so that any wrong pairing changes the displayed state.
     LASER_STATES = {"LaneState1": "Active", "LaneState2": "Inactive", "LaneState3": "Disabled"}
@@ -1765,16 +1764,45 @@ class TestLaneStatusLaserAssociation:
             "lane{:02d}".format(position): laser for position, laser, _ in self.EXPECTED
         }
 
-    def test_table_shows_the_correct_laser_and_state_in_every_row(self, nonuniform):
+    def test_tables_show_oe_lanes_and_each_selected_laser_once(self, nonuniform):
         result = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         rows = [line.split() for line in result.output.splitlines() if line.startswith("Ethernet0")]
         lane_rows = [row for row in rows if "DataPathActivated" in row]
         assert len(lane_rows) == len(self.EXPECTED)
-        for row, (_, laser, state) in zip(lane_rows, self.EXPECTED):
-            # Columns end with: ELS, Laser, ELS Lane State, Shared
-            assert row[-4:] == ["ELS0", str(laser), state, "No"], row
-        assert "per-lane association unavailable" not in result.output
+        assert all(len(row) == 4 for row in lane_rows)  # Interface, Lane N, state
+        laser_rows = [row for row in rows if row[1] == "ELS0"]
+        assert laser_rows == [
+            ["Ethernet0", "ELS0", "0", "Active", "No"],
+            ["Ethernet0", "ELS0", "1", "Inactive", "No"],
+            ["Ethernet0", "ELS0", "2", "Disabled", "No"],
+        ]
+        assert result.output.count("OE datapath state:") == 1
+        assert result.output.count("ELS lane state:") == 1
+        assert "ELS status:" not in result.output
+
+    @pytest.mark.parametrize("json_output", [False, True])
+    @pytest.mark.parametrize("module_status", ["absent", "raises"])
+    def test_module_status_api_is_not_required(self, nonuniform, monkeypatch, json_output, module_status):
+        # A platform can implement lane-state reads without the module aggregate.
+        api = nonuniform.api
+        if module_status == "absent":
+            monkeypatch.delattr(type(api), "get_elsfp_status")
+        else:
+            monkeypatch.setattr(api, "get_elsfp_status", mock.Mock(
+                side_effect=AssertionError("Unexpected ELS module status read")))
+        arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+        if json_output:
+            arguments.append("--json")
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert "ELS Status" not in record
+            assert record["ELS Lane State"] == {"lane00": "Active", "lane01": "Inactive", "lane02": "Disabled"}
+        else:
+            assert "ELS lane state:" in result.output
+            assert "Status field" not in result.output
 
     def test_asic_lane_ids_differ_from_lane_positions(self, monkeypatch, coverage_environment):
         data = TestExplicitLaserMapping.nonuniform_topology()
@@ -1799,9 +1827,14 @@ class TestLaneStatusLaserAssociation:
         assert table.exit_code == 0, table.output
         lane_rows = [line.split() for line in table.output.splitlines()
                      if line.startswith("Ethernet0") and "DataPathActivated" in line]
-        assert lane_rows and all(row[-3:] == ["N/A", "N/A", "N/A"] for row in lane_rows)
-        assert "per-lane association unavailable" in table.output
-        assert "0: Active, 1: Inactive" in table.output
+        assert len(lane_rows) == 2
+        assert all(len(row) == 4 for row in lane_rows)
+        laser_rows = [line.split() for line in table.output.splitlines()
+                      if line.startswith("Ethernet0") and "ELS0" in line]
+        assert laser_rows == [
+            ["Ethernet0", "ELS0", "0", "Active", "No"],
+            ["Ethernet0", "ELS0", "1", "Inactive", "No"],
+        ]
 
 
 class TestBreakoutWithoutLaneMapping:
@@ -1848,7 +1881,7 @@ class TestBreakoutWithoutLaneMapping:
         lane_rows = [line.split() for line in table.output.splitlines()
                      if line.startswith("Ethernet") and "DataPathActivated" in line]
         assert [row[0] for row in lane_rows] == ["Ethernet0", "Ethernet1"]
-        assert all(row[-3:] == ["N/A", "N/A", "N/A"] for row in lane_rows)
+        assert all(len(row) == 4 for row in lane_rows)
         assert table.output.count(cpoutil.UNRESOLVED_LASERS) == 2
 
     def test_full_port_on_same_topology_still_resolves_lasers(self, coverage_environment, monkeypatch):
