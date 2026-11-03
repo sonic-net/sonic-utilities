@@ -3793,18 +3793,21 @@ class TestConfigNtp(object):
         import config.main
         importlib.reload(config.main)
 
+    @pytest.mark.parametrize("address", ["10.10.10.4", "2001:db8::4"])
     @patch('utilities_common.cli.run_command')
-    def test_add_ntp_server(self, mock_run_command):
+    def test_add_ntp_server(self, mock_run_command, address):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
+        result = runner.invoke(config.config.commands["ntp"], ["add", address], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert result.output == "NTP server {} added to configuration\n".format(address)
+        assert db.cfgdb.get_table("NTP_SERVER")[address] == {}
+        mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_version_3(self, mock_run_command):
@@ -3817,7 +3820,8 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert db.cfgdb.get_entry("NTP_SERVER", "10.10.10.4") == {"version": "3"}
+        mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_with_iburst(self, mock_run_command):
@@ -3830,7 +3834,8 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert db.cfgdb.get_entry("NTP_SERVER", "10.10.10.4") == {"iburst": "on"}
+        mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_with_server_association(self, mock_run_command):
@@ -3844,7 +3849,8 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert db.cfgdb.get_table("NTP_SERVER")["10.10.10.4"] == {}
+        mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_with_pool_association(self, mock_run_command):
@@ -3858,7 +3864,8 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert db.cfgdb.get_entry("NTP_SERVER", "pool.ntp.org") == {"association_type": "pool"}
+        mock_run_command.assert_not_called()
 
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
            mock.Mock(side_effect=ValueError))
@@ -3901,20 +3908,23 @@ class TestConfigNtp(object):
         assert "is already configured" in result.output
         mock_run_command.assert_not_called()
 
+    @pytest.mark.parametrize("address", ["10.10.10.4", "2001:db8::4"])
     @patch('utilities_common.cli.run_command')
-    def test_del_ntp_server(self, mock_run_command):
+    def test_del_ntp_server(self, mock_run_command, address):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
 
-        db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
+        db.cfgdb.set_entry("NTP_SERVER", address, {})
 
-        result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.4"], obj=obj)
+        result = runner.invoke(config.config.commands["ntp"], ["del", address], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert result.output == "NTP server {} removed from configuration\n".format(address)
+        assert address not in db.cfgdb.get_table("NTP_SERVER")
+        mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
     def test_del_pool_ntp_server(self, mock_run_command):
@@ -3929,7 +3939,8 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert "pool.ntp.org" not in db.cfgdb.get_table("NTP_SERVER")
+        mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
     def test_del_ntp_server_not_configured(self, mock_run_command):

@@ -10808,6 +10808,10 @@ This command displays a list of NTP peers known to the server as well as a summa
 
 This sub-section of commands is used to add or remove the configured NTP servers.
 
+These commands update CONFIG_DB. The `hostcfgd` daemon applies the changes and
+restarts chrony asynchronously. Command completion confirms the configuration
+update, not time synchronization; use `show ntp` to check synchronization.
+
 **config ntp add**
 
 This command is used to add a NTP server IP address to the NTP server list.  Note that more that one NTP server IP address can be added in the device.
@@ -10821,7 +10825,6 @@ This command is used to add a NTP server IP address to the NTP server list.  Not
   ```
   admin@sonic:~$ sudo config ntp add 9.9.9.9
   NTP server 9.9.9.9 added to configuration
-  Restarting ntp-config service...
   ```
 
 **config ntp delete**
@@ -10837,7 +10840,6 @@ This command is used to delete a configured NTP server IP address.
   ```
   admin@sonic:~$ sudo config ntp del 9.9.9.9
   NTP server 9.9.9.9 removed from configuration
-  Restarting ntp-config service...
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#NTP)
