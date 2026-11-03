@@ -12,3 +12,15 @@ override_dh_auto_clean:
 override_dh_auto_build:
 	mkdir build
 	./generate_completions.py -o build
+
+# OPTIMIZE_CLI (default unset/off, see rules/config in sonic-buildimage):
+# the cli-daemon systemd unit and its doc only make sense alongside the
+# sonic-cli-daemon console script, which setup.py itself excludes from the
+# build when the flag is off. Strip them here too so a default build never
+# ships a unit file pointing at a binary that was never installed.
+override_dh_install:
+	dh_install
+ifneq ($(strip $(OPTIMIZE_CLI)),y)
+	rm -f debian/sonic-utilities-data/lib/systemd/system/sonic-cli-daemon.service
+	rm -f debian/sonic-utilities-data/usr/share/doc/sonic-utilities-data/cli-daemon.md
+endif
