@@ -22,7 +22,6 @@ DOCKERDIR_NAME = 'docker'
 def is_list_of_strings(command):
     return isinstance(command, list) and all(isinstance(item, str) for item in command)
 
-
 # Run bash command and print output to stdout
 def run_command(command, stdout=subprocess.PIPE, env=None, shell=False):
     if not is_list_of_strings(command):
@@ -66,3 +65,4 @@ def run_command_or_raise(argv, raise_exception=True, capture=True):
 # output of multiple commands using subprocess.Popen()
 def default_sigpipe():
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
