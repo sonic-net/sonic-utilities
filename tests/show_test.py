@@ -12,7 +12,6 @@ from click.testing import CliRunner
 from utilities_common import constants
 from unittest.mock import call, MagicMock, patch, mock_open
 
-EXPECTED_BASE_COMMAND = 'sudo '
 EXPECTED_BASE_COMMAND_LIST = ['sudo']
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -124,97 +123,182 @@ class TestShowRunAllCommandsMasic(object):
         dbconnector.load_namespace_config()
 
 
-@patch('show.main.run_command')
-@pytest.mark.parametrize(
-        "cli_arguments0,expected0",
-        [
-            ([], 'cat /var/log/syslog'),
-            (['xcvrd'], "cat /var/log/syslog | grep 'xcvrd'"),
-            (['-l', '10'], 'cat /var/log/syslog | tail -10'),
-        ]
-)
-@pytest.mark.parametrize(
-        "cli_arguments1,expected1",
-        [
-            (['-f'], ['tail', '-F', '/var/log/syslog']),
-        ]
-)
-def test_show_logging_default(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
-    runner = CliRunner()
-    runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
-    runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+# (isfile, exists, expected log files in order) covering /var/log vs
+# /var/log.tmpfs, with and without rotated syslog.1
+LOGGING_PATH_CASES = [
+    (False, False, ['/var/log/syslog']),
+    (True, False, ['/var/log/syslog.1', '/var/log/syslog']),
+    (False, True, ['/var/log.tmpfs/syslog']),
+    (True, True, ['/var/log.tmpfs/syslog.1', '/var/log.tmpfs/syslog']),
+]
+
+INJECTION_PROCESS_VALUES = [
+    "xcvrd.*error",
+    "'; rm -rf / #",
+    "a; rm -rf /",
+    "$(reboot)",
+    "`reboot`",
+    "a|b",
+    "a\nb",
+    "a b",
+]
+
 
 @patch('show.main.run_command')
-@patch('os.path.isfile', MagicMock(return_value=True))
-@pytest.mark.parametrize(
-        "cli_arguments0,expected0",
-        [
-            ([], 'cat /var/log/syslog.1 /var/log/syslog'),
-            (['xcvrd'], "cat /var/log/syslog.1 /var/log/syslog | grep 'xcvrd'"),
-            (['-l', '10'], 'cat /var/log/syslog.1 /var/log/syslog | tail -10'),
-        ]
-)
-@pytest.mark.parametrize(
-        "cli_arguments1,expected1",
-        [
-            (['-f'], ['tail', '-F', '/var/log/syslog']),
-        ]
-)
-def test_show_logging_syslog_1(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
-    runner = CliRunner()
-    runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
-    runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+@pytest.mark.parametrize("isfile, exists, log_files", LOGGING_PATH_CASES)
+def test_show_logging_no_filter(run_command, isfile, exists, log_files):
+    with patch('os.path.isfile', MagicMock(return_value=isfile)), \
+            patch('os.path.exists', MagicMock(return_value=exists)):
+        CliRunner().invoke(show.cli.commands["logging"], [])
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + ['cat'] + log_files, display_cmd=False)
+
+
+@patch('show.main.subprocess.Popen')
+@pytest.mark.parametrize("isfile, exists, log_files", LOGGING_PATH_CASES)
+def test_show_logging_filter(mock_popen, isfile, exists, log_files):
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
+    with patch('os.path.isfile', MagicMock(return_value=isfile)), \
+            patch('os.path.exists', MagicMock(return_value=exists)):
+        result = CliRunner().invoke(show.cli.commands["logging"], ['xcvrd'])
+    assert mock_popen.call_args_list == [
+        call(EXPECTED_BASE_COMMAND_LIST + ['cat'] + log_files, stdin=None, stdout=subprocess.PIPE),
+        call(['grep', '-h', '--', 'xcvrd'], stdin=mock_p1.stdout, stdout=None),
+    ]
+    assert result.exit_code == 0
+
 
 @patch('show.main.run_command')
-@patch('os.path.exists', MagicMock(return_value=True))
-@pytest.mark.parametrize(
-        "cli_arguments0,expected0",
-        [
-            ([], 'cat /var/log.tmpfs/syslog'),
-            (['xcvrd'], "cat /var/log.tmpfs/syslog | grep 'xcvrd'"),
-            (['-l', '10'], 'cat /var/log.tmpfs/syslog | tail -10'),
-        ]
-)
-@pytest.mark.parametrize(
-        "cli_arguments1,expected1",
-        [
-            (['-f'], ['tail', '-F', '/var/log.tmpfs/syslog']),
-        ]
-)
-def test_show_logging_tmpfs(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
-    runner = CliRunner()
-    runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
-    runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+@pytest.mark.parametrize("isfile, exists, log_files", LOGGING_PATH_CASES)
+def test_show_logging_follow(run_command, isfile, exists, log_files):
+    with patch('os.path.isfile', MagicMock(return_value=isfile)), \
+            patch('os.path.exists', MagicMock(return_value=exists)):
+        CliRunner().invoke(show.cli.commands["logging"], ['-f'])
+    run_command.assert_called_with(
+        EXPECTED_BASE_COMMAND_LIST + ['tail', '-F', log_files[-1]], display_cmd=False)
+
 
 @patch('show.main.run_command')
-@patch('os.path.isfile', MagicMock(return_value=True))
-@patch('os.path.exists', MagicMock(return_value=True))
+def test_show_logging_follow_ignores_other_args(run_command):
+    with patch('os.path.isfile', MagicMock(return_value=False)), \
+            patch('os.path.exists', MagicMock(return_value=False)):
+        CliRunner().invoke(show.cli.commands["logging"], ['xcvrd', '-l', '10', '-f'])
+    run_command.assert_called_with(
+        EXPECTED_BASE_COMMAND_LIST + ['tail', '-F', '/var/log/syslog'], display_cmd=False)
+
+
+@patch('show.main.subprocess.Popen')
+@pytest.mark.parametrize("isfile, exists, log_files", LOGGING_PATH_CASES)
+def test_show_logging_lines_no_filter(mock_popen, isfile, exists, log_files):
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
+    with patch('os.path.isfile', MagicMock(return_value=isfile)), \
+            patch('os.path.exists', MagicMock(return_value=exists)):
+        result = CliRunner().invoke(show.cli.commands["logging"], ['-l', '10'])
+    assert mock_popen.call_args_list == [
+        call(EXPECTED_BASE_COMMAND_LIST + ['cat'] + log_files, stdin=None, stdout=subprocess.PIPE),
+        call(['tail', '-n', '10'], stdin=mock_p1.stdout, stdout=None),
+    ]
+    assert result.exit_code == 0
+
+
+@patch('show.main.subprocess.Popen')
+@pytest.mark.parametrize("isfile, exists, log_files", LOGGING_PATH_CASES)
+def test_show_logging_lines_filter(mock_popen, isfile, exists, log_files):
+    mock_p1, mock_p2, mock_p3 = MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2, mock_p3]
+    with patch('os.path.isfile', MagicMock(return_value=isfile)), \
+            patch('os.path.exists', MagicMock(return_value=exists)):
+        result = CliRunner().invoke(show.cli.commands["logging"], ['xcvrd', '-l', '10'])
+    assert mock_popen.call_args_list == [
+        call(EXPECTED_BASE_COMMAND_LIST + ['cat'] + log_files, stdin=None, stdout=subprocess.PIPE),
+        call(['grep', '-h', '--', 'xcvrd'], stdin=mock_p1.stdout, stdout=subprocess.PIPE),
+        call(['tail', '-n', '10'], stdin=mock_p2.stdout, stdout=None),
+    ]
+    assert result.exit_code == 0
+
+
+@patch('show.main.subprocess.Popen')
+def test_show_logging_lines_verbose(mock_popen):
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
+    with patch('os.path.isfile', MagicMock(return_value=False)), \
+            patch('os.path.exists', MagicMock(return_value=False)):
+        result = CliRunner().invoke(show.cli.commands["logging"], ['-l', '5', '--verbose'])
+    assert "sudo cat /var/log/syslog | tail -n 5" in result.output
+
+
+@patch('show.main.subprocess.Popen')
 @pytest.mark.parametrize(
-        "cli_arguments0,expected0",
+        "p1_rc, p2_rc, p3_rc",
         [
-            ([], 'cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog'),
-            (['xcvrd'], "cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | grep 'xcvrd'"),
-            (['-l', '10'], 'cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | tail -10'),
+            (1, 0, 0),  # cat fails to read a log file, grep/tail on empty stdin still exit 0
+            (0, 1, 0),  # grep found nothing, tail on empty stdin still exits 0
+            (0, 0, 1),  # tail itself fails
         ]
 )
-@pytest.mark.parametrize(
-        "cli_arguments1,expected1",
-        [
-            (['-f'], ['tail', '-F', '/var/log.tmpfs/syslog']),
-        ]
-)
-def test_show_logging_tmpfs_syslog_1(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
-    runner = CliRunner()
-    runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
-    runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+def test_show_logging_lines_nonzero_status(mock_popen, p1_rc, p2_rc, p3_rc):
+    mock_p1 = MagicMock(returncode=p1_rc)
+    mock_p2 = MagicMock(returncode=p2_rc)
+    mock_p3 = MagicMock(returncode=p3_rc)
+    mock_popen.side_effect = [mock_p1, mock_p2, mock_p3]
+    with patch('os.path.isfile', MagicMock(return_value=False)), \
+            patch('os.path.exists', MagicMock(return_value=False)):
+        result = CliRunner().invoke(show.cli.commands["logging"], ['xcvrd', '-l', '10'])
+    assert result.exit_code != 0
+
+
+def test_show_logging_lines_non_numeric():
+    result = CliRunner().invoke(show.cli.commands["logging"], ['-l', 'not-a-number'])
+    assert result.exit_code != 0
+
+
+@patch('show.main.subprocess.Popen')
+@pytest.mark.parametrize("process", INJECTION_PROCESS_VALUES)
+def test_show_logging_process_argv_integrity(mock_popen, process):
+    """A malicious/edge-case process value must stay a single argv element
+    passed to grep with shell=False, never altering command structure."""
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
+    with patch('os.path.isfile', MagicMock(return_value=False)), \
+            patch('os.path.exists', MagicMock(return_value=False)):
+        CliRunner().invoke(show.cli.commands["logging"], [process])
+    assert mock_popen.call_args_list == [
+        call(['sudo', 'cat', '/var/log/syslog'], stdin=None, stdout=subprocess.PIPE),
+        call(['grep', '-h', '--', process], stdin=mock_p1.stdout, stdout=None),
+    ]
+
+
+@patch('show.main.subprocess.Popen')
+@pytest.mark.parametrize("process", INJECTION_PROCESS_VALUES)
+def test_show_logging_lines_process_argv_integrity(mock_popen, process):
+    mock_p1, mock_p2, mock_p3 = MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2, mock_p3]
+    with patch('os.path.isfile', MagicMock(return_value=False)), \
+            patch('os.path.exists', MagicMock(return_value=False)):
+        CliRunner().invoke(show.cli.commands["logging"], [process, '-l', '10'])
+    assert mock_popen.call_args_list == [
+        call(['sudo', 'cat', '/var/log/syslog'], stdin=None, stdout=subprocess.PIPE),
+        call(['grep', '-h', '--', process], stdin=mock_p1.stdout, stdout=subprocess.PIPE),
+        call(['tail', '-n', '10'], stdin=mock_p2.stdout, stdout=None),
+    ]
+
+
+@patch('show.main.subprocess.Popen')
+def test_show_logging_process_leading_dash(mock_popen):
+    """A process value beginning with "-" must not be read as a grep option;
+    grep's own "--" separator (built into the command, independent of Click's
+    "--") ensures it is treated as the pattern."""
+    process = "-rf /"
+    mock_p1, mock_p2 = MagicMock(returncode=0), MagicMock(returncode=0)
+    mock_popen.side_effect = [mock_p1, mock_p2]
+    with patch('os.path.isfile', MagicMock(return_value=False)), \
+            patch('os.path.exists', MagicMock(return_value=False)):
+        CliRunner().invoke(show.cli.commands["logging"], ['--', process])
+    assert mock_popen.call_args_list == [
+        call(['sudo', 'cat', '/var/log/syslog'], stdin=None, stdout=subprocess.PIPE),
+        call(['grep', '-h', '--', process], stdin=mock_p1.stdout, stdout=None),
+    ]
 
 def side_effect_subprocess_popen(*args, **kwargs):
     mock = MagicMock()
@@ -1324,22 +1408,71 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['watermarkcfg', '--show-interval'])
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_route_map(self, mock_run_command):
+    def test_show_route_map(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["route-map"], ['BGP', '--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', 'show route-map BGP'], display_cmd=True)
 
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ip_prefix_list(self, mock_run_command):
+    def test_show_vrrp_commands(self, mock_run_command, mock_which):
+        runner = CliRunner()
+        vrrp = show.cli.commands['vrrp']
+        invocations = [
+            (vrrp, ['--verbose'], 'show vrrp'),
+            (vrrp.commands['interface'], ['Ethernet0', '1', '--verbose'],
+             'show vrrp interface Ethernet0 1'),
+            (vrrp.commands['vrid'], ['1', '--verbose'], 'show vrrp 1'),
+            (vrrp.commands['summary'], ['--verbose'], 'show vrrp summary'),
+        ]
+
+        for command, args, expected_vtysh_command in invocations:
+            result = runner.invoke(command, args)
+            assert result.exit_code == 0
+            mock_run_command.assert_called_with(
+                ['sudo', constants.RVTYSH_COMMAND, '-c', expected_vtysh_command],
+                display_cmd=True)
+
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
+    @patch('show.main.run_command')
+    def test_show_vrrp6_commands(self, mock_run_command, mock_which):
+        runner = CliRunner()
+        vrrp6 = show.cli.commands['vrrp6']
+        invocations = [
+            (vrrp6, ['--verbose'], 'show vrrp6'),
+            (vrrp6.commands['interface'], ['Ethernet0', '1', '--verbose'],
+             'show vrrp6 interface Ethernet0 1'),
+            (vrrp6.commands['vrid'], ['1', '--verbose'], 'show vrrp6 1'),
+            (vrrp6.commands['summary'], ['--verbose'], 'show vrrp6 summary'),
+        ]
+
+        for command, args, expected_vtysh_command in invocations:
+            result = runner.invoke(command, args)
+            assert result.exit_code == 0
+            mock_run_command.assert_called_with(
+                ['sudo', constants.RVTYSH_COMMAND, '-c', expected_vtysh_command],
+                display_cmd=True)
+
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
+    @patch('show.main.run_command')
+    def test_show_ip_prefix_list(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ip'].commands["prefix-list"], ['0.0.0.0', '--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', 'show ip prefix-list 0.0.0.0'], display_cmd=True)
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ip_protocol(self, mock_run_command):
+    def test_show_ip_protocol(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ip'].commands["protocol"], ['--verbose'])
         assert result.exit_code == 0
@@ -1352,15 +1485,21 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['fibshow', '-4', '-ip', '0.0.0.0'], display_cmd=True)
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ipv6_prefix_list(self, mock_run_command):
+    def test_show_ipv6_prefix_list(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ipv6'].commands["prefix-list"], ['0.0.0.0', '--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', 'show ipv6 prefix-list 0.0.0.0'], display_cmd=True)
 
+    # rvtysh is resolved at call time via bgp_util.get_vtysh_shell_cmd();
+    # pin it present so the assertion stays deterministic off-device.
+    @patch('utilities_common.bgp_util.shutil.which', return_value='/usr/bin/rvtysh')
     @patch('show.main.run_command')
-    def test_show_ipv6_protocol(self, mock_run_command):
+    def test_show_ipv6_protocol(self, mock_run_command, mock_which):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ipv6'].commands["protocol"], ['--verbose'])
         assert result.exit_code == 0
@@ -1731,3 +1870,89 @@ class TestShowSwitchCounters(object):
     @patch("utilities_common.cli.run_command")
     def test_switch_stats_period(self, mock_run_command, command, options, expected):
         self.verify_stats(mock_run_command, command, options, expected)
+
+
+class TestCsonicNeighborEnv(object):
+    """Tests for cSONiC (docker-sonic-vs) single-container neighbor environments
+    where the nested 'bgp' docker container and the 'rvtysh' wrapper do not
+    exist. See sonic-utilities issue #4632.
+    """
+
+    def setup_method(self):
+        print('SETUP')
+
+    def test_get_routing_stack_no_docker_skips_oneliner(self):
+        # When the 'docker' binary is absent (docker-sonic-vs neighbor), the
+        # docker ps one-liner must NOT run, and the default 'frr' is returned.
+        with mock.patch('show.main.shutil.which', return_value=None), \
+                mock.patch('show.main.subprocess.check_output',
+                           side_effect=AssertionError("docker oneliner should not run")) \
+                as mock_check_output:
+            assert show.get_routing_stack() == 'frr'
+            mock_check_output.assert_not_called()
+
+    def test_get_routing_stack_with_docker_runs_oneliner(self):
+        # When 'docker' is present (real SONiC), the one-liner runs and its
+        # output determines the routing stack.
+        with mock.patch('show.main.shutil.which', return_value='/usr/bin/docker'), \
+                mock.patch('show.main.subprocess.check_output',
+                           return_value='quagga\n') as mock_check_output:
+            assert show.get_routing_stack() == 'quagga'
+            mock_check_output.assert_called_once()
+
+    def test_get_routing_stack_with_no_bgp_container_uses_default(self):
+        # When docker exists but no BGP container is found, keep the FRR default.
+        with mock.patch('show.main.shutil.which', return_value='/usr/bin/docker'), \
+                mock.patch('show.main.subprocess.check_output',
+                           return_value='') as mock_check_output:
+            assert show.get_routing_stack() == 'frr'
+            mock_check_output.assert_called_once()
+
+    def test_run_bgp_show_command_falls_back_to_vtysh(self):
+        # When 'rvtysh' is absent (docker-sonic-vs neighbor), run_bgp_show_command
+        # must fall back to the plain 'vtysh' binary instead of 'rvtysh'.
+        captured = {}
+
+        def fake_run_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd, exit_on_fail):
+            captured['shell'] = vtysh_shell_cmd
+            return "{}"
+
+        def fake_which(cmd):
+            # rvtysh missing, vtysh present
+            return None if cmd == constants.RVTYSH_COMMAND else '/usr/bin/vtysh'
+
+        with mock.patch('utilities_common.bgp_util.shutil.which', side_effect=fake_which), \
+                mock.patch('utilities_common.bgp_util.run_bgp_command',
+                           side_effect=fake_run_bgp_command):
+            bgp_util.run_bgp_show_command("show ip bgp summary json")
+            assert captured['shell'] == constants.VTYSH_COMMAND
+
+    def test_run_bgp_show_command_uses_rvtysh_when_present(self):
+        # When 'rvtysh' is present (real SONiC), it is used as before.
+        captured = {}
+
+        def fake_run_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd, exit_on_fail):
+            captured['shell'] = vtysh_shell_cmd
+            return "{}"
+
+        with mock.patch('utilities_common.bgp_util.shutil.which',
+                        return_value='/usr/bin/rvtysh'), \
+                mock.patch('utilities_common.bgp_util.run_bgp_command',
+                           side_effect=fake_run_bgp_command):
+            bgp_util.run_bgp_show_command("show ip bgp summary json")
+            assert captured['shell'] == constants.RVTYSH_COMMAND
+
+    def test_get_vtysh_shell_cmd_falls_back_to_vtysh(self):
+        # 'rvtysh' absent (docker-sonic-vs neighbor) -> plain 'vtysh'.
+        with mock.patch('utilities_common.bgp_util.shutil.which',
+                        return_value=None):
+            assert bgp_util.get_vtysh_shell_cmd() == constants.VTYSH_COMMAND
+
+    def test_get_vtysh_shell_cmd_uses_rvtysh_when_present(self):
+        # 'rvtysh' present (real SONiC) -> keep using the wrapper.
+        with mock.patch('utilities_common.bgp_util.shutil.which',
+                        return_value='/usr/bin/rvtysh'):
+            assert bgp_util.get_vtysh_shell_cmd() == constants.RVTYSH_COMMAND
+
+    def teardown_method(self):
+        print('TEAR DOWN')

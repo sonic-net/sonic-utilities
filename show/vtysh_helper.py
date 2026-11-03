@@ -4,7 +4,7 @@ import subprocess
 
 from click.shell_completion import CompletionItem
 from sonic_py_common import multi_asic
-from utilities_common import constants
+from utilities_common import bgp_util
 
 
 class VtyshParamType(click.types.StringParamType):
@@ -249,7 +249,7 @@ class VtyshCommand(click.Command):
             help_command += "?" if completion else " ?"
             # rvtysh (read-only vtysh wrapper) — no sudo. Read-only help
             # queries shouldn't require elevation.
-            cmd = [constants.RVTYSH_COMMAND]
+            cmd = [bgp_util.get_vtysh_shell_cmd()]
             # The SONiC vtysh wrapper only consumes `-n N` on multi-ASIC
             # platforms; on single-ASIC it falls through into the docker
             # container's vtysh, which then looks for nonexistent

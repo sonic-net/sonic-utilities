@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import re
@@ -18,6 +19,7 @@ from utilities_common import util_base
 from utilities_common import hft as hft_common
 from utilities_common.db import Db
 from datetime import datetime
+import utilities_common.bgp_util as bgp_util
 import utilities_common.constants as constants
 from utilities_common.general import load_db_config
 from json.decoder import JSONDecodeError
@@ -95,13 +97,21 @@ COMMAND_TIMEOUT = 300
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
-    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
-    try:
-        stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
-        result = stdout.rstrip('\n')
-    except Exception as err:
-        click.echo('Failed to get routing stack: {}'.format(err), err=True)
+    # The bash one-liner below relies on a nested "bgp" docker container, which
+    # only exists on a real SONiC device. On single-container images such as
+    # docker-sonic-vs (used as cSONiC neighbors in the KVM testbed) there is no
+    # nested docker, so only run the probe when docker is available.
+    if shutil.which('docker') is not None:
+        command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
+
+        try:
+            stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
+            detected_stack = stdout.rstrip('\n')
+            if detected_stack:
+                result = detected_stack
+        except Exception as err:
+            click.echo('Failed to get routing stack: {}'.format(err), err=True)
 
     return result
 
@@ -1292,7 +1302,7 @@ def aging_time(ctx):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def route_map(route_map_name, verbose):
     """show route-map"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show route-map']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show route-map']
     if route_map_name is not None:
         cmd[-1] += ' {}'.format(route_map_name)
     run_command(cmd, display_cmd=verbose)
@@ -1309,7 +1319,7 @@ def vrrp(ctx, verbose):
     if ctx.invoked_subcommand is not None:
         return
 
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1321,7 +1331,7 @@ def vrrp(ctx, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_interface(ctx, interface_name, vrid, verbose):
     """show vrrp interface <interface_name> <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp']
     if vrid is not None:
         cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
     else:
@@ -1336,7 +1346,7 @@ def vrrp_interface(ctx, interface_name, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_vrid(ctx, vrid, verbose):
     """show vrrp vrid <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp {}'.format(vrid)]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp {}'.format(vrid)]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1346,7 +1356,7 @@ def vrrp_vrid(ctx, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_summary(ctx, verbose):
     """show vrrp summary"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp summary']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp summary']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1361,7 +1371,7 @@ def vrrp6(ctx, verbose):
     if ctx.invoked_subcommand is not None:
         return
 
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1373,7 +1383,7 @@ def vrrp6(ctx, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_interface(ctx, interface_name, vrid, verbose):
     """show vrrp6 interface <interface_name> <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6']
     if vrid is not None:
         cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
     else:
@@ -1388,7 +1398,7 @@ def vrrp6_interface(ctx, interface_name, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_vrid(ctx, vrid, verbose):
     """show vrrp6 vrid <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 {}'.format(vrid)]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6 {}'.format(vrid)]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1398,7 +1408,7 @@ def vrrp6_vrid(ctx, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_summary(ctx, verbose):
     """show vrrp6 summary"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 summary']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6 summary']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1488,7 +1498,7 @@ def route(args, namespace, display, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def prefix_list(prefix_list_name, verbose):
     """show ip prefix-list"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show ip prefix-list']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show ip prefix-list']
     if prefix_list_name is not None:
         cmd[-1] += ' {}'.format(prefix_list_name)
     run_command(cmd, display_cmd=verbose)
@@ -1499,7 +1509,7 @@ def prefix_list(prefix_list_name, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def protocol(verbose):
     """Show IPv4 protocol information"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', "show ip protocol"]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', "show ip protocol"]
     run_command(cmd, display_cmd=verbose)
 
 #
@@ -1535,7 +1545,7 @@ def ipv6():
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def prefix_list(prefix_list_name, verbose):
     """show ip prefix-list"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show ipv6 prefix-list']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show ipv6 prefix-list']
     if prefix_list_name is not None:
         cmd[-1] += ' {}'.format(prefix_list_name)
     run_command(cmd, display_cmd=verbose)
@@ -1581,7 +1591,7 @@ def route(args, namespace, display, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def protocol(verbose):
     """Show IPv6 protocol information"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 protocol"]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', "show ipv6 protocol"]
     run_command(cmd, display_cmd=verbose)
 
 #
@@ -1715,21 +1725,51 @@ def logging(process, lines, follow, verbose):
     else:
         log_path = "/var/log"
     if follow:
-        cmd = ['sudo', 'tail', '-F', '{}/syslog'.format(log_path)]
-        run_command(cmd, display_cmd=verbose)
-    else:
-        if os.path.isfile("{}/syslog.1".format(log_path)):
-            cmd = "sudo cat {}/syslog.1 {}/syslog".format(log_path, log_path)
-        else:
-            cmd = "sudo cat {}/syslog".format(log_path)
+        run_command(['sudo', 'tail', '-F', '{}/syslog'.format(log_path)], display_cmd=verbose)
+        return
 
-        if process is not None:
-            cmd += " | grep '{}'".format(process)
+    log_files = ["{}/syslog.1".format(log_path)] if os.path.isfile("{}/syslog.1".format(log_path)) else []
+    log_files.append("{}/syslog".format(log_path))
+    cat_cmd = ["sudo", "cat"] + log_files
 
-        if lines is not None:
-            cmd += " | tail -{}".format(lines)
+    if process is None and lines is None:
+        run_command(cat_cmd, display_cmd=verbose)
+        return
 
-        run_command(cmd, display_cmd=verbose, shell=True)
+    # Only "cat" needs root, to read the log files; "grep"/"tail" run as the
+    # invoking user -- same privilege boundary as the old
+    # "sudo cat ... | grep ... | tail ..." shell form, instead of running the
+    # user-controlled process regex (or tail) as root.
+    cmds = [cat_cmd]
+    if process is not None:
+        # "-h" keeps output filename-free across multiple files; "--" stops
+        # a process value starting with "-" from being read as a grep option.
+        cmds.append(["grep", "-h", "--", process])
+    if lines is not None:
+        cmds.append(["tail", "-n", str(lines)])
+
+    if verbose:
+        click.echo(click.style("Command: ", fg='cyan') +
+                   click.style(' | '.join(' '.join(cmd) for cmd in cmds), fg='green'))
+
+    # Chain the pipeline manually (rather than via getstatusoutput_noshell_pipe,
+    # which buffers the whole output via communicate()) so the last stage
+    # inherits the terminal's stdout and streams line-by-line, while still
+    # avoiding a shell entirely.
+    procs = []
+    stdin = None
+    for i, cmd in enumerate(cmds):
+        stdout = subprocess.PIPE if i < len(cmds) - 1 else None
+        procs.append(subprocess.Popen(cmd, stdin=stdin, stdout=stdout))
+        if stdin is not None:
+            stdin.close()  # SIGPIPE upstream if a downstream stage exits early
+        stdin = procs[-1].stdout
+
+    for proc in procs:
+        proc.wait()
+    rc = next((proc.returncode for proc in reversed(procs) if proc.returncode), 0)
+    if rc:
+        sys.exit(rc)
 
 #
 # 'version' command ("show version")
@@ -2329,10 +2369,10 @@ def aaa(db):
 
 
 @cli.command()
-def tacacs():
+@clicommon.pass_db
+def tacacs(db):
     """Show TACACS+ configuration"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = db.cfgdb
     output = ''
     data = config_db.get_table('TACPLUS')
 
@@ -2340,7 +2380,8 @@ def tacacs():
         'global': {
             'auth_type': 'pap (default)',
             'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'passkey': '<EMPTY_STRING> (default)',
+            'traceid_authorization': 'False (default)'
         }
     }
     if 'global' in data:

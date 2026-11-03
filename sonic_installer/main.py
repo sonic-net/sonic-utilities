@@ -9,6 +9,10 @@ import utilities_common.cli as clicommon
 from utilities_common.image_disk_space import (
     check_image_install_free_disk_space,
 )
+from utilities_common.swap_mem import (
+    resolve_swap_mem_size,
+    resolve_total_mem_threshold,
+)
 from urllib.request import urlopen, urlretrieve
 
 import click
@@ -422,12 +426,18 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             umount(new_image_mount, raise_exception=False)
 
 
+# Defaults in MiB. Kept at module level so they stay readable when
+# SWAPAllocator itself is patched out.
+SWAP_MEM_SIZE_DEFAULT = 1024
+TOTAL_MEM_THRESHOLD_DEFAULT = 2048
+
+
 class SWAPAllocator(object):
     """Context class to allocate SWAP memory."""
 
-    SWAP_MEM_SIZE = 1024
+    SWAP_MEM_SIZE = SWAP_MEM_SIZE_DEFAULT
     DISK_FREESPACE_THRESHOLD = 4 * 1024
-    TOTAL_MEM_THRESHOLD = 2048
+    TOTAL_MEM_THRESHOLD = TOTAL_MEM_THRESHOLD_DEFAULT
     AVAILABLE_MEM_THRESHOLD = 1200
     SWAP_FILE_PATH = '/host/swapfile'
     KiB_TO_BYTES_FACTOR = 1024
@@ -625,7 +635,27 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
                 echo_and_log('Verification successful')
 
         echo_and_log("Installing image {} and setting it as default...".format(binary_image_version))
-        with SWAPAllocator(not skip_setup_swap, swap_mem_size, total_mem_threshold, available_mem_threshold):
+        effective_swap_mem_size = swap_mem_size
+        effective_total_mem_threshold = total_mem_threshold
+        if not skip_setup_swap:
+            # Without platform.json these are what SWAPAllocator would use, so
+            # comparing against them reports only what the platform raised.
+            requested_swap_mem_size = (
+                swap_mem_size if swap_mem_size is not None else SWAP_MEM_SIZE_DEFAULT)
+            requested_total_mem_threshold = (
+                total_mem_threshold if total_mem_threshold is not None
+                else TOTAL_MEM_THRESHOLD_DEFAULT)
+            effective_swap_mem_size = resolve_swap_mem_size(swap_mem_size, SWAP_MEM_SIZE_DEFAULT)
+            effective_total_mem_threshold = resolve_total_mem_threshold(
+                total_mem_threshold, TOTAL_MEM_THRESHOLD_DEFAULT)
+            if effective_swap_mem_size != requested_swap_mem_size:
+                echo_and_log("Using SWAP memory size of {} MiB required by the platform".format(
+                    effective_swap_mem_size))
+            if effective_total_mem_threshold != requested_total_mem_threshold:
+                echo_and_log("Using total memory threshold of {} MiB required by the platform".format(
+                    effective_total_mem_threshold))
+        with SWAPAllocator(not skip_setup_swap, effective_swap_mem_size,
+                           effective_total_mem_threshold, available_mem_threshold):
             try:
                 bootloader.install_image(image_path)
             except SystemExit as e:
@@ -673,7 +703,8 @@ def list_command():
     click.echo("Next: " + nextimage)
     click.echo("Available: ")
     for image in images:
-        click.echo(image)
+        if image:
+            click.echo(image)
 
 
 # Set default image for boot
@@ -686,7 +717,7 @@ def set_default(image):
         print_deprecation_warning("set_default", "set-default")
 
     bootloader = get_bootloader()
-    if image not in bootloader.get_installed_images():
+    if not image or image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         raise click.Abort()
     bootloader.set_default_image(image)
@@ -702,7 +733,7 @@ def set_next_boot(image):
         print_deprecation_warning("set_next_boot", "set-next-boot")
 
     bootloader = get_bootloader()
-    if image not in bootloader.get_installed_images():
+    if not image or image not in bootloader.get_installed_images():
         echo_and_log('Error: Image does not exist', LOG_ERR)
         sys.exit(1)
     bootloader.set_next_image(image)
@@ -757,7 +788,8 @@ def remove(image):
         echo_and_log('Cannot remove current image', LOG_ERR)
         sys.exit(1)
     # TODO: check if image is next boot or default boot and fix these
-    bootloader.remove_image(image)
+    if image:
+        bootloader.remove_image(image)
 
 
 # Retrieve version from binary image file and print to screen
@@ -790,7 +822,7 @@ def cleanup():
     nextimage = bootloader.get_next_image()
     image_removed = 0
     for image in images:
-        if image != curimage and image != nextimage:
+        if image and image != curimage and image != nextimage:
             echo_and_log("Removing image %s" % image)
             bootloader.remove_image(image)
             image_removed += 1

@@ -19,6 +19,7 @@ REBOOT_METHOD="/sbin/kexec -e"
 ASSISTANT_IP_LIST=""
 ASSISTANT_SCRIPT="/usr/local/bin/neighbor_advertiser"
 LAG_KEEPALIVE_SCRIPT="/usr/local/bin/lag_keepalive.py"
+READ_ARISTA_7060_EEPROM_SCRIPT="/usr/local/bin/arista_7060_prefdl_gen.py"
 WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
@@ -53,6 +54,7 @@ EXIT_NO_MIRROR_SESSION_ACLS=24
 EXIT_PFC_STORM_DETECTED=25
 EXIT_LEFTOVER_CPA_TUNNEL=30
 EXIT_SSD_HEALTH_FAILURE=40
+EXIT_EEPROM_READ_FAILURE=50
 
 [ -f /usr/share/sonic/device/$PLATFORM/asic.conf ] && . /usr/share/sonic/device/$PLATFORM/asic.conf
 NUM_ASIC=${NUM_ASIC:-1}
@@ -364,6 +366,24 @@ function filter_asic_list()
     fi
 }
 
+# Create and populate /host/.system-prefdl if it does not already exist
+# Should only apply to Arista-7060CX-32S-*
+function arista_7060_gen_system_prefdl()
+{
+    if [[ "${HWSKU}" == *"Arista-7060CX-32S-"* && ! -f "/host/.system-prefdl" ]]; then
+        if [ -f "/etc/sonic/.syseeprom" ]; then
+            cp /etc/sonic/.syseeprom /host/.system-prefdl
+            echo "/host/.system-prefdl not found - restored from /etc/sonic/.syseeprom"
+        else
+            if ! python3 "${READ_ARISTA_7060_EEPROM_SCRIPT}"; then
+                error "EEPROM read failed for HWSKU ${HWSKU}"
+                exit "${EXIT_EEPROM_READ_FAILURE}"
+            fi
+            echo "/host/.system-prefdl not found - restored by reading from EEPROM"
+        fi
+    fi
+}
+
 function clear_fast_boot_table()
 {
     #update FAST_RESTART_ENABLE_TABLE to false
@@ -592,17 +612,17 @@ function abort_reboot_if_cpa_tunnel_is_leftover()
     local has_leftover_tunnel=false
     local has_leftover_tunnel_term_table_entry=false
 
-    local tunnel_list=$(redis-cli -n 1 KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:*")
+    local tunnel_list=$(sonic-db-cli --unixsocket ASIC_DB KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:*")
     for key in $tunnel_list; do
-        if [[ $(redis-cli -n 1 HGET "$key" "SAI_TUNNEL_ATTR_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
+        if [[ $(sonic-db-cli --unixsocket ASIC_DB HGET "$key" "SAI_TUNNEL_ATTR_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
             debug "Found leftover SAI_OBJECT_TYPE_TUNNEL with SAI_TUNNEL_ATTR_TYPE: SAI_TUNNEL_TYPE_VXLAN. (key = $key)"
             has_leftover_tunnel=true
         fi
     done
 
-    local tunnel_term_table_entry_list=$(redis-cli -n 1 KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:*")
+    local tunnel_term_table_entry_list=$(sonic-db-cli --unixsocket ASIC_DB KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:*")
     for key in $tunnel_term_table_entry_list; do
-        if [[ $(redis-cli -n 1 HGET "$key" "SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
+        if [[ $(sonic-db-cli --unixsocket ASIC_DB HGET "$key" "SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
             debug "Found leftover SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY with SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE: SAI_TUNNEL_TYPE_VXLAN. (key = $key)"
             has_leftover_tunnel_term_table_entry=true
         fi
@@ -616,11 +636,11 @@ function abort_reboot_if_cpa_tunnel_is_leftover()
 
 function setup_control_plane_assistant()
 {
-    abort_reboot_if_cpa_tunnel_is_leftover
-
     if [[ -n "${ASSISTANT_IP_LIST}" && -x ${ASSISTANT_SCRIPT} ]]; then
         # TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
         if [[ "${HWSKU}" != "DellEMC-Z9332f-M-O16C64" && "${HWSKU}" != "DellEMC-Z9332f-M-O16C64-lab" ]]; then
+            # The check cannot tell a leftover CPA tunnel from user VxLAN config, so run it only when setting up CPA
+            abort_reboot_if_cpa_tunnel_is_leftover
             debug "Setting up control plane assistant: ${ASSISTANT_IP_LIST} ..."
             ${ASSISTANT_SCRIPT} -s ${ASSISTANT_IP_LIST} -m set
 	    check_mirror_session_acls
@@ -961,7 +981,7 @@ then
 fi
 
 if [[ $NUM_ASIC -gt 1 ]]; then
-    BACK_END_ASIC_COUNT=$(python3 <<EOF
+    BACK_END_ASIC_COUNT=$(python3 -I <<EOF
 from swsscommon.swsscommon import SonicDBConfig
 from sonic_py_common.multi_asic import *
 SonicDBConfig.initializeGlobalConfig()
@@ -975,6 +995,9 @@ EOF
 fi
 
 debug "Starting $REBOOT_TYPE"
+
+# Check if device is Arista-7060CX-32S and if system_prefdl generation is needed
+arista_7060_gen_system_prefdl
 
 # re-run the script in background mode with detaching from the terminal session
 if [[ x"${DETACH}" == x"yes" && x"${ALREADY_DETACHED}" == x"" ]]; then

@@ -11,10 +11,13 @@ class TestFastRebootFilterRoutes(object):
 
     @patch('utilities_common.cli.run_command')
     def test_get_connected_routes(self, mock_run_command):
-        mock_run_command.return_value = ('{"1.1.0.0/16": {}}', 0)
+        mock_run_command.side_effect = [('{"1.1.0.0/16": {}}', 0), ('{"2001:db8:1::/64": {}}', 0)]
         output = fast_reboot_filter_routes.get_connected_routes(namespace="")
-        mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', "show ip route connected json"], return_cmd=True)
-        assert output == ['1.1.0.0/16']
+        mock_run_command.assert_has_calls([
+            mock.call(['sudo', 'vtysh', '-c', "show ip route connected json"], return_cmd=True),
+            mock.call(['sudo', 'vtysh', '-c', "show ipv6 route connected json"], return_cmd=True)
+        ])
+        assert output == ['1.1.0.0/16', '2001:db8:1::/64']
 
     @patch('utilities_common.cli.run_command')
     def test_get_connected_routes_command_failed(self, mock_run_command):
@@ -25,18 +28,28 @@ class TestFastRebootFilterRoutes(object):
 
     @patch('utilities_common.cli.run_command')
     def test_get_connected_routes_for_namespace(self, mock_run_command):
-        mock_run_command.return_value = ('{"2.2.0.0/16": {}}', 0)
+        mock_run_command.side_effect = [('{"2.2.0.0/16": {}}', 0), ('{"2001:db8:2::/64": {}}', 0)]
         with mock.patch.object(fast_reboot_filter_routes.multi_asic,
                                'get_asic_id_from_name',
                                return_value='0') as mock_get_asic_id:
             output = fast_reboot_filter_routes.get_connected_routes(namespace="asic0")
 
         mock_get_asic_id.assert_called_once_with("asic0")
-        mock_run_command.assert_called_with(
-            ['sudo', 'vtysh', '-n', '0', '-c', "show ip route connected json"],
-            return_cmd=True
-        )
-        assert output == ['2.2.0.0/16']
+        mock_run_command.assert_has_calls([
+            mock.call(['sudo', 'vtysh', '-n', '0', '-c', "show ip route connected json"],
+                      return_cmd=True),
+            mock.call(['sudo', 'vtysh', '-n', '0', '-c', "show ipv6 route connected json"],
+                      return_cmd=True)
+        ])
+        assert output == ['2.2.0.0/16', '2001:db8:2::/64']
+
+    @patch('utilities_common.cli.run_command')
+    def test_get_connected_routes_ipv6_command_failed(self, mock_run_command):
+        mock_run_command.side_effect = [('{"1.1.0.0/16": {}}', 0), ('', 1)]
+        with pytest.raises(Exception):
+            fast_reboot_filter_routes.get_connected_routes(namespace="")
+        mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', "show ipv6 route connected json"],
+                                            return_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_get_connected_routes_with_empty_output(self, mock_run_command):
