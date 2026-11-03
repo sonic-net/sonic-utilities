@@ -141,7 +141,10 @@ def show_warm_restart_config_for_namespace(namespace, **kwargs):
             else:
                 r.append(state_db.get(state_db.STATE_DB, enable_k, "enable"))
 
+            # Every branch below must append exactly 4 values, one per column
+            # after 'name' and 'enable', or tabulate misaligns the table.
             if k not in data:
+                r.append("NULL")
                 r.append("NULL")
                 r.append("NULL")
                 r.append("NULL")
@@ -149,7 +152,8 @@ def show_warm_restart_config_for_namespace(namespace, **kwargs):
                 r.append("neighsyncd_timer")
                 r.append(data[k]['neighsyncd_timer'])
                 r.append("NULL")
-            elif 'bgp_timer' in data[k] or 'bgp_eoiu' in data[k]:
+                r.append("NULL")
+            elif 'bgp_timer' in data[k] or 'bgp_eoiu' in data[k] or 'eoiu_hold_timer' in data[k]:
                 if 'bgp_timer' in data[k]:
                     r.append("bgp_timer")
                     r.append(data[k]['bgp_timer'])
@@ -160,11 +164,17 @@ def show_warm_restart_config_for_namespace(namespace, **kwargs):
                     r.append(data[k]['bgp_eoiu'])
                 else:
                     r.append("NULL")
+                if 'eoiu_hold_timer' in data[k]:
+                    r.append(data[k]['eoiu_hold_timer'])
+                else:
+                    r.append("NULL")
             elif 'teamsyncd_timer' in data[k]:
                 r.append("teamsyncd_timer")
                 r.append(data[k]['teamsyncd_timer'])
                 r.append("NULL")
+                r.append("NULL")
             else:
+                r.append("NULL")
                 r.append("NULL")
                 r.append("NULL")
                 r.append("NULL")
@@ -173,6 +183,6 @@ def show_warm_restart_config_for_namespace(namespace, **kwargs):
 
         return table
 
-    header = ['name', 'enable', 'timer_name', 'timer_duration', 'eoiu_enable']
+    header = ['name', 'enable', 'timer_name', 'timer_duration', 'eoiu_enable', 'eoiu_hold_timer']
     click.echo(tabulate(tablelize(keys, data, enable_table_keys, prefix), header))
     state_db.close(state_db.STATE_DB)

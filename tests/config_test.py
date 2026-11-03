@@ -3603,6 +3603,52 @@ class TestConfigWarmRestart(object):
         assert result.exit_code != 0
         assert "Invalid ConfigDB. Error" in result.output
 
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
+    def test_warm_restart_bgp_eoiu_hold_timer_yang_validation(self):
+        config.ADHOC_VALIDATION = False
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
+
+        result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_eoiu_hold_timer"], ["5"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid ConfigDB. Error" in result.output
+
+    def test_warm_restart_bgp_eoiu_hold_timer(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
+
+        result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_eoiu_hold_timer"], ["0"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "bgp eoiu hold timer must be in range 1-3600" in result.output
+
+        result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_eoiu_hold_timer"], ["3601"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "bgp eoiu hold timer must be in range 1-3600" in result.output
+
+        # 3600 is the inclusive upper bound and must be accepted
+        result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_eoiu_hold_timer"], ["3600"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('WARM_RESTART', 'bgp')['eoiu_hold_timer'] == '3600'
+
+        result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_eoiu_hold_timer"],
+                               ["5", "-n", "asic9"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid namespace: asic9" in result.output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
