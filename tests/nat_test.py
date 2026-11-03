@@ -178,6 +178,28 @@ class TestNat(object):
         result = runner.invoke(config.config.commands["nat"].commands["remove"].commands["static"].commands["all"], obj=obj)
         assert "Invalid ConfigDB. Error" in result.output
 
+    def test_remove_bindings(self):
+        nat.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["nat"].commands["remove"].commands["bindings"], obj=obj)
+        assert result.exit_code == 0
+
+    @patch("config.nat.ConfigDBConnector.get_table", mock.Mock(return_value={"sample_table_key": "sample_table_value"}))
+    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
+           mock.Mock(side_effect=JsonPatchConflict))
+    def test_remove_bindings_yang_validation(self):
+        nat.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["nat"].commands["remove"].commands["bindings"], obj=obj)
+        assert "Invalid ConfigDB. Error" in result.output
+
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_enable_yang_validation(self):
