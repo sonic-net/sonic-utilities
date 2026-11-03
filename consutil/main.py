@@ -59,7 +59,10 @@ def show(db, brief):
         pid = port.session_pid if port.session_pid else "-"
         date = port.session_start_date if port.session_start_date else "-"
         baud = port.baud if port.baud else "-"
-        flow_control = "Enabled" if port.flow_control else "Disabled"
+        if not port.configured:
+            flow_control = "-"
+        else:
+            flow_control = "Enabled" if port.flow_control else "Disabled"
         remote_device = port.remote_device if port.remote_device else "-"
         oper_state = port.oper_state if port.oper_state else "-"
         state_duration = port.state_duration if port.state_duration else "-"
