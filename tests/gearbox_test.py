@@ -5,7 +5,7 @@ import importlib.util
 from contextlib import redirect_stdout
 from io import StringIO
 from click.testing import CliRunner
-from unittest import TestCase
+from unittest import TestCase, mock
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -54,6 +54,25 @@ class TestGearbox(TestCase):
             "       1  Ethernet200  200,201,202,203               25G  300,301,302,303               25G       304,305                50G    down       up"
         )
         self.assertEqual(result.output.strip(), expected_output)
+
+    def test_gearbox_interfaces_lane_speeds(self):
+        for system_lanes, line_lanes, expected in (
+            ("300,301", "304,305,306,307", ["50G", "25G"]),
+            ("300,301,302,303", "304,305,306,307", ["25G", "25G"]),
+        ):
+            with self.subTest(system_lanes=system_lanes, line_lanes=line_lanes):
+                db = gearboxutil.db_connect_appl()
+                original_get = db.get
+                lanes = {"system_lanes": system_lanes, "line_lanes": line_lanes}
+                status = gearboxutil.InterfaceStatus.__new__(gearboxutil.InterfaceStatus)
+                status.appl_db = db
+                output = StringIO()
+                with mock.patch.object(
+                    db, "get", side_effect=lambda db_name, key, attr:
+                        lanes[attr] if attr in lanes else original_get(db_name, key, attr)
+                ), redirect_stdout(output):
+                    status.display_intf_status(["_GEARBOX_TABLE:interface:200"])
+                self.assertEqual(output.getvalue().splitlines()[-1].split()[5:8:2], expected)
 
     def test_gearbox_interfaces_fec_stats(self):
         result = self.runner.invoke(
