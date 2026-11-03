@@ -300,13 +300,8 @@ def current():
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 def firmware(args):
     """Show firmware information"""
-    cmd = ["sudo", "fwutil", "show"] + list(args)
-
-    try:
-        subprocess.check_call(cmd)
-    except subprocess.CalledProcessError as e:
-        sys.exit(e.returncode)
-
+    cmd = ["sudo", "stdbuf", "-oL", "-eL", "fwutil", "show"] + list(args)
+    clicommon.run_command(cmd)
 
 LEAK_CONTROL_POLICY_TABLE = 'LEAK_CONTROL_POLICY'
 LEAK_CONTROL_POLICY_KEY = 'policy'
