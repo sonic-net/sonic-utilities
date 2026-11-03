@@ -77,8 +77,6 @@ PKCS7_SIGNED_DATA_OID = bytes.fromhex("06092a864886f70d010702")
 AUTHORITY_VARIABLES = ("KEK",)
 # EFI/BOOT is the firmware fallback path.
 FALLBACK_ESP_DIRS = ("BOOT", "boot")
-# Network-boot GRUB variants and MokManager are not part of the disk boot chain, so they are never inspected.
-IGNORED_EFI_PREFIXES = ("grubnet", "mmx")
 
 
 class EfiTime(ctypes.LittleEndianStructure):
@@ -294,7 +292,6 @@ def discover_binaries(directory):
         p for p in directory.iterdir()
         if p.is_file() and not p.is_symlink()
         and (p.name.lower().endswith(".efi") or p.name.startswith("vmlinuz-"))
-        and not p.name.lower().startswith(IGNORED_EFI_PREFIXES)
     )
 
 
@@ -576,7 +573,7 @@ def apply_plan(config, plan, work, verbose=True):
 
 @contextmanager
 def defer_cancellation():
-    """Deliver cancellation only after firmware restoration and verification finish."""
+    """Defer termination and terminal suspension until restoration and verification finish."""
     if threading.current_thread() is not threading.main_thread():
         yield
         return
@@ -590,12 +587,13 @@ def defer_cancellation():
             pending.append((signum, frame))
 
     try:
-        for signum in (signal.SIGTERM, signal.SIGINT):
+        for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT,
+                       signal.SIGTSTP, signal.SIGTTIN, signal.SIGTTOU):
             handler = signal.getsignal(signum)
             if handler != signal.SIG_IGN:
                 handlers[signum] = handler
                 signal.signal(signum, remember)
-        # Children inherit the mask, so terminal signals cannot kill a firmware writer either.
+        # Children inherit the mask, so terminal signals cannot kill or suspend firmware writers.
         if handlers:
             previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, handlers)
         yield
@@ -612,6 +610,8 @@ def defer_cancellation():
         handler = handlers[signum]
         if callable(handler):
             handler(signum, frame)
+        elif signum in (signal.SIGTSTP, signal.SIGTTIN, signal.SIGTTOU):
+            signal.raise_signal(signum)
         else:
             raise SystemExit(128 + signum)
 

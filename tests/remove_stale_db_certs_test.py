@@ -314,7 +314,40 @@ def test_plan_discovers_efi_binaries_case_insensitively(env, capsys):
     # The fake sbverify only knows the lowercase name, so the renamed shim is reported as unsigned;
     # that it is reported at all shows it was discovered.
     assert "ShimX64.EFI" in err
-    assert "grubnetx64" not in out + err and "mmx64" not in out + err
+    assert "grubnetx64.EFI" in err and "mmx64.efi" in err
+
+
+@pytest.mark.parametrize("filename", ["mmx64.efi", "grubnetx64.EFI", "other.EfI"])
+def test_efi_alongside_grub_preserves_its_only_db_certificate(env, safe_updates, tmp_path, filename):
+    config = safe_updates
+    cert0, cert1 = env["certs"]
+    extra, stale = _make_cert("EXTRA"), _make_cert("STALE")
+    _write_var(config.efivars_dir, "db", _esl(cert0, cert1, extra, stale))
+    (config.sonic_os_dir / filename).write_text("binary")
+    (env["fake_bin"].parent / "signers" / filename).write_bytes(
+        extra.public_bytes(serialization.Encoding.PEM))
+    (env["auth_dir"] / "DB-extra.auth").write_bytes(_auth(_esl(extra)))
+
+    plan = prune.analyze(config, tmp_path, images=["SONiC-OS-test"])
+
+    assert [cert.subject for cert in plan.records[config.sonic_os_dir / filename]] == ["CN=EXTRA"]
+    assert [cert.subject for cert in plan.used] == ["CN=CERT0", "CN=CERT1", "CN=EXTRA"]
+    assert [cert.subject for cert in plan.drop] == ["CN=STALE"]
+    assert not plan.boot_chain_at_risk
+    assert prune.main(["--commit"]) == 0
+    assert "DB-extra.auth" in env["marker"].read_text()
+
+
+@pytest.mark.parametrize("filename", ["mmx64.efi", "grubnetx64.EFI"])
+@pytest.mark.parametrize("mode", ["--commit", "--auto"])
+def test_efi_alongside_grub_without_db_signer_blocks_pruning(env, safe_updates, capsys, filename, mode):
+    (safe_updates.sonic_os_dir / filename).write_text("binary")
+
+    code, _, err = _run(capsys, mode)
+
+    assert code == (0 if mode == "--auto" else 2)
+    assert f"not signed by any db certificate: {safe_updates.sonic_os_dir / filename}" in err
+    assert not env["marker"].exists()
 
 
 def test_plan_fails_closed_when_no_boot_loader_is_found(env, capsys):
@@ -815,7 +848,9 @@ def test_validation_timeout_does_not_warn_of_firmware_changes(env, safe_updates,
     assert not env["marker"].exists()
 
 
-@pytest.mark.parametrize("signum", [prune.signal.SIGTERM, prune.signal.SIGINT])
+@pytest.mark.parametrize("signum", [
+    prune.signal.SIGTERM, prune.signal.SIGINT, prune.signal.SIGHUP, prune.signal.SIGQUIT,
+])
 @pytest.mark.parametrize("phase", ["wipe", "append"])
 def test_cancellation_restores_certificates_before_propagating(
         env, safe_updates, monkeypatch, capsys, signum, phase):
@@ -836,8 +871,8 @@ def test_cancellation_restores_certificates_before_propagating(
     expected = KeyboardInterrupt if signum == prune.signal.SIGINT else SystemExit
     with pytest.raises(expected) as error:
         prune.prune_db_certificates(safe_updates, auto=True)
-    if signum == prune.signal.SIGTERM:
-        assert error.value.code == 143
+    if signum != prune.signal.SIGINT:
+        assert error.value.code == 128 + signum
     assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
     assert env["marker"].read_text().splitlines() == [
         "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
@@ -848,12 +883,18 @@ def test_cancellation_restores_certificates_before_propagating(
     assert prune.signal.pthread_sigmask(prune.signal.SIG_BLOCK, []) == original_mask
 
 
-@pytest.mark.parametrize("signum", [prune.signal.SIGTERM, prune.signal.SIGINT])
+@pytest.mark.parametrize("signum", [
+    prune.signal.SIGTERM, prune.signal.SIGINT, prune.signal.SIGHUP, prune.signal.SIGQUIT,
+    prune.signal.SIGTSTP, prune.signal.SIGTTIN, prune.signal.SIGTTOU,
+])
 def test_custom_cancellation_handler_runs_after_restoration(env, safe_updates, monkeypatch, signum):
     calls = []
+    read = Mock(wraps=prune.read_efi_certificates)
+    monkeypatch.setattr(prune, "read_efi_certificates", read)
 
     def caller_handler(received, frame):
         assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
+        assert any(args[2:] == ("db", "new-db") for args, _ in read.call_args_list)
         calls.append(received)
 
     original = prune.signal.signal(signum, caller_handler)
@@ -875,7 +916,10 @@ def test_custom_cancellation_handler_runs_after_restoration(env, safe_updates, m
         prune.signal.signal(signum, original)
 
 
-@pytest.mark.parametrize("signum", [prune.signal.SIGTERM, prune.signal.SIGINT])
+@pytest.mark.parametrize("signum", [
+    prune.signal.SIGTERM, prune.signal.SIGINT, prune.signal.SIGHUP, prune.signal.SIGQUIT,
+    prune.signal.SIGTSTP, prune.signal.SIGTTIN, prune.signal.SIGTTOU,
+])
 def test_process_group_cancellation_does_not_kill_firmware_writer(env, safe_updates, signum):
     writer = env["fake_bin"] / "efi-updatevar"
     contents = writer.read_text()
@@ -883,12 +927,15 @@ def test_process_group_cancellation_does_not_kill_firmware_writer(env, safe_upda
         "previous = db.read_bytes()",
         f"if '-a' not in sys.argv:\n    os.killpg(os.getpgrp(), {int(signum)})\nprevious = db.read_bytes()",
     ))
-    child = """
+    child = f"""
 import signal
+import sys
 from sonic_installer import secure_boot_db as prune
 prune.os.geteuid = lambda: 0
 signal.signal(signal.SIGTERM, signal.SIG_DFL)
 signal.signal(signal.SIGINT, signal.default_int_handler)
+if {int(signum)} in (signal.SIGTSTP, signal.SIGTTIN, signal.SIGTTOU):
+    signal.signal({int(signum)}, lambda received, frame: sys.exit(128 + received))
 try:
     prune.prune_db_certificates(prune.Config.from_env(), images=["SONiC-OS-test"], auto=True)
 except KeyboardInterrupt:
@@ -904,6 +951,37 @@ except KeyboardInterrupt:
     ]
     assert "all boot-chain binaries verify" in result.stdout
     assert "DO NOT REBOOT" not in result.stderr
+
+
+@pytest.mark.parametrize("signum", [prune.signal.SIGTSTP, prune.signal.SIGTTIN, prune.signal.SIGTTOU])
+def test_default_terminal_stop_is_replayed_after_verification(env, safe_updates, monkeypatch, signum):
+    original = prune.signal.signal(signum, prune.signal.SIG_DFL)
+    original_mask = prune.signal.pthread_sigmask(prune.signal.SIG_BLOCK, [])
+    update = prune.update_db
+    read = Mock(wraps=prune.read_efi_certificates)
+    monkeypatch.setattr(prune, "read_efi_certificates", read)
+
+    def suspend_after_wipe(config, auth, append):
+        result = update(config, auth, append)
+        if not append:
+            os.kill(os.getpid(), signum)
+        return result
+
+    def replay(received):
+        assert received == signum
+        assert prune.signal.getsignal(signum) == prune.signal.SIG_DFL
+        assert prune.signal.pthread_sigmask(prune.signal.SIG_BLOCK, []) == original_mask
+        assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
+        assert any(args[2:] == ("db", "new-db") for args, _ in read.call_args_list)
+
+    monkeypatch.setattr(prune, "update_db", suspend_after_wipe)
+    raise_signal = Mock(side_effect=replay)
+    monkeypatch.setattr(prune.signal, "raise_signal", raise_signal)
+    try:
+        assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+        raise_signal.assert_called_once_with(signum)
+    finally:
+        prune.signal.signal(signum, original)
 
 
 def test_restoration_error_takes_priority_over_pending_cancellation(env, safe_updates, monkeypatch, capsys):
