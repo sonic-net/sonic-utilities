@@ -171,6 +171,47 @@ bgp_rib_out_table   true
         resultB = expected_output.strip().replace(' ', '').replace('\n', '')
         assert resultA == resultB
 
+    def test_tables_no_bmp_config(self):
+        """Test show bmp tables when BMP is not configured at all"""
+        runner = CliRunner()
+        db = Db()
+        # Do not set any BMP config - simulates fresh system with no BMP configured
+
+        expected_output = """\
+BMP tables:
+Table_Name          Enabled
+------------------  ---------
+bgp_neighbor_table  false
+bgp_rib_in_table    false
+bgp_rib_out_table   false
+"""
+        result = runner.invoke(show.cli.commands['bmp'].commands['tables'], [], obj=db)
+        assert result.exit_code == 0
+        resultA = result.output.strip().replace(' ', '').replace('\n', '')
+        resultB = expected_output.strip().replace(' ', '').replace('\n', '')
+        assert resultA == resultB
+
+    def test_tables_partial_bmp_config(self):
+        """Test show bmp tables when only some BMP tables are configured"""
+        runner = CliRunner()
+        db = Db()
+        # Only configure one table - simulates partial config scenario
+        db.cfgdb.mod_entry("BMP", "table", {'bgp_neighbor_table': 'true'})
+
+        expected_output = """\
+BMP tables:
+Table_Name          Enabled
+------------------  ---------
+bgp_neighbor_table  true
+bgp_rib_in_table    false
+bgp_rib_out_table   false
+"""
+        result = runner.invoke(show.cli.commands['bmp'].commands['tables'], [], obj=db)
+        assert result.exit_code == 0
+        resultA = result.output.strip().replace(' ', '').replace('\n', '')
+        resultB = expected_output.strip().replace(' ', '').replace('\n', '')
+        assert resultA == resultB
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
