@@ -412,12 +412,28 @@ class TestVlan(object):
         assert result.output == show_vlan_brief_output
 
     def test_show_vlan_brief_verbose(self):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], ["--verbose"])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == show_vlan_brief_output
+        db = Db()
+        vlan_name = "Vlan3999"
+        try:
+            db.cfgdb.set_entry("VLAN", vlan_name, {
+                "vlanid": "3999",
+                "admin_status": "down"
+            })
+
+            runner = CliRunner()
+            result = runner.invoke(
+                show.cli.commands["vlan"].commands["brief"],
+                ["--verbose"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Admin Status" in result.output
+            assert "| up             |" in result.output
+            assert "| down           |" in result.output
+        finally:
+            db.cfgdb.set_entry("VLAN", vlan_name, None)
 
     def test_show_vlan_brief_in_alias_mode(self):
         runner = CliRunner()
@@ -499,6 +515,52 @@ class TestVlan(object):
         result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001"])
         print(result.exit_code)
         print(result.output)
+        assert result.exit_code != 0
+        assert "Error: Vlan1001 does not exist" in result.output
+
+    @pytest.mark.parametrize("command,admin_status", [
+        ("shutdown", "down"),
+        ("startup", "up"),
+    ])
+    def test_config_vlan_admin_status(self, command, admin_status):
+        db = Db()
+        vlan_name = "Vlan3999"
+        try:
+            db.cfgdb.set_entry("VLAN", vlan_name, {"vlanid": "3999"})
+
+            runner = CliRunner()
+            result = runner.invoke(
+                config.config.commands["vlan"].commands[command],
+                ["3999"],
+                obj={"config_db": db.cfgdb, "namespace": ""}
+            )
+
+            assert result.exit_code == 0
+            vlan = db.cfgdb.get_entry("VLAN", vlan_name)
+            assert vlan["admin_status"] == admin_status
+            assert vlan["vlanid"] == "3999"
+        finally:
+            db.cfgdb.set_entry("VLAN", vlan_name, None)
+
+    @pytest.mark.parametrize("command", ["shutdown", "startup"])
+    def test_config_vlan_admin_status_invalid_vlanid(self, command):
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["vlan"].commands[command],
+            ["4096"]
+        )
+
+        assert result.exit_code != 0
+        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
+
+    @pytest.mark.parametrize("command", ["shutdown", "startup"])
+    def test_config_vlan_admin_status_nonexistent_vlan(self, command):
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["vlan"].commands[command],
+            ["1001"]
+        )
+
         assert result.exit_code != 0
         assert "Error: Vlan1001 does not exist" in result.output
 
