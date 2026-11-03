@@ -185,8 +185,11 @@ def getLldpNeighbors(namespace=""):
     container = "lldp"
     if namespace:
         container += namespace.removeprefix("asic")
-    (processStdout, _) = getCmdOutput(["docker", "exec", container, "lldpctl", "-f", "json"])
-    return json.loads(processStdout)
+    try:
+        (processStdout, _) = getCmdOutput(["docker", "exec", container, "lldpctl", "-f", "json"])
+        return json.loads(processStdout)
+    except json.JSONDecodeError:
+        return None
 
 def craftLacpPacket(portChannelConfig, portName, isResetPacket=False, newVersion=True):
     portConfig = portChannelConfig["ports"][portName]
@@ -254,6 +257,11 @@ def main(probeOnly=False, namespace=""):
         for portChannel in portChannels:
             config = getPortChannelConfig(portChannel)
             lldpInfo = getLldpNeighbors(namespace)
+            if not lldpInfo:
+                log.log_error(f"ERROR: Failed to get LLDP neighbors for port channel {portChannel}; "
+                              "make sure lldp container is running", also_print_to_console=True)
+                failedPortChannels.append(portChannel)
+                continue
             portChannelChecked = False
             for portName in config["ports"].keys():
                 if not "runner" in config["ports"][portName] or \

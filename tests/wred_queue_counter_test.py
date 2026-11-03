@@ -1384,80 +1384,80 @@ show_wred_queue_counters_summary = """\
  MC17             139              154               154                173
  MC18             170              143                89                190
  MC19             134               50               114                141
-ALL20               0                0                 0                  0
-ALL21               0                0                 0                  0
-ALL22               0                0                 0                  0
-ALL23               0                0                 0                  0
-ALL24               0                0                 0                  0
-ALL25               0                0                 0                  0
-ALL26               0                0                 0                  0
-ALL27               0                0                 0                  0
-ALL28               0                0                 0                  0
-ALL29               0                0                 0                  0
+ALL20             N/A              N/A               N/A                N/A
+ALL21             N/A              N/A               N/A                N/A
+ALL22             N/A              N/A               N/A                N/A
+ALL23             N/A              N/A               N/A                N/A
+ALL24             N/A              N/A               N/A                N/A
+ALL25             N/A              N/A               N/A                N/A
+ALL26             N/A              N/A               N/A                N/A
+ALL27             N/A              N/A               N/A                N/A
+ALL28             N/A              N/A               N/A                N/A
+ALL29             N/A              N/A               N/A                N/A
 
 """
 
 show_queue_counters_summary_json = """\
 {
   "ALL20": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL21": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL22": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL23": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL24": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL25": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL26": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL27": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL28": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "ALL29": {
-    "ecnbytes": 0,
-    "ecnpacket": 0,
-    "wredDrpbytes": 0,
-    "wredDrppacket": 0
+    "ecnbytes": "N/A",
+    "ecnpacket": "N/A",
+    "wredDrpbytes": "N/A",
+    "wredDrppacket": "N/A"
   },
   "MC10": {
     "ecnbytes": 164,

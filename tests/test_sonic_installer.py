@@ -2,7 +2,11 @@ import os
 import sys
 import pytest
 from contextlib import contextmanager
-from sonic_installer.main import sonic_installer
+from sonic_installer.main import (
+    sonic_installer,
+    SWAP_MEM_SIZE_DEFAULT,
+    TOTAL_MEM_THRESHOLD_DEFAULT,
+)
 from click.testing import CliRunner
 from unittest.mock import patch, Mock, call
 import sonic_installer.common as sonic_installer_common
@@ -244,3 +248,91 @@ def test_install_failed(
     runner = CliRunner()
     result = runner.invoke(sonic_installer.commands["install"], [sonic_image_filename, "-y"])
     print(result.output)
+
+
+def setup_swap_install_mocks(fs, get_bootloader):
+    """Set up the minimum mocks for an install to reach SWAPAllocator."""
+    sonic_image_filename = "sonic.bin"
+    new_image_version = "image_2"
+    new_image_folder = f"/images/{new_image_version}"
+
+    fs.create_file(sonic_image_filename)
+    fs.create_dir(os.path.join(new_image_folder, "docker"))
+
+    mock_bootloader = Mock()
+    mock_bootloader.get_binary_image_version = Mock(return_value=new_image_version)
+    mock_bootloader.get_installed_images = Mock(return_value=["image_1"])
+    mock_bootloader.get_image_path = Mock(return_value=new_image_folder)
+    mock_bootloader.verify_image_sign = Mock(return_value=True)
+    mock_bootloader.install_image = Mock(side_effect=lambda arg: sys.exit(1))
+    get_bootloader.return_value = mock_bootloader
+
+    return sonic_image_filename
+
+
+@patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
+@patch("sonic_installer.main.resolve_total_mem_threshold")
+@patch("sonic_installer.main.resolve_swap_mem_size")
+@patch("sonic_installer.main.SWAPAllocator")
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.run_command_or_raise")
+@patch("sonic_installer.main.run_command")
+@patch('shutil.rmtree')
+def test_install_skip_setup_swap_does_not_resolve(
+    rmtree,
+    run_command,
+    run_command_or_raise,
+    get_bootloader,
+    swap,
+    resolve_swap_mem_size,
+    resolve_total_mem_threshold,
+    _,
+    fs,
+):
+    """--skip-setup-swap must not read platform.json at all."""
+    sonic_image_filename = setup_swap_install_mocks(fs, get_bootloader)
+
+    runner = CliRunner()
+    runner.invoke(
+        sonic_installer.commands["install"],
+        [sonic_image_filename, "-y", "--skip-setup-swap"],
+    )
+
+    resolve_swap_mem_size.assert_not_called()
+    resolve_total_mem_threshold.assert_not_called()
+    # The click defaults are passed through untouched, as before this change.
+    swap.assert_called_with(False, SWAP_MEM_SIZE_DEFAULT, TOTAL_MEM_THRESHOLD_DEFAULT, 1200)
+
+
+@patch("sonic_installer.main.check_image_install_free_disk_space", return_value=True)
+@patch("sonic_installer.main.resolve_total_mem_threshold")
+@patch("sonic_installer.main.resolve_swap_mem_size")
+@patch("sonic_installer.main.SWAPAllocator")
+@patch("sonic_installer.main.get_bootloader")
+@patch("sonic_installer.main.run_command_or_raise")
+@patch("sonic_installer.main.run_command")
+@patch('shutil.rmtree')
+def test_install_uses_resolved_swap_values(
+    rmtree,
+    run_command,
+    run_command_or_raise,
+    get_bootloader,
+    swap,
+    resolve_swap_mem_size,
+    resolve_total_mem_threshold,
+    _,
+    fs,
+):
+    """The resolved values are what SWAPAllocator is given."""
+    sonic_image_filename = setup_swap_install_mocks(fs, get_bootloader)
+    resolve_swap_mem_size.return_value = 3072
+    resolve_total_mem_threshold.return_value = 8192
+
+    runner = CliRunner()
+    runner.invoke(sonic_installer.commands["install"], [sonic_image_filename, "-y"])
+
+    resolve_swap_mem_size.assert_called_once_with(
+        SWAP_MEM_SIZE_DEFAULT, SWAP_MEM_SIZE_DEFAULT)
+    resolve_total_mem_threshold.assert_called_once_with(
+        TOTAL_MEM_THRESHOLD_DEFAULT, TOTAL_MEM_THRESHOLD_DEFAULT)
+    swap.assert_called_with(True, 3072, 8192, 1200)

@@ -192,7 +192,7 @@ function reboot_pre_check()
 
 function check_local_reboot_disk_space()
 {
-    python3 - "$PLATFORM_JSON_PATH" <<'PYCODE'
+    python3 -I - "$PLATFORM_JSON_PATH" <<'PYCODE'
 import sys
 
 from utilities_common.image_disk_space import (
@@ -254,7 +254,7 @@ function parse_options()
 
 function linecard_reboot_notify_supervisor()
 {
-    is_linecard=$(python3 -c 'from sonic_py_common import device_info; print("True") if device_info.is_chassis() == True and device_info.is_supervisor() == False else print("False")')
+    is_linecard=$(python3 -I -c 'from sonic_py_common import device_info; print("True") if device_info.is_chassis() == True and device_info.is_supervisor() == False else print("False")')
     if [ $is_linecard == "True" ]; then
         key=$(sonic-db-cli STATE_DB keys "CHASSIS_MODULE_TABLE|LINE-CARD*")
         status=$?

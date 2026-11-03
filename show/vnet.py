@@ -1,11 +1,13 @@
+import ipaddress
+
 import click
-from sonic_py_common import multi_asic
-import utilities_common.cli as clicommon
-import utilities_common.multi_asic as multi_asic_util
 from natsort import natsorted
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
-import ipaddress
+
+from sonic_py_common import multi_asic
+import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
 
 #
 # 'vnet' command ("show vnet")
@@ -443,9 +445,9 @@ def endpoint(args):
 
             for k in vnet_rt_keys:
                 val = appl_db.get_all(appl_db.APPL_DB, k)
-                endpoints = val.get('endpoint').split(',') if 'endpoint' in val else []
+                endpoints = [ep.strip() for ep in val.get('endpoint').split(',')] if 'endpoint' in val else []
                 if 'endpoint_monitor' in val:
-                    monitors = val.get('endpoint_monitor').split(',')
+                    monitors = [m.strip() for m in val.get('endpoint_monitor').split(',')]
                 else:
                     continue
                 for idx, ep in enumerate(endpoints):
@@ -495,8 +497,11 @@ def endpoint(args):
 
             for k in vnet_rt_keys:
                 val = appl_db.get_all(appl_db.APPL_DB, k)
-                endpoints = val.get('endpoint').split(',') if val and 'endpoint' in val else []
-                monitors = val.get('endpoint_monitor').split(',') if val and 'endpoint_monitor' in val else []
+                endpoints = [ep.strip() for ep in val.get('endpoint').split(',')] if val and 'endpoint' in val else []
+                if val and 'endpoint_monitor' in val:
+                    monitors = [m.strip() for m in val.get('endpoint_monitor').split(',')]
+                else:
+                    monitors = []
                 for idx, ep in enumerate(endpoints):
                     if args == ep:
                         prefix.append(k.split(":", 2)[2])
@@ -526,24 +531,31 @@ def routes():
     pass
 
 
-def pretty_print(table, r, epval, mac_addr, vni, metric, state):
-    endpoints = epval.split(',') if epval else []
-    if not endpoints:
-        endpoints = [""]
+def pretty_print_local(table, r, nexthop_val, ifname_val):
+    # Not stripped: splitting and re-joining on ',' preserves the original spacing verbatim.
+    nexthops = nexthop_val.split(',') if nexthop_val else [""]
+    interfaces = ifname_val.split(',') if ifname_val else []
+
+    row_width = 2
+
+    max_entries = max(len(nexthops), len(interfaces))
+    i = 0
+    while i < max_entries:
+        r.append(",".join(nexthops[i:i + row_width]) if i < len(nexthops) else "")
+        r.append(",".join(interfaces[i:i + row_width]) if i < len(interfaces) else "")
+        i += row_width
+        table.append(r)
+        r = ["", ""]
+
+
+def pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state):
+    endpoints = epval.split(',') if epval else [""]
     # When mac_address or vni is a per-endpoint list, split so all three fields
     # wrap in the same chunks — keeps rows aligned at any ECMP scale.
     macs = mac_addr.split(',') if mac_addr and ',' in mac_addr else None
     vnis = vni.split(',') if vni and ',' in vni else None
 
-    # Derive row_width from the longest single item across all three fields so
-    # that long MAC addresses or IPv6 endpoints don't overflow the terminal.
-    all_items = list(endpoints)
-    if macs:
-        all_items.extend(macs)
-    if vnis:
-        all_items.extend(vnis)
-    max_len = max((len(item) for item in all_items), default=0)
-    row_width = 2 if max_len > 15 else 3
+    row_width = 2
 
     i = 0
     while i < len(endpoints):
@@ -635,9 +647,9 @@ def _show_local_helper(vnet_name=None, appl_db=None):
         r = []
         r.extend(k.split(":", 2)[1:])
         val = appl_db.get_all(appl_db.APPL_DB, k)
-        r.append(val.get('nexthop'))
-        r.append(val.get('ifname'))
-        table.append(r)
+        nexthop_val = val.get('nexthop') or ''
+        ifname_val = val.get('ifname') or ''
+        pretty_print_local(table, r, nexthop_val, ifname_val)
 
     click.echo(tabulate(table, route_header))
 
@@ -672,6 +684,6 @@ def _show_tunnel_helper(vnet_name=None, appl_db=None, state_db=None):
             metric = int(raw_metric) if raw_metric else ''
         except (ValueError, TypeError):
             metric = raw_metric
-        pretty_print(table, r, epval, mac_addr, vni, metric, state)
+        pretty_print_tunnel(table, r, epval, mac_addr, vni, metric, state)
 
     click.echo(tabulate(table, tunnel_header))
