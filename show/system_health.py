@@ -1,5 +1,10 @@
+import json
 import os
+import subprocess
 import sys
+import syslog
+from types import SimpleNamespace
+from typing import NoReturn
 
 import click
 from tabulate import tabulate
@@ -14,32 +19,105 @@ CHASSIS_SERVER_PORT = 6380
 CHASSIS_STATE_DB = 13
 
 
-def get_system_health_status():
-    if os.environ.get("UTILITIES_UNIT_TESTING") == "1":
-        modules_path = os.path.join(os.path.dirname(__file__), "..")
-        sys.path.insert(0, modules_path)
-        from tests.system_health_test import MockerManager
-        from tests.system_health_test import MockerChassis
-        HealthCheckerManager = MockerManager
-        Chassis = MockerChassis
-    else:
-        if os.geteuid():
-            click.echo("Root privileges are required for this operation")
-            exit(1)
+HEALTHCHECK_PATH = '/usr/bin/healthcheck'
+HEALTHCHECK_CMD = [HEALTHCHECK_PATH, '--json']
+HEALTHCHECK_CONFIG_MISSING = 1
+# A cycle normally takes under a second, but each unanswered container or API call waits up to 15 s, one after
+# another; a degraded system should show its Not OK checks rather than a timeout. This only bounds a stuck binary.
+HEALTHCHECK_TIMEOUT = 300
+
+
+def healthcheck_installed():
+    """Whether the image has the Rust check binary of the system health daemon, which replaces health_checker."""
+    return os.path.isfile(HEALTHCHECK_PATH) and os.access(HEALTHCHECK_PATH, os.X_OK)
+
+
+def run_healthcheck():
+    proc = subprocess.run(HEALTHCHECK_CMD, capture_output=True, text=True, errors='replace',
+                          timeout=HEALTHCHECK_TIMEOUT)
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def health_check_failed(reason) -> NoReturn:
+    click.echo("System health check failed: {}".format(reason))
+    sys.exit(1)
+
+
+def is_string_list(value):
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def is_health_stat(stat):
+    """The shape the display functions read: {category: {name: {'status', 'message', 'type'}}}, all strings."""
+    return isinstance(stat, dict) and all(
+        isinstance(objects, dict) and all(
+            isinstance(info, dict) and all(isinstance(info.get(key), str) for key in ('status', 'message', 'type'))
+            for info in objects.values())
+        for objects in stat.values())
+
+
+def get_system_health_status_in_process():
+    """Images without the Rust check binary still have the Python health_checker package."""
+    try:
         from health_checker.manager import HealthCheckerManager
         from sonic_platform.chassis import Chassis
-
+    except ImportError as e:
+        health_check_failed("{} is not installed, and {}".format(HEALTHCHECK_PATH, e))
 
     manager = HealthCheckerManager()
     if not manager.config.config_file_exists():
         click.echo("System health configuration file not found, exit...")
-        exit(1)
+        sys.exit(1)
 
     chassis = Chassis()
     stat = manager.check(chassis)
     chassis.initizalize_system_led()
-
     return manager, chassis, stat
+
+
+def get_system_health_status():
+    if os.geteuid():
+        click.echo("Root privileges are required for this operation")
+        sys.exit(1)
+
+    if not healthcheck_installed():
+        syslog.syslog(syslog.LOG_NOTICE, "show system-health: {} is not installed, running the Python health_checker "
+                      "package instead".format(HEALTHCHECK_PATH))
+        return get_system_health_status_in_process()
+
+    try:
+        returncode, stdout, stderr = run_healthcheck()
+    except subprocess.TimeoutExpired:
+        health_check_failed("no result after {} seconds".format(HEALTHCHECK_TIMEOUT))
+    except OSError as e:
+        health_check_failed(e)
+    if returncode == HEALTHCHECK_CONFIG_MISSING:
+        click.echo("System health configuration file not found, exit...")
+        sys.exit(1)
+    if returncode != 0:
+        how = "killed by signal {}".format(-returncode) if returncode < 0 else "exit code {}".format(returncode)
+        health_check_failed("{} ({})".format(stderr.strip(), how) if stderr.strip() else how)
+
+    try:
+        output = json.loads(stdout)
+        led = output['led']
+        stat = output['stat']
+        ignore = output.get('ignore', {})
+        ignore_services = ignore.get('services', [])
+        ignore_devices = ignore.get('devices', [])
+        if not (isinstance(led, str) and is_health_stat(stat) and
+                is_string_list(ignore_services) and is_string_list(ignore_devices)):
+            raise TypeError
+    except (ValueError, KeyError, TypeError, AttributeError):
+        health_check_failed("invalid output from {}".format(HEALTHCHECK_PATH))
+    # On success the binary's stderr holds only what the checks printed (LED set failures, the vendor's own prints),
+    # as the in-process checks printed it; the binary logs to syslog.
+    if stderr:
+        click.echo(stderr, nl=False)
+    manager = SimpleNamespace(config=SimpleNamespace(ignore_services=ignore_services, ignore_devices=ignore_devices))
+    chassis = SimpleNamespace(get_status_led=lambda: led)
+    return manager, chassis, stat
+
 
 def display_system_health_summary(stat, led):
     click.echo("System status summary\n\n  System status LED  " + led)
