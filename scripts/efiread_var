@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+
+"""
+SONiC helper to read standard UEFI Secure Boot variables.
+
+This utility intentionally uses the Linux/UEFI runtime-service path:
+
+    efiread-var
+        -> efi-readvar
+        -> efivarfs
+        -> Linux EFI runtime subsystem
+        -> BIOS RuntimeServices->GetVariable()
+        -> firmware/platform implementation
+
+It does not use the SONiC Secure Boot backend selector or any
+platform-specific API such as Cisco TAM.
+"""
+
+from __future__ import print_function
+
+import argparse
+import os
+import subprocess
+import sys
+
+
+EFI_READVAR = "/usr/bin/efi-readvar"
+
+SUPPORTED_VARIABLES = (
+    "PK",
+    "KEK",
+    "db",
+)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read a UEFI Secure Boot variable using the standard "
+            "Linux EFI runtime-service path"
+        )
+    )
+
+    parser.add_argument(
+        "variable",
+        choices=SUPPORTED_VARIABLES,
+        help="Secure Boot variable to read: PK, KEK, or db",
+    )
+
+    return parser
+
+
+def read_efi_variable(variable):
+    """
+    Read a Secure Boot variable using efi-readvar.
+
+    Return the efi-readvar process exit status.
+    stdout/stderr are inherited so the native efitools output is
+    displayed unchanged.
+    """
+
+    if variable not in SUPPORTED_VARIABLES:
+        print(
+            "Error: unsupported EFI variable '{}'".format(variable),
+            file=sys.stderr,
+        )
+        return 2
+
+    if not os.path.exists(EFI_READVAR):
+        print(
+            "Error: {} is not installed".format(EFI_READVAR),
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        return subprocess.call(
+            [
+                EFI_READVAR,
+                "-v",
+                variable,
+            ]
+        )
+    except OSError as exc:
+        print(
+            "Error: failed to execute {}: {}".format(
+                EFI_READVAR,
+                exc,
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+
+    return read_efi_variable(args.variable)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
