@@ -1686,19 +1686,23 @@ class RemoveCreateOnlyDependencyMoveGenerator:
         target_config = diff.target_config # Final config after applying whole patch
         reload_config = True
 
-        for path in self.create_only_filter.get_paths(current_config):
+        # Walk the target config to find both a field changing value and a field being added.
+        # A field deleted from the target is never visited, the rest of the sorter handles it.
+        for path in self.create_only_filter.get_paths(target_config):
             tokens = self.path_addressing.get_path_tokens(path)
             current_field = self.__fetch_path(current_config, tokens)
             target_field = self.__fetch_path(target_config, tokens)
 
-            # If field is deleted or created we don't care, we only care when it was
-            # already set and is changing value.
-            if current_field is None or target_field is None or current_field == target_field:
+            if current_field == target_field:
                 continue
 
             # Create only filters may reference an exact leaf, but it's really the parent that is the
             # object we're after.
             tokens.pop()
+
+            # A field whose parent does not exist yet is created with it, nothing to tear down.
+            if self.__fetch_path(current_config, tokens) is None:
+                continue
 
             # First see if there are any dependents for the exact path
             for move in self.__remove_dependents(diff, tokens, reload_config=reload_config,
