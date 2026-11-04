@@ -2587,6 +2587,36 @@ class TestLowLevelMoveGenerator(unittest.TestCase):
             second_move = next(first_run)
             self.assertIs(second_move.patches[0].diff, diff_a)
 
+    def test_interleaved_real_add_keeps_original_diff(self):
+        diff_a = ps.Diff(
+            {},
+            {
+                "A": {"first": "one"},
+                "B": {"second": "two"},
+            },
+        )
+        diff_b = ps.Diff(
+            {"B": {"existing": "old"}},
+            {"B": {"existing": "old", "other": "new"}},
+        )
+
+        first_run = self.generator.generate(diff_a)
+        first_move = next(first_run)
+        self.assertEqual(first_move.patches[0].path, "/A")
+
+        # Simulate a recursive DFS call using the same generator.
+        list(self.generator.generate(diff_b))
+
+        second_move = next(first_run)
+        second_patch = second_move.patches[0]
+
+        self.assertEqual(second_patch.path, "/B")
+        self.assertEqual(second_patch.value, {"second": "two"})
+        self.assertEqual(
+            second_patch.patch.apply({}),
+            {"B": {"second": "two"}},
+        )
+
     def test_generate__no_diff__no_moves(self):
         self.verify()
 
