@@ -68,6 +68,7 @@ from . import plugins
 from .config_mgmt import ConfigMgmtDPB, ConfigMgmt, YANG_DIR
 from . import mclag
 from . import syslog
+from . import load_hwsku
 from . import switchport
 from . import dns
 from . import bgp_cli
@@ -1947,6 +1948,9 @@ config.add_command(syslog.syslog)
 
 # SED module
 config.add_command(sed.sed)
+
+# hwsku module
+config.add_command(load_hwsku.hwsku)
 
 # DNS module
 config.add_command(dns.dns)
