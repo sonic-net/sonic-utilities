@@ -2521,10 +2521,71 @@ class TestBulkLeafListMoveGenerator(unittest.TestCase):
         self.assertCountEqual(ex_ops, moves_ops)
 
 
+class TestBulkLowLevelMoveGeneratorRegression(unittest.TestCase):
+    def test_interleaved_generators_keep_original_diff(self):
+        from unittest.mock import patch
+
+        class FakePathAddressing:
+            def create_path(self, tokens):
+                return "/" + "/".join(tokens)
+
+            def configdb_sorted_keys_by_backlinks(self, path, config, **kwargs):
+                return list(config.keys())
+
+        class FakeMove:
+            def __init__(self, diff, *args, **kwargs):
+                self.diff = diff
+
+        generator = ps.BulkLowLevelMoveGenerator(FakePathAddressing())
+
+        diff_a = ps.Diff(
+            {"A": {"x": "old", "y": "old"},
+             "B": {"x": "old", "y": "old"}},
+            {"A": {"x": "new", "y": "new"},
+             "B": {"x": "new", "y": "new"}},
+        )
+
+        diff_b = ps.Diff(
+            {"C": {"x": "old", "y": "old"}},
+            {"C": {"x": "new", "y": "new"}},
+        )
+
+        with patch.object(ps, "JsonMove", FakeMove):
+            first_run = generator.generate_replace(diff_a)
+            first_group = next(first_run)
+            self.assertIs(first_group.patches[0].diff, diff_a)
+
+            list(generator.generate_replace(diff_b))
+
+            second_group = next(first_run)
+            self.assertIs(second_group.patches[0].diff, diff_a)
+
+
 class TestLowLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
         path_addressing = PathAddressing()
         self.generator = ps.LowLevelMoveGenerator(path_addressing)
+
+    def test_generate_interleaved_calls_keep_original_diff(self):
+        from unittest.mock import patch
+
+        diff_a = ps.Diff({}, {"A": {"first": "one", "second": "two"}})
+        diff_b = ps.Diff({}, {"B": {"other": "three"}})
+
+        class FakeMove:
+            def __init__(self, diff, *args, **kwargs):
+                self.diff = diff
+
+        with patch.object(ps, "JsonMove", FakeMove):
+            first_run = self.generator.generate(diff_a)
+            first_move = next(first_run)
+
+            self.assertIs(first_move.patches[0].diff, diff_a)
+
+            list(self.generator.generate(diff_b))
+
+            second_move = next(first_run)
+            self.assertIs(second_move.patches[0].diff, diff_a)
 
     def test_generate__no_diff__no_moves(self):
         self.verify()
