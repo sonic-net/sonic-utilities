@@ -3793,10 +3793,17 @@ class TestConfigNtp(object):
         import config.main
         importlib.reload(config.main)
 
+    @pytest.fixture(autouse=True)
+    def mock_hostcfgd_status(self):
+        with patch('config.main.subprocess.call', return_value=0) as mock_status:
+            yield mock_status
+
+    @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active", "inactive"])
     @pytest.mark.parametrize("address", ["10.10.10.4", "2001:db8::4"])
     @patch('utilities_common.cli.run_command')
-    def test_add_ntp_server(self, mock_run_command, address):
+    def test_add_ntp_server(self, mock_run_command, address, hostcfgd_status, mock_hostcfgd_status):
         config.ADHOC_VALIDATION = True
+        mock_hostcfgd_status.return_value = hostcfgd_status
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
@@ -3805,9 +3812,15 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == "NTP server {} added to configuration\n".format(address)
+        expected_output = "NTP server {} added to configuration\n".format(address)
         assert db.cfgdb.get_table("NTP_SERVER")[address] == {}
-        mock_run_command.assert_not_called()
+        mock_hostcfgd_status.assert_called_once_with(['systemctl', 'is-active', '--quiet', 'hostcfgd'])
+        if hostcfgd_status == 0:
+            mock_run_command.assert_not_called()
+        else:
+            expected_output += "Restarting chrony service...\n"
+            mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert result.output == expected_output
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_version_3(self, mock_run_command):
@@ -3870,7 +3883,7 @@ class TestConfigNtp(object):
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
            mock.Mock(side_effect=ValueError))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
-    def test_add_ntp_server_failed_yang_validation(self):
+    def test_add_ntp_server_failed_yang_validation(self, mock_hostcfgd_status):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
@@ -3880,8 +3893,9 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
+        mock_hostcfgd_status.assert_not_called()
 
-    def test_add_ntp_server_invalid_ip(self):
+    def test_add_ntp_server_invalid_ip(self, mock_hostcfgd_status):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
@@ -3891,9 +3905,10 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert "Invalid IP address" in result.output
+        mock_hostcfgd_status.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
-    def test_add_ntp_server_twice(self, mock_run_command):
+    def test_add_ntp_server_twice(self, mock_run_command, mock_hostcfgd_status):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
@@ -3907,11 +3922,14 @@ class TestConfigNtp(object):
         assert result.exit_code == 0
         assert "is already configured" in result.output
         mock_run_command.assert_not_called()
+        mock_hostcfgd_status.assert_not_called()
 
+    @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active", "inactive"])
     @pytest.mark.parametrize("address", ["10.10.10.4", "2001:db8::4"])
     @patch('utilities_common.cli.run_command')
-    def test_del_ntp_server(self, mock_run_command, address):
+    def test_del_ntp_server(self, mock_run_command, address, hostcfgd_status, mock_hostcfgd_status):
         config.ADHOC_VALIDATION = True
+        mock_hostcfgd_status.return_value = hostcfgd_status
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
@@ -3922,9 +3940,15 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == "NTP server {} removed from configuration\n".format(address)
+        expected_output = "NTP server {} removed from configuration\n".format(address)
         assert address not in db.cfgdb.get_table("NTP_SERVER")
-        mock_run_command.assert_not_called()
+        mock_hostcfgd_status.assert_called_once_with(['systemctl', 'is-active', '--quiet', 'hostcfgd'])
+        if hostcfgd_status == 0:
+            mock_run_command.assert_not_called()
+        else:
+            expected_output += "Restarting chrony service...\n"
+            mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        assert result.output == expected_output
 
     @patch('utilities_common.cli.run_command')
     def test_del_pool_ntp_server(self, mock_run_command):
@@ -3943,7 +3967,7 @@ class TestConfigNtp(object):
         mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
-    def test_del_ntp_server_not_configured(self, mock_run_command):
+    def test_del_ntp_server_not_configured(self, mock_run_command, mock_hostcfgd_status):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
@@ -3955,11 +3979,12 @@ class TestConfigNtp(object):
         assert result.exit_code != 0
         assert "not configured" in result.output
         mock_run_command.assert_not_called()
+        mock_hostcfgd_status.assert_not_called()
 
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value="10.10.10.10"))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
-    def test_del_ntp_server_invalid_ip_yang_validation(self):
+    def test_del_ntp_server_invalid_ip_yang_validation(self, mock_hostcfgd_status):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
@@ -3969,6 +3994,44 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
+        mock_hostcfgd_status.assert_not_called()
+
+    @pytest.mark.parametrize("operation", ["add", "del"])
+    @patch('utilities_common.cli.run_command', side_effect=SystemExit(1))
+    def test_ntp_server_restart_failure(self, mock_run_command, operation, mock_hostcfgd_status):
+        config.ADHOC_VALIDATION = True
+        mock_hostcfgd_status.return_value = 3
+        runner = CliRunner()
+        db = Db()
+        if operation == "del":
+            db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
+
+        result = runner.invoke(config.config.commands["ntp"], [operation, "10.10.10.4"], obj={'db': db.cfgdb})
+
+        assert result.exit_code != 0
+        assert "Restart service chrony failed with error 1" in result.output
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @pytest.mark.parametrize("operation", ["add", "del"])
+    @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active", "inactive"])
+    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry")
+    @patch('utilities_common.cli.run_command')
+    def test_ntp_server_yang_validation(self, mock_run_command, mock_set_entry, operation,
+                                        hostcfgd_status, mock_hostcfgd_status):
+        config.ADHOC_VALIDATION = False
+        mock_hostcfgd_status.return_value = hostcfgd_status
+        runner = CliRunner()
+        db = Db()
+        if operation == "del":
+            db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
+
+        result = runner.invoke(config.config.commands["ntp"], [operation, "10.10.10.4"], obj={'db': db.cfgdb})
+
+        assert result.exit_code == 0
+        mock_set_entry.assert_called_once_with("NTP_SERVER", "10.10.10.4", {} if operation == "add" else None)
+        mock_hostcfgd_status.assert_not_called()
+        mock_run_command.assert_not_called()
 
     @classmethod
     def teardown_class(cls):

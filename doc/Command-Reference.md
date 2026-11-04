@@ -10808,9 +10808,19 @@ This command displays a list of NTP peers known to the server as well as a summa
 
 This sub-section of commands is used to add or remove the configured NTP servers.
 
-These commands update CONFIG_DB. The `hostcfgd` daemon applies the changes and
-restarts chrony asynchronously. Command completion confirms the configuration
-update, not time synchronization; use `show ntp` to check synchronization.
+These commands update CONFIG_DB. With the default validation mode and an active
+`hostcfgd` daemon, `hostcfgd` applies the changes and restarts chrony
+asynchronously. If `hostcfgd` is inactive, such as before its delayed startup,
+the CLI restarts chrony synchronously and prints `Restarting chrony service...`.
+
+When YANG validation is enabled (`yang_config_validation=enable` in
+`DEVICE_METADATA|localhost`), GCU's `ntp_validator` restarts chrony synchronously;
+these commands do not add another direct restart. Overlapping GCU and `hostcfgd`
+restarts in that mode are not prevented by this change.
+
+Command completion does not confirm time synchronization; use `show ntp` to
+check synchronization. The examples below use the default validation mode with
+an active `hostcfgd`.
 
 **config ntp add**
 
