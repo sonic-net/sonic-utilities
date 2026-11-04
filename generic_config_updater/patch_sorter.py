@@ -1,3 +1,4 @@
+import sys
 import copy
 import json
 import jsonpatch
@@ -2233,6 +2234,8 @@ class DfsSorter:
         self.path_tracker = None
 
     def sort(self, diff, path_tracker: Optional[PatchSorterPath] = None):
+        sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
+
         if path_tracker is None and self.path_trace:
             self.path_tracker = PatchSorterPath(diff=diff)
             path_tracker = self.path_tracker
