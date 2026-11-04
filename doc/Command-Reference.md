@@ -10809,9 +10809,16 @@ This command displays a list of NTP peers known to the server as well as a summa
 This sub-section of commands is used to add or remove the configured NTP servers.
 
 These commands update CONFIG_DB. With the default validation mode and an active
-`hostcfgd` daemon, `hostcfgd` applies the changes and restarts chrony
-asynchronously. If `hostcfgd` is inactive, such as before its delayed startup,
-the CLI restarts chrony synchronously and prints `Restarting chrony service...`.
+`hostcfgd` daemon after warm/fast boot finalization, `hostcfgd` applies the changes
+and restarts chrony asynchronously. If `hostcfgd` is inactive, such as before its
+delayed startup, or warm/fast boot is still in progress, the CLI restarts chrony
+synchronously and prints `Restarting chrony service...`. A failure to read the
+boot state produces a warning and uses the same synchronous fallback.
+
+`hostcfgd` can be active before it subscribes to configuration changes. The boot
+state check covers its wait for warm/fast boot, but is not an atomic subscription
+readiness check. If that wait times out before boot finalization, overlapping
+CLI and `hostcfgd` restarts remain possible until the boot flag clears.
 
 When YANG validation is enabled (`yang_config_validation=enable` in
 `DEVICE_METADATA|localhost`), GCU's `ntp_validator` restarts chrony synchronously;
@@ -10820,7 +10827,7 @@ restarts in that mode are not prevented by this change.
 
 Command completion does not confirm time synchronization; use `show ntp` to
 check synchronization. The examples below use the default validation mode with
-an active `hostcfgd`.
+an active `hostcfgd` after boot finalization.
 
 **config ntp add**
 

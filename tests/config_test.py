@@ -3798,12 +3798,21 @@ class TestConfigNtp(object):
         with patch('config.main.subprocess.call', return_value=0) as mock_status:
             yield mock_status
 
+    @pytest.fixture(autouse=True)
+    def mock_boot_state(self):
+        with patch('config.main.swsscommon') as mock_swsscommon:
+            mock_swsscommon.RestartWaiter.isAdvancedBootInProgress.return_value = False
+            yield mock_swsscommon
+
+    @pytest.mark.parametrize("boot_in_progress", [False, True], ids=["boot-complete", "warm-fast-boot"])
     @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active", "inactive"])
     @pytest.mark.parametrize("address", ["10.10.10.4", "2001:db8::4"])
     @patch('utilities_common.cli.run_command')
-    def test_add_ntp_server(self, mock_run_command, address, hostcfgd_status, mock_hostcfgd_status):
+    def test_add_ntp_server(self, mock_run_command, address, hostcfgd_status, boot_in_progress,
+                            mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = True
         mock_hostcfgd_status.return_value = hostcfgd_status
+        mock_boot_state.RestartWaiter.isAdvancedBootInProgress.return_value = boot_in_progress
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
@@ -3816,6 +3825,12 @@ class TestConfigNtp(object):
         assert db.cfgdb.get_table("NTP_SERVER")[address] == {}
         mock_hostcfgd_status.assert_called_once_with(['systemctl', 'is-active', '--quiet', 'hostcfgd'])
         if hostcfgd_status == 0:
+            mock_boot_state.DBConnector.assert_called_once_with('STATE_DB', 0)
+            mock_boot_state.RestartWaiter.isAdvancedBootInProgress.assert_called_once_with(
+                mock_boot_state.DBConnector.return_value)
+        else:
+            mock_boot_state.DBConnector.assert_not_called()
+        if hostcfgd_status == 0 and not boot_in_progress:
             mock_run_command.assert_not_called()
         else:
             expected_output += "Restarting chrony service...\n"
@@ -3883,7 +3898,7 @@ class TestConfigNtp(object):
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
            mock.Mock(side_effect=ValueError))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
-    def test_add_ntp_server_failed_yang_validation(self, mock_hostcfgd_status):
+    def test_add_ntp_server_failed_yang_validation(self, mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
@@ -3894,8 +3909,9 @@ class TestConfigNtp(object):
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
         mock_hostcfgd_status.assert_not_called()
+        mock_boot_state.DBConnector.assert_not_called()
 
-    def test_add_ntp_server_invalid_ip(self, mock_hostcfgd_status):
+    def test_add_ntp_server_invalid_ip(self, mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
@@ -3906,9 +3922,10 @@ class TestConfigNtp(object):
         print(result.output)
         assert "Invalid IP address" in result.output
         mock_hostcfgd_status.assert_not_called()
+        mock_boot_state.DBConnector.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
-    def test_add_ntp_server_twice(self, mock_run_command, mock_hostcfgd_status):
+    def test_add_ntp_server_twice(self, mock_run_command, mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
@@ -3923,13 +3940,17 @@ class TestConfigNtp(object):
         assert "is already configured" in result.output
         mock_run_command.assert_not_called()
         mock_hostcfgd_status.assert_not_called()
+        mock_boot_state.DBConnector.assert_not_called()
 
+    @pytest.mark.parametrize("boot_in_progress", [False, True], ids=["boot-complete", "warm-fast-boot"])
     @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active", "inactive"])
     @pytest.mark.parametrize("address", ["10.10.10.4", "2001:db8::4"])
     @patch('utilities_common.cli.run_command')
-    def test_del_ntp_server(self, mock_run_command, address, hostcfgd_status, mock_hostcfgd_status):
+    def test_del_ntp_server(self, mock_run_command, address, hostcfgd_status, boot_in_progress,
+                            mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = True
         mock_hostcfgd_status.return_value = hostcfgd_status
+        mock_boot_state.RestartWaiter.isAdvancedBootInProgress.return_value = boot_in_progress
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
@@ -3944,6 +3965,12 @@ class TestConfigNtp(object):
         assert address not in db.cfgdb.get_table("NTP_SERVER")
         mock_hostcfgd_status.assert_called_once_with(['systemctl', 'is-active', '--quiet', 'hostcfgd'])
         if hostcfgd_status == 0:
+            mock_boot_state.DBConnector.assert_called_once_with('STATE_DB', 0)
+            mock_boot_state.RestartWaiter.isAdvancedBootInProgress.assert_called_once_with(
+                mock_boot_state.DBConnector.return_value)
+        else:
+            mock_boot_state.DBConnector.assert_not_called()
+        if hostcfgd_status == 0 and not boot_in_progress:
             mock_run_command.assert_not_called()
         else:
             expected_output += "Restarting chrony service...\n"
@@ -3967,7 +3994,7 @@ class TestConfigNtp(object):
         mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
-    def test_del_ntp_server_not_configured(self, mock_run_command, mock_hostcfgd_status):
+    def test_del_ntp_server_not_configured(self, mock_run_command, mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
@@ -3980,11 +4007,12 @@ class TestConfigNtp(object):
         assert "not configured" in result.output
         mock_run_command.assert_not_called()
         mock_hostcfgd_status.assert_not_called()
+        mock_boot_state.DBConnector.assert_not_called()
 
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value="10.10.10.10"))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
-    def test_del_ntp_server_invalid_ip_yang_validation(self, mock_hostcfgd_status):
+    def test_del_ntp_server_invalid_ip_yang_validation(self, mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
@@ -3995,12 +4023,16 @@ class TestConfigNtp(object):
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
         mock_hostcfgd_status.assert_not_called()
+        mock_boot_state.DBConnector.assert_not_called()
 
+    @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active-warm-fast-boot", "inactive"])
     @pytest.mark.parametrize("operation", ["add", "del"])
     @patch('utilities_common.cli.run_command', side_effect=SystemExit(1))
-    def test_ntp_server_restart_failure(self, mock_run_command, operation, mock_hostcfgd_status):
+    def test_ntp_server_restart_failure(self, mock_run_command, operation, hostcfgd_status,
+                                        mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = True
-        mock_hostcfgd_status.return_value = 3
+        mock_hostcfgd_status.return_value = hostcfgd_status
+        mock_boot_state.RestartWaiter.isAdvancedBootInProgress.return_value = True
         runner = CliRunner()
         db = Db()
         if operation == "del":
@@ -4013,14 +4045,41 @@ class TestConfigNtp(object):
         mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @pytest.mark.parametrize("operation", ["add", "del"])
+    @pytest.mark.parametrize("probe", ["connect", "read"])
+    @patch('config.main.log.log_warning')
+    @patch('utilities_common.cli.run_command')
+    def test_ntp_server_boot_state_unavailable(self, mock_run_command, mock_log_warning,
+                                               probe, operation, mock_boot_state):
+        config.ADHOC_VALIDATION = True
+        if probe == "connect":
+            mock_boot_state.DBConnector.side_effect = RuntimeError("STATE_DB unavailable")
+        else:
+            mock_boot_state.RestartWaiter.isAdvancedBootInProgress.side_effect = RuntimeError("STATE_DB unavailable")
+        db = Db()
+        if operation == "del":
+            db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
+
+        result = CliRunner().invoke(config.config.commands["ntp"], [operation, "10.10.10.4"], obj={'db': db.cfgdb})
+
+        assert result.exit_code == 0
+        assert "Restarting chrony service..." in result.output
+        assert ("10.10.10.4" in db.cfgdb.get_table("NTP_SERVER")) == (operation == "add")
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        mock_log_warning.assert_called_once_with(
+            "Unable to check warm/fast boot state: STATE_DB unavailable; restarting chrony synchronously.",
+            also_print_to_console=True)
+
+    @pytest.mark.parametrize("boot_in_progress", [False, True], ids=["boot-complete", "warm-fast-boot"])
+    @pytest.mark.parametrize("operation", ["add", "del"])
     @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active", "inactive"])
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry")
     @patch('utilities_common.cli.run_command')
     def test_ntp_server_yang_validation(self, mock_run_command, mock_set_entry, operation,
-                                        hostcfgd_status, mock_hostcfgd_status):
+                                        hostcfgd_status, boot_in_progress, mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = False
         mock_hostcfgd_status.return_value = hostcfgd_status
+        mock_boot_state.RestartWaiter.isAdvancedBootInProgress.return_value = boot_in_progress
         runner = CliRunner()
         db = Db()
         if operation == "del":
@@ -4031,6 +4090,8 @@ class TestConfigNtp(object):
         assert result.exit_code == 0
         mock_set_entry.assert_called_once_with("NTP_SERVER", "10.10.10.4", {} if operation == "add" else None)
         mock_hostcfgd_status.assert_not_called()
+        mock_boot_state.DBConnector.assert_not_called()
+        mock_boot_state.RestartWaiter.isAdvancedBootInProgress.assert_not_called()
         mock_run_command.assert_not_called()
 
     @classmethod
