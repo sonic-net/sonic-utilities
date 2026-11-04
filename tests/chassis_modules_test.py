@@ -38,6 +38,13 @@ FABRIC-CARD0 fabric-card 17 Online up FC1000101
 header_lines = 2
 warning_lines = 0
 
+
+def set_shutdown_allowed(db, module_name, allowed="True"):
+    """Publish the STATE_DB field chassisd writes for this module."""
+    statedb = db.db
+    statedb.connect("STATE_DB")
+    statedb.set("STATE_DB", "CHASSIS_MODULE_TABLE|" + module_name, "shutdown_allowed", allowed)
+
 show_chassis_modules_output="""\
         Name      Description    Physical-Slot    Oper-Status    Admin-Status     Serial
 ------------  ---------------  ---------------  -------------  --------------  ---------
@@ -202,6 +209,7 @@ class TestChassisModules(object):
     def test_config_shutdown_module(self):
         runner = CliRunner()
         db = Db()
+        set_shutdown_allowed(db, "LINE-CARD0")
         result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"], ["LINE-CARD0"], obj=db)
         print(result.exit_code)
         print(result.output)
@@ -225,6 +233,7 @@ class TestChassisModules(object):
              mock.patch("config.chassis_modules.wait_for_container_stopped", return_value=True):
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "FABRIC-CARD0")
 
             chassisdb = db.db
             chassisdb.connect("CHASSIS_STATE_DB")
@@ -267,6 +276,7 @@ class TestChassisModules(object):
         """Stop the ASIC services before admin_status 'down' is written, start them after."""
         runner = CliRunner()
         db = Db()
+        set_shutdown_allowed(db, "FABRIC-CARD0")
         admin_status_at_command = []
 
         def record_admin_status(command, *args, **kwargs):
@@ -298,6 +308,7 @@ class TestChassisModules(object):
              mock.patch("config.chassis_modules.fabric_module_set_admin_status") as mock_set_admin_status:
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "FABRIC-CARD0")
 
             result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                                    ["FABRIC-CARD0"], obj=db)
@@ -318,6 +329,7 @@ class TestChassisModules(object):
              mock.patch("config.chassis_modules.wait_for_container_stopped", return_value=container_stopped):
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "FABRIC-CARD0")
 
             chassisdb = db.db
             chassisdb.connect("CHASSIS_STATE_DB")
@@ -337,6 +349,7 @@ class TestChassisModules(object):
                         mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "FABRIC-CARD0")
 
             result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                                    ["FABRIC-CARD0"], obj=db)
@@ -387,6 +400,7 @@ class TestChassisModules(object):
     def test_config_startup_module(self):
         runner = CliRunner()
         db = Db()
+        set_shutdown_allowed(db, "LINE-CARD0")
         result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["startup"], ["LINE-CARD0"], obj=db)
         print(result.exit_code)
         print(result.output)
@@ -405,6 +419,7 @@ class TestChassisModules(object):
                         mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "FABRIC-CARD0")
 
             chassisdb = db.db
             chassisdb.connect("CHASSIS_STATE_DB")
@@ -583,6 +598,7 @@ class TestChassisModules(object):
 
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "DPU0")
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                 ["DPU0"],
@@ -606,6 +622,7 @@ class TestChassisModules(object):
 
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "DPU0")
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                 ["DPU0"],
@@ -626,6 +643,7 @@ class TestChassisModules(object):
 
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "DPU0")
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                 ["DPU0"],
@@ -643,6 +661,7 @@ class TestChassisModules(object):
 
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "DPU0")
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["startup"],
                 ["DPU0"],
@@ -666,6 +685,7 @@ class TestChassisModules(object):
 
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "DPU0")
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["startup"],
                 ["DPU0"],
@@ -686,6 +706,7 @@ class TestChassisModules(object):
 
             runner = CliRunner()
             db = Db()
+            set_shutdown_allowed(db, "DPU0")
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["startup"],
                 ["DPU0"],
@@ -695,6 +716,31 @@ class TestChassisModules(object):
             print(result.output)
             assert result.exit_code == 0
             assert "Module DPU0 is already set to up state" in result.output
+
+    @pytest.mark.parametrize(
+        "command,published,message",
+        [
+            ("shutdown", "False", "Shutdown is not allowed for module DPU0"),
+            ("startup", "False", "Startup is not allowed for module DPU0"),
+            ("shutdown", None, "Shutdown is not allowed for module DPU0"),
+            ("startup", None, "Startup is not allowed for module DPU0"),
+        ],
+    )
+    def test_admin_change_blocked_when_shutdown_not_allowed(self, command, published, message):
+        runner = CliRunner()
+        db = Db()
+        if published is not None:
+            set_shutdown_allowed(db, "DPU0", published)
+        result = runner.invoke(
+            config.config.commands["chassis"].commands["modules"].commands[command],
+            ["DPU0"],
+            obj=db,
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert message in result.output
+        assert db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0") == {}
 
     @classmethod
     def teardown_class(cls):
@@ -931,6 +977,7 @@ class TestChassisModuleBMCStartupShutdown(object):
             'power_on_delay': '300',
             'graceful_shutdown_timeout': '120',
         })
+        set_shutdown_allowed(db, "SWITCH-HOST")
         with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["startup"],
@@ -953,6 +1000,7 @@ class TestChassisModuleBMCStartupShutdown(object):
             'power_on_delay': '60',
             'graceful_shutdown_timeout': '30',
         })
+        set_shutdown_allowed(db, "SWITCH-HOST")
         with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
@@ -971,6 +1019,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         runner = CliRunner()
         db = Db()
         db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
+        set_shutdown_allowed(db, "SWITCH-HOST")
         with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["startup"],
@@ -985,6 +1034,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         """shutdown SWITCH-HOST when already down (no entry) should print a message and return."""
         runner = CliRunner()
         db = Db()
+        set_shutdown_allowed(db, "SWITCH-HOST")
         with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
