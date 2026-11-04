@@ -191,28 +191,30 @@ def test_fallback_warns_during_construction_but_not_replay(keepalive, port_chann
 @pytest.mark.parametrize("preserve", [False, True])
 def test_member_selection_and_namespace(keepalive, port_channel, namespace, preserve):
     app_db = mock.MagicMock()
-    config_db = mock.MagicMock()
     app_db.get_keys.return_value = [
         ("PortChannel1", "Ethernet0"), ("PortChannel2", "Ethernet4"),
         ("PortChannel3", "Ethernet8"), ("PortChannel1", "Ethernet12"),
     ]
     app_db.get.side_effect = ["up", "up", "down", "up"]
-    config_db.get_entry.side_effect = [
-        {"admin_status": "up"}, {"admin_status": "up"}, {"admin_status": "down"}]
-    with mock.patch.object(keepalive, "ConfigDBConnector", side_effect=[app_db, config_db]) as connector, \
+    with mock.patch.object(keepalive, "ConfigDBConnector", return_value=app_db) as connector, \
             mock.patch.object(keepalive, "get_retry_count_port_channels", return_value={"PortChannel1"}) as select, \
             mock.patch.object(keepalive, "get_port_channel_config", return_value=port_channel) as config, \
             mock.patch.object(keepalive, "craft_lacp_packet") as craft, \
             mock.patch.object(keepalive.conf, "L2socket") as socket:
         active, packets = keepalive.get_lacpdu_per_lag_member(namespace, preserve)
 
-    assert active == ["Ethernet0", "Ethernet4"]
+    assert active == ["Ethernet0", "Ethernet4", "Ethernet12"]
     assert list(packets) == active
-    assert connector.call_args_list == [mock.call(namespace=namespace)] * 2
-    assert config.call_args_list == [mock.call("PortChannel1", namespace), mock.call("PortChannel2", namespace)]
+    connector.assert_called_once_with(namespace=namespace)
+    app_db.db_connect.assert_called_once_with("APPL_DB")
+    assert config.call_args_list == [
+        mock.call("PortChannel1", namespace), mock.call("PortChannel2", namespace),
+        mock.call("PortChannel1", namespace),
+    ]
     assert craft.call_args_list == [
         mock.call(port_channel, "Ethernet0", preserve_retry_count=preserve),
         mock.call(port_channel, "Ethernet4", preserve_retry_count=False),
+        mock.call(port_channel, "Ethernet12", preserve_retry_count=preserve),
     ]
     assert socket.call_args_list == [mock.call(iface=port) for port in active]
     if preserve:
@@ -241,12 +243,10 @@ def test_mixed_retry_modes_initialize_all_members(keepalive, port_channel, names
     del configs["PortChannel3"]["runner"]
     del configs["PortChannel3"]["ports"]["Ethernet8"]["runner"]["partner_retry_count"]
     app_db = mock.MagicMock()
-    config_db = mock.MagicMock()
     app_db.get_keys.return_value = members
     app_db.get.return_value = "up"
-    config_db.get_entry.return_value = {"admin_status": "up"}
 
-    with mock.patch.object(keepalive, "ConfigDBConnector", side_effect=[app_db, config_db] * 2), \
+    with mock.patch.object(keepalive, "ConfigDBConnector", return_value=app_db) as connector, \
             mock.patch.object(keepalive, "get_retry_count_port_channels",
                               return_value={"PortChannel1", "PortChannel2"}), \
             mock.patch.object(keepalive, "get_port_channel_config",
@@ -256,6 +256,7 @@ def test_mixed_retry_modes_initialize_all_members(keepalive, port_channel, names
         for _ in range(2):
             active, packets = keepalive.get_lacpdu_per_lag_member(namespace, True)
 
+    assert connector.call_args_list == [mock.call(namespace=namespace)] * 2
     assert log.call_count == 2
     assert log.call_args.args[0] == keepalive.syslog.LOG_WARNING
     assert active == [port for _, port in members]

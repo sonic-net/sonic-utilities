@@ -51,7 +51,7 @@ def test_lag_keepalive_starts_after_negotiation_before_shutdown():
             script.index("    execute_in_namespaces asic pause_orchagent") <
             script.index("    execute_in_namespaces asic increase_teamd_retry_count") <
             script.index("\nset +e") <
-            script.index("    execute_in_namespaces asic filter_routes") <
+            script.index("    python /usr/local/bin/fast-reboot-filter-routes.py") <
             script.index("trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM") <
             script.index(start) < script.index("\n    stop_service $service"))
 
@@ -59,7 +59,8 @@ def test_lag_keepalive_starts_after_negotiation_before_shutdown():
 @pytest.mark.parametrize("reboot_type", ["warm-reboot", "fastfast-reboot", "express-reboot", "fast-reboot"])
 @pytest.mark.parametrize("increase_status", [0, 1])
 @pytest.mark.parametrize("keepalive_status", [0, 1, 124])
-def test_lag_keepalive_shutdown_sequence(reboot_type, increase_status, keepalive_status):
+@pytest.mark.parametrize("filter_status", [0, 1])
+def test_lag_keepalive_shutdown_sequence(reboot_type, increase_status, keepalive_status, filter_status):
     script = FAST_REBOOT.read_text()
     start = script.index("execute_in_namespaces all init_warm_reboot_states")
     keepalive_call = "execute_in_namespaces asic start_lag_keepalive"
@@ -67,22 +68,28 @@ def test_lag_keepalive_shutdown_sequence(reboot_type, increase_status, keepalive
     sequence = re.sub(r"^function \w+\(\).*?^}\n", "", script[start:end], flags=re.M | re.S)
     driver = '''
 execute_in_namespaces() { shift; "$@"; }
+debug() { :; }
+error() { printf '%s\\n' "$*" >&2; }
 init_warm_reboot_states() { echo init; }
 setup_control_plane_assistant() { echo cpa; }
 probe_teamd_retry_count() { echo probe; }
 pause_orchagent() { echo pause; }
 increase_teamd_retry_count() { echo increase; return "$INCREASE_STATUS"; }
-filter_routes() { echo filter; }
+python() { printf 'filter:%s\\n' "$*"; return "$FILTER_STATUS"; }
 start_lag_keepalive() { echo keepalive; return "$KEEPALIVE_STATUS"; }
 ''' + sequence + '\necho shutdown\n'
     env = dict(os.environ, REBOOT_TYPE=reboot_type, NUM_ASIC="1",
                REQUIRE_TEAMD_RETRY_COUNT="no", INCREASE_STATUS=str(increase_status),
-               KEEPALIVE_STATUS=str(keepalive_status))
+               KEEPALIVE_STATUS=str(keepalive_status), FILTER_STATUS=str(filter_status))
     result = subprocess.run(["bash", "-e", "-c", driver], env=env,
                             capture_output=True, text=True, timeout=10)
     if reboot_type == "fast-reboot":
         assert result.returncode == 0, result.stderr
-        assert result.stdout.splitlines() == ["init", "cpa", "pause", "filter", "keepalive", "shutdown"]
+        assert result.stdout.splitlines() == [
+            "init", "cpa", "pause", "filter:/usr/local/bin/fast-reboot-filter-routes.py",
+            "keepalive", "shutdown",
+        ]
+        assert result.stderr == ("Preserving connected and default routes failed.\n" if filter_status else "")
     else:
         assert result.returncode == increase_status, result.stderr
         expected = ["init", "cpa", "probe", "pause", "increase"]
