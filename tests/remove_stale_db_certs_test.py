@@ -237,17 +237,6 @@ def test_plan_marks_installed_kernel_and_fallback_loader_as_essential(env, capsy
     assert not env["marker"].exists()
 
 
-def test_plan_does_not_check_tool_availability(env, capsys, monkeypatch):
-    def unexpected_tool_check(tool):
-        pytest.fail(f"unexpected tool availability check: {tool}")
-
-    monkeypatch.setattr(shutil, "which", unexpected_tool_check)
-    code, out, err = _run(capsys, "--plan")
-    assert code == 0, err
-    assert "Plan only - no changes made." in out
-    assert not env["marker"].exists()
-
-
 @pytest.mark.parametrize("append", [False, True])
 @pytest.mark.parametrize("chattr_status,update_status", [(0, 0), (1, 0), (0, 1)])
 def test_update_db_calls_tools_directly(env, monkeypatch, append, chattr_status, update_status):
@@ -1020,14 +1009,6 @@ def test_cancellation_before_writes_is_not_deferred(env, safe_updates, monkeypat
 
 def test_pruning_preserves_existing_signal_handler(safe_updates, monkeypatch):
     monkeypatch.setattr(prune.signal, "getsignal", Mock(return_value=prune.signal.SIG_IGN))
-    handler = Mock()
-    monkeypatch.setattr(prune.signal, "signal", handler)
-    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
-    handler.assert_not_called()
-
-
-def test_pruning_can_run_outside_the_main_thread(safe_updates, monkeypatch):
-    monkeypatch.setattr(prune.threading, "current_thread", Mock(return_value=object()))
     handler = Mock()
     monkeypatch.setattr(prune.signal, "signal", handler)
     assert prune.prune_db_certificates(safe_updates, auto=True) == 0

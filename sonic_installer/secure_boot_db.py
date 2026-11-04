@@ -24,7 +24,6 @@ import signal
 import subprocess
 import sys
 import tempfile
-import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -574,10 +573,6 @@ def apply_plan(config, plan, work, verbose=True):
 @contextmanager
 def defer_cancellation():
     """Defer termination and terminal suspension until restoration and verification finish."""
-    if threading.current_thread() is not threading.main_thread():
-        yield
-        return
-
     handlers = {}
     pending = []
     previous_mask = None
