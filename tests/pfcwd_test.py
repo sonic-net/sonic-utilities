@@ -97,6 +97,27 @@ def _hw_get_all_rx_only(self, db_id, key):
     return _hw_get_all(self, db_id, key)
 
 
+def _hw_get_all_forward_on_asic1(self, db_id, key):
+    """Hardware mode with drop on asic0 and forward on asic1."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD' and self.namespace == 'asic1':
+        return {'RECOVERY_MECHANISM': 'HARDWARE', 'DLR_PACKET_ACTION': 'forward'}
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_high_minimum(self, db_id, key):
+    """Hardware mode whose minimums are above the 200 ms defaults."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '400',
+            'DETECTION_TIME_MAX': '1500',
+            'RESTORATION_TIME_MIN': '400',
+            'RESTORATION_TIME_MAX': '1000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
 def _hw_get_all_no_ranges(self, db_id, key):
     """Hardware mode without reported ranges."""
     if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
@@ -838,6 +859,18 @@ class TestPfcwd(object):
         assert "Error: Action mismatch" in result.output
         assert db.cfgdb.get_table("PFC_WD") == before
 
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_high_minimum)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_hardware_mode_within_hw_range(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        result = CliRunner().invoke(pfcwd.cli.commands["start_default"], [], obj=db)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("PFC_WD", "Ethernet0")
+        assert entry['detection_time'] == '400'
+        assert entry['restoration_time'] == '400'
+
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     @patch('pfcwd.main.os')
     def test_pfcwd_start_default_hardware_mode_keeps_big_red_switch(self, mock_os):
@@ -1536,6 +1569,14 @@ class TestMultiAsicPfcwdShow(object):
         result = self._start(["--action", "forward", "--restoration-time", "600", "all", "600"])
         assert result.exit_code == 1
         assert "Error: Action mismatch" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_forward_on_asic1)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_checks_only_the_ports_asic(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "forward", "--restoration-time", "400", "Ethernet-BP256", "400"])
+        assert result.exit_code == 0
+        assert "Action mismatch" not in result.output
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_forward)
     @patch('pfcwd.main.os')

@@ -407,6 +407,16 @@ class PfcwdCli(object):
         hw_limits = self.get_hw_recovery_limits()
         hw_ranges = configurable_limits(hw_limits) if hw_limits is not None else {}
 
+        # Validate only on the ASIC that holds the requested ports
+        if hw_limits is not None and len(ports) != 0 and "all" not in ports:
+            local_ports = get_all_ports(
+                self.db, self.multi_asic.current_namespace,
+                self.multi_asic.display_option
+            )
+            ports = [port for port in ports if port in local_ports]
+            if not ports:
+                return
+
         pfcwd_info = {
             'detection_time': detection_time,
         }
@@ -681,8 +691,15 @@ class PfcwdCli(object):
         # Hardware timers are per port, so they are not scaled by port count
         if hw_mode:
             self.check_hw_action(DEFAULT_ACTION, active_ports)
-            detection_time = DEFAULT_DETECTION_TIME
-            restoration_time = DEFAULT_RESTORATION_TIME
+            # Move each default into the range the hardware supports
+            ranges = configurable_limits(self.get_hw_recovery_limits())
+
+            def within_range(field, value):
+                low, high = ranges.get(field, (value, value))
+                return min(max(value, low), high)
+
+            detection_time = within_range('detection_time', DEFAULT_DETECTION_TIME)
+            restoration_time = within_range('restoration_time', DEFAULT_RESTORATION_TIME)
         else:
             # Parameter values positively correlate to the number of ports.
             multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
