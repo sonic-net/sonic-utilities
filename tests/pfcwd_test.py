@@ -51,6 +51,20 @@ def _hw_get_all_narrow(self, db_id, key):
     return _hw_get_all(self, db_id, key)
 
 
+def _hw_get_all_low_minimum(self, db_id, key):
+    """Hardware mode whose minimums are below the configurable 100 ms."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '1',
+            'DETECTION_TIME_MAX': '1500',
+            'RESTORATION_TIME_MIN': '10',
+            'RESTORATION_TIME_MAX': '1000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
 def _hw_get_all_zero_ranges(self, db_id, key):
     """Hardware mode where SAI reported 0-0 ranges."""
     if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
@@ -1428,11 +1442,49 @@ class TestMultiAsicPfcwdShow(object):
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
     @patch('pfcwd.main.os')
-    def test_pfcwd_start_hw_mode_default_restoration_out_of_range(self, mock_os):
+    def test_pfcwd_start_hw_mode_default_restoration_capped(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        result = CliRunner().invoke(pfcwd.cli.commands["start"], ["--action", "drop", "Ethernet0", "600"], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "default to the hardware maximum: 1000 ms" in result.output
+        written = [c.get_entry('PFC_WD', 'Ethernet0').get('restoration_time') for c in db.cfgdb_clients.values()]
+        assert '1000' in written
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_zero_ranges)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_default_restoration_zero_ranges(self, mock_os):
         mock_os.geteuid.return_value = 0
         result = self._start(["--action", "drop", "Ethernet0", "600"])
+        assert result.exit_code == 0
+        assert "default to 2 times detection time: 1200 ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_low_minimum)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_range_is_configurable_range(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "400", "Ethernet0", "1600"])
         assert result.exit_code == 1
-        assert "restoration_time 1200ms is outside hardware supported range [100-1000]ms" in result.output
+        assert "detection_time 1600ms is outside hardware supported range [100-1500]ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_low_minimum)
+    def test_pfcwd_show_config_hw_mode_json_configurable_range(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["config"], ["--json"], obj=Db())
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["hw_detection_time_ms"] == {"min": 100, "max": 1500}
+        assert data["hw_restoration_time_ms"] == {"min": 100, "max": 1000}
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_zero_ranges)
+    def test_pfcwd_show_config_hw_mode_json_zero_ranges(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["config"], ["--json"], obj=Db())
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["hw_detection_time_ms"] == {"min": None, "max": None}
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
     @patch('pfcwd.main.os')

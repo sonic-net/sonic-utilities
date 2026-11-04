@@ -65,6 +65,23 @@ STATE_DB_PFC_WD_STATE_TABLE = 'PFC_WD_STATE_TABLE'
 STATE_DB_PFC_WD_HW_STATE_TABLE = 'PFC_WD_HW_STATE'
 PORT_QOS_MAP =  "PORT_QOS_MAP"
 
+# (CONFIG_DB field, hardware limit name, range sonic-pfcwd.yang allows) of each hardware timer
+HW_TIMERS = (
+    ('detection_time', 'detection', (100, 5000)),
+    ('restoration_time', 'restoration', (100, 60000)),
+)
+
+
+def configurable_limits(limits):
+    """Return {field: (min, max)} each hardware timer can be set to; timers without a usable range are left out."""
+    ranges = {}
+    for field, name, (yang_low, yang_high) in HW_TIMERS:
+        low, high = limits[name + '_min'], limits[name + '_max']
+        if low and high:
+            ranges[field] = (max(low, yang_low), min(high, yang_high))
+    return ranges
+
+
 # Main entrypoint
 @click.group()
 def cli():
@@ -234,11 +251,10 @@ class PfcwdCli(object):
             else:
                 self.json_globals[key] = glob_entry.get(field)
         if hw_mode and 'hw_detection_time_ms' not in self.json_globals:
-            for name in ('detection', 'restoration'):
-                self.json_globals['hw_{}_time_ms'.format(name)] = {
-                    'min': hw_limits[name + '_min'],
-                    'max': hw_limits[name + '_max'],
-                }
+            ranges = configurable_limits(hw_limits)
+            for field, _, _ in HW_TIMERS:
+                low, high = ranges.get(field, (None, None))
+                self.json_globals['hw_{}_ms'.format(field)] = {'min': low, 'max': high}
 
         ports_found = False
         for port in ports:
@@ -388,6 +404,9 @@ class PfcwdCli(object):
         if os.geteuid() != 0:
             sys.exit("Root privileges are required for this operation")
 
+        hw_limits = self.get_hw_recovery_limits()
+        hw_ranges = configurable_limits(hw_limits) if hw_limits is not None else {}
+
         pfcwd_info = {
             'detection_time': detection_time,
         }
@@ -396,27 +415,30 @@ class PfcwdCli(object):
         if restoration_time is not None:
             pfcwd_info['restoration_time'] = restoration_time
         else:
-            pfcwd_info['restoration_time'] = 2 * detection_time
-            click.echo(
-                "restoration time not defined; default to 2 times "
-                "detection time: {} ms".format(2 * detection_time)
-            )
+            restoration_time = 2 * detection_time
+            restoration_max = hw_ranges.get('restoration_time', (None, None))[1]
+            # Keep the default within the hardware range
+            if restoration_max is not None and restoration_time > restoration_max:
+                restoration_time = restoration_max
+                click.echo(
+                    "restoration time not defined; default to the hardware "
+                    "maximum: {} ms".format(restoration_time)
+                )
+            else:
+                click.echo(
+                    "restoration time not defined; default to 2 times "
+                    "detection time: {} ms".format(restoration_time)
+                )
+            pfcwd_info['restoration_time'] = restoration_time
         if pfc_stat_history:
             pfcwd_info["pfc_stat_history"] = "enable"
 
-        hw_limits = self.get_hw_recovery_limits()
         if hw_limits is not None:
-            for name, value in (('detection', detection_time),
-                                ('restoration', pfcwd_info['restoration_time'])):
-                low = hw_limits[name + '_min']
-                high = hw_limits[name + '_max']
-                # Skip a range that was not reported or has a zero bound
-                if not low or not high:
-                    continue
-                if not low <= value <= high:
+            for field, (low, high) in hw_ranges.items():
+                if not low <= pfcwd_info[field] <= high:
                     click.echo(
-                        "Error: {}_time {}ms is outside hardware supported "
-                        "range [{}-{}]ms".format(name, value, low, high),
+                        "Error: {} {}ms is outside hardware supported "
+                        "range [{}-{}]ms".format(field, pfcwd_info[field], low, high),
                         err=True
                     )
                     sys.exit(1)
