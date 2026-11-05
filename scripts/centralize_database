@@ -76,11 +76,11 @@ def centralize_to_target_db(target_dbname, namespace):
         dbid = SonicDBConfig.getDbId(dbname, key)
 
         source = redis.Redis(connection_pool=connection_pool(unix_socket_path=dbsocket, db=dbid))
-        target = redis.Redis(connection_pool=connection_pool(unix_socket_path=target_dbsocket, db=dbid))
+        target = redis.Redis(connection_pool=connection_pool(unix_socket_path=target_dbsocket, db=dbid, authenticate=True))
         copy_database(source, target)
 
     #SAVE rdb file
-    target = redis.Redis(connection_pool=connection_pool(unix_socket_path=target_dbsocket))
+    target = redis.Redis(connection_pool=connection_pool(unix_socket_path=target_dbsocket, authenticate=True))
     target.save()
 
 def main():

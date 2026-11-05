@@ -104,8 +104,8 @@ def test_centralize_to_target_db_copies_remote_socket_and_saves():
     initialize_global.assert_called_once_with()
     assert pools.call_args_list == [
         mock.call(unix_socket_path='/var/run/redis-state/redis.sock', db=6),
-        mock.call(unix_socket_path='/var/run/redis/redis.sock', db=6),
-        mock.call(unix_socket_path='/var/run/redis/redis.sock'),
+        mock.call(unix_socket_path='/var/run/redis/redis.sock', db=6, authenticate=True),
+        mock.call(unix_socket_path='/var/run/redis/redis.sock', authenticate=True),
     ]
     assert redis_client.call_args_list == [
         mock.call(connection_pool=mock.sentinel.source_pool),
