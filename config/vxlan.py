@@ -5,9 +5,19 @@ from utilities_common.constants import DEFAULT_NAMESPACE
 
 from jsonpatch import JsonPatchConflict
 from .validated_config_db_connector import ValidatedConfigDBConnector
-from swsscommon.swsscommon import isInterfaceNameValid, IFACE_NAME_MAX_LEN
+from swsscommon.swsscommon import isInterfaceNameValid, IFACE_NAME_MAX_LEN, ConfigDBConnector, SonicV2Connector, ProducerStateTable
 
 ADHOC_VALIDATION = True
+
+
+def _write_switch_table_to_appl_db(field, value):
+    """Write a field to APP_DB SWITCH_TABLE via ProducerStateTable so orchagent is notified."""
+    app_db = SonicV2Connector()
+    app_db.connect(app_db.APPL_DB)
+    tbl = ProducerStateTable(app_db.get_redis_client(app_db.APPL_DB), 'SWITCH_TABLE')
+    tbl.set('switch', [(field, value)])
+
+
 #
 # 'vxlan' group ('config vxlan ...')
 #
@@ -94,6 +104,81 @@ def del_vxlan(db, vxlan_name):
         config_db.set_entry('VXLAN_TUNNEL', vxlan_name, None)
     except JsonPatchConflict as e:
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+@vxlan.command('destination-port')
+@click.argument('port', metavar='<port>', required=True, type=int)
+@clicommon.pass_db
+def set_destination_port(db, port):
+    """Set VXLAN destination UDP port"""
+    ctx = click.get_current_context()
+
+    # Validate port range (1-65535)
+    if port < 1 or port > 65535:
+        ctx.fail("Invalid port number {}. Valid range is 1-65535".format(port))
+
+    # Persist vxlan_port in CONFIG_DB under DEVICE_METADATA|localhost
+    try:
+        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'vxlan_port': str(port)})
+    except Exception as e:
+        ctx.fail("Failed to update CONFIG_DB. Error: {}".format(e))
+
+    # Write vxlan_port to APP_DB SWITCH_TABLE via ProducerStateTable for orchagent notification
+    try:
+        _write_switch_table_to_appl_db('vxlan_port', str(port))
+    except Exception as e:
+        ctx.fail("Failed to update APP_DB. Error: {}".format(e))
+
+    click.echo("VXLAN destination port set to {}".format(port))
+
+@vxlan.command('source-port')
+@click.argument('port', metavar='<port>', required=True, type=int)
+@clicommon.pass_db
+def set_source_port(db, port):
+    """Set VXLAN source UDP port"""
+    ctx = click.get_current_context()
+
+    # Validate port range (1-65535)
+    if port < 1 or port > 65535:
+        ctx.fail("Invalid port number {}. Valid range is 1-65535".format(port))
+
+    # Persist vxlan_sport in CONFIG_DB under DEVICE_METADATA|localhost
+    try:
+        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'vxlan_sport': str(port)})
+    except Exception as e:
+        ctx.fail("Failed to update CONFIG_DB. Error: {}".format(e))
+
+    # Write vxlan_sport to APP_DB SWITCH_TABLE via ProducerStateTable for orchagent notification
+    try:
+        _write_switch_table_to_appl_db('vxlan_sport', str(port))
+    except Exception as e:
+        ctx.fail("Failed to update APP_DB. Error: {}".format(e))
+
+    click.echo("VXLAN source port set to {}".format(port))
+
+@vxlan.command('source-port-mask')
+@click.argument('mask', metavar='<mask>', required=True, type=int)
+@clicommon.pass_db
+def set_source_port_mask(db, mask):
+    """Set VXLAN source UDP port mask"""
+    ctx = click.get_current_context()
+
+    # Validate mask range (0-255)
+    if mask < 0 or mask > 255:
+        ctx.fail("Invalid mask {}. Valid range is 0-255".format(mask))
+
+    # Persist vxlan_mask in CONFIG_DB under DEVICE_METADATA|localhost
+    try:
+        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'vxlan_mask': str(mask)})
+    except Exception as e:
+        ctx.fail("Failed to update CONFIG_DB. Error: {}".format(e))
+
+    # Write vxlan_mask to APP_DB SWITCH_TABLE via ProducerStateTable for orchagent notification
+    try:
+        _write_switch_table_to_appl_db('vxlan_mask', str(mask))
+    except Exception as e:
+        ctx.fail("Failed to update APP_DB. Error: {}".format(e))
+
+    click.echo("VXLAN source port mask set to {}".format(mask))
 
 @vxlan.group('evpn_nvo')
 def vxlan_evpn_nvo():
