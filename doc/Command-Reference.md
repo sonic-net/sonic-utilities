@@ -2771,7 +2771,7 @@ This command displays the summary of all configured IPv4 BGP neighbors and their
 
 This command displays IPv4 BGP neighbor details when no optional argument is specified.
 
-When the optional argument IPv4_address is specified, it displays the detailed neighbor information about that specific IPv4 neighbor.
+When an optional IPv4 address or configured interface name is specified, it displays detailed information about that neighbor. Interface names identify unnumbered neighbors and must preserve the case of the configured key, for example `Ethernet16`.
 
 Command has got additional optional arguments to display only the advertised routes, or the received routes, or all routes.
 
@@ -2781,8 +2781,16 @@ Use `show ipv6 bgp neighbors <ipv6-address>` to display details for an IPv6 neig
 - Usage:
 
   ```
-  show ip bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
+  show ip bgp neighbors [(<ipv4-address> | <interface-name>) [advertised-routes | received-routes | routes]]
   ```
+
+Interface-based examples:
+
+```
+show ip bgp neighbors Ethernet16
+show ip bgp neighbors Ethernet16 advertised-routes
+show ip bgp vrf Vrf-red neighbors Ethernet16 routes
+```
 
 - Example:
   ```
@@ -2840,7 +2848,7 @@ Use `show ipv6 bgp neighbors <ipv6-address>` to display details for an IPv6 neig
    Read thread: on  Write thread: on
   ```
 
-Optionally, you can specify an IP address in order to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
+Optionally, you can specify an IPv4 address or configured interface name to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
 
 - Example:
   ```
@@ -2915,13 +2923,13 @@ This command displays the summary of all IPv6 bgp neighbors that are configured 
   ```
 **show ipv6 bgp neighbors**
 
-This command displays all the details of one particular IPv6 Border Gateway Protocol (BGP) neighbor. Option is also available to display only the advertised routes, or the received routes, or all routes.
+This command displays IPv6 BGP neighbor information. A neighbor can be selected by IPv6 address or by the case-sensitive configured interface name of an unnumbered neighbor. Options are available to display advertised routes, received routes, or routes. The interface must be a configured BGP neighbor; arbitrary interface names are not accepted.
 
 
 - Usage:
 
   ```
-  show ipv6 bgp neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
+  show ipv6 bgp neighbors [(<ipv6-address> | <interface-name>) [advertised-routes | received-routes | routes]]
   ```
 
 - Example:
@@ -2932,6 +2940,15 @@ This command displays all the details of one particular IPv6 Border Gateway Prot
 
   admin@sonic:~$ show ipv6 bgp neighbors fc00::72 routes
   ```
+
+Interface-based examples:
+
+```
+show ipv6 bgp neighbors Ethernet16
+show ipv6 bgp neighbors Ethernet16 advertised-routes
+show ipv6 bgp vrf Vrf-red neighbors Ethernet16 routes
+```
+
 **show ipv6 bgp network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
 
 This command displays all the details of IPv6 Border Gateway Protocol (BGP) prefixes.
