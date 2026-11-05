@@ -837,13 +837,14 @@ def _change_bgp_session_status_by_addr(config_db, ipaddress, status, verbose):
     config_db.mod_entry('bgp_neighbor', ipaddress, {'admin_status': status})
 
 def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
-    """Start up or shut down BGP session by IP address or hostname
+    """Start up or shut down BGP session by IP address, interface name or hostname
     """
     ip_addrs = []
 
-    # If we were passed an IP address, convert it to lowercase because IPv6 addresses were
-    # stored in ConfigDB with all lowercase alphabet characters during minigraph parsing
-    if _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
+    # Preserve case-sensitive interface keys before trying legacy IPv6 normalization.
+    if _is_neighbor_ipaddress(config_db, ipaddr_or_hostname):
+        ip_addrs.append(ipaddr_or_hostname)
+    elif _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
         ip_addrs.append(ipaddr_or_hostname.lower())
     else:
         # If <ipaddr_or_hostname> is not the IP address of a neighbor, check to see if it's a hostname
@@ -5227,10 +5228,10 @@ def all(verbose):
 
 # 'neighbor' subcommand
 @shutdown.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
+@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_interface_or_hostname>', required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 def neighbor(ipaddr_or_hostname, verbose):
-    """Shut down BGP session by neighbor IP address or hostname.
+    """Shut down BGP session by neighbor IP address, interface name or hostname.
        User can specify either internal or external BGP neighbor to shutdown
     """
     log.log_info("'bgp shutdown neighbor {}' executing...".format(ipaddr_or_hostname))
@@ -5282,13 +5283,13 @@ def all(verbose):
 
 # 'neighbor' subcommand
 @startup.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
+@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_interface_or_hostname>', required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 def neighbor(ipaddr_or_hostname, verbose):
-    log.log_info("'bgp startup neighbor {}' executing...".format(ipaddr_or_hostname))
-    """Start up BGP session by neighbor IP address or hostname.
+    """Start up BGP session by neighbor IP address, interface name or hostname.
        User can specify either internal or external BGP neighbor to startup
     """
+    log.log_info("'bgp startup neighbor {}' executing...".format(ipaddr_or_hostname))
     namespaces = [DEFAULT_NAMESPACE]
     found_neighbor = False
 
