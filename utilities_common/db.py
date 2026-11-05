@@ -5,14 +5,15 @@ from utilities_common.multi_asic import multi_asic_ns_choices
 
 
 class Db(object):
-    def __init__(self):
+    def __init__(self, authenticate=False):
         self.cfgdb_clients = {}
         self.db_clients = {}
-        self.cfgdb = ConfigDBConnector()
+        options = {"use_unix_socket_path": True, "authenticate": True} if authenticate else {}
+        self.cfgdb = ConfigDBConnector(**options)
         self.cfgdb.connect()
-        self.cfgdb_pipe = ConfigDBPipeConnector()
+        self.cfgdb_pipe = ConfigDBPipeConnector(**options)
         self.cfgdb_pipe.connect()
-        self.db = SonicV2Connector(host="127.0.0.1")
+        self.db = SonicV2Connector(host="127.0.0.1", **options)
 
         # Skip connecting to chassis databases in line cards
         self.db_list = list(self.db.get_db_list())
@@ -35,9 +36,9 @@ class Db(object):
             self.ns_list = multi_asic_ns_choices()
             for ns in self.ns_list:
                 self.cfgdb_clients[ns] = (
-                    multi_asic.connect_config_db_for_ns(ns)
+                    multi_asic.connect_config_db_for_ns(ns, authenticate=authenticate)
                 )
-                self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns)
+                self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns, authenticate=authenticate)
 
     def get_data(self, table, key):
         data = self.cfgdb.get_table(table)

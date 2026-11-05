@@ -42,11 +42,11 @@ def isolate(portid, namespace):
         ctx.fail('Must specify asic')
 
     # Connect to config database
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     config_db.connect()
 
     # Connect to state database
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     state_db.connect(state_db.STATE_DB, False)
 
     # check if the port is actually in use
@@ -77,11 +77,11 @@ def unisolate(portid, namespace, force):
     ctx = click.get_current_context()
 
     # Connect to config database
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     config_db.connect()
 
     # Connect to state database
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     state_db.connect(state_db.STATE_DB, False)
 
     n_asics = multi_asic.get_num_asics()
@@ -178,11 +178,11 @@ def error_threshold(crccells, rxcells, namespace):
         ctx.fail("rxCells must be in range 10000...100000000")
 
     # Connect to config database
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     config_db.connect()
 
     # Connect to state database
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     state_db.connect(state_db.STATE_DB, False)
 
     # Make sure configuration data exists
@@ -197,7 +197,7 @@ def error_threshold(crccells, rxcells, namespace):
 def setFabricPortMonitorState(state, namespace, ctx):
     """ set the fabric port monitor state"""
     # Connect to config database
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     config_db.connect()
 
     # Make sure configuration data exists
@@ -262,11 +262,11 @@ def isolation(pollcount, namespace):
         ctx.fail("pollCount must be in range 1...10")
 
     # Connect to config database
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     config_db.connect()
 
     # Connect to state database
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     state_db.connect(state_db.STATE_DB, False)
 
     # Make sure configuration data exists
@@ -298,11 +298,11 @@ def recovery(pollcount, namespace):
         ctx.fail("pollCount must be in range 1...10")
 
     # Connect to config database
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     config_db.connect()
 
     # Connect to state database
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     state_db.connect(state_db.STATE_DB, False)
 
     # Make sure configuration data exists
@@ -346,7 +346,7 @@ def threshold(capacitythreshold):
     namespaces = multi_asic.get_namespace_list()
     for idx, namespace in enumerate(namespaces, start=1):
         # Connect to config database
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         config_db.connect()
 
         # Make sure configuration data exists

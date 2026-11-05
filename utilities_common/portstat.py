@@ -6,9 +6,10 @@ from natsort import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
-from swsscommon.swsscommon import SonicV2Connector, CounterTable, PortCounter
+from swsscommon.swsscommon import SonicV2Connector, CounterTable, PortCounter, SonicDBConfig
 
 from utilities_common import constants
+from utilities_common.chassis import chassis_db_socket_available
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.netstat import ns_diff, table_as_json, format_brate, format_prate, \
                                      format_util, format_number_with_comma, format_util_directly, \
@@ -190,7 +191,7 @@ class Portstat(object):
         self.display_option = display_option
         self.multi_asic = multi_asic_util.MultiAsic(display_option, namespace)
         if device_info.is_supervisor():
-            self.db = SonicV2Connector(use_unix_socket_path=False)
+            self.db = SonicV2Connector(use_unix_socket_path=chassis_db_socket_available("CHASSIS_STATE_DB"))
             self.db.connect(self.db.CHASSIS_STATE_DB, False)
         self.db_clients = {}
         self.sorted = natsorted
@@ -218,7 +219,7 @@ class Portstat(object):
         self.db.delete_all_by_pattern(self.db.CHASSIS_STATE_DB, LINECARD_PORT_STAT_MARK_TABLE + "*")
 
         # Check how many linecards are connected
-        tempdb = SonicV2Connector(use_unix_socket_path=False)
+        tempdb = SonicV2Connector(use_unix_socket_path=SonicDBConfig.getDbPort('STATE_DB') == 0)
         tempdb.connect(tempdb.STATE_DB, False)
         linecard_midplane_keys = tempdb.keys(tempdb.STATE_DB, CHASSIS_MIDPLANE_INFO_TABLE + "*")
         lc_count = 0

@@ -673,6 +673,11 @@ show_muxcable_resetcause_expected_port_output_json="""\
 """
 
 class TestMuxcable(object):
+    @pytest.fixture(autouse=True)
+    def administrator(self, monkeypatch):
+        # These mocked command/output tests invoke administrator callbacks directly.
+        monkeypatch.setattr(os, 'geteuid', lambda: 0)
+
     @classmethod
     def setup_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"

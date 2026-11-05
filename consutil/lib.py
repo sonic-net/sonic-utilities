@@ -7,8 +7,11 @@
 import json
 import os
 import re
+import shlex
+import signal
 import socket
 import struct
+import subprocess
 import sys
 import time
 
@@ -78,14 +81,6 @@ if [ -r /dev/tty ]; then
     SAVED_STTY=$(stty -g < /dev/tty 2>/dev/null || true)
 fi
 
-console_state_set() {
-    local ln="$1" st="$2" pid="${3:-}" start="${4:-}"
-    local key="CONSOLE_PORT|${ln}"
-    sonic-db-cli -s STATE_DB hset "$key" state "$st" > /dev/null 2>&1 || true
-    sonic-db-cli -s STATE_DB hset "$key" pid "$pid" > /dev/null 2>&1 || true
-    sonic-db-cli -s STATE_DB hset "$key" start_time "$start" > /dev/null 2>&1 || true
-}
-
 restore_tty() {
     if [ -w /dev/tty ]; then
         if [ -n "$SAVED_STTY" ]; then
@@ -108,7 +103,6 @@ cleanup() {
     if [ -n "$picocom_pid" ]; then
         wait "$picocom_pid" 2>/dev/null || true
     fi
-    console_state_set "$LINE_NUM" idle "" ""
     restore_tty
 }
 
@@ -116,9 +110,9 @@ trap cleanup EXIT
 trap forward_signal HUP INT TERM
 
 printf 'Successful connection to line [%s]\nPress ^%s ^X to disconnect\n' "$LINE_NUM" "$ESCAPE_DISPLAY"
-bash -c "$PICOCOM_CMD" < /dev/tty > /dev/tty 2>&1 &
+python3 -c 'import sys; from consutil.lib import run_console_session; sys.exit(run_console_session(sys.argv[1], sys.argv[2]))' \
+    "$LINE_NUM" "$PICOCOM_CMD" < /dev/tty > /dev/tty 2>&1 &
 picocom_pid=$!
-console_state_set "$LINE_NUM" busy "$picocom_pid" "$(ps -p "$picocom_pid" -o lstart= | sed 's/^ *//')"
 wait "$picocom_pid"
 rc=$?
 restore_tty
@@ -428,7 +422,7 @@ class SysInfoProvider(object):
     @staticmethod
     def list_active_console_processes():
         """Lists all active console session processes"""
-        cmd0 = ['ps', '-eo', 'pid,lstart,cmd']
+        cmd0 = ['ps', '-C', 'picocom', '-C', 'minicom', '-o', 'pid,lstart,cmd']
         cmd1 = ['grep', '-E', "(mini|pico)com"]
         output = SysInfoProvider.run_command(cmd0, cmd1)
         return SysInfoProvider._parse_processes_info(output)
@@ -485,9 +479,10 @@ class DbUtils(object):
 
     def update_state(self, line_num, state, pid="", date=""):
         key = "{}|{}".format(CONSOLE_PORT_TABLE, line_num)
-        self._state_db.set(self._state_db.STATE_DB, key, STATE_KEY, state)
-        self._state_db.set(self._state_db.STATE_DB, key, PID_KEY, pid)
-        self._state_db.set(self._state_db.STATE_DB, key, START_TIME_KEY, date)
+        if os.geteuid() == 0:
+            self._state_db.set(self._state_db.STATE_DB, key, STATE_KEY, state)
+            self._state_db.set(self._state_db.STATE_DB, key, PID_KEY, pid)
+            self._state_db.set(self._state_db.STATE_DB, key, START_TIME_KEY, date)
 
         # Read existing oper_state and last_state_change from STATE_DB
         existing_data = self._state_db.get_all(self._state_db.STATE_DB, key)
@@ -501,6 +496,60 @@ class DbUtils(object):
             OPER_STATE_KEY: oper_state,
             LAST_STATE_CHANGE_KEY: last_state_change
         }
+
+
+def refresh_console_state(db, line):
+    """Refresh only a configured numeric line from the actual console processes."""
+    require_root()
+    if not re.fullmatch(r'[0-9]+', line) or line not in db.cfgdb.get_keys(CONSOLE_PORT_TABLE):
+        raise click.BadParameter('Console line is not configured')
+    active = SysInfoProvider.list_active_console_processes().get(line)
+    return DbUtils(db).update_state(line, BUSY_FLAG if active else IDLE_FLAG,
+                                   *(active if active else ('', '')))
+
+
+def _refresh_session_state(line):
+    command = ['/usr/local/bin/consutil', 'refresh-state', line]
+    if os.geteuid() != 0:
+        command = ['/usr/bin/sudo', '-n'] + command
+    subprocess.run(command, check=True, close_fds=True)
+
+
+def run_console_session(line, command):
+    """Keep the session unprivileged; refresh ownership after exec and child reap."""
+    child = None
+    pending = []
+
+    def forward(signum, frame):
+        if child is None:
+            pending.append(signum)
+        else:
+            try:
+                child.send_signal(signum)
+            except ProcessLookupError:
+                pass
+
+    previous = {number: signal.signal(number, forward)
+                for number in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)}
+    try:
+        # Popen's exec-error pipe closes at exec; '&' alone has no such barrier.
+        child = subprocess.Popen(shlex.split(command), close_fds=True)
+        for number in pending:
+            forward(number, None)
+        _refresh_session_state(line)
+        status = child.wait()
+        return 128 - status if status < 0 else status
+    finally:
+        if child is not None and child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+        _refresh_session_state(line)
 
 
 def initialize_console_runtime(db):
@@ -518,7 +567,7 @@ def console_connect(target, use_device=False, db=None):
     """Connect to a console port. Can be called directly without Click context."""
     if db is None:
         from utilities_common.db import Db
-        db = Db()
+        db = Db(authenticate=True) if os.geteuid() == 0 else Db()
         initialize_console_runtime(db)
 
     port_provider = ConsolePortProvider(db, configured_only=False)

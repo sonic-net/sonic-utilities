@@ -40,7 +40,7 @@ def connect_to_db(namespace):
     else:
         if not SonicDBConfig.isGlobalInit():
             SonicDBConfig.initializeGlobalConfig()
-    configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
+    configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace), authenticate=True)
     configdb.connect()
     return configdb
 
@@ -571,7 +571,7 @@ def eni_disable(ctx):
 @click.pass_context
 def ha_set(ctx):
     """ HA set counter commands """
-    ctx.obj = ConfigDBConnector()
+    ctx.obj = ConfigDBConnector(use_unix_socket_path=True, authenticate=True)
     ctx.obj.connect()
 
 
