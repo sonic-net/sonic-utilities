@@ -1,0 +1,7 @@
+module(name = "sonic-utilities", version = "1.2", bazel_compatibility = [">=8.5.1", "<=8.5.1"])
+bazel_dep(name = "rules_python", version = "1.9.0")
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(python_version = "3.13", is_default = True)
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(hub_name = "utilities_test_pip", python_version = "3.13", requirements_lock = "//bazel:requirements_test_lock.txt")
+use_repo(pip, "utilities_test_pip")

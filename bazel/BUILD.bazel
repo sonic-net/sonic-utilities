@@ -1,0 +1,3 @@
+exports_files(["requirements_test_lock.txt", "packaging.json"])
+
+exports_files(["wheel_contract_test.py", "wheel_installed_test.py"])

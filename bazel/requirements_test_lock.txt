@@ -1,0 +1,6 @@
+# Bounded installed-runtime tests, not the full image dependency closure.
+installer==0.7.0 \
+    --hash=sha256:05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53
+
+click==8.1.8 \
+    --hash=sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2

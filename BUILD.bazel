@@ -1,0 +1,70 @@
+load("@rules_python//python:packaging.bzl", "py_wheel")
+load("@rules_python//python:py_test.bzl", "py_test")
+load("@utilities_test_pip//:requirements.bzl", "requirement")
+load("//bazel:packaging.bzl", "PACKAGES", "PACKAGE_DATA", "SCRIPTS", "ENTRY_POINTS", "REQUIRES", "EXTRA_REQUIRES", "CLASSIFIERS")
+package(default_visibility = ["//visibility:public"])
+filegroup(
+    name = "wheel_payload",
+    srcs = glob([p.replace(".", "/") + "/*.py" for p in PACKAGES] + [p.replace(".", "/") + "/" + pattern for p, patterns in PACKAGE_DATA.items() for pattern in patterns]),
+)
+# No setup.py execution: its host-installed SONiC dependency check is replaced
+# by wheel Requires-Dist metadata, not ignored or replaced with mock packages.
+py_wheel(
+    name = "sonic_utilities_wheel",
+    distribution = "sonic-utilities",
+    version = "1.2",
+    python_tag = "py3",
+    # setup.py ships an existing AMD64 SSD diagnostic ELF. This is not a
+    # source-built native tool and makes an 'any' platform tag dishonest.
+    platform = "linux_x86_64",
+    deps = [":wheel_payload"],
+    data_files = {s: "scripts/" + s.split("/")[-1] for s in SCRIPTS} | {"ssd-dump/vtFA_RTK_5766_v2": "data/bin/vtFA_RTK_5766_v2"},
+    entry_points = ENTRY_POINTS,
+    requires = REQUIRES,
+    extra_requires = EXTRA_REQUIRES,
+    summary = "Command-line utilities for SONiC",
+    author = "SONiC Team",
+    author_email = "linuxnetdev@microsoft.com",
+    homepage = "https://github.com/Azure/sonic-utilities",
+    license = "Apache 2.0",
+    classifiers = CLASSIFIERS,
+    extra_distinfo_files = {"LICENSE": "LICENSE"},
+)
+py_test(
+    name = "wheel_contract_test",
+    size = "small",
+    srcs = ["//bazel:wheel_contract_test.py"],
+    main = "//bazel:wheel_contract_test.py",
+    data = [":sonic_utilities_wheel", ":wheel_payload", "setup.py", "//bazel:packaging.json", "ssd-dump/vtFA_RTK_5766_v2"] + SCRIPTS,
+    args = ["$(location :sonic_utilities_wheel)", "$(location setup.py)", "$(location //bazel:packaging.json)"],
+)
+py_test(
+    name = "wheel_installed_test",
+    size = "small",
+    srcs = ["//bazel:wheel_installed_test.py"],
+    main = "//bazel:wheel_installed_test.py",
+    data = [":sonic_utilities_wheel", "@utilities_test_pip//click:whl"],
+    deps = [requirement("installer")],
+    args = ["$(location :sonic_utilities_wheel)", "$(location @utilities_test_pip//click:whl)"],
+)
+
+# Separate legacy sonic-utilities-data package, not part of setup.py wheel.
+filegroup(
+    name = "utilities_templates",
+    srcs = glob(["sonic-utilities-data/templates/**/*.j2"]),
+)
+
+# Keep the exact legacy wheel above for development/tests. Runtime deployment
+# excludes only the top-level tests namespace, which collides with inherited
+# SONiC wheels. All production files/scripts/data/metadata remain byte-identical.
+filegroup(
+    name = "runtime_wheel_payload",
+    srcs = glob([p.replace(".", "/") + "/*.py" for p in PACKAGES] + [p.replace(".", "/") + "/" + pattern for p, patterns in PACKAGE_DATA.items() for pattern in patterns], exclude = ["tests/**"]),
+)
+py_test(
+    name = "runtime_wheel_contract_test",
+    srcs = ["//bazel/runtime:contract_test.py"],
+    main = "//bazel/runtime:contract_test.py",
+    data = [":sonic_utilities_wheel", "//bazel/runtime:sonic_utilities_wheel"],
+    args = ["$(location :sonic_utilities_wheel)", "$(location //bazel/runtime:sonic_utilities_wheel)"],
+)

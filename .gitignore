@@ -30,3 +30,7 @@ sonic-utilities-data/debian/*
 sonic-utilities-data_*.deb
 sonic-utilities-data_*.buildinfo
 sonic-utilities-data_*.changes
+
+# Local Bazel outputs / generated resolution evidence
+/bazel-*
+/MODULE.bazel.lock

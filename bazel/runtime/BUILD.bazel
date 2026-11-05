@@ -1,0 +1,26 @@
+load("@rules_python//python:packaging.bzl", "py_wheel")
+load("//bazel:packaging.bzl", "SCRIPTS", "ENTRY_POINTS", "REQUIRES", "EXTRA_REQUIRES", "CLASSIFIERS")
+package(default_visibility = ["//visibility:public"])
+py_wheel(
+    name = "sonic_utilities_wheel",
+    distribution = "sonic-utilities",
+    version = "1.2",
+    python_tag = "py3",
+    # setup.py ships an existing AMD64 SSD diagnostic ELF. This is not a
+    # source-built native tool and makes an 'any' platform tag dishonest.
+    platform = "linux_x86_64",
+    deps = ["//:runtime_wheel_payload"],
+    data_files = {"//:" + s: "scripts/" + s.split("/")[-1] for s in SCRIPTS} | {"//:ssd-dump/vtFA_RTK_5766_v2": "data/bin/vtFA_RTK_5766_v2"},
+    entry_points = ENTRY_POINTS,
+    requires = REQUIRES,
+    extra_requires = EXTRA_REQUIRES,
+    summary = "Command-line utilities for SONiC",
+    author = "SONiC Team",
+    author_email = "linuxnetdev@microsoft.com",
+    homepage = "https://github.com/Azure/sonic-utilities",
+    license = "Apache 2.0",
+    classifiers = CLASSIFIERS,
+    extra_distinfo_files = {"//:LICENSE": "LICENSE"},
+)
+
+exports_files(["contract_test.py"])
