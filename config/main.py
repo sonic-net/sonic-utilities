@@ -859,16 +859,9 @@ def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
     """Start up or shut down BGP session by IP address, interface name or hostname
     """
     neighbor_keys = []
-    is_ip = (
-        bgp_util.is_ipv4_address(ipaddr_or_hostname)
-        or bgp_util.is_ipv6_address(ipaddr_or_hostname)
-    )
-
-    if not is_ip and _is_neighbor_interface(config_db, ipaddr_or_hostname):
+    if _is_neighbor_interface(config_db, ipaddr_or_hostname):
         neighbor_keys.append(ipaddr_or_hostname)
-    elif is_ip and _is_neighbor_ipaddress(config_db, ipaddr_or_hostname):
-        neighbor_keys.append(ipaddr_or_hostname)
-    elif is_ip and _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
+    elif _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
         neighbor_keys.append(ipaddr_or_hostname.lower())
     else:
         # If <ipaddr_or_hostname> is not the IP address of a neighbor, check to see if it's a hostname

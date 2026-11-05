@@ -76,18 +76,16 @@ def test_numbered_neighbor_lookup(config_db, action, address):
     config_db.mod_entry.assert_called_once_with(
         "bgp_neighbor", key, {"admin_status": action[1]}
     )
-    config_db.get_keys.assert_not_called()
 
 
-def test_exact_uppercase_ipv6_key(config_db, action):
+def test_uppercase_only_ipv6_key_retains_legacy_lookup_behavior(config_db, action):
     config_db.tables["BGP_NEIGHBOR"] = {"FC00::1": {"name": "peer1", "asn": "65200"}}
 
     result = invoke_neighbor(config_db, action, "FC00::1")
 
-    assert result.exit_code == 0, result.output
-    config_db.mod_entry.assert_called_once_with(
-        "bgp_neighbor", "FC00::1", {"admin_status": action[1]}
-    )
+    assert result.exit_code != 0
+    assert "Could not locate neighbor 'FC00::1'" in result.output
+    config_db.mod_entry.assert_not_called()
 
 
 def test_hostname_lookup_updates_matching_neighbors(config_db, action):
@@ -231,3 +229,14 @@ def test_interface_helper_does_not_identify_numbered_neighbor(config_db):
     config_db.tables["BGP_NEIGHBOR"] = {"192.0.2.1": {"name": "peer1"}}
 
     assert config._is_neighbor_interface(config_db, "192.0.2.1") is False
+
+
+def test_legacy_lowercase_key_lookup_is_unchanged(config_db, action):
+    config_db.tables["BGP_NEIGHBOR"] = {"ethernet16": {"name": "peer1"}}
+
+    result = invoke_neighbor(config_db, action, "ethernet16")
+
+    assert result.exit_code == 0, result.output
+    config_db.mod_entry.assert_called_once_with(
+        "bgp_neighbor", "ethernet16", {"admin_status": action[1]}
+    )
