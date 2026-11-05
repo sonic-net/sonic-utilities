@@ -14188,18 +14188,36 @@ This command displays configured syslog servers.
 - Example:
   ```
   admin@sonic:~$ show syslog
-  SERVER IP    SOURCE IP    PORT    VRF      PROTOCOL    TLS PROFILE ID    PERMITTED PEERS             TLS APPLIED    FAILURE REASON
-  -----------  -----------  ------  -------  ----------  ----------------  --------------------------  -------------  ----------------
-  2.2.2.2      1.1.1.1      514     default  udp         N/A               N/A                         N/A            N/A
-  10.0.0.5     N/A          6514    N/A      tls         siem-east         syslog-east.example.com     true           NONE
-  10.0.0.8     N/A          6514    N/A      tls         no-certs          syslog-nocerts.example.com  false          NO_CERTIFICATE
+  SERVER IP    SOURCE IP    PORT    VRF      PROTOCOL    TLS PROFILE ID    PERMITTED PEERS
+  -----------  -----------  ------  -------  ----------  ----------------  --------------------------
+  2.2.2.2      1.1.1.1      514     default  udp         N/A               N/A
+  10.0.0.5     N/A          6514    N/A      tls         siem-east         syslog-east.example.com
+  10.0.0.8     N/A          6514    N/A      tls         no-certs          syslog-nocerts.example.com
   ```
 
-  For `tls` servers, `TLS APPLIED` and `FAILURE REASON` come from STATE_DB `SYSLOG_SERVER|<server>`
+**show syslog tls-state**
+
+This command displays TLS transport security apply state for syslog servers configured with
+`protocol` `tls` (or legacy `transport_security`).
+
+- Usage:
+  ```
+  show syslog tls-state
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show syslog tls-state
+  SERVER IP    TLS APPLIED    FAILURE REASON
+  -----------  -------------  ----------------
+  10.0.0.5     true           NONE
+  10.0.0.8     false          NO_CERTIFICATE
+  ```
+
+  `TLS APPLIED` and `FAILURE REASON` come from STATE_DB `SYSLOG_SERVER|<server>`
   (`applied_transport_security`, `failure_reason`). `FAILURE REASON` is one of `NONE`, `NO_PROFILE`,
   `NO_PERMITTED_PEERS`, `NO_CERTIFICATE` (PEMs missing under `/etc/sonic/ssl-certs/<tls_profile_id>/`)
-  or `RSYSLOG_APPLY_FAILED`. Both columns show `N/A` for non-TLS servers, or when no state has been
-  published yet.
+  or `RSYSLOG_APPLY_FAILED`. Both columns show `N/A` when no state has been published yet.
 
 **show syslog rate-limit-host**
 

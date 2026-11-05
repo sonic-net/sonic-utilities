@@ -481,13 +481,13 @@ class TestSyslog:
             runner = CliRunner()
 
             result = runner.invoke(
-                show.cli.commands["syslog"], [], obj=db
+                show.cli.commands["syslog"], ["tls-state"], obj=db
             )
 
             logger.debug("\n" + result.output)
             logger.debug(result.exit_code)
             assert result.exit_code == SUCCESS
-            assert result.output == assert_show_output.show_syslog_tls
+            assert result.output == assert_show_output.show_syslog_tls_state
         finally:
             for k, v in prev.items():
                 if v is None:
