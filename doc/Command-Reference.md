@@ -7801,12 +7801,12 @@ This command displays some more fields such as Lanes, Speed, MTU, Type, Asymmetr
   show interfaces status [<interface_name>] [-l <location>]
   ```
 
-On a packet chassis supervisor, the default command displays local supervisor
-interfaces and all line-card interfaces using the normal display filtering. Use
-`-d all` to include internal interfaces. Use `-l SUPERVISOR` or the matching
-`-l SUPERVISOR<n>` name for only the local supervisor, `-l LINE-CARD<n>` for one
-line card, or `-l all` for both the supervisor and all line cards. A numbered
-supervisor location that does not match the local supervisor is rejected.
+On a chassis-packet supervisor, the default frontend view displays line-card
+interfaces using the normal display filtering. Use `-d all` to include the
+supervisor's internal interfaces. Use `-l SUPERVISOR` or the matching
+`-l SUPERVISOR<n>` name to select the local supervisor, `-l LINE-CARD<n>` for
+one line card, or `-l all` for all chassis locations. A numbered supervisor
+location that does not match the local supervisor is rejected.
 Aggregate output labels each section with its chassis location. When internal
 interfaces are filtered from a supervisor view, the command prints a reminder
 to use `-d all`. Other supervisor and non-supervisor platforms retain their
