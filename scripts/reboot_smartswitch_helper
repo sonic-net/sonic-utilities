@@ -6,6 +6,10 @@ declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
 declare -r EXIT_DPU_DOWN=2
 
+# DPUs authorized for this whole-SmartSwitch reboot by disk preflight.
+PREFLIGHTED_DPU_TARGETS=()
+PREFLIGHT_COMPLETED=no
+
 # Function to print debug message
 function log_message() {
     local message=$1
@@ -256,6 +260,9 @@ function preflight_all_dpus()
     local dpu_index
     local dpu_status
 
+    PREFLIGHTED_DPU_TARGETS=()
+    PREFLIGHT_COMPLETED=no
+
     if [[ -z "$NUM_DPU" ]]; then
         log_message "ERROR: Failed to retrieve number of DPUs or no DPUs found"
         return ${EXIT_ERROR}
@@ -273,7 +280,9 @@ function preflight_all_dpus()
             log_message "ERROR: dpu$dpu_index reboot aborted due to insufficient free disk space"
             return ${EXIT_ERROR}
         fi
+        PREFLIGHTED_DPU_TARGETS+=("dpu$dpu_index")
     done
+    PREFLIGHT_COMPLETED=yes
     return ${EXIT_SUCCESS}
 }
 
@@ -390,11 +399,18 @@ function reboot_all_dpus() {
         return
     fi
 
+    if [[ "$PREFLIGHT_COMPLETED" != "yes" ]]; then
+        log_message "ERROR: DPU reboot preflight was not completed"
+        return ${EXIT_ERROR}
+    fi
+
     local failures=0
     local pids=()
+    local dpu_name
 
-    for (( i=0; i<"$NUM_DPU"; i++ )); do
-        reboot_dpu "dpu$i" "$MODULE_REBOOT_SMARTSWITCH" &
+    # Only launch workers for DPUs that passed disk-space preflight.
+    for dpu_name in "${PREFLIGHTED_DPU_TARGETS[@]}"; do
+        reboot_dpu "$dpu_name" "$MODULE_REBOOT_SMARTSWITCH" &
         pids+=("$!")
     done
 

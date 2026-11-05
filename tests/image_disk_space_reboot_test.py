@@ -279,7 +279,7 @@ def test_get_remote_dpu_free_disk_in_bytes_command(monkeypatch):
         (False, 0, "enabled", False, 0,
          ["check:dpu0", "check:dpu1", "disable", "reboot:dpu0", "reboot:dpu1"]),
         (False, 2, "enabled", True, 0,
-         ["check:dpu0", "disable", "reboot:dpu0", "reboot:dpu1"]),
+         ["check:dpu0", "disable", "reboot:dpu0"]),
         (False, 0, "", False, 1, ["check:dpu0", "check:dpu1"]),
     ],
 )
@@ -421,3 +421,33 @@ preflight_all_dpus 1
     if expected_status == 0:
         expected_events.append("check")
     assert result.stdout.splitlines() == expected_events
+
+
+def test_preflight_skipped_dpu_cannot_join_reboot_after_becoming_online(tmp_path):
+    """An offline DPU must not start a worker if it becomes online later."""
+    helper = Path(__file__).resolve().parents[1] / "scripts" / "reboot_smartswitch_helper"
+    result = subprocess.run(
+        ["bash", "-c", r'''
+source "$1"
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+is_smartswitch() { return 0; }
+check_dpu_online() {
+    # DPU1 is offline at preflight but comes online before worker dispatch.
+    if [[ "$phase" == preflight && "$1" == dpu1 ]]; then return 2; fi
+    return 0
+}
+check_dpu_reboot_disk_space() {
+    echo "check:$1"
+    return 0
+}
+reboot_dpu() { echo "reboot:$1"; }
+phase=preflight
+preflight_all_dpus 2 || exit 1
+phase=workers
+reboot_all_dpus 2
+''', "reboot-test", str(helper)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["check:dpu0", "reboot:dpu0"]
