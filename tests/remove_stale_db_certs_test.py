@@ -552,6 +552,28 @@ def test_direct_call_rejects_conflicting_options(env):
     assert not env["marker"].exists()
 
 
+@pytest.mark.parametrize("auth_state", ["missing", "empty", "no-auth-files"])
+@pytest.mark.parametrize("argv", [[], ["--auto"], ["--commit"], ["--plan"]])
+def test_missing_or_empty_auth_directory_skips_analysis(env, monkeypatch, capsys, auth_state, argv):
+    for auth in env["auth_dir"].iterdir():
+        auth.unlink()
+    if auth_state == "missing":
+        env["auth_dir"].rmdir()
+    elif auth_state == "no-auth-files":
+        (env["auth_dir"] / "README").write_text("No authentication updates provisioned.")
+        (env["auth_dir"] / "directory.auth").mkdir()
+
+    analyze = Mock(side_effect=AssertionError("unexpected analysis"))
+    ensure_efivars = Mock(side_effect=AssertionError("unexpected EFI variable check"))
+    monkeypatch.setattr(prune, "analyze", analyze)
+    monkeypatch.setattr(prune, "ensure_efivars", ensure_efivars)
+
+    assert _run(capsys, *argv) == (0, "", "")
+    analyze.assert_not_called()
+    ensure_efivars.assert_not_called()
+    assert not env["marker"].exists()
+
+
 @pytest.mark.parametrize("has_removable_certificate", [False, True])
 def test_multi_certificate_auth_only_drops_certificates_not_reinstalled(
         env, safe_updates, tmp_path, capsys, has_removable_certificate):

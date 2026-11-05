@@ -619,9 +619,9 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
 
     if os.geteuid() != 0:
         raise ScriptError(f"must be run as root (needs to read/write {config.efivars_dir} and {config.host_path})")
+    if not config.auth_dir.is_dir() or not any(auth.is_file() for auth in config.auth_dir.glob("*.auth")):
+        return 0
     ensure_efivars(config)
-    if not config.auth_dir.is_dir():
-        warn(f"auth directory not found: {config.auth_dir} (reinstall will find no .auth files)")
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
