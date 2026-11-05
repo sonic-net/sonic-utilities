@@ -253,6 +253,14 @@ def pfccounters():
     command = ["pfcstat", "-c"]
     run_command(command)
 
+
+@cli.command()
+def pfcwdstats():
+    """Clear PFC Watchdog stats counters"""
+    command = ["pfcwdstat", "-c"]
+    run_command(command)
+
+
 @cli.command()
 def dropcounters():
     """Clear drop counters"""
