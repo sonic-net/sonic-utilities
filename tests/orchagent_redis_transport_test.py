@@ -37,7 +37,7 @@ def test_clear_initializes_namespace_before_connection(namespace, initialized):
         clear_orchagent._send_clear(namespace)
 
     assert native.DBConnector.call_args_list == [
-        mock.call('APPL_DB', clear_orchagent.REDIS_TIMEOUT_MSECS, False, namespace)
+        mock.call('APPL_DB', clear_orchagent.REDIS_TIMEOUT_MSECS, False, namespace, True)
     ] * 2
     assert native.SonicDBConfig.initializeGlobalConfig.call_count == int(bool(namespace) and not initialized)
     native.SonicDBConfig.getDbPort.assert_not_called()
@@ -51,7 +51,7 @@ def test_show_uses_the_selected_local_namespace(namespace):
         assert show_orchagent._query_orchagent('show', namespace) == ('ok', '', [])
 
     native.DBConnector.assert_called_once_with(
-        'APPL_DB', show_orchagent.REDIS_TIMEOUT_MSECS, False, namespace)
+        'APPL_DB', show_orchagent.REDIS_TIMEOUT_MSECS, False, namespace, True)
     native.SonicDBConfig.getDbPort.assert_not_called()
     native.NotificationProducer.return_value.send.assert_called_once_with('show', '', [])
 
@@ -67,5 +67,5 @@ def test_socket_failure_propagates_without_tcp_fallback(module):
             else:
                 module._send_clear('asic0')
 
-    native.DBConnector.assert_called_once_with('APPL_DB', module.REDIS_TIMEOUT_MSECS, False, 'asic0')
+    native.DBConnector.assert_called_once_with('APPL_DB', module.REDIS_TIMEOUT_MSECS, False, 'asic0', True)
     native.SonicDBConfig.getDbPort.assert_not_called()

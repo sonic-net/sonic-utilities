@@ -22,7 +22,7 @@ def _send_clear(namespace):
         swsscommon.SonicDBConfig.initializeGlobalConfig()
     db = swsscommon.DBConnector(
         "APPL_DB", REDIS_TIMEOUT_MSECS,
-        False, namespace)
+        False, namespace, True)
     producer = swsscommon.NotificationProducer(db, TASK_STATS_QUERY_CHANNEL)
     consumer = swsscommon.NotificationConsumer(db, TASK_STATS_REPLY_CHANNEL)
 
