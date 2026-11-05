@@ -31,6 +31,7 @@ import subprocess
 import json
 import logging
 import argparse
+from swsscommon.swsscommon import SonicDBConfig
 import sonic_py_common.multi_asic as multi_asic
 import sonic_py_common.device_info as device_info
 RC_OK = 0
@@ -72,13 +73,12 @@ def extract_table_ids_from_chassis_db(table_output):
 
 def get_lag_ids_asic_namespace(asic_netns):
     """Get LAG IDs from a specific ASIC namespace."""
-    if asic_netns == multi_asic.DEFAULT_NAMESPACE:
-        asic_cmd = ["redis-dump", "-d", "1", "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"]
-    else:
-        asic_cmd = [
-            "sudo", "ip", "netns", "exec", asic_netns,
-            "redis-dump", "-d", "1", "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"
-        ]
+    if asic_netns != multi_asic.DEFAULT_NAMESPACE:
+        SonicDBConfig.load_sonic_global_db_config()
+    socket = SonicDBConfig.getDbSock("ASIC_DB", asic_netns)
+    database = SonicDBConfig.getDbId("ASIC_DB", asic_netns)
+    asic_cmd = ["redis-dump", "-s", socket, "-d", str(database),
+                "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"]
     asic_db_output = run_redis_dump(asic_cmd)
     lag_id_ns = extract_lag_ids_from_asic_db(
         asic_db_output, "SAI_OBJECT_TYPE_LAG", "SAI_LAG_ATTR_SYSTEM_PORT_AGGREGATE_ID"

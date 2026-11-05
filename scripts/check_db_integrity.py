@@ -38,7 +38,7 @@ def main():
 
     for db_name, schema in DB_SCHEMA.items():
         db_dump_file = "/tmp/{}{}.json".format(db_name, NETNS)
-        dump_db_cmd = ["sonic-db-dump", "--netns", NETNS, "-n", 'COUNTERS_DB', "-y"]
+        dump_db_cmd = ["sonic-db-dump", "-t", "unix_socket", "--netns", NETNS, "-n", 'COUNTERS_DB', "-y"]
         with open(db_dump_file, 'w') as f:
             p = subprocess.Popen(dump_db_cmd, text=True, stdout=f, stderr=subprocess.PIPE)
         (_, err) = p.communicate()

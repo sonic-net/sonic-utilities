@@ -305,7 +305,7 @@ def get_appdb_routes(namespace):
     helper to read route table from APPL-DB.
     :return list of sorted routes with prefix ensured
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for routes")
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
     keys = tbl.getKeys()
@@ -328,7 +328,7 @@ def get_asicdb_routes(namespace):
     as well initiate selector for ASIC-DB:ASIC-state updates.
     :return (selector,  subscriber, <list of sorted routes>)
     """
-    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     subs = swsscommon.SubscriberStateTable(db, ASIC_TABLE_NAME)
     print_message(syslog.LOG_DEBUG, "ASIC DB {} connected".format(namespace))
 
@@ -353,7 +353,7 @@ def get_appdb_sids(namespace):
     helper to read SIDs table from APPL-DB.
     :return list of sorted SIDs with prefix ensured
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for sids")
     tbl = swsscommon.Table(db, 'SRV6_MY_SID_TABLE')
     keys = tbl.getKeys()
@@ -368,7 +368,7 @@ def get_asicdb_sids(namespace):
     helper to read SIDs table from APPL-DB.
     :return list of sorted SIDs with prefix ensured
     """
-    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     print_message(syslog.LOG_DEBUG, "ASIC DB connected for sids")
     tbl = swsscommon.Table(db, ASIC_TABLE_NAME)
     keys = tbl.getKeys()
@@ -546,7 +546,7 @@ def get_interfaces(namespace):
     helper to read interface table from APPL-DB.
     :return sorted list of IP addresses with added prefix
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for interfaces")
     tbl = swsscommon.Table(db, 'INTF_TABLE')
     keys = tbl.getKeys()
@@ -587,7 +587,7 @@ def get_local_p2p_ips(namespace):
     helper to read p2p local IPs from interface table in APPL-DB.
     :return sorted list of local p2p IP addresses
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for interfaces")
     tbl = swsscommon.Table(db, 'INTF_TABLE')
     keys = tbl.getKeys()
@@ -638,7 +638,7 @@ def filter_out_local_interfaces(namespace, keys):
     chassis_local_intfs = chassis.get_chassis_local_interfaces()
     local_if_lst.update(set(chassis_local_intfs))
 
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
 
     for k in keys:
@@ -671,7 +671,7 @@ def filter_out_voq_neigh_routes(namespace, keys):
     rt = []
     local_if_re = [r'Ethernet-IB\d+']
 
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
 
     for k in keys:
@@ -710,7 +710,7 @@ def filter_out_vnet_routes(namespace, routes):
     :param routes: list of routes to filter
     :return filtered list of routes.
     """
-    db = swsscommon.DBConnector('APPL_DB', REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector('APPL_DB', REDIS_TIMEOUT_MSECS, False, namespace)
 
     vnet_route_table = swsscommon.Table(db, 'VNET_ROUTE_TABLE')
     vnet_route_tunnel_table = swsscommon.Table(db, 'VNET_ROUTE_TUNNEL_TABLE')
@@ -746,7 +746,7 @@ def filter_out_standalone_tunnel_routes(namespace, routes):
     if not is_dualtor(config_db):
         return routes
 
-    app_db = swsscommon.DBConnector('APPL_DB', REDIS_TIMEOUT_MSECS, True, namespace)
+    app_db = swsscommon.DBConnector('APPL_DB', REDIS_TIMEOUT_MSECS, False, namespace)
     neigh_table = swsscommon.Table(app_db, 'NEIGH_TABLE')
     neigh_keys = neigh_table.getKeys()
     standalone_tunnel_route_ips = []
@@ -848,7 +848,7 @@ def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_app
     All of the above mentioned cases must be considered as a bug, but even in that case we will report an error in the log but
     given that this script ensures the route is installed in the hardware it will automitigate such a bug.
     """
-    db = swsscommon.DBConnector('APPL_STATE_DB', REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector('APPL_STATE_DB', REDIS_TIMEOUT_MSECS, False, namespace)
     response_producer = swsscommon.NotificationProducer(db, f'{APPL_DB_NAME}_{swsscommon.APP_ROUTE_TABLE_NAME}_RESPONSE_CHANNEL')
     for entry in [entry for entry in missed_frr_rt if entry['prefix'] in rt_appl]:
         fvs = swsscommon.FieldValuePairs([('err_str', 'SWSS_RC_SUCCESS'), ('protocol', entry['protocol'])])
@@ -901,7 +901,7 @@ def filter_out_soc_ip_routes(namespace, routes):
 
 def get_vlan_neighbors(namespace):
     """Return a list of VLAN neighbors."""
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, False, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for neighbors")
     tbl = swsscommon.Table(db, 'NEIGH_TABLE')
     neigh_entries = tbl.getKeys()

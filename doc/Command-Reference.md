@@ -3366,6 +3366,7 @@ All commands under this section are not applicable when SONiC used as regular sw
 **show line**
 
 This command displays serial port or a virtual network connection status.
+Session ownership comes from the running terminal processes. Ordinary display commands do not update the saved session state.
 
 - Usage:
   ```
@@ -3542,6 +3543,10 @@ The command is same with `connect line --devicename <devicename>`
   Successful connection to line 1
   Press ^A ^X to disconnect
   ```
+
+Console sessions run under the calling user. At start and exit, the session wrapper
+uses `sudo -n consutil refresh-state <line>` to save the state of that configured
+numeric line. This internal command requires root and reads the process state itself.
 
 ### Console clear commands
 
@@ -9768,6 +9773,13 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#manage
 ## Muxcable
 
 ### Muxcable Show commands
+
+Queries that request fresh cable data use fixed passwordless sudo commands.
+The command syntax and output remain the same.
+
+Vendor debug commands require an administrator:
+`sudo show muxcable debugdumpregisters <port> [option] [--json]`.
+The default vendor register dump can clear hardware status registers.
 
 **show muxcable status**
 

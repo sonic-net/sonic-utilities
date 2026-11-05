@@ -31,9 +31,9 @@ class FdbClear(object):
             if not SonicDBConfig.isGlobalInit():
                 SonicDBConfig.load_sonic_global_db_config()
 
-            self.db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+            self.db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         else:
-            self.db = SonicV2Connector(host="127.0.0.1")
+            self.db = SonicV2Connector(use_unix_socket_path=True, authenticate=True)
 
         self.db.connect(self.db.APPL_DB)
         return

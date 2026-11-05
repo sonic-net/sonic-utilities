@@ -216,6 +216,36 @@ class TestRouteCheck(object):
     def setup_method(self):
         pass
 
+    @pytest.mark.parametrize('namespace', ['', 'asic0'])
+    @pytest.mark.parametrize('function_name,db_name,arguments', [
+        ('get_appdb_routes', 'APPL_DB', ()),
+        ('get_asicdb_routes', 'ASIC_DB', ()),
+        ('get_appdb_sids', 'APPL_DB', ()),
+        ('get_asicdb_sids', 'ASIC_DB', ()),
+        ('get_interfaces', 'APPL_DB', ()),
+        ('get_local_p2p_ips', 'APPL_DB', ()),
+        ('filter_out_local_interfaces', 'APPL_DB', ([],)),
+        ('filter_out_voq_neigh_routes', 'APPL_DB', ([],)),
+        ('filter_out_vnet_routes', 'APPL_DB', ([],)),
+        ('filter_out_standalone_tunnel_routes', 'APPL_DB', ([],)),
+        ('mitigate_installed_not_offloaded_frr_routes', 'APPL_STATE_DB', ([], [])),
+        ('get_vlan_neighbors', 'APPL_DB', ()),
+    ])
+    def test_local_connections_do_not_infer_transport(self, function_name, db_name, arguments, namespace):
+        config_db = MagicMock()
+        config_db.get_table.return_value = {'localhost': {'subtype': 'dualtor'}}
+        with patch('route_check.swsscommon.SonicDBConfig.getDbPort',
+                   side_effect=RuntimeError('transport must be explicit')) as get_port, \
+                patch('route_check.swsscommon.DBConnector',
+                      side_effect=RuntimeError('connector selected')) as connector, \
+                patch('route_check.multi_asic.connect_config_db_for_ns', return_value=config_db), \
+                patch('route_check.chassis.get_chassis_local_interfaces', return_value=[]):
+            with pytest.raises(RuntimeError, match='connector selected'):
+                getattr(route_check, function_name)(namespace, *arguments)
+
+        get_port.assert_not_called()
+        connector.assert_called_once_with(db_name, route_check.REDIS_TIMEOUT_MSECS, False, namespace)
+
     def init(self):
         route_check.UNIT_TESTING = 1
         route_check.FRR_WAIT_TIME = 0
