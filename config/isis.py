@@ -1,7 +1,8 @@
 import click
 import re
 import utilities_common.cli as clicommon
-from sonic_py_common import logger
+from sonic_py_common import logger, multi_asic
+from swsscommon.swsscommon import ConfigDBConnector
 
 # Table names
 CFG_ISIS_GLOBALS = "ISIS_GLOBALS"
@@ -13,37 +14,32 @@ log = logger.Logger("isis_cli")
 log.set_min_log_priority_info()
 
 
-def _alias_to_name(db_conn, interface_alias):
-    """Resolve interface alias to native name if alias mode is active"""
-    port_dict = db_conn.get_table('PORT')
-    if not port_dict:
-        return interface_alias
-    for port_name, info in port_dict.items():
-        if interface_alias == info.get('alias'):
-            return port_name
-    return interface_alias
+def _interface_vrf(db, name):
+    for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE',
+                  'LOOPBACK_INTERFACE', 'VLAN_SUB_INTERFACE'):
+        entry = db.get_entry(table, name)
+        if entry.get('vrf_name'):
+            return entry['vrf_name']
+    return 'default'
 
 
-def _validate_interface(db_conn, interface_name):
-    """Validate that the interface exists in ConfigDB"""
-    port_dict = db_conn.get_table('PORT')
-    port_channel_dict = db_conn.get_table('PORTCHANNEL')
-    vlan_dict = db_conn.get_table('VLAN')
-    loopback_dict = db_conn.get_table('LOOPBACK_INTERFACE')
-    vlan_sub_dict = db_conn.get_table('VLAN_SUB_INTERFACE')
+def _resolve_interface(ctx, db, name):
+    # Import lazily: main registers this module's command groups.
+    from config.main import (interface_alias_to_name, interface_name_is_valid,
+                             interface_is_in_portchannel, interface_is_in_vlan)
+    if clicommon.get_interface_naming_mode() == 'alias':
+        name = interface_alias_to_name(db, name)
+    if not db.get_entry("VLAN_INTERFACE", name) and not interface_name_is_valid(db, name):
+        ctx.fail("Interface '{}' does not exist".format(name))
+    if (interface_is_in_portchannel(db.get_table('PORTCHANNEL_MEMBER'), name) or
+            interface_is_in_vlan(db.get_table('VLAN_MEMBER'), name)):
+        ctx.fail("Interface '{}' is a PortChannel or VLAN member".format(name))
+    return name
 
-    if port_dict and interface_name in port_dict:
-        return True
-    if port_channel_dict and interface_name in port_channel_dict:
-        return True
-    if vlan_dict and interface_name in vlan_dict:
-        return True
-    if loopback_dict and interface_name in loopback_dict:
-        return True
-    if vlan_sub_dict and interface_name in vlan_sub_dict:
-        return True
 
-    return False
+def _require_process(ctx, db, vrf):
+    if db.get_entry(CFG_ISIS_GLOBALS, vrf).get('enabled') != 'true':
+        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first.".format(vrf))
 
 
 #
@@ -54,9 +50,18 @@ def _validate_interface(db_conn, interface_name):
     name="isis",
     cls=clicommon.AliasedGroup
 )
-def ISIS():
+@click.option('-n', '--namespace',
+              required=multi_asic.is_multi_asic(),
+              type=click.Choice(multi_asic.get_namespace_list()))
+@clicommon.pass_db
+@click.pass_context
+def ISIS(ctx, db, namespace):
     """Configure IS-IS routing protocol"""
-    pass
+    if namespace is not None:
+        db.cfgdb = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        db.cfgdb.connect()
+    if db.cfgdb.get_entry('DEVICE_METADATA', 'localhost').get('frr_mgmt_framework_config') != 'true':
+        click.echo('Warning: IS-IS requires frr_mgmt_framework_config=true and a bgp container restart.', err=True)
 
 
 @ISIS.command(name="enable")
@@ -68,18 +73,16 @@ def isis_enable(ctx, db, vrf):
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    cfg = db.cfgdb.get_config()
-    cfg.setdefault(table, {})
-
-    if key in cfg[table]:
-        data = cfg[table][key]
-        if data.get("enabled") == "true":
-            click.echo("IS-IS is already enabled for VRF '{}'".format(vrf))
-            return
+    from config.main import is_vrf_exists
+    if vrf != 'default' and not is_vrf_exists(db.cfgdb, vrf):
+        ctx.fail("VRF '{}' does not exist".format(vrf))
+    if db.cfgdb.get_entry(table, key).get('enabled') == 'true':
+        click.echo("IS-IS is already enabled for VRF '{}'".format(vrf))
+        return
 
     data = {"enabled": "true"}
     try:
-        db.cfgdb.set_entry(table, key, data)
+        db.cfgdb.mod_entry(table, key, data)
         click.echo("Enabled IS-IS routing process for VRF '{}'".format(vrf))
         log.log_notice("Enabled IS-IS routing process for VRF '{}'".format(vrf))
     except Exception as e:
@@ -96,17 +99,19 @@ def isis_disable(ctx, db, vrf):
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    cfg = db.cfgdb.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if not db.cfgdb.get_entry(table, key):
         click.echo("IS-IS routing process for VRF '{}' is not configured".format(vrf))
         return
 
     try:
-        db.cfgdb.set_entry(table, key, None)
+        for name in db.cfgdb.get_table(CFG_ISIS_INTERFACE):
+            if _interface_vrf(db.cfgdb, name) == vrf:
+                ctx.fail("Disable IS-IS on interface '{}' first".format(name))
         # Clean up timers table if exists
         timers_table = CFG_ISIS_GLOBALS_TIMERS
-        if timers_table in cfg and key in cfg[timers_table]:
+        if db.cfgdb.get_entry(timers_table, key):
             db.cfgdb.set_entry(timers_table, key, None)
+        db.cfgdb.set_entry(table, key, None)
 
         click.echo("Disabled IS-IS routing process for VRF '{}'".format(vrf))
         log.log_notice("Disabled IS-IS routing process for VRF '{}'".format(vrf))
@@ -123,25 +128,24 @@ def isis_disable(ctx, db, vrf):
 def isis_net(ctx, db, net_title, vrf):
     """Configure Network Entity Title (NET) for IS-IS"""
     # Strict validation of NET (e.g. 49.0001.1921.6800.0001.00)
-    net_pattern = re.compile(r'^[a-fA-F0-9]{2}(\.[a-fA-F0-9]{4}){1,9}\.[a-fA-F0-9]{2}$')
+    net_pattern = re.compile(r'^[a-fA-F0-9]{2}(\.[a-fA-F0-9]{4}){3,9}\.00$')
     if not net_pattern.match(net_title):
         ctx.fail("Invalid NET format '{}'. Example format: 49.0001.1921.6800.0001.00".format(net_title))
 
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    cfg = db.cfgdb.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if db.cfgdb.get_entry(table, key).get("enabled") != "true":
         ctx.fail(
             "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
             "'config isis enable {}'".format(vrf, vrf)
         )
 
-    data = cfg[table][key]
+    data = {}
     data["net_title"] = net_title
 
     try:
-        db.cfgdb.set_entry(table, key, data)
+        db.cfgdb.mod_entry(table, key, data)
         click.echo("Configured IS-IS NET to '{}' for VRF '{}'".format(net_title, vrf))
         log.log_notice("Configured IS-IS NET to '{}' for VRF '{}'".format(net_title, vrf))
     except Exception as e:
@@ -159,18 +163,17 @@ def isis_level(ctx, db, level, vrf):
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    cfg = db.cfgdb.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if db.cfgdb.get_entry(table, key).get("enabled") != "true":
         ctx.fail(
             "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
             "'config isis enable {}'".format(vrf, vrf)
         )
 
-    data = cfg[table][key]
+    data = {}
     data["level"] = level
 
     try:
-        db.cfgdb.set_entry(table, key, data)
+        db.cfgdb.mod_entry(table, key, data)
         click.echo("Configured IS-IS level to '{}' for VRF '{}'".format(level, vrf))
         log.log_notice("Configured IS-IS level to '{}' for VRF '{}'".format(level, vrf))
     except Exception as e:
@@ -179,7 +182,7 @@ def isis_level(ctx, db, level, vrf):
 
 
 @ISIS.command(name="hostname")
-@click.argument("state", type=click.Choice(['enabled', 'disabled']))
+@click.argument("state", type=click.Choice(['enable', 'disable']))
 @click.argument("vrf", required=False, default="default")
 @clicommon.pass_db
 @click.pass_context
@@ -188,18 +191,17 @@ def isis_hostname(ctx, db, state, vrf):
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    cfg = db.cfgdb.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if db.cfgdb.get_entry(table, key).get("enabled") != "true":
         ctx.fail(
             "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
             "'config isis enable {}'".format(vrf, vrf)
         )
 
-    data = cfg[table][key]
-    data["dynamic_hostname"] = "true" if state == "enabled" else "false"
+    data = {}
+    data["dynamic_hostname"] = "true" if state == "enable" else "false"
 
     try:
-        db.cfgdb.set_entry(table, key, data)
+        db.cfgdb.mod_entry(table, key, data)
         click.echo("Configured IS-IS dynamic hostname to '{}' for VRF '{}'".format(state, vrf))
         log.log_notice("Configured IS-IS dynamic hostname to '{}' for VRF '{}'".format(state, vrf))
     except Exception as e:
@@ -220,18 +222,15 @@ def ISIS_TIMER():
 @click.pass_context
 def isis_timer_lsp_mtu(ctx, db, mtu, vrf):
     """Configure IS-IS LSP MTU size"""
-    cfg = db.cfgdb.get_config()
-    if CFG_ISIS_GLOBALS not in cfg or vrf not in cfg[CFG_ISIS_GLOBALS]:
-        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first.".format(vrf))
+    _require_process(ctx, db.cfgdb, vrf)
 
     table = CFG_ISIS_GLOBALS_TIMERS
     key = vrf
-    cfg.setdefault(table, {})
-    data = cfg[table].setdefault(key, {})
+    data = {}
     data["lsp_mtu"] = str(mtu)
 
     try:
-        db.cfgdb.set_entry(table, key, data)
+        db.cfgdb.mod_entry(table, key, data)
         click.echo("Configured IS-IS LSP MTU to {} for VRF '{}'".format(mtu, vrf))
         log.log_notice("Configured IS-IS LSP MTU to {} for VRF '{}'".format(mtu, vrf))
     except Exception as e:
@@ -240,24 +239,23 @@ def isis_timer_lsp_mtu(ctx, db, mtu, vrf):
 
 
 @ISIS_TIMER.command(name="lsp-refresh")
-@click.argument("interval", type=click.IntRange(1, 65535))
+@click.argument("interval", type=click.IntRange(1, 65235))
 @click.argument("vrf", required=False, default="default")
 @clicommon.pass_db
 @click.pass_context
 def isis_timer_lsp_refresh(ctx, db, interval, vrf):
     """Configure IS-IS LSP refresh interval (seconds)"""
-    cfg = db.cfgdb.get_config()
-    if CFG_ISIS_GLOBALS not in cfg or vrf not in cfg[CFG_ISIS_GLOBALS]:
-        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first.".format(vrf))
+    _require_process(ctx, db.cfgdb, vrf)
 
     table = CFG_ISIS_GLOBALS_TIMERS
     key = vrf
-    cfg.setdefault(table, {})
-    data = cfg[table].setdefault(key, {})
+    data = {}
+    if interval + 300 > int(db.cfgdb.get_entry(table, key).get("lsp_lifetime", 1200)):
+        ctx.fail("LSP lifetime must be at least refresh interval + 300 seconds")
     data["lsp_refresh_interval"] = str(interval)
 
     try:
-        db.cfgdb.set_entry(table, key, data)
+        db.cfgdb.mod_entry(table, key, data)
         click.echo("Configured IS-IS LSP refresh interval to {}s for VRF '{}'".format(interval, vrf))
         log.log_notice("Configured IS-IS LSP refresh interval to {}s for VRF '{}'".format(interval, vrf))
     except Exception as e:
@@ -272,18 +270,17 @@ def isis_timer_lsp_refresh(ctx, db, interval, vrf):
 @click.pass_context
 def isis_timer_lsp_lifetime(ctx, db, lifetime, vrf):
     """Configure IS-IS max LSP lifetime (seconds)"""
-    cfg = db.cfgdb.get_config()
-    if CFG_ISIS_GLOBALS not in cfg or vrf not in cfg[CFG_ISIS_GLOBALS]:
-        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first.".format(vrf))
+    _require_process(ctx, db.cfgdb, vrf)
 
     table = CFG_ISIS_GLOBALS_TIMERS
     key = vrf
-    cfg.setdefault(table, {})
-    data = cfg[table].setdefault(key, {})
+    data = {}
+    if lifetime < int(db.cfgdb.get_entry(table, key).get("lsp_refresh_interval", 900)) + 300:
+        ctx.fail("LSP lifetime must be at least refresh interval + 300 seconds")
     data["lsp_lifetime"] = str(lifetime)
 
     try:
-        db.cfgdb.set_entry(table, key, data)
+        db.cfgdb.mod_entry(table, key, data)
         click.echo("Configured IS-IS LSP max lifetime to {}s for VRF '{}'".format(lifetime, vrf))
         log.log_notice("Configured IS-IS LSP max lifetime to {}s for VRF '{}'".format(lifetime, vrf))
     except Exception as e:
@@ -313,29 +310,22 @@ def interface_isis_enable(ctx, interface_name):
     """Enable IS-IS routing on an interface"""
     db = ctx.obj['config_db']
 
-    if clicommon.get_interface_naming_mode() == "alias":
-        interface_name = _alias_to_name(db, interface_name)
-        if not interface_name:
-            ctx.fail("Invalid interface alias")
+    interface_name = _resolve_interface(ctx, db, interface_name)
 
-    if not _validate_interface(db, interface_name):
-        ctx.fail("Interface '{}' does not exist".format(interface_name))
+    _require_process(ctx, db, _interface_vrf(db, interface_name))
 
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    cfg = db.get_config()
-    cfg.setdefault(table, {})
-
-    if key in cfg[table]:
+    if db.get_entry(table, key).get("enabled") == "true":
         click.echo("IS-IS is already enabled on interface {}".format(interface_name))
         return
 
-    # Use a dummy dict containing just enabled: true to trigger creation
+    # Explicit administrative state is shared with YANG and frrcfgd.
     data = {"enabled": "true"}
 
     try:
-        db.set_entry(table, key, data)
+        db.mod_entry(table, key, data)
         click.echo("Enabled IS-IS on interface {}".format(interface_name))
         log.log_notice("Enabled IS-IS on interface {}".format(interface_name))
     except Exception as e:
@@ -350,16 +340,16 @@ def interface_isis_disable(ctx, interface_name):
     """Disable IS-IS routing on an interface"""
     db = ctx.obj['config_db']
 
-    if clicommon.get_interface_naming_mode() == "alias":
-        interface_name = _alias_to_name(db, interface_name)
-        if not interface_name:
-            ctx.fail("Invalid interface alias")
+    # Cleanup must also work after the interface is removed or becomes a member.
+    if not db.get_entry(CFG_ISIS_INTERFACE, interface_name):
+        from config.main import interface_alias_to_name
+        if clicommon.get_interface_naming_mode() == 'alias':
+            interface_name = interface_alias_to_name(db, interface_name)
 
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    cfg = db.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if not db.get_entry(table, key):
         click.echo("IS-IS routing is not enabled on interface {}".format(interface_name))
         return
 
@@ -380,26 +370,22 @@ def interface_isis_metric(ctx, interface_name, metric_val):
     """Configure IS-IS metric for an interface"""
     db = ctx.obj['config_db']
 
-    if clicommon.get_interface_naming_mode() == "alias":
-        interface_name = _alias_to_name(db, interface_name)
-        if not interface_name:
-            ctx.fail("Invalid interface alias")
+    interface_name = _resolve_interface(ctx, db, interface_name)
 
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    cfg = db.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if db.get_entry(table, key).get("enabled") != "true":
         ctx.fail(
             "IS-IS routing is not enabled on interface {}. Please enable it first using "
             "'config interface isis enable {}'".format(interface_name, interface_name)
         )
 
-    data = cfg[table][key]
+    data = {}
     data["metric"] = str(metric_val)
 
     try:
-        db.set_entry(table, key, data)
+        db.mod_entry(table, key, data)
         click.echo("Configured IS-IS metric to {} on interface {}".format(metric_val, interface_name))
         log.log_notice("Configured IS-IS metric to {} on interface {}".format(metric_val, interface_name))
     except Exception as e:
@@ -415,26 +401,22 @@ def interface_isis_circuit_type(ctx, interface_name, circuit_type):
     """Configure IS-IS circuit type for an interface"""
     db = ctx.obj['config_db']
 
-    if clicommon.get_interface_naming_mode() == "alias":
-        interface_name = _alias_to_name(db, interface_name)
-        if not interface_name:
-            ctx.fail("Invalid interface alias")
+    interface_name = _resolve_interface(ctx, db, interface_name)
 
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    cfg = db.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if db.get_entry(table, key).get("enabled") != "true":
         ctx.fail(
             "IS-IS routing is not enabled on interface {}. Please enable it first using "
             "'config interface isis enable {}'".format(interface_name, interface_name)
         )
 
-    data = cfg[table][key]
+    data = {}
     data["circuit_type"] = circuit_type
 
     try:
-        db.set_entry(table, key, data)
+        db.mod_entry(table, key, data)
         click.echo("Configured IS-IS circuit type to '{}' on interface {}".format(circuit_type, interface_name))
         log.log_notice("Configured IS-IS circuit type to '{}' on interface {}".format(circuit_type, interface_name))
     except Exception as e:
@@ -450,28 +432,57 @@ def interface_isis_passive(ctx, interface_name, mode):
     """Configure IS-IS passive mode for an interface"""
     db = ctx.obj['config_db']
 
-    if clicommon.get_interface_naming_mode() == "alias":
-        interface_name = _alias_to_name(db, interface_name)
-        if not interface_name:
-            ctx.fail("Invalid interface alias")
+    interface_name = _resolve_interface(ctx, db, interface_name)
 
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    cfg = db.get_config()
-    if table not in cfg or key not in cfg[table]:
+    if db.get_entry(table, key).get("enabled") != "true":
         ctx.fail(
             "IS-IS routing is not enabled on interface {}. Please enable it first using "
             "'config interface isis enable {}'".format(interface_name, interface_name)
         )
 
-    data = cfg[table][key]
+    data = {}
     data["passive"] = "true" if mode == "enable" else "false"
 
     try:
-        db.set_entry(table, key, data)
+        db.mod_entry(table, key, data)
         click.echo("Configured IS-IS passive mode to '{}' on interface {}".format(mode, interface_name))
         log.log_notice("Configured IS-IS passive mode to '{}' on interface {}".format(mode, interface_name))
     except Exception as e:
         log.log_error("Failed to configure IS-IS passive mode on interface {}: {}".format(interface_name, str(e)))
         ctx.fail(str(e))
+
+
+@ISIS.command(name='reset')
+@click.argument('field', type=click.Choice(['net', 'level', 'hostname', 'lsp-mtu', 'lsp-refresh', 'lsp-lifetime']))
+@click.argument('vrf', required=False, default='default')
+@clicommon.pass_db
+@click.pass_context
+def isis_reset(ctx, db, field, vrf):
+    """Reset a global setting to its default (remove NET when selected)."""
+    _require_process(ctx, db.cfgdb, vrf)
+    fields = {'net': 'net_title', 'level': 'level', 'hostname': 'dynamic_hostname',
+              'lsp-mtu': 'lsp_mtu', 'lsp-refresh': 'lsp_refresh_interval', 'lsp-lifetime': 'lsp_lifetime'}
+    table = CFG_ISIS_GLOBALS_TIMERS if field.startswith('lsp-') else CFG_ISIS_GLOBALS
+    timers = db.cfgdb.get_entry(CFG_ISIS_GLOBALS_TIMERS, vrf)
+    refresh = 900 if field == 'lsp-refresh' else int(timers.get('lsp_refresh_interval', 900))
+    lifetime = 1200 if field == 'lsp-lifetime' else int(timers.get('lsp_lifetime', 1200))
+    if field in ('lsp-refresh', 'lsp-lifetime') and lifetime < refresh + 300:
+        ctx.fail('LSP lifetime must be at least refresh interval + 300 seconds')
+    if db.cfgdb.get_entry(table, vrf):
+        db.cfgdb.mod_entry(table, vrf, {fields[field]: None})
+
+
+@INTERFACE_ISIS.command(name='reset')
+@click.argument('interface_name')
+@click.argument('field', type=click.Choice(['metric', 'circuit-type', 'passive']))
+@click.pass_context
+def interface_isis_reset(ctx, interface_name, field):
+    """Reset an interface setting to its default."""
+    db = ctx.obj['config_db']
+    name = _resolve_interface(ctx, db, interface_name)
+    if db.get_entry(CFG_ISIS_INTERFACE, name).get('enabled') != 'true':
+        ctx.fail("IS-IS routing is not enabled on interface {}".format(name))
+    db.mod_entry(CFG_ISIS_INTERFACE, name, {field.replace('-', '_'): None})

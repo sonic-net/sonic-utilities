@@ -34,7 +34,7 @@ class TestIsis(object):
 
     @classmethod
     def teardown_class(cls):
-        pass
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
     def test_isis_enable_disable(self):
         db = Db()
@@ -47,6 +47,10 @@ class TestIsis(object):
         assert "default" in db.cfgdb.get_table("ISIS_GLOBALS")
         assert db.cfgdb.get_table("ISIS_GLOBALS")["default"]["enabled"] == "true"
 
+        # Reject absent VRFs before writing anything.
+        result = runner.invoke(self.config_isis_enable, ["Vrf2"], obj=obj)
+        assert result.exit_code != 0
+        db.cfgdb.set_entry("VRF", "Vrf2", {"NULL": "NULL"})
         # Enable IS-IS for non-default VRF Vrf2
         result = runner.invoke(self.config_isis_enable, ["Vrf2"], obj=obj)
         assert result.exit_code == 0
@@ -90,7 +94,7 @@ class TestIsis(object):
         assert db.cfgdb.get_table("ISIS_GLOBALS")["default"]["level"] == "level-1"
 
         # Set hostname
-        result = runner.invoke(self.config_isis_hostname, ["enabled"], obj=obj)
+        result = runner.invoke(self.config_isis_hostname, ["enable"], obj=obj)
         assert result.exit_code == 0
         assert db.cfgdb.get_table("ISIS_GLOBALS")["default"]["dynamic_hostname"] == "true"
 
@@ -130,6 +134,8 @@ class TestIsis(object):
 
         obj = {'config_db': db.cfgdb, 'namespace': 'default'}
 
+        runner.invoke(self.config_isis_enable, [], obj=db)
+
         # Enable ISIS on Ethernet0
         result = runner.invoke(self.config_interface_isis_enable, ["Ethernet0"], obj=obj)
         assert result.exit_code == 0
@@ -155,8 +161,9 @@ class TestIsis(object):
         assert result.exit_code == 0
         assert "Ethernet0" not in db.cfgdb.get_table("ISIS_INTERFACE")
 
+    @mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='vtysh')
     @mock.patch('utilities_common.cli.run_command')
-    def test_show_isis(self, mock_run_command):
+    def test_show_isis(self, mock_run_command, mock_shell):
         mock_run_command.return_value = ("IS-IS output summary mock", 0)
         runner = CliRunner()
 
@@ -183,4 +190,92 @@ class TestIsis(object):
         mock_run_command.return_value = ("", 1)
         result = runner.invoke(self.show_isis_database, [])
         assert result.exit_code != 0
-        assert "vtysh command failed" in result.output
+        assert result.exit_code == 1
+
+    def test_isis_validation_and_preserved_fields(self):
+        db = Db()
+        runner = CliRunner()
+        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', {'enabled': 'false', 'level': 'level-2'})
+        result = runner.invoke(self.config_isis_enable, [], obj=db)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default')['level'] == 'level-2'
+        for net in ('49.0001.00', '49.0001.0000.0000.0001.01'):
+            assert runner.invoke(self.config_isis_net, [net], obj=db).exit_code != 0
+        db.cfgdb.set_entry('ISIS_GLOBALS_TIMERS', 'default', None)
+        for value in ('0', '65236', '1000'):
+            assert runner.invoke(self.config_isis_timer_lsp_refresh, [value], obj=db).exit_code != 0
+        assert runner.invoke(self.config_isis_timer_lsp_lifetime, ['1199'], obj=db).exit_code != 0
+        assert runner.invoke(self.config_isis_timer_lsp_mtu, ['4000'], obj=db).exit_code == 0
+        assert runner.invoke(self.config_isis_timer_lsp_lifetime, ['1500'], obj=db).exit_code == 0
+        assert runner.invoke(self.config_isis_timer_lsp_refresh, ['1000'], obj=db).exit_code == 0
+        reset = config.config.commands['isis'].commands['reset']
+        assert runner.invoke(reset, ['lsp-lifetime'], obj=db).exit_code != 0
+        assert runner.invoke(reset, ['lsp-refresh'], obj=db).exit_code == 0
+        assert runner.invoke(reset, ['lsp-lifetime'], obj=db).exit_code == 0
+        db.cfgdb.set_entry('ISIS_GLOBALS_TIMERS', 'default', None)
+        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)
+
+    def test_isis_interface_negative_paths(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb, 'namespace': ''}
+        db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1', 'admin_status': 'up'})
+        db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', None)
+        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)
+        assert runner.invoke(self.config_interface_isis_enable, ['Ethernet0'], obj=obj).exit_code != 0
+        runner.invoke(self.config_isis_enable, [], obj=db)
+        assert runner.invoke(self.config_interface_isis_enable, ['EthernetMissing'], obj=obj).exit_code != 0
+        for command, args in ((self.config_interface_isis_metric, ['Ethernet0', '20']),
+                              (self.config_interface_isis_circuit_type, ['Ethernet0', 'p2p']),
+                              (self.config_interface_isis_passive, ['Ethernet0', 'enable'])):
+            assert runner.invoke(command, args, obj=obj).exit_code != 0
+        db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), {'NULL': 'NULL'})
+        assert runner.invoke(self.config_interface_isis_enable, ['Ethernet0'], obj=obj).exit_code != 0
+        db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), None)
+        db.cfgdb.set_entry('VLAN_MEMBER', ('Vlan999', 'Ethernet0'), {'tagging_mode': 'untagged'})
+        assert runner.invoke(self.config_interface_isis_enable, ['Ethernet0'], obj=obj).exit_code != 0
+        db.cfgdb.set_entry('VLAN_MEMBER', ('Vlan999', 'Ethernet0'), None)
+        with mock.patch('utilities_common.cli.get_interface_naming_mode', return_value='alias'):
+            result = runner.invoke(self.config_interface_isis_enable, ['etp1'], obj=obj)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['enabled'] == 'true'
+        assert runner.invoke(self.config_isis_disable, [], obj=db).exit_code != 0
+        assert runner.invoke(self.config_interface_isis_disable, ['Ethernet0'], obj=obj).exit_code == 0
+        assert runner.invoke(self.config_isis_disable, [], obj=db).exit_code == 0
+
+    @mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='rvtysh')
+    @mock.patch('utilities_common.bgp_util.run_bgp_command', return_value='state\n')
+    def test_show_isis_detail_interface(self, run_command, shell):
+        runner = CliRunner()
+        result = runner.invoke(self.show_isis_database, ['detail', '--json'])
+        assert result.exit_code == 0
+        run_command.assert_called_with('show isis database detail json', None, 'rvtysh')
+        result = runner.invoke(show.cli.commands['isis'].commands['interface'], [])
+        assert result.exit_code == 0
+        run_command.assert_called_with('show isis interface', None, 'rvtysh')
+
+    def test_isis_namespace(self):
+        runner = CliRunner()
+        db = Db()
+        group = config.config.commands['isis']
+        namespace_option = next(param for param in group.params if param.name == 'namespace')
+        with mock.patch.object(namespace_option.type, 'choices', ['asic0']), \
+                mock.patch('config.isis.ConfigDBConnector') as connector:
+            selected = connector.return_value
+            selected.get_entry.return_value = {}
+            result = runner.invoke(group, ['-n', 'asic0', 'enable'], obj=db)
+        assert result.exit_code == 0, result.output
+        connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
+        selected.mod_entry.assert_called_once_with('ISIS_GLOBALS', 'default', {'enabled': 'true'})
+
+    def test_isis_cleanup_retained_rows(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb, 'namespace': ''}
+        for name, enabled in (('EthernetMissing', 'true'), ('Ethernet0', 'false')):
+            db.cfgdb.set_entry('ISIS_INTERFACE', name, {'enabled': enabled, 'metric': '30'})
+            db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', name), {'NULL': 'NULL'})
+            result = runner.invoke(self.config_interface_isis_disable, [name], obj=obj)
+            assert result.exit_code == 0, result.output
+            assert not db.cfgdb.get_entry('ISIS_INTERFACE', name)
+            db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', name), None)

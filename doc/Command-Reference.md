@@ -2715,150 +2715,62 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
 
 ## IS-IS
 
-This section explains all the IS-IS show commands and IS-IS configuration commands supported in SONiC.
+IS-IS requires `DEVICE_METADATA|localhost` field
+`frr_mgmt_framework_config="true"` and a restart of the affected bgp container.
+Enable the process before configuring NET, level, hostname or timers, and before
+enabling interfaces. Non-default VRFs must already exist. Use interface names;
+aliases are accepted in alias naming mode. PortChannel/VLAN members are rejected.
 
 ### IS-IS show commands
 
-**show isis neighbor**
-
-This command displays the IS-IS neighbor adjacencies and their current states.
-
-- Usage:
-  ```
-  show isis neighbor [--json]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show isis neighbor
-  Area default:
-   System Id           Interface   L  State         Holdtime SNPA
-   sonic               Ethernet0   3  Up            29       2020.2020.2020
-   sonic               Ethernet4   3  Up            28       2020.2020.2020
-  ```
-
-**show isis database**
-
-This command displays the IS-IS Link-State Database (LSDB).
-
-- Usage:
-  ```
-  show isis database [--json]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show isis database
-  IS-IS Level-1 link-state database:
-  LSP ID                  PduLen  SeqNumber   Chksum  Holdtime  ATT/P/OL
-  sonic.00-00          *     73   0x00000002  0x34a4    1217    0/0/0
-  ```
-
-**show isis summary**
-
-This command displays the IS-IS process summary.
-
-- Usage:
-  ```
-  show isis summary [--json]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show isis summary
-  vrf             : default
-  Process Id      : 42
-  System Id       : 1921.6800.0001
-  Up time         : 00:03:50 ago
-  Number of areas : 1
-  ```
+```
+show isis summary [-j|--json] [-n NAMESPACE]
+show isis neighbor [-j|--json] [-n NAMESPACE]
+show isis database [detail] [-j|--json] [-n NAMESPACE]
+show isis interface [-j|--json] [-n NAMESPACE]
+```
 
 ### IS-IS config commands
 
-**config isis net**
+```
+config isis [-n NAMESPACE] enable [VRF]
+config isis [-n NAMESPACE] disable [VRF]
+config isis [-n NAMESPACE] net NET [VRF]
+config isis [-n NAMESPACE] level {level-1|level-2|level-1-2} [VRF]
+config isis [-n NAMESPACE] hostname {enable|disable} [VRF]
+config isis [-n NAMESPACE] timer lsp-mtu MTU [VRF]
+config isis [-n NAMESPACE] timer lsp-refresh SECONDS [VRF]
+config isis [-n NAMESPACE] timer lsp-lifetime SECONDS [VRF]
+config isis [-n NAMESPACE] reset {net|level|hostname|lsp-mtu|lsp-refresh|lsp-lifetime} [VRF]
+config interface [-n NAMESPACE] isis enable INTERFACE
+config interface [-n NAMESPACE] isis disable INTERFACE
+config interface [-n NAMESPACE] isis metric INTERFACE METRIC
+config interface [-n NAMESPACE] isis circuit-type INTERFACE {p2p|lan}
+config interface [-n NAMESPACE] isis passive INTERFACE {enable|disable}
+config interface [-n NAMESPACE] isis reset INTERFACE {metric|circuit-type|passive}
+```
 
-This command configures the Network Entity Title (NET) for IS-IS.
+VRF defaults to `default`. NET must contain a system-id and end in `.00`.
+LSP MTU accepts 128–4352 (default 1492), refresh accepts 1–65235 seconds
+(default 900), lifetime accepts 350–65535 seconds (default 1200), and lifetime
+must be at least refresh + 300. Interface metric accepts 1–16777215 (default 10).
+Circuit type defaults to LAN; passive defaults to off. Reset removes the selected
+field, restoring its default (or removing NET). Process disable refuses while
+interface bindings remain; disable interfaces first. Hostname uses `enable|disable`.
 
-- Usage:
-  ```
-  config isis net <net_title>
-  ```
+Example, after enabling management-framework mode:
 
-- Example:
-  ```
-  admin@sonic:~$ sudo config isis net 49.0001.0000.0000.0001.00
-  ```
-
-**config isis level**
-
-This command configures the router level for IS-IS.
-
-- Usage:
-  ```
-  config isis level <level-1|level-2|level-1-2>
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config isis level level-1
-  ```
-
-**config interface isis enable / disable**
-
-This command enables or disables IS-IS on an interface.
-
-- Usage:
-  ```
-  config interface isis enable <interface_name>
-  config interface isis disable <interface_name>
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config interface isis enable Ethernet0
-  ```
-
-**config interface isis passive**
-
-This command enables or disables passive mode for an interface in IS-IS.
-
-- Usage:
-  ```
-  config interface isis passive <interface_name> <enable|disable>
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config interface isis passive Loopback0 enable
-  ```
-
-**config interface isis circuit-type**
-
-This command configures the circuit type (p2p or lan) for an interface in IS-IS.
-
-- Usage:
-  ```
-  config interface isis circuit-type <interface_name> <p2p|lan>
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config interface isis circuit-type Ethernet0 p2p
-  ```
-
-**config interface isis metric**
-
-This command configures the IS-IS metric cost for an interface.
-
-- Usage:
-  ```
-  config interface isis metric <interface_name> <metric_val>
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config interface isis metric Ethernet0 20
-  ```
+```shell
+sudo config isis enable
+sudo config isis net 49.0001.0000.0000.0001.00
+sudo config isis level level-2
+sudo config interface isis enable Ethernet0
+sudo config interface isis circuit-type Ethernet0 p2p
+sudo config interface isis enable Loopback0
+sudo config interface isis passive Loopback0 enable
+show isis interface
+show isis neighbor
+```
 
 ## BGP
 

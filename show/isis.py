@@ -1,22 +1,12 @@
 import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
-from sonic_py_common import multi_asic
+from utilities_common import bgp_util
 
 
 def run_vtysh_command(vtysh_cmd, namespace=None):
-    """Run vtysh command in the correct namespace"""
-    cmd = ['sudo', 'vtysh']
-    if namespace and namespace != multi_asic.DEFAULT_NAMESPACE:
-        asic_id = multi_asic.get_asic_id_from_name(namespace)
-        if asic_id is not None:
-            cmd += ['-n', str(asic_id)]
-    cmd += ['-c', vtysh_cmd]
-
-    output, ret = clicommon.run_command(cmd, return_cmd=True)
-    if ret != 0:
-        raise click.ClickException("vtysh command failed with exit code {}".format(ret))
-    return output
+    """Use the routing-stack-aware wrapper and shared namespace/error handling."""
+    return bgp_util.run_bgp_command(vtysh_cmd, namespace, bgp_util.get_vtysh_shell_cmd())
 
 
 @click.group(
@@ -61,10 +51,21 @@ def neighbor(json_format, namespace):
 @click.option('--namespace', '-n', default=None, type=str,
               help='Namespace name',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def database(json_format, namespace):
+@click.argument("detail", required=False, type=click.Choice(["detail"]))
+def database(json_format, namespace, detail):
     """Show IS-IS database"""
-    cmd = "show isis database"
+    cmd = "show isis database" + (" detail" if detail else "")
     if json_format:
         cmd += " json"
     output = run_vtysh_command(cmd, namespace)
     click.echo(output.rstrip('\n'))
+
+
+@isis.command()
+@click.option('-j', '--json', 'json_format', is_flag=True, help="Display in JSON format")
+@click.option('--namespace', '-n', default=None, type=str,
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def interface(json_format, namespace):
+    """Show IS-IS interface configuration and state"""
+    cmd = 'show isis interface' + (' json' if json_format else '')
+    click.echo(run_vtysh_command(cmd, namespace).rstrip('\n'))
