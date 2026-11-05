@@ -3205,7 +3205,7 @@ When the session is shutdown using this command, BGP state in "show ip bgp summa
 
 **config bgp shutdown neighbor**
 
-This command shuts down a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. Interface names must match the configured neighbor key, including case.
+This command shuts down a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. Interface names must match the configured neighbor key, including case, and exist in the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` configuration table. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```
@@ -3241,7 +3241,7 @@ This command is used to start up all the IPv4 & IPv6 BGP neighbors
 
 **config bgp startup neighbor**
 
-This command starts up a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. Interface names must match the configured neighbor key, including case.
+This command starts up a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. Interface names must match the configured neighbor key, including case, and exist in the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` configuration table. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```

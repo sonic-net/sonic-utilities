@@ -808,6 +808,25 @@ def _is_neighbor_ipaddress(config_db, ipaddress):
     entry = config_db.get_entry('BGP_NEIGHBOR', ipaddress)
     return True if entry else False
 
+def _is_neighbor_interface(config_db, interface_name):
+    """Return whether an exact interface name is a configured BGP neighbor."""
+    if not config_db.get_entry('BGP_NEIGHBOR', interface_name):
+        return False
+
+    interface_tables = (
+        'INTERFACE',
+        'PORTCHANNEL_INTERFACE',
+        'VLAN_INTERFACE',
+        'VLAN_SUB_INTERFACE',
+    )
+    for table in interface_tables:
+        for key in config_db.get_keys(table):
+            name = key[0] if isinstance(key, tuple) else key
+            if name == interface_name:
+                return True
+
+    return False
+
 def _get_all_neighbor_ipaddresses(config_db):
     """Returns list of strings containing IP addresses of all BGP neighbors
     """
@@ -839,22 +858,27 @@ def _change_bgp_session_status_by_addr(config_db, ipaddress, status, verbose):
 def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
     """Start up or shut down BGP session by IP address, interface name or hostname
     """
-    ip_addrs = []
+    neighbor_keys = []
+    is_ip = (
+        bgp_util.is_ipv4_address(ipaddr_or_hostname)
+        or bgp_util.is_ipv6_address(ipaddr_or_hostname)
+    )
 
-    # Preserve case-sensitive interface keys before trying legacy IPv6 normalization.
-    if _is_neighbor_ipaddress(config_db, ipaddr_or_hostname):
-        ip_addrs.append(ipaddr_or_hostname)
-    elif _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
-        ip_addrs.append(ipaddr_or_hostname.lower())
+    if not is_ip and _is_neighbor_interface(config_db, ipaddr_or_hostname):
+        neighbor_keys.append(ipaddr_or_hostname)
+    elif is_ip and _is_neighbor_ipaddress(config_db, ipaddr_or_hostname):
+        neighbor_keys.append(ipaddr_or_hostname)
+    elif is_ip and _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
+        neighbor_keys.append(ipaddr_or_hostname.lower())
     else:
         # If <ipaddr_or_hostname> is not the IP address of a neighbor, check to see if it's a hostname
-        ip_addrs = _get_neighbor_ipaddress_list_by_hostname(config_db, ipaddr_or_hostname)
+        neighbor_keys = _get_neighbor_ipaddress_list_by_hostname(config_db, ipaddr_or_hostname)
 
-    if not ip_addrs:
+    if not neighbor_keys:
         return False
 
-    for ip_addr in ip_addrs:
-        _change_bgp_session_status_by_addr(config_db, ip_addr, status, verbose)
+    for neighbor_key in neighbor_keys:
+        _change_bgp_session_status_by_addr(config_db, neighbor_key, status, verbose)
 
     return True
 

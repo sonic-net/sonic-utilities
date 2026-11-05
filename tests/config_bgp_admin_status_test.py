@@ -9,7 +9,10 @@ import config.main as config
 @pytest.fixture
 def config_db():
     db = mock.MagicMock()
+    db.tables = {}
+    db.get_table.side_effect = lambda table: db.tables.get(table, {})
     db.get_entry.side_effect = lambda table, key: db.get_table(table).get(key, {})
+    db.get_keys.side_effect = lambda table: list(db.get_table(table))
     return db
 
 
@@ -25,9 +28,18 @@ def invoke_neighbor(config_db, action, neighbor):
         return CliRunner().invoke(config.bgp, [command, "neighbor", neighbor])
 
 
-@pytest.mark.parametrize("interface", ["Ethernet16", "PortChannel101", "Ethernet16.100"])
-def test_interface_neighbor_preserves_case(config_db, action, interface):
-    config_db.get_table.return_value = {interface: {"name": "peer1", "asn": "65200"}}
+@pytest.mark.parametrize("interface,table", [
+    ("Ethernet16", "INTERFACE"),
+    ("PortChannel101", "PORTCHANNEL_INTERFACE"),
+    ("Vlan200", "VLAN_INTERFACE"),
+    ("Ethernet16.100", "VLAN_SUB_INTERFACE"),
+    ("Po101.100", "VLAN_SUB_INTERFACE"),
+])
+def test_interface_neighbor_preserves_case(config_db, action, interface, table):
+    config_db.tables = {
+        "BGP_NEIGHBOR": {interface: {"name": "peer1", "asn": "65200"}},
+        table: {interface: {}},
+    }
 
     result = invoke_neighbor(config_db, action, interface)
 
@@ -39,10 +51,11 @@ def test_interface_neighbor_preserves_case(config_db, action, interface):
 
 
 def test_exact_key_takes_precedence_over_lowercase_key(config_db, action):
-    config_db.get_table.return_value = {
+    config_db.tables["BGP_NEIGHBOR"] = {
         "Ethernet16": {"name": "peer1"},
         "ethernet16": {"name": "peer2"},
     }
+    config_db.tables["INTERFACE"] = {"Ethernet16": {}}
 
     result = invoke_neighbor(config_db, action, "Ethernet16")
 
@@ -55,7 +68,7 @@ def test_exact_key_takes_precedence_over_lowercase_key(config_db, action):
 @pytest.mark.parametrize("address", ["192.0.2.1", "fc00::1", "FC00::1"])
 def test_numbered_neighbor_lookup(config_db, action, address):
     key = address.lower()
-    config_db.get_table.return_value = {key: {"name": "peer1", "asn": "65200"}}
+    config_db.tables["BGP_NEIGHBOR"] = {key: {"name": "peer1", "asn": "65200"}}
 
     result = invoke_neighbor(config_db, action, address)
 
@@ -63,10 +76,11 @@ def test_numbered_neighbor_lookup(config_db, action, address):
     config_db.mod_entry.assert_called_once_with(
         "bgp_neighbor", key, {"admin_status": action[1]}
     )
+    config_db.get_keys.assert_not_called()
 
 
 def test_exact_uppercase_ipv6_key(config_db, action):
-    config_db.get_table.return_value = {"FC00::1": {"name": "peer1", "asn": "65200"}}
+    config_db.tables["BGP_NEIGHBOR"] = {"FC00::1": {"name": "peer1", "asn": "65200"}}
 
     result = invoke_neighbor(config_db, action, "FC00::1")
 
@@ -77,7 +91,7 @@ def test_exact_uppercase_ipv6_key(config_db, action):
 
 
 def test_hostname_lookup_updates_matching_neighbors(config_db, action):
-    config_db.get_table.return_value = {
+    config_db.tables["BGP_NEIGHBOR"] = {
         "192.0.2.1": {"name": "peer1"},
         "Ethernet16": {"name": "peer1"},
         "PortChannel101": {"name": "peer2"},
@@ -94,7 +108,10 @@ def test_hostname_lookup_updates_matching_neighbors(config_db, action):
 
 @pytest.mark.parametrize("neighbor", ["Ethernet99", "ethernet16", "missing-host"])
 def test_missing_neighbor_reports_error(config_db, action, neighbor):
-    config_db.get_table.return_value = {"Ethernet16": {"name": "peer1"}}
+    config_db.tables = {
+        "BGP_NEIGHBOR": {"Ethernet16": {"name": "peer1"}},
+        "INTERFACE": {"Ethernet16": {}},
+    }
 
     result = invoke_neighbor(config_db, action, neighbor)
 
@@ -105,12 +122,20 @@ def test_missing_neighbor_reports_error(config_db, action, neighbor):
 
 def test_interface_neighbor_in_multi_asic_namespace(action):
     databases = {namespace: mock.MagicMock() for namespace in ["asic0", "asic1"]}
-    databases["asic0"].get_table.return_value = {}
-    databases["asic1"].get_table.return_value = {"Ethernet16": {"name": "peer1"}}
+    tables = {
+        "asic0": {},
+        "asic1": {
+            "BGP_NEIGHBOR": {"Ethernet16": {"name": "peer1"}},
+            "INTERFACE": {"Ethernet16": {}},
+        },
+    }
+    for namespace, db in databases.items():
+        db.get_table.side_effect = lambda table, namespace=namespace: tables[namespace].get(table, {})
     for db in databases.values():
         db.get_entry.side_effect = (
             lambda table, key, db=db: db.get_table(table).get(key, {})
         )
+        db.get_keys.side_effect = lambda table, db=db: list(db.get_table(table))
 
     def connect(**kwargs):
         return databases[kwargs["namespace"]]
@@ -136,3 +161,73 @@ def test_neighbor_help_includes_interface_name(action):
     assert result.exit_code == 0
     assert "<ipaddr_or_interface_or_hostname>" in result.output
     assert "interface name" in result.output
+
+
+@pytest.mark.parametrize("interface,table", [
+    ("Ethernet16", "INTERFACE"),
+    ("PortChannel101", "PORTCHANNEL_INTERFACE"),
+    ("Vlan200", "VLAN_INTERFACE"),
+    ("Ethernet16.100", "VLAN_SUB_INTERFACE"),
+])
+def test_interface_address_tuple_key(config_db, action, interface, table):
+    config_db.tables = {
+        "BGP_NEIGHBOR": {interface: {"name": "peer1"}},
+        table: {(interface, "192.0.2.1/31"): {}},
+    }
+
+    result = invoke_neighbor(config_db, action, interface)
+
+    assert result.exit_code == 0, result.output
+    config_db.mod_entry.assert_called_once_with(
+        "bgp_neighbor", interface, {"admin_status": action[1]}
+    )
+
+
+@pytest.mark.parametrize("missing_table", ["INTERFACE", "BGP_NEIGHBOR"])
+def test_interface_requires_both_configurations(config_db, action, missing_table):
+    config_db.tables = {
+        "BGP_NEIGHBOR": {"Ethernet16": {"name": "peer1"}},
+        "INTERFACE": {"Ethernet16": {}},
+    }
+    del config_db.tables[missing_table]
+
+    result = invoke_neighbor(config_db, action, "Ethernet16")
+
+    assert result.exit_code != 0
+    assert "Could not locate neighbor 'Ethernet16'" in result.output
+    config_db.mod_entry.assert_not_called()
+
+
+def test_interface_table_case_must_match(config_db, action):
+    config_db.tables = {
+        "BGP_NEIGHBOR": {"Ethernet16": {"name": "peer1"}},
+        "INTERFACE": {"ethernet16": {}},
+    }
+
+    result = invoke_neighbor(config_db, action, "Ethernet16")
+
+    assert result.exit_code != 0
+    config_db.mod_entry.assert_not_called()
+
+
+def test_interface_selection_only_updates_one_same_hostname_session(config_db, action):
+    config_db.tables = {
+        "BGP_NEIGHBOR": {
+            "Ethernet16": {"name": "SPINE01"},
+            "Ethernet20": {"name": "SPINE01"},
+        },
+        "INTERFACE": {"Ethernet16": {}, "Ethernet20": {}},
+    }
+
+    result = invoke_neighbor(config_db, action, "Ethernet16")
+
+    assert result.exit_code == 0, result.output
+    config_db.mod_entry.assert_called_once_with(
+        "bgp_neighbor", "Ethernet16", {"admin_status": action[1]}
+    )
+
+
+def test_interface_helper_does_not_identify_numbered_neighbor(config_db):
+    config_db.tables["BGP_NEIGHBOR"] = {"192.0.2.1": {"name": "peer1"}}
+
+    assert config._is_neighbor_interface(config_db, "192.0.2.1") is False
