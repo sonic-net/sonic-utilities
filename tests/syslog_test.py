@@ -209,6 +209,32 @@ class TestSyslog:
         assert ERROR_PATTERN_INVALID_VRF in result.output
         assert result.exit_code == ERROR2
 
+    def test_config_syslog_vrf_choice_listed_once(self):
+        dbconnector.dedicated_dbs["CONFIG_DB"] = os.path.join(mock_db_path, "vrf_default_cdb")
+        try:
+            db = Db()
+            runner = CliRunner()
+
+            result = runner.invoke(
+                config.config.commands["syslog"].commands["add"],
+                ["2.2.2.2", "--vrf", "NoSuchVrf"], obj=db
+            )
+
+            logger.debug("\n" + result.output)
+            logger.debug(result.exit_code)
+            choice_line = [
+                line for line in result.output.splitlines()
+                if "not one of" in line or "choose from" in line
+            ]
+            assert choice_line, result.output
+            text = choice_line[-1]
+            assert text.count("default") == 1
+            assert text.count("mgmt") == 1
+            assert text.count("Vrf-Data") == 1
+            assert result.exit_code == ERROR2
+        finally:
+            dbconnector.dedicated_dbs["CONFIG_DB"] = None
+
     @pytest.mark.parametrize("vrf", ["mgmt", "Vrf-Data"])
     @mock.patch("config.syslog.get_vrf_list", mock.MagicMock(return_value=[]))
     @mock.patch("config.syslog.get_vrf_member_dict", mock.MagicMock(return_value={}))
