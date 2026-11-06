@@ -1,4 +1,24 @@
 {
+    "PFC_WD_STORM_HISTORY|Ethernet0|3": {
+        "last_storm": "1",
+        "storm_1_detected": "2025-10-20T22:40:00.000000Z",
+        "storm_1_restored": "2025-10-20T22:40:00.500000Z",
+        "storm_1_duration_ms": "500",
+        "storm_1_tx_packets": "1000",
+        "storm_1_tx_dropped": "900",
+        "storm_1_rx_packets": "800",
+        "storm_1_rx_dropped": "700"
+    },
+    "PFC_WD_STORM_HISTORY|Ethernet-BP0|3": {
+        "last_storm": "1",
+        "storm_1_detected": "2025-10-20T22:41:40.000000Z",
+        "storm_1_restored": "2025-10-20T22:41:40.100000Z",
+        "storm_1_duration_ms": "100",
+        "storm_1_tx_packets": "10",
+        "storm_1_tx_dropped": "5",
+        "storm_1_rx_packets": "20",
+        "storm_1_rx_dropped": "15"
+    },
     "TRANSCEIVER_INFO|Ethernet0": {
         "type": "QSFP28 or later",
         "vendor_rev": "AC",

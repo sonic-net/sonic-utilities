@@ -1,3 +1,5 @@
+import datetime
+import json
 import importlib
 import os
 import sys
@@ -59,7 +61,15 @@ CONFIG_DESCRIPTION = [
 STATS_HEADER = ('QUEUE', 'STATUS',) + list(zip(*STATS_DESCRIPTION))[0]
 CONFIG_HEADER = ('PORT',) + list(zip(*CONFIG_DESCRIPTION))[0]
 
+HISTORY_DISPLAY_LIMIT = 5
+HISTORY_HEADER = ('QUEUE', '#', 'DETECTED', 'RESTORED', 'DURATION(ms)', 'TX/TX-DROP', 'RX/RX-DROP')
+# Timestamp format orchagent writes into PFC_WD_STORM_HISTORY,
+# e.g. 2025-10-21T02:26:40.000000Z
+HISTORY_TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
+
 CONFIG_DB_PFC_WD_TABLE_NAME = 'PFC_WD'
+STATE_DB_PFC_WD_STATE_TABLE = 'PFC_WD_STATE_TABLE'
+STATE_DB_PFC_WD_STORM_HISTORY_TABLE = 'PFC_WD_STORM_HISTORY'
 PORT_QOS_MAP =  "PORT_QOS_MAP"
 
 # Main entrypoint
@@ -130,6 +140,7 @@ class PfcwdCli(object):
         )
         self.table = []
         self.all_ports = []
+        self.history = []
 
     @multi_asic_util.run_on_multi_asic
     def collect_stats(self, empty, queues):
@@ -176,6 +187,132 @@ class PfcwdCli(object):
         click.echo(tabulate(
             self.table, STATS_HEADER, stralign='right', numalign='right',
             tablefmt='simple'
+        ))
+
+    @multi_asic_util.run_on_multi_asic
+    def collect_history(self, queues):
+        # Ports come from CONFIG_DB rather than COUNTERS_QUEUE_NAME_MAP, which stays
+        # empty after a cold start until queue counters are registered
+        ports = list(self.config_db.get_keys('PORT'))
+        if self.multi_asic.display_option != constants.DISPLAY_ALL:
+            ports = get_external_ports(ports, self.multi_asic.current_namespace)
+        ports = set(ports)
+        prefix = STATE_DB_PFC_WD_STORM_HISTORY_TABLE + '|'
+
+        for key in self.db.keys(self.db.STATE_DB, prefix + '*') or []:
+            # Key is <port>|<queue index>
+            parts = key[len(prefix):].split('|')
+            if len(parts) != 2:
+                continue
+            if not (parts[1].isascii() and parts[1].isdigit()):
+                continue
+            queue = parts[0] + ':' + parts[1]
+            if parts[0] not in ports:
+                continue
+            # A filter names a queue (Ethernet0:3) or every queue of a port (Ethernet0)
+            if queues and queue not in queues and parts[0] not in queues:
+                continue
+            entry = self.db.get_all(self.db.STATE_DB, key) or {}
+            for field, detected in entry.items():
+                # One storm per storm_<N>_detected field; N is the ordinal
+                if not field.startswith('storm_'):
+                    continue
+                if not field.endswith('_detected'):
+                    continue
+                ordinal = field[len('storm_'):-len('_detected')]
+                if not (ordinal.isascii() and ordinal.isdigit()):
+                    continue
+                try:
+                    detected_dt = datetime.datetime.strptime(
+                        detected, HISTORY_TIMESTAMP_FORMAT)
+                except (TypeError, ValueError):
+                    continue
+                storm = 'storm_' + ordinal + '_'
+                self.history.append({
+                    'queue': queue,
+                    'ordinal': int(ordinal),
+                    'detected': detected,
+                    '_detected_dt': detected_dt,
+                    'restored': entry.get(storm + 'restored'),
+                    'interrupted': entry.get(storm + 'interrupted'),
+                    'duration_ms': entry.get(storm + 'duration_ms'),
+                    'tx_packets': entry.get(storm + 'tx_packets'),
+                    'tx_dropped': entry.get(storm + 'tx_dropped'),
+                    'rx_packets': entry.get(storm + 'rx_packets'),
+                    'rx_dropped': entry.get(storm + 'rx_dropped'),
+                })
+
+    def show_history(self, queues=(), count=None, json_output=False):
+        self.history = []
+        self.collect_history(queues)
+
+        # Newest first by detection time; queue name then ordinal break ties.
+        self.history.sort(key=lambda e: (e['queue'], -e['ordinal']))
+        self.history.sort(key=lambda e: e['_detected_dt'], reverse=True)
+        # A queue filter shows every stored storm of those queues unless --count is given
+        if count is None and not queues:
+            count = HISTORY_DISPLAY_LIMIT
+        if count is not None:
+            self.history = self.history[:count]
+
+        if json_output:
+            self.show_history_json()
+            return
+
+        def cell(value):
+            return '-' if value is None else value
+
+        rows = []
+        for e in self.history:
+            if e['restored'] is None:
+                # Still in progress, or ended by a swss cold start (interrupted)
+                restored = 'interrupted' if e['interrupted'] is not None else '-'
+                duration, tx, rx = '-', '-/-', '-/-'
+            else:
+                restored = e['restored']
+                duration = cell(e['duration_ms'])
+                tx = cell(e['tx_packets']) + '/' + cell(e['tx_dropped'])
+                rx = cell(e['rx_packets']) + '/' + cell(e['rx_dropped'])
+            rows.append([
+                e['queue'], str(e['ordinal']), e['detected'], restored,
+                duration, tx, rx
+            ])
+
+        click.echo(tabulate(
+            rows, HISTORY_HEADER, stralign='right', numalign='right',
+            tablefmt='simple'
+        ))
+
+    def show_history_json(self):
+        hw_global = self.db.get_all(
+            self.db.STATE_DB, STATE_DB_PFC_WD_STATE_TABLE + '|PFC_WD'
+        ) or {}
+        mechanism = (hw_global.get('RECOVERY_MECHANISM') or 'unknown').lower()
+
+        def to_int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        storms = []
+        for e in self.history:
+            storms.append({
+                'queue': e['queue'],
+                'ordinal': e['ordinal'],
+                'detected': e['detected'],
+                'restored': e['restored'],
+                'interrupted': e['interrupted'],
+                'duration_ms': to_int(e['duration_ms']),
+                'tx_packets': to_int(e['tx_packets']),
+                'tx_dropped_packets': to_int(e['tx_dropped']),
+                'rx_packets': to_int(e['rx_packets']),
+                'rx_dropped_packets': to_int(e['rx_dropped']),
+            })
+
+        click.echo(json.dumps(
+            {'recovery_mechanism': mechanism, 'storms': storms},
+            indent=4, sort_keys=True
         ))
 
     @multi_asic_util.run_on_multi_asic
@@ -504,12 +641,29 @@ class Show(object):
     @multi_asic_util.multi_asic_click_options
     @click.option('-e', '--empty', is_flag=True)
     @click.option('--check-storm', is_flag=True, help='Exit 1 if any storms detected, 0 otherwise')
+    @click.option('--history', is_flag=True,
+                  help='Show recent PFC storms, newest first: the 5 most recent on the switch, '
+                       'or every stored storm of the given queues or ports')
+    @click.option('--count', type=click.IntRange(min=1), default=None,
+                  help='Number of storms to show (with --history)')
+    @click.option('--json', 'json_output', is_flag=True, help='JSON output (with --history)')
     @click.argument('queues', nargs=-1)
     @clicommon.pass_db
-    def stats(db, namespace, display, empty, check_storm, queues):
+    def stats(db, namespace, display, empty, check_storm, history, count, json_output, queues):
         """ Show PFC Watchdog stats per queue """
+        if count is not None and not history:
+            raise click.UsageError("--count requires --history")
+        if history and empty:
+            raise click.UsageError("--history and --empty are mutually exclusive")
+        if history and check_storm:
+            raise click.UsageError("--history and --check-storm are mutually exclusive")
+        if json_output and not history:
+            raise click.UsageError("--json requires --history")
         if (len(queues)):
             display = constants.DISPLAY_ALL
+        if history:
+            PfcwdCli(db, namespace, display).show_history(queues, count, json_output)
+            return
         PfcwdCli(db, namespace, display).show_stats(empty, queues, check_storm)
 
     # Show config

@@ -1,13 +1,32 @@
+import json
 import importlib
 import os
 import sys
 from unittest.mock import patch, MagicMock
 
 from click.testing import CliRunner
+from swsscommon import swsscommon
 
 from utilities_common.db import Db
 
 from .pfcwd_input import pfcwd_test_vectors as test_vectors
+
+_orig_sonic_get_all = swsscommon.SonicV2Connector.get_all
+
+
+def _sw_get_all(self, db_id, key):
+    """Software mode, as PfcWdSwOrch writes it."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {'RECOVERY_MECHANISM': 'SOFTWARE'}
+    return _orig_sonic_get_all(self, db_id, key)
+
+
+def _hw_get_all(self, db_id, key):
+    """Hardware mode, as the hardware PFC watchdog orchagent writes it."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {'RECOVERY_MECHANISM': 'HARDWARE'}
+    return _orig_sonic_get_all(self, db_id, key)
+
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -21,6 +40,215 @@ class TestPfcwd(object):
     def setup_class(cls):
         os.environ["PATH"] += os.pathsep + scripts_path
         print("SETUP")
+
+    def test_pfcwd_show_history(self):
+        self.executor(test_vectors.testData['pfcwd_show_history'])
+
+    def _invoke_history_json(self):
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["stats"], ["--history", "--json"], obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        return json.loads(result.output)
+
+    def _invoke_stats(self, args):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], args, obj=Db()
+        )
+        print(result.output)
+        return result
+
+    def _history_rows(self, args):
+        result = self._invoke_stats(['--history'] + args)
+        assert result.exit_code == 0
+        return [tuple(row.split()[:2]) for row in result.output.splitlines()[2:]]
+
+    def test_pfcwd_show_history_queue_filter_shows_all_storms(self):
+        # A queue filter lifts the default cap of 5: all four Ethernet8:4 storms
+        assert self._history_rows(['Ethernet8:4']) == [
+            ('Ethernet8:4', '4'), ('Ethernet8:4', '3'),
+            ('Ethernet8:4', '2'), ('Ethernet8:4', '1'),
+        ]
+
+    def test_pfcwd_show_history_port_filter(self):
+        assert self._history_rows(['Ethernet4']) == [
+            ('Ethernet4:3', '2'), ('Ethernet4:3', '1'),
+        ]
+
+    def test_pfcwd_show_history_several_queues(self):
+        assert self._history_rows(['Ethernet0:3', 'Ethernet4:3']) == [
+            ('Ethernet0:3', '1'), ('Ethernet4:3', '2'), ('Ethernet4:3', '1'),
+        ]
+
+    def test_pfcwd_show_history_unknown_queue_is_empty(self):
+        assert self._history_rows(['Ethernet999:3']) == []
+
+    def test_pfcwd_show_history_count(self):
+        assert self._history_rows(['--count', '2']) == [
+            ('Ethernet0:3', '1'), ('Ethernet4:3', '2'),
+        ]
+        assert self._history_rows(['--count', '1', 'Ethernet8:4']) == [('Ethernet8:4', '4')]
+        assert len(self._history_rows(['--count', '50'])) == 9
+
+    def test_pfcwd_show_history_interrupted(self):
+        # Storm 2 was open when swss cold-started: no restore, shown as interrupted
+        result = self._invoke_stats(['--history', 'Ethernet8:3'])
+        assert result.exit_code == 0
+        rows = [row.split() for row in result.output.splitlines()[2:]]
+        assert rows == [
+            ['Ethernet8:3', '2', '2025-10-20T22:00:00.000000Z', 'interrupted', '-', '-/-', '-/-'],
+            ['Ethernet8:3', '1', '2025-10-20T21:00:00.000000Z', '2025-10-20T21:00:00.250000Z',
+             '250', '30/30', '15/15'],
+        ]
+
+    def test_pfcwd_show_history_interrupted_json(self):
+        result = self._invoke_stats(['--history', '--json', 'Ethernet8:3'])
+        assert result.exit_code == 0
+        storms = {x['ordinal']: x for x in json.loads(result.output)['storms']}
+        assert storms[2]['restored'] is None
+        assert storms[2]['interrupted'] == '2025-10-20T22:07:12.000000Z'
+        assert storms[2]['duration_ms'] is None
+        assert storms[1]['interrupted'] is None
+
+    def test_pfcwd_show_history_count_must_be_positive(self):
+        result = self._invoke_stats(['--history', '--count', '0'])
+        assert result.exit_code == 2
+
+    def test_pfcwd_show_count_without_history_rejected(self):
+        result = self._invoke_stats(['--count', '3'])
+        assert result.exit_code == 2
+        assert "--count requires --history" in result.output
+
+    def test_pfcwd_show_history_with_empty_rejected(self):
+        result = self._invoke_stats(['--history', '-e'])
+        assert result.exit_code == 2
+        assert "--history and --empty are mutually exclusive" in result.output
+
+    def test_pfcwd_show_history_cap_and_order(self):
+        result = self._invoke_stats(['--history'])
+        assert result.exit_code == 0
+        lines = result.output.splitlines()[2:]
+        assert len(lines) == 5
+        rows = [tuple(row.split()[:3]) for row in lines]
+        # 5 most recent of the 7 valid storms, newest first by detection time
+        assert rows == [
+            ('Ethernet0:3', '1', '2025-10-21T03:33:49.123456Z'),
+            ('Ethernet4:3', '2', '2025-10-21T02:26:40.000000Z'),
+            ('Ethernet8:4', '4', '2025-10-21T02:00:00.000000Z'),
+            ('Ethernet8:4', '3', '2025-10-21T01:43:20.000000Z'),
+            ('Ethernet4:3', '1', '2025-10-21T01:26:40.000000Z'),
+        ]
+        # Ethernet8:4 storms 1 and 2 are the two cut by the cap
+        assert ('Ethernet8:4', '1') not in [r[:2] for r in rows]
+        assert ('Ethernet8:4', '2') not in [r[:2] for r in rows]
+
+    def test_pfcwd_show_history_with_check_storm_rejected(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"],
+            ["--history", "--check-storm"], obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 2
+        assert "--history and --check-storm are mutually exclusive" in result.output
+
+    def test_pfcwd_show_json_without_history_rejected(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], ["--json"], obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 2
+        assert "--json requires --history" in result.output
+
+    def test_pfcwd_show_stats_unchanged_with_history_data(self):
+        # PFC_WD_STORM_HISTORY|* keys exist in the mock STATE_DB; plain stats must ignore them
+        self.executor(test_vectors.testData['pfcwd_show_stats'])
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], [], obj=Db()
+        )
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_stats_output
+
+    def test_pfcwd_show_history_json(self):
+        data = self._invoke_history_json()
+        # No PFC_WD_STATE_TABLE|PFC_WD in the mock: the mode is not known
+        assert data['recovery_mechanism'] == 'unknown'
+        storms = data['storms']
+        assert len(storms) == 5
+        expected_keys = {'queue', 'ordinal', 'detected', 'restored', 'interrupted', 'duration_ms',
+                         'tx_packets', 'tx_dropped_packets', 'rx_packets',
+                         'rx_dropped_packets'}
+        for storm in storms:
+            assert set(storm.keys()) == expected_keys
+            assert not [k for k in storm if k.startswith('_')]
+            assert not [k for k in storm if k.endswith('_timestamp_us')]
+        assert (storms[0]['queue'], storms[0]['ordinal']) == ('Ethernet0:3', 1)
+        assert storms[0]['detected'] == '2025-10-21T03:33:49.123456Z'
+        assert storms[0]['restored'] is None
+        by_key = {(x['queue'], x['ordinal']): x for x in storms}
+        assert by_key[('Ethernet4:3', 1)] == {
+            'queue': 'Ethernet4:3', 'ordinal': 1,
+            'detected': '2025-10-21T01:26:40.000000Z',
+            'restored': '2025-10-21T01:26:40.475000Z',
+            'interrupted': None,
+            'duration_ms': 475, 'tx_packets': 1200, 'tx_dropped_packets': 1200,
+            'rx_packets': 980, 'rx_dropped_packets': 980,
+        }
+        assert ('Ethernet8:4', 2) not in by_key and ('Ethernet8:4', 1) not in by_key
+        partial = by_key[('Ethernet4:3', 2)]
+        assert partial['restored'] == '2025-10-21T02:26:40.100000Z'
+        assert partial['duration_ms'] is None and partial['tx_packets'] is None
+        assert partial['rx_dropped_packets'] is None
+        stamps = [x['detected'] for x in storms]
+        assert stamps == sorted(stamps, reverse=True)
+
+    def test_pfcwd_show_history_skips_bad_timestamps(self):
+        # Ethernet8:4 junk: storm_9 (restored only), storm_10 ("abc"), storm_x
+        storms = self._invoke_history_json()['storms']
+        assert len(storms) == 5
+        assert all(isinstance(x['ordinal'], int) for x in storms)
+        assert not [x for x in storms if x['queue'] == 'Ethernet8:4'
+                    and x['ordinal'] not in (3, 4)]
+
+    def test_pfcwd_show_history_skips_unknown_port_and_bad_key(self):
+        # Ethernet999|3 (unknown port) and PFC_WD_STORM_HISTORY|garbage carry the
+        # newest times, so they would top the list if not skipped
+        result = self._invoke_stats(['--history'])
+        assert result.exit_code == 0
+        assert 'Ethernet999' not in result.output
+        assert 'garbage' not in result.output
+        storms = self._invoke_history_json()['storms']
+        assert {x['queue'] for x in storms} == {'Ethernet0:3', 'Ethernet4:3', 'Ethernet8:4'}
+
+    def test_pfcwd_show_history_before_queue_counters(self):
+        # After a cold start COUNTERS_QUEUE_NAME_MAP stays empty until queue counters
+        # are registered; the storm records in STATE_DB are shown regardless
+        original_get_all = swsscommon.SonicV2Connector.get_all
+
+        def get_all(self, db_name, key, *args, **kwargs):
+            if key == 'COUNTERS_QUEUE_NAME_MAP':
+                return {}
+            return original_get_all(self, db_name, key, *args, **kwargs)
+
+        with patch.object(swsscommon.SonicV2Connector, 'get_all', new=get_all):
+            storms = self._invoke_history_json()['storms']
+        assert {x['queue'] for x in storms} == {'Ethernet0:3', 'Ethernet4:3', 'Ethernet8:4'}
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_sw_get_all)
+    def test_pfcwd_show_history_json_sw_mode(self):
+        data = self._invoke_history_json()
+        assert data['recovery_mechanism'] == 'software'
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_history_json_hw_mode(self):
+        data = self._invoke_history_json()
+        assert data['recovery_mechanism'] == 'hardware'
 
     def test_pfcwd_show_config(self):
         self.executor(test_vectors.testData['pfcwd_show_config'])
@@ -748,6 +976,38 @@ class TestMultiAsicPfcwdShow(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == test_vectors.show_pfcwd_stats_all
+
+    def test_pfcwd_show_history_masic(self):
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["stats"],
+            ["--history"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        # -d defaults to "all": utilities_common.multi_asic computed the default
+        # before the multi-asic topology was set and is not reloaded here.
+        assert result.output == test_vectors.show_pfcwd_history_masic_all
+
+    def _invoke_history_masic(self, args):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], args, obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        return result.output
+
+    def test_pfcwd_show_history_masic_frontend(self):
+        output = self._invoke_history_masic(['--history', '-d', 'frontend'])
+        assert output == test_vectors.show_pfcwd_history_masic
+
+    def test_pfcwd_show_history_masic_all(self):
+        output = self._invoke_history_masic(['--history', '-d', 'all'])
+        assert output == test_vectors.show_pfcwd_history_masic_all
 
     def test_pfcwd_stats_with_queues(self):
         import pfcwd.main as pfcwd
