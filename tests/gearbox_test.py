@@ -5,7 +5,7 @@ import importlib.util
 from contextlib import redirect_stdout
 from io import StringIO
 from click.testing import CliRunner
-from unittest import TestCase
+from unittest import mock, TestCase
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -25,6 +25,7 @@ _gearboxutil_spec = importlib.util.spec_from_loader("gearboxutil", _gearboxutil_
 gearboxutil = importlib.util.module_from_spec(_gearboxutil_spec)
 _gearboxutil_loader.exec_module(gearboxutil)
 
+
 class TestGearbox(TestCase):
     @classmethod
     def setup_class(cls):
@@ -33,6 +34,10 @@ class TestGearbox(TestCase):
 
     def setUp(self):
         self.runner = CliRunner()
+        # platform_has_gearbox() checks for a gearbox_config.json on disk, which
+        # is not present in the unit-test environment, so register it explicitly.
+        if "gearbox" not in show.cli.commands:
+            show.cli.add_command(show.gearbox.gearbox)
 
     def test_gearbox_phys_status_validation(self):
         result = self.runner.invoke(show.cli.commands["gearbox"].commands["phys"].commands["status"], [])
@@ -183,3 +188,24 @@ class TestInterfaceFecStats(TestCase):
     @classmethod
     def teardown_class(cls):
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestPlatformHasGearbox(TestCase):
+    def test_gearbox_config_present(self):
+        with mock.patch('show.main.device_info.get_path_to_hwsku_dir', return_value='/hwsku'):
+            with mock.patch('os.path.isfile', return_value=True) as mock_isfile:
+                self.assertTrue(show.platform_has_gearbox())
+                mock_isfile.assert_called_once_with('/hwsku/gearbox_config.json')
+
+    def test_gearbox_config_absent(self):
+        with mock.patch('show.main.device_info.get_path_to_hwsku_dir', return_value='/hwsku'):
+            with mock.patch('os.path.isfile', return_value=False):
+                self.assertFalse(show.platform_has_gearbox())
+
+    def test_no_hwsku_dir(self):
+        with mock.patch('show.main.device_info.get_path_to_hwsku_dir', return_value=None):
+            self.assertFalse(show.platform_has_gearbox())
+
+    def test_hwsku_dir_lookup_raises(self):
+        with mock.patch('show.main.device_info.get_path_to_hwsku_dir', side_effect=Exception('boom')):
+            self.assertFalse(show.platform_has_gearbox())
