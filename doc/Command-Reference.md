@@ -179,7 +179,6 @@
   * [Platform Component Firmware vendor specific behaviour](#platform-component-firmware-vendor-specific-behaviour)
 * [Platform Specific Commands](#platform-specific-commands)
   * [Mellanox Platform Specific Commands](#mellanox-platform-specific-commands)
-  * [Barefoot Platform Specific Commands](#barefoot-platform-specific-commands)
 * [PINS](#pins-show commands)
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
@@ -11283,41 +11282,6 @@ config platform mlnx
 This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
 The platform mellanox command currently includes no sub command.
-
-### Barefoot Platform Specific Commands
-
-**show platform barefoot profile**
-
-This command displays active P4 profile and lists available ones.
-
-- Usage:
-  ```
-  show platform barefoot profile
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform barefoot profile
-  Current profile: x1
-  Available profile(s):
-  x1
-  x2
-  ```
-
-**config platform barefoot profile**
-
-This command sets P4 profile.
-
-- Usage:
-  ```
-  config platform barefoot profile <p4_profile> [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config platform barefoot profile x1
-  Swss service will be restarted, continue? [y/N]: y
-  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#platform-specific-commands)
 
