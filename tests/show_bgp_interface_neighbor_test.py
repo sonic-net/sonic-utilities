@@ -3,7 +3,7 @@ from unittest import mock
 import pytest
 from click.testing import CliRunner
 
-import show.main  # Import the CLI root before its BGP modules to avoid circular imports.
+import show.main as show_cli  # Load the CLI root before its BGP modules.
 from show import bgp_frr_v4, bgp_frr_v6
 
 
@@ -14,10 +14,13 @@ def family(request):
 
 def invoke_neighbor(family, neighbor=None, info_type=None, vrf="default", namespace=None):
     arguments = []
+    bgp_command = show_cli.cli.commands[
+        "ip" if family is bgp_frr_v4 else "ipv6"
+    ].commands["bgp"]
     if vrf == "default":
-        command = family.bgp.commands["neighbors"]
+        command = bgp_command.commands["neighbors"]
     else:
-        command = family.bgp.commands["vrf"]
+        command = bgp_command.commands["vrf"]
         arguments.extend([vrf, "neighbors"])
     if neighbor is not None:
         arguments.append(neighbor)
@@ -159,7 +162,10 @@ def test_interface_namespace_mismatch_warning(family):
 
 @pytest.mark.parametrize("vrf", ["default", "Vrf-red"])
 def test_help_includes_interface_name(family, vrf):
-    command = family.bgp.commands["neighbors"] if vrf == "default" else family.bgp.commands["vrf"]
+    bgp_command = show_cli.cli.commands[
+        "ip" if family is bgp_frr_v4 else "ipv6"
+    ].commands["bgp"]
+    command = bgp_command.commands["neighbors"] if vrf == "default" else bgp_command.commands["vrf"]
     arguments = ["--help"] if vrf == "default" else [vrf, "neighbors", "--help"]
 
     result = CliRunner().invoke(command, arguments)
