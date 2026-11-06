@@ -418,7 +418,10 @@ fi
 VERBOSE=yes debug "Issuing OS-level reboot ..." >&2
 
 if [[ "${BLOCKING_MODE}" != "yes" ]]; then
-    # In non blocking mode, we will remain the original logic.
+    if [[ "$smartswitch" == "True" && "$REBOOT_DPU" == "no" ]]; then
+        /sbin/reboot ${REBOOT_FLAGS}
+        exit $?
+    fi
     exec /sbin/reboot ${REBOOT_FLAGS}
 else
 

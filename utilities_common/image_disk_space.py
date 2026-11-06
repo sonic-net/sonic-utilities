@@ -20,6 +20,7 @@ SWITCH_MIN_FREE_DISK_REBOOT_KEY = "min_free_disk_in_gb_for_switch_reboot"
 DPU_MIN_FREE_DISK_REBOOT_KEY = "min_free_disk_in_gb_for_dpu_reboot"
 
 DEFAULT_DISK_PATH = "/host"
+SSH_DISK_CHECK_TIMEOUT_SECONDS = 60
 
 IMAGE_TYPE_SWITCH = "switch"
 IMAGE_TYPE_DPU = "dpu"
@@ -308,8 +309,11 @@ def _run_cmd(cmd: List[str]) -> Tuple[int, str]:
             cmd,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
+            timeout=SSH_DISK_CHECK_TIMEOUT_SECONDS,
         )
         return 0, output.strip()
+    except subprocess.TimeoutExpired:
+        return 1, "Disk-space command timed out"
     except subprocess.CalledProcessError as error:
         output = error.output or ""
         return error.returncode, output.strip()
