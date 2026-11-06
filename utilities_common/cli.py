@@ -123,6 +123,11 @@ class AliasedGroup(click.Group):
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
 
+        # Names registered for the same command, such as bpdu_guard and
+        # bpdu-guard, count as one match.
+        if len({id(click.Group.get_command(self, ctx, x)) for x in matches}) == 1:
+            return click.Group.get_command(self, ctx, matches[0])
+
         # In completion context, Click sets ctx.resilient_parsing = True.
         # Return None instead of raising an error to avoid showing traceback during tab completion.
         if ctx.resilient_parsing:
