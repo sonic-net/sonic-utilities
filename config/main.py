@@ -3075,11 +3075,13 @@ def portchannel(db, ctx, namespace):
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
 @click.option('--min-links', default=1, type=click.IntRange(1,1024))
 @click.option('--fallback', default='false')
+@click.option('--fallback-timeout', default=None, type=click.IntRange(1,300),
+              help='LACP fallback timeout in seconds (1-300), applies when fallback is enabled')
 @click.option('--fast-rate', default='false',
               type=click.Choice(['true', 'false'],
                                 case_sensitive=False))
 @click.pass_context
-def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
+def add_portchannel(ctx, portchannel_name, min_links, fallback, fallback_timeout, fast_rate):
     """Add port channel"""
 
     fvs = {
@@ -3093,6 +3095,8 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
         fvs['min_links'] = str(min_links)
     if fallback != 'false':
         fvs['fallback'] = 'true'
+    if fallback_timeout is not None:
+        fvs['fallback_timeout'] = str(fallback_timeout)
 
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
