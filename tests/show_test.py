@@ -1402,6 +1402,23 @@ class TestShow(object):
         mock_run_command.assert_called_with(['pfcwd', 'show', 'stats', '-d', 'all'], display_cmd=True)
 
     @patch('show.main.run_command')
+    def test_show_pfcwd_config_json(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["pfcwd"].commands['config'], ['--json'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['pfcwd', 'show', 'config', '-d', 'all', '--json'], display_cmd=False)
+
+    @patch('show.main.run_command')
+    def test_show_pfcwd_config_json_verbose(self, mock_run_command):
+        # --verbose must not print the command line ahead of the JSON
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["pfcwd"].commands['config'], ['--json', '--verbose'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['pfcwd', 'show', 'config', '-d', 'all', '--json'], display_cmd=False)
+
+    @patch('show.main.run_command')
     def test_show_watermark_telemetry_interval(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["watermark"].commands['telemetry'].commands['interval'])
