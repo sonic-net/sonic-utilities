@@ -72,6 +72,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import isis
 from . import evpn_mh
 from . import llr
 
@@ -1953,6 +1954,9 @@ config.add_command(dns.dns)
 
 # Switchport module
 config.add_command(switchport.switchport)
+
+# add isis commands
+config.add_command(isis.ISIS)
 
 @config.command()
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false,
@@ -5357,6 +5361,9 @@ def interface(ctx, namespace):
     config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     config_db.connect()
     ctx.obj = {'config_db': config_db, 'namespace': str(namespace)}
+
+
+interface.add_command(isis.INTERFACE_ISIS)
 
 
 @config.group(cls=clicommon.AliasedGroup, name='switch-fast-linkup', context_settings=CONTEXT_SETTINGS)

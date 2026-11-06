@@ -39,6 +39,9 @@
   * [BMC config commands](#bmc-config-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
+* [IS-IS](#is-is)
+  * [IS-IS show commands](#is-is-show-commands)
+  * [IS-IS config commands](#is-is-config-commands)
 * [BGP](#bgp)
   * [BGP show commands](#bgp-show-commands)
   * [BGP config commands](#bgp-config-commands)
@@ -2733,6 +2736,65 @@ This command displays the state and key parameters of all BFD sessions that matc
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
+
+## IS-IS
+
+IS-IS requires `DEVICE_METADATA|localhost` field
+`frr_mgmt_framework_config="true"` and a restart of the affected bgp container.
+Enable the process before configuring NET, level, hostname or timers, and before
+enabling interfaces. Non-default VRFs must already exist. Use interface names;
+aliases are accepted in alias naming mode. PortChannel/VLAN members are rejected.
+
+### IS-IS show commands
+
+```
+show isis summary [-j|--json] [-n NAMESPACE]
+show isis neighbor [-j|--json] [-n NAMESPACE]
+show isis database [detail] [-j|--json] [-n NAMESPACE]
+show isis interface [-j|--json] [-n NAMESPACE]
+```
+
+### IS-IS config commands
+
+```
+config isis [-n NAMESPACE] enable [VRF]
+config isis [-n NAMESPACE] disable [VRF]
+config isis [-n NAMESPACE] net NET [VRF]
+config isis [-n NAMESPACE] level {level-1|level-2|level-1-2} [VRF]
+config isis [-n NAMESPACE] hostname {enable|disable} [VRF]
+config isis [-n NAMESPACE] timer lsp-mtu MTU [VRF]
+config isis [-n NAMESPACE] timer lsp-refresh SECONDS [VRF]
+config isis [-n NAMESPACE] timer lsp-lifetime SECONDS [VRF]
+config isis [-n NAMESPACE] reset {net|level|hostname|lsp-mtu|lsp-refresh|lsp-lifetime} [VRF]
+config interface [-n NAMESPACE] isis enable INTERFACE
+config interface [-n NAMESPACE] isis disable INTERFACE
+config interface [-n NAMESPACE] isis metric INTERFACE METRIC
+config interface [-n NAMESPACE] isis circuit-type INTERFACE {p2p|lan}
+config interface [-n NAMESPACE] isis passive INTERFACE {enable|disable}
+config interface [-n NAMESPACE] isis reset INTERFACE {metric|circuit-type|passive}
+```
+
+VRF defaults to `default`. NET must contain a system-id and end in `.00`.
+LSP MTU accepts 128–4352 (default 1492), refresh accepts 1–65235 seconds
+(default 900), lifetime accepts 350–65535 seconds (default 1200), and lifetime
+must be at least refresh + 300. Interface metric accepts 1–16777215 (default 10).
+Circuit type defaults to LAN; passive defaults to off. Reset removes the selected
+field, restoring its default (or removing NET). Process disable refuses while
+interface bindings remain; disable interfaces first. Hostname uses `enable|disable`.
+
+Example, after enabling management-framework mode:
+
+```shell
+sudo config isis enable
+sudo config isis net 49.0001.0000.0000.0001.00
+sudo config isis level level-2
+sudo config interface isis enable Ethernet0
+sudo config interface isis circuit-type Ethernet0 p2p
+sudo config interface isis enable Loopback0
+sudo config interface isis passive Loopback0 enable
+show isis interface
+show isis neighbor
+```
 
 ## BGP
 
