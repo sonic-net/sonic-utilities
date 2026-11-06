@@ -808,6 +808,7 @@ def _is_neighbor_ipaddress(config_db, ipaddress):
     entry = config_db.get_entry('BGP_NEIGHBOR', ipaddress)
     return True if entry else False
 
+
 def _is_neighbor_interface(config_db, interface_name):
     """Return whether an exact interface name is a configured BGP neighbor."""
     if not config_db.get_entry('BGP_NEIGHBOR', interface_name):
@@ -826,6 +827,7 @@ def _is_neighbor_interface(config_db, interface_name):
                 return True
 
     return False
+
 
 def _get_all_neighbor_ipaddresses(config_db):
     """Returns list of strings containing IP addresses of all BGP neighbors
