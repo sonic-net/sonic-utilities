@@ -5,6 +5,7 @@ from click.testing import CliRunner
 import config.main as config
 import show.main as show
 from utilities_common.db import Db
+from sonic_py_common import multi_asic
 
 
 class TestIsis(object):
@@ -211,7 +212,12 @@ class TestIsis(object):
         reset = config.config.commands['isis'].commands['reset']
         assert runner.invoke(reset, ['lsp-lifetime'], obj=db).exit_code != 0
         assert runner.invoke(reset, ['lsp-refresh'], obj=db).exit_code == 0
+        assert db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default') == {
+            'lsp_mtu': '4000', 'lsp_lifetime': '1500'}
         assert runner.invoke(reset, ['lsp-lifetime'], obj=db).exit_code == 0
+        assert db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default') == {'lsp_mtu': '4000'}
+        assert runner.invoke(reset, ['lsp-mtu'], obj=db).exit_code == 0
+        assert not db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default')
         db.cfgdb.set_entry('ISIS_GLOBALS_TIMERS', 'default', None)
         db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)
 
@@ -249,10 +255,10 @@ class TestIsis(object):
         runner = CliRunner()
         result = runner.invoke(self.show_isis_database, ['detail', '--json'])
         assert result.exit_code == 0
-        run_command.assert_called_with('show isis database detail json', None, 'rvtysh')
+        run_command.assert_called_with('show isis database detail json', multi_asic.DEFAULT_NAMESPACE, 'rvtysh')
         result = runner.invoke(show.cli.commands['isis'].commands['interface'], [])
         assert result.exit_code == 0
-        run_command.assert_called_with('show isis interface', None, 'rvtysh')
+        run_command.assert_called_with('show isis interface', multi_asic.DEFAULT_NAMESPACE, 'rvtysh')
 
     def test_isis_namespace(self):
         runner = CliRunner()
@@ -279,3 +285,29 @@ class TestIsis(object):
             assert result.exit_code == 0, result.output
             assert not db.cfgdb.get_entry('ISIS_INTERFACE', name)
             db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', name), None)
+
+    def test_isis_reset_removes_fields_and_preserves_siblings(self):
+        db = Db()
+        runner = CliRunner()
+        reset = config.config.commands['isis'].commands['reset']
+        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', {
+            'enabled': 'true', 'net_title': '49.0001.0000.0000.0001.00',
+            'level': 'level-2', 'dynamic_hostname': 'false'})
+        remaining = db.cfgdb.get_entry('ISIS_GLOBALS', 'default').copy()
+        for option, field in (('net', 'net_title'), ('level', 'level'), ('hostname', 'dynamic_hostname')):
+            assert runner.invoke(reset, [option], obj=db).exit_code == 0
+            remaining.pop(field)
+            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == remaining
+        db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1'})
+        db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', {
+            'enabled': 'true', 'metric': '30', 'circuit_type': 'p2p', 'passive': 'true'})
+        interface_reset = config.config.commands['interface'].commands['isis'].commands['reset']
+        obj = {'config_db': db.cfgdb, 'namespace': multi_asic.DEFAULT_NAMESPACE}
+        remaining = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0').copy()
+        for option in ('metric', 'circuit-type', 'passive'):
+            result = runner.invoke(interface_reset, ['Ethernet0', option], obj=obj)
+            assert result.exit_code == 0, result.output
+            remaining.pop(option.replace('-', '_'))
+            assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == remaining
+        db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', None)
+        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)

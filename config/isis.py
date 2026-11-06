@@ -471,8 +471,10 @@ def isis_reset(ctx, db, field, vrf):
     lifetime = 1200 if field == 'lsp-lifetime' else int(timers.get('lsp_lifetime', 1200))
     if field in ('lsp-refresh', 'lsp-lifetime') and lifetime < refresh + 300:
         ctx.fail('LSP lifetime must be at least refresh interval + 300 seconds')
-    if db.cfgdb.get_entry(table, vrf):
-        db.cfgdb.mod_entry(table, vrf, {fields[field]: None})
+    entry = db.cfgdb.get_entry(table, vrf)
+    if fields[field] in entry:
+        entry.pop(fields[field])
+        db.cfgdb.set_entry(table, vrf, entry or None)
 
 
 @INTERFACE_ISIS.command(name='reset')
@@ -485,4 +487,6 @@ def interface_isis_reset(ctx, interface_name, field):
     name = _resolve_interface(ctx, db, interface_name)
     if db.get_entry(CFG_ISIS_INTERFACE, name).get('enabled') != 'true':
         ctx.fail("IS-IS routing is not enabled on interface {}".format(name))
-    db.mod_entry(CFG_ISIS_INTERFACE, name, {field.replace('-', '_'): None})
+    entry = db.get_entry(CFG_ISIS_INTERFACE, name)
+    entry.pop(field.replace('-', '_'), None)
+    db.set_entry(CFG_ISIS_INTERFACE, name, entry)
