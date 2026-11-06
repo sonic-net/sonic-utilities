@@ -3139,6 +3139,13 @@ def remove_portchannel(ctx, portchannel_name):
         except ValueError as e:
             ctx.fail(str(e))
 
+    # Its spanning-tree configuration goes with it. The STP rows point at the
+    # PortChannel in YANG, so they have to be removed before it is.
+    try:
+        stp.interface_remove_stp(db, portchannel_name)
+    except JsonPatchConflict as e:
+        ctx.fail("Could not remove the spanning-tree config of {}: {}".format(portchannel_name, e))
+
     try:
         db.set_entry('PORTCHANNEL', portchannel_name, None)
     except JsonPatchConflict:
