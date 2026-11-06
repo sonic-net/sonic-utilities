@@ -861,6 +861,9 @@ def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
     """Start up or shut down BGP session by IP address, interface name or hostname
     """
     neighbor_keys = []
+
+    # If we were passed an IP address, convert it to lowercase because IPv6 addresses were
+    # stored in ConfigDB with all lowercase alphabet characters during minigraph parsing
     if _is_neighbor_interface(config_db, ipaddr_or_hostname):
         neighbor_keys.append(ipaddr_or_hostname)
     elif _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
@@ -872,8 +875,8 @@ def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
     if not neighbor_keys:
         return False
 
-    for neighbor_key in neighbor_keys:
-        _change_bgp_session_status_by_addr(config_db, neighbor_key, status, verbose)
+    for ip_addr in neighbor_keys:
+        _change_bgp_session_status_by_addr(config_db, ip_addr, status, verbose)
 
     return True
 
