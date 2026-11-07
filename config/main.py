@@ -1111,6 +1111,23 @@ def _get_disabled_services_list(config_db):
     return disabled_services_list
 
 
+# Optional monit program checks unmonitored during config reload / load_minigraph.
+_OPTIONAL_MONIT_PROGRAM_CHECKS = ("routeCheck", "chassisLagIdCheck")
+
+
+def _unmonitor_optional_monit_program_checks():
+    for service in _OPTIONAL_MONIT_PROGRAM_CHECKS:
+        if _monit_service_exists(service):
+            clicommon.run_command(['sudo', 'monit', 'unmonitor', service])
+
+
+def _monitor_optional_monit_program_checks():
+    """Re-enable optional monit program checks (caller waits before monit reload)."""
+    for service in _OPTIONAL_MONIT_PROGRAM_CHECKS:
+        if _monit_service_exists(service):
+            clicommon.run_command(['sudo', 'monit', 'monitor', service])
+
+
 def _monit_service_exists(service):
     """Return True if monit knows about the given service."""
     try:
@@ -1144,10 +1161,11 @@ def _get_monit_services_by_prefix(prefix):
 def _stop_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Disabling container, routeCheck and memory monitoring ...")
+        click.echo(
+            "Disabling container, routeCheck, chassisLagIdCheck and memory monitoring ..."
+        )
         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
-        if _monit_service_exists('routeCheck'):
-            clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
+        _unmonitor_optional_monit_program_checks()
         for svc in _get_monit_services_by_prefix('container_memory_'):
             clicommon.run_command(['sudo', 'monit', 'unmonitor', svc])
     except subprocess.CalledProcessError as err:
@@ -1303,17 +1321,18 @@ def _restart_services():
     wait_service_restart_finish('networking', last_networking_timestamp)
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Enabling container, routeCheck and memory monitoring ...")
-        has_route_check = _monit_service_exists('routeCheck')
-        if has_route_check:
-            clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
+        click.echo(
+            "Enabling container, routeCheck, chassisLagIdCheck and memory monitoring ..."
+        )
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
+        _monitor_optional_monit_program_checks()
         memory_services = _get_monit_services_by_prefix('container_memory_')
         for svc in memory_services:
             clicommon.run_command(['sudo', 'monit', 'monitor', svc])
         log.log_notice("Waiting for monit monitor actions to complete ...")
-        if has_route_check:
-            _wait_for_monit_service_monitored('routeCheck')
+        for service in _OPTIONAL_MONIT_PROGRAM_CHECKS:
+            if _monit_service_exists(service):
+                _wait_for_monit_service_monitored(service)
         _wait_for_monit_service_monitored('container_checker')
         for svc in memory_services:
             _wait_for_monit_service_monitored(svc)
