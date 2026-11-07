@@ -2,7 +2,7 @@ import jsonpatch
 import copy
 from jsonpointer import JsonPointer
 
-from sonic_py_common import device_info
+from sonic_py_common import device_info, multi_asic
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
 from generic_config_updater.gu_common import EmptyTableError, genericUpdaterLogging
 
@@ -11,6 +11,8 @@ class ValidatedConfigDBConnector(object):
     def __init__(self, config_db_connector):
         self.connector = config_db_connector
         self.yang_enabled = device_info.is_yang_config_validation_enabled(self.connector)
+        # Validate and write in the connector's namespace: GenericUpdater defaults to the host's.
+        self.scope = getattr(self.connector, 'namespace', None) or multi_asic.DEFAULT_NAMESPACE
 
     def __getattr__(self, name):
         if self.yang_enabled:
@@ -95,7 +97,9 @@ class ValidatedConfigDBConnector(object):
 
         try:
             # Because all writes to ConfigDB through ValidatedConfigDBConnector are simple and don't require sorting, we set sort=False to skip sorting and improve performance
-            GenericUpdater().apply_patch(patch=gcu_patch, config_format=config_format, verbose=False, dry_run=False, ignore_non_yang_tables=False, ignore_paths=None, sort=False)
+            GenericUpdater(scope=self.scope).apply_patch(patch=gcu_patch, config_format=config_format, verbose=False,
+                                                         dry_run=False, ignore_non_yang_tables=False, ignore_paths=None,
+                                                         sort=False)
         except EmptyTableError:
             self.validated_delete_table(table)
 
@@ -104,7 +108,9 @@ class ValidatedConfigDBConnector(object):
         format = ConfigFormat.CONFIGDB.name
         config_format = ConfigFormat[format.upper()]
         try:
-            GenericUpdater().apply_patch(patch=gcu_patch, config_format=config_format, verbose=False, dry_run=False, ignore_non_yang_tables=False, ignore_paths=None, sort=False)
+            GenericUpdater(scope=self.scope).apply_patch(patch=gcu_patch, config_format=config_format, verbose=False,
+                                                         dry_run=False, ignore_non_yang_tables=False, ignore_paths=None,
+                                                         sort=False)
         except ValueError as e:
             logger = genericUpdaterLogging.get_logger(title="Patch Applier", print_all_to_console=True)
             logger.log_notice("Unable to remove entry, as doing so will result in invalid config. Error: {}".format(e))
