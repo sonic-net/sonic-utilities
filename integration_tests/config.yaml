@@ -1,0 +1,52 @@
+# One bank-zero CMIS module; each test starts its own emulator process.
+transceivers:
+  0:
+    present: true
+    defaults:
+      SFF8024Identifier: QSFP_DD
+      SFF8024IdentifierCopy: QSFP_DD
+      CmisRevision:
+        Major: 5
+        Minor: 2
+      MemoryModel: PAGED
+      BanksSupported: BANK_0_SUPPORTED
+      MciMaxSpeed: UP_TO_400_KHZ
+
+      VendorName: xcvr-emu
+      VendorPN: EMU-CMIS-400G
+      VendorSN: EMU000000000001
+      VendorRev: "01"
+      VendorOUI: 0x010203
+      DateCode:
+        Year: "24"
+        Month: "12"
+        DayOfMonth: "14"
+      ConnectorType: MPO_1X16
+      MediaType: OPTICAL_SMF
+      LengthMultiplier: MULTIPLIER_100
+      BaseLength: 1
+      ModulePowerClass: CLASS_8
+      MaxPower: 40  # 10 W in 0.25 W units.
+      ModuleActiveFirmwareMajorRevision: 1
+      ModuleActiveFirmwareMinorRevision: 2
+      ModuleInactiveFirmwareMajorRevision: 1
+      ModuleInactiveFirmwareMinorRevision: 1
+
+      ApplicationDescriptor:
+        - HostInterfaceID: 79  # 400GAUI-4-S C2M
+          MediaInterfaceID: 28  # 400GBASE-DR4
+          HostLaneCount: 4
+          MediaLaneCount: 4
+          HostLaneAssignmentOptions: 0b1
+      MediaLaneAssignmentOptions: [0b1]
+      MaxDurationDPInit: BETWEEN_1_AND_5_S
+      SteppedConfigOnly: STEP_BY_STEP
+
+      DiagnosticPagesSupported: 1
+      OutputDisableTxSupported: SUPPORTED
+      OutputDisableRxSupported: SUPPORTED
+      TempMonSupported: SUPPORTED
+      VccMonSupported: SUPPORTED
+      TxOpticalPowerMonSupported: SUPPORTED
+      RxOpticalPowerMonSupported: SUPPORTED
+      TxBiasMonSupported: SUPPORTED

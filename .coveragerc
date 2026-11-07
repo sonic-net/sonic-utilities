@@ -4,3 +4,4 @@ source = .
 omit =
     .eggs/*
     tests/*
+    integration_tests/*
