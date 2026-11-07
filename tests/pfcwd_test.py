@@ -1,8 +1,10 @@
 import importlib
 import os
 import sys
+from contextlib import ExitStack
 from unittest.mock import patch, MagicMock
 
+import pytest
 from click.testing import CliRunner
 
 from utilities_common.db import Db
@@ -33,6 +35,41 @@ class TestPfcwd(object):
 
     def test_pfcwd_show_config_invalid_port(self):
         self.executor(test_vectors.testData['pfcwd_show_config_invalid_port'])
+
+    @pytest.mark.parametrize('ports', [[], ['Ethernet0']])
+    @pytest.mark.parametrize('global_config, expected_globals', [
+        ({}, ''),
+        ({'POLL_INTERVAL': '100'}, 'Changed polling interval to 100ms\n'),
+        ({'BIG_RED_SWITCH': 'disable'}, 'BIG_RED_SWITCH status is disable\n'),
+        ({'BIG_RED_SWITCH': 'enable'}, 'BIG_RED_SWITCH status is enable\n'),
+        (
+            {'POLL_INTERVAL': '100', 'BIG_RED_SWITCH': 'disable'},
+            'Changed polling interval to 100ms\nBIG_RED_SWITCH status is disable\n',
+        ),
+        (
+            {'POLL_INTERVAL': '100', 'BIG_RED_SWITCH': 'enable'},
+            'Changed polling interval to 100ms\nBIG_RED_SWITCH status is enable\n',
+        ),
+    ])
+    def test_pfcwd_show_config_without_port_entries(
+        self, ports, global_config, expected_globals
+    ):
+        import pfcwd.main as pfcwd
+        db = Db()
+        original_get_entry = db.cfgdb.get_entry
+
+        def get_entry(table, key):
+            if table == 'PFC_WD':
+                return dict(global_config) if key == 'GLOBAL' else {}
+            return original_get_entry(table, key)
+
+        with patch.object(db.cfgdb, 'get_entry', side_effect=get_entry):
+            result = CliRunner().invoke(
+                pfcwd.cli.commands['show'].commands['config'], ports, obj=db
+            )
+
+        assert result.exit_code == 0, result.output
+        assert result.output == expected_globals + test_vectors.pfcwd_show_config_empty_output
 
     def test_pfcwd_show_stats(self):
         self.executor(test_vectors.testData['pfcwd_show_stats'])
@@ -667,6 +704,32 @@ class TestMultiAsicPfcwdShow(object):
         dbconnector.load_namespace_config()
         import pfcwd.main
         importlib.reload(pfcwd.main)
+
+    def test_pfcwd_config_without_port_entries(self):
+        import pfcwd.main as pfcwd
+        db = Db()
+        args = ['--display', 'all']
+        namespaces = ['asic0', 'asic1']
+
+        def get_entry(table, key):
+            assert table == 'PFC_WD'
+            return {'POLL_INTERVAL': '100', 'BIG_RED_SWITCH': 'disable'} if key == 'GLOBAL' else {}
+
+        command = pfcwd.cli.commands['show'].commands['config']
+        with ExitStack() as stack:
+            for config_db in db.cfgdb_clients.values():
+                stack.enter_context(patch.object(config_db, 'get_entry', side_effect=get_entry))
+            result = CliRunner().invoke(
+                command, args, obj=db
+            )
+
+        expected_globals = ''.join(
+            'Changed polling interval to 100ms on {0}\n'
+            'BIG_RED_SWITCH status is disable on {0}\n'.format(ns)
+            for ns in namespaces
+        )
+        assert result.exit_code == 0, result.output
+        assert result.output == expected_globals + test_vectors.pfcwd_show_config_empty_output
 
     @patch('pfcwd.main.os.geteuid', MagicMock(return_value=8))
     def test_pfcwd_start_nonroot(self):

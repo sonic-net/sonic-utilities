@@ -205,7 +205,6 @@ class PfcwdCli(object):
                 self.multi_asic.display_option
             )
 
-        ports_found = False
         for port in ports:
             config_list = []
             config_entry = self.config_db.get_entry(
@@ -213,14 +212,10 @@ class PfcwdCli(object):
             )
             if config_entry is None or config_entry == {}:
                 continue
-            ports_found = True
             for config in CONFIG_DESCRIPTION:
                 line = config_entry.get(config[1], config[2])
                 config_list.append(line)
             table.append([port] + config_list)
-
-        if not ports_found:
-            return
 
         poll_interval = self.config_db.get_entry(
             CONFIG_DB_PFC_WD_TABLE_NAME, 'GLOBAL'
