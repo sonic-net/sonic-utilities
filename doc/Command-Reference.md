@@ -16980,7 +16980,9 @@ These commands display per-interface CPO information. When `-p/--port` is omitte
 
 `show interface speed application` displays four columns: Interface, Lane, Configured Application, and Active Application. Each application is displayed as `AppSel: Host interface / Media interface`, using the complete descriptions returned by the public API. It does not infer a numeric link speed. JSON preserves the complete `Application Advertisement` and the per-lane AppSel IDs under `Application Select Controls` and `Active Application Control Set`. Breakout subports display only their own lanes.
 
-For a breakout subport, `map` and `lane-status` identify its ELS lasers only when `cpo.json` provides `laser_to_asic_lane_mapping`; otherwise the lasers are shown as `N/A (needs laser_to_asic_lane_mapping)`. `lane-status` shows a lane's laser and laser state only when the topology associates that lane with a laser.
+`show interface lane-status` displays two tables: OE datapath state per interface lane, and ELS lane state per interface laser. It does not query or display ELS module status. JSON retains `Data Path State Indicator`, `ELS Lane State`, and topology metadata, without an `ELS Status` section. A laser shared by multiple OE lanes appears once per interface in the ELS table; the two tables do not imply a one-to-one lane-to-laser association. Unsupported lane-state queries report an error.
+
+For a breakout subport, `map` and `lane-status` identify its ELS lasers only when `cpo.json` provides `laser_to_asic_lane_mapping`; otherwise the lasers are shown as `N/A (needs laser_to_asic_lane_mapping)`. OE datapath rows are still shown when the interface's laser selection is unresolved; ELS lane states are not guessed.
 
 - Usage:
   ```
@@ -16998,6 +17000,22 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
   -----------  ------  -------------------
   Ethernet0    Lane 1  false
   Ethernet0    Lane 2  true
+  ```
+
+- Lane-status example:
+  ```
+  admin@sonic:~$ sudo cpoutil show interface lane-status -p Ethernet0
+  OE datapath state:
+  Interface    Lane    Data Path State
+  -----------  ------  -----------------
+  Ethernet0    Lane 1  DataPathActivated
+  Ethernet0    Lane 2  DataPathActivated
+
+  ELS lane state:
+  Interface    ELS    Laser  ELS Lane State    Shared
+  -----------  -----  -----  ----------------  --------
+  Ethernet0    ELS0       0  Output on         No
+  Ethernet0    ELS0       1  Output on         No
   ```
 
 **cpoutil show oe lpmode|status|temperature**
