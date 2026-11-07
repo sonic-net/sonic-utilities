@@ -1533,7 +1533,6 @@ class BulkLowLevelMoveGenerator:
     generator as the normal LowLevelMoveGenerator will generate the extendable moves.
     """
     def __init__(self, path_addressing):
-        self.diff = None
         self.path_addressing = path_addressing
         self.requiredval = RequiredValueIdentifier(path_addressing)
 
@@ -1551,26 +1550,23 @@ class BulkLowLevelMoveGenerator:
             yield move
 
     def generate_remove(self, diff, min_moves: int = 2, restricted_only: bool = False):
-        self.diff = diff
         tokens = []
 
-        for move in self.__traverse(OperationType.REMOVE, self.diff.current_config, self.diff.target_config, tokens,
+        for move in self.__traverse(diff, OperationType.REMOVE, diff.current_config, diff.target_config, tokens,
                                     min_moves, restricted_only):
             yield move
 
     def generate_replace(self, diff, min_moves: int = 2, restricted_only: bool = False):
-        self.diff = diff
         tokens = []
 
-        for move in self.__traverse(OperationType.REPLACE, self.diff.current_config, self.diff.target_config, tokens,
+        for move in self.__traverse(diff, OperationType.REPLACE, diff.current_config, diff.target_config, tokens,
                                     min_moves, restricted_only):
             yield move
 
     def generate_add(self, diff, min_moves: int = 2, restricted_only: bool = False):
-        self.diff = diff
         tokens = []
 
-        for move in self.__traverse(OperationType.ADD, self.diff.current_config, self.diff.target_config, tokens,
+        for move in self.__traverse(diff, OperationType.ADD, diff.current_config, diff.target_config, tokens,
                                     min_moves, restricted_only):
             yield move
 
@@ -1584,10 +1580,11 @@ class BulkLowLevelMoveGenerator:
             return True
         return rv
 
-    def __traverse(self, op, current_ptr, target_ptr, tokens, min_moves, restricted_only: bool = False):
+    def __traverse(self, diff, op, current_ptr, target_ptr, tokens, min_moves, restricted_only: bool = False):
         if isinstance(current_ptr, dict):
             if self.__children_are_leafs(current_ptr) and self.__children_are_leafs(target_ptr):
-                for move in self.__output_bulk_move(op, current_ptr, target_ptr, tokens, min_moves, restricted_only):
+                for move in self.__output_bulk_move(
+                        diff, op, current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
                 return
 
@@ -1608,7 +1605,8 @@ class BulkLowLevelMoveGenerator:
                     continue
 
                 tokens.append(key)
-                for move in self.__traverse(op, current_ptr[key], target_ptr[key], tokens, min_moves, restricted_only):
+                for move in self.__traverse(
+                        diff, op, current_ptr[key], target_ptr[key], tokens, min_moves, restricted_only):
                     yield move
                 tokens.pop()
             return
@@ -1622,50 +1620,52 @@ class BulkLowLevelMoveGenerator:
                 return False
         return True
 
-    def __output_bulk_move(self, op, current_ptr, target_ptr, tokens, min_moves, restricted_only):
+    def __output_bulk_move(self, diff, op, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         match op:
             case OperationType.REMOVE:
-                for move in self.__output_bulk_remove(current_ptr, target_ptr, tokens, min_moves, restricted_only):
+                for move in self.__output_bulk_remove(
+                        diff, current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
             case OperationType.REPLACE:
-                for move in self.__output_bulk_replace(current_ptr, target_ptr, tokens, min_moves, restricted_only):
+                for move in self.__output_bulk_replace(
+                        diff, current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
             case OperationType.ADD:
-                for move in self.__output_bulk_add(current_ptr, target_ptr, tokens, min_moves, restricted_only):
+                for move in self.__output_bulk_add(diff, current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
 
-    def __output_bulk_add(self, current_ptr, target_ptr, tokens, min_moves, restricted_only):
+    def __output_bulk_add(self, diff, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         group = JsonMoveGroup(self.__class__.__name__,)
         for key in target_ptr:
             if current_ptr.get(key) is None and not self.__restricted_key(tokens, key, invert=restricted_only):
                 tokens.append(key)
-                group.append(JsonMove(self.diff, OperationType.ADD, tokens, tokens))
+                group.append(JsonMove(diff, OperationType.ADD, tokens, tokens))
                 tokens.pop()
 
         # Not a bulk move if there's not more than one action to take
         if len(group) >= min_moves:
             yield group
 
-    def __output_bulk_remove(self, current_ptr, target_ptr, tokens, min_moves, restricted_only):
+    def __output_bulk_remove(self, diff, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         group = JsonMoveGroup(self.__class__.__name__,)
         for key in current_ptr:
             if target_ptr.get(key) is None and not self.__restricted_key(tokens, key, invert=restricted_only):
                 tokens.append(key)
-                group.append(JsonMove(self.diff, OperationType.REMOVE, tokens))
+                group.append(JsonMove(diff, OperationType.REMOVE, tokens))
                 tokens.pop()
 
         # Not a bulk move if there's not more than one action to take
         if len(group) >= min_moves:
             yield group
 
-    def __output_bulk_replace(self, current_ptr, target_ptr, tokens, min_moves, restricted_only):
+    def __output_bulk_replace(self, diff, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         group = JsonMoveGroup(self.__class__.__name__,)
         for key in current_ptr:
             target_val = target_ptr.get(key)
             if (target_val is not None and target_val != current_ptr.get(key) and
                     not self.__restricted_key(tokens, key, invert=restricted_only)):
                 tokens.append(key)
-                group.append(JsonMove(self.diff, OperationType.REPLACE, tokens, tokens))
+                group.append(JsonMove(diff, OperationType.REPLACE, tokens, tokens))
                 tokens.pop()
 
         # Not a bulk move if there's not more than one action to take
@@ -1777,20 +1777,18 @@ class LowLevelMoveGenerator:
     where the path of the move does not have children.
     """
     def __init__(self, path_addressing):
-        self.diff = None
         self.path_addressing = path_addressing
 
     def generate(self, diff):
-        self.diff = diff
-        current_ptr = self.diff.current_config
-        target_ptr = self.diff.target_config
+        current_ptr = diff.current_config
+        target_ptr = diff.target_config
         current_tokens = []
         target_tokens = []
 
-        for move in self._traverse(current_ptr, target_ptr, current_tokens, target_tokens):
+        for move in self._traverse(diff, current_ptr, target_ptr, current_tokens, target_tokens):
             yield move
 
-    def _traverse(self, current_ptr, target_ptr, current_tokens, target_tokens):
+    def _traverse(self, diff, current_ptr, target_ptr, current_tokens, target_tokens):
         """
         Traverses the current/target config trees.
         The given ptrs can be:
@@ -1801,7 +1799,7 @@ class LowLevelMoveGenerator:
         list of dict is not allowed
         """
         if isinstance(current_ptr, list) or isinstance(target_ptr, list):
-            for move in self._traverse_list(current_ptr, target_ptr, current_tokens, target_tokens):
+            for move in self._traverse_list(diff, current_ptr, target_ptr, current_tokens, target_tokens):
                 yield move
             return
 
@@ -1810,22 +1808,22 @@ class LowLevelMoveGenerator:
                 current_tokens.append(key)
                 if key in target_ptr:
                     target_tokens.append(key)
-                    for move in self._traverse(current_ptr[key], target_ptr[key], current_tokens, target_tokens):
+                    for move in self._traverse(diff, current_ptr[key], target_ptr[key], current_tokens, target_tokens):
                         yield move
                     target_tokens.pop()
                 else:
-                    for move in self._traverse_current(current_ptr[key], current_tokens):
+                    for move in self._traverse_current(diff, current_ptr[key], current_tokens):
                         yield move
 
                 current_tokens.pop()
 
             for key in target_ptr:
                 if key in current_ptr:
-                    continue # Already tried in the previous loop
+                    continue  # Already tried in the previous loop
 
                 target_tokens.append(key)
                 current_tokens.append(key)
-                for move in self._traverse_target(target_ptr[key], current_tokens, target_tokens):
+                for move in self._traverse_target(diff, target_ptr[key], current_tokens, target_tokens):
                     yield move
                 current_tokens.pop()
                 target_tokens.pop()
@@ -1833,10 +1831,10 @@ class LowLevelMoveGenerator:
             return
 
         # The current/target ptr are neither dict nor list, so they might be string, int, float, bool
-        for move in self._traverse_value(current_ptr, target_ptr, current_tokens, target_tokens):
+        for move in self._traverse_value(diff, current_ptr, target_ptr, current_tokens, target_tokens):
             yield move
 
-    def _traverse_list(self, current_ptr, target_ptr, current_tokens, target_tokens):
+    def _traverse_list(self, diff, current_ptr, target_ptr, current_tokens, target_tokens):
         # if same elements different order, just sort by replacing whole list
         # Example:
         #   current: [1, 2, 3, 4]
@@ -1845,7 +1843,7 @@ class LowLevelMoveGenerator:
         current_dict_cnts = self._list_to_dict_with_count(current_ptr)
         target_dict_cnts = self._list_to_dict_with_count(target_ptr)
         if current_dict_cnts == target_dict_cnts:
-            for move in self._traverse_value(current_ptr, target_ptr, current_tokens, target_tokens):
+            for move in self._traverse_value(diff, current_ptr, target_ptr, current_tokens, target_tokens):
                 yield move
             return
 
@@ -1855,7 +1853,7 @@ class LowLevelMoveGenerator:
             for current_index, current_item in enumerate(current_ptr):
                 if current_dict_cnts[current_item] > target_dict_cnts.get(current_item, 0):
                     current_tokens.append(current_index)
-                    for move in self._traverse_current_value(current_item, current_tokens):
+                    for move in self._traverse_current_value(diff, current_item, current_tokens):
                         yield move
                     current_tokens.pop()
         # Try add
@@ -1866,7 +1864,7 @@ class LowLevelMoveGenerator:
                     index = min(current_cnt, target_index)
                     current_tokens.append(index)
                     target_tokens.append(target_index)
-                    for move in self._traverse_target_value(target_item, current_tokens, target_tokens):
+                    for move in self._traverse_target_value(diff, target_item, current_tokens, target_tokens):
                         yield move
                     target_tokens.pop()
                     current_tokens.pop()
@@ -1876,63 +1874,64 @@ class LowLevelMoveGenerator:
             for current_index, current_item in enumerate(current_ptr):
                 for target_index, target_item in enumerate(target_ptr):
                     if current_dict_cnts[current_item] > target_dict_cnts.get(current_item, 0) and \
-                    target_dict_cnts[target_item] > current_dict_cnts.get(target_item, 0):
+                            target_dict_cnts[target_item] > current_dict_cnts.get(target_item, 0):
                         current_tokens.append(current_index)
                         target_tokens.append(target_index)
-                        for move in self._traverse_value(current_item, target_item, current_tokens, target_tokens):
+                        for move in self._traverse_value(
+                                diff, current_item, target_item, current_tokens, target_tokens):
                             yield move
                         target_tokens.pop()
                         current_tokens.pop()
 
-    def _traverse_value(self, current_value, target_value, current_tokens, target_tokens):
+    def _traverse_value(self, diff, current_value, target_value, current_tokens, target_tokens):
         if current_value == target_value:
             return
 
         yield JsonMoveGroup(
             self.__class__.__name__,
-            JsonMove(self.diff, OperationType.REPLACE, current_tokens, target_tokens),
+            JsonMove(diff, OperationType.REPLACE, current_tokens, target_tokens),
         )
 
-    def _traverse_current(self, ptr, current_tokens):
+    def _traverse_current(self, diff, ptr, current_tokens):
         if isinstance(ptr, list):
-            for move in self._traverse_current_list(ptr, current_tokens):
+            for move in self._traverse_current_list(diff, ptr, current_tokens):
                 yield move
             return
 
         if isinstance(ptr, dict):
             if len(ptr) == 0:
-                yield JsonMoveGroup(self.__class__.__name__, JsonMove(self.diff, OperationType.REMOVE, current_tokens))
+                yield JsonMoveGroup(self.__class__.__name__, JsonMove(diff, OperationType.REMOVE, current_tokens))
                 return
 
             for key in ptr:
                 current_tokens.append(key)
-                for move in self._traverse_current(ptr[key], current_tokens):
+                for move in self._traverse_current(diff, ptr[key], current_tokens):
                     yield move
                 current_tokens.pop()
 
             return
 
         # ptr is not a dict nor a list, it can be string, int, float, bool
-        for move in self._traverse_current_value(ptr, current_tokens):
+        for move in self._traverse_current_value(diff, ptr, current_tokens):
             yield move
 
-    def _traverse_current_list(self, ptr, current_tokens):
+    def _traverse_current_list(self, diff, ptr, current_tokens):
         if len(ptr) <= 1:
-            yield JsonMoveGroup(self.__class__.__name__, JsonMove(self.diff, OperationType.REMOVE, current_tokens))
+            yield JsonMoveGroup(self.__class__.__name__, JsonMove(diff, OperationType.REMOVE, current_tokens))
             return
 
         for index, val in enumerate(ptr):
             current_tokens.append(index)
-            for move in self._traverse_current_value(val, current_tokens):
+            for move in self._traverse_current_value(diff, val, current_tokens):
                 yield move
             current_tokens.pop()
 
-    def _traverse_current_value(self, val, current_tokens):
-        yield JsonMoveGroup(self.__class__.__name__, JsonMove(self.diff, OperationType.REMOVE, current_tokens))
+    def _traverse_current_value(self, diff, val, current_tokens):
+        yield JsonMoveGroup(self.__class__.__name__, JsonMove(diff, OperationType.REMOVE, current_tokens))
 
-    def _traverse_target(self, ptr, current_tokens, target_tokens):
+    def _traverse_target(self, diff, ptr, current_tokens, target_tokens):
         if isinstance(ptr, list):
-            for move in self._traverse_target_list(ptr, current_tokens, target_tokens):
+            for move in self._traverse_target_list(diff, ptr, current_tokens, target_tokens):
                 yield move
             return
 
@@ -1940,14 +1939,14 @@ class LowLevelMoveGenerator:
             if len(ptr) == 0:
                 yield JsonMoveGroup(
                     self.__class__.__name__,
-                    JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens),
+                    JsonMove(diff, OperationType.ADD, current_tokens, target_tokens),
                 )
                 return
 
             for key in ptr:
                 current_tokens.append(key)
                 target_tokens.append(key)
-                for move in self._traverse_target(ptr[key], current_tokens, target_tokens):
+                for move in self._traverse_target(diff, ptr[key], current_tokens, target_tokens):
                     yield move
                 target_tokens.pop()
                 current_tokens.pop()
@@ -1955,14 +1954,14 @@ class LowLevelMoveGenerator:
             return
 
         # target configs are not dict nor list, so handle them as string, int, bool, float
-        for move in self._traverse_target_value(ptr, current_tokens, target_tokens):
+        for move in self._traverse_target_value(diff, ptr, current_tokens, target_tokens):
             yield move
 
-    def _traverse_target_list(self, ptr, current_tokens, target_tokens):
+    def _traverse_target_list(self, diff, ptr, current_tokens, target_tokens):
         if len(ptr) == 0:
             yield JsonMoveGroup(
                 self.__class__.__name__,
-                JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens),
+                JsonMove(diff, OperationType.ADD, current_tokens, target_tokens),
             )
             return
 
@@ -1971,15 +1970,15 @@ class LowLevelMoveGenerator:
             # in such case any item should be added at first location i.e. 0
             current_tokens.append(0)
             target_tokens.append(index)
-            for move in self._traverse_target_value(val, current_tokens, target_tokens):
+            for move in self._traverse_target_value(diff, val, current_tokens, target_tokens):
                 yield move
             target_tokens.pop()
             current_tokens.pop()
 
-    def _traverse_target_value(self, val, current_tokens, target_tokens):
+    def _traverse_target_value(self, diff, val, current_tokens, target_tokens):
         yield JsonMoveGroup(
             self.__class__.__name__,
-            JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens),
+            JsonMove(diff, OperationType.ADD, current_tokens, target_tokens),
         )
 
     def _list_to_dict_with_count(self, items):
