@@ -45,6 +45,7 @@ from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
 from utilities_common import hft as hft_common
+from utilities_common.mirror import connect_mirror_session_state_db, is_mirror_session_label_capable
 
 from .utils import log
 
@@ -1475,6 +1476,49 @@ def is_port_mirror_capability_supported(direction, namespace=None):
 def mirror_session_exists(config_db, session_name):
     """Check whether a mirror session name already exists in the given ConfigDB."""
     return bool(config_db.get_entry('MIRROR_SESSION', session_name))
+
+
+def validate_mirror_session_label(ctx, param, label):
+    """Validate an optional mirror-session label."""
+    if label is None:
+        return None
+
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{1,31}', label):
+        raise click.BadParameter(
+            "must be 1 to 31 characters using only letters, digits, '_' or '-'",
+            ctx=ctx,
+            param=param
+        )
+
+    return label
+
+
+def validate_mirror_session_label_uniqueness(ctx, config_db, label):
+    """Validate mirror-session label uniqueness in one ASIC namespace."""
+    if label is None:
+        return
+
+    for session_name, session in config_db.get_table('MIRROR_SESSION').items():
+        if session.get('label') == label:
+            ctx.fail("label {} is already used by {}".format(label, session_name))
+
+
+def validate_mirror_session_label_capability(ctx, state_db):
+    """Validate mirror-session label support on the target ASIC namespace."""
+    if state_db is None:
+        return
+
+    if not is_mirror_session_label_capable(state_db):
+        ctx.fail("Mirror session label is not supported")
+
+
+def log_mirror_session_created(session_name, session_info):
+    details = ",".join("{}={}".format(key, value) for key, value in session_info.items())
+    log.log_notice("Created mirror session {}: {}".format(session_name, details))
+
+
+def log_mirror_session_removed(session_name):
+    log.log_notice("Removed mirror session {}".format(session_name))
 
 
 def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction,
@@ -3407,10 +3451,14 @@ def mirror_session():
 @click.argument('ttl', metavar='<ttl>', type=TTL_RANGE, required=True)
 @click.argument('gre_type', metavar='[gre_type]', callback=validate_gre_type, required=False)
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
-@click.option('--policer')
-def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer):
+@click.option("-l", "--label", "label", callback=validate_mirror_session_label,
+              help="Configures stable label to persist the hardware mirror slot across warm reboot")
+@click.option('--policer',
+              help="Policer used to control the rate at which frames are mirrored")
+def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, label, policer):
     """ Add ERSPAN mirror session.(Legacy support) """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
+               gre_type=gre_type, queue=queue, label=label, policer=policer)
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='erspan')
 @click.pass_context
@@ -3433,24 +3481,24 @@ def erspan(ctx):
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
-@click.option('--policer')
+@click.option("-l", "--label", "label", callback=validate_mirror_session_label,
+              help="Configures stable label to persist the hardware mirror slot across warm reboot")
+@click.option('--policer',
+              help="Policer used to control the rate at which frames are mirrored")
 @click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
               help="Sampling rate (1-in-N), 2..4294967295. 0 disables sampling")
 @click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
               help="Truncation size in bytes, 64..9216. 0 disables truncation")
-def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
-               sample_rate, truncate_size):
+def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, src_port, direction,
+               label, policer, sample_rate, truncate_size):
     """ Add ERSPAN mirror session """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
-               queue, policer, src_port, direction,
-               sample_rate, truncate_size)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
+               gre_type=gre_type, queue=queue, src_port=src_port, direction=direction,
+               label=label, policer=policer, sample_rate=sample_rate, truncate_size=truncate_size)
 
 
-def gather_session_info(session_info, policer, queue, src_port, direction,
-                        sample_rate=0, truncate_size=0):
-    if policer:
-        session_info['policer'] = policer
-
+def gather_session_info(session_info, queue=None, src_port=None, direction=None,
+                        label=None, policer=None, sample_rate=0, truncate_size=0):
     if queue is not None:
         session_info['queue'] = queue
 
@@ -3459,6 +3507,12 @@ def gather_session_info(session_info, policer, queue, src_port, direction,
         if not direction:
             direction = "both"
         session_info['direction'] = direction.upper()
+
+    if label is not None:
+        session_info['label'] = label
+
+    if policer is not None:
+        session_info['policer'] = policer
 
     if sample_rate:
         session_info['sample_rate'] = str(sample_rate)
@@ -3469,9 +3523,9 @@ def gather_session_info(session_info, policer, queue, src_port, direction,
     return session_info
 
 
-def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
-               policer, src_port=None, direction=None,
-               sample_rate=0, truncate_size=0):
+def add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
+               gre_type=None, queue=None, src_port=None, direction=None,
+               label=None, policer=None, sample_rate=0, truncate_size=0):
     session_info = {
             "type" : "ERSPAN",
             "src_ip": src_ip,
@@ -3483,8 +3537,9 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
     if gre_type is not None:
         session_info['gre_type'] = gre_type
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction,
-                                       sample_rate, truncate_size)
+    session_info = gather_session_info(session_info, queue=queue, src_port=src_port, direction=direction,
+                                       label=label, policer=policer, sample_rate=sample_rate,
+                                       truncate_size=truncate_size)
     raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
@@ -3495,15 +3550,24 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
+        state_db = None
+        if label:
+            state_db = connect_mirror_session_state_db()
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(config_db, session_name, None, raw_src_port, direction) is False:
                 return
+        # Capability and uniqueness are not part of validate_mirror_session_config:
+        # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+        # syntax, not ASIC label support or uniqueness in this namespace.
+        validate_mirror_session_label_capability(ctx, state_db)
+        validate_mirror_session_label_uniqueness(ctx, config_db, label)
         if raw_src_port:
             session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
 
     else:
         # Validate and write src_port only in the matching namespace
@@ -3523,11 +3587,15 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
                              if k not in ('src_port', 'direction')}
 
         per_npu_configdb = {}
+        per_npu_statedb = {}
         for front_asic_namespaces in namespaces['front_ns']:
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(
                 ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces)
             )
             per_npu_configdb[front_asic_namespaces].connect()
+            per_npu_statedb[front_asic_namespaces] = None
+            if label:
+                per_npu_statedb[front_asic_namespaces] = connect_mirror_session_state_db(front_asic_namespaces)
 
         ns_session_infos = {}
         for front_asic_namespaces in namespaces['front_ns']:
@@ -3565,6 +3633,11 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
                         return
                 ns_session_info = dict(base_session_info)
 
+            # Capability and uniqueness are not part of validate_mirror_session_config:
+            # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+            # syntax, not ASIC label support or uniqueness in this namespace.
+            validate_mirror_session_label_capability(ctx, per_npu_statedb[front_asic_namespaces])
+            validate_mirror_session_label_uniqueness(ctx, per_npu_configdb[front_asic_namespaces], label)
             ns_session_infos[front_asic_namespaces] = ns_session_info
 
         for front_asic_namespaces in namespaces['front_ns']:
@@ -3576,6 +3649,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
                 )
             except ValueError as e:
                 ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='span')
 @click.pass_context
@@ -3590,13 +3664,20 @@ def span(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
-@click.option('--policer')
-def span_add(session_name, dst_port, src_port, direction, queue, policer):
+@click.option("-l", "--label", "label", callback=validate_mirror_session_label,
+              help="Configures stable label to persist the hardware mirror slot across warm reboot")
+@click.option('--policer',
+              help="Policer used to control the rate at which frames are mirrored")
+def span_add(session_name, dst_port, src_port, direction, queue, label, policer):
     """ Add SPAN mirror session """
-    add_span(session_name, dst_port, src_port, direction, queue, policer)
+    add_span(session_name, dst_port,
+             src_port=src_port, direction=direction, queue=queue,
+             label=label, policer=policer)
 
 
-def add_span(session_name, dst_port, src_port, direction, queue, policer):
+def add_span(session_name, dst_port,
+             src_port=None, direction=None, queue=None,
+             label=None, policer=None):
     # Save original dst_port for namespace detection (before alias conversion)
     original_dst_port = dst_port
 
@@ -3611,7 +3692,8 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             "dst_port": dst_port,
             }
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    session_info = gather_session_info(session_info, queue=queue, src_port=src_port, direction=direction,
+                                       label=label, policer=policer)
     raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
@@ -3622,15 +3704,24 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
+        state_db = None
+        if label:
+            state_db = connect_mirror_session_state_db()
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(config_db, session_name, dst_port, raw_src_port, direction) is False:
                 return
+        # Capability and uniqueness are not part of validate_mirror_session_config:
+        # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+        # syntax, not ASIC label support or uniqueness in this namespace.
+        validate_mirror_session_label_capability(ctx, state_db)
+        validate_mirror_session_label_uniqueness(ctx, config_db, label)
         if raw_src_port:
             session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
     else:
         # Auto-detect namespace from destination port
         dst_port_namespace = get_port_namespace(original_dst_port)
@@ -3659,6 +3750,9 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             per_npu_configdb[front_asic_namespaces].connect()
 
         config_db = per_npu_configdb[dst_port_namespace]
+        state_db = None
+        if label:
+            state_db = connect_mirror_session_state_db(dst_port_namespace)
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(
                 config_db,
@@ -3670,12 +3764,18 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
                 front_asic_configdbs=per_npu_configdb
             ) is False:
                 return
+        # Capability and uniqueness are not part of validate_mirror_session_config:
+        # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+        # syntax, not ASIC label support or uniqueness in this namespace.
+        validate_mirror_session_label_capability(ctx, state_db)
+        validate_mirror_session_label_uniqueness(ctx, config_db, label)
         if raw_src_port:
             session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
 
 
 @mirror_session.command()
@@ -3691,20 +3791,26 @@ def remove(session_name):
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
-        try:
-            config_db.set_entry("MIRROR_SESSION", session_name, None)
-        except JsonPatchConflict as e:
-            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        if config_db.get_entry("MIRROR_SESSION", session_name):
+            try:
+                config_db.set_entry("MIRROR_SESSION", session_name, None)
+            except JsonPatchConflict as e:
+                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+            log_mirror_session_removed(session_name)
     else:
         per_npu_configdb = {}
+        session_removed = False
         for front_asic_namespaces in namespaces['front_ns']:
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))  # noqa: E501
             per_npu_configdb[front_asic_namespaces].connect()
             if per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name):
                 try:
                     per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, None)
+                    session_removed = True
                 except JsonPatchConflict as e:
                     ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        if session_removed:
+            log_mirror_session_removed(session_name)
 
 #
 # 'pfcwd' group ('config pfcwd ...')
