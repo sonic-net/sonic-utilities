@@ -15,6 +15,12 @@ SYSLOG_TABLE = "SYSLOG_SERVER"
 SYSLOG_SOURCE = "source"
 SYSLOG_PORT = "port"
 SYSLOG_VRF = "vrf"
+SYSLOG_PROTOCOL = "protocol"
+SYSLOG_TLS_PROFILE_ID = "tls_profile_id"
+SYSLOG_TLS_PERMITTED_PEERS = "tls_permitted_peers"
+SYSLOG_TRANSPORT_SECURITY = "transport_security"
+SYSLOG_TLS_APPLIED = "applied_transport_security"
+SYSLOG_TLS_FAILURE_REASON = "failure_reason"
 
 #
 # Syslog helpers ------------------------------------------------------------------------------------------------------
@@ -22,6 +28,28 @@ SYSLOG_VRF = "vrf"
 
 def format(header, body):
     return tabulate.tabulate(body, header, tablefmt="simple", numalign="left", stralign="left")
+
+
+def is_tls_server(entry):
+    """ Return True if the SYSLOG_SERVER entry is configured for TLS """
+    proto = str(entry.get(SYSLOG_PROTOCOL, "")).lower()
+    transport_security = str(entry.get(SYSLOG_TRANSPORT_SECURITY, "")).lower()
+    return proto == "tls" or transport_security in ("true", "tls", "enabled", "1")
+
+
+def get_tls_apply_state(db, server):
+    """ Get (applied, failure_reason) published in STATE_DB SYSLOG_SERVER|<server>
+
+    Returns ("N/A", "N/A") when nothing has been published yet.
+    """
+    try:
+        state = db.db.get_all(db.db.STATE_DB, "{}|{}".format(SYSLOG_TABLE, server)) or {}
+    except Exception:
+        state = {}
+    return (
+        state.get(SYSLOG_TLS_APPLIED, "N/A"),
+        state.get(SYSLOG_TLS_FAILURE_REASON, "N/A"),
+    )
 
 #
 # Syslog CLI ----------------------------------------------------------------------------------------------------------
@@ -45,6 +73,9 @@ def syslog(db, ctx):
         "SOURCE IP",
         "PORT",
         "VRF",
+        "PROTOCOL",
+        "TLS PROFILE ID",
+        "PERMITTED PEERS",
     ]
     body = []
 
@@ -55,8 +86,36 @@ def syslog(db, ctx):
             entry.get(SYSLOG_SOURCE, "N/A"),
             entry.get(SYSLOG_PORT, "N/A"),
             entry.get(SYSLOG_VRF, "N/A"),
+            entry.get(SYSLOG_PROTOCOL, "udp"),
+            entry.get(SYSLOG_TLS_PROFILE_ID, "N/A"),
+            entry.get(SYSLOG_TLS_PERMITTED_PEERS, "N/A"),
         ]
         body.append(row)
+
+    click.echo(format(header, body))
+
+
+@syslog.command(
+    name='tls-state'
+)
+@clicommon.pass_db
+def tls_state(db):
+    """ Show TLS transport security apply state for syslog servers """
+
+    header = [
+        "SERVER IP",
+        "TLS APPLIED",
+        "FAILURE REASON",
+    ]
+    body = []
+
+    table = db.cfgdb.get_table(SYSLOG_TABLE)
+    for key in natsorted(table):
+        entry = table[key]
+        if not is_tls_server(entry):
+            continue
+        tls_applied, failure_reason = get_tls_apply_state(db, key)
+        body.append([key, tls_applied, failure_reason])
 
     click.echo(format(header, body))
 
