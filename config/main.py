@@ -808,6 +808,27 @@ def _is_neighbor_ipaddress(config_db, ipaddress):
     entry = config_db.get_entry('BGP_NEIGHBOR', ipaddress)
     return True if entry else False
 
+
+def _is_neighbor_interface(config_db, interface_name):
+    """Return whether an exact interface name is a configured BGP neighbor."""
+    if not config_db.get_entry('BGP_NEIGHBOR', interface_name):
+        return False
+
+    interface_tables = (
+        'INTERFACE',
+        'PORTCHANNEL_INTERFACE',
+        'VLAN_INTERFACE',
+        'VLAN_SUB_INTERFACE',
+    )
+    for table in interface_tables:
+        for key in config_db.get_keys(table):
+            name = key[0] if isinstance(key, tuple) else key
+            if name == interface_name:
+                return True
+
+    return False
+
+
 def _get_all_neighbor_ipaddresses(config_db):
     """Returns list of strings containing IP addresses of all BGP neighbors
     """
@@ -837,22 +858,24 @@ def _change_bgp_session_status_by_addr(config_db, ipaddress, status, verbose):
     config_db.mod_entry('bgp_neighbor', ipaddress, {'admin_status': status})
 
 def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
-    """Start up or shut down BGP session by IP address or hostname
+    """Start up or shut down BGP session by IP address, interface name or hostname
     """
-    ip_addrs = []
+    neighbor_keys = []
 
     # If we were passed an IP address, convert it to lowercase because IPv6 addresses were
     # stored in ConfigDB with all lowercase alphabet characters during minigraph parsing
-    if _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
-        ip_addrs.append(ipaddr_or_hostname.lower())
+    if _is_neighbor_interface(config_db, ipaddr_or_hostname):
+        neighbor_keys.append(ipaddr_or_hostname)
+    elif _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
+        neighbor_keys.append(ipaddr_or_hostname.lower())
     else:
         # If <ipaddr_or_hostname> is not the IP address of a neighbor, check to see if it's a hostname
-        ip_addrs = _get_neighbor_ipaddress_list_by_hostname(config_db, ipaddr_or_hostname)
+        neighbor_keys = _get_neighbor_ipaddress_list_by_hostname(config_db, ipaddr_or_hostname)
 
-    if not ip_addrs:
+    if not neighbor_keys:
         return False
 
-    for ip_addr in ip_addrs:
+    for ip_addr in neighbor_keys:
         _change_bgp_session_status_by_addr(config_db, ip_addr, status, verbose)
 
     return True
@@ -5227,10 +5250,10 @@ def all(verbose):
 
 # 'neighbor' subcommand
 @shutdown.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
+@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_interface_or_hostname>', required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 def neighbor(ipaddr_or_hostname, verbose):
-    """Shut down BGP session by neighbor IP address or hostname.
+    """Shut down BGP session by neighbor IP address, interface name or hostname.
        User can specify either internal or external BGP neighbor to shutdown
     """
     log.log_info("'bgp shutdown neighbor {}' executing...".format(ipaddr_or_hostname))
@@ -5282,13 +5305,13 @@ def all(verbose):
 
 # 'neighbor' subcommand
 @startup.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
+@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_interface_or_hostname>', required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 def neighbor(ipaddr_or_hostname, verbose):
-    log.log_info("'bgp startup neighbor {}' executing...".format(ipaddr_or_hostname))
-    """Start up BGP session by neighbor IP address or hostname.
+    """Start up BGP session by neighbor IP address, interface name or hostname.
        User can specify either internal or external BGP neighbor to startup
     """
+    log.log_info("'bgp startup neighbor {}' executing...".format(ipaddr_or_hostname))
     namespaces = [DEFAULT_NAMESPACE]
     found_neighbor = False
 
