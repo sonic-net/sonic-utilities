@@ -1,11 +1,36 @@
 import os
+import copy
 from unittest import mock
+import pytest
 from click.testing import CliRunner
 
 import config.main as config
 import show.main as show
 from utilities_common.db import Db
 from sonic_py_common import multi_asic
+
+
+@pytest.fixture
+def isis_af_db():
+    db = Db()
+    config_db = db.cfgdb
+    rows = [('PORT', 'Ethernet0'), ('INTERFACE', 'Ethernet0'),
+            ('VRF', 'VrfIsis'), ('ISIS_GLOBALS', 'default'), ('ISIS_GLOBALS', 'VrfIsis'),
+            ('ISIS_INTERFACE', 'Ethernet0'),
+            ('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0')),
+            ('VLAN_MEMBER', ('Vlan999', 'Ethernet0'))]
+    saved = {(table, key): copy.deepcopy(db.cfgdb.get_entry(table, key)) for table, key in rows}
+    for table, key in rows:
+        db.cfgdb.set_entry(table, key, None)
+    db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1', 'admin_status': 'up'})
+    db.cfgdb.set_entry('ISIS_GLOBALS', 'default',
+                       {'enabled': 'true', 'net_title': '49.0001.1921.6800.0001.00', 'level': 'level-2'})
+    db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0',
+                       {'enabled': 'true', 'metric': '30', 'passive': 'true', 'circuit_type': 'p2p'})
+    yield db
+    db.cfgdb = config_db
+    for (table, key), data in saved.items():
+        db.cfgdb.set_entry(table, key, data or None)
 
 
 class TestIsis(object):
@@ -311,3 +336,99 @@ class TestIsis(object):
             assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == remaining
         db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', None)
         db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)
+
+    def test_isis_interface_address_families(self, isis_af_db):
+        db = isis_af_db.cfgdb
+        runner = CliRunner()
+        group = config.config.commands['interface'].commands['isis']
+        obj = {'config_db': db, 'namespace': 'asic0'}
+        original = db.get_entry('ISIS_INTERFACE', 'Ethernet0')
+
+        result = runner.invoke(group, ['ipv4', 'Ethernet0', 'disable'], obj=obj)
+        assert result.exit_code == 0, result.output
+        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(original, ipv4_enabled='false')
+        result = runner.invoke(group, ['ipv6', 'Ethernet0', 'disable'], obj=obj)
+        assert result.exit_code == 0, result.output
+        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(
+            original, ipv4_enabled='false', ipv6_enabled='false')
+
+        result = runner.invoke(group, ['ipv6', 'Ethernet0', 'enable'], obj=obj)
+        assert result.exit_code == 0, result.output
+        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(
+            original, ipv4_enabled='false', ipv6_enabled='true')
+        for family in ('ipv4', 'ipv6'):
+            result = runner.invoke(group, ['reset', 'Ethernet0', family], obj=obj)
+            assert result.exit_code == 0, result.output
+        # Reset removes only the selected leaves; their effective default is true.
+        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
+
+    @pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
+    def test_isis_af_rejects_invalid_input(self, isis_af_db, family):
+        db = isis_af_db.cfgdb
+        runner = CliRunner()
+        group = config.config.commands['interface'].commands['isis']
+        obj = {'config_db': db, 'namespace': ''}
+        original = db.get_entry('ISIS_INTERFACE', 'Ethernet0')
+        for state in ('true', 'false', 'invalid'):
+            result = runner.invoke(group, [family, 'Ethernet0', state], obj=obj)
+            assert result.exit_code == 2, result.output
+            assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
+        result = runner.invoke(group, [family, 'EthernetMissing', 'disable'], obj=obj)
+        assert result.exit_code != 0
+        assert not db.get_entry('ISIS_INTERFACE', 'EthernetMissing')
+        db.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), {'NULL': 'NULL'})
+        assert runner.invoke(group, [family, 'Ethernet0', 'disable'], obj=obj).exit_code != 0
+        db.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), None)
+        db.set_entry('VLAN_MEMBER', ('Vlan999', 'Ethernet0'), {'tagging_mode': 'untagged'})
+        assert runner.invoke(group, [family, 'Ethernet0', 'disable'], obj=obj).exit_code != 0
+        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
+
+    @pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
+    def test_isis_af_requires_enabled_interface_and_process(self, isis_af_db, family):
+        db = isis_af_db.cfgdb
+        runner = CliRunner()
+        group = config.config.commands['interface'].commands['isis']
+        obj = {'config_db': db, 'namespace': ''}
+        original = db.get_entry('ISIS_INTERFACE', 'Ethernet0')
+        db.set_entry('ISIS_INTERFACE', 'Ethernet0', dict(original, enabled='false'))
+        assert runner.invoke(group, [family, 'Ethernet0', 'disable'], obj=obj).exit_code != 0
+        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(original, enabled='false')
+        db.set_entry('ISIS_INTERFACE', 'Ethernet0', original)
+        db.set_entry('INTERFACE', 'Ethernet0', {'vrf_name': 'VrfIsis'})
+        # An enabled default process does not satisfy this interface's VRF.
+        for args in ([family, 'Ethernet0', 'disable'], ['reset', 'Ethernet0', family]):
+            assert runner.invoke(group, args, obj=obj).exit_code != 0
+            assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
+        db.set_entry('VRF', 'VrfIsis', {'NULL': 'NULL'})
+        db.set_entry('ISIS_GLOBALS', 'VrfIsis', {'enabled': 'true'})
+        with mock.patch('utilities_common.cli.get_interface_naming_mode', return_value='alias'):
+            result = runner.invoke(group, [family, 'etp1', 'disable'], obj=obj)
+        assert result.exit_code == 0, result.output
+        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(original, **{family + '_enabled': 'false'})
+
+    @pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
+    def test_isis_af_selected_namespace(self, isis_af_db, family):
+        runner = CliRunner()
+        group = config.config.commands['interface']
+        option = next(param for param in group.params if param.name == 'namespace')
+        selected = mock.MagicMock()
+        selected.get_table.side_effect = lambda table: {'Ethernet0': {'alias': 'etp1'}} if table == 'PORT' else {}
+        selected.get_entry.side_effect = lambda table, key: (
+            {'enabled': 'true'} if table in ('ISIS_GLOBALS', 'ISIS_INTERFACE') else {})
+        with mock.patch.object(option.type, 'choices', ['asic0']), \
+                mock.patch('config.main.ConfigDBConnector', return_value=selected) as connector:
+            result = runner.invoke(group, ['-n', 'asic0', 'isis', family, 'Ethernet0', 'disable'], obj=isis_af_db)
+        assert result.exit_code == 0, result.output
+        connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
+        selected.mod_entry.assert_called_once_with('ISIS_INTERFACE', 'Ethernet0', {family + '_enabled': 'false'})
+
+    def test_isis_af_database_write_error(self, isis_af_db):
+        runner = CliRunner()
+        command = config.config.commands['interface'].commands['isis']
+        obj = {'config_db': isis_af_db.cfgdb, 'namespace': ''}
+        original = isis_af_db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
+        with mock.patch.object(isis_af_db.cfgdb, 'mod_entry', side_effect=RuntimeError('write failed')):
+            result = runner.invoke(command, ['ipv4', 'Ethernet0', 'disable'], obj=obj)
+        assert result.exit_code != 0
+        assert 'write failed' in result.output
+        assert isis_af_db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original

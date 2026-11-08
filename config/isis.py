@@ -455,6 +455,40 @@ def interface_isis_passive(ctx, interface_name, mode):
         ctx.fail(str(e))
 
 
+def _set_interface_af(ctx, interface_name, family, state):
+    db = ctx.obj['config_db']
+    name = _resolve_interface(ctx, db, interface_name)
+    if db.get_entry(CFG_ISIS_INTERFACE, name).get('enabled') != 'true':
+        ctx.fail("IS-IS routing is not enabled on interface {}".format(name))
+    _require_process(ctx, db, _interface_vrf(db, name))
+    try:
+        db.mod_entry(CFG_ISIS_INTERFACE, name,
+                     {family.lower() + '_enabled': 'true' if state == 'enable' else 'false'})
+        click.echo("Configured IS-IS {} to '{}' on interface {}".format(family, state, name))
+        log.log_notice("Configured IS-IS {} to '{}' on interface {}".format(family, state, name))
+    except Exception as e:
+        log.log_error("Failed to configure IS-IS {} on interface {}: {}".format(family, name, str(e)))
+        ctx.fail(str(e))
+
+
+@INTERFACE_ISIS.command(name='ipv4')
+@click.argument('interface_name')
+@click.argument('state', type=click.Choice(['enable', 'disable']))
+@click.pass_context
+def interface_isis_ipv4(ctx, interface_name, state):
+    """Enable or disable IS-IS IPv4 routing on an interface."""
+    _set_interface_af(ctx, interface_name, 'IPv4', state)
+
+
+@INTERFACE_ISIS.command(name='ipv6')
+@click.argument('interface_name')
+@click.argument('state', type=click.Choice(['enable', 'disable']))
+@click.pass_context
+def interface_isis_ipv6(ctx, interface_name, state):
+    """Enable or disable IS-IS IPv6 routing on an interface."""
+    _set_interface_af(ctx, interface_name, 'IPv6', state)
+
+
 @ISIS.command(name='reset')
 @click.argument('field', type=click.Choice(['net', 'level', 'hostname', 'lsp-mtu', 'lsp-refresh', 'lsp-lifetime']))
 @click.argument('vrf', required=False, default='default')
@@ -479,7 +513,7 @@ def isis_reset(ctx, db, field, vrf):
 
 @INTERFACE_ISIS.command(name='reset')
 @click.argument('interface_name')
-@click.argument('field', type=click.Choice(['metric', 'circuit-type', 'passive']))
+@click.argument('field', type=click.Choice(['metric', 'circuit-type', 'passive', 'ipv4', 'ipv6']))
 @click.pass_context
 def interface_isis_reset(ctx, interface_name, field):
     """Reset an interface setting to its default."""
@@ -487,6 +521,10 @@ def interface_isis_reset(ctx, interface_name, field):
     name = _resolve_interface(ctx, db, interface_name)
     if db.get_entry(CFG_ISIS_INTERFACE, name).get('enabled') != 'true':
         ctx.fail("IS-IS routing is not enabled on interface {}".format(name))
+    if field in ('ipv4', 'ipv6'):
+        _require_process(ctx, db, _interface_vrf(db, name))
+    fields = {'metric': 'metric', 'circuit-type': 'circuit_type', 'passive': 'passive',
+              'ipv4': 'ipv4_enabled', 'ipv6': 'ipv6_enabled'}
     entry = db.get_entry(CFG_ISIS_INTERFACE, name)
-    entry.pop(field.replace('-', '_'), None)
+    entry.pop(fields[field], None)
     db.set_entry(CFG_ISIS_INTERFACE, name, entry)

@@ -2747,7 +2747,9 @@ config interface [-n NAMESPACE] isis disable INTERFACE
 config interface [-n NAMESPACE] isis metric INTERFACE METRIC
 config interface [-n NAMESPACE] isis circuit-type INTERFACE {p2p|lan}
 config interface [-n NAMESPACE] isis passive INTERFACE {enable|disable}
-config interface [-n NAMESPACE] isis reset INTERFACE {metric|circuit-type|passive}
+config interface [-n NAMESPACE] isis ipv4 INTERFACE {enable|disable}
+config interface [-n NAMESPACE] isis ipv6 INTERFACE {enable|disable}
+config interface [-n NAMESPACE] isis reset INTERFACE {metric|circuit-type|passive|ipv4|ipv6}
 ```
 
 VRF defaults to `default`. NET must contain a system-id and end in `.00`.
@@ -2757,6 +2759,14 @@ must be at least refresh + 300. Interface metric accepts 1–16777215 (default 1
 Circuit type defaults to LAN; passive defaults to off. Reset removes the selected
 field, restoring its default (or removing NET). Process disable refuses while
 interface bindings remain; disable interfaces first. Hostname uses `enable|disable`.
+
+IPv4 and IPv6 bindings are controlled independently through
+`ISIS_INTERFACE.ipv4_enabled` and `ipv6_enabled`. Both fields default to true;
+reset removes the selected field and restores that default. Disabling both
+families retains the configured interface settings without an IS-IS circuit.
+These controls require backend/YANG support from the matching IS-IS implementation.
+For an IPv6-only interface, enable IS-IS on the interface and then run
+`config interface isis ipv4 INTERFACE disable`.
 
 Example, after enabling management-framework mode:
 
