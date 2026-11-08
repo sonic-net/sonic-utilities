@@ -209,6 +209,24 @@ def isis_hostname(ctx, db, state, vrf):
         ctx.fail(str(e))
 
 
+@ISIS.command(name="ipv6-multi-topology")
+@click.argument("state", type=click.Choice(['enable', 'disable']))
+@click.argument("vrf", required=False, default="default")
+@clicommon.pass_db
+@click.pass_context
+def isis_ipv6_multi_topology(ctx, db, state, vrf):
+    """Configure IS-IS IPv6 multi-topology support."""
+    _require_process(ctx, db.cfgdb, vrf)
+    try:
+        db.cfgdb.mod_entry(CFG_ISIS_GLOBALS, vrf,
+                           {'ipv6_multi_topology': 'true' if state == 'enable' else 'false'})
+        click.echo("Configured IS-IS IPv6 multi-topology to '{}' for VRF '{}'".format(state, vrf))
+        log.log_notice("Configured IS-IS IPv6 multi-topology to '{}' for VRF '{}'".format(state, vrf))
+    except Exception as e:
+        log.log_error("Failed to configure IS-IS IPv6 multi-topology for VRF '{}': {}".format(vrf, str(e)))
+        ctx.fail(str(e))
+
+
 @ISIS.group(name="timer")
 def ISIS_TIMER():
     """Configure IS-IS global timers"""
@@ -490,7 +508,8 @@ def interface_isis_ipv6(ctx, interface_name, state):
 
 
 @ISIS.command(name='reset')
-@click.argument('field', type=click.Choice(['net', 'level', 'hostname', 'lsp-mtu', 'lsp-refresh', 'lsp-lifetime']))
+@click.argument('field', type=click.Choice(['net', 'level', 'hostname', 'ipv6-multi-topology',
+                                            'lsp-mtu', 'lsp-refresh', 'lsp-lifetime']))
 @click.argument('vrf', required=False, default='default')
 @clicommon.pass_db
 @click.pass_context
@@ -498,6 +517,7 @@ def isis_reset(ctx, db, field, vrf):
     """Reset a global setting to its default (remove NET when selected)."""
     _require_process(ctx, db.cfgdb, vrf)
     fields = {'net': 'net_title', 'level': 'level', 'hostname': 'dynamic_hostname',
+              'ipv6-multi-topology': 'ipv6_multi_topology',
               'lsp-mtu': 'lsp_mtu', 'lsp-refresh': 'lsp_refresh_interval', 'lsp-lifetime': 'lsp_lifetime'}
     table = CFG_ISIS_GLOBALS_TIMERS if field.startswith('lsp-') else CFG_ISIS_GLOBALS
     timers = db.cfgdb.get_entry(CFG_ISIS_GLOBALS_TIMERS, vrf)

@@ -2738,10 +2738,11 @@ config isis [-n NAMESPACE] disable [VRF]
 config isis [-n NAMESPACE] net NET [VRF]
 config isis [-n NAMESPACE] level {level-1|level-2|level-1-2} [VRF]
 config isis [-n NAMESPACE] hostname {enable|disable} [VRF]
+config isis [-n NAMESPACE] ipv6-multi-topology {enable|disable} [VRF]
 config isis [-n NAMESPACE] timer lsp-mtu MTU [VRF]
 config isis [-n NAMESPACE] timer lsp-refresh SECONDS [VRF]
 config isis [-n NAMESPACE] timer lsp-lifetime SECONDS [VRF]
-config isis [-n NAMESPACE] reset {net|level|hostname|lsp-mtu|lsp-refresh|lsp-lifetime} [VRF]
+config isis [-n NAMESPACE] reset {net|level|hostname|ipv6-multi-topology|lsp-mtu|lsp-refresh|lsp-lifetime} [VRF]
 config interface [-n NAMESPACE] isis enable INTERFACE
 config interface [-n NAMESPACE] isis disable INTERFACE
 config interface [-n NAMESPACE] isis metric INTERFACE METRIC
@@ -2767,6 +2768,12 @@ families retains the configured interface settings without an IS-IS circuit.
 These controls require backend/YANG support from the matching IS-IS implementation.
 For an IPv6-only interface, enable IS-IS on the interface and then run
 `config interface isis ipv4 INTERFACE disable`.
+
+`config isis ipv6-multi-topology` controls `ISIS_GLOBALS.ipv6_multi_topology`
+for the selected VRF and namespace. The schema default is true; reset removes
+only that field. The IS-IS process must be enabled before changing or resetting
+this setting. This selects IPv6 multi-topology mode; it does not enable or disable
+the IPv6 binding on individual interfaces.
 
 Example, after enabling management-framework mode:
 

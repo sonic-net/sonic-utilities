@@ -432,3 +432,64 @@ class TestIsis(object):
         assert result.exit_code != 0
         assert 'write failed' in result.output
         assert isis_af_db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
+
+    def test_isis_ipv6_multi_topology(self, isis_af_db):
+        db = isis_af_db
+        runner = CliRunner()
+        group = config.config.commands['isis']
+        original = db.cfgdb.get_entry('ISIS_GLOBALS', 'default')
+        for state, value in (('disable', 'false'), ('enable', 'true')):
+            result = runner.invoke(group, ['ipv6-multi-topology', state], obj=db)
+            assert result.exit_code == 0, result.output
+            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == dict(
+                original, ipv6_multi_topology=value)
+        result = runner.invoke(group, ['reset', 'ipv6-multi-topology'], obj=db)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
+
+        named = {'enabled': 'true', 'level': 'level-1'}
+        db.cfgdb.set_entry('VRF', 'VrfIsis', {'NULL': 'NULL'})
+        db.cfgdb.set_entry('ISIS_GLOBALS', 'VrfIsis', named)
+        result = runner.invoke(group, ['ipv6-multi-topology', 'disable', 'VrfIsis'], obj=db)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'VrfIsis') == dict(named, ipv6_multi_topology='false')
+        result = runner.invoke(group, ['reset', 'ipv6-multi-topology', 'VrfIsis'], obj=db)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'VrfIsis') == named
+        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
+
+    def test_isis_topology_rejects_invalid_state_and_disabled_process(self, isis_af_db):
+        db = isis_af_db
+        runner = CliRunner()
+        group = config.config.commands['isis']
+        original = db.cfgdb.get_entry('ISIS_GLOBALS', 'default')
+        for args in (['ipv6-multi-topology', 'invalid'], ['ipv6-multi-topology', 'disable', 'VrfMissing']):
+            assert runner.invoke(group, args, obj=db).exit_code != 0
+            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
+        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', dict(original, enabled='false'))
+        for args in (['ipv6-multi-topology', 'disable'], ['reset', 'ipv6-multi-topology']):
+            assert runner.invoke(group, args, obj=db).exit_code != 0
+            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == dict(original, enabled='false')
+
+    def test_isis_topology_selected_namespace(self, isis_af_db):
+        runner = CliRunner()
+        group = config.config.commands['isis']
+        option = next(param for param in group.params if param.name == 'namespace')
+        with mock.patch.object(option.type, 'choices', ['asic0']), \
+                mock.patch('config.isis.ConfigDBConnector') as connector:
+            selected = connector.return_value
+            selected.get_entry.return_value = {'enabled': 'true'}
+            result = runner.invoke(group, ['-n', 'asic0', 'ipv6-multi-topology', 'disable'], obj=isis_af_db)
+        assert result.exit_code == 0, result.output
+        connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
+        selected.mod_entry.assert_called_once_with('ISIS_GLOBALS', 'default', {'ipv6_multi_topology': 'false'})
+
+    def test_isis_topology_database_write_error(self, isis_af_db):
+        runner = CliRunner()
+        command = config.config.commands['isis']
+        original = isis_af_db.cfgdb.get_entry('ISIS_GLOBALS', 'default')
+        with mock.patch.object(isis_af_db.cfgdb, 'mod_entry', side_effect=RuntimeError('write failed')):
+            result = runner.invoke(command, ['ipv6-multi-topology', 'disable'], obj=isis_af_db)
+        assert result.exit_code != 0
+        assert 'write failed' in result.output
+        assert isis_af_db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
