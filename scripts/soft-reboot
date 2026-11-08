@@ -41,6 +41,8 @@ REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
 PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
 BOOT_TYPE_ARG="soft"
 TAG_LATEST=yes
+SHUTDOWN_IN_PROGRESS_DIR="/run/sonic"
+SHUTDOWN_IN_PROGRESS_FILE="${SHUTDOWN_IN_PROGRESS_DIR}/shutdown-in-progress"
 
 function debug()
 {
@@ -79,6 +81,12 @@ function stop_sonic_services()
         sleep 3
     fi
     stop_pmon_service
+}
+
+function mark_shutdown_in_progress()
+{
+    mkdir -p "${SHUTDOWN_IN_PROGRESS_DIR}" && touch "${SHUTDOWN_IN_PROGRESS_FILE}" || \
+        debug "Failed to mark shutdown in progress"
 }
 
 function clear_lingering_reboot_config()
@@ -219,6 +227,7 @@ reboot_pre_check
 tag_images
 
 # Stop SONiC services gracefully.
+mark_shutdown_in_progress
 stop_sonic_services
 
 clear_lingering_reboot_config
