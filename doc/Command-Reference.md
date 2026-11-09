@@ -2720,10 +2720,9 @@ config chassis modules shutdown SWITCH-HOST
 config chassis modules startup SWITCH-HOST
 ```
 
-Run the second command only after the shutdown has completed, which
-`show chassis modules status` reports as the host being offline together with
-the shutdown's result. A `startup` written while the shutdown is still in
-flight can be ignored; in that case run `shutdown` and then `startup` again.
+The second command may be written while the shutdown is still in flight: it
+is queued and runs once the shutdown has completed. `show chassis modules status`
+reports each step's result.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bmc)
 
