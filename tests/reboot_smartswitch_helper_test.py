@@ -123,12 +123,13 @@ def test_gnmi_reboot_dpu_falls_back_to_native_port(tmp_path):
 
 def test_gnmi_reboot_dpu_times_out_while_halt_is_active(tmp_path):
     result, commands = run_helper_function(
-        tmp_path, 'DOCKER_OUTPUT=\'{"active":true}\'\ngnmi_reboot_dpu dpu0'
+        tmp_path, "gnmi_reboot_dpu dpu0", docker_output='{"active":true}'
     )
     assert result.returncode != 0
     assert "Timeout waiting for dpu0 to finish halting the services" in result.stderr
     command_lines = commands.splitlines()
-    assert sum("-rpc RebootStatus" in line for line in command_lines) == 1
+    # The 6 s budget is polled at 0 s and at 5 s, then the deadline ends the wait.
+    assert sum("-rpc RebootStatus" in line for line in command_lines) == 2
     assert sum("-rpc Reboot " in f"{line} " for line in command_lines) == 1
 
 
