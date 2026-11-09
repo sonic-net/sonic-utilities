@@ -269,7 +269,8 @@ def del_vlan(ctx, vid, multiple, no_restart_dhcp_relay):
             clicommon.run_command(
                 ndppd_cmd_prefix + ['supervisorctl', 'stop', 'ndppd'], ignore_error=True, return_cmd=True)
             clicommon.run_command(
-                ndppd_cmd_prefix + ['rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'], ignore_error=True, return_cmd=True)
+                ndppd_cmd_prefix + ['rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'],
+                ignore_error=True, return_cmd=True)
             clicommon.run_command(ndppd_cmd_prefix + ['supervisorctl', 'update'], return_cmd=True)
 
 
