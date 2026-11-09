@@ -382,7 +382,7 @@ def syslog():
 @click.option(
     "-p", "--port",
     help="Configures syslog server UDP port",
-    type=click.IntRange(min=0, max=65535, clamp=False)
+    type=click.IntRange(min=1, max=65535, clamp=False)
 )
 @click.option(
     "-r", "--vrf",
