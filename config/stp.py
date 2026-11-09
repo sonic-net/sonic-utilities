@@ -1454,7 +1454,7 @@ def stp_interface_bpdu_guard_enable(_db, interface_name, shutdown):
 
     if stp_mode == "pvst":
         fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
+    elif stp_mode == "mst":
         fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
     db.mod_entry('STP_PORT', interface_name, fvs)
@@ -1473,7 +1473,7 @@ def stp_interface_bpdu_guard_disable(_db, interface_name):
 
     if stp_mode == "pvst":
         fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
+    elif stp_mode == "mst":
         fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
     db.mod_entry('STP_PORT', interface_name, fvs)
@@ -1504,7 +1504,7 @@ def stp_interface_root_guard_enable(_db, interface_name):
     # Add mode-specific attributes
     if stp_mode == "pvst":
         fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
+    elif stp_mode == "mst":
         fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
     db.mod_entry('STP_PORT', interface_name, fvs)
@@ -1531,7 +1531,7 @@ def stp_interface_root_guard_disable(_db, interface_name):
     # Add mode-specific attributes
     if stp_mode == "pvst":
         fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
+    elif stp_mode == "mst":
         fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
     db.mod_entry('STP_PORT', interface_name, fvs)
@@ -1571,7 +1571,7 @@ def stp_interface_priority(_db, interface_name, priority_value):
 
     if stp_mode == "pvst":
         fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
+    elif stp_mode == "mst":
         fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
     # Update the database entry

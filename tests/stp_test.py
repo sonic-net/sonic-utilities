@@ -2094,7 +2094,9 @@ class TestStpInterfacePriority:
 
         assert result.exit_code == 0
         self.cfgdb.mod_entry.assert_called_with('STP_PORT', 'Ethernet8', {
-            'priority': '240'
+            'priority': '240',
+            'edge_port': 'false',
+            'link_type': 'auto'
         })
 
     @patch('config.stp.get_global_stp_mode', return_value='pvst')
@@ -2156,7 +2158,7 @@ class TestStpInterfaceRootGuardDisable:
             "uplink_fast": "false"
         })
 
-    @patch('config.stp.get_global_stp_mode', return_value='mstp')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
     @patch('config.stp.check_if_interface_is_valid')
     def test_root_guard_disable_mstp(self, mock_check_valid, mock_get_mode):
         result = self.runner.invoke(
@@ -2216,7 +2218,7 @@ class TestStpInterfaceRootGuardEnable:
             "uplink_fast": "false"
         })
 
-    @patch('config.stp.get_global_stp_mode', return_value='mstp')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
     @patch('config.stp.check_if_interface_is_valid')
     def test_root_guard_enable_mstp(self, mock_check_valid, mock_get_mode):
         result = self.runner.invoke(
@@ -2277,7 +2279,7 @@ class TestStpInterfaceBpduGuardDisable:
             "uplink_fast": "false"
         })
 
-    @patch('config.stp.get_global_stp_mode', return_value='mstp')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
     @patch('config.stp.check_if_interface_is_valid')
     def test_bpdu_guard_disable_mstp(self, mock_check_valid, mock_get_mode):
         result = self.runner.invoke(
@@ -2339,7 +2341,7 @@ class TestStpInterfaceBpduGuardEnable:
             "uplink_fast": "false"
         })
 
-    @patch('config.stp.get_global_stp_mode', return_value='mstp')
+    @patch('config.stp.get_global_stp_mode', return_value='mst')
     @patch('config.stp.check_if_interface_is_valid')
     def test_bpdu_guard_enable_mstp_without_shutdown(self, mock_check_valid, mock_get_mode):
         result = self.runner.invoke(
