@@ -126,7 +126,34 @@ class TestPfcMultiAsic(TestPfcBase):
     @classmethod
     def teardown_class(cls):
         import mock_tables.mock_single_asic
+        importlib.reload(mock_tables.mock_single_asic)
         mock_tables.dbconnector.load_database_config()
+
+        # Undo setup_class's reloads with the single-asic mocks back in place:
+        # utilities_common.multi_asic fixes its click option defaults at import,
+        # so commands built later in this process would keep the multi-asic ones.
+        import utilities_common
+        importlib.reload(utilities_common.multi_asic)
+        importlib.reload(pfc)
 
         super().teardown_class()
         os.environ.pop("UTILITIES_UNIT_TESTING_TOPOLOGY")
+
+
+class TestPfcMultiAsicTeardown(object):
+    def test_single_asic_click_options_restored(self):
+        # Commands built after TestPfcMultiAsic in this process (e.g. by a test
+        # that reloads show.main) must get the single-asic option defaults,
+        # not the --display frontend that setup_class's reload produced.
+        import click
+        from sonic_py_common import multi_asic
+        from utilities_common import multi_asic as multi_asic_util
+
+        @click.command()
+        @multi_asic_util.multi_asic_click_options
+        def command(namespace, display):
+            pass
+
+        display = next(p for p in command.params if p.name == 'display')
+        assert not multi_asic.is_multi_asic()
+        assert display.default == multi_asic_util.multi_asic_display_default_option()
