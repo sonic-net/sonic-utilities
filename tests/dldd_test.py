@@ -243,9 +243,11 @@ def test_show_status_handles_missing_state():
     assert result.output == "DLDD status is unavailable in STATE_DB.\n"
 
 
-def test_show_rules_displays_count_and_only_exceptions():
+def test_show_rules_displays_count_and_only_exceptions(monkeypatch):
     db = _db()
     db.db.get_all.return_value = _detailed_status_state()
+    run = Mock()
+    monkeypatch.setattr("show.dldd.subprocess.run", run)
 
     result = _invoke_ok(show_dldd, ("rules",), obj=db)
 
@@ -254,6 +256,39 @@ def test_show_rules_displays_count_and_only_exceptions():
         present=("Loaded rules: 12", "PSU_OV_FAULT", "query_error"),
         absent=("Work items", "Correlation key", "DLDD_RULE_DETAIL"),
     )
+    run.assert_not_called()
+
+
+@pytest.mark.parametrize("option", ("--verbose", "--detail"))
+def test_show_rules_verbose_dumps_complete_active_file(monkeypatch, option):
+    db = _db()
+    db.db.get_all.return_value = {"rule_count": "3"}
+    content = "schema_version: 0.0.1\nsignatures:\n  - name: SENSOR_FAULT\n"
+    run = Mock(return_value=Mock(returncode=0, stdout=content, stderr=""))
+    monkeypatch.setattr("show.dldd.subprocess.run", run)
+
+    result = _invoke_ok(show_dldd, ("rules", option), obj=db)
+
+    run.assert_called_once_with(
+        ["sudo", "-n", "cat", "--", "/var/lib/sonic/dldd/rules/dld_rules.active.yaml"],
+        capture_output=True, text=True, check=False,
+    )
+    assert "Loaded rules: 3\nNo rule exceptions.\n" in result.output
+    assert "Active rules (/var/lib/sonic/dldd/rules/dld_rules.active.yaml)\n" in result.output
+    assert result.output.endswith(content)
+
+
+def test_show_rules_verbose_reports_read_failure(monkeypatch):
+    db = _db()
+    db.db.get_all.return_value = {"rule_count": "3"}
+    monkeypatch.setattr("show.dldd.subprocess.run", Mock(return_value=Mock(
+        returncode=1, stdout="", stderr="cat: active rules: Permission denied\n",
+    )))
+
+    result = CliRunner().invoke(show_dldd, ("rules", "--verbose"), obj=db)
+
+    assert result.exit_code == 1
+    assert "Error: cat: active rules: Permission denied" in result.output
 
 
 def test_show_faults_displays_and_filters_records():

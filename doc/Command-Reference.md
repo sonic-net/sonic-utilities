@@ -5105,11 +5105,13 @@ generation metadata and any rule or source exceptions.
 **show dldd rules**
 
 Displays the number of loaded rules and details only for rules with runtime
-exceptions.
+exceptions. Use `--verbose` (or `--detail`) to also dump the complete active
+YAML/JSON rules file, including healthy rules. This is a read-only display;
+reading the root-owned active file requires non-interactive sudo access.
 
 - Usage:
   ```
-  show dldd rules
+  show dldd rules [--verbose|--detail]
   ```
 
 - Example:

@@ -2,6 +2,7 @@
 
 import json
 import math
+import subprocess
 from typing import Any, Tuple
 
 import click
@@ -19,6 +20,7 @@ from utilities_common.dldd import (
 
 FAULT_INFO_PATTERN = "FAULT_INFO|*"
 HEARTBEAT_TTL_SECONDS = 120
+ACTIVE_RULES_FILE = "/var/lib/sonic/dldd/rules/dld_rules.active.yaml"
 
 FAULT_NESTED_FIELDS: Tuple[Tuple[str, str, Any], ...] = (
     ("events", "Events", []),
@@ -356,9 +358,13 @@ def status(db, detail):
 
 
 @dldd.command("rules")
+@click.option(
+    "verbose", "--verbose", "--detail", is_flag=True,
+    help="Dump the complete active rules file.",
+)
 @clicommon.pass_db
-def rules(db):
-    """Show the active rule count and exceptional rules."""
+def rules(db, verbose):
+    """Show the active rule count, exceptions, and optionally all rules."""
 
     process_state = _state_entry(db, DLDD_STATUS_KEY)
     if not process_state:
@@ -368,8 +374,23 @@ def rules(db):
     click.echo("Loaded rules: {}".format(process_state.get("rule_count", 0)))
     if not broken:
         click.echo("No rule exceptions.")
-        return
-    _print_record_table(broken, BROKEN_RULE_COLUMNS)
+    else:
+        _print_record_table(broken, BROKEN_RULE_COLUMNS)
+
+    if verbose:
+        try:
+            result = subprocess.run(
+                ["sudo", "-n", "cat", "--", ACTIVE_RULES_FILE],
+                capture_output=True, text=True, check=False,
+            )
+        except OSError as error:
+            raise click.ClickException("Unable to read active rules: {}".format(error))
+        if result.returncode:
+            raise click.ClickException(
+                result.stderr.strip() or "Unable to read active rules."
+            )
+        click.echo("\nActive rules ({})".format(ACTIVE_RULES_FILE))
+        click.echo(result.stdout, nl=False)
 
 
 @dldd.command("faults")
