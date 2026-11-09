@@ -251,7 +251,8 @@ def test_software_show_uses_hld_columns_only(cli, monkeypatch, verbose):
         assert value in result.output
     for header in ["CONVERGENCE", "ADMIN_MODE", "LAST_ARBITRATION", "LAST_RESYNC"]:
         assert header in result.output
-    for extra in ["PROGRAMMED_SAI_ADMIN_MODE", "LAST_EVENT", "REVERTIVE", "WAIT_TO_RESTORE_TIME_MS", "stale_event", "5000"]:
+    for extra in ["PROGRAMMED_SAI_ADMIN_MODE", "LAST_EVENT", "REVERTIVE",
+                  "WAIT_TO_RESTORE_TIME_MS", "stale_event", "5000"]:
         assert extra not in result.output
     assert "n/a" in result.output
     assert ("T_RECONCILE_ARMED_AT" in result.output) == verbose
@@ -302,9 +303,12 @@ def test_hld_hardware_arbitration_and_verbose_fields(cli, monkeypatch, verbose, 
     result = show_rows(cli, {"PortChannel0": entry}, ["--verbose"] if verbose else [])
     assert result.exit_code == 0, result.output
     assert "CONVERGING" in result.output and entry["last_resync_ts"] in result.output
-    if convergence == "disabled": assert "n/a" in result.output and "corrective_override" not in result.output
-    elif outcome == "none": assert "none" in result.output and entry["last_arbitration_ts"] not in result.output
-    else: assert f"{outcome} ({source}) @ {entry['last_arbitration_ts']}" in result.output
+    if convergence == "disabled":
+        assert "n/a" in result.output and "corrective_override" not in result.output
+    elif outcome == "none":
+        assert "none" in result.output and entry["last_arbitration_ts"] not in result.output
+    else:
+        assert f"{outcome} ({source}) @ {entry['last_arbitration_ts']}" in result.output
     if verbose:
         assert "T_RECONCILE_ARMED_AT" in result.output
         assert "LAST_ARBITRATION_SOURCE" in result.output and "LAST_CACHE_UPDATE" in result.output
@@ -317,7 +321,8 @@ def test_hld_hardware_arbitration_and_verbose_fields(cli, monkeypatch, verbose, 
 def test_legacy_software_rows_do_not_expose_non_hld_state_values(cli, monkeypatch, path, health):
     monkeypatch.setattr(status.multi_asic, "is_multi_asic", lambda: False)
     entry = {"protection_type": "sw_protection", "admin_mode": "AUTO", "reconciliation_state": health}
-    if path is not None: entry["protection_state"] = path
+    if path is not None:
+        entry["protection_state"] = path
     result = show_rows(cli, {"PortChannel0": entry}, ["--verbose"])
     assert result.exit_code == 0, result.output
     assert "—" in result.output and "INCONSISTENT" in result.output

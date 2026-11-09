@@ -14,7 +14,8 @@ TABLE = "BRIDGE_PORT_PROTECTION_STATE"
 
 @click.command(name="bridge-port-protection")
 @click.argument("interface", required=False)
-@click.option("--verbose", is_flag=True, help="Show HLD reconciliation timing, arbitration source and cache diagnostics.")
+@click.option("--verbose", is_flag=True,
+              help="Show HLD reconciliation timing, arbitration source and cache diagnostics.")
 @click.option("-n", "--namespace", default=None,
               type=multi_asic_util.LazyChoice(multi_asic_util.multi_asic_ns_choices),
               help="ASIC namespace; default shows all front-end ASICs.")
