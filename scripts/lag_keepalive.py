@@ -18,6 +18,7 @@ import traceback  # noqa: E402
 from pyroute2 import netns  # noqa: E402
 from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig  # noqa: E402
 from sonic_py_common import multi_asic  # noqa: E402
+from utilities_common.lacp import LACPRetryCount, get_retry_count_port_channels  # noqa: E402
 
 SYSLOG_ID = 'lag_keepalive'
 SLOW_PROTOCOL_MAC_ADDRESS = "01:80:c2:00:00:02"
@@ -35,6 +36,12 @@ def log_error(msg):
     syslog.closelog()
 
 
+def log_warning(msg):
+    syslog.openlog(SYSLOG_ID)
+    syslog.syslog(syslog.LOG_WARNING, msg)
+    syslog.closelog()
+
+
 def getCmdOutput(cmd):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     return proc.communicate()[0], proc.returncode
@@ -48,7 +55,8 @@ def get_port_channel_config(portChannelName, namespace=""):
     return json.loads(processStdout)
 
 
-def craft_lacp_packet(portChannelConfig, portName):
+def craft_lacp_packet(portChannelConfig, portName, preserve_retry_count=False):
+    """Build a LACPDU, optionally retaining negotiated retry-count TLVs."""
     portConfig = portChannelConfig["ports"][portName]
     actorConfig = portConfig["runner"]["actor_lacpdu_info"]
     partnerConfig = portConfig["runner"]["partner_lacpdu_info"]
@@ -56,6 +64,35 @@ def craft_lacp_packet(portChannelConfig, portName):
     l3 = scapy.contrib.lacp.SlowProtocol(subtype=0x01)
     l4 = scapy.contrib.lacp.LACP()
     l4.version = 0x1
+    if preserve_retry_count:
+        try:
+            runner = portChannelConfig["runner"]
+            if runner["enable_retry_count_feature"] is not True:
+                raise ValueError("Local retry-count feature is not enabled")
+            actor_retry_count = runner["retry_count"]
+            partner_retry_count = portConfig["runner"]["partner_retry_count"]
+            if (type(actor_retry_count) is not int or not 3 < actor_retry_count <= 255 or
+                    type(partner_retry_count) is not int or not 0 < partner_retry_count <= 255):
+                raise ValueError("Invalid extended retry-count state")
+            l4 = LACPRetryCount(
+                version=0xf1, actor_retry_count=actor_retry_count, partner_retry_count=partner_retry_count)
+        except (KeyError, TypeError, ValueError) as err:
+            # In the reboot sequence, orchagent has already been paused and shutdown
+            # must continue so the device can recover. Fall back to standard LACPDUs
+            # as a degraded mode. lag_keepalive sends once per second and is intended
+            # to run through the end of shutdown, whereas teamd is stopped earlier
+            # and, in slow-periodic mode, sends only once every 30 seconds. Continuing
+            # replay keeps the LAGs fresher than relying on teamd's last packet,
+            # attempting to reduce the risk of flapping without guaranteeing
+            # extended timeout protection.
+            # Local teamd state may not reflect the extended counts advertised to the peer:
+            # teamd_increase_retry_count.py can inject extended LACPDUs without changing
+            # local teamd's retry-count configuration. Any failure to configure native
+            # extended retry counts must be investigated upstream, not by stopping
+            # keepalive here.
+            log_warning(
+                f"Cannot preserve extended retry counts for {portName}: {err}; "
+                "using standard LACPDU without extended retry-count protection")
     l4.actor_system_priority = actorConfig["system_priority"]
     l4.actor_system = actorConfig["system"]
     l4.actor_key = actorConfig["key"]
@@ -72,7 +109,9 @@ def craft_lacp_packet(portChannelConfig, portName):
     return packet
 
 
-def get_lacpdu_per_lag_member(namespace):
+def get_lacpdu_per_lag_member(namespace, preserve_retry_count=False):
+    """Cache packets and sockets for active, administratively enabled LAG members."""
+    retry_count_port_channels = get_retry_count_port_channels(namespace) if preserve_retry_count else set()
     appDB = ConfigDBConnector(namespace=namespace)
     appDB.db_connect('APPL_DB')
     appDB_lag_info = appDB.get_keys('LAG_MEMBER_TABLE')
@@ -94,7 +133,8 @@ def get_lacpdu_per_lag_member(namespace):
             active_lag_members.append(lag_member)
             # craft lacpdu packets for each lag member based on config
             port_channel_config = get_port_channel_config(lag_name, namespace)
-            packet = craft_lacp_packet(port_channel_config, lag_member)
+            packet = craft_lacp_packet(port_channel_config, lag_member,
+                                       preserve_retry_count=lag_name in retry_count_port_channels)
             socket = conf.L2socket(iface=lag_member)
             lag_member_to_packet[lag_member] = (socket, packet)
 
@@ -122,6 +162,8 @@ def lag_keepalive(lag_member_to_packet):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fork-into-background', action='store_true')
+    parser.add_argument('--preserve-retry-count', action='store_true',
+                        help='preserve negotiated retry counts on eligible port channels')
     parser.add_argument('-n', '--namespace', default="", type=str, help='namespace to use')
     args = parser.parse_args()
 
@@ -135,7 +177,8 @@ def main():
 
     while True:
         try:
-            active_lag_members, lag_member_to_packet = get_lacpdu_per_lag_member(args.namespace)
+            active_lag_members, lag_member_to_packet = get_lacpdu_per_lag_member(
+                args.namespace, args.preserve_retry_count)
             if len(active_lag_members) != len(lag_member_to_packet.keys()):
                 log_error("Failed to craft LACPDU packets for some lag members. " +
                           "Active lag members: {}. LACPDUs crafted for: {}".format(

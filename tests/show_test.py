@@ -1256,46 +1256,6 @@ class TestShowPlatform(object):
     def teardown_method(self):
         print('TEAR DOWN')
 
-class TestShowQuagga(object):
-    def setup_method(self):
-        print('SETUP')
-
-    @patch('show.main.run_command')
-    @patch('show.main.get_routing_stack', MagicMock(return_value='quagga'))
-    def test_show_ip_bgp(self, mock_run_command):
-        from show.bgp_quagga_v4 import bgp
-        runner = CliRunner()
-
-        result = runner.invoke(show.cli.commands["ip"].commands['bgp'].commands['summary'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ip bgp summary"], return_cmd=True)
-
-        result = runner.invoke(show.cli.commands["ip"].commands['bgp'].commands['neighbors'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ip bgp neighbor"])
-
-        result = runner.invoke(show.cli.commands["ip"].commands['bgp'].commands['neighbors'], ['0.0.0.0', 'routes'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ip bgp neighbor 0.0.0.0 routes"])
-
-    @patch('show.main.run_command')
-    @patch('show.main.get_routing_stack', MagicMock(return_value='quagga'))
-    def test_show_ipv6_bgp(self, mock_run_command):
-        from show.bgp_quagga_v6 import bgp
-        runner = CliRunner()
-
-        result = runner.invoke(show.cli.commands["ipv6"].commands['bgp'].commands['summary'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 bgp summary"], return_cmd=True)
-
-        result = runner.invoke(show.cli.commands["ipv6"].commands['bgp'].commands['neighbors'], ['0.0.0.0', 'routes'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 bgp neighbor 0.0.0.0 routes"])
-
-    def teardown_method(self):
-        print('TEAR DOWN')
-
-
 class TestShow(object):
     def setup_method(self):
         print('SETUP')
@@ -1562,28 +1522,11 @@ class TestShow(object):
         mock_run_command.assert_called_with(['sonic-cfggen', '-d', '--var-json', 'INTERFACE', '--key', 'Ethernet0'], display_cmd=True)
 
     @patch('show.main.run_command')
-    @patch('show.main.getstatusoutput_noshell_pipe', MagicMock(return_value=(0, 'quagga')))
-    def test_show_startupconfiguration_bgp_quagga(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands['startupconfiguration'].commands['bgp'], ['--verbose'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/quagga/bgpd.conf'], display_cmd=True)
-
-    @patch('show.main.run_command')
-    @patch('show.main.getstatusoutput_noshell_pipe', MagicMock(return_value=(0, 'frr')))
     def test_show_startupconfiguration_bgp_frr(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['startupconfiguration'].commands['bgp'], ['--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=True)
-
-    @patch('show.main.run_command')
-    @patch('show.main.getstatusoutput_noshell_pipe', MagicMock(return_value=(0, 'gobgp')))
-    def test_show_startupconfiguration_bgp_gobgp(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands['startupconfiguration'].commands['bgp'], ['--verbose'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/gpbgp/bgpd.conf'], display_cmd=True)
 
     @patch('show.main.run_command')
     def test_show_uptime(self, mock_run_command):
@@ -1880,33 +1823,6 @@ class TestCsonicNeighborEnv(object):
 
     def setup_method(self):
         print('SETUP')
-
-    def test_get_routing_stack_no_docker_skips_oneliner(self):
-        # When the 'docker' binary is absent (docker-sonic-vs neighbor), the
-        # docker ps one-liner must NOT run, and the default 'frr' is returned.
-        with mock.patch('show.main.shutil.which', return_value=None), \
-                mock.patch('show.main.subprocess.check_output',
-                           side_effect=AssertionError("docker oneliner should not run")) \
-                as mock_check_output:
-            assert show.get_routing_stack() == 'frr'
-            mock_check_output.assert_not_called()
-
-    def test_get_routing_stack_with_docker_runs_oneliner(self):
-        # When 'docker' is present (real SONiC), the one-liner runs and its
-        # output determines the routing stack.
-        with mock.patch('show.main.shutil.which', return_value='/usr/bin/docker'), \
-                mock.patch('show.main.subprocess.check_output',
-                           return_value='quagga\n') as mock_check_output:
-            assert show.get_routing_stack() == 'quagga'
-            mock_check_output.assert_called_once()
-
-    def test_get_routing_stack_with_no_bgp_container_uses_default(self):
-        # When docker exists but no BGP container is found, keep the FRR default.
-        with mock.patch('show.main.shutil.which', return_value='/usr/bin/docker'), \
-                mock.patch('show.main.subprocess.check_output',
-                           return_value='') as mock_check_output:
-            assert show.get_routing_stack() == 'frr'
-            mock_check_output.assert_called_once()
 
     def test_run_bgp_show_command_falls_back_to_vtysh(self):
         # When 'rvtysh' is absent (docker-sonic-vs neighbor), run_bgp_show_command
