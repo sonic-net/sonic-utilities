@@ -746,22 +746,31 @@ class TestDirectPlatformApiCommands(object):
         assert ("Expected per-lane data" in result.output
                 or "did not return data for ELS laser" in result.output)
 
-    def test_els_status_requires_independent_module_state(self):
-        els_api = mock.Mock(spec=["get_module_state"])
-        els_api.get_module_state.side_effect = NotImplementedError(
-            "Independent ELS module state is not implemented")
-        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api))
-        missing = invoke(["show", "els", "status", "0", "--json"])
-        assert missing.exit_code != 0
-        assert (
-            "Independent ELS module state is not implemented"
-            in missing.output
-        )
-
-        els_api.get_module_state.side_effect = None
-        els_api.get_module_state.return_value = "ModuleReady"
-        result = invoke(["show", "els", "status", "0", "--json"])
-        assert json.loads(result.output) == {"els0": "ModuleReady"}
+    @pytest.mark.parametrize("low_power", [False, True])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_els_status_matches_endpoint_lpmode(self, low_power, json_output):
+        endpoint = mock.Mock()
+        endpoint.get_lpmode.return_value = low_power
+        endpoint.get_api.side_effect = AssertionError("Status must use the platform low-power hook")
+        self.cpo.elsfp = endpoint
+        results = []
+        for command in ("status", "lpmode"):
+            arguments = ["show", "els", command, "0"]
+            if json_output:
+                arguments.append("--json")
+            result = invoke(arguments)
+            assert result.exit_code == 0, result.output
+            results.append(result.output)
+            if json_output:
+                assert json.loads(result.output) == {"els0": low_power}
+            else:
+                assert "Low-power Mode" in result.output
+                assert ("On" if low_power else "Off") in result.output
+                assert "High power mode" not in result.output
+                assert "Low power mode" not in result.output
+        assert results[0] == results[1]
+        assert endpoint.get_lpmode.call_count == 2
+        endpoint.get_api.assert_not_called()
 
     def test_temperature_keeps_measurement_precision(self):
         temperature = invoke(["show", "oe", "temperature", "0"])

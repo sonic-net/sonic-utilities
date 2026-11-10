@@ -17298,6 +17298,8 @@ These commands display Optical Engine state.
 
 These commands display External Laser Source state.
 
+`status` and `lpmode` are aliases for the same platform `get_lpmode()` query. Both display a `Low-power Mode` column with `On` for true and `Off` for false; JSON returns booleans. `Off` does not assert that the module is ready or in a particular high-power state. Platforms without the low-power query report that it is not implemented. Use `temperature` for the module temperature.
+
 - Usage:
   ```
   cpoutil show els {lpmode|status|temperature} [ELS_INDEX] [--json]

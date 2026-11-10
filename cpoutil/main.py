@@ -1396,26 +1396,8 @@ def show_els_lpmode(els_index, json_output):
     )
 
 
-@show_els.command("status")
-@click.argument("els_index", required=False)
-@output_option
-def show_els_status(els_index, json_output):
-    """Display the independent ELS module state."""
-    records = {}
-    try:
-        for resource_id, cpo in get_resource_cpo_objects(
-                EXTERNAL_LASER_SOURCE, els_index):
-            state = get_els_api(cpo, resource_id).get_module_state()
-            if state is None:
-                raise CpoCommandError("The ELSFP module state API returned no data")
-            records[resource_id] = state
-    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(str(exc))
-    print_records(
-        records,
-        json_output,
-        ("ELS", "Status"),
-    )
+# Status is an alias of the endpoint low-power query.
+show_els.add_command(show_els_lpmode, name="status")
 
 
 @show_els.command("temperature")
