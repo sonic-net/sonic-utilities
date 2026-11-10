@@ -801,6 +801,7 @@ class TestValidateFieldOperation:
         config_wrapper = gu_common.ConfigWrapper()
         config_wrapper.validate_field_operation(old_config, target_config)
 
+
 class TestGetBreakoutSpeeds:
     """get_breakout_speeds() derives the speeds a port can reach from the
     breakout_modes in platform.json, and returns an empty set (so the caller
