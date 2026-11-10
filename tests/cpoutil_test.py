@@ -1419,7 +1419,6 @@ class TestOptionalElsApis:
 
     @pytest.mark.parametrize("arguments", [
         ["show", "els", "status", "0"],
-        ["show", "interface", "lane-status", "-p", "Ethernet0"],
     ])
     def test_unsupported_els_reads_do_not_change_oe(
             self, coverage_environment, monkeypatch, arguments):

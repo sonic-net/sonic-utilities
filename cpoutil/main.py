@@ -941,6 +941,10 @@ def print_lane_status_records(records, json_output):
         els_lane_states = values.get("ELS Lane State", {})
         shared = set(values.get("Shared ELS Lasers", []))
         els_id = values.get("ELS", "N/A")
+        oe_error = values.get("OE Datapath State Error")
+        els_error = values.get("ELS Lane State Error")
+        if oe_error:
+            lane_rows.append((interface, "N/A", oe_error))
         for lane in sorted(lane_states, key=_natural_sort_key):
             lane_rows.append((
                 interface,
@@ -950,7 +954,9 @@ def print_lane_status_records(records, json_output):
 
         # ELS lasers and OE lanes are separate resources. Display each selected
         # laser once per interface, without guessing a lane-to-laser pairing.
-        if lasers is None:
+        if els_error:
+            laser_rows.append((interface, els_id, "N/A", els_error, "N/A"))
+        elif lasers is None:
             laser_rows.append((interface, els_id, UNRESOLVED_LASERS, "N/A", "N/A"))
         else:
             for laser in sorted(lasers):
@@ -1253,28 +1259,40 @@ def show_interface_lane_status(port, json_output):
     try:
         with _eeprom_read_snapshot() as attach_snapshot:
             for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-                oe_api = get_oe_api(cpo, port_name)
-                els_api = get_els_api(cpo, port_name)
-                attach_snapshot(cpo.oe, oe_api)
-                attach_snapshot(cpo.elsfp, els_api)
                 context = cpo_mapping.interface_context(logical_port, current_port_config, require_lasers=False)
                 laser_ids = context["laser_ids"]
-                records[port_name] = {
-                    "Data Path State Indicator": _select_lane_values(
-                        oe_api.get_datapath_state(), context["lane_positions"]
-                    ),
+                record = {
+                    "Data Path State Indicator": {},
                     "ELS": context["mapping"].els_name.upper(),
-                    "ELS Lane State": _select_els_laser_values(
-                        els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
-                    ) if laser_ids is not None else {},
+                    "ELS Lane State": {},
                     "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
                     "Lane Lasers": _lane_lasers(context),
                     "Shared ELS Lasers": list(context["shared_laser_ids"]),
                 }
-    except (NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(
-            "This functionality is not implemented: {}".format(exc)
-        )
+                try:
+                    oe_api = get_oe_api(cpo, port_name)
+                    attach_snapshot(cpo.oe, oe_api)
+                    record["Data Path State Indicator"] = _select_lane_values(
+                        oe_api.get_datapath_state(), context["lane_positions"]
+                    )
+                except (NotImplementedError, AttributeError, CpoCommandError) as exc:
+                    if isinstance(exc, CpoCommandError) and not isinstance(
+                            exc.__cause__, (NotImplementedError, AttributeError)):
+                        raise
+                    record["OE Datapath State Error"] = "Not supported"
+                if laser_ids is not None:
+                    try:
+                        els_api = get_els_api(cpo, port_name)
+                        attach_snapshot(cpo.elsfp, els_api)
+                        record["ELS Lane State"] = _select_els_laser_values(
+                            els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
+                        )
+                    except (NotImplementedError, AttributeError, CpoCommandError) as exc:
+                        if isinstance(exc, CpoCommandError) and not isinstance(
+                                exc.__cause__, (NotImplementedError, AttributeError)):
+                            raise
+                        record["ELS Lane State Error"] = "Not supported"
+                records[port_name] = record
     except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     print_lane_status_records(records, json_output)

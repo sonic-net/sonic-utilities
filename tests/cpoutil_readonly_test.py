@@ -628,6 +628,71 @@ class TestDirectPlatformApiCommands(object):
             "lane01": "Inactive",
         }
 
+    @pytest.mark.parametrize("resource", ["oe", "els"])
+    @pytest.mark.parametrize("failure", ["missing", "unimplemented", "factory"])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_lane_status_keeps_the_other_endpoint(self, resource, failure, json_output):
+        oe_api, els_api = FakeApi(), FakeApi()
+        endpoints = {
+            "oe": mock.Mock(get_api=mock.Mock(return_value=oe_api)),
+            "els": mock.Mock(get_api=mock.Mock(return_value=els_api)),
+        }
+        api = oe_api if resource == "oe" else els_api
+        method = "get_datapath_state" if resource == "oe" else "get_per_lane_state"
+        if failure == "factory":
+            endpoints[resource].get_api.side_effect = NotImplementedError()
+        elif failure == "unimplemented":
+            setattr(api, method, mock.Mock(side_effect=NotImplementedError()))
+        else:
+            names = ["get_per_lane_state", "xcvr_eeprom"] if resource == "oe" else [
+                "get_datapath_state", "xcvr_eeprom"]
+            partial = mock.Mock(spec=names)
+            partial.xcvr_eeprom = api.xcvr_eeprom
+            for name in names:
+                if name != "xcvr_eeprom":
+                    getattr(partial, name).side_effect = getattr(api, name)
+            endpoints[resource].get_api.return_value = partial
+        self.cpo.oe = endpoints["oe"]
+        self.cpo.elsfp = endpoints["els"]
+        arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+        if json_output:
+            arguments.append("--json")
+        result = invoke(arguments)
+        assert result.exit_code == 0, result.output
+        error = "OE Datapath State Error" if resource == "oe" else "ELS Lane State Error"
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert record[error] == "Not supported"
+            assert "ELS Status" not in record
+            if resource == "oe":
+                assert record["Data Path State Indicator"] == {}
+                assert record["ELS Lane State"] == {"lane00": "Active", "lane01": "Inactive"}
+            else:
+                assert record["ELS Lane State"] == {}
+                assert record["Data Path State Indicator"]["lane00"] == "DataPathActivated"
+        else:
+            assert result.output.count("OE datapath state:") == 1
+            assert result.output.count("ELS lane state:") == 1
+            assert "Not supported" in result.output
+            assert ("Active" if resource == "oe" else "DataPathActivated") in result.output
+
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_lane_status_marks_both_unsupported_readers(self, json_output):
+        with mock.patch.object(self.cpo.api, "get_datapath_state", side_effect=NotImplementedError()), \
+                mock.patch.object(self.cpo.api, "get_per_lane_state", side_effect=NotImplementedError()):
+            arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+            if json_output:
+                arguments.append("--json")
+            result = invoke(arguments)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert record["OE Datapath State Error"] == "Not supported"
+            assert record["ELS Lane State Error"] == "Not supported"
+            assert record["Data Path State Indicator"] == record["ELS Lane State"] == {}
+        else:
+            assert result.output.count("Not supported") == 2
+
     def test_els_lane_state_preserves_api_strings(self):
         with mock.patch.object(
                 self.cpo.api,
