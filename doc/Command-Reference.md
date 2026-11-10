@@ -3123,11 +3123,11 @@ When the session is shutdown using this command, BGP state in "show ip bgp summa
 
 **config bgp shutdown neighbor**
 
-This command is to shut down a BGP session with a neighbor by that neighbor's IP address or hostname
+This command shuts down a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. The dedicated interface lookup is case-sensitive and checks both the neighbor key and the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` table. If it does not match, the existing lowercase neighbor-key and hostname lookups are retained. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```
-  sudo config bgp shutdown neighbor (<ip_address> | <hostname>)
+  sudo config bgp shutdown neighbor (<ip_address> | <interface_name> | <hostname>)
   ```
 
 - Examples:
@@ -3136,6 +3136,9 @@ This command is to shut down a BGP session with a neighbor by that neighbor's IP
   ```
   ```
   admin@sonic:~$ sudo config bgp shutdown neighbor SONIC02SPINE
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp shutdown neighbor Ethernet16
   ```
 
 
@@ -3156,11 +3159,11 @@ This command is used to start up all the IPv4 & IPv6 BGP neighbors
 
 **config bgp startup neighbor**
 
-This command is used to start up the particular IPv4 or IPv6 BGP neighbor using either the IP address or hostname.
+This command starts up a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. The dedicated interface lookup is case-sensitive and checks both the neighbor key and the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` table. If it does not match, the existing lowercase neighbor-key and hostname lookups are retained. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```
-  config bgp startup neighbor (<ip-address> | <hostname>)
+  config bgp startup neighbor (<ip-address> | <interface_name> | <hostname>)
   ```
 
 - Examples:
@@ -3169,6 +3172,9 @@ This command is used to start up the particular IPv4 or IPv6 BGP neighbor using 
   ```
   ```
   admin@sonic:~$ sudo config bgp startup neighbor SONIC02SPINE
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp startup neighbor Ethernet16
   ```
 
 
