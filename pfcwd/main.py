@@ -63,9 +63,10 @@ CONFIG_HEADER = ('PORT',) + list(zip(*CONFIG_DESCRIPTION))[0]
 
 HISTORY_DISPLAY_LIMIT = 5
 HISTORY_HEADER = ('QUEUE', '#', 'DETECTED', 'RESTORED', 'DURATION(ms)', 'TX/TX-DROP', 'RX/RX-DROP')
-# Timestamp format orchagent writes into PFC_WD_STORM_HISTORY,
-# e.g. 2025-10-21T02:26:40.000000Z
+# orchagent stores storm times as microseconds since the epoch; they are shown
+# as ISO-8601 UTC, e.g. 2025-10-21T02:26:40.000000Z
 HISTORY_TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
+EPOCH = datetime.datetime(1970, 1, 1)
 
 CONFIG_DB_PFC_WD_TABLE_NAME = 'PFC_WD'
 STATE_DB_PFC_WD_STATE_TABLE = 'PFC_WD_STATE_TABLE'
@@ -189,6 +190,18 @@ class PfcwdCli(object):
             tablefmt='simple'
         ))
 
+    @staticmethod
+    def history_time(value):
+        """Microseconds since the epoch to ISO-8601 UTC; None if unparsable."""
+        if not (isinstance(value, str) and value.isascii() and value.isdigit()):
+            return None
+        seconds, micros = divmod(int(value), 1000000)
+        try:
+            when = EPOCH + datetime.timedelta(seconds=seconds, microseconds=micros)
+        except OverflowError:
+            return None
+        return when.strftime(HISTORY_TIMESTAMP_FORMAT)
+
     @multi_asic_util.run_on_multi_asic
     def collect_history(self, queues):
         # Ports come from CONFIG_DB rather than COUNTERS_QUEUE_NAME_MAP, which stays
@@ -222,19 +235,17 @@ class PfcwdCli(object):
                 ordinal = field[len('storm_'):-len('_detected')]
                 if not (ordinal.isascii() and ordinal.isdigit()):
                     continue
-                try:
-                    detected_dt = datetime.datetime.strptime(
-                        detected, HISTORY_TIMESTAMP_FORMAT)
-                except (TypeError, ValueError):
+                detected_iso = self.history_time(detected)
+                if detected_iso is None:
                     continue
                 storm = 'storm_' + ordinal + '_'
                 self.history.append({
                     'queue': queue,
                     'ordinal': int(ordinal),
-                    'detected': detected,
-                    '_detected_dt': detected_dt,
-                    'restored': entry.get(storm + 'restored'),
-                    'interrupted': entry.get(storm + 'interrupted'),
+                    'detected': detected_iso,
+                    '_detected_us': int(detected),
+                    'restored': self.history_time(entry.get(storm + 'restored')),
+                    'interrupted': self.history_time(entry.get(storm + 'interrupted')),
                     'duration_ms': entry.get(storm + 'duration_ms'),
                     'tx_packets': entry.get(storm + 'tx_packets'),
                     'tx_dropped': entry.get(storm + 'tx_dropped'),
@@ -248,7 +259,7 @@ class PfcwdCli(object):
 
         # Newest first by detection time; queue name then ordinal break ties.
         self.history.sort(key=lambda e: (e['queue'], -e['ordinal']))
-        self.history.sort(key=lambda e: e['_detected_dt'], reverse=True)
+        self.history.sort(key=lambda e: e['_detected_us'], reverse=True)
         # A queue filter shows every stored storm of those queues unless --count is given
         if count is None and not queues:
             count = HISTORY_DISPLAY_LIMIT
@@ -265,7 +276,7 @@ class PfcwdCli(object):
         rows = []
         for e in self.history:
             if e['restored'] is None:
-                # Still in progress, or ended by a swss cold start (interrupted)
+                # Still in progress, or its handling ended without a restoration (interrupted)
                 restored = 'interrupted' if e['interrupted'] is not None else '-'
                 duration, tx, rx = '-', '-/-', '-/-'
             else:
