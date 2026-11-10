@@ -165,6 +165,23 @@ testData = {
                                       'rc': 1,
                                       'rc_msg': 'Invalid rmax (-2097153). rmax should be an non-negative integer'
                                       },
+             'ecn_cfg_gmax_out_of_range': {'cmd': ['config'],
+                                           'args': ['-profile', 'AZURE_LOSSLESS', '-gmax', '4294967295'],
+                                           'rc': 1,
+                                           'rc_msg': ('Invalid gmax (4294967295). gmax should not be larger'
+                                                      ' than 2147483647')
+                                           },
+             'ecn_cfg_rmin_out_of_range': {'cmd': ['config'],
+                                           'args': ['-profile', 'AZURE_LOSSLESS', '-rmin', '2147483648'],
+                                           'rc': 1,
+                                           'rc_msg': ('Invalid rmin (2147483648). rmin should not be larger'
+                                                      ' than 2147483647')
+                                           },
+             'ecn_cfg_gmax_upper_bound': {'cmd': ['config'],
+                                          'args': ['-profile', 'AZURE_LOSSLESS', '-gmax', '2147483647'],
+                                          'rc': 0,
+                                          'cmp_args': [',AZURE_LOSSLESS,green_max_threshold,2147483647']
+                                          },
              'ecn_cfg_rdrop_invalid': {'cmd': ['config'],
                                        'args': ['-profile', 'AZURE_LOSSLESS', '-rdrop', '105'],
                                        'rc': 1,
