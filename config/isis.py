@@ -9,7 +9,7 @@ from sonic_py_common import logger, multi_asic
 from swsscommon.swsscommon import ConfigDBConnector
 import utilities_common.cli as clicommon
 from sonic_isis import (LEVELS, BACKOFF, FIELDS, PROTOCOLS,
-                        identifier, key_tuple, net, routed_vrf, validate, capture, commit)
+                        identifier, key_tuple, net, routed_vrf, validate, validate_transition, capture, commit)
 
 log = logger.Logger("isis_cli")
 log.set_min_log_priority_info()
@@ -60,6 +60,7 @@ def _write(ctx, updates):
             after[table][key] = row
     try:
         validate(after)
+        validate_transition(before, after)
         commit(db, before, updates)
     except Exception as error:
         ctx.fail(str(error))

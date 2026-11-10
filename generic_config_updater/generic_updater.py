@@ -116,6 +116,13 @@ class PatchApplier:
         self.logger.log_notice(f"{scope}: simulating the target full config after applying the patch.")
         target_config = self.patch_wrapper.simulate_config_db_patch(patch, old_config)
 
+        # Static YANG cannot express a transition-dependent FRR limitation.
+        # Reject unsafe live IS-IS area removal before applying any patch step.
+        if old_config.get('ISIS_INSTANCE') != target_config.get('ISIS_INSTANCE'):
+            from sonic_isis import validate_transition
+            validate_transition({'ISIS_INSTANCE': old_config.get('ISIS_INSTANCE', {})},
+                                {'ISIS_INSTANCE': target_config.get('ISIS_INSTANCE', {})})
+
         # Validate all JsonPatch operations on specified fields
         self.logger.log_notice(f"{scope}: validating all JsonPatch operations are permitted on the specified fields")
         self.config_wrapper.validate_field_operation(old_config, target_config)

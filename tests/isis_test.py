@@ -266,3 +266,15 @@ def test_show_rejects_invalid_json_and_missing_area_identity(run):
         assert result.exit_code != 0
     run.return_value = 'ISIS is not running'
     assert CliRunner().invoke(group, ['--json']).exit_code != 0
+
+
+@pytest.mark.parametrize('action', ['disable', 'del'])
+def test_multi_area_retirement_is_refused_without_configdb_change(isis_db, action):
+    ok(isis_db, 'instance', 'enable', 'CORE')
+    ok(isis_db, 'instance', 'add', 'EDGE')
+    ok(isis_db, 'net', 'add', 'EDGE', '49.0002.0000.0000.0001.00')
+    ok(isis_db, 'instance', 'enable', 'EDGE')
+    before = copy.deepcopy(isis_db.cfgdb.get_table('ISIS_INSTANCE'))
+    result = invoke(isis_db, 'instance', action, 'EDGE')
+    assert result.exit_code != 0 and 'operation refused until FRR is fixed' in result.output
+    assert isis_db.cfgdb.get_table('ISIS_INSTANCE') == before
