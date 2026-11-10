@@ -2713,89 +2713,89 @@ This command displays the state and key parameters of all BFD sessions that matc
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
 
-## IS-IS
+## IS-IS Configuration and Show Commands
 
-IS-IS requires `DEVICE_METADATA|localhost` field
-`frr_mgmt_framework_config="true"` and a restart of the affected bgp container.
-Enable the process before configuring NET, level, hostname or timers, and before
-enabling interfaces. Non-default VRFs must already exist. Use interface names;
-aliases are accepted in alias naming mode. PortChannel/VLAN members are rejected.
+The following is the implemented Click syntax. `INSTANCE` is always explicit for parent
+operations and initial interface binding; `--vrf` defaults to `default` for parent
+operations and is inferred/checked for interface binding. `LEVEL` is `level-1`,
+`level-2` or the write convenience `both`.
 
-### IS-IS show commands
+| Function | Command |
+| -------- | ---------------- |
+| Instance lifecycle | `config isis instance <add\|enable\|disable\|del> INSTANCE [--vrf VRF]` |
+| NET list | `config isis net <add\|del> INSTANCE NET [--vrf VRF]` |
+| Instance scalar setting | `config isis set INSTANCE FIELD VALUE [--vrf VRF]` |
+| Instance reset | `config isis reset INSTANCE FIELD [--vrf VRF]` |
+| Level setting/reset | `config isis level <set\|reset> INSTANCE LEVEL FIELD [VALUE] [--vrf VRF]` |
+| Complete SPF backoff tuple | `config isis spf-backoff set INSTANCE INIT SHORT LONG HOLD LEARN [--vrf VRF]` |
+| Remove SPF backoff | `config isis spf-backoff reset INSTANCE [--vrf VRF]` |
+| Bind/unbind | `config interface isis bind INTERFACE INSTANCE [--vrf VRF]`; `config interface isis unbind INTERFACE` |
+| Interface admin state | `config interface isis <enable\|disable> INTERFACE` |
+| Independent AF control | `config interface isis af INTERFACE <ipv4\|ipv6> <enable\|disable\|reset>` |
+| Interface scalar setting/reset | `config interface isis <set\|reset> INTERFACE FIELD [VALUE]` |
+| Interface level setting/reset | `config interface isis level <set\|reset> INTERFACE LEVEL FIELD [VALUE]` |
+| Redistribution | `config isis redistribute add INSTANCE AF PROTOCOL LEVEL [--metric VALUE] [--route-map NAME] [--vrf VRF]` |
+| Redistribution removal | `config isis redistribute del INSTANCE AF PROTOCOL LEVEL [--vrf VRF]` |
 
+`FIELD` is a documented Click choice, not an arbitrary FRR passthrough. Instance
+choices include level type, hostname, metric style, LSP MTU, overload and IPv6 MT.
+Interface choices include level type, network type and passive mode. Level choices
+are restricted to the corresponding table's fields. Optional values in the compact
+table are mandatory for `set` and forbidden for `reset`.
+
+The exposed protocol allowlist is IPv4 `connected`, `static`, `kernel`, `bgp`,
+`ospf`, `rip`; IPv6 `connected`, `static`, `kernel`, `bgp`, `ospf6`, `ripng`.
+A route-map must reference an existing `ROUTE_MAP_SET` entry. Table-direct redistribution has an additional table-ID
+dimension and must not be collapsed into a protocol-only row. Default origination
+is a separate FRR object, not an alias for redistributing static routes. Table-direct and default origination are outside this iteration.
+
+Operational commands cover summary, neighbors, interface, database, route,
+hostname, topology and VRF inventory. Implement filters only when the pinned
+command/output can faithfully represent them. Do not return another instance's
+state under an instance filter; exact native command mapping is an acceptance gate.
+
+Boolean scalar values are `true` or `false`. Configuration requires sudo.
+Use `config isis -n NAMESPACE` and `config interface -n NAMESPACE isis` for the
+same ASIC. AF and MT default to false; enable each explicitly when required.
+
+#### Operational commands
+
+| Command | Scope and format |
+| ------- | ---------------- |
+| `show isis summary` | `--vrf VRF`, `--json`, `--instance NAME` with JSON |
+| `show isis neighbor` | Same options; one VRF per JSON query |
+| `show isis database [detail]` | Same options; one VRF per JSON query |
+| `show isis interface` | Same options; one VRF per JSON query |
+| `show isis route` / `show isis topology` | `--vrf VRF`, `--level level-1\|level-2`, `--json`; JSON rejected for multiple areas |
+| `show isis hostname` | `--vrf VRF`, text only |
+| `show isis vrf` | All-VRF summary, optional `--json` |
+
+All support `-n` / `--namespace`. `--instance` requires JSON and one VRF; it
+filters native area objects, never substitutes another area's data. FRR's
+route/topology JSON can overwrite multiple areas, and most all-VRF JSON writers
+can overwrite VRFs. Unsupported combinations fail explicitly; text remains
+available. Native command errors propagate to the caller.
+
+
+### Example
+
+Commands for a default-VRF, Level-2 dual-stack point-to-point interface:
+
+```bash
+config isis instance add CORE
+config isis net add CORE 49.0001.0000.0000.0001.00
+config isis set CORE level-type level-2-only
+config interface isis bind Ethernet0 CORE
+config interface isis set Ethernet0 network-type point-to-point
+config interface isis set Ethernet0 level-type level-2-only
+config interface isis af Ethernet0 ipv4 enable
+config interface isis af Ethernet0 ipv6 enable
+config interface isis enable Ethernet0
+config isis instance enable CORE
 ```
-show isis summary [-j|--json] [-n NAMESPACE]
-show isis neighbor [-j|--json] [-n NAMESPACE]
-show isis database [detail] [-j|--json] [-n NAMESPACE]
-show isis interface [-j|--json] [-n NAMESPACE]
-```
 
-### IS-IS config commands
-
-```
-config isis [-n NAMESPACE] enable [VRF]
-config isis [-n NAMESPACE] disable [VRF]
-config isis [-n NAMESPACE] add [VRF]
-config isis [-n NAMESPACE] del [VRF]
-config isis [-n NAMESPACE] net NET [VRF]
-config isis [-n NAMESPACE] level {level-1|level-2|level-1-2} [VRF]
-config isis [-n NAMESPACE] hostname {enable|disable} [VRF]
-config isis [-n NAMESPACE] ipv6-multi-topology {enable|disable} [VRF]
-config isis [-n NAMESPACE] timer lsp-mtu MTU [VRF]
-config isis [-n NAMESPACE] timer lsp-refresh SECONDS [VRF]
-config isis [-n NAMESPACE] timer lsp-lifetime SECONDS [VRF]
-config isis [-n NAMESPACE] reset {net|level|hostname|ipv6-multi-topology|lsp-mtu|lsp-refresh|lsp-lifetime} [VRF]
-config interface [-n NAMESPACE] isis enable INTERFACE
-config interface [-n NAMESPACE] isis disable INTERFACE
-config interface [-n NAMESPACE] isis add INTERFACE
-config interface [-n NAMESPACE] isis del INTERFACE
-config interface [-n NAMESPACE] isis metric INTERFACE METRIC
-config interface [-n NAMESPACE] isis circuit-type INTERFACE {p2p|lan}
-config interface [-n NAMESPACE] isis passive INTERFACE {enable|disable}
-config interface [-n NAMESPACE] isis ipv4 INTERFACE {enable|disable}
-config interface [-n NAMESPACE] isis ipv6 INTERFACE {enable|disable}
-config interface [-n NAMESPACE] isis reset INTERFACE {metric|circuit-type|passive|ipv4|ipv6}
-```
-
-VRF defaults to `default`. NET must contain a system-id and end in `.00`.
-LSP MTU accepts 128–4352 (default 1497), refresh accepts 1–65235 seconds
-(default 900), lifetime accepts 350–65535 seconds (default 1200), and lifetime
-must be at least refresh + 300. Interface metric accepts 1–16777215 (default 10).
-Circuit type defaults to LAN; passive defaults to off. Reset removes the selected
-field, restoring its default (or removing NET). Disable retains configuration;
-re-enable restores it. `add` creates disabled configuration and preserves existing
-values. Edits and resets require configured objects, but do not require them to
-be enabled. Parent `del` refuses while any interface rows remain, even disabled
-ones; use interface `del` first. Interface `del` also cleans up stale configuration
-after a routed interface disappears. Hostname uses `enable|disable`.
-
-IPv4 and IPv6 bindings are controlled independently through
-`ISIS_INTERFACE.ipv4_enabled` and `ipv6_enabled`. Both fields default to true;
-reset removes the selected field and restores that default. Disabling both
-families retains the configured interface settings without an IS-IS circuit.
-These controls require backend/YANG support from the matching IS-IS implementation.
-For an IPv6-only interface, enable IS-IS on the interface and then run
-`config interface isis ipv4 INTERFACE disable`.
-
-`config isis ipv6-multi-topology` controls `ISIS_GLOBALS.ipv6_multi_topology`
-for the selected VRF and namespace. The schema default is true; reset removes
-only that field. The IS-IS process must exist before changing or resetting
-this setting; disabled configurations can be edited. This selects IPv6 multi-topology mode; it does not enable or disable
-the IPv6 binding on individual interfaces.
-
-Example, after enabling management-framework mode:
-
-```shell
-sudo config isis enable
-sudo config isis net 49.0001.0000.0000.0001.00
-sudo config isis level level-2
-sudo config interface isis enable Ethernet0
-sudo config interface isis circuit-type Ethernet0 p2p
-sudo config interface isis enable Loopback0
-sudo config interface isis passive Loopback0 enable
-show isis interface
-show isis neighbor
-```
+Addressing and routed-interface prerequisites are configured separately. IPv6 MT
+is an explicit instance setting and is not implicitly enabled by IPv6 routing.
 
 ## BGP
 

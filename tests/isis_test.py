@@ -1,547 +1,268 @@
-import os
+"""IS-IS northbound contract, including gs1571 AF/MT/reset regression coverage."""
 import copy
+import os
 from unittest import mock
+
 import pytest
 from click.testing import CliRunner
-
 import config.main as config
 import show.main as show
 from utilities_common.db import Db
-from sonic_py_common import multi_asic
+from sonic_isis import SNAPSHOT_TABLES, capture, commit
+
+NET = '49.0001.0000.0000.0001.00'
 
 
 @pytest.fixture
-def isis_af_db():
+def isis_db(monkeypatch):
     db = Db()
-    config_db = db.cfgdb
-    rows = [('PORT', 'Ethernet0'), ('INTERFACE', 'Ethernet0'),
-            ('VRF', 'VrfIsis'), ('ISIS_GLOBALS', 'default'), ('ISIS_GLOBALS', 'VrfIsis'),
-            ('ISIS_INTERFACE', 'Ethernet0'),
-            ('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0')),
-            ('VLAN_MEMBER', ('Vlan999', 'Ethernet0'))]
-    saved = {(table, key): copy.deepcopy(db.cfgdb.get_entry(table, key)) for table, key in rows}
-    for table, key in rows:
-        db.cfgdb.set_entry(table, key, None)
-    db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1', 'admin_status': 'up'})
-    db.cfgdb.set_entry('ISIS_GLOBALS', 'default',
-                       {'enabled': 'true', 'net_title': '49.0001.1921.6800.0001.00', 'level': 'level-2'})
-    db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0',
-                       {'enabled': 'true', 'metric': '30', 'passive': 'true', 'circuit_type': 'p2p'})
+    original = {table: copy.deepcopy(db.cfgdb.get_table(table)) for table in SNAPSHOT_TABLES}
+    for table in SNAPSHOT_TABLES:
+        for key in db.cfgdb.get_table(table):
+            db.cfgdb.set_entry(table, key, None)
+    db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1'})
+    db.cfgdb.set_entry('INTERFACE', 'Ethernet0', {'NULL': 'NULL'})
+    db.cfgdb.set_entry('ISIS_INSTANCE', ('default', 'CORE'), {'enabled': 'false', 'net_titles': [NET]})
+    # Standard sonic-utilities fixtures use mockredis, which does not implement
+    # Lua. Local native-Redis mode executes the production capture/CAS scripts.
+    if not os.environ.get('ISIS_TEST_REDIS'):
+        def snapshot(connector):
+            return {table: connector.get_table(table) for table in SNAPSHOT_TABLES}
+
+        def fake_commit(connector, before, updates):
+            if snapshot(connector) != before:
+                raise ValueError('configuration changed; retry')
+            for table, key, row in updates:
+                connector.set_entry(table, key, row)
+        monkeypatch.setattr('config.isis.capture', snapshot)
+        monkeypatch.setattr('config.isis.commit', fake_commit)
     yield db
-    db.cfgdb = config_db
-    for (table, key), data in saved.items():
-        db.cfgdb.set_entry(table, key, data or None)
+    for table in SNAPSHOT_TABLES:
+        for key in db.cfgdb.get_table(table):
+            db.cfgdb.set_entry(table, key, None)
+        for key, row in original[table].items():
+            db.cfgdb.set_entry(table, key, row)
 
 
-class TestIsis(object):
-    config_isis_enable = config.config.commands["isis"].commands["enable"]
-    config_isis_disable = config.config.commands["isis"].commands["disable"]
-    config_isis_net = config.config.commands["isis"].commands["net"]
-    config_isis_level = config.config.commands["isis"].commands["level"]
-    config_isis_hostname = config.config.commands["isis"].commands["hostname"]
+def invoke(db, *args, interface=False):
+    group = config.config.commands['interface'].commands['isis'] if interface else config.config.commands['isis']
+    obj = {'config_db': db.cfgdb, 'namespace': ''} if interface else db
+    return CliRunner().invoke(group, list(args), obj=obj)
 
-    config_isis_timer_lsp_mtu = config.config.commands["isis"].commands["timer"].commands["lsp-mtu"]
-    config_isis_timer_lsp_refresh = config.config.commands["isis"].commands["timer"].commands["lsp-refresh"]
-    config_isis_timer_lsp_lifetime = config.config.commands["isis"].commands["timer"].commands["lsp-lifetime"]
 
-    config_interface_isis_enable = config.config.commands["interface"].commands["isis"].commands["enable"]
-    config_interface_isis_disable = config.config.commands["interface"].commands["isis"].commands["disable"]
-    config_interface_isis_metric = config.config.commands["interface"].commands["isis"].commands["metric"]
-    config_interface_isis_circuit_type = config.config.commands["interface"].commands["isis"].commands["circuit-type"]
-    config_interface_isis_passive = config.config.commands["interface"].commands["isis"].commands["passive"]
+def ok(db, *args, **kwargs):
+    result = invoke(db, *args, **kwargs)
+    assert result.exit_code == 0, result.output or str(result.exception)
+    return result
 
-    show_isis_summary = show.cli.commands["isis"].commands["summary"]
-    show_isis_neighbor = show.cli.commands["isis"].commands["neighbor"]
-    show_isis_database = show.cli.commands["isis"].commands["database"]
 
-    @classmethod
-    def setup_class(cls):
-        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+def test_instance_lifecycle_and_reference_guard(isis_db):
+    db = isis_db
+    ok(db, 'instance', 'add', 'CORE')
+    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['net_titles'] == [NET]
+    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
+    ok(db, 'set', 'CORE', 'lsp-mtu', '1492')
+    ok(db, 'instance', 'enable', 'CORE')
+    ok(db, 'af', 'Ethernet0', 'ipv6', 'enable', interface=True)
+    ok(db, 'enable', 'Ethernet0', interface=True)
+    original = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
+    ok(db, 'instance', 'disable', 'CORE')
+    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
+    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['lsp_mtu'] == '1492'
+    ok(db, 'disable', 'Ethernet0', interface=True)
+    with mock.patch('config.isis.log.log_error') as log:
+        rejected = invoke(db, 'instance', 'del', 'CORE')
+        assert rejected.exit_code != 0
+        log.assert_not_called()
+    ok(db, 'level', 'set', 'Ethernet0', 'both', 'metric', '30', interface=True)
+    ok(db, 'instance', 'enable', 'CORE')
+    ok(db, 'enable', 'Ethernet0', interface=True)
+    assert db.cfgdb.get_entry('ISIS_INTERFACE_LEVEL', ('Ethernet0', 'level-1'))['metric'] == '30'
+    ok(db, 'unbind', 'Ethernet0', interface=True)
+    assert not db.cfgdb.get_table('ISIS_INTERFACE_LEVEL')
+    ok(db, 'instance', 'del', 'CORE')
+    assert not db.cfgdb.get_table('ISIS_INSTANCE')
 
-    @classmethod
-    def teardown_class(cls):
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
-    def test_isis_enable_disable(self):
-        db = Db()
-        runner = CliRunner()
-        obj = db
+@pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
+def test_independent_af_controls_and_reset_while_disabled(isis_db, family):
+    db = isis_db
+    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
+    ok(db, 'set', 'Ethernet0', 'passive', 'true', interface=True)
+    original = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
+    for state, value in [('enable', 'true'), ('disable', 'false')]:
+        ok(db, 'af', 'Ethernet0', family, state, interface=True)
+        assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(original, **{family + '_enabled': value})
+    ok(db, 'af', 'Ethernet0', family, 'reset', interface=True)
+    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
+    assert invoke(db, 'af', 'Ethernet0', family, 'invalid', interface=True).exit_code == 2
 
-        # Enable IS-IS default VRF
-        result = runner.invoke(self.config_isis_enable, [], obj=obj)
-        assert result.exit_code == 0
-        assert "default" in db.cfgdb.get_table("ISIS_GLOBALS")
-        assert db.cfgdb.get_table("ISIS_GLOBALS")["default"]["enabled"] == "true"
 
-        # Reject absent VRFs before writing anything.
-        result = runner.invoke(self.config_isis_enable, ["Vrf2"], obj=obj)
-        assert result.exit_code != 0
-        db.cfgdb.set_entry("VRF", "Vrf2", {"NULL": "NULL"})
-        # Enable IS-IS for non-default VRF Vrf2
-        result = runner.invoke(self.config_isis_enable, ["Vrf2"], obj=obj)
-        assert result.exit_code == 0
-        assert "Vrf2" in db.cfgdb.get_table("ISIS_GLOBALS")
-        assert db.cfgdb.get_table("ISIS_GLOBALS")["Vrf2"]["enabled"] == "true"
+def test_mt_is_distinct_from_interface_af_and_reset_preserves_fields(isis_db):
+    db = isis_db
+    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
+    before = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
+    ok(db, 'set', 'CORE', 'ipv6-multi-topology', 'true')
+    ok(db, 'reset', 'CORE', 'ipv6-multi-topology')
+    assert 'ipv6_multi_topology' not in db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))
+    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == before
+    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['net_titles'] == [NET]
 
-        # Disable IS-IS for Vrf2
-        result = runner.invoke(self.config_isis_disable, ["Vrf2"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_entry("ISIS_GLOBALS", "Vrf2")["enabled"] == "false"
 
-        # Disable IS-IS default VRF
-        result = runner.invoke(self.config_isis_disable, [], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_entry("ISIS_GLOBALS", "default")["enabled"] == "false"
+def test_explicit_binding_vrf_and_interface_validation(isis_db):
+    db = isis_db
+    assert invoke(db, 'enable', 'Ethernet0', interface=True).exit_code != 0
+    assert invoke(db, 'bind', 'Ethernet0', 'MISSING', interface=True).exit_code != 0
+    assert invoke(db, 'bind', 'Ethernet0', 'CORE', '--vrf', 'VrfA', interface=True).exit_code != 0
+    for table in ('PORTCHANNEL_MEMBER', 'VLAN_MEMBER'):
+        db.cfgdb.set_entry(table, ('group', 'Ethernet0'), {'NULL': 'NULL'})
+        assert invoke(db, 'bind', 'Ethernet0', 'CORE', interface=True).exit_code != 0
+        db.cfgdb.set_entry(table, ('group', 'Ethernet0'), None)
+    with mock.patch('utilities_common.cli.get_interface_naming_mode', return_value='alias'):
+        ok(db, 'bind', 'etp1', 'CORE', interface=True)
+    db.cfgdb.set_entry('VRF', 'VrfA', {'NULL': 'NULL'})
+    ok(db, 'instance', 'add', 'CORE', '--vrf', 'VrfA')
+    db.cfgdb.set_entry('INTERFACE', 'Ethernet0', {'vrf_name': 'VrfA'})
+    assert invoke(db, 'enable', 'Ethernet0', interface=True).exit_code != 0
+    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['vrf'] == 'default'
+    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
+    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['vrf'] == 'VrfA'
+    # Removal remains possible after the routed interface disappears.
+    db.cfgdb.set_entry('INTERFACE', 'Ethernet0', None)
+    db.cfgdb.set_entry('PORT', 'Ethernet0', None)
+    ok(db, 'unbind', 'Ethernet0', interface=True)
 
-    def test_isis_net_level_hostname(self):
-        db = Db()
-        runner = CliRunner()
-        obj = db
 
-        # Try configuring without enabling first (should fail)
-        result = runner.invoke(self.config_isis_net, ["49.0001.1921.6800.0001.00"], obj=obj)
-        assert result.exit_code != 0
+def test_net_and_instance_identity(isis_db):
+    db = isis_db
+    ok(db, 'instance', 'add', 'EDGE')
+    assert invoke(db, 'instance', 'enable', 'EDGE').exit_code != 0
+    assert invoke(db, 'net', 'add', 'EDGE', '49.0001.00').exit_code != 0
+    ok(db, 'net', 'add', 'EDGE', NET)
+    ok(db, 'instance', 'enable', 'EDGE')
+    assert invoke(db, 'net', 'del', 'EDGE', NET).exit_code != 0
+    assert invoke(db, 'net', 'add', 'EDGE', '49.0001.0000.0000.0002.00').exit_code != 0
+    ok(db, 'net', 'add', 'EDGE', '49.0002.0000.0000.0001.00')
+    ok(db, 'instance', 'disable', 'EDGE')
+    ok(db, 'net', 'del', 'EDGE', NET)
+    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['net_titles'] == [NET]
 
-        # Enable first
-        runner.invoke(self.config_isis_enable, [], obj=obj)
 
-        # Set valid NET
-        result = runner.invoke(self.config_isis_net, ["49.0001.1921.6800.0001.00"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_GLOBALS")["default"]["net_title"] == "49.0001.1921.6800.0001.00"
+def test_level_values_both_and_single_reset(isis_db):
+    db = isis_db
+    ok(db, 'level', 'set', 'CORE', 'both', 'lsp-maximum-lifetime', '1500')
+    ok(db, 'level', 'set', 'CORE', 'both', 'lsp-refresh-interval', '1000')
+    original = copy.deepcopy(db.cfgdb.get_table('ISIS_INSTANCE_LEVEL'))
+    assert invoke(db, 'level', 'reset', 'CORE', 'both', 'lsp-maximum-lifetime').exit_code != 0
+    assert db.cfgdb.get_table('ISIS_INSTANCE_LEVEL') == original
+    ok(db, 'level', 'reset', 'CORE', 'level-1', 'lsp-refresh-interval')
+    assert 'lsp_refresh_interval' not in db.cfgdb.get_entry('ISIS_INSTANCE_LEVEL', ('default', 'CORE', 'level-1'))
+    assert db.cfgdb.get_entry('ISIS_INSTANCE_LEVEL', ('default', 'CORE', 'level-2'))['lsp_refresh_interval'] == '1000'
+    ok(db, 'instance', 'del', 'CORE')
+    assert not db.cfgdb.get_table('ISIS_INSTANCE_LEVEL')
 
-        # Set invalid NET (should fail)
-        result = runner.invoke(self.config_isis_net, ["invalid-net"], obj=obj)
-        assert result.exit_code != 0
 
-        # Set level
-        result = runner.invoke(self.config_isis_level, ["level-1"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_GLOBALS")["default"]["level"] == "level-1"
+def test_overload_spf_redistribution_and_reset(isis_db):
+    db = isis_db
+    ok(db, 'set', 'CORE', 'overload', 'true')
+    ok(db, 'set', 'CORE', 'overload-on-startup', '30')
+    assert invoke(db, 'set', 'CORE', 'overload-on-startup', '86401').exit_code != 0
+    assert invoke(db, 'spf-backoff', 'set', 'CORE', '1', '10', '100', '100', '100').exit_code != 0
+    ok(db, 'spf-backoff', 'set', 'CORE', '1', '10', '100', '1000', '500')
+    ok(db, 'spf-backoff', 'reset', 'CORE')
+    assert not any(field.startswith('spf_') for field in db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE')))
+    assert invoke(db, 'redistribute', 'add', 'CORE', 'ipv6', 'ospf', 'level-1').exit_code != 0
+    assert invoke(db, 'redistribute', 'add', 'CORE', 'ipv4', 'static', 'level-1',
+                  '--route-map', 'MISSING').exit_code != 0
+    db.cfgdb.set_entry('ROUTE_MAP_SET', 'EXPORT', {'NULL': 'NULL'})
+    ok(db, 'redistribute', 'add', 'CORE', 'ipv4', 'static', 'level-1', '--route-map', 'EXPORT', '--metric', '20')
+    assert invoke(db, 'set', 'CORE', 'level-type', 'level-2-only').exit_code != 0
+    ok(db, 'redistribute', 'del', 'CORE', 'ipv4', 'static', 'level-1')
+    ok(db, 'set', 'CORE', 'level-type', 'level-2-only')
 
-        # Set hostname
-        result = runner.invoke(self.config_isis_hostname, ["enable"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_GLOBALS")["default"]["dynamic_hostname"] == "true"
 
-    def test_isis_timers(self):
-        db = Db()
-        runner = CliRunner()
-        obj = db
-
-        # Enable first
-        runner.invoke(self.config_isis_enable, [], obj=obj)
-
-        # Set lsp-mtu
-        result = runner.invoke(self.config_isis_timer_lsp_mtu, ["1400"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_GLOBALS_TIMERS")["default"]["lsp_mtu"] == "1400"
-
-        # Set out-of-range lsp-mtu (should fail)
-        result = runner.invoke(self.config_isis_timer_lsp_mtu, ["9999"], obj=obj)
-        assert result.exit_code != 0
-
-        # Set lsp-refresh
-        result = runner.invoke(self.config_isis_timer_lsp_refresh, ["900"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_GLOBALS_TIMERS")["default"]["lsp_refresh_interval"] == "900"
-
-        # Set lsp-lifetime
-        result = runner.invoke(self.config_isis_timer_lsp_lifetime, ["1500"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_GLOBALS_TIMERS")["default"]["lsp_lifetime"] == "1500"
-
-    def test_isis_interface(self):
-        db = Db()
-        runner = CliRunner()
-
-        # Let's mock a port in CONFIG_DB so validation passes
-        db.cfgdb.set_entry("PORT", "Ethernet0", {"admin_status": "up"})
-
-        obj = {'config_db': db.cfgdb, 'namespace': 'default'}
-
-        runner.invoke(self.config_isis_enable, [], obj=db)
-
-        # Enable ISIS on Ethernet0
-        result = runner.invoke(self.config_interface_isis_enable, ["Ethernet0"], obj=obj)
-        assert result.exit_code == 0
-        assert "Ethernet0" in db.cfgdb.get_table("ISIS_INTERFACE")
-
-        # Configure Metric
-        result = runner.invoke(self.config_interface_isis_metric, ["Ethernet0", "20"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_INTERFACE")["Ethernet0"]["metric"] == "20"
-
-        # Configure Circuit Type
-        result = runner.invoke(self.config_interface_isis_circuit_type, ["Ethernet0", "p2p"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_INTERFACE")["Ethernet0"]["circuit_type"] == "p2p"
-
-        # Configure Passive Mode
-        result = runner.invoke(self.config_interface_isis_passive, ["Ethernet0", "enable"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("ISIS_INTERFACE")["Ethernet0"]["passive"] == "true"
-
-        # Disable ISIS on Ethernet0
-        result = runner.invoke(self.config_interface_isis_disable, ["Ethernet0"], obj=obj)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_entry("ISIS_INTERFACE", "Ethernet0")["enabled"] == "false"
-
-    @mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='vtysh')
-    @mock.patch('utilities_common.cli.run_command')
-    def test_show_isis(self, mock_run_command, mock_shell):
-        mock_run_command.return_value = ("IS-IS output summary mock", 0)
-        runner = CliRunner()
-
-        # show isis summary
-        result = runner.invoke(self.show_isis_summary, [])
-        assert result.exit_code == 0
-        assert "IS-IS output summary mock" in result.output
-        mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', 'show isis summary'], return_cmd=True)
-
-        # show isis neighbor --json
-        mock_run_command.return_value = ("[]", 0)
-        result = runner.invoke(self.show_isis_neighbor, ["--json"])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', 'show isis neighbor json'], return_cmd=True)
-
-        # show isis database
-        mock_run_command.return_value = ("IS-IS database mock", 0)
-        result = runner.invoke(self.show_isis_database, [])
-        assert result.exit_code == 0
-        assert "IS-IS database mock" in result.output
-        mock_run_command.assert_called_with(['sudo', 'vtysh', '-c', 'show isis database'], return_cmd=True)
-
-        # vtysh errors must be reported to the CLI caller
-        mock_run_command.return_value = ("", 1)
-        result = runner.invoke(self.show_isis_database, [])
-        assert result.exit_code != 0
-        assert result.exit_code == 1
-
-    def test_isis_validation_and_preserved_fields(self):
-        db = Db()
-        runner = CliRunner()
-        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', {'enabled': 'false', 'level': 'level-2'})
-        result = runner.invoke(self.config_isis_enable, [], obj=db)
-        assert result.exit_code == 0
-        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default')['level'] == 'level-2'
-        for net in ('49.0001.00', '49.0001.0000.0000.0001.01'):
-            assert runner.invoke(self.config_isis_net, [net], obj=db).exit_code != 0
-        db.cfgdb.set_entry('ISIS_GLOBALS_TIMERS', 'default', None)
-        for value in ('0', '65236', '1000'):
-            assert runner.invoke(self.config_isis_timer_lsp_refresh, [value], obj=db).exit_code != 0
-        assert runner.invoke(self.config_isis_timer_lsp_lifetime, ['1199'], obj=db).exit_code != 0
-        assert runner.invoke(self.config_isis_timer_lsp_mtu, ['4000'], obj=db).exit_code == 0
-        assert runner.invoke(self.config_isis_timer_lsp_lifetime, ['1500'], obj=db).exit_code == 0
-        assert runner.invoke(self.config_isis_timer_lsp_refresh, ['1000'], obj=db).exit_code == 0
-        reset = config.config.commands['isis'].commands['reset']
-        assert runner.invoke(reset, ['lsp-lifetime'], obj=db).exit_code != 0
-        assert runner.invoke(reset, ['lsp-refresh'], obj=db).exit_code == 0
-        assert db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default') == {
-            'lsp_mtu': '4000', 'lsp_lifetime': '1500'}
-        assert runner.invoke(reset, ['lsp-lifetime'], obj=db).exit_code == 0
-        assert db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default') == {'lsp_mtu': '4000'}
-        assert runner.invoke(reset, ['lsp-mtu'], obj=db).exit_code == 0
-        assert not db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default')
-        db.cfgdb.set_entry('ISIS_GLOBALS_TIMERS', 'default', None)
-        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)
-
-    def test_isis_interface_negative_paths(self):
-        db = Db()
-        runner = CliRunner()
-        obj = {'config_db': db.cfgdb, 'namespace': ''}
-        db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1', 'admin_status': 'up'})
-        db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', None)
-        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)
-        assert runner.invoke(self.config_interface_isis_enable, ['Ethernet0'], obj=obj).exit_code != 0
-        runner.invoke(self.config_isis_enable, [], obj=db)
-        assert runner.invoke(self.config_interface_isis_enable, ['EthernetMissing'], obj=obj).exit_code != 0
-        for command, args in ((self.config_interface_isis_metric, ['Ethernet0', '20']),
-                              (self.config_interface_isis_circuit_type, ['Ethernet0', 'p2p']),
-                              (self.config_interface_isis_passive, ['Ethernet0', 'enable'])):
-            assert runner.invoke(command, args, obj=obj).exit_code != 0
-        db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), {'NULL': 'NULL'})
-        assert runner.invoke(self.config_interface_isis_enable, ['Ethernet0'], obj=obj).exit_code != 0
-        db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), None)
-        db.cfgdb.set_entry('VLAN_MEMBER', ('Vlan999', 'Ethernet0'), {'tagging_mode': 'untagged'})
-        assert runner.invoke(self.config_interface_isis_enable, ['Ethernet0'], obj=obj).exit_code != 0
-        db.cfgdb.set_entry('VLAN_MEMBER', ('Vlan999', 'Ethernet0'), None)
-        with mock.patch('utilities_common.cli.get_interface_naming_mode', return_value='alias'):
-            result = runner.invoke(self.config_interface_isis_enable, ['etp1'], obj=obj)
-        assert result.exit_code == 0, result.output
-        assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['enabled'] == 'true'
-        delete = config.config.commands['isis'].commands['del']
-        assert runner.invoke(delete, [], obj=db).exit_code != 0
-        assert runner.invoke(self.config_interface_isis_disable, ['Ethernet0'], obj=obj).exit_code == 0
-        assert runner.invoke(self.config_isis_disable, [], obj=db).exit_code == 0
-
-    @mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='rvtysh')
-    @mock.patch('utilities_common.bgp_util.run_bgp_command', return_value='state\n')
-    def test_show_isis_detail_interface(self, run_command, shell):
-        runner = CliRunner()
-        result = runner.invoke(self.show_isis_database, ['detail', '--json'])
-        assert result.exit_code == 0
-        run_command.assert_called_with('show isis database detail json', multi_asic.DEFAULT_NAMESPACE, 'rvtysh')
-        result = runner.invoke(show.cli.commands['isis'].commands['interface'], [])
-        assert result.exit_code == 0
-        run_command.assert_called_with('show isis interface', multi_asic.DEFAULT_NAMESPACE, 'rvtysh')
-
-    def test_isis_namespace(self):
-        runner = CliRunner()
-        db = Db()
-        group = config.config.commands['isis']
-        namespace_option = next(param for param in group.params if param.name == 'namespace')
-        with mock.patch.object(namespace_option.type, 'choices', ['asic0']), \
-                mock.patch('config.isis.ConfigDBConnector') as connector:
-            selected = connector.return_value
-            selected.get_entry.return_value = {}
-            result = runner.invoke(group, ['-n', 'asic0', 'enable'], obj=db)
-        assert result.exit_code == 0, result.output
+def test_namespace_selects_connector(isis_db):
+    group = config.config.commands['isis']
+    option = next(p for p in group.params if p.name == 'namespace')
+    with mock.patch.object(option.type, 'choices', ['asic0']), \
+            mock.patch('config.isis.ConfigDBConnector', return_value=isis_db.cfgdb) as connector:
+        ok(isis_db, '-n', 'asic0', 'set', 'CORE', 'overload', 'true')
         connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
-        selected.mod_entry.assert_called_once_with('ISIS_GLOBALS', 'default', {'enabled': 'true'})
 
-    def test_isis_cleanup_retained_rows(self):
-        db = Db()
-        runner = CliRunner()
-        obj = {'config_db': db.cfgdb, 'namespace': ''}
-        for name, enabled in (('EthernetMissing', 'true'), ('Ethernet0', 'false')):
-            db.cfgdb.set_entry('ISIS_INTERFACE', name, {'enabled': enabled, 'metric': '30'})
-            db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', name), {'NULL': 'NULL'})
-            delete = config.config.commands['interface'].commands['isis'].commands['del']
-            result = runner.invoke(delete, [name], obj=obj)
-            assert result.exit_code == 0, result.output
-            assert not db.cfgdb.get_entry('ISIS_INTERFACE', name)
-            db.cfgdb.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', name), None)
 
-    def test_isis_reset_removes_fields_and_preserves_siblings(self):
-        db = Db()
-        runner = CliRunner()
-        reset = config.config.commands['isis'].commands['reset']
-        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', {
-            'enabled': 'true', 'net_title': '49.0001.0000.0000.0001.00',
-            'level': 'level-2', 'dynamic_hostname': 'false'})
-        remaining = db.cfgdb.get_entry('ISIS_GLOBALS', 'default').copy()
-        for option, field in (('net', 'net_title'), ('level', 'level'), ('hostname', 'dynamic_hostname')):
-            assert runner.invoke(reset, [option], obj=db).exit_code == 0
-            remaining.pop(field)
-            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == remaining
-        db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1'})
-        db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', {
-            'enabled': 'true', 'metric': '30', 'circuit_type': 'p2p', 'passive': 'true'})
-        interface_reset = config.config.commands['interface'].commands['isis'].commands['reset']
-        obj = {'config_db': db.cfgdb, 'namespace': multi_asic.DEFAULT_NAMESPACE}
-        remaining = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0').copy()
-        for option in ('metric', 'circuit-type', 'passive'):
-            result = runner.invoke(interface_reset, ['Ethernet0', option], obj=obj)
-            assert result.exit_code == 0, result.output
-            remaining.pop(option.replace('-', '_'))
-            assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == remaining
-        db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', None)
-        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', None)
+def test_database_failure_does_not_report_success(isis_db):
+    original = isis_db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))
+    with mock.patch('config.isis.commit', side_effect=RuntimeError('write failed')):
+        result = invoke(isis_db, 'set', 'CORE', 'overload', 'true')
+    assert result.exit_code != 0 and 'write failed' in result.output
+    assert isis_db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE')) == original
 
-    def test_isis_interface_address_families(self, isis_af_db):
-        db = isis_af_db.cfgdb
-        runner = CliRunner()
-        group = config.config.commands['interface'].commands['isis']
-        obj = {'config_db': db, 'namespace': 'asic0'}
-        original = db.get_entry('ISIS_INTERFACE', 'Ethernet0')
 
-        result = runner.invoke(group, ['ipv4', 'Ethernet0', 'disable'], obj=obj)
-        assert result.exit_code == 0, result.output
-        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(original, ipv4_enabled='false')
-        result = runner.invoke(group, ['ipv6', 'Ethernet0', 'disable'], obj=obj)
-        assert result.exit_code == 0, result.output
-        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(
-            original, ipv4_enabled='false', ipv6_enabled='false')
+@pytest.mark.skipif(not os.environ.get('ISIS_TEST_REDIS'), reason='requires native Redis Lua evaluation')
+def test_native_redis_transaction_rejects_concurrent_insert(isis_db):
+    db = isis_db.cfgdb
+    before = capture(db)
+    db.set_entry('ISIS_INTERFACE', 'Ethernet0', {'vrf': 'default', 'instance': 'CORE', 'enabled': 'false'})
+    with pytest.raises(Exception, match='changed; retry'):
+        commit(db, before, [('ISIS_INSTANCE', ('default', 'CORE'), None)])
+    assert db.get_entry('ISIS_INSTANCE', ('default', 'CORE'))
 
-        result = runner.invoke(group, ['ipv6', 'Ethernet0', 'enable'], obj=obj)
-        assert result.exit_code == 0, result.output
-        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(
-            original, ipv4_enabled='false', ipv6_enabled='true')
-        for family in ('ipv4', 'ipv6'):
-            result = runner.invoke(group, ['reset', 'Ethernet0', family], obj=obj)
-            assert result.exit_code == 0, result.output
-        # Reset removes only the selected leaves; their effective default is true.
-        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
 
-    @pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
-    def test_isis_af_rejects_invalid_input(self, isis_af_db, family):
-        db = isis_af_db.cfgdb
-        runner = CliRunner()
-        group = config.config.commands['interface'].commands['isis']
-        obj = {'config_db': db, 'namespace': ''}
-        original = db.get_entry('ISIS_INTERFACE', 'Ethernet0')
-        for state in ('true', 'false', 'invalid'):
-            result = runner.invoke(group, [family, 'Ethernet0', state], obj=obj)
-            assert result.exit_code == 2, result.output
-            assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
-        result = runner.invoke(group, [family, 'EthernetMissing', 'disable'], obj=obj)
+@mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='vtysh')
+@mock.patch('utilities_common.cli.run_command')
+def test_show_failure_is_not_empty_success(run, shell):
+    run.return_value = ('', 1)
+    result = CliRunner().invoke(show.cli.commands['isis'].commands['database'], [])
+    assert result.exit_code == 1
+
+
+@pytest.mark.parametrize('command', ['summary', 'neighbor', 'database', 'interface', 'route', 'topology', 'hostname'])
+@mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='rvtysh')
+@mock.patch('utilities_common.bgp_util.run_bgp_command', return_value='native state\n')
+def test_show_vrf_and_namespace(run, shell, command):
+    result = CliRunner().invoke(show.cli.commands['isis'].commands[command], ['--vrf', 'VrfA'])
+    assert result.exit_code == 0, result.output
+    run.assert_called_once_with('show isis vrf VrfA ' + command, '', 'rvtysh')
+
+
+@mock.patch('utilities_common.bgp_util.run_bgp_command')
+def test_show_instance_filters_only_scoped_areas(run):
+    run.return_value = '{"areas":[{"area":"CORE","circuits":[]},{"area":"EDGE","circuits":[]}]}'
+    group = show.cli.commands['isis'].commands['interface']
+    result = CliRunner().invoke(group, ['--json', '--instance', 'CORE'])
+    assert result.exit_code == 0
+    assert 'EDGE' not in result.output and 'CORE' in result.output
+    assert CliRunner().invoke(group, ['--instance', 'CORE']).exit_code != 0
+    assert CliRunner().invoke(group, ['--json', '--vrf', 'all']).exit_code != 0
+    run.return_value = '{"unknown":[]}'
+    assert CliRunner().invoke(group, ['--json', '--instance', 'CORE']).exit_code != 0
+
+
+@mock.patch('utilities_common.bgp_util.run_bgp_command')
+def test_show_route_rejects_lossy_native_json(run):
+    run.return_value = '{"vrfs":[{"vrf":"default","areas":[{"area":"CORE"},{"area":"EDGE"}]}]}'
+    result = CliRunner().invoke(show.cli.commands['isis'].commands['route'], ['--json'])
+    assert result.exit_code != 0 and 'loses multiple areas' in result.output
+    assert run.call_count == 1
+
+
+def test_cleanup_is_idempotent_and_does_not_require_stale_parent(isis_db):
+    db = isis_db
+    ok(db, 'unbind', 'Ethernet0', interface=True)
+    ok(db, 'instance', 'del', 'MISSING')
+    db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', {'vrf': 'default', 'instance': 'MISSING'})
+    db.cfgdb.set_entry('ISIS_INTERFACE_LEVEL', ('Ethernet0', 'level-1'), {'metric': '20'})
+    ok(db, 'unbind', 'Ethernet0', interface=True)
+    assert not db.cfgdb.get_table('ISIS_INTERFACE_LEVEL')
+    ok(db, 'unbind', 'Ethernet0', interface=True)
+
+
+@mock.patch('utilities_common.bgp_util.run_bgp_command')
+def test_show_rejects_invalid_json_and_missing_area_identity(run):
+    group = show.cli.commands['isis'].commands['interface']
+    for output in ('ISIS is not running', '{"areas":[{}]}'):
+        run.return_value = output
+        result = CliRunner().invoke(group, ['--json', '--instance', 'CORE'])
         assert result.exit_code != 0
-        assert not db.get_entry('ISIS_INTERFACE', 'EthernetMissing')
-        db.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), {'NULL': 'NULL'})
-        assert runner.invoke(group, [family, 'Ethernet0', 'disable'], obj=obj).exit_code != 0
-        db.set_entry('PORTCHANNEL_MEMBER', ('PortChannel999', 'Ethernet0'), None)
-        db.set_entry('VLAN_MEMBER', ('Vlan999', 'Ethernet0'), {'tagging_mode': 'untagged'})
-        assert runner.invoke(group, [family, 'Ethernet0', 'disable'], obj=obj).exit_code != 0
-        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
-
-    @pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
-    def test_isis_af_allows_disabled_interface_and_requires_parent(self, isis_af_db, family):
-        db = isis_af_db.cfgdb
-        runner = CliRunner()
-        group = config.config.commands['interface'].commands['isis']
-        obj = {'config_db': db, 'namespace': ''}
-        original = db.get_entry('ISIS_INTERFACE', 'Ethernet0')
-        db.set_entry('ISIS_INTERFACE', 'Ethernet0', dict(original, enabled='false'))
-        assert runner.invoke(group, [family, 'Ethernet0', 'disable'], obj=obj).exit_code == 0
-        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(
-            original, enabled='false', **{family + '_enabled': 'false'})
-        db.set_entry('ISIS_INTERFACE', 'Ethernet0', original)
-        db.set_entry('INTERFACE', 'Ethernet0', {'vrf_name': 'VrfIsis'})
-        # An enabled default process does not satisfy this interface's VRF.
-        for args in ([family, 'Ethernet0', 'disable'], ['reset', 'Ethernet0', family]):
-            assert runner.invoke(group, args, obj=obj).exit_code != 0
-            assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
-        db.set_entry('VRF', 'VrfIsis', {'NULL': 'NULL'})
-        db.set_entry('ISIS_GLOBALS', 'VrfIsis', {'enabled': 'true'})
-        with mock.patch('utilities_common.cli.get_interface_naming_mode', return_value='alias'):
-            result = runner.invoke(group, [family, 'etp1', 'disable'], obj=obj)
-        assert result.exit_code == 0, result.output
-        assert db.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(original, **{family + '_enabled': 'false'})
-
-    @pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
-    def test_isis_af_selected_namespace(self, isis_af_db, family):
-        runner = CliRunner()
-        group = config.config.commands['interface']
-        option = next(param for param in group.params if param.name == 'namespace')
-        selected = mock.MagicMock()
-        selected.get_table.side_effect = lambda table: {'Ethernet0': {'alias': 'etp1'}} if table == 'PORT' else {}
-        selected.get_entry.side_effect = lambda table, key: (
-            {'enabled': 'true'} if table in ('ISIS_GLOBALS', 'ISIS_INTERFACE') else {})
-        with mock.patch.object(option.type, 'choices', ['asic0']), \
-                mock.patch('config.main.ConfigDBConnector', return_value=selected) as connector:
-            result = runner.invoke(group, ['-n', 'asic0', 'isis', family, 'Ethernet0', 'disable'], obj=isis_af_db)
-        assert result.exit_code == 0, result.output
-        connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
-        selected.mod_entry.assert_called_once_with('ISIS_INTERFACE', 'Ethernet0', {family + '_enabled': 'false'})
-
-    def test_isis_af_database_write_error(self, isis_af_db):
-        runner = CliRunner()
-        command = config.config.commands['interface'].commands['isis']
-        obj = {'config_db': isis_af_db.cfgdb, 'namespace': ''}
-        original = isis_af_db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
-        with mock.patch.object(isis_af_db.cfgdb, 'mod_entry', side_effect=RuntimeError('write failed')):
-            result = runner.invoke(command, ['ipv4', 'Ethernet0', 'disable'], obj=obj)
-        assert result.exit_code != 0
-        assert 'write failed' in result.output
-        assert isis_af_db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
-
-    def test_isis_ipv6_multi_topology(self, isis_af_db):
-        db = isis_af_db
-        runner = CliRunner()
-        group = config.config.commands['isis']
-        original = db.cfgdb.get_entry('ISIS_GLOBALS', 'default')
-        for state, value in (('disable', 'false'), ('enable', 'true')):
-            result = runner.invoke(group, ['ipv6-multi-topology', state], obj=db)
-            assert result.exit_code == 0, result.output
-            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == dict(
-                original, ipv6_multi_topology=value)
-        result = runner.invoke(group, ['reset', 'ipv6-multi-topology'], obj=db)
-        assert result.exit_code == 0, result.output
-        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
-
-        named = {'enabled': 'true', 'level': 'level-1'}
-        db.cfgdb.set_entry('VRF', 'VrfIsis', {'NULL': 'NULL'})
-        db.cfgdb.set_entry('ISIS_GLOBALS', 'VrfIsis', named)
-        result = runner.invoke(group, ['ipv6-multi-topology', 'disable', 'VrfIsis'], obj=db)
-        assert result.exit_code == 0, result.output
-        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'VrfIsis') == dict(named, ipv6_multi_topology='false')
-        result = runner.invoke(group, ['reset', 'ipv6-multi-topology', 'VrfIsis'], obj=db)
-        assert result.exit_code == 0, result.output
-        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'VrfIsis') == named
-        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
-
-    def test_isis_topology_rejects_invalid_state_and_allows_disabled_process(self, isis_af_db):
-        db = isis_af_db
-        runner = CliRunner()
-        group = config.config.commands['isis']
-        original = db.cfgdb.get_entry('ISIS_GLOBALS', 'default')
-        for args in (['ipv6-multi-topology', 'invalid'], ['ipv6-multi-topology', 'disable', 'VrfMissing']):
-            assert runner.invoke(group, args, obj=db).exit_code != 0
-            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
-        db.cfgdb.set_entry('ISIS_GLOBALS', 'default', dict(original, enabled='false'))
-        for args in (['ipv6-multi-topology', 'disable'], ['reset', 'ipv6-multi-topology']):
-            assert runner.invoke(group, args, obj=db).exit_code == 0
-            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default')['enabled'] == 'false'
-        assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == dict(original, enabled='false')
-
-    def test_isis_topology_selected_namespace(self, isis_af_db):
-        runner = CliRunner()
-        group = config.config.commands['isis']
-        option = next(param for param in group.params if param.name == 'namespace')
-        with mock.patch.object(option.type, 'choices', ['asic0']), \
-                mock.patch('config.isis.ConfigDBConnector') as connector:
-            selected = connector.return_value
-            selected.get_entry.return_value = {'enabled': 'true'}
-            result = runner.invoke(group, ['-n', 'asic0', 'ipv6-multi-topology', 'disable'], obj=isis_af_db)
-        assert result.exit_code == 0, result.output
-        connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
-        selected.mod_entry.assert_called_once_with('ISIS_GLOBALS', 'default', {'ipv6_multi_topology': 'false'})
-
-    def test_isis_topology_database_write_error(self, isis_af_db):
-        runner = CliRunner()
-        command = config.config.commands['isis']
-        original = isis_af_db.cfgdb.get_entry('ISIS_GLOBALS', 'default')
-        with mock.patch.object(isis_af_db.cfgdb, 'mod_entry', side_effect=RuntimeError('write failed')):
-            result = runner.invoke(command, ['ipv6-multi-topology', 'disable'], obj=isis_af_db)
-        assert result.exit_code != 0
-        assert 'write failed' in result.output
-        assert isis_af_db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == original
-
-    def test_isis_disabled_configuration_lifecycle(self, isis_af_db):
-        db = isis_af_db
-        runner = CliRunner()
-        global_group = config.config.commands['isis']
-        interface_group = config.config.commands['interface'].commands['isis']
-        obj = {'config_db': db.cfgdb, 'namespace': ''}
-        original = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
-        db.cfgdb.set_entry('ISIS_GLOBALS_TIMERS', 'default', {'lsp_mtu': '1400'})
-        try:
-            assert runner.invoke(global_group, ['disable'], obj=db).exit_code == 0
-            assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
-            assert db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default') == {'lsp_mtu': '1400'}
-            for args in (['net', '49.0001.0000.0000.0002.00'], ['level', 'level-1'],
-                         ['hostname', 'disable'], ['timer', 'lsp-mtu', '1492']):
-                result = runner.invoke(global_group, args, obj=db)
-                assert result.exit_code == 0, result.output
-                assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default')['enabled'] == 'false'
-            assert runner.invoke(interface_group, ['disable', 'Ethernet0'], obj=obj).exit_code == 0
-            for args in (['metric', 'Ethernet0', '40'], ['passive', 'Ethernet0', 'disable'],
-                         ['ipv4', 'Ethernet0', 'disable'], ['reset', 'Ethernet0', 'ipv6']):
-                result = runner.invoke(interface_group, args, obj=obj)
-                assert result.exit_code == 0, result.output
-                assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['enabled'] == 'false'
-            with mock.patch('config.isis.log.log_error') as error:
-                result = runner.invoke(global_group, ['del'], obj=db)
-                assert result.exit_code != 0
-                error.assert_not_called()
-            assert db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default') == {'lsp_mtu': '1492'}
-            assert runner.invoke(interface_group, ['enable', 'Ethernet0'], obj=obj).exit_code == 0
-            assert runner.invoke(global_group, ['enable'], obj=db).exit_code == 0
-            assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['metric'] == '40'
-            assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['circuit_type'] == 'p2p'
-            assert runner.invoke(interface_group, ['del', 'Ethernet0'], obj=obj).exit_code == 0
-            assert runner.invoke(global_group, ['del'], obj=db).exit_code == 0
-            assert not db.cfgdb.get_entry('ISIS_GLOBALS', 'default')
-            assert not db.cfgdb.get_entry('ISIS_GLOBALS_TIMERS', 'default')
-            # Create/edit before first activation; repeated add preserves values.
-            assert runner.invoke(global_group, ['add'], obj=db).exit_code == 0
-            assert runner.invoke(global_group, ['level', 'level-2'], obj=db).exit_code == 0
-            assert runner.invoke(global_group, ['add'], obj=db).exit_code == 0
-            assert db.cfgdb.get_entry('ISIS_GLOBALS', 'default') == {'enabled': 'false', 'level': 'level-2'}
-            assert runner.invoke(interface_group, ['add', 'Ethernet0'], obj=obj).exit_code == 0
-            assert runner.invoke(interface_group, ['metric', 'Ethernet0', '50'], obj=obj).exit_code == 0
-            assert runner.invoke(interface_group, ['add', 'Ethernet0'], obj=obj).exit_code == 0
-            assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == {'enabled': 'false', 'metric': '50'}
-        finally:
-            db.cfgdb.set_entry('ISIS_GLOBALS_TIMERS', 'default', None)
+    run.return_value = 'ISIS is not running'
+    assert CliRunner().invoke(group, ['--json']).exit_code != 0

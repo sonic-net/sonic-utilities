@@ -1,29 +1,22 @@
+"""IS-IS Click API over the shared ConfigDB model.
+
+Independent AF and MT controls build on gs1571's contributions; lifecycle and
+identity changes are incremental adaptations of the same ConfigDB write path.
+"""
+import copy
 import click
-import re
-import utilities_common.cli as clicommon
 from sonic_py_common import logger, multi_asic
 from swsscommon.swsscommon import ConfigDBConnector
+import utilities_common.cli as clicommon
+from sonic_isis import (LEVELS, BACKOFF, FIELDS, PROTOCOLS,
+                        identifier, key_tuple, net, routed_vrf, validate, capture, commit)
 
-# Table names
-CFG_ISIS_GLOBALS = "ISIS_GLOBALS"
-CFG_ISIS_GLOBALS_TIMERS = "ISIS_GLOBALS_TIMERS"
-CFG_ISIS_INTERFACE = "ISIS_INTERFACE"
-
-# Logger
 log = logger.Logger("isis_cli")
 log.set_min_log_priority_info()
 
 
-def _interface_vrf(db, name):
-    for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE',
-                  'LOOPBACK_INTERFACE', 'VLAN_SUB_INTERFACE'):
-        entry = db.get_entry(table, name)
-        if entry.get('vrf_name'):
-            return entry['vrf_name']
-    return 'default'
-
-
 def _resolve_interface(ctx, db, name):
+    _snapshot(ctx)  # Include interface/member changes in the compare-and-commit boundary.
     # Import lazily: main registers this module's command groups.
     from config.main import (interface_alias_to_name, interface_name_is_valid,
                              interface_is_in_portchannel, interface_is_in_vlan)
@@ -37,26 +30,89 @@ def _resolve_interface(ctx, db, name):
     return name
 
 
-def _require_process(ctx, db, vrf):
-    if not db.get_entry(CFG_ISIS_GLOBALS, vrf):
-        ctx.fail("IS-IS routing process for VRF '{}' is not configured.".format(vrf))
+def _db(ctx):
+    return ctx.obj['config_db'] if isinstance(ctx.obj, dict) else ctx.obj.cfgdb
 
 
-#
-# IS-IS Global Configuration --------------------------------------------------
-#
+def _snapshot(ctx):
+    if 'isis_snapshot' not in ctx.meta:
+        try:
+            ctx.meta['isis_snapshot'] = capture(_db(ctx))
+        except Exception as error:
+            ctx.fail('Cannot read a consistent ConfigDB snapshot: {}'.format(error))
+    return ctx.meta['isis_snapshot']
 
-@click.group(
-    name="isis",
-    cls=clicommon.AliasedGroup
-)
-@click.option('-n', '--namespace',
-              required=multi_asic.is_multi_asic(),
+
+def _row(ctx, table, key):
+    return copy.deepcopy(_snapshot(ctx).get(table, {}).get(key, {}))
+
+
+def _write(ctx, updates):
+    """Validate the candidate graph before writing; both-level edits commit together."""
+    db = _db(ctx)
+    before = _snapshot(ctx)
+    after = copy.deepcopy(before)
+    for table, key, row in updates:
+        # ConfigDB represents composite keys as tuples.
+        if row is None:
+            after[table].pop(key, None)
+        else:
+            after[table][key] = row
+    try:
+        validate(after)
+        commit(db, before, updates)
+    except Exception as error:
+        ctx.fail(str(error))
+
+
+def _parent(ctx, instance, vrf):
+    try:
+        identifier(instance)
+        identifier(vrf)
+    except ValueError as error:
+        ctx.fail(str(error))
+    row = _row(ctx, 'ISIS_INSTANCE', (vrf, instance))
+    if (vrf, instance) not in _snapshot(ctx)['ISIS_INSTANCE']:
+        ctx.fail('IS-IS instance {}/{} does not exist'.format(vrf, instance))
+    return row
+
+
+def _binding(ctx, interface, resolve=True):
+    db = _db(ctx)
+    if resolve:
+        interface = _resolve_interface(ctx, db, interface)
+    elif not _row(ctx, 'ISIS_INTERFACE', interface) and clicommon.get_interface_naming_mode() == 'alias':
+        from config.main import interface_alias_to_name
+        interface = interface_alias_to_name(db, interface)
+    row = _row(ctx, 'ISIS_INTERFACE', interface)
+    if not row:
+        ctx.fail('Interface {} is not explicitly bound to IS-IS'.format(interface))
+    _parent(ctx, row['instance'], row['vrf'])
+    return interface, row
+
+
+def _fields(table):
+    return click.Choice([name.replace('_', '-') for name in FIELDS[table]
+                         if name not in ('enabled', 'vrf', 'instance') + BACKOFF])
+
+
+def _set(ctx, table, key, field, value=None, reset=False):
+    field = field.replace('-', '_')
+    row = _row(ctx, table, key)
+    if reset:
+        row.pop(field, None)
+    else:
+        row[field] = value
+    _write(ctx, [(table, key, row)])
+
+
+@click.group(name='isis', cls=clicommon.AliasedGroup)
+@click.option('-n', '--namespace', required=multi_asic.is_multi_asic(),
               type=click.Choice(multi_asic.get_namespace_list()))
 @clicommon.pass_db
 @click.pass_context
 def ISIS(ctx, db, namespace):
-    """Configure IS-IS routing protocol"""
+    """Configure IS-IS instances and policy."""
     if namespace is not None:
         db.cfgdb = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         db.cfgdb.connect()
@@ -64,528 +120,267 @@ def ISIS(ctx, db, namespace):
         click.echo('Warning: IS-IS requires frr_mgmt_framework_config=true and a bgp container restart.', err=True)
 
 
-@ISIS.command(name="enable")
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
+@ISIS.group(name='instance')
+def INSTANCE():
+    """Create, enable, disable or delete a named instance."""
+
+
+def _instance_operation(action):
+    @INSTANCE.command(name=action)
+    @click.argument('instance')
+    @click.option('--vrf', default='default', show_default=True)
+    @click.pass_context
+    def command(ctx, instance, vrf):
+        if action in ('add', 'del'):
+            row = _row(ctx, 'ISIS_INSTANCE', (vrf, instance)) or {'enabled': 'false'}
+        else:
+            row = _parent(ctx, instance, vrf)
+        if action == 'del':
+            for name, binding in _snapshot(ctx)['ISIS_INTERFACE'].items():
+                if (binding.get('vrf'), binding.get('instance')) == (vrf, instance):
+                    ctx.fail('Unbind IS-IS interface {} first (including disabled bindings)'.format(name))
+            updates = [(table, key, None) for table in ('ISIS_INSTANCE_LEVEL', 'ISIS_REDISTRIBUTE')
+                       for key in _snapshot(ctx)[table] if key_tuple(key)[:2] == (vrf, instance)]
+            updates.append(('ISIS_INSTANCE', (vrf, instance), None))
+        else:
+            if action in ('enable', 'disable'):
+                row['enabled'] = 'true' if action == 'enable' else 'false'
+            updates = [('ISIS_INSTANCE', (vrf, instance), row)]
+        _write(ctx, updates)
+    return command
+
+
+for _action in ('add', 'enable', 'disable', 'del'):
+    _instance_operation(_action)
+
+
+@ISIS.group(name='net')
+def NET():
+    """Manage up to three NET addresses with a shared system ID."""
+
+
+def _net_operation(action):
+    @NET.command(name=action)
+    @click.argument('instance')
+    @click.argument('address')
+    @click.option('--vrf', default='default')
+    @click.pass_context
+    def command(ctx, instance, address, vrf):
+        row = _parent(ctx, instance, vrf)
+        try:
+            address = net(address)
+        except ValueError as error:
+            ctx.fail(str(error))
+        values = list(row.get('net_titles', []))
+        if action == 'add' and address not in values:
+            values.append(address)
+        elif action == 'del' and address in values:
+            values.remove(address)
+        if values:
+            row['net_titles'] = values
+        else:
+            row.pop('net_titles', None)
+        _write(ctx, [('ISIS_INSTANCE', (vrf, instance), row)])
+    return command
+
+
+for _action in ('add', 'del'):
+    _net_operation(_action)
+
+
+@ISIS.command(name='set')
+@click.argument('instance')
+@click.argument('field', type=_fields('ISIS_INSTANCE'))
+@click.argument('value')
+@click.option('--vrf', default='default')
 @click.pass_context
-def isis_enable(ctx, db, vrf):
-    """Enable IS-IS routing process for a VRF"""
-    table = CFG_ISIS_GLOBALS
-    key = vrf
-
-    from config.main import is_vrf_exists
-    if vrf != 'default' and not is_vrf_exists(db.cfgdb, vrf):
-        ctx.fail("VRF '{}' does not exist".format(vrf))
-    if db.cfgdb.get_entry(table, key).get('enabled') == 'true':
-        click.echo("IS-IS is already enabled for VRF '{}'".format(vrf))
-        return
-
-    data = {"enabled": "true"}
-    try:
-        db.cfgdb.mod_entry(table, key, data)
-        click.echo("Enabled IS-IS routing process for VRF '{}'".format(vrf))
-        log.log_notice("Enabled IS-IS routing process for VRF '{}'".format(vrf))
-    except Exception as e:
-        log.log_error("Failed to enable IS-IS for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS.command(name="disable")
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_disable(ctx, db, vrf):
-    """Disable IS-IS routing process for a VRF"""
-    table = CFG_ISIS_GLOBALS
-    key = vrf
-
-    if not db.cfgdb.get_entry(table, key):
-        click.echo("IS-IS routing process for VRF '{}' is not configured".format(vrf))
-        return
-
-    try:
-        db.cfgdb.mod_entry(table, key, {"enabled": "false"})
-        click.echo("Disabled IS-IS routing process for VRF '{}' (configuration retained)".format(vrf))
-    except Exception as e:
-        log.log_error("Failed to disable IS-IS for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS.command(name="add")
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_add(ctx, db, vrf):
-    """Create a disabled IS-IS configuration for a VRF."""
-    from config.main import is_vrf_exists
-    if vrf != 'default' and not is_vrf_exists(db.cfgdb, vrf):
-        ctx.fail("VRF '{}' does not exist".format(vrf))
-    if not db.cfgdb.get_entry(CFG_ISIS_GLOBALS, vrf):
-        db.cfgdb.mod_entry(CFG_ISIS_GLOBALS, vrf, {"enabled": "false"})
-
-
-@ISIS.command(name="del")
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_delete(ctx, db, vrf):
-    """Delete an IS-IS configuration after removing its interface references."""
-    # Validate before mutation, and outside the database exception handler.
-    for name in db.cfgdb.get_table(CFG_ISIS_INTERFACE):
-        if _interface_vrf(db.cfgdb, name) == vrf:
-            ctx.fail("Delete IS-IS on interface '{}' first".format(name))
-    try:
-        db.cfgdb.set_entry(CFG_ISIS_GLOBALS_TIMERS, vrf, None)
-        db.cfgdb.set_entry(CFG_ISIS_GLOBALS, vrf, None)
-        click.echo("Deleted IS-IS routing configuration for VRF '{}'".format(vrf))
-    except Exception as e:
-        log.log_error("Failed to delete IS-IS for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS.command(name="net")
-@click.argument("net_title")
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_net(ctx, db, net_title, vrf):
-    """Configure Network Entity Title (NET) for IS-IS"""
-    # Strict validation of NET (e.g. 49.0001.1921.6800.0001.00)
-    net_pattern = re.compile(r'^[a-fA-F0-9]{2}(\.[a-fA-F0-9]{4}){3,9}\.00$')
-    if not net_pattern.match(net_title):
-        ctx.fail("Invalid NET format '{}'. Example format: 49.0001.1921.6800.0001.00".format(net_title))
-
-    table = CFG_ISIS_GLOBALS
-    key = vrf
-
-    _require_process(ctx, db.cfgdb, vrf)
-
-    data = {}
-    data["net_title"] = net_title
-
-    try:
-        db.cfgdb.mod_entry(table, key, data)
-        click.echo("Configured IS-IS NET to '{}' for VRF '{}'".format(net_title, vrf))
-        log.log_notice("Configured IS-IS NET to '{}' for VRF '{}'".format(net_title, vrf))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS NET for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS.command(name="level")
-@click.argument("level", type=click.Choice(['level-1', 'level-2', 'level-1-2']))
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_level(ctx, db, level, vrf):
-    """Configure IS-IS routing level"""
-    table = CFG_ISIS_GLOBALS
-    key = vrf
-
-    _require_process(ctx, db.cfgdb, vrf)
-
-    data = {}
-    data["level"] = level
-
-    try:
-        db.cfgdb.mod_entry(table, key, data)
-        click.echo("Configured IS-IS level to '{}' for VRF '{}'".format(level, vrf))
-        log.log_notice("Configured IS-IS level to '{}' for VRF '{}'".format(level, vrf))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS level for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS.command(name="hostname")
-@click.argument("state", type=click.Choice(['enable', 'disable']))
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_hostname(ctx, db, state, vrf):
-    """Configure dynamic hostname support for IS-IS"""
-    table = CFG_ISIS_GLOBALS
-    key = vrf
-
-    _require_process(ctx, db.cfgdb, vrf)
-
-    data = {}
-    data["dynamic_hostname"] = "true" if state == "enable" else "false"
-
-    try:
-        db.cfgdb.mod_entry(table, key, data)
-        click.echo("Configured IS-IS dynamic hostname to '{}' for VRF '{}'".format(state, vrf))
-        log.log_notice("Configured IS-IS dynamic hostname to '{}' for VRF '{}'".format(state, vrf))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS dynamic hostname for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS.command(name="ipv6-multi-topology")
-@click.argument("state", type=click.Choice(['enable', 'disable']))
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_ipv6_multi_topology(ctx, db, state, vrf):
-    """Configure IS-IS IPv6 multi-topology support."""
-    _require_process(ctx, db.cfgdb, vrf)
-    try:
-        db.cfgdb.mod_entry(CFG_ISIS_GLOBALS, vrf,
-                           {'ipv6_multi_topology': 'true' if state == 'enable' else 'false'})
-        click.echo("Configured IS-IS IPv6 multi-topology to '{}' for VRF '{}'".format(state, vrf))
-        log.log_notice("Configured IS-IS IPv6 multi-topology to '{}' for VRF '{}'".format(state, vrf))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS IPv6 multi-topology for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS.group(name="timer")
-def ISIS_TIMER():
-    """Configure IS-IS global timers"""
-    pass
-
-
-@ISIS_TIMER.command(name="lsp-mtu")
-@click.argument("mtu", type=click.IntRange(128, 4352))
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_timer_lsp_mtu(ctx, db, mtu, vrf):
-    """Configure IS-IS LSP MTU size"""
-    _require_process(ctx, db.cfgdb, vrf)
-
-    table = CFG_ISIS_GLOBALS_TIMERS
-    key = vrf
-    data = {}
-    data["lsp_mtu"] = str(mtu)
-
-    try:
-        db.cfgdb.mod_entry(table, key, data)
-        click.echo("Configured IS-IS LSP MTU to {} for VRF '{}'".format(mtu, vrf))
-        log.log_notice("Configured IS-IS LSP MTU to {} for VRF '{}'".format(mtu, vrf))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS LSP MTU for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS_TIMER.command(name="lsp-refresh")
-@click.argument("interval", type=click.IntRange(1, 65235))
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_timer_lsp_refresh(ctx, db, interval, vrf):
-    """Configure IS-IS LSP refresh interval (seconds)"""
-    _require_process(ctx, db.cfgdb, vrf)
-
-    table = CFG_ISIS_GLOBALS_TIMERS
-    key = vrf
-    data = {}
-    if interval + 300 > int(db.cfgdb.get_entry(table, key).get("lsp_lifetime", 1200)):
-        ctx.fail("LSP lifetime must be at least refresh interval + 300 seconds")
-    data["lsp_refresh_interval"] = str(interval)
-
-    try:
-        db.cfgdb.mod_entry(table, key, data)
-        click.echo("Configured IS-IS LSP refresh interval to {}s for VRF '{}'".format(interval, vrf))
-        log.log_notice("Configured IS-IS LSP refresh interval to {}s for VRF '{}'".format(interval, vrf))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS LSP refresh interval for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-@ISIS_TIMER.command(name="lsp-lifetime")
-@click.argument("lifetime", type=click.IntRange(350, 65535))
-@click.argument("vrf", required=False, default="default")
-@clicommon.pass_db
-@click.pass_context
-def isis_timer_lsp_lifetime(ctx, db, lifetime, vrf):
-    """Configure IS-IS max LSP lifetime (seconds)"""
-    _require_process(ctx, db.cfgdb, vrf)
-
-    table = CFG_ISIS_GLOBALS_TIMERS
-    key = vrf
-    data = {}
-    if lifetime < int(db.cfgdb.get_entry(table, key).get("lsp_refresh_interval", 900)) + 300:
-        ctx.fail("LSP lifetime must be at least refresh interval + 300 seconds")
-    data["lsp_lifetime"] = str(lifetime)
-
-    try:
-        db.cfgdb.mod_entry(table, key, data)
-        click.echo("Configured IS-IS LSP max lifetime to {}s for VRF '{}'".format(lifetime, vrf))
-        log.log_notice("Configured IS-IS LSP max lifetime to {}s for VRF '{}'".format(lifetime, vrf))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS LSP max lifetime for VRF '{}': {}".format(vrf, str(e)))
-        ctx.fail(str(e))
-
-
-#
-# IS-IS Interface Configuration -----------------------------------------------
-#
-
-@click.group(
-    name="isis",
-    cls=clicommon.AliasedGroup
-)
-@click.pass_context
-def INTERFACE_ISIS(ctx):
-    """Configure IS-IS interface settings"""
-    if not ctx.obj or 'config_db' not in ctx.obj:
-        ctx.fail("config_db is not initialized")
-
-
-def _require_interface(ctx, db, name):
-    if not db.get_entry(CFG_ISIS_INTERFACE, name):
-        ctx.fail("IS-IS is not configured on interface {}".format(name))
-    _require_process(ctx, db, _interface_vrf(db, name))
-
-
-@INTERFACE_ISIS.command(name="add")
-@click.argument("interface_name")
-@click.pass_context
-def interface_isis_add(ctx, interface_name):
-    """Create disabled interface configuration under a configured process."""
-    db = ctx.obj['config_db']
-    name = _resolve_interface(ctx, db, interface_name)
-    _require_process(ctx, db, _interface_vrf(db, name))
-    if not db.get_entry(CFG_ISIS_INTERFACE, name):
-        db.mod_entry(CFG_ISIS_INTERFACE, name, {"enabled": "false"})
-
-
-@INTERFACE_ISIS.command(name="enable")
-@click.argument("interface_name")
-@click.pass_context
-def interface_isis_enable(ctx, interface_name):
-    """Enable IS-IS routing on an interface"""
-    db = ctx.obj['config_db']
-
-    interface_name = _resolve_interface(ctx, db, interface_name)
-
-    _require_process(ctx, db, _interface_vrf(db, interface_name))
-
-    table = CFG_ISIS_INTERFACE
-    key = interface_name
-
-    if db.get_entry(table, key).get("enabled") == "true":
-        click.echo("IS-IS is already enabled on interface {}".format(interface_name))
-        return
-
-    # Explicit administrative state is shared with YANG and frrcfgd.
-    data = {"enabled": "true"}
-
-    try:
-        db.mod_entry(table, key, data)
-        click.echo("Enabled IS-IS on interface {}".format(interface_name))
-        log.log_notice("Enabled IS-IS on interface {}".format(interface_name))
-    except Exception as e:
-        log.log_error("Failed to enable IS-IS on interface {}: {}".format(interface_name, str(e)))
-        ctx.fail(str(e))
-
-
-@INTERFACE_ISIS.command(name="disable")
-@click.argument("interface_name")
-@click.pass_context
-def interface_isis_disable(ctx, interface_name):
-    """Disable IS-IS routing on an interface"""
-    db = ctx.obj['config_db']
-
-    # Cleanup must also work after the interface is removed or becomes a member.
-    if not db.get_entry(CFG_ISIS_INTERFACE, interface_name):
-        from config.main import interface_alias_to_name
-        if clicommon.get_interface_naming_mode() == 'alias':
-            interface_name = interface_alias_to_name(db, interface_name)
-
-    table = CFG_ISIS_INTERFACE
-    key = interface_name
-
-    if not db.get_entry(table, key):
-        click.echo("IS-IS routing is not enabled on interface {}".format(interface_name))
-        return
-
-    try:
-        db.mod_entry(table, key, {"enabled": "false"})
-        click.echo("Disabled IS-IS on interface {}".format(interface_name))
-        log.log_notice("Disabled IS-IS on interface {}".format(interface_name))
-    except Exception as e:
-        log.log_error("Failed to disable IS-IS on interface {}: {}".format(interface_name, str(e)))
-        ctx.fail(str(e))
-
-
-@INTERFACE_ISIS.command(name="del")
-@click.argument("interface_name")
-@click.pass_context
-def interface_isis_delete(ctx, interface_name):
-    """Delete retained IS-IS configuration on an interface"""
-    db = ctx.obj['config_db']
-
-    # Cleanup must also work after the interface is removed or becomes a member.
-    if not db.get_entry(CFG_ISIS_INTERFACE, interface_name):
-        from config.main import interface_alias_to_name
-        if clicommon.get_interface_naming_mode() == 'alias':
-            interface_name = interface_alias_to_name(db, interface_name)
-
-    table = CFG_ISIS_INTERFACE
-    key = interface_name
-
-    if not db.get_entry(table, key):
-        click.echo("IS-IS routing is not enabled on interface {}".format(interface_name))
-        return
-
-    try:
-        db.set_entry(table, key, None)
-        click.echo("Deleted IS-IS on interface {}".format(interface_name))
-        log.log_notice("Deleted IS-IS on interface {}".format(interface_name))
-    except Exception as e:
-        log.log_error("Failed to delete IS-IS on interface {}: {}".format(interface_name, str(e)))
-        ctx.fail(str(e))
-
-
-@INTERFACE_ISIS.command(name="metric")
-@click.argument("interface_name")
-@click.argument("metric_val", type=click.IntRange(1, 16777215))
-@click.pass_context
-def interface_isis_metric(ctx, interface_name, metric_val):
-    """Configure IS-IS metric for an interface"""
-    db = ctx.obj['config_db']
-
-    interface_name = _resolve_interface(ctx, db, interface_name)
-
-    table = CFG_ISIS_INTERFACE
-    key = interface_name
-
-    _require_interface(ctx, db, interface_name)
-
-    data = {}
-    data["metric"] = str(metric_val)
-
-    try:
-        db.mod_entry(table, key, data)
-        click.echo("Configured IS-IS metric to {} on interface {}".format(metric_val, interface_name))
-        log.log_notice("Configured IS-IS metric to {} on interface {}".format(metric_val, interface_name))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS metric on interface {}: {}".format(interface_name, str(e)))
-        ctx.fail(str(e))
-
-
-@INTERFACE_ISIS.command(name="circuit-type")
-@click.argument("interface_name")
-@click.argument("circuit_type", type=click.Choice(['p2p', 'lan']))
-@click.pass_context
-def interface_isis_circuit_type(ctx, interface_name, circuit_type):
-    """Configure IS-IS circuit type for an interface"""
-    db = ctx.obj['config_db']
-
-    interface_name = _resolve_interface(ctx, db, interface_name)
-
-    table = CFG_ISIS_INTERFACE
-    key = interface_name
-
-    _require_interface(ctx, db, interface_name)
-
-    data = {}
-    data["circuit_type"] = circuit_type
-
-    try:
-        db.mod_entry(table, key, data)
-        click.echo("Configured IS-IS circuit type to '{}' on interface {}".format(circuit_type, interface_name))
-        log.log_notice("Configured IS-IS circuit type to '{}' on interface {}".format(circuit_type, interface_name))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS circuit type on interface {}: {}".format(interface_name, str(e)))
-        ctx.fail(str(e))
-
-
-@INTERFACE_ISIS.command(name="passive")
-@click.argument("interface_name")
-@click.argument("mode", type=click.Choice(['enable', 'disable']))
-@click.pass_context
-def interface_isis_passive(ctx, interface_name, mode):
-    """Configure IS-IS passive mode for an interface"""
-    db = ctx.obj['config_db']
-
-    interface_name = _resolve_interface(ctx, db, interface_name)
-
-    table = CFG_ISIS_INTERFACE
-    key = interface_name
-
-    _require_interface(ctx, db, interface_name)
-
-    data = {}
-    data["passive"] = "true" if mode == "enable" else "false"
-
-    try:
-        db.mod_entry(table, key, data)
-        click.echo("Configured IS-IS passive mode to '{}' on interface {}".format(mode, interface_name))
-        log.log_notice("Configured IS-IS passive mode to '{}' on interface {}".format(mode, interface_name))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS passive mode on interface {}: {}".format(interface_name, str(e)))
-        ctx.fail(str(e))
-
-
-def _set_interface_af(ctx, interface_name, family, state):
-    db = ctx.obj['config_db']
-    name = _resolve_interface(ctx, db, interface_name)
-    _require_interface(ctx, db, name)
-    try:
-        db.mod_entry(CFG_ISIS_INTERFACE, name,
-                     {family.lower() + '_enabled': 'true' if state == 'enable' else 'false'})
-        click.echo("Configured IS-IS {} to '{}' on interface {}".format(family, state, name))
-        log.log_notice("Configured IS-IS {} to '{}' on interface {}".format(family, state, name))
-    except Exception as e:
-        log.log_error("Failed to configure IS-IS {} on interface {}: {}".format(family, name, str(e)))
-        ctx.fail(str(e))
-
-
-@INTERFACE_ISIS.command(name='ipv4')
-@click.argument('interface_name')
-@click.argument('state', type=click.Choice(['enable', 'disable']))
-@click.pass_context
-def interface_isis_ipv4(ctx, interface_name, state):
-    """Enable or disable IS-IS IPv4 routing on an interface."""
-    _set_interface_af(ctx, interface_name, 'IPv4', state)
-
-
-@INTERFACE_ISIS.command(name='ipv6')
-@click.argument('interface_name')
-@click.argument('state', type=click.Choice(['enable', 'disable']))
-@click.pass_context
-def interface_isis_ipv6(ctx, interface_name, state):
-    """Enable or disable IS-IS IPv6 routing on an interface."""
-    _set_interface_af(ctx, interface_name, 'IPv6', state)
+def instance_set(ctx, instance, field, value, vrf):
+    _parent(ctx, instance, vrf)
+    _set(ctx, 'ISIS_INSTANCE', (vrf, instance), field, value)
 
 
 @ISIS.command(name='reset')
-@click.argument('field', type=click.Choice(['net', 'level', 'hostname', 'ipv6-multi-topology',
-                                            'lsp-mtu', 'lsp-refresh', 'lsp-lifetime']))
-@click.argument('vrf', required=False, default='default')
-@clicommon.pass_db
+@click.argument('instance')
+@click.argument('field', type=_fields('ISIS_INSTANCE'))
+@click.option('--vrf', default='default')
 @click.pass_context
-def isis_reset(ctx, db, field, vrf):
-    """Reset a global setting to its default (remove NET when selected)."""
-    _require_process(ctx, db.cfgdb, vrf)
-    fields = {'net': 'net_title', 'level': 'level', 'hostname': 'dynamic_hostname',
-              'ipv6-multi-topology': 'ipv6_multi_topology',
-              'lsp-mtu': 'lsp_mtu', 'lsp-refresh': 'lsp_refresh_interval', 'lsp-lifetime': 'lsp_lifetime'}
-    table = CFG_ISIS_GLOBALS_TIMERS if field.startswith('lsp-') else CFG_ISIS_GLOBALS
-    timers = db.cfgdb.get_entry(CFG_ISIS_GLOBALS_TIMERS, vrf)
-    refresh = 900 if field == 'lsp-refresh' else int(timers.get('lsp_refresh_interval', 900))
-    lifetime = 1200 if field == 'lsp-lifetime' else int(timers.get('lsp_lifetime', 1200))
-    if field in ('lsp-refresh', 'lsp-lifetime') and lifetime < refresh + 300:
-        ctx.fail('LSP lifetime must be at least refresh interval + 300 seconds')
-    entry = db.cfgdb.get_entry(table, vrf)
-    if fields[field] in entry:
-        entry.pop(fields[field])
-        db.cfgdb.set_entry(table, vrf, entry or None)
+def instance_reset(ctx, instance, field, vrf):
+    _parent(ctx, instance, vrf)
+    _set(ctx, 'ISIS_INSTANCE', (vrf, instance), field, reset=True)
 
 
-@INTERFACE_ISIS.command(name='reset')
-@click.argument('interface_name')
-@click.argument('field', type=click.Choice(['metric', 'circuit-type', 'passive', 'ipv4', 'ipv6']))
+@ISIS.group(name='spf-backoff')
+def SPF():
+    """Configure the complete instance-wide IETF SPF backoff tuple in milliseconds."""
+
+
+@SPF.command(name='set')
+@click.argument('instance')
+@click.argument('values', nargs=5, type=click.IntRange(0, 60000))
+@click.option('--vrf', default='default')
 @click.pass_context
-def interface_isis_reset(ctx, interface_name, field):
-    """Reset an interface setting to its default."""
-    db = ctx.obj['config_db']
-    name = _resolve_interface(ctx, db, interface_name)
-    _require_interface(ctx, db, name)
-    fields = {'metric': 'metric', 'circuit-type': 'circuit_type', 'passive': 'passive',
-              'ipv4': 'ipv4_enabled', 'ipv6': 'ipv6_enabled'}
-    entry = db.get_entry(CFG_ISIS_INTERFACE, name)
-    entry.pop(fields[field], None)
-    db.set_entry(CFG_ISIS_INTERFACE, name, entry)
+def spf_set(ctx, instance, values, vrf):
+    row = _parent(ctx, instance, vrf)
+    row.update(zip(BACKOFF, map(str, values)))
+    _write(ctx, [('ISIS_INSTANCE', (vrf, instance), row)])
+
+
+@SPF.command(name='reset')
+@click.argument('instance')
+@click.option('--vrf', default='default')
+@click.pass_context
+def spf_reset(ctx, instance, vrf):
+    row = _parent(ctx, instance, vrf)
+    for field in BACKOFF:
+        row.pop(field, None)
+    _write(ctx, [('ISIS_INSTANCE', (vrf, instance), row)])
+
+
+@click.group(name='isis', cls=clicommon.AliasedGroup)
+@click.pass_context
+def INTERFACE_ISIS(ctx):
+    """Bind an interface explicitly and configure its IS-IS circuit."""
+    if not ctx.obj or 'config_db' not in ctx.obj:
+        ctx.fail('config_db is not initialized')
+
+
+@INTERFACE_ISIS.command(name='bind')
+@click.argument('interface')
+@click.argument('instance')
+@click.option('--vrf', default=None)
+@click.pass_context
+def interface_bind(ctx, interface, instance, vrf):
+    db = _db(ctx)
+    interface = _resolve_interface(ctx, db, interface)
+    actual = routed_vrf(_snapshot(ctx), interface)
+    if actual is None or (vrf is not None and vrf != actual):
+        ctx.fail('Binding requires an existing routed interface in the specified VRF')
+    _parent(ctx, instance, actual)
+    row = _row(ctx, 'ISIS_INTERFACE', interface) or {'enabled': 'false'}
+    row.update(vrf=actual, instance=instance)
+    _write(ctx, [('ISIS_INTERFACE', interface, row)])
+
+
+@INTERFACE_ISIS.command(name='unbind')
+@click.argument('interface')
+@click.pass_context
+def interface_unbind(ctx, interface):
+    # Cleanup must also work after the interface or parent has been removed.
+    if not _row(ctx, 'ISIS_INTERFACE', interface) and clicommon.get_interface_naming_mode() == 'alias':
+        from config.main import interface_alias_to_name
+        interface = interface_alias_to_name(_db(ctx), interface)
+    updates = [('ISIS_INTERFACE_LEVEL', key, None) for key in _snapshot(ctx)['ISIS_INTERFACE_LEVEL']
+               if key_tuple(key)[0] == interface]
+    _write(ctx, updates + [('ISIS_INTERFACE', interface, None)])
+
+
+def _interface_admin(action):
+    @INTERFACE_ISIS.command(name=action)
+    @click.argument('interface')
+    @click.pass_context
+    def command(ctx, interface):
+        interface, row = _binding(ctx, interface, resolve=action == 'enable')
+        if action == 'enable' and routed_vrf(_snapshot(ctx), interface) != row['vrf']:
+            ctx.fail('Interface VRF changed; explicitly bind it again before enabling')
+        row['enabled'] = 'true' if action == 'enable' else 'false'
+        _write(ctx, [('ISIS_INTERFACE', interface, row)])
+    return command
+
+
+for _action in ('enable', 'disable'):
+    _interface_admin(_action)
+
+
+@INTERFACE_ISIS.command(name='af')
+@click.argument('interface')
+@click.argument('family', type=click.Choice(['ipv4', 'ipv6']))
+@click.argument('state', type=click.Choice(['enable', 'disable', 'reset']))
+@click.pass_context
+def interface_af(ctx, interface, family, state):
+    """Control each AF independently, retaining unrelated circuit settings."""
+    interface, _ = _binding(ctx, interface)
+    _set(ctx, 'ISIS_INTERFACE', interface, family + '_enabled',
+         'true' if state == 'enable' else 'false', reset=state == 'reset')
+
+
+def _interface_field(action):
+    params = [click.Argument(['interface']), click.Argument(['field'], type=_fields('ISIS_INTERFACE'))]
+    if action == 'set':
+        params.append(click.Argument(['value']))
+
+    @click.pass_context
+    def command(ctx, interface, field, value=None):
+        interface, _ = _binding(ctx, interface)
+        _set(ctx, 'ISIS_INTERFACE', interface, field, value, reset=action == 'reset')
+    INTERFACE_ISIS.add_command(click.Command(action, params=params, callback=command))
+
+
+for _action in ('set', 'reset'):
+    _interface_field(_action)
+
+
+def _level_commands(group, table):
+    level_group = click.Group('level', help='Configure explicit Level-1/Level-2 values; both writes both rows.')
+    group.add_command(level_group)
+    for action in ('set', 'reset'):
+        def register(action):
+            params = [click.Argument(['name']), click.Argument(['level'], type=click.Choice([*LEVELS, 'both'])),
+                      click.Argument(['field'], type=_fields(table))]
+            if action == 'set':
+                params.append(click.Argument(['value']))
+            if table == 'ISIS_INSTANCE_LEVEL':
+                params.append(click.Option(['--vrf'], default='default'))
+
+            @click.pass_context
+            def command(ctx, name, level, field, value=None, vrf=None):
+                if table == 'ISIS_INSTANCE_LEVEL':
+                    _parent(ctx, name, vrf)
+                    prefix = (vrf, name)
+                else:
+                    name, _ = _binding(ctx, name)
+                    prefix = (name,)
+                updates = []
+                for selected in LEVELS if level == 'both' else (level,):
+                    key = prefix + (selected,)
+                    row = _row(ctx, table, key)
+                    if action == 'reset':
+                        row.pop(field.replace('-', '_'), None)
+                    else:
+                        row[field.replace('-', '_')] = value
+                    updates.append((table, key, row or None))
+                _write(ctx, updates)
+            level_group.add_command(click.Command(action, params=params, callback=command))
+        register(action)
+
+
+_level_commands(ISIS, 'ISIS_INSTANCE_LEVEL')
+_level_commands(INTERFACE_ISIS, 'ISIS_INTERFACE_LEVEL')
+
+
+@ISIS.group(name='redistribute')
+def REDISTRIBUTE():
+    """Configure per-AF, protocol and level redistribution policy."""
+
+
+def _redistribution(action):
+    params = [click.Argument(['instance']), click.Argument(['af'], type=click.Choice(['ipv4', 'ipv6'])),
+              click.Argument(['protocol'], type=click.Choice(sorted(set(sum(PROTOCOLS.values(), ()))))),
+              click.Argument(['level'], type=click.Choice(LEVELS)), click.Option(['--vrf'], default='default')]
+    if action == 'add':
+        params += [click.Option(['--metric'], type=click.IntRange(0, 16777215)), click.Option(['--route-map'])]
+
+    @click.pass_context
+    def command(ctx, instance, af, protocol, level, vrf, metric=None, route_map=None):
+        _parent(ctx, instance, vrf)
+        row = {}
+        if metric is not None:
+            row['metric'] = str(metric)
+        if route_map is not None:
+            row['route_map'] = route_map
+        _write(ctx, [('ISIS_REDISTRIBUTE', (vrf, instance, af, protocol, level),
+                      row if action == 'add' else None)])
+    REDISTRIBUTE.add_command(click.Command(action, params=params, callback=command))
+
+
+for _action in ('add', 'del'):
+    _redistribution(_action)

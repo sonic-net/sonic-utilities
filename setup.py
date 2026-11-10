@@ -19,6 +19,7 @@ sonic_dependencies = [
     'sonic-platform-common',
     'sonic-py-common',
     'sonic-yang-mgmt',
+    'sonic-yang-models',
 ]
 
 for package in sonic_dependencies:
@@ -248,6 +249,7 @@ setup(
         ]
     },
     install_requires=[
+        'sonic-yang-models>=1.0',
         'bcrypt>=3.2.2',
         'click>=8.0, <8.2',  # Click 8.3 has some bug with mutual exclusions,
                              # and 8.2 changes the exit code from 0 to 2 when
