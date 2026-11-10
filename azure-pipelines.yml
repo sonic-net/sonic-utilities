@@ -55,7 +55,6 @@ stages:
         set -ex
         sudo apt-get update
         sudo apt-get install -y python3-pip python3-venv
-        sudo pip3 install requests==2.31.0
         sudo apt-get install -y python3-protobuf
       displayName: "Install dependencies"
 
