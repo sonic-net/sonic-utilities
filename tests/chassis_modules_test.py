@@ -1070,10 +1070,9 @@ class TestChassisModuleBMCStartupShutdown(object):
         assert "Power-On-Delay" in result.output
         assert "Shutdown-Timeout" in result.output
         assert "Result" in result.output
-        assert "Request-Id" in result.output
         header = result.output.splitlines()[0]
         assert header.index("Shutdown-Timeout") < header.index("Result")
-        assert header.index("Result") < header.index("Request-Id")
+        assert header.split()[-1] == "Result"
 
     def test_show_status_bmc_non_switch_host_shows_na_for_timing(self):
         """On BMC, non-SWITCH-HOST rows display N/A for BMC-only columns."""
@@ -1087,7 +1086,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         print(result.output)
         assert result.exit_code == 0
         row = result.output.strip().splitlines()[-1].split()
-        assert row[-4:] == ["N/A", "N/A", "N/A", "N/A"]
+        assert row[-3:] == ["N/A", "N/A", "N/A"]
 
     def test_show_status_bmc_listing_reads_host_operation_once(self):
         """A populated host operation applies only to SWITCH-HOST rows."""
@@ -1132,9 +1131,10 @@ class TestChassisModuleBMCStartupShutdown(object):
         for line in result.output.strip().splitlines()[2:]:
             fields = line.split()
             rows[fields[0]] = fields
-        assert rows["LINE-CARD0"][-4:] == ["N/A", "N/A", "N/A", "N/A"]
-        assert rows["SWITCH-HOST0"][-2:] == ["SUCCESS_GRACEFUL", "request-1"]
-        assert rows["SWITCH-HOST1"][-2:] == ["SUCCESS_GRACEFUL", "request-1"]
+        assert rows["LINE-CARD0"][-3:] == ["N/A", "N/A", "N/A"]
+        assert rows["SWITCH-HOST0"][-1] == "SUCCESS_GRACEFUL"
+        assert rows["SWITCH-HOST1"][-1] == "SUCCESS_GRACEFUL"
+        assert "request-1" not in result.output
         assert mock_conn.get_all.call_args_list.count(
             mock.call('STATE_DB', 'HOST_STATE|switch-host')) == 1
         assert mock_conn_cls.call_count == 1
@@ -1154,7 +1154,6 @@ class TestChassisModuleBMCStartupShutdown(object):
         assert "Power-On-Delay" not in result.output
         assert "Shutdown-Timeout" not in result.output
         assert "Result" not in result.output
-        assert "Request-Id" not in result.output
 
     def test_show_status_bmc_switch_host_shows_configured_timing_values(self):
         """On BMC, SWITCH-HOST row shows the configured power-on-delay and
@@ -1211,21 +1210,19 @@ class TestChassisModuleBMCStartupShutdown(object):
         assert "300" in result.output
         assert "90" in result.output
         row = result.output.strip().splitlines()[-1].split()
-        assert row[-2:] == ["SUCCESS_GRACEFUL", "3f2b1c8a-9d41"]
+        assert row[-3:] == ["300", "90", "SUCCESS_GRACEFUL"]
+        assert "3f2b1c8a-9d41" not in result.output
         assert "Physical-Slot" not in result.output
         assert mock_conn.get_all.call_args_list.count(
             mock.call('STATE_DB', 'HOST_STATE|switch-host')) == 1
 
     @pytest.mark.parametrize(
-        "host_operation, expected_tail",
-        [
-            (None, ["-", "-"]),
-            ({'op_result': 'SUCCESS_GRACEFUL'}, ["SUCCESS_GRACEFUL", "-"]),
-        ],
+        "host_operation",
+        [None, {'device_power_state': 'POWERED_ON'}],
         ids=["missing-key", "missing-field"],
     )
     def test_show_status_bmc_switch_host_missing_operation_data_shows_dash(
-            self, host_operation, expected_tail):
+            self, host_operation):
         """Missing SWITCH-HOST operation key or field is displayed as a dash."""
         runner = CliRunner()
         db = Db()
@@ -1260,7 +1257,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         print(result.output)
         assert result.exit_code == 0
         row = result.output.strip().splitlines()[-1].split()
-        assert row[-2:] == expected_tail
+        assert row[-1] == "-"
         assert mock_conn.get_all.call_args_list.count(
             mock.call('STATE_DB', 'HOST_STATE|switch-host')) == 1
 

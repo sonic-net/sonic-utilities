@@ -19,7 +19,6 @@ CHASSIS_MODULE_INFO_SERIAL_FIELD = 'serial'
 
 HOST_STATE_KEY = 'HOST_STATE|switch-host'
 HOST_STATE_OP_RESULT_FIELD = 'op_result'
-HOST_STATE_OP_REQUEST_ID_FIELD = 'op_request_id'
 
 CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
 CHASSIS_MIDPLANE_INFO_IP_FIELD = 'ip_address'
@@ -61,8 +60,7 @@ def status(db, chassis_module_name):
         # BMC-only timing fields configured via 'config chassis modules
         # power-on-delay' / 'shutdown-timeout' for SWITCH-HOST modules.
         header.remove('Physical-Slot')
-        header.extend(['Power-On-Delay (sec)', 'Shutdown-Timeout (sec)',
-                       'Result', 'Request-Id'])
+        header.extend(['Power-On-Delay (sec)', 'Shutdown-Timeout (sec)', 'Result'])
 
     chassis_cfg_table = db.cfgdb.get_table('CHASSIS_MODULE')
 
@@ -166,13 +164,11 @@ def status(db, chassis_module_name):
                 power_on_delay = cfg.get('power_on_delay', '0')
                 shutdown_timeout = cfg.get('graceful_shutdown_timeout', '120')
                 op_result = host_state.get(HOST_STATE_OP_RESULT_FIELD, '-')
-                op_request_id = host_state.get(HOST_STATE_OP_REQUEST_ID_FIELD, '-')
             else:
                 power_on_delay = 'N/A'
                 shutdown_timeout = 'N/A'
                 op_result = 'N/A'
-                op_request_id = 'N/A'
-            row.extend([power_on_delay, shutdown_timeout, op_result, op_request_id])
+            row.extend([power_on_delay, shutdown_timeout, op_result])
 
         table.append(tuple(row))
 

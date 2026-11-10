@@ -2692,7 +2692,7 @@ This command resets the BMC root password to default
 
 **config chassis modules shutdown-timeout**
 
-Set the switch-host graceful shutdown/restart timeout in seconds. The default is 120; 0 skips the graceful wait and requests forced power-off. Existing configured values are preserved. The command accepts nonnegative integers without an upper limit and checks nothing against the switch host, so the value has to be qualified against the host's budget by the platform owner:
+Set the switch-host graceful shutdown timeout in seconds. The default is 120; 0 skips the graceful wait and requests forced power-off. Existing configured values are preserved. The command accepts nonnegative integers without an upper limit and checks nothing against the switch host, so the value has to be qualified against the host's budget by the platform owner:
 
 - Too low, and every shutdown is recorded `SUCCESS_FORCED` with reason `deadline` even when the host finished its teardown. The timeout must cover the request, the host's measured pre-shutdown time and the status polling. To keep a failed host check reported as `check_failed` rather than `deadline`, it must also cover the host's `switch_host_halt_services_timeout`, a switch-host `platform.json` key with no CLI that defaults to 60 seconds.
 - Too high, and the host watchdog armed by `reboot -p` (at least 180 seconds) can fire before the BMC removes power. The timeout plus polling and power-off latency must stay inside the watchdog, and the timeout must stay below the reboot backend's 260-second wait.
@@ -2706,14 +2706,14 @@ Requalify both values whenever either changes. The reason behind a forced result
 
 **show chassis modules status**
 
-On a BMC, this command appends `Result` and `Request-Id` after the existing `Shutdown-Timeout (sec)` column. For a `SWITCH-HOST` row, they show the most recent operation result and request ID from `HOST_STATE|switch-host`; a missing value is shown as `-`. Other module types show `N/A` in these two columns. Non-BMC output is unchanged.
+On a BMC, this command appends `Result` after the existing `Shutdown-Timeout (sec)` column. For a `SWITCH-HOST` row, it shows the most recent operation result from `HOST_STATE|switch-host`; a missing value is shown as `-`. Other module types show `N/A` in this column. The request ID of that operation is `op_request_id` in the same STATE_DB key. Non-BMC output is unchanged.
 
 - Usage:
   ```bash
   show chassis modules status [<module_name>]
   ```
 
-`GRACEFUL_RESTART` has no CLI command. Its CLI equivalent is to shut down the switch host and then start it again:
+To restart the switch host, shut it down and then start it again:
 
 ```bash
 config chassis modules shutdown SWITCH-HOST
