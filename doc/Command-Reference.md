@@ -2735,6 +2735,8 @@ show isis interface [-j|--json] [-n NAMESPACE]
 ```
 config isis [-n NAMESPACE] enable [VRF]
 config isis [-n NAMESPACE] disable [VRF]
+config isis [-n NAMESPACE] add [VRF]
+config isis [-n NAMESPACE] del [VRF]
 config isis [-n NAMESPACE] net NET [VRF]
 config isis [-n NAMESPACE] level {level-1|level-2|level-1-2} [VRF]
 config isis [-n NAMESPACE] hostname {enable|disable} [VRF]
@@ -2745,6 +2747,8 @@ config isis [-n NAMESPACE] timer lsp-lifetime SECONDS [VRF]
 config isis [-n NAMESPACE] reset {net|level|hostname|ipv6-multi-topology|lsp-mtu|lsp-refresh|lsp-lifetime} [VRF]
 config interface [-n NAMESPACE] isis enable INTERFACE
 config interface [-n NAMESPACE] isis disable INTERFACE
+config interface [-n NAMESPACE] isis add INTERFACE
+config interface [-n NAMESPACE] isis del INTERFACE
 config interface [-n NAMESPACE] isis metric INTERFACE METRIC
 config interface [-n NAMESPACE] isis circuit-type INTERFACE {p2p|lan}
 config interface [-n NAMESPACE] isis passive INTERFACE {enable|disable}
@@ -2754,12 +2758,16 @@ config interface [-n NAMESPACE] isis reset INTERFACE {metric|circuit-type|passiv
 ```
 
 VRF defaults to `default`. NET must contain a system-id and end in `.00`.
-LSP MTU accepts 128–4352 (default 1492), refresh accepts 1–65235 seconds
+LSP MTU accepts 128–4352 (default 1497), refresh accepts 1–65235 seconds
 (default 900), lifetime accepts 350–65535 seconds (default 1200), and lifetime
 must be at least refresh + 300. Interface metric accepts 1–16777215 (default 10).
 Circuit type defaults to LAN; passive defaults to off. Reset removes the selected
-field, restoring its default (or removing NET). Process disable refuses while
-interface bindings remain; disable interfaces first. Hostname uses `enable|disable`.
+field, restoring its default (or removing NET). Disable retains configuration;
+re-enable restores it. `add` creates disabled configuration and preserves existing
+values. Edits and resets require configured objects, but do not require them to
+be enabled. Parent `del` refuses while any interface rows remain, even disabled
+ones; use interface `del` first. Interface `del` also cleans up stale configuration
+after a routed interface disappears. Hostname uses `enable|disable`.
 
 IPv4 and IPv6 bindings are controlled independently through
 `ISIS_INTERFACE.ipv4_enabled` and `ipv6_enabled`. Both fields default to true;
@@ -2771,8 +2779,8 @@ For an IPv6-only interface, enable IS-IS on the interface and then run
 
 `config isis ipv6-multi-topology` controls `ISIS_GLOBALS.ipv6_multi_topology`
 for the selected VRF and namespace. The schema default is true; reset removes
-only that field. The IS-IS process must be enabled before changing or resetting
-this setting. This selects IPv6 multi-topology mode; it does not enable or disable
+only that field. The IS-IS process must exist before changing or resetting
+this setting; disabled configurations can be edited. This selects IPv6 multi-topology mode; it does not enable or disable
 the IPv6 binding on individual interfaces.
 
 Example, after enabling management-framework mode:

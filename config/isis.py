@@ -38,8 +38,8 @@ def _resolve_interface(ctx, db, name):
 
 
 def _require_process(ctx, db, vrf):
-    if db.get_entry(CFG_ISIS_GLOBALS, vrf).get('enabled') != 'true':
-        ctx.fail("IS-IS routing process for VRF '{}' is not enabled. Please enable it first.".format(vrf))
+    if not db.get_entry(CFG_ISIS_GLOBALS, vrf):
+        ctx.fail("IS-IS routing process for VRF '{}' is not configured.".format(vrf))
 
 
 #
@@ -104,19 +104,42 @@ def isis_disable(ctx, db, vrf):
         return
 
     try:
-        for name in db.cfgdb.get_table(CFG_ISIS_INTERFACE):
-            if _interface_vrf(db.cfgdb, name) == vrf:
-                ctx.fail("Disable IS-IS on interface '{}' first".format(name))
-        # Clean up timers table if exists
-        timers_table = CFG_ISIS_GLOBALS_TIMERS
-        if db.cfgdb.get_entry(timers_table, key):
-            db.cfgdb.set_entry(timers_table, key, None)
-        db.cfgdb.set_entry(table, key, None)
-
-        click.echo("Disabled IS-IS routing process for VRF '{}'".format(vrf))
-        log.log_notice("Disabled IS-IS routing process for VRF '{}'".format(vrf))
+        db.cfgdb.mod_entry(table, key, {"enabled": "false"})
+        click.echo("Disabled IS-IS routing process for VRF '{}' (configuration retained)".format(vrf))
     except Exception as e:
         log.log_error("Failed to disable IS-IS for VRF '{}': {}".format(vrf, str(e)))
+        ctx.fail(str(e))
+
+
+@ISIS.command(name="add")
+@click.argument("vrf", required=False, default="default")
+@clicommon.pass_db
+@click.pass_context
+def isis_add(ctx, db, vrf):
+    """Create a disabled IS-IS configuration for a VRF."""
+    from config.main import is_vrf_exists
+    if vrf != 'default' and not is_vrf_exists(db.cfgdb, vrf):
+        ctx.fail("VRF '{}' does not exist".format(vrf))
+    if not db.cfgdb.get_entry(CFG_ISIS_GLOBALS, vrf):
+        db.cfgdb.mod_entry(CFG_ISIS_GLOBALS, vrf, {"enabled": "false"})
+
+
+@ISIS.command(name="del")
+@click.argument("vrf", required=False, default="default")
+@clicommon.pass_db
+@click.pass_context
+def isis_delete(ctx, db, vrf):
+    """Delete an IS-IS configuration after removing its interface references."""
+    # Validate before mutation, and outside the database exception handler.
+    for name in db.cfgdb.get_table(CFG_ISIS_INTERFACE):
+        if _interface_vrf(db.cfgdb, name) == vrf:
+            ctx.fail("Delete IS-IS on interface '{}' first".format(name))
+    try:
+        db.cfgdb.set_entry(CFG_ISIS_GLOBALS_TIMERS, vrf, None)
+        db.cfgdb.set_entry(CFG_ISIS_GLOBALS, vrf, None)
+        click.echo("Deleted IS-IS routing configuration for VRF '{}'".format(vrf))
+    except Exception as e:
+        log.log_error("Failed to delete IS-IS for VRF '{}': {}".format(vrf, str(e)))
         ctx.fail(str(e))
 
 
@@ -135,11 +158,7 @@ def isis_net(ctx, db, net_title, vrf):
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    if db.cfgdb.get_entry(table, key).get("enabled") != "true":
-        ctx.fail(
-            "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
-            "'config isis enable {}'".format(vrf, vrf)
-        )
+    _require_process(ctx, db.cfgdb, vrf)
 
     data = {}
     data["net_title"] = net_title
@@ -163,11 +182,7 @@ def isis_level(ctx, db, level, vrf):
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    if db.cfgdb.get_entry(table, key).get("enabled") != "true":
-        ctx.fail(
-            "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
-            "'config isis enable {}'".format(vrf, vrf)
-        )
+    _require_process(ctx, db.cfgdb, vrf)
 
     data = {}
     data["level"] = level
@@ -191,11 +206,7 @@ def isis_hostname(ctx, db, state, vrf):
     table = CFG_ISIS_GLOBALS
     key = vrf
 
-    if db.cfgdb.get_entry(table, key).get("enabled") != "true":
-        ctx.fail(
-            "IS-IS routing process for VRF '{}' is not enabled. Please enable it first using "
-            "'config isis enable {}'".format(vrf, vrf)
-        )
+    _require_process(ctx, db.cfgdb, vrf)
 
     data = {}
     data["dynamic_hostname"] = "true" if state == "enable" else "false"
@@ -321,6 +332,24 @@ def INTERFACE_ISIS(ctx):
         ctx.fail("config_db is not initialized")
 
 
+def _require_interface(ctx, db, name):
+    if not db.get_entry(CFG_ISIS_INTERFACE, name):
+        ctx.fail("IS-IS is not configured on interface {}".format(name))
+    _require_process(ctx, db, _interface_vrf(db, name))
+
+
+@INTERFACE_ISIS.command(name="add")
+@click.argument("interface_name")
+@click.pass_context
+def interface_isis_add(ctx, interface_name):
+    """Create disabled interface configuration under a configured process."""
+    db = ctx.obj['config_db']
+    name = _resolve_interface(ctx, db, interface_name)
+    _require_process(ctx, db, _interface_vrf(db, name))
+    if not db.get_entry(CFG_ISIS_INTERFACE, name):
+        db.mod_entry(CFG_ISIS_INTERFACE, name, {"enabled": "false"})
+
+
 @INTERFACE_ISIS.command(name="enable")
 @click.argument("interface_name")
 @click.pass_context
@@ -372,11 +401,40 @@ def interface_isis_disable(ctx, interface_name):
         return
 
     try:
-        db.set_entry(table, key, None)
+        db.mod_entry(table, key, {"enabled": "false"})
         click.echo("Disabled IS-IS on interface {}".format(interface_name))
         log.log_notice("Disabled IS-IS on interface {}".format(interface_name))
     except Exception as e:
         log.log_error("Failed to disable IS-IS on interface {}: {}".format(interface_name, str(e)))
+        ctx.fail(str(e))
+
+
+@INTERFACE_ISIS.command(name="del")
+@click.argument("interface_name")
+@click.pass_context
+def interface_isis_delete(ctx, interface_name):
+    """Delete retained IS-IS configuration on an interface"""
+    db = ctx.obj['config_db']
+
+    # Cleanup must also work after the interface is removed or becomes a member.
+    if not db.get_entry(CFG_ISIS_INTERFACE, interface_name):
+        from config.main import interface_alias_to_name
+        if clicommon.get_interface_naming_mode() == 'alias':
+            interface_name = interface_alias_to_name(db, interface_name)
+
+    table = CFG_ISIS_INTERFACE
+    key = interface_name
+
+    if not db.get_entry(table, key):
+        click.echo("IS-IS routing is not enabled on interface {}".format(interface_name))
+        return
+
+    try:
+        db.set_entry(table, key, None)
+        click.echo("Deleted IS-IS on interface {}".format(interface_name))
+        log.log_notice("Deleted IS-IS on interface {}".format(interface_name))
+    except Exception as e:
+        log.log_error("Failed to delete IS-IS on interface {}: {}".format(interface_name, str(e)))
         ctx.fail(str(e))
 
 
@@ -393,11 +451,7 @@ def interface_isis_metric(ctx, interface_name, metric_val):
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    if db.get_entry(table, key).get("enabled") != "true":
-        ctx.fail(
-            "IS-IS routing is not enabled on interface {}. Please enable it first using "
-            "'config interface isis enable {}'".format(interface_name, interface_name)
-        )
+    _require_interface(ctx, db, interface_name)
 
     data = {}
     data["metric"] = str(metric_val)
@@ -424,11 +478,7 @@ def interface_isis_circuit_type(ctx, interface_name, circuit_type):
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    if db.get_entry(table, key).get("enabled") != "true":
-        ctx.fail(
-            "IS-IS routing is not enabled on interface {}. Please enable it first using "
-            "'config interface isis enable {}'".format(interface_name, interface_name)
-        )
+    _require_interface(ctx, db, interface_name)
 
     data = {}
     data["circuit_type"] = circuit_type
@@ -455,11 +505,7 @@ def interface_isis_passive(ctx, interface_name, mode):
     table = CFG_ISIS_INTERFACE
     key = interface_name
 
-    if db.get_entry(table, key).get("enabled") != "true":
-        ctx.fail(
-            "IS-IS routing is not enabled on interface {}. Please enable it first using "
-            "'config interface isis enable {}'".format(interface_name, interface_name)
-        )
+    _require_interface(ctx, db, interface_name)
 
     data = {}
     data["passive"] = "true" if mode == "enable" else "false"
@@ -476,9 +522,7 @@ def interface_isis_passive(ctx, interface_name, mode):
 def _set_interface_af(ctx, interface_name, family, state):
     db = ctx.obj['config_db']
     name = _resolve_interface(ctx, db, interface_name)
-    if db.get_entry(CFG_ISIS_INTERFACE, name).get('enabled') != 'true':
-        ctx.fail("IS-IS routing is not enabled on interface {}".format(name))
-    _require_process(ctx, db, _interface_vrf(db, name))
+    _require_interface(ctx, db, name)
     try:
         db.mod_entry(CFG_ISIS_INTERFACE, name,
                      {family.lower() + '_enabled': 'true' if state == 'enable' else 'false'})
@@ -539,10 +583,7 @@ def interface_isis_reset(ctx, interface_name, field):
     """Reset an interface setting to its default."""
     db = ctx.obj['config_db']
     name = _resolve_interface(ctx, db, interface_name)
-    if db.get_entry(CFG_ISIS_INTERFACE, name).get('enabled') != 'true':
-        ctx.fail("IS-IS routing is not enabled on interface {}".format(name))
-    if field in ('ipv4', 'ipv6'):
-        _require_process(ctx, db, _interface_vrf(db, name))
+    _require_interface(ctx, db, name)
     fields = {'metric': 'metric', 'circuit-type': 'circuit_type', 'passive': 'passive',
               'ipv4': 'ipv4_enabled', 'ipv6': 'ipv6_enabled'}
     entry = db.get_entry(CFG_ISIS_INTERFACE, name)
