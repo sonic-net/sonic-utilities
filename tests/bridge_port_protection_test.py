@@ -1,4 +1,3 @@
-import os
 from unittest import mock
 
 import click
@@ -13,10 +12,20 @@ from utilities_common.db import Db
 
 
 @pytest.fixture
-def cli(monkeypatch):
+def yang_validator(monkeypatch):
+    # CLI unit tests exercise the validator contract independently of the
+    # installed model wheel. Real schema validation is covered by model/DVS tests.
+    validator = mock.Mock(spec=["loadYangModel", "loadData", "validate_data_tree", "tablesWithOutYang"])
+    validator.tablesWithOutYang = {}
+    factory = mock.Mock(return_value=validator)
+    monkeypatch.setattr(policy.sonic_yang, "SonicYang", factory)
+    return factory
+
+
+@pytest.fixture
+def cli(yang_validator):
     db = Db()
     db.cfgdb.set_entry("PORTCHANNEL", "PortChannel0", {"admin_status": "up"})
-    monkeypatch.setattr(policy, "YANG_DIR", os.environ.get("SONIC_YANG_TEST_DIR", policy.YANG_DIR))
     return CliRunner(), db
 
 
@@ -39,12 +48,21 @@ def configure(cli, key, value=None, interface="PortChannel0"):
     ("wait_to_restore_time_ms", "5000", "5000"),
     ("wait_to_restore_time_ms", "4294967295", "4294967295"),
 ])
-def test_valid_policy_and_materialized_defaults(cli, key, value, stored):
+def test_valid_policy_and_materialized_defaults(cli, yang_validator, key, value, stored):
     result = configure(cli, key, value)
     assert result.exit_code == 0, result.output
     expected = dict(policy.DEFAULTS)
     expected[key] = stored
     assert cli[1].cfgdb.get_entry(policy.TABLE, "PortChannel0") == expected
+    yang_validator.assert_called_once_with(policy.YANG_DIR, print_log_enabled=False)
+    assert yang_validator.return_value.mock_calls == [
+        mock.call.loadYangModel(),
+        mock.call.loadData(configdbJson={
+            "PORTCHANNEL": {"PortChannel0": {"admin_status": "up"}},
+            policy.TABLE: {"PortChannel0": expected},
+        }),
+        mock.call.validate_data_tree(),
+    ]
 
 
 def test_exact_interface_syntax_preserves_other_fields(cli, monkeypatch):
@@ -122,20 +140,29 @@ def test_portchannel_delete_requires_protection_removal(cli, monkeypatch, adhoc,
     assert "PortChannel1" in db.cfgdb.get_table(policy.TABLE)
 
 
-def test_yang_validation_rejects_stale_unknown_field(cli):
+def test_yang_validation_failure_preserves_existing_policy(cli, yang_validator):
+    validator = yang_validator.return_value
+    validator.validate_data_tree.side_effect = policy.sonic_yang.SonicYangException(
+        "Unknown field convergence_mode")
     cli[1].cfgdb.set_entry(policy.TABLE, "PortChannel0", {"convergence_mode": "AUTO"})
     result = configure(cli, "admin_mode", "auto")
     assert result.exit_code != 0
     assert "Failed to configure" in result.output
+    assert "Unknown field convergence_mode" in result.output
+    validator.loadData.assert_called_once_with(configdbJson={
+        "PORTCHANNEL": {"PortChannel0": {"admin_status": "up"}},
+        policy.TABLE: {"PortChannel0": {**policy.DEFAULTS, "convergence_mode": "AUTO"}},
+    })
     assert cli[1].cfgdb.get_entry(policy.TABLE, "PortChannel0") == {"convergence_mode": "AUTO"}
 
 
-def test_missing_yang_model_fails_closed(cli, monkeypatch):
-    validator = mock.Mock(tablesWithOutYang={policy.TABLE: {}})
-    monkeypatch.setattr(policy.sonic_yang, "SonicYang", lambda *args, **kwargs: validator)
+def test_missing_yang_model_fails_closed(cli, yang_validator):
+    validator = yang_validator.return_value
+    validator.tablesWithOutYang = {policy.TABLE: {}}
     result = configure(cli, "admin_mode", "auto")
     assert result.exit_code != 0
     assert "Install the bridge-port protection YANG model" in result.output
+    validator.validate_data_tree.assert_not_called()
     assert not cli[1].cfgdb.get_entry(policy.TABLE, "PortChannel0")
 
 
