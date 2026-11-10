@@ -22,6 +22,7 @@ ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
 DEFLT_10_SEC= "default (10000)"
 DEFLT_1_SEC = "default (1000)"
+DEFLT_SECONDARY_POLL_FACTOR = "default (120)"
 DEFAULT_NAMESPACE = ''
 
 
@@ -115,12 +116,32 @@ def port(ctx, namespace):
 @click.argument('poll_interval', type=click.IntRange(100, 30000))
 @click.pass_context
 def port_interval(ctx, poll_interval):
-    """ Set port counter query interval """
+    """ Set port counter query interval.
+
+    The resulting polling window is this interval multiplied by the secondary
+    poll factor.
+    """
     port_info = {}
     if poll_interval is not None:
         port_info['POLL_INTERVAL'] = poll_interval
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
 
+
+@port.command('secondary-poll-factor')
+@click.argument('factor', type=click.IntRange(min=1))
+def secondary_poll_factor(factor):
+    """ Set port counter secondary poll factor.
+
+    The resulting polling window is the port polling interval multiplied by
+    this factor. The default factor of 120 gives a 120-second polling window
+    at the default 1000-ms port polling interval.
+    """
+    configdb = ConfigDBConnector()
+    configdb.connect()
+    port_info = {}
+    if factor is not None:
+        port_info['SECONDARY_POLL_FACTOR'] = factor
+    configdb.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
 
 @port.command(name='enable')
 @click.pass_context
@@ -883,12 +904,13 @@ def show(namespace):
     switch_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SWITCH')
     llr_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'LLR')
 
-    header = ("Type", "Interval (in ms)", "Status")
+    header = ("Type", "Interval (in ms)", "Status", "Secondary Poll Factor")
     data = []
     if queue_info:
         data.append(["QUEUE_STAT", queue_info.get("POLL_INTERVAL", DEFLT_10_SEC), queue_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_info:
-        data.append(["PORT_STAT", port_info.get("POLL_INTERVAL", DEFLT_1_SEC), port_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+        data.append(["PORT_STAT", port_info.get("POLL_INTERVAL", DEFLT_1_SEC),
+                     port_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_drop_info:
         data.append([PORT_BUFFER_DROP, port_drop_info.get("POLL_INTERVAL", DEFLT_60_SEC), port_drop_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_phy_attr_info:
@@ -942,6 +964,13 @@ def show(namespace):
     if dpu and ha_set_info:
         data.append(["HA_SET_STAT", ha_set_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     ha_set_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+
+    secondary_poll_factor = (
+        port_info.get("SECONDARY_POLL_FACTOR", DEFLT_SECONDARY_POLL_FACTOR)
+        if port_info else ""
+    )
+    for row in data:
+        row.append(secondary_poll_factor if row[0] == "PORT_STAT" else "")
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
