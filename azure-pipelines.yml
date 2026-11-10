@@ -45,7 +45,7 @@ stages:
     pool: sonicso1ES-amd64
 
     container:
-      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
+      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-trixie:$(BUILD_BRANCH)
 
     steps:
     - checkout: self
@@ -89,7 +89,7 @@ stages:
         sudo dpkg -i libnl-nf-3-200_*.deb
         sudo dpkg -i libyang3_*.deb
         sudo dpkg -i python3-libyang_*.deb
-      workingDirectory: $(Pipeline.Workspace)/target/debs/bookworm/
+      workingDirectory: $(Pipeline.Workspace)/target/debs/trixie/
       displayName: 'Install Debian dependencies'
 
     - task: DownloadPipelineArtifact@2
@@ -97,7 +97,7 @@ stages:
         source: specific
         project: build
         pipeline: 9
-        artifact: sonic-swss-common-bookworm
+        artifact: sonic-swss-common-trixie
         runVersion: 'latestFromBranch'
         runBranch: 'refs/heads/$(sourceBranch)'
       displayName: "Download sonic swss common deb packages"
@@ -138,14 +138,14 @@ stages:
         sudo pip3 install sonic_yang_models-1.0-py3-none-any.whl
         sudo pip3 install sonic_config_engine-1.0-py3-none-any.whl
         sudo pip3 install sonic_platform_common-1.0-py3-none-any.whl
-      workingDirectory: $(Pipeline.Workspace)/target/python-wheels/bookworm/
+      workingDirectory: $(Pipeline.Workspace)/target/python-wheels/trixie/
       displayName: 'Install Python dependencies'
 
     - script: |
         set -ex
-        # Install .NET CORE
-        curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-        sudo apt-add-repository https://packages.microsoft.com/debian/12/prod
+        curl -fsSL https://packages.microsoft.com/config/debian/13/packages-microsoft-prod.deb \
+          -o "$(Agent.TempDirectory)/packages-microsoft-prod.deb"
+        sudo dpkg -i "$(Agent.TempDirectory)/packages-microsoft-prod.deb"
         sudo apt-get update
         sudo apt-get install -y dotnet-sdk-8.0
       displayName: "Install .NET CORE"
@@ -211,7 +211,7 @@ stages:
       vmImage: ubuntu-24.04
 
     container:
-      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
+      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-trixie:$(BUILD_BRANCH)
 
     steps:
     - script: |
@@ -252,7 +252,7 @@ stages:
         sudo dpkg -i libnl-nf-3-200_*.deb
         sudo dpkg -i libyang3_*.deb
         sudo dpkg -i python3-libyang_*.deb
-      workingDirectory: $(Pipeline.Workspace)/target/debs/bookworm/
+      workingDirectory: $(Pipeline.Workspace)/target/debs/trixie/
       displayName: 'Install Debian dependencies'
 
     - task: DownloadPipelineArtifact@2
@@ -260,7 +260,7 @@ stages:
         source: specific
         project: build
         pipeline: 9
-        artifact: sonic-swss-common-bookworm
+        artifact: sonic-swss-common-trixie
         runVersion: 'latestFromBranch'
         runBranch: 'refs/heads/$(sourceBranch)'
       displayName: "Download sonic swss common deb packages"
@@ -300,7 +300,7 @@ stages:
         sudo pip3 install sonic_yang_models-1.0-py3-none-any.whl
         sudo pip3 install sonic_config_engine-1.0-py3-none-any.whl
         sudo pip3 install sonic_platform_common-1.0-py3-none-any.whl
-      workingDirectory: $(Pipeline.Workspace)/target/python-wheels/bookworm/
+      workingDirectory: $(Pipeline.Workspace)/target/python-wheels/trixie/
       displayName: 'Install Python dependencies'
 
     - task: DownloadPipelineArtifact@2
