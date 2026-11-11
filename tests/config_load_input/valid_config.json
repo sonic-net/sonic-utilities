@@ -1,0 +1,11 @@
+{
+    "DEVICE_METADATA": {
+        "localhost": {
+            "hostname": "sonic",
+            "hwsku": "Force10-S6000",
+            "mac": "00:e0:ec:89:6e:48",
+            "platform": "x86_64-kvm_x86_64-r0",
+            "type": "ToRRouter"
+        }
+    }
+}
