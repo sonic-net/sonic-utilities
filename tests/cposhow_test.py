@@ -5,6 +5,7 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 import pytest
+from click import ClickException
 from click.testing import CliRunner
 
 
@@ -137,5 +138,5 @@ def test_constructor_does_not_open_files_or_devices(script, monkeypatch):
     ("display", ()),
 ])
 def test_direct_business_entrypoints_cannot_return_fake_results(script, method, arguments):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ClickException, match="not implemented"):
         getattr(script.CPOShow(), method)(*arguments)
