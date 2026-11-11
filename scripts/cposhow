@@ -72,22 +72,33 @@ class CPOShow:
     def _get_db_port(self, port, table):
         """Resolve the actual row key for a logical port and a specific table.
 
-        Respect that diagnostic tables may use the first breakout subport;
-        do not assume every OE/ELS table has the same publication key."""
+        Match the publisher's key for each table. For example, OE DOM data
+        uses the first breakout subport, while TRANSCEIVER_STATUS_SW uses
+        the requested logical port. Confirm the key for each ELS table with
+        its publisher instead of inheriting the OE rule."""
         raise NotImplementedError("CPOShow._get_db_port is not implemented yet")
 
     def _read_hash(self, namespace, table, db_port):
-        """Read one hash and retain its missing/read-error status.
+        """Read one raw STATE_DB hash at table|db_port in the given namespace.
 
-        Cache by namespace, table and DB port; missing data must not hide
-        connection errors or prevent other resources from being collected."""
+        db_port is the resolved publication key, which can differ from the
+        requested logical port. Cache rows by (namespace, table, db_port)
+        on this CPOShow instance so several ports sharing a row read it
+        once per invocation. Keep an absent row distinct from a connection
+        or read failure; neither tells us whether hardware is present.
+        Leave field selection, merging and formatting to the caller."""
         raise NotImplementedError("CPOShow._read_hash is not implemented yet")
 
     def _read_tables(self, kind, command, port, history=False):
-        """Read only the STATE_DB groups needed by this OE/ELS command.
+        """Collect the published table groups required by one OE/ELS view.
 
-        Keep DOM/status flags separate; load their count/set/clear metadata
-        only for history. Never import xcvrd task or DB utility classes."""
+        Select tables by kind and command (e.g. sensor and threshold for
+        DOM), resolve each table's port key, and use _read_hash for each row.
+        Keep DOM and status flags separate. Read their change-count, set-time
+        and clear-time tables only when history is requested. Preserve the
+        source table and any published timestamps for later rendering;
+        separate reads do not form an atomic snapshot. Use the STATE_DB
+        contract directly without importing xcvrd internals."""
         raise NotImplementedError("CPOShow._read_tables is not implemented yet")
 
     def _aggregate_resource(self, kind, resource_id, ports, bank=None):
