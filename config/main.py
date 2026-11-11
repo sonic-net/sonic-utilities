@@ -3389,7 +3389,17 @@ def mirror_session():
     pass
 
 
-# Sampled source bindings: config mirror_session sample add/remove
+# Sampled source bindings: config mirror_session sample add/remove/enable/disable
+def validate_sample_rate(ctx, param, value):
+    return click.IntRange(SAMPLE_RATE_MIN, SAMPLE_RATE_MAX).convert(value, param, ctx)
+
+
+def validate_truncate_size(ctx, param, value):
+    if value is None:
+        return None
+    return click.IntRange(TRUNCATE_SIZE_MIN, TRUNCATE_SIZE_MAX).convert(value, param, ctx)
+
+
 def mirror_sample_source_database(ctx, databases, port, removing=False):
     """Resolve a physical port or logical PortChannel in front-end namespaces."""
     candidates = []
@@ -3462,7 +3472,7 @@ def validate_mirror_sample_source_overlap(ctx, database, port, directions, pendi
                      'Remove the existing binding first.')
 
 
-def apply_mirror_sample_bindings(ctx, database, namespace, entries):
+def apply_mirror_sample_bindings(ctx, database, namespace, entries, update=False):
     """Submit all requested bindings in this namespace as one validated patch."""
     try:
         if device_info.is_yang_config_validation_enabled(database):
@@ -3473,7 +3483,12 @@ def apply_mirror_sample_bindings(ctx, database, namespace, entries):
                 operations.append({'op': 'add', 'path': '/' + port_mirror.SAMPLE_TABLE, 'value': {}})
             for key, value in entries:
                 path = JsonPointer.from_parts([port_mirror.SAMPLE_TABLE, '|'.join(key)]).path
-                if value is None:
+                if update:
+                    for field, field_value in value.items():
+                        field_path = JsonPointer.from_parts(
+                            [port_mirror.SAMPLE_TABLE, '|'.join(key), field]).path
+                        operations.append({'op': 'add', 'path': field_path, 'value': field_value})
+                elif value is None:
                     target.pop(key, None)
                     target.pop('|'.join(key), None)
                     operations.append({'op': 'remove', 'path': path})
@@ -3489,7 +3504,10 @@ def apply_mirror_sample_bindings(ctx, database, namespace, entries):
         else:
             # All requested keys and references have been checked before this loop.
             for key, value in entries:
-                database.set_entry(port_mirror.SAMPLE_TABLE, key, value)
+                if update:
+                    database.mod_entry(port_mirror.SAMPLE_TABLE, key, value)
+                else:
+                    database.set_entry(port_mirror.SAMPLE_TABLE, key, value)
     except (ValueError, jsonpatch.JsonPatchException, GenericConfigUpdaterError) as error:
         ctx.fail(f'Invalid ConfigDB. Error: {error}')
 
@@ -3500,16 +3518,18 @@ def sample():
 
 
 @sample.command('add')
-@click.argument('session_name')
-@click.argument('port', metavar='<port_list>')
+@click.argument('session_name', metavar='<session_name>')
+@click.argument('port', metavar='<source_ports>')
 @click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
-@click.option('--sample_rate', required=True, type=click.IntRange(SAMPLE_RATE_MIN, SAMPLE_RATE_MAX))
-@click.option('--truncate_size', type=click.IntRange(TRUNCATE_SIZE_MIN, TRUNCATE_SIZE_MAX), default=None)
+@click.option('--sample_rate', required=True, type=int, callback=validate_sample_rate,
+              help='Sample one in every N packets.')
+@click.option('--truncate_size', type=int, callback=validate_truncate_size, default=None,
+              help='Truncation size in bytes.')
 @click.option('--disabled', is_flag=True, help='Create a disabled binding (admin_state=down).')
 @click.pass_context
 @try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, disabled):
-    """Attach comma-separated sources with the same sampling policy to an ERSPAN export."""
+    """Add sampled ERSPAN bindings for one or more source ports."""
     databases = port_mirror.config_databases()
     for database in databases.values():
         if 'global' in database.get_keys('SFLOW'):
@@ -3541,13 +3561,13 @@ def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, d
 
 
 @sample.command('remove')
-@click.argument('session_name')
-@click.argument('port', metavar='<port_list>')
+@click.argument('session_name', metavar='<session_name>')
+@click.argument('port', metavar='<source_ports>')
 @click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
 @click.pass_context
 @try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_remove(ctx, session_name, port, direction):
-    """Remove bindings for comma-separated sources without deleting their export."""
+    """Remove sampled ERSPAN bindings for one or more source ports."""
     databases = port_mirror.config_databases()
     # Use a stored canonical source name even if the interface was removed.
     sources = resolve_mirror_sample_sources(ctx, databases, port, removing=True)
@@ -3568,6 +3588,53 @@ def sample_remove(ctx, session_name, port, direction):
         grouped.setdefault(namespace, []).extend(entries)
     for namespace, entries in grouped.items():
         apply_mirror_sample_bindings(ctx, databases[namespace], namespace, entries)
+
+
+def set_mirror_sample_admin_state(ctx, session_name, port, direction, admin_state):
+    """Validate all selected bindings before updating only their admin_state."""
+    databases = port_mirror.config_databases()
+    for database in databases.values():
+        if 'global' in database.get_keys('SFLOW'):
+            ctx.fail(port_mirror.EXCLUSION_ERROR)
+    sources = resolve_mirror_sample_sources(ctx, databases, port, removing=admin_state == 'down')
+    directions = ['rx', 'tx'] if direction == 'both' else [direction]
+    grouped = {}
+    for namespace, database, source in sources:
+        for item in directions:
+            key = (source, item)
+            entry = database.get_entry(port_mirror.SAMPLE_TABLE, key)
+            if not entry:
+                ctx.fail(f'No matching sampled mirror binding exists for {source} {item}.')
+            if entry.get('mirror_session') != session_name:
+                ctx.fail(f'Binding {source}|{item} references a different mirror session.')
+            if admin_state == 'up':
+                validate_mirror_sample_capabilities(ctx, namespace, [item], entry.get('truncate_size'))
+            if entry.get('admin_state', 'down') != admin_state:
+                grouped.setdefault(namespace, []).append((key, {'admin_state': admin_state}))
+    for namespace, entries in grouped.items():
+        apply_mirror_sample_bindings(ctx, databases[namespace], namespace, entries, update=True)
+
+
+@sample.command('enable')
+@click.argument('session_name', metavar='<session_name>')
+@click.argument('port', metavar='<source_ports>')
+@click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
+@click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
+def sample_enable(ctx, session_name, port, direction):
+    """Enable existing sampled ERSPAN bindings without changing their policy."""
+    set_mirror_sample_admin_state(ctx, session_name, port, direction, 'up')
+
+
+@sample.command('disable')
+@click.argument('session_name', metavar='<session_name>')
+@click.argument('port', metavar='<source_ports>')
+@click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
+@click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
+def sample_disable(ctx, session_name, port, direction):
+    """Disable existing sampled ERSPAN bindings without removing their configuration."""
+    set_mirror_sample_admin_state(ctx, session_name, port, direction, 'down')
 
 
 #
@@ -3840,6 +3907,7 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
 
 @mirror_session.command()
 @click.argument('session_name', metavar='<session_name>', required=True)
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def remove(session_name):
     """ Delete mirror session """
 

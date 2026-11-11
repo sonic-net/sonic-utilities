@@ -10652,6 +10652,8 @@ port or PortChannel binding:
 config mirror_session erspan add export1 10.0.0.1 10.0.0.2 8 64
 config mirror_session sample add export1 Ethernet0 both --sample_rate 5000 --truncate_size 128
 config mirror_session sample add export1 PortChannel1001 rx --sample_rate 1000 --disabled
+config mirror_session sample enable export1 PortChannel1001 rx
+config mirror_session sample disable export1 Ethernet0 both
 show mirror_session sample
 config mirror_session sample remove export1 Ethernet0 both
 ```
@@ -10669,6 +10671,8 @@ While adding sampled ERSPAN bindings, users need to configure the following fiel
   ```
   config mirror_session sample add <session_name> <source-port-list> <direction> --sample_rate <N> [--truncate_size <bytes>] [--disabled]
   config mirror_session sample remove <session_name> <source-port-list> <direction>
+  config mirror_session sample enable <session_name> <source-port-list> <direction>
+  config mirror_session sample disable <session_name> <source-port-list> <direction>
   ```
 
 - `--sample_rate` is required, in range 2..4294967295. Zero and one are invalid.
@@ -10679,6 +10683,12 @@ While adding sampled ERSPAN bindings, users need to configure the following fiel
   PortChannel/member sources within the request are rejected.
 - `--truncate_size` is optional, in range 64..9216. Omit it for no truncation.
 - Bindings default to `admin_state=up`; `--disabled` stores `down`.
+- `enable` and `disable` update only `admin_state` on existing bindings, preserving
+  their sampling policy and export reference. Repeating the same state is a no-op.
+  Every selected binding must exist and reference the specified session; `both`
+  requires both directional entries. All targets are checked before any writes.
+  Policy changes still require removing and recreating the binding. Disabled
+  bindings remain mutually exclusive with explicit `SFLOW|global` configuration.
 - `both` creates separate `rx` and `tx` entries. Both are checked before writes;
   duplicate keys and overlapping PortChannel/member ownership are rejected.
 - PortChannels are stored as logical bindings, not expanded into member entries.
@@ -10699,7 +10709,7 @@ While adding sampled ERSPAN bindings, users need to configure the following fiel
   while bindings exist. Disabling sFlow does not remove its global configuration;
   remove that configuration, for example with a valid GCU patch, before adding bindings.
   SFLOW_SESSION and collector configuration alone do not trigger this exclusion.
-  Sample add/remove and sFlow global writers share `/etc/sonic/sampling.lock`
+  Sample add/remove/enable/disable and sFlow global writers share `/etc/sonic/sampling.lock`
   across their conflict checks and writes in all affected namespaces. If another
   protected command holds the lock, the command fails before changing configuration
   and can be retried. This lock does not serialize standalone GCU or direct Redis writes.

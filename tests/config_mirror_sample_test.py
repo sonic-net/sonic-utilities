@@ -35,6 +35,10 @@ class Database:
         else:
             self.tables.setdefault(table, {})[key] = deepcopy(value)
 
+    def mod_entry(self, table, key, value):
+        self.writes.append((table, key, deepcopy(value)))
+        self.tables[table][key].update(value)
+
 
 @pytest.fixture
 def database(monkeypatch):
@@ -157,6 +161,99 @@ def test_remove_missing_binding(database):
     result = invoke(['sample', 'remove', 'export1', 'Ethernet4', 'rx'])
     assert result.exit_code != 0
     assert 'No matching' in result.output
+    assert not database.writes
+
+
+@pytest.mark.parametrize('port', ['Ethernet4', 'PortChannel1'])
+def test_admin_state_transitions_preserve_policy(database, port):
+    assert invoke(['sample', 'add', 'export1', port, 'both', '--sample_rate', '5000',
+                   '--truncate_size', '128', '--disabled']).exit_code == 0
+    original = deepcopy(database.tables)
+    for command, state in [('enable', 'up'), ('disable', 'down')]:
+        database.writes.clear()
+        result = invoke(['sample', command, 'export1', port, 'both'])
+        assert result.exit_code == 0, result.output
+        expected = deepcopy(original)
+        for entry in expected['PORT_MIRROR_SAMPLE'].values():
+            entry['admin_state'] = state
+        assert database.tables == expected
+        assert database.writes == [('PORT_MIRROR_SAMPLE', (port, d), {'admin_state': state})
+                                   for d in ['rx', 'tx']]
+        database.writes.clear()
+        assert invoke(['sample', command, 'export1', port, 'both']).exit_code == 0
+        assert not database.writes
+
+
+@pytest.mark.parametrize('command', ['enable', 'disable'])
+@pytest.mark.parametrize('error', ['missing', 'session', 'sflow'])
+def test_admin_state_checks_all_bindings_before_writes(database, command, error):
+    state = 'down' if command == 'enable' else 'up'
+    database.tables['PORT_MIRROR_SAMPLE'] = {
+        (p, d): {'mirror_session': 'export1', 'sample_rate': '5000', 'admin_state': state}
+        for p in ['Ethernet0', 'Ethernet4'] for d in ['rx', 'tx']}
+    if error == 'missing':
+        del database.tables['PORT_MIRROR_SAMPLE'][('Ethernet4', 'tx')]
+    elif error == 'session':
+        database.tables['PORT_MIRROR_SAMPLE'][('Ethernet4', 'tx')]['mirror_session'] = 'export2'
+    else:
+        database.tables['SFLOW'] = {'global': {'admin_state': 'down'}}
+    before = deepcopy(database.tables)
+    result = invoke(['sample', command, 'export1', 'Ethernet0,Ethernet4', 'both'])
+    assert result.exit_code != 0
+    assert not database.writes
+    assert database.tables == before
+
+
+def test_admin_state_namespace_alias_and_prevalidation(database, monkeypatch):
+    other = Database()
+    other.tables['PORT'] = {'Ethernet8': {'alias': 'Eth8'}}
+    other.tables['PORTCHANNEL'] = {}
+    monkeypatch.setattr(port_mirror, 'config_databases', lambda: {'asic0': database, 'asic1': other})
+    monkeypatch.setattr(config.clicommon, 'get_interface_naming_mode', lambda: 'alias')
+    database.tables['PORT_MIRROR_SAMPLE'] = {
+        ('Ethernet0', 'rx'): {'mirror_session': 'export1', 'sample_rate': '1000'}}
+    result = invoke(['sample', 'enable', 'export1', 'Eth0,Eth8', 'rx'])
+    assert result.exit_code != 0
+    assert not database.writes and not other.writes
+    other.tables['PORT_MIRROR_SAMPLE'] = {
+        ('Ethernet8', 'rx'): {'mirror_session': 'export1', 'sample_rate': '2000'}}
+    result = invoke(['sample', 'enable', 'export1', 'Eth0,Eth8', 'rx'])
+    assert result.exit_code == 0, result.output
+    for db, port in [(database, 'Ethernet0'), (other, 'Ethernet8')]:
+        assert db.writes == [('PORT_MIRROR_SAMPLE', (port, 'rx'), {'admin_state': 'up'})]
+
+
+@pytest.mark.parametrize('command,state,initial', [('enable', 'up', 'down'), ('disable', 'down', 'up')])
+def test_admin_state_yang_patch_updates_only_field(database, monkeypatch, command, state, initial):
+    database.tables['PORT_MIRROR_SAMPLE'] = {
+        ('Ethernet4', d): {'mirror_session': 'export1', 'sample_rate': '5000', 'admin_state': initial}
+        for d in ['rx', 'tx']}
+    monkeypatch.setattr(config.device_info, 'is_yang_config_validation_enabled', lambda db: True)
+    updater = mock.Mock()
+    monkeypatch.setattr(config, 'GenericUpdater', lambda **kwargs: updater)
+    result = invoke(['sample', command, 'export1', 'Ethernet4', 'both'])
+    assert result.exit_code == 0, result.output
+    updater.apply_patch.assert_called_once()
+    assert updater.apply_patch.call_args.kwargs['patch'].patch == [
+        {'op': 'add', 'path': '/PORT_MIRROR_SAMPLE/Ethernet4|' + d + '/admin_state', 'value': state}
+        for d in ['rx', 'tx']]
+    assert not database.writes
+
+
+def test_admin_state_capability_failure_does_not_block_disable(database, monkeypatch):
+    database.tables['PORT_MIRROR_SAMPLE'] = {
+        ('Ethernet4', d): {'mirror_session': 'export1', 'sample_rate': '5000', 'admin_state': 'up'}
+        for d in ['rx', 'tx']}
+    state = mock.Mock()
+    state.get.side_effect = lambda db, key, field: 'false' if 'EGRESS' in field else 'true'
+    monkeypatch.setattr(config, 'SonicV2Connector', lambda **kwargs: state)
+    result = invoke(['sample', 'disable', 'export1', 'Ethernet4', 'both'])
+    assert result.exit_code == 0, result.output
+    state.get.assert_not_called()
+    database.writes.clear()
+    result = invoke(['sample', 'enable', 'export1', 'Ethernet4', 'both'])
+    assert result.exit_code != 0
+    assert 'not supported' in result.output
     assert not database.writes
 
 
@@ -640,6 +737,8 @@ def test_sampling_lock_serializes_independent_cli_processes(database, monkeypatc
 @pytest.mark.parametrize('path,args', [
     (['mirror_session', 'sample', 'add'], ['export1', 'Ethernet4', 'rx', '--sample_rate', '2']),
     (['mirror_session', 'sample', 'remove'], ['export1', 'Ethernet4', 'rx']),
+    (['mirror_session', 'sample', 'enable'], ['export1', 'Ethernet4', 'rx']),
+    (['mirror_session', 'sample', 'disable'], ['export1', 'Ethernet4', 'rx']),
     (['sflow', 'enable'], []),
     (['sflow', 'disable'], []),
     (['sflow', 'polling-interval'], ['20']),
