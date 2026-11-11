@@ -467,6 +467,74 @@ class TestValidateFieldOperation:
             target_config
         )
 
+    @pytest.mark.parametrize("old_config, target_config, refused_fields", [
+        # GLOBAL row added, by a patch or by a replace/rollback to a config that has it
+        ({"PFC_WD": {"Ethernet0": {"action": "drop"}}},
+         {"PFC_WD": {"Ethernet0": {"action": "drop"}, "GLOBAL": {"POLL_INTERVAL": "100"}}},
+         "POLL_INTERVAL"),
+        # PFC_WD table added with a GLOBAL row
+        ({},
+         {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "100"}}},
+         "POLL_INTERVAL"),
+        # field changed in an existing GLOBAL row
+        ({"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200"}}},
+         {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "100"}}},
+         "POLL_INTERVAL"),
+        # field added to an existing GLOBAL row
+        ({"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200"}}},
+         {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200", "BIG_RED_SWITCH": "enable"}}},
+         "BIG_RED_SWITCH"),
+        # GLOBAL row added with two fields: both named, sorted
+        ({},
+         {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "100", "BIG_RED_SWITCH": "enable"}}},
+         "BIG_RED_SWITCH, POLL_INTERVAL"),
+    ])
+    @pytest.mark.parametrize("mechanism", ["HARDWARE", "hardware"])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_hw_pfcwd_global_refused(self, old_config, target_config, refused_fields,
+                                                              mechanism):
+        config_wrapper = gu_common.ConfigWrapper(scope="asic0")
+        with patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+                   return_value=mechanism) as read_statedb_entry:
+            with pytest.raises(gu_common.IllegalPatchOperationError) as err:
+                config_wrapper.validate_field_operation(old_config, target_config)
+        assert str(err.value) == \
+            "PFC_WD|GLOBAL {} is not supported with hardware based PFC watchdog".format(refused_fields)
+        read_statedb_entry.assert_called_once_with("asic0", "PFC_WD_STATE_TABLE", "PFC_WD", "RECOVERY_MECHANISM")
+
+    @pytest.mark.parametrize("mechanism", ["SOFTWARE", "", None])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_sw_pfcwd_global_allowed(self, mechanism):
+        old_config = {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200"}}}
+        target_config = {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "100", "BIG_RED_SWITCH": "enable"}}}
+        config_wrapper = gu_common.ConfigWrapper(scope="asic0")
+        with patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+                   return_value=mechanism) as read_statedb_entry:
+            config_wrapper.validate_field_operation(old_config, target_config)
+        read_statedb_entry.assert_called_once_with("asic0", "PFC_WD_STATE_TABLE", "PFC_WD", "RECOVERY_MECHANISM")
+
+    @pytest.mark.parametrize("old_config, target_config", [
+        # existing GLOBAL row kept unchanged
+        ({"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200"}, "Ethernet0": {"action": "drop"}}},
+         {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200"}, "Ethernet0": {"action": "forward"}}}),
+        # field removed from an existing GLOBAL row
+        ({"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200", "BIG_RED_SWITCH": "enable"}}},
+         {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "200"}}}),
+        # no PFC_WD change
+        ({"PORT": {"Ethernet0": {"mtu": "9100"}}},
+         {"PORT": {"Ethernet0": {"mtu": "9000"}}}),
+    ])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_hw_pfcwd_global_untouched(self, old_config, target_config):
+        config_wrapper = gu_common.ConfigWrapper()
+        with patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+                   return_value="HARDWARE") as read_statedb_entry:
+            config_wrapper.validate_field_operation(old_config, target_config)
+        read_statedb_entry.assert_not_called()
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "20241211.49"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name",

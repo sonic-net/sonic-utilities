@@ -203,6 +203,7 @@ class ConfigWrapper:
                     raise IllegalPatchOperationError("Given patch operation is invalid. Operation: {} is illegal on field: {}".format(operation, field))
 
         self.illegal_dataacl_check(old_config, target_config)
+        self.illegal_hw_pfcwd_global_check(old_config, target_config)
 
         def _invoke_validating_function(cmd, jsonpatch_element):
             # cmd is in the format as <package/module name>.<method name>
@@ -277,6 +278,24 @@ class ConfigWrapper:
                         acl table type changed in {}".format(
                             key, modified_common_dacl_table
                     ))
+
+    def illegal_hw_pfcwd_global_check(self, old_config, target_config):
+        '''
+        Block adding or changing a PFC_WD|GLOBAL field when the PFC watchdog runs in hardware.
+        orchagent drops the GLOBAL row in that mode, and GCU refuses to remove it afterwards.
+        '''
+        old_global = old_config.get("PFC_WD", {}).get("GLOBAL", {})
+        target_global = target_config.get("PFC_WD", {}).get("GLOBAL", {})
+        changed = sorted(field for field, value in target_global.items() if old_global.get(field) != value)
+        if not changed:
+            return
+
+        from . import field_operation_validators
+        mechanism = field_operation_validators.read_statedb_entry(
+            self.scope, "PFC_WD_STATE_TABLE", "PFC_WD", "RECOVERY_MECHANISM")
+        if (mechanism or "").upper() == "HARDWARE":
+            raise IllegalPatchOperationError(
+                "PFC_WD|GLOBAL {} is not supported with hardware based PFC watchdog".format(", ".join(changed)))
 
     def validate_lanes(self, config_db):
         if "PORT" not in config_db:
