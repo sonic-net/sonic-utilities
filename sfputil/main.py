@@ -23,7 +23,7 @@ from sonic_platform_base.sfp_base import SfpBase
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from natsort import natsorted
 from sonic_py_common import device_info, logger, multi_asic
-from utilities_common import platform_sfputil_helper
+from utilities_common import constants, platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
     get_first_subport
 )
@@ -581,7 +581,7 @@ def load_port_config():
             platform_sfputil.read_all_porttab_mappings(hwsku_path, multi_asic.get_num_asics())
         else:
             # For single ASIC platforms we pass port_config_file_path and the asic_inst as 0
-            port_config_file_path = device_info.get_path_to_port_config_file()
+            port_config_file_path = constants.RUNTIME_PORT_CONFIG_FILE
             platform_sfputil.read_porttab_mappings(port_config_file_path, 0)
     except Exception as e:
         log.log_error("Error reading port info ({})".format(str(e)), True)
