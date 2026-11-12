@@ -18,6 +18,9 @@ fi
 
 /bin/gzip -1 - > /var/core/${PREFIX}core.gz
 
+# Release the core pipe after gzip finishes so post-processing cannot inherit it.
+exec 0</dev/null
+
 if [[ ! -z $CONTAINER_ID ]]; then
    CONTAINER_NAME=$(docker inspect --format='{{.Name}}' ${CONTAINER_ID} | cut -c2-)
    if [[ ! -z ${CONTAINER_NAME} ]]; then
