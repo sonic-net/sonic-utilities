@@ -376,7 +376,7 @@ def test_remove_prunes_db_certs_without_flag():
     _, prune = _remove_with_prune()
     prune.assert_called_once()
     assert isinstance(prune.call_args.args[0], secure_boot_db.Config)
-    assert prune.call_args.kwargs == {"images": ["cur"], "commit": True}
+    assert prune.call_args.kwargs == {"images": ["cur"], "auto": True}
 
 
 @pytest.mark.parametrize("error", [
@@ -428,7 +428,7 @@ def test_cleanup_prunes_only_when_images_were_removed(old_images):
     if old_images:
         assert operations == old_images + ["prune"]
         prune.assert_called_once()
-        assert prune.call_args.kwargs == {"images": ["cur", "next"], "commit": True}
+        assert prune.call_args.kwargs == {"images": ["cur", "next"], "auto": True}
     else:
         assert operations == []
         prune.assert_not_called()
