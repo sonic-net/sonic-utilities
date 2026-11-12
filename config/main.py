@@ -906,8 +906,8 @@ def _clear_cbf():
             config_db = ConfigDBConnector(use_unix_socket_path=True, authenticate=True)
         else:
             config_db = ConfigDBConnector(
-                use_unix_socket_path=True, namespace=ns
-            , authenticate=True)
+                use_unix_socket_path=True, namespace=ns, authenticate=True
+            )
         config_db.connect()
         for cbf_table in CBF_TABLE_NAMES:
             config_db.delete_table(cbf_table)
@@ -1053,8 +1053,8 @@ def _clear_qos(delay=False, verbose=False):
             config_db = ConfigDBConnector(use_unix_socket_path=True, authenticate=True)
         else:
             config_db = ConfigDBConnector(
-                use_unix_socket_path=True, namespace=ns
-            , authenticate=True)
+                use_unix_socket_path=True, namespace=ns, authenticate=True
+            )
         config_db.connect()
         for qos_table in QOS_TABLE_NAMES:
             config_db.delete_table(qos_table)
@@ -3868,8 +3868,8 @@ def reload(ctx, dry_run, json_data):
             asic_id_suffix = str(asic_id)
 
             config_db = ConfigDBConnector(
-                use_unix_socket_path=True, namespace=ns
-            , authenticate=True)
+                use_unix_socket_path=True, namespace=ns, authenticate=True
+            )
 
         config_db.connect()
 
@@ -3967,8 +3967,8 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
             asic_id_suffix = str(asic_id)
 
             config_db = ConfigDBConnector(
-                use_unix_socket_path=True, namespace=ns
-            , authenticate=True)
+                use_unix_socket_path=True, namespace=ns, authenticate=True
+            )
 
         config_db.connect()
 
@@ -7248,7 +7248,8 @@ def unbind(ctx, interface_name):
             if ctx.obj['namespace'] is DEFAULT_NAMESPACE:
                 state_db = SonicV2Connector(use_unix_socket_path=True, authenticate=True)
             else:
-                state_db = SonicV2Connector(use_unix_socket_path=True, namespace=ctx.obj['namespace'], authenticate=True)
+                state_db = SonicV2Connector(
+                    use_unix_socket_path=True, namespace=ctx.obj['namespace'], authenticate=True)
             state_db.connect(state_db.STATE_DB, False)
         else:
             state_db = ctx.obj['state_db']

@@ -110,7 +110,8 @@ trap cleanup EXIT
 trap forward_signal HUP INT TERM
 
 printf 'Successful connection to line [%s]\nPress ^%s ^X to disconnect\n' "$LINE_NUM" "$ESCAPE_DISPLAY"
-python3 -c 'import sys; from consutil.lib import run_console_session; sys.exit(run_console_session(sys.argv[1], sys.argv[2]))' \
+python3 -c \
+'import sys; from consutil.lib import run_console_session; sys.exit(run_console_session(sys.argv[1], sys.argv[2]))' \
     "$LINE_NUM" "$PICOCOM_CMD" < /dev/tty > /dev/tty 2>&1 &
 picocom_pid=$!
 wait "$picocom_pid"
@@ -505,7 +506,7 @@ def refresh_console_state(db, line):
         raise click.BadParameter('Console line is not configured')
     active = SysInfoProvider.list_active_console_processes().get(line)
     return DbUtils(db).update_state(line, BUSY_FLAG if active else IDLE_FLAG,
-                                   *(active if active else ('', '')))
+                                    *(active if active else ('', '')))
 
 
 def _refresh_session_state(line):

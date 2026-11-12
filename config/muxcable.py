@@ -544,7 +544,8 @@ def packetloss(db, action, port):
         # replace these with correct macros
         per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_configdb[asic_id].connect()
-        per_npu_statedb[asic_id] = swsscommon.SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
+        per_npu_statedb[asic_id] = swsscommon.SonicV2Connector(
+            use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_statedb[asic_id].connect(per_npu_statedb[asic_id].STATE_DB)
 
         port_table_keys[asic_id] = per_npu_statedb[asic_id].keys(

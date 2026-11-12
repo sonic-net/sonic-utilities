@@ -35,8 +35,10 @@ def test_refresh_keeps_display_values_without_ordinary_writes(lib, monkeypatch, 
     assert result == {'state': 'busy', 'pid': '1234', 'start_time': 'test-date',
                       'oper_state': 'Connected', 'last_state_change': '123'}
     if uid == 0:
-        assert db.db.set.call_args_list == [call('STATE_DB', 'CONSOLE_PORT|1', field, value)
-            for field, value in [('state', 'busy'), ('pid', '1234'), ('start_time', 'test-date')]]
+        assert db.db.set.call_args_list == [
+            call('STATE_DB', 'CONSOLE_PORT|1', field, value)
+            for field, value in [('state', 'busy'), ('pid', '1234'), ('start_time', 'test-date')]
+        ]
     else:
         db.db.set.assert_not_called()
 
@@ -100,10 +102,12 @@ def session(lib, monkeypatch):
     child.wait.side_effect = lambda *args, **kwargs: events.append('wait/reap') or 0
     child.poll.return_value = 0
     handlers = {}
+
     def install(number, handler):
         previous = handlers.get(number, signal.SIG_DFL)
         handlers[number] = handler
         return previous
+
     def spawn(argv, **kwargs):
         events.append('successful exec')
         return child
@@ -140,6 +144,7 @@ def test_signal_forwards_to_console_child(lib, session, number):
 
 def test_signal_during_spawn_is_forwarded_after_exec(lib, session, monkeypatch):
     child, events, handlers = session
+
     def spawn(*args, **kwargs):
         handlers[signal.SIGHUP](signal.SIGHUP, None)
         events.append('successful exec')

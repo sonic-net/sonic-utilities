@@ -20,7 +20,7 @@ def mux(monkeypatch):
     # Reuse the production abbreviation classes without unrelated DB imports.
     parsed = ast.parse((root / 'utilities_common/cli.py').read_text())
     groups = ast.Module(body=[node for node in parsed.body if isinstance(node, ast.ClassDef)
-                             and node.name in ('Config', 'AliasedGroup', 'AbbreviationGroup')], type_ignores=[])
+                              and node.name in ('Config', 'AliasedGroup', 'AbbreviationGroup')], type_ignores=[])
     cli = types.ModuleType('utilities_common.cli')
     cli.__dict__.update(click=click, configparser=configparser, os=os,
                         __file__=str(root / 'utilities_common/cli.py'), _config=None)
