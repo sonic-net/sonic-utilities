@@ -11,6 +11,7 @@ from swsscommon.swsscommon import ConfigDBConnector
 from sonic_py_common import multi_asic
 from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
 from .gu_common import JsonChange
+from . import services_validator
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 UPDATER_CONF_FILE = f"{SCRIPT_DIR}/gcu_services_validator.conf.json"
@@ -31,6 +32,10 @@ def set_verbose(verbose=False):
 
 def log_debug(m):
     logger.log(logger.LOG_PRIORITY_DEBUG, m, print_to_console)
+
+
+def log_notice(m):
+    logger.log(logger.LOG_PRIORITY_NOTICE, m, print_to_console)
 
 
 def log_error(m):
@@ -70,6 +75,21 @@ class DryRunChangeApplier:
 
     def remove_backend_tables_from_config(self, data):
         return data
+
+    def restart_services(self, old_cfg, upd_cfg):
+        return True
+
+
+def _restart_rule_matches(rule, old_tbl, upd_tbl):
+    fields = rule.get("fields")
+    if fields is None:
+        return old_tbl != upd_tbl
+    for key in set(old_tbl) | set(upd_tbl):
+        old_entry = old_tbl.get(key, {})
+        upd_entry = upd_tbl.get(key, {})
+        if any(old_entry.get(f) != upd_entry.get(f) for f in fields):
+            return True
+    return False
 
 
 class ChangeApplier:
@@ -177,6 +197,36 @@ class ChangeApplier:
         # from _upd_data on failure?  We seem to intentionally only log on
         # _services_validate()
         return upd_data
+
+    def restart_services(self, old_cfg, upd_cfg):
+        # Restart once per patch, not per change: a service whose config is
+        # read only at start would otherwise restart for every sorted change
+        # and could hit systemd's start limit.
+        if self.scope != multi_asic.DEFAULT_NAMESPACE:
+            # The units in the conf are host services.
+            return True
+
+        units = defaultdict(list)
+        tables = (ChangeApplier.updater_conf or {}).get("tables", {})
+        for tbl, tbl_conf in tables.items():
+            for rule in tbl_conf.get("restart_on_change", []):
+                if _restart_rule_matches(rule, old_cfg.get(tbl, {}), upd_cfg.get(tbl, {})):
+                    for unit in rule.get("units", []):
+                        units[unit].append(tbl)
+
+        features = upd_cfg.get("FEATURE", {})
+        ok = True
+        for unit in sorted(units):
+            changed = ", ".join(sorted(set(units[unit])))
+            if features.get(unit, {}).get("state") in ("disabled", "always_disabled"):
+                log_notice("{} changed; {} is disabled, not restarting it".format(changed, unit))
+                continue
+            log_notice("{} changed; restarting {}".format(changed, unit))
+            services_validator.command_wrapper(["systemctl", "reset-failed", unit])
+            if not services_validator._service_restart(unit):
+                log_error("Failed to restart {} after {} changed".format(unit, changed))
+                ok = False
+        return ok
 
     def remove_backend_tables_from_config(self, data):
         for key in self.backend_tables:

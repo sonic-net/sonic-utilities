@@ -47,6 +47,25 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
 
+    def test_apply__restarts_services_once_after_all_changes(self):
+        # Arrange
+        changes = [Mock(), Mock()]
+        patch_applier = self.__create_patch_applier(changes)
+        calls = Mock()
+        calls.attach_mock(patch_applier.changeapplier, "changeapplier")
+        calls.attach_mock(patch_applier.config_wrapper.get_config_db_as_json, "get_config")
+
+        # Act
+        patch_applier.apply(Files.MULTI_OPERATION_CONFIG_DB_PATCH)
+
+        # Assert
+        order = [name for name, _, _ in calls.mock_calls
+                 if name in ("get_config", "changeapplier.apply", "changeapplier.restart_services")]
+        self.assertEqual(order, ["get_config", "changeapplier.apply", "changeapplier.apply",
+                                 "changeapplier.restart_services", "get_config"])
+        patch_applier.changeapplier.restart_services.assert_called_once_with(
+            Files.CONFIG_DB_AS_JSON, Files.CONFIG_DB_AFTER_MULTI_PATCH)
+
     def __create_patch_applier(self,
                                changes=None,
                                valid_patch_does_not_produce_empty_tables=True,
