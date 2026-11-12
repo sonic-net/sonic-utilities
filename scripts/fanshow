@@ -48,32 +48,40 @@ class FanShow(object):
         table = []
         for key in natsorted(keys):
             key_list = key.split('|')
-            if len(key_list) != 2: # error data in DB, log it and ignore
+            if len(key_list) != 2:
                 print('Warn: Invalid key in table FAN_INFO: {}'.format(key))
                 continue
 
             name = key_list[1]
             data_dict = self.db.get_all(self.db.STATE_DB, key)
-            try:
-                speed = float(data_dict[SPEED_FIELD_NAME])
-                if speed > 100:
-                    speed = '{}RPM'.format(int(speed))
-                else:
-                    speed = '{}%'.format(data_dict[SPEED_FIELD_NAME])
-            except ValueError as e:
-                speed = data_dict[SPEED_FIELD_NAME]
 
-            presence = data_dict[PRESENCE_FIELD_NAME].lower()
-            presence = 'Present' if presence == 'true' else 'Not Present'
-            status = data_dict[STATUS_FIELD_NAME]
+            drawer = data_dict.get(DRAWER_FIELD_NAME, 'N/A')
+            led = data_dict.get(LED_STATUS_FIELD_NAME, 'N/A')
+            timestamp = data_dict.get(TIMESTAMP_FIELD_NAME, 'N/A')
+
+            presence_raw = data_dict.get(PRESENCE_FIELD_NAME, 'N/A').lower()
+            presence = 'Present' if presence_raw == 'true' else 'Not Present'
+
+            speed_raw = data_dict.get(SPEED_FIELD_NAME)
+            try:
+                speed = float(speed_raw)
+                speed_is_in_rpm = speed > 100
+                if speed_is_in_rpm:
+                    speed_str = '{}RPM'.format(int(speed))
+                else:
+                    speed_str = '{}%'.format(speed_raw)
+            except (ValueError, TypeError):
+                speed_str = "N/A"
+
+            status = data_dict.get(STATUS_FIELD_NAME, 'N/A')
             status_lower = status.lower()
             if status_lower == 'true':
                 status = 'OK'
             elif status_lower == 'false':
                 status = 'Not OK'
 
-            table.append((data_dict[DRAWER_FIELD_NAME], data_dict[LED_STATUS_FIELD_NAME], name, speed, data_dict[DIRECTION_FIELD_NAME], presence, status,
-                          data_dict[TIMESTAMP_FIELD_NAME]))
+            direction = data_dict.get(DIRECTION_FIELD_NAME, 'N/A')
+            table.append((drawer, led, name, speed_str, direction, presence, status, timestamp))
         if table:
             print(tabulate(table, header, tablefmt='simple', stralign='right'))
         else:
