@@ -11,10 +11,11 @@ Strategy
      reinstall .auth. Every .auth is first verified against the enrolled KEK, so db is never
      wiped by an update that firmware would refuse to follow up.
 
-The standalone command is a dry run unless --commit or --auto is given. "sonic-installer remove"
-and "cleanup" call prune_db_certificates directly in automatic mode.
+The standalone command is a dry run unless --commit is given. Commit mode skips unsafe plans
+and plans with no stale certificates. "sonic-installer remove" and "cleanup" call
+prune_db_certificates directly with commit=True.
 
-Exit status: 0 on success (or a clean plan/skip), 2 on any error or refused safety gate.
+Exit status: 0 on success (or a clean plan/skip), 2 on any error.
 """
 
 import argparse
@@ -611,12 +612,8 @@ def defer_cancellation():
             raise SystemExit(128 + signum)
 
 
-def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, auto=False, verbose=False):
-    """Analyze or prune db; automatic mode modifies only safe plans with stale certificates."""
-    if auto and plan_only:
-        raise ScriptError("--auto cannot be combined with --plan")
-    commit = commit or auto
-
+def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, verbose=False):
+    """Analyze or prune db; commit mode modifies only safe plans with stale certificates."""
     if os.geteuid() != 0:
         raise ScriptError(f"must be run as root (needs to read/write {config.efivars_dir} and {config.host_path})")
     if not config.auth_dir.is_dir() or not any(auth.is_file() for auth in config.auth_dir.glob("*.auth")):
@@ -626,14 +623,13 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         plan = analyze(config, work, images)
-        if not auto or verbose:
-            print_plan(config, plan, commit, verbose)
+        print_plan(config, plan, commit, verbose)
 
         if plan_only:
             print("Plan only - no changes made.")
             return 0
 
-        if auto:
+        if commit:
             if not plan.used or plan.missing or plan.boot_chain_at_risk:
                 warn(f"Secure Boot db prune skipped (unsafe plan: used={len(plan.used)} "
                      f"missing={len(plan.missing)} essential_missing={plan.boot_critical_binaries_at_risk})")
@@ -649,20 +645,16 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
         if not commit:
             if plan.boot_chain_at_risk:
                 warn(f"{plan.boot_critical_binaries_at_risk} boot-chain binaries would lose every db signer "
-                     "(essential db certificate missing); --commit would refuse")
+                     "(essential db certificate missing); --commit would skip pruning")
             print("Dry-run complete. Re-run with --commit to delete all db certs and reinstall the")
             print(f"{len(plan.selected_auths)} image-signing certificate(s) listed above.")
             return 0
 
-        # A boot-chain binary without a db signer may leave the device unbootable: never allowed.
-        if plan.boot_chain_at_risk:
-            raise ScriptError("a boot-chain binary would lose every db signer. "
-                              f"Refusing to touch db. Provide the missing .auth in {config.auth_dir}.")
         validate_updates(config, plan, work)
         completed = False
         try:
             with defer_cancellation():
-                apply_plan(config, plan, work, verbose=not auto or verbose)
+                apply_plan(config, plan, work)
                 completed = True
         finally:
             if not completed:
@@ -675,22 +667,18 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog=PROG,
         description="Delete all UEFI 'db' certificates and reinstall only those that sign an installed "
-                    "SONiC image, using pre-existing signed .auth files. Dry run unless --commit/--auto.",
+                    "SONiC image, using pre-existing signed .auth files. Dry run unless --commit.",
     )
     parser.add_argument("--auth-dir", help="directory of per-certificate reinstall .auth files "
                                            "(default: $SONIC_DB_AUTH_DIR or /host/db-auth)")
     parser.add_argument("--remove-all", help="signed .auth that empties db (default: <auth-dir>/remove-all-db.auth)")
-    parser.add_argument("--commit", action="store_true", help="actually modify the UEFI db")
+    parser.add_argument("--commit", action="store_true",
+                        help="modify UEFI db only if the plan is safe and something is stale; "
+                             "an unsafe or empty plan is skipped with exit status 0")
     parser.add_argument("--plan", action="store_true",
                         help="analyse only and print a PRUNE_PLAN summary; never modifies db or fails on safety")
-    parser.add_argument("--auto", action="store_true",
-                        help="unattended mode for sonic-installer: prune only if the plan is safe and something "
-                             "is stale; an unsafe or empty plan is skipped with exit status 0")
     parser.add_argument("-v", "--verbose", action="store_true", help="print the per-binary -> db cert mapping")
-    args = parser.parse_args(argv)
-    if args.auto and args.plan:
-        parser.error("--auto cannot be combined with --plan")
-    return args
+    return parser.parse_args(argv)
 
 
 def main(argv=None):
@@ -699,7 +687,7 @@ def main(argv=None):
     try:
         return prune_db_certificates(
             Config.from_env(args.auth_dir, args.remove_all),
-            commit=args.commit, plan_only=args.plan, auto=args.auto, verbose=args.verbose,
+            commit=args.commit, plan_only=args.plan, verbose=args.verbose,
         )
     except (ScriptError, OSError, subprocess.SubprocessError) as e:
         print(f"{PROG}: error: {e}", file=sys.stderr)
