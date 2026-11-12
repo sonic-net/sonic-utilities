@@ -1066,6 +1066,7 @@
     "SWITCH_CAPABILITY|switch": {
         "MIRROR": "true",
         "MIRRORV6": "true",
+        "MIRROR_SESSION_LABEL_CAPABLE": "true",
         "PORT_TPID_CAPABLE": "true",
         "LAG_TPID_CAPABLE": "true",
         "ACL_ACTION|PACKET_ACTION": "FORWARD",

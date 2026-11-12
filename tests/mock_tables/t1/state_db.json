@@ -6120,6 +6120,7 @@
       "MAX_NEXTHOP_GROUP_COUNT": "512",
       "MIRROR": "true",
       "MIRRORV6": "true",
+      "MIRROR_SESSION_LABEL_CAPABLE": "true",
       "PACKET_ACTION": "DROP,FORWARD"
     }
   }, 
