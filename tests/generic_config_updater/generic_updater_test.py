@@ -63,8 +63,7 @@ class TestPatchApplier(unittest.TestCase):
                  if name in ("get_config", "changeapplier.apply", "changeapplier.restart_services")]
         self.assertEqual(order, ["get_config", "changeapplier.apply", "changeapplier.apply",
                                  "changeapplier.restart_services", "get_config"])
-        patch_applier.changeapplier.restart_services.assert_called_once_with(
-            Files.CONFIG_DB_AS_JSON, Files.CONFIG_DB_AFTER_MULTI_PATCH)
+        patch_applier.changeapplier.restart_services.assert_called_once_with()
 
     def __create_patch_applier(self,
                                changes=None,

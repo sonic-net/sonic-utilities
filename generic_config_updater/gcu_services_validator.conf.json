@@ -24,15 +24,21 @@
         "Note: The commands may be called in any order",
         "",
         "A table may also list 'restart_on_change' rules, each as",
-        "    { 'units': [ <systemd unit>, ... ], 'fields': [ <field>, ... ] }",
-        "After the changes of a patch are applied (or, if one fails, the",
-        "changes before it), each unit of a rule whose table differs",
-        "between the config before and after them is restarted once.",
-        "'fields' is optional: without it any difference in the table",
-        "matches; with it, the rule only matches when one of those fields",
-        "differs in some key of the table. The units are host services:",
-        "they are restarted for the host scope only, and a unit whose",
-        "FEATURE state is disabled or always_disabled is skipped.",
+        "    { 'units': [ <systemd unit>, ... ], 'fields': [ <field>, ... ],",
+        "      'modified_only': true, 'reset_failed': [ <unit>, ... ],",
+        "      'host_only': true }",
+        "Only 'units' is required. Rules are matched against each change",
+        "of a patch as it is applied. After the last change (or after one",
+        "fails), each unit of a matched rule is restarted once, after",
+        "'systemctl reset-failed' of the unit and of the 'reset_failed' units.",
+        "Without 'fields' any difference in the table matches. With it,",
+        "the rule matches when one of those fields differs in some key of",
+        "the table; a missing, empty-string or empty-list value counts as",
+        "unset. With 'modified_only', a field only counts when it is set",
+        "both before and after.",
+        "Rules apply in every scope whose patch changes the table, unless",
+        "'host_only' limits them to the host scope. A unit whose FEATURE",
+        "state is disabled or always_disabled is skipped.",
         ""
     ],
     "tables": {
@@ -40,81 +46,60 @@
             "services_to_validate": [ "system_health" ]
         },
         "PORT": {
-            "services_to_validate": [ "port_service" ]
+            "restart_on_change": [ { "fields": [ "speed" ], "modified_only": true, "units": [ "telemetry" ] } ]
         },
-        "SYSLOG_SERVER":{
-            "services_to_validate": [ "rsyslog" ]
+        "SYSLOG_SERVER": {
+            "restart_on_change": [ { "units": [ "rsyslog-config" ], "reset_failed": [ "rsyslog" ] } ]
         },
         "DHCP_RELAY": {
-            "services_to_validate": [ "dhcp-relay" ]
+            "restart_on_change": [ { "units": [ "dhcp_relay" ] } ]
         },
         "DHCP_SERVER": {
-            "services_to_validate": [ "dhcp-relay" ]
+            "restart_on_change": [ { "units": [ "dhcp_relay" ] } ]
         },
         "VLAN": {
-            "services_to_validate": [ "vlan-service" ]
+            "restart_on_change": [ { "fields": [ "dhcp_servers" ], "units": [ "dhcp_relay" ] } ]
         },
         "ACL_RULE": {
             "services_to_validate": [ "caclmgrd-service" ]
         },
         "NTP_SERVER": {
-            "services_to_validate": [ "ntp-service" ]
+            "restart_on_change": [ { "units": [ "chrony" ] } ]
         },
         "VLAN_INTERFACE": {
             "services_to_validate": [ "vlanintf-service" ]
         },
         "GNMI": {
-            "services_to_validate": [ "gnmi-service" ]
+            "restart_on_change": [ { "fields": [ "vrf" ], "units": [ "gnmi" ] } ]
         },
         "TELEMETRY": {
-            "services_to_validate": [ "telemetry-service" ]
+            "restart_on_change": [ { "fields": [ "vrf" ], "units": [ "telemetry" ] } ]
         },
         "SNMP": {
-            "restart_on_change": [ { "units": [ "snmp" ] } ]
+            "restart_on_change": [ { "units": [ "snmp" ], "host_only": true } ]
         },
         "SNMP_COMMUNITY": {
-            "restart_on_change": [ { "units": [ "snmp" ] } ]
+            "restart_on_change": [ { "units": [ "snmp" ], "host_only": true } ]
         },
         "SNMP_USER": {
-            "restart_on_change": [ { "units": [ "snmp" ] } ]
+            "restart_on_change": [ { "units": [ "snmp" ], "host_only": true } ]
         },
         "SNMP_AGENT_ADDRESS_CONFIG": {
-            "restart_on_change": [ { "units": [ "snmp" ] } ]
+            "restart_on_change": [ { "units": [ "snmp" ], "host_only": true } ]
         },
         "SNMP_TRAP_CONFIG": {
-            "restart_on_change": [ { "units": [ "snmp" ] } ]
+            "restart_on_change": [ { "units": [ "snmp" ], "host_only": true } ]
         }
     },
     "services": {
         "system_health": { 
             "validate_commands": [ ]
         },
-        "port_service": {
-            "validate_commands": [ "generic_config_updater.services_validator.port_speed_change_validator" ]
-        },
-        "rsyslog": {
-            "validate_commands": [ "generic_config_updater.services_validator.rsyslog_validator" ]
-        },
-        "dhcp-relay": {
-            "validate_commands": [ "generic_config_updater.services_validator.dhcp_validator" ]
-        },
-        "vlan-service": {
-            "validate_commands": [ "generic_config_updater.services_validator.vlan_validator" ]
-        },
         "caclmgrd-service": {
             "validate_commands": [ "generic_config_updater.services_validator.caclmgrd_validator" ]
         },
-        "ntp-service": {
-            "validate_commands": [ "generic_config_updater.services_validator.ntp_validator" ]
-        },
         "vlanintf-service": {
             "validate_commands": [ "generic_config_updater.services_validator.vlanintf_validator" ]
-        },
-        "gnmi-service": {
-            "validate_commands": [ "generic_config_updater.services_validator.gnmi_validator" ]
-        },
-        "telemetry-service": {
-            "validate_commands": [ "generic_config_updater.services_validator.telemetry_validator" ]
         }
     }
 }

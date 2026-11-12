@@ -151,7 +151,7 @@ class PatchApplier:
                 current_config = self.changeapplier.apply(current_config, change)
         finally:
             # Changes already written stay in ConfigDB even if a later one fails.
-            self.changeapplier.restart_services(old_config, current_config)
+            self.changeapplier.restart_services()
 
         # Validate config updated successfully
         self.logger.log_notice(f"{scope}: verifying patch updates are reflected on ConfigDB.")

@@ -306,15 +306,17 @@ class TestDryRunChangeApplierRestartServices(unittest.TestCase):
     @patch("generic_config_updater.services_validator._service_restart")
     def test_restart_services__restarts_nothing(self, mock_restart):
         applier = generic_config_updater.change_applier.DryRunChangeApplier(Mock())
-        assert applier.restart_services({}, {"SNMP": {"LOCATION": {"Location": "lab"}}})
+        assert applier.restart_services()
         mock_restart.assert_not_called()
 
 
 class TestChangeApplierRestartServices(unittest.TestCase):
     CONF = {
         "tables": {
-            "SNMP": {"restart_on_change": [{"units": ["snmp"]}]},
-            "SNMP_COMMUNITY": {"restart_on_change": [{"units": ["snmp"]}]},
+            "SNMP": {"restart_on_change": [{"units": ["snmp"], "host_only": True}]},
+            "SNMP_COMMUNITY": {"restart_on_change": [{"units": ["snmp"], "host_only": True}]},
+            "PORT": {"restart_on_change": [{"fields": ["speed"], "modified_only": True, "units": ["telemetry"]}]},
+            "SYSLOG_SERVER": {"restart_on_change": [{"units": ["rsyslog-config"], "reset_failed": ["rsyslog"]}]},
             "DEVICE_METADATA": {
                 "restart_on_change": [{"fields": ["docker_routing_config_mode"], "units": ["bgp"]}],
             },
@@ -352,18 +354,24 @@ class TestChangeApplierRestartServices(unittest.TestCase):
                 upd[tbl] = data
         return upd
 
+    def restart_after(self, *changes, applier=None):
+        applier = applier or self.applier
+        for old, upd in changes:
+            applier._collect_restarts(old, upd)
+        return applier.restart_services()
+
     def test_unchanged__no_restart(self):
-        assert self.applier.restart_services(self.OLD, copy.deepcopy(self.OLD))
+        assert self.restart_after((self.OLD, copy.deepcopy(self.OLD)))
         self.restart.assert_not_called()
         self.command.assert_not_called()
 
     def test_unrelated_table__no_restart(self):
-        assert self.applier.restart_services(self.OLD, self.updated(VLAN={}))
+        assert self.restart_after((self.OLD, self.updated(VLAN={})))
         self.restart.assert_not_called()
 
     def test_tables_sharing_a_unit__one_restart(self):
         upd = self.updated(SNMP={"LOCATION": {"Location": "dc"}}, SNMP_COMMUNITY={"private": {"TYPE": "RW"}})
-        assert self.applier.restart_services(self.OLD, upd)
+        assert self.restart_after((self.OLD, upd))
         self.restart.assert_called_once_with("snmp")
         self.command.assert_called_once_with(["systemctl", "reset-failed", "snmp"])
 
@@ -371,16 +379,16 @@ class TestChangeApplierRestartServices(unittest.TestCase):
         added = self.updated(SNMP={"LOCATION": {"Location": "lab"}, "CONTACT": {"Contact": "noc"}})
         for upd in (self.updated(SNMP=None), added):
             self.restart.reset_mock()
-            assert self.applier.restart_services(self.OLD, upd)
+            assert self.restart_after((self.OLD, upd))
             self.restart.assert_called_once_with("snmp")
         self.restart.reset_mock()
         old = self.updated(SNMP_COMMUNITY=None)
-        assert self.applier.restart_services(old, self.OLD)
+        assert self.restart_after((old, self.OLD))
         self.restart.assert_called_once_with("snmp")
 
     def test_field_rule__other_field__no_restart(self):
         upd = self.updated(DEVICE_METADATA={"localhost": {"hostname": "sw2"}})
-        assert self.applier.restart_services(self.OLD, upd)
+        assert self.restart_after((self.OLD, upd))
         self.restart.assert_not_called()
 
     def test_field_rule__listed_field__restart(self):
@@ -391,34 +399,71 @@ class TestChangeApplierRestartServices(unittest.TestCase):
                                                               "docker_routing_config_mode": "unified"}})
             upd = self.updated(DEVICE_METADATA={"localhost": meta} if meta else None)
             self.restart.reset_mock()
-            assert self.applier.restart_services(old, upd)
+            assert self.restart_after((old, upd))
             self.restart.assert_called_once_with("bgp")
 
     def test_each_unit_restarted_once_in_order(self):
         upd = self.updated(SNMP={}, DEVICE_METADATA={"localhost": {"docker_routing_config_mode": "split"}})
-        assert self.applier.restart_services(self.OLD, upd)
+        assert self.restart_after((self.OLD, upd))
         assert self.restart.call_args_list == [call("bgp"), call("snmp")]
 
     def test_disabled_feature__no_restart(self):
         for state in ("disabled", "always_disabled"):
             upd = self.updated(SNMP={}, FEATURE={"snmp": {"state": state}})
-            assert self.applier.restart_services(self.OLD, upd)
+            assert self.restart_after((self.OLD, upd))
         self.restart.assert_not_called()
         self.command.assert_not_called()
         upd = self.updated(SNMP={}, FEATURE={"snmp": {"state": "enabled"}})
-        assert self.applier.restart_services(self.OLD, upd)
+        assert self.restart_after((self.OLD, upd))
         self.restart.assert_called_once_with("snmp")
 
     def test_restart_failure__returns_false_and_restarts_the_rest(self):
         self.restart.side_effect = lambda unit: unit != "bgp"
         upd = self.updated(SNMP={}, DEVICE_METADATA={"localhost": {"docker_routing_config_mode": "split"}})
-        assert not self.applier.restart_services(self.OLD, upd)
+        assert not self.restart_after((self.OLD, upd))
         assert self.restart.call_args_list == [call("bgp"), call("snmp")]
 
-    def test_namespace_scope__no_restart(self):
+    def test_namespace_scope__skips_host_only_rules(self):
         applier = generic_config_updater.change_applier.ChangeApplier(scope="asic0")
-        assert applier.restart_services(self.OLD, self.updated(SNMP={}))
+        assert self.restart_after((self.OLD, self.updated(SNMP={})), applier=applier)
         self.restart.assert_not_called()
+        upd = self.updated(SNMP={}, DEVICE_METADATA={"localhost": {"docker_routing_config_mode": "split"}})
+        assert self.restart_after((self.OLD, upd), applier=applier)
+        self.restart.assert_called_once_with("bgp")
+
+    def test_key_deleted_and_readded__restart(self):
+        removed = self.updated(SNMP_COMMUNITY=None)
+        assert self.restart_after((self.OLD, removed), (removed, copy.deepcopy(self.OLD)))
+        self.restart.assert_called_once_with("snmp")
+
+    def test_pending_restarts_cleared__not_repeated(self):
+        assert self.restart_after((self.OLD, self.updated(SNMP={})))
+        assert self.restart_after()
+        self.restart.assert_called_once_with("snmp")
+
+    def test_empty_field_value__counts_as_unset(self):
+        for value in ("", []):
+            upd = self.updated(DEVICE_METADATA={"localhost": {"hostname": "sw1",
+                                                              "docker_routing_config_mode": value}})
+            assert self.restart_after((self.OLD, upd))
+        self.restart.assert_not_called()
+
+    def test_modified_only__ignores_field_set_or_cleared(self):
+        old = self.updated(PORT={"Ethernet0": {"speed": "100000"}, "Ethernet4": {"mtu": "9100"}})
+        for port in ({"Ethernet0": {"speed": "100000"}, "Ethernet4": {"mtu": "9100", "speed": "100000"}},
+                     {"Ethernet0": {}, "Ethernet4": {"mtu": "9100"}},
+                     {"Ethernet4": {"mtu": "9100"}}):
+            assert self.restart_after((old, self.updated(PORT=port)))
+        self.restart.assert_not_called()
+        upd = self.updated(PORT={"Ethernet0": {"speed": "400000"}, "Ethernet4": {"mtu": "9100"}})
+        assert self.restart_after((old, upd))
+        self.restart.assert_called_once_with("telemetry")
+
+    def test_reset_failed__clears_extra_units_first(self):
+        upd = self.updated(SYSLOG_SERVER={"10.0.0.1": {}})
+        assert self.restart_after((self.OLD, upd))
+        self.command.assert_called_once_with(["systemctl", "reset-failed", "rsyslog-config", "rsyslog"])
+        self.restart.assert_called_once_with("rsyslog-config")
 
     def test_patch_with_several_snmp_changes__one_restart(self):
         target = self.updated(SNMP={"LOCATION": {"Location": "dc"}, "CONTACT": {"Contact": "noc"}},
@@ -484,10 +529,14 @@ class TestShippedRestartConf(unittest.TestCase):
             rules = tbl_conf.get("restart_on_change", [])
             assert isinstance(rules, list), tbl
             for rule in rules:
-                assert isinstance(rule, dict) and "units" in rule and set(rule) <= {"units", "fields"}, tbl
-                for values in rule.values():
+                assert isinstance(rule, dict) and "units" in rule, tbl
+                assert set(rule) <= {"units", "fields", "reset_failed", "modified_only", "host_only"}, tbl
+                for key in ("units", "fields", "reset_failed"):
+                    values = rule.get(key, ["x"])
                     assert isinstance(values, list) and values, tbl
                     assert all(isinstance(v, str) and v for v in values), tbl
+                for key in ("modified_only", "host_only"):
+                    assert rule.get(key, True) is True, tbl
 
     # snmpd.conf is rendered from these tables only when the snmp container starts.
     SNMP_TABLES = ["SNMP", "SNMP_COMMUNITY", "SNMP_USER", "SNMP_AGENT_ADDRESS_CONFIG", "SNMP_TRAP_CONFIG"]
@@ -501,5 +550,6 @@ class TestShippedRestartConf(unittest.TestCase):
             applier = generic_config_updater.change_applier.ChangeApplier()
             for tbl in self.SNMP_TABLES:
                 mock_restart.reset_mock()
-                assert applier.restart_services({}, {tbl: {"key": {"field": "value"}}})
+                applier._collect_restarts({}, {tbl: {"key": {"field": "value"}}})
+                assert applier.restart_services()
                 mock_restart.assert_called_once_with("snmp")

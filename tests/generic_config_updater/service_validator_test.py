@@ -1,16 +1,16 @@
+import json
+import os
 import unittest
 from unittest.mock import patch
 
 from generic_config_updater.services_validator import (
     command_wrapper,
-    vlan_validator,
-    rsyslog_validator,
+    _service_restart,
     caclmgrd_validator,
     vlanintf_validator,
-    port_speed_change_validator,
 )
-from generic_config_updater.services_validator import ntp_validator
-from generic_config_updater.services_validator import gnmi_validator, telemetry_validator
+import generic_config_updater.change_applier
+from generic_config_updater.change_applier import ChangeApplier
 
 # Mimics subprocess.run call
 #
@@ -56,7 +56,7 @@ def mock_time_sleep_call(sleep_time):
     assert sleep_time == entry["sleep_time"], msg
 
 
-test_data = [
+test_vlan_data = [
         { "old": {}, "upd": {}, "cmd": "" },
         {
             "old": { "VLAN": { "XXX": { "dhcp_servers": [ "10.10.10.10" ] } } },
@@ -66,7 +66,7 @@ test_data = [
         {
             "old": { "VLAN": { "XXX": { "dhcp_servers": [ "10.10.10.10" ] } } },
             "upd": { "VLAN": { "XXX": { "dhcp_servers": [ "10.10.10.11" ] } } },
-            "cmd": "systemctl restart dhcp_relay"
+            "cmd": "systemctl reset-failed dhcp_relay,systemctl restart dhcp_relay"
         },
         {
             "old": { "VLAN": { "XXX": { "dhcp_servers": [ "10.10.10.10" ] } } },
@@ -80,12 +80,12 @@ test_data = [
             "upd": { "VLAN": {
                 "XXX": { "dhcp_servers": [ "10.10.10.10" ] },
                 "YYY": { "dhcp_servers": [ "10.12.12.1" ] } } },
-            "cmd": "systemctl restart dhcp_relay"
+            "cmd": "systemctl reset-failed dhcp_relay,systemctl restart dhcp_relay"
         },
         {
             "old": { "VLAN": { "XXX": { "dhcp_servers": [ "10.10.10.10" ] } } },
             "upd": {},
-            "cmd": "systemctl restart dhcp_relay"
+            "cmd": "systemctl reset-failed dhcp_relay,systemctl restart dhcp_relay"
         }
     ]
 
@@ -248,7 +248,7 @@ test_ntp_data = [
                     "1.pool.ntp.org": {}
                     }
                 },
-            "cmd": "systemctl restart chrony"
+            "cmd": "systemctl reset-failed chrony,systemctl restart chrony"
         }
    ]
 
@@ -336,22 +336,22 @@ test_gnmi_data = [
         {
             "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
             "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
-            "cmd": "systemctl restart gnmi"
+            "cmd": "systemctl reset-failed gnmi,systemctl restart gnmi"
         },
         {
             "old": {"GNMI": {"gnmi": {"port": "50052"}}},
             "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
-            "cmd": "systemctl restart gnmi"
+            "cmd": "systemctl reset-failed gnmi,systemctl restart gnmi"
         },
         {
             "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
             "upd": {"GNMI": {"gnmi": {"port": "50052"}}},
-            "cmd": "systemctl restart gnmi"
+            "cmd": "systemctl reset-failed gnmi,systemctl restart gnmi"
         },
         {
             "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
             "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
-            "cmd": "systemctl restart gnmi"
+            "cmd": "systemctl reset-failed gnmi,systemctl restart gnmi"
         },
         {
             "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
@@ -376,28 +376,60 @@ test_telemetry_data = [
         {
             "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
             "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
-            "cmd": "systemctl restart telemetry"
+            "cmd": "systemctl reset-failed telemetry,systemctl restart telemetry"
         },
         {
             "old": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
             "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
-            "cmd": "systemctl restart telemetry"
+            "cmd": "systemctl reset-failed telemetry,systemctl restart telemetry"
         },
         {
             "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
             "upd": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
-            "cmd": "systemctl restart telemetry"
+            "cmd": "systemctl reset-failed telemetry,systemctl restart telemetry"
         },
         {
             "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
             "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
-            "cmd": "systemctl restart telemetry"
+            "cmd": "systemctl reset-failed telemetry,systemctl restart telemetry"
         },
         {
             "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
             "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
             "cmd": ""
         }
+    ]
+
+
+test_dhcp_data = [
+        {
+            "old": {"DHCP_RELAY": {"Vlan1000": {}}},
+            "upd": {"DHCP_RELAY": {"Vlan1000": {}, "Vlan2000": {}}},
+            "cmd": "systemctl reset-failed dhcp_relay,systemctl restart dhcp_relay"
+        },
+        {
+            "old": {"DHCP_SERVER": {"Vlan1000": {"state": "enabled"}}},
+            "upd": {"DHCP_SERVER": {"Vlan1000": {"state": "disabled"}}},
+            "cmd": "systemctl reset-failed dhcp_relay,systemctl restart dhcp_relay"
+        }
+    ]
+
+test_port_speed_data = [
+        {"old": {"PORT": {"Ethernet0": {"speed": "100000"}}},
+         "upd": {"PORT": {"Ethernet0": {"speed": "100000"}}},
+         "cmd": ""},
+        {"old": {"PORT": {"Ethernet0": {"speed": "100000"}}},
+         "upd": {"PORT": {"Ethernet0": {"speed": "400000"}}},
+         "cmd": "systemctl reset-failed telemetry,systemctl restart telemetry"},
+        # A port added or removed, or a speed set or cleared, is not a speed change.
+        {"old": {"PORT": {}}, "upd": {"PORT": {"Ethernet1": {"speed": "100000"}}}, "cmd": ""},
+        {"old": {"PORT": {"Ethernet2": {"speed": "100000"}}}, "upd": {"PORT": {}}, "cmd": ""},
+        {"old": {"PORT": {"Ethernet0": {"mtu": "9100"}}},
+         "upd": {"PORT": {"Ethernet0": {"mtu": "9100", "speed": "100000"}}},
+         "cmd": ""},
+        {"old": {"PORT": {"Ethernet0": {"speed": "100000"}, "Ethernet1": {"speed": "400000"}}},
+         "upd": {"PORT": {"Ethernet0": {"speed": "400000"}, "Ethernet1": {"speed": "100000"}}},
+         "cmd": "systemctl reset-failed telemetry,systemctl restart telemetry"},
     ]
 
 
@@ -450,112 +482,18 @@ class TestServiceValidator(unittest.TestCase):
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_change_apply_subprocess_run(self, mock_subprocess):
-        global subprocess_calls, subprocess_call_index
+        global subprocess_calls, subprocess_call_index, msg
 
         mock_subprocess.side_effect = mock_subprocess_run
-
-        for entry in test_data:
-            if entry["cmd"]:
-                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
-            msg = "case failed: {}".format(str(entry))
-
-            vlan_validator(entry["old"], entry["upd"], None)
-
         subprocess_calls = []
         subprocess_call_index = 0
-        for entry in test_rsyslog_data:
-            if entry["cmd"]:
-                for c in entry["cmd"].split(","):
-                    subprocess_calls.append({"cmd": c, "rc": 0})
-            msg = "case failed: {}".format(str(entry))
 
-            rsyslog_validator(entry["old"], entry["upd"], None)
-
-        subprocess_calls = []
-        subprocess_call_index = 0
         for entry in test_vlanintf_data:
             if entry["cmd"]:
                 subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
             msg = "case failed: {}".format(str(entry))
 
             vlanintf_validator(entry["old"], entry["upd"], None)
-
-        subprocess_calls = []
-        subprocess_call_index = 0
-        for entry in test_ntp_data:
-            if entry["cmd"]:
-                for c in entry["cmd"].split(","):
-                    subprocess_calls.append({"cmd": c, "rc": 0})
-
-            ntp_validator(entry["old"], entry["upd"], None)
-
-    @patch("generic_config_updater.services_validator.subprocess.run")
-    def test_port_speed_change_validator(self, mock_subprocess):
-        """Test port_speed_change_validator for port speed changes and no changes"""
-        global subprocess_calls, subprocess_call_index
-
-        mock_subprocess.side_effect = mock_subprocess_run
-
-        # Case 1: No speed change, should not call systemctl
-        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
-        upd_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
-        subprocess_calls = []
-        subprocess_call_index = 0
-        result = port_speed_change_validator(old_config, upd_config, None)
-        self.assertTrue(result)
-
-        # Case 2: Speed changed, successful restart
-        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
-        upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}}}
-        subprocess_calls = [{
-            "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry",
-            "rc": 0
-        }]
-        subprocess_call_index = 0
-        result = port_speed_change_validator(old_config, upd_config, None)
-        self.assertTrue(result)
-        self.assertEqual(subprocess_call_index, 1)
-
-        # Case 2b: Speed changed, restart fails then succeeds after reset-failed
-        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
-        upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}}}
-        subprocess_calls = [
-            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry", "rc": 1},
-            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl reset-failed telemetry", "rc": 0},
-            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry", "rc": 0}
-        ]
-        subprocess_call_index = 0
-        result = port_speed_change_validator(old_config, upd_config, None)
-        self.assertTrue(result)
-        self.assertEqual(subprocess_call_index, 3)
-
-        # Case 3: Port added with speed, should not restart (no old speed to compare)
-        old_config = {"PORT": {}}
-        upd_config = {"PORT": {"Ethernet1": {"speed": "100000"}}}
-        subprocess_calls = []
-        subprocess_call_index = 0
-        result = port_speed_change_validator(old_config, upd_config, None)
-        self.assertTrue(result)
-
-        # Case 4: Port removed, should not restart
-        old_config = {"PORT": {"Ethernet2": {"speed": "100000"}}}
-        upd_config = {"PORT": {}}
-        subprocess_calls = []
-        subprocess_call_index = 0
-        result = port_speed_change_validator(old_config, upd_config, None)
-        self.assertTrue(result)
-
-        # Case 5: Multiple ports, one speed changed (with nsenter)
-        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}, "Ethernet1": {"speed": "400000"}}}
-        upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}, "Ethernet1": {"speed": "400000"}}}
-        subprocess_calls = [{
-            "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry",
-            "rc": 0
-        }]
-        subprocess_call_index = 0
-        result = port_speed_change_validator(old_config, upd_config, None)
-        self.assertTrue(result)
-        self.assertEqual(subprocess_call_index, 1)
 
     @patch("generic_config_updater.services_validator.time.sleep")
     def test_change_apply_time_sleep(self, mock_time_sleep):
@@ -610,36 +548,56 @@ class TestServiceValidator(unittest.TestCase):
             assert result == entry["expected_result"], \
                 f"{msg} - Expected {entry['expected_result']} but got {result}"
 
-    @patch("generic_config_updater.services_validator.subprocess.run")
-    def test_gnmi_validator(self, mock_subprocess):
-        """Test gnmi_validator restarts gnmi service on VRF change"""
-        global subprocess_calls, subprocess_call_index
 
-        mock_subprocess.side_effect = mock_subprocess_run
+class TestRestartRules(unittest.TestCase):
+    """The shipped restart_on_change rules restart what the per-table validators they replaced did."""
 
-        for entry in test_gnmi_data:
-            subprocess_calls = []
-            subprocess_call_index = 0
+    NSENTER = ["nsenter", "--target", "1", "--pid", "--mount", "--uts", "--ipc", "--net"]
 
-            if entry["cmd"]:
-                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
-
-            result = gnmi_validator(entry["old"], entry["upd"], None)
-            assert result, "gnmi_validator failed: {}".format(str(entry))
+    def shipped_conf(self):
+        conf_file = os.path.join(os.path.dirname(generic_config_updater.change_applier.__file__),
+                                 "gcu_services_validator.conf.json")
+        with open(conf_file) as f:
+            return json.load(f)
 
     @patch("generic_config_updater.services_validator.subprocess.run")
-    def test_telemetry_validator(self, mock_subprocess):
-        """Test telemetry_validator restarts telemetry service on VRF change"""
-        global subprocess_calls, subprocess_call_index
+    def test_service_restart__retries_after_reset_failed(self, mock_subprocess):
+        mock_subprocess.side_effect = [MockSubprocessResult(1), MockSubprocessResult(0), MockSubprocessResult(0)]
+        assert _service_restart("telemetry")
+        actual = [c.args[0][len(self.NSENTER):] for c in mock_subprocess.call_args_list]
+        self.assertEqual(actual, [["systemctl", "restart", "telemetry"],
+                                  ["systemctl", "reset-failed", "telemetry"],
+                                  ["systemctl", "restart", "telemetry"]])
 
-        mock_subprocess.side_effect = mock_subprocess_run
+    @patch("generic_config_updater.services_validator._service_restart", return_value=True)
+    @patch("generic_config_updater.services_validator.command_wrapper", return_value=0)
+    @patch("generic_config_updater.change_applier.get_config_db")
+    def test_namespace_scope__restarts_all_but_host_only_rules(self, mock_db, mock_command, mock_restart):
+        with patch.object(ChangeApplier, "updater_conf", self.shipped_conf()):
+            applier = ChangeApplier(scope="asic0")
+            applier._collect_restarts({}, {"NTP_SERVER": {"10.0.0.1": {}}, "SNMP": {"LOCATION": {"Location": "x"}}})
+            assert applier.restart_services()
+        mock_restart.assert_called_once_with("chrony")
 
-        for entry in test_telemetry_data:
-            subprocess_calls = []
-            subprocess_call_index = 0
-
-            if entry["cmd"]:
-                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
-
-            result = telemetry_validator(entry["old"], entry["upd"], None)
-            assert result, "telemetry_validator failed: {}".format(str(entry))
+    @patch("generic_config_updater.change_applier.get_config_db")
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_restart_rules(self, mock_subprocess, mock_db):
+        mock_subprocess.return_value = MockSubprocessResult(0)
+        conf = self.shipped_conf()
+        nsenter = self.NSENTER
+        with patch.object(ChangeApplier, "updater_conf", conf):
+            applier = ChangeApplier()
+            for data in (test_vlan_data,
+                         test_rsyslog_data,
+                         test_ntp_data,
+                         test_gnmi_data,
+                         test_telemetry_data,
+                         test_port_speed_data,
+                         test_dhcp_data):
+                for entry in data:
+                    mock_subprocess.reset_mock()
+                    applier._collect_restarts(entry["old"], entry["upd"])
+                    assert applier.restart_services()
+                    expected = [nsenter + c.split() for c in entry["cmd"].split(",")] if entry["cmd"] else []
+                    actual = [c.args[0] for c in mock_subprocess.call_args_list]
+                    self.assertEqual(actual, expected, str(entry))

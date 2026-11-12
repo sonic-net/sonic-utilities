@@ -10786,9 +10786,10 @@ readiness check. If that wait times out before boot finalization, overlapping
 CLI and `hostcfgd` restarts remain possible until the boot flag clears.
 
 When YANG validation is enabled (`yang_config_validation=enable` in
-`DEVICE_METADATA|localhost`), GCU's `ntp_validator` restarts chrony synchronously;
-these commands do not add another direct restart. Overlapping GCU and `hostcfgd`
-restarts in that mode are not prevented by this change.
+`DEVICE_METADATA|localhost`), GCU's NTP_SERVER restart rule restarts chrony
+once the patch is applied; these commands do not add another direct restart.
+Overlapping GCU and `hostcfgd` restarts in that mode are not prevented by this
+change.
 
 Command completion does not confirm time synchronization; use `show ntp` to
 check synchronization. The examples below use the default validation mode with
