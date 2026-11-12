@@ -1,4 +1,5 @@
 import importlib
+from functools import wraps
 import os
 import sys
 
@@ -9,6 +10,7 @@ from sonic_py_common.multi_asic import get_external_ports
 from tabulate import tabulate
 from utilities_common import multi_asic as multi_asic_util
 from utilities_common import constants
+from utilities_common.db import Db
 from utilities_common.general import load_db_config
 from sonic_py_common import logger
 
@@ -61,6 +63,19 @@ CONFIG_HEADER = ('PORT',) + list(zip(*CONFIG_DESCRIPTION))[0]
 
 CONFIG_DB_PFC_WD_TABLE_NAME = 'PFC_WD'
 PORT_QOS_MAP =  "PORT_QOS_MAP"
+
+
+def _pass_writer_db(function):
+    @click.pass_context
+    @wraps(function)
+    def wrapper(ctx, *args, **kwargs):
+        db = ctx.find_object(Db)
+        if db is None:
+            db = Db(authenticate=True)
+            ctx.obj = db
+        return ctx.invoke(function, db, *args, **kwargs)
+    return wrapper
+
 
 # Main entrypoint
 @click.group()
@@ -532,7 +547,7 @@ class Start(object):
     @click.option('--pfc-stat-history', is_flag=True)
     @click.argument('ports', nargs=-1)
     @click.argument('detection-time', type=click.IntRange(100, 5000))
-    @clicommon.pass_db
+    @_pass_writer_db
     def start(db, action, restoration_time, ports, detection_time, pfc_stat_history):
         """
         Start PFC watchdog on port(s). To config all ports, use all as input.
@@ -551,7 +566,7 @@ class Start(object):
 class Interval(object):
     @cli.command()
     @click.argument('poll_interval', type=click.IntRange(100, MAX_POLL_INTERVAL_TIME))
-    @clicommon.pass_db
+    @_pass_writer_db
     def interval(db, poll_interval):
         """ Set PFC watchdog counter polling interval """
         PfcwdCli(db).interval(poll_interval)
@@ -561,7 +576,7 @@ class Interval(object):
 class Stop(object):
     @cli.command()
     @click.argument('ports', nargs=-1)
-    @clicommon.pass_db
+    @_pass_writer_db
     def stop(db, ports):
         """ Stop PFC watchdog on port(s) """
         PfcwdCli(db).stop(ports)
@@ -570,7 +585,7 @@ class Stop(object):
 # Set WD default configuration on server facing ports when enable flag is on
 class StartDefault(object):
     @cli.command("start_default")
-    @clicommon.pass_db
+    @_pass_writer_db
     def start_default(db):
         """ Start PFC WD by default configurations  """
         PfcwdCli(db).start_default()
@@ -580,7 +595,7 @@ class StartDefault(object):
 class CounterPoll(object):
     @cli.command('counter_poll')
     @click.argument('counter_poll', type=click.Choice(['enable', 'disable']))
-    @clicommon.pass_db
+    @_pass_writer_db
     def counter_poll(db, counter_poll):
         """ Enable/disable counter polling """
         PfcwdCli(db).counter_poll(counter_poll)
@@ -590,7 +605,7 @@ class CounterPoll(object):
 class BigRedSwitch(object):
     @cli.command('big_red_switch')
     @click.argument('big_red_switch', type=click.Choice(['enable', 'disable']))
-    @clicommon.pass_db
+    @_pass_writer_db
     def big_red_switch(db, big_red_switch):
         """ Enable/disable BIG_RED_SWITCH mode """
         PfcwdCli(db).big_red_switch(big_red_switch)
@@ -601,7 +616,7 @@ class PfcStatHistory(object):
     @cli.command('pfc_stat_history')
     @click.argument('pfc_stat_history', type=click.Choice(['enable', 'disable']))
     @click.argument('ports', nargs=-1)
-    @clicommon.pass_db
+    @_pass_writer_db
     def pfc_stat_history(db, pfc_stat_history, ports):
         """ Enable/disable PFC Historical Statistics mode on ports"""
         PfcwdCli(db).pfc_stat_history(pfc_stat_history, ports)
