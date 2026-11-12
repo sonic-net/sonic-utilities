@@ -128,7 +128,7 @@ def rdma_config_update_validator_common(scope, patch_element, exact_field_match=
         if 'value' in patch_element.keys() and isinstance(patch_element['value'], dict):
             for key in patch_element['value']:
                 if len(cleaned_field) > 0:
-                    cleaned_fields.append(cleaned_field + '/' + key)
+                    cleaned_fields.append(cleaned_field + '/' + key.lower())
                 else:
                     cleaned_fields.append(key)
         else:
