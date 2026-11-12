@@ -37,7 +37,8 @@ from collections import OrderedDict
 from tabulate import tabulate
 from lxml import etree as ET
 from lxml.etree import QName
-from sonic_py_common.general import check_output_pipe
+
+from utilities_common import constants
 
 minigraph_ns = "Microsoft.Search.Autopilot.Evolution"
 minigraph_ns1 = "http://schemas.datacontract.org/2004/07/Microsoft.Search.Autopilot.Evolution"
@@ -743,7 +744,8 @@ def main(argv):
     parser.add_argument('-p', '--print', action='store_true', help='Print port_config.ini without creating a new SKU', default=False)
     parser.add_argument('--verbose', action='store_true', help='Verbose output', default=False)
     parser.add_argument('-d', '--default_sku_path', action='store',nargs=1, help='Specify Default SKU path', default=None)
-    parser.add_argument('-q', '--port_split_path', action='store',nargs=1, help='Specify Port split path', default=None)
+    parser.add_argument('-q', '--port_split_path', action='store',nargs=1,
+                        help='Override runtime port_config.ini and config_db.json directory', default=None)
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
 
     args = parser.parse_args()
@@ -802,12 +804,7 @@ def main(argv):
                 sku.cfg_file = args.port_split_path[0] + "/config_db.json"
                 sku.parse_platform_from_config_db_file(sku.cfg_file)
             else:
-                try:
-                    sku_name = check_output_pipe(["show", "platform", "summary"], ["grep", "HwSKU"]).rstrip().split()[1]
-                except KeyError:
-                    print("Couldn't find HwSku info in Platform summary", file=sys.stderr)
-                    sys.exit(1)
-                sku.ini_file = sku.default_sku_path + "/" + sku_name + "/port_config.ini"
+                sku.ini_file = constants.RUNTIME_PORT_CONFIG_FILE
                 sku.cfg_file = "/etc/sonic/config_db.json"
 
             if sku.platform in platform_4:
