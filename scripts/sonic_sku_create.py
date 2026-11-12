@@ -437,7 +437,7 @@ class SkuCreate(object):
                         alias_str = "etp{:d}".format(alias_index)
                     else:
                         alias_str = "etp{:d}{:s}".format(alias_index,alias_arr[int(i/step)])
-                    index_str = "{:<9d} ".format(alias_index) if len(line.split()) != 4 else ""
+                    index_str = "{:<9d} ".format(alias_index) if "index" in title else ""
                     lanes_str_result = lanes_str_result + ":" + lanes_str
                     out_str = "{:15s} {:20s} {:11s} {}{:10s}\n".format(
                         port_str, lanes_str, alias_str, index_str, str(speed))
