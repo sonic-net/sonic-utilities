@@ -1,5 +1,4 @@
 import io
-import os
 import sys
 from contextlib import ExitStack, redirect_stdout, redirect_stderr
 from pathlib import Path
@@ -115,7 +114,7 @@ class TestLocalWriterAuthentication:
 
     @pytest.mark.parametrize('component,arguments,program,expected_exit', NON_WRITES)
     def test_invalid_and_nonwriting_requests_do_not_authenticate(self, local_modules, component, arguments, program,
-                                                               expected_exit):
+                                                                 expected_exit):
         result, factory, _, _ = invoke_local(local_modules[component], component, arguments, program)
         assert result.exit_code == expected_exit, result.output
         factory.assert_not_called()
@@ -129,7 +128,7 @@ class TestLocalWriterAuthentication:
     ])
     @pytest.mark.parametrize('supplied', [False, True], ids=['default', 'explicit'])
     def test_constructor_preserves_namespace_and_supplied_DB(self, local_modules, component, class_name, arguments,
-                                                           supplied):
+                                                             supplied):
         module = local_modules[component]
         db = object() if supplied else None
         with patch.object(module.multi_asic_util, 'MultiAsic') as wrapper, \
