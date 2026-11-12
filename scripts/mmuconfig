@@ -25,6 +25,7 @@ import json
 from utilities_common.general import load_db_config
 from sonic_py_common import multi_asic
 from utilities_common import multi_asic as multi_asic_util
+from utilities_common.db import Db
 
 BUFFER_POOL_TABLE_NAME = "BUFFER_POOL"
 BUFFER_PROFILE_TABLE_NAME = "BUFFER_PROFILE"
@@ -59,12 +60,12 @@ except KeyError:
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 class MmuConfig(object):
-    def __init__(self, verbose, config, filename, namespace):
+    def __init__(self, verbose, config, filename, namespace, db=None):
         self.verbose = verbose
         self.config = config
         self.filename = filename
         self.namespace = namespace
-        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace, db=db)
         self.config_db = None
         self.db = None
 
@@ -189,7 +190,10 @@ def main(show_config, profile, alpha, staticth, trim, namespace, verbose):
 
     try:
         load_db_config()
-        mmu_cfg = MmuConfig(verbose, config, filename, namespace)
+        db = None
+        if config and not show_config and profile and (alpha is not None or staticth is not None or trim):
+            db = Db(authenticate=True)
+        mmu_cfg = MmuConfig(verbose, config, filename, namespace, db=db)
 
         # Both mmuconfig and buffershow have access to show_config option
         if show_config:
