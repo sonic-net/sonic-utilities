@@ -8,6 +8,32 @@ def bmc():
     pass
 
 
+@bmc.command('reset')
+def reset():
+    """Reset the BMC through the local hardware platform API."""
+    try:
+        import sonic_platform
+        chassis = sonic_platform.platform.Platform().get_chassis()
+        bmc_device = chassis.get_bmc()
+    except Exception as err:
+        raise click.ClickException('Unable to access BMC platform API: {}'.format(err))
+
+    if bmc_device is None:
+        raise click.ClickException('BMC reset control is not supported on this platform')
+
+    try:
+        result = bmc_device.reset()
+    except NotImplementedError:
+        raise click.ClickException('BMC reset control is not supported on this platform')
+    except Exception as err:
+        raise click.ClickException('BMC reset failed: {}'.format(err))
+
+    if not result:
+        raise click.ClickException('BMC reset failed')
+
+    click.echo('BMC reset completed')
+
+
 # config bmc reset-root-password
 @bmc.command('reset-root-password')
 def reset_root_password():
