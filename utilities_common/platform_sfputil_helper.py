@@ -5,7 +5,6 @@ import sys
 import click
 
 from . import cli as clicommon
-from . import constants
 from .sfp_helper import QSFP_DATA_MAP
 from sonic_py_common import multi_asic, device_info
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
@@ -284,7 +283,7 @@ def platform_sfputil_read_porttab_mappings():
             (platform_path, hwsku_path) = device_info.get_paths_to_platform_and_hwsku_dirs()
             platform_sfputil.read_all_porttab_mappings(hwsku_path, multi_asic.get_num_asics())
         else:
-            port_config_file_path = constants.RUNTIME_PORT_CONFIG_FILE
+            port_config_file_path = device_info.get_path_to_port_config_file()
             platform_sfputil.read_porttab_mappings(port_config_file_path, 0)
 
         platform_porttab_mapping_read = True
