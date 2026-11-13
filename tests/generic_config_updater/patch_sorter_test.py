@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import copy
 import io
 import jsonpatch
 import sys
@@ -1519,6 +1520,86 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
     def prepare_config(self, config, patch):
         return patch.apply(config)
 
+    def test_validate__replace_group__replace_checked_once_for_the_whole_group(self):
+        # _validate_replace() answers a question about diff.current_config vs
+        # simulated_config and ignores the move it is given, so every member of a
+        # REPLACE group asks the same thing. Asking once per group instead of once per
+        # member is what keeps a group of N from costing 2N full-config YANG loads.
+        current_config = {"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A"},
+                                        "RM|20": {"match_prefix_set": "SET_A"},
+                                        "RM|30": {"match_prefix_set": "SET_A"}}}
+        target_config = {"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_B"},
+                                       "RM|20": {"match_prefix_set": "SET_B"},
+                                       "RM|30": {"match_prefix_set": "SET_B"}}}
+        diff = ps.Diff(current_config, target_config)
+        group = JsonMoveGroup("")
+        for key in ("RM|10", "RM|20", "RM|30"):
+            tokens = ["ROUTE_MAP", key, "match_prefix_set"]
+            group.append(ps.JsonMove(diff, OperationType.REPLACE, tokens, tokens))
+        simulated_config = group.apply(diff.current_config)
+
+        self.validator._validate_replace = Mock(return_value=True)
+
+        self.assertTrue(self.validator.validate(group, diff, simulated_config)[0])
+        self.validator._validate_replace.assert_called_once()
+
+    def test_validate__replace_group_rejected__group_rejected(self):
+        # Collapsing the per-member checks must not swallow a rejection.
+        current_config = {"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A"},
+                                        "RM|20": {"match_prefix_set": "SET_A"}}}
+        target_config = {"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_B"},
+                                       "RM|20": {"match_prefix_set": "SET_B"}}}
+        diff = ps.Diff(current_config, target_config)
+        group = JsonMoveGroup("")
+        for key in ("RM|10", "RM|20"):
+            tokens = ["ROUTE_MAP", key, "match_prefix_set"]
+            group.append(ps.JsonMove(diff, OperationType.REPLACE, tokens, tokens))
+        simulated_config = group.apply(diff.current_config)
+
+        self.validator._validate_replace = Mock(return_value=False)
+
+        self.assertFalse(self.validator.validate(group, diff, simulated_config)[0])
+        self.validator._validate_replace.assert_called_once()
+
+    def test_validate__remove_group__still_validated_per_member(self):
+        # REMOVE members are each checked against diff.current_config only, the same
+        # single-config-side situation as ADD, so they keep per-member validation too.
+        current_config = {"VLAN": {"Vlan1000": {"vlanid": "1000"},
+                                   "Vlan2000": {"vlanid": "2000"},
+                                   "Vlan3000": {"vlanid": "3000"}}}
+        target_config = {"VLAN": {"Vlan1000": {"vlanid": "1000"}}}
+        diff = ps.Diff(current_config, target_config)
+        group = JsonMoveGroup("")
+        for key in ("Vlan2000", "Vlan3000"):
+            group.append(ps.JsonMove(diff, OperationType.REMOVE, ["VLAN", key]))
+        simulated_config = group.apply(diff.current_config)
+
+        self.validator._validate_paths_config = Mock(return_value=True)
+
+        self.assertTrue(self.validator.validate(group, diff, simulated_config)[0])
+        self.assertEqual(2, self.validator._validate_paths_config.call_count)
+
+    def test_validate__add_group__still_validated_per_member(self):
+        # ADD members are each checked against the simulated config only, so the loaded
+        # tree is reused between them and there is nothing to collapse. Per-member
+        # validation must be preserved: each added path is its own question.
+        current_config = {"VLAN": {"Vlan1000": {"vlanid": "1000"}}}
+        target_config = {"VLAN": {"Vlan1000": {"vlanid": "1000"},
+                                  "Vlan2000": {"vlanid": "2000"},
+                                  "Vlan3000": {"vlanid": "3000"}}}
+        diff = ps.Diff(current_config, target_config)
+        group = JsonMoveGroup("")
+        for key in ("Vlan2000", "Vlan3000"):
+            tokens = ["VLAN", key]
+            group.append(ps.JsonMove(diff, OperationType.ADD, tokens, tokens))
+        simulated_config = group.apply(diff.current_config)
+
+        self.validator._validate_paths_config = Mock(return_value=True)
+
+        self.assertTrue(self.validator.validate(group, diff, simulated_config)[0])
+        self.assertEqual(2, self.validator._validate_paths_config.call_count)
+
+
 class TestNoEmptyTableMoveValidator(unittest.TestCase):
     def setUp(self):
         path_addressing = ps.PathAddressing()
@@ -2519,6 +2600,145 @@ class TestBulkLeafListMoveGenerator(unittest.TestCase):
         for move in moves:
             moves_ops.extend(move.get_jsonpatch())
         self.assertCountEqual(ex_ops, moves_ops)
+
+
+class TestBulkLowLevelMoveGenerator(unittest.TestCase):
+    """Bulk low-level moves for entries that contain a leaf-list.
+
+    A leaf-list is replaced as a whole value, exactly like a scalar leaf, so its
+    presence must not disqualify the entry from bulk grouping. Before this was
+    handled, a single leaf-list anywhere in an entry silenced this generator for
+    that entry entirely and every field change fell back to one move each.
+    """
+    def setUp(self):
+        path_addressing = PathAddressing()
+        self.generator = ps.BulkLowLevelMoveGenerator(path_addressing)
+
+    def test_generate_replace__entry_has_leaf_list__scalars_still_grouped(self):
+        """Two scalars differ in an entry that also carries an (unchanged) leaf-list."""
+        self.verify_replace(
+            current={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A",
+                                             "route_operation": "permit",
+                                             "set_ext_community_inline": ["color:00:401"]}}},
+            target={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_B",
+                                            "route_operation": "deny",
+                                            "set_ext_community_inline": ["color:00:401"]}}},
+            ex_ops=[{"op": "replace", "path": "/ROUTE_MAP/RM|10/match_prefix_set", "value": "SET_B"},
+                    {"op": "replace", "path": "/ROUTE_MAP/RM|10/route_operation", "value": "deny"}])
+
+    def test_generate_replace__leaf_list_itself_differs__included_in_group(self):
+        """A differing leaf-list is replaced as a whole value alongside scalar changes."""
+        self.verify_replace(
+            current={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A",
+                                             "set_ext_community_inline": ["color:00:401"]}}},
+            target={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_B",
+                                            "set_ext_community_inline": ["color:00:402"]}}},
+            ex_ops=[{"op": "replace", "path": "/ROUTE_MAP/RM|10/match_prefix_set", "value": "SET_B"},
+                    {"op": "replace", "path": "/ROUTE_MAP/RM|10/set_ext_community_inline",
+                     "value": ["color:00:402"]}])
+
+    def test_generate_replace__entry_has_list_of_dicts__no_moves(self):
+        """Lists of non-scalars are still out of scope, so the entry is skipped."""
+        self.verify_replace(
+            current={"TABLE": {"KEY": {"field": "a", "items": [{"x": 1}]}}},
+            target={"TABLE": {"KEY": {"field": "b", "items": [{"x": 1}]}}},
+            ex_ops=[])
+
+    def test_generate_replace__single_change_below_min_moves__no_moves(self):
+        """min_moves defaults to 2, so one differing field alone is not a bulk move."""
+        self.verify_replace(
+            current={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A",
+                                             "set_ext_community_inline": ["color:00:401"]}}},
+            target={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_B",
+                                            "set_ext_community_inline": ["color:00:401"]}}},
+            ex_ops=[])
+
+    def test_generate_remove__entry_has_leaf_list__scalars_still_grouped(self):
+        """The predicate gates removals too, not only replacements."""
+        self.verify(
+            self.generator.generate_remove,
+            current={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A",
+                                             "route_operation": "permit",
+                                             "set_ext_community_inline": ["color:00:401"]}}},
+            target={"ROUTE_MAP": {"RM|10": {"set_ext_community_inline": ["color:00:401"]}}},
+            ex_ops=[{"op": "remove", "path": "/ROUTE_MAP/RM|10/match_prefix_set"},
+                    {"op": "remove", "path": "/ROUTE_MAP/RM|10/route_operation"}])
+
+    def test_generate_add__entry_has_leaf_list__scalars_still_grouped(self):
+        """And additions."""
+        self.verify(
+            self.generator.generate_add,
+            current={"ROUTE_MAP": {"RM|10": {"set_ext_community_inline": ["color:00:401"]}}},
+            target={"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A",
+                                            "route_operation": "permit",
+                                            "set_ext_community_inline": ["color:00:401"]}}},
+            ex_ops=[{"op": "add", "path": "/ROUTE_MAP/RM|10/match_prefix_set", "value": "SET_A"},
+                    {"op": "add", "path": "/ROUTE_MAP/RM|10/route_operation", "value": "permit"}])
+
+    def verify(self, generate, current, target, ex_ops):
+        diff = ps.Diff(current, target)
+        moves_ops = []
+        for move in generate(diff):
+            moves_ops.extend(move.get_jsonpatch())
+        self.assertCountEqual(ex_ops, moves_ops)
+
+    def verify_replace(self, current, target, ex_ops):
+        diff = ps.Diff(current, target)
+        moves_ops = []
+        for move in self.generator.generate_replace(diff):
+            moves_ops.extend(move.get_jsonpatch())
+        self.assertCountEqual(ex_ops, moves_ops)
+
+
+class TestBulkKeyGroupLowLevelMoveGenerator(unittest.TestCase):
+    """Grouping the same field change across many keys of one table."""
+    def setUp(self):
+        path_addressing = PathAddressing()
+        self.generator = ps.BulkKeyGroupLowLevelMoveGenerator(path_addressing)
+
+    def test_generate__same_field_across_keys_with_leaf_lists__single_group(self):
+        """One field changed in each of three keys that also carry leaf-lists.
+
+        This is the shape of a route-map retargeting: N sequences, each keeping its
+        leaf-list and changing one scalar. All of it belongs in one group.
+        """
+        current = {"ROUTE_MAP": {
+            "RM|10": {"match_prefix_set": "SET_A1", "set_ext_community_inline": ["color:00:401"]},
+            "RM|20": {"match_prefix_set": "SET_A2", "set_ext_community_inline": ["color:00:402"]},
+            "RM|30": {"match_prefix_set": "SET_A3", "set_ext_community_inline": ["color:00:403"]}}}
+        target = copy.deepcopy(current)
+        for index, key in enumerate(("RM|10", "RM|20", "RM|30"), start=1):
+            target["ROUTE_MAP"][key]["match_prefix_set"] = "SET_B{}".format(index)
+
+        diff = ps.Diff(current, target)
+        groups = [group for group in self.generator.generate(diff) if list(group.get_jsonpatch())]
+
+        self.assertEqual(1, len(groups), "the three key changes belong in a single group")
+        self.assertCountEqual(
+            [{"op": "replace", "path": "/ROUTE_MAP/RM|10/match_prefix_set", "value": "SET_B1"},
+             {"op": "replace", "path": "/ROUTE_MAP/RM|20/match_prefix_set", "value": "SET_B2"},
+             {"op": "replace", "path": "/ROUTE_MAP/RM|30/match_prefix_set", "value": "SET_B3"}],
+            list(groups[0].get_jsonpatch()))
+
+    def test_generate__keys_from_different_tables__separate_groups(self):
+        """Merging is per parent table: a different parentTableName() ends the group."""
+        current = {"ROUTE_MAP": {"RM|10": {"match_prefix_set": "SET_A1", "route_operation": "permit"},
+                                 "RM|20": {"match_prefix_set": "SET_A2", "route_operation": "permit"}},
+                   "ACL_RULE": {"T|R1": {"PRIORITY": "10", "PACKET_ACTION": "FORWARD"}}}
+        target = copy.deepcopy(current)
+        target["ROUTE_MAP"]["RM|10"]["match_prefix_set"] = "SET_B1"
+        target["ROUTE_MAP"]["RM|20"]["match_prefix_set"] = "SET_B2"
+        target["ACL_RULE"]["T|R1"]["PRIORITY"] = "20"
+
+        diff = ps.Diff(current, target)
+        groups = [group for group in self.generator.generate(diff) if list(group.get_jsonpatch())]
+        tables = [group.parentTableName() for group in groups]
+
+        self.assertNotIn("/ACL_RULE/T", [t for t in tables if t == "/ROUTE_MAP/RM"],
+                         "the two tables must not share a group")
+        for group in groups:
+            paths = {op["path"].split("/")[1] for op in group.get_jsonpatch()}
+            self.assertEqual(1, len(paths), f"group spans more than one table: {paths}")
 
 
 class TestLowLevelMoveGenerator(unittest.TestCase):
