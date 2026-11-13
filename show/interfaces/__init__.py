@@ -212,13 +212,65 @@ def tpid(interfacename, namespace, display, verbose):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
+def _update_breakout_port_details(port_name, port_data, cur_brkout_tbl,
+                                  hwsku_dict, platform_file, config_db):
+    """Update breakout details for a port in place.
+
+    Args:
+        port_name: Interface name to update.
+        port_data: Platform data for the interface; modified in place.
+        cur_brkout_tbl: BREAKOUT_CFG table keyed by interface name.
+        hwsku_dict: HWSKU interface data keyed by interface name.
+        platform_file: Path to the platform port configuration file.
+        config_db: Connected ConfigDB used to read child-port speeds.
+
+    Returns:
+        bool: True if breakout details were populated, or False if the
+        interface has no BREAKOUT_CFG entry.
+    """
+    # Check whether port is available in `BREAKOUT_CFG` table or not
+    if port_name not in cur_brkout_tbl:
+        return False
+
+    cur_brkout_mode = cur_brkout_tbl[port_name]["brkout_mode"]
+
+    # Update default breakout mode and current breakout mode
+    port_data.update(hwsku_dict[port_name])
+    port_data["Current Breakout Mode"] = cur_brkout_mode
+
+    # List all the child ports if present
+    child_port_dict = get_child_ports(port_name, cur_brkout_mode, platform_file)
+    if not child_port_dict:
+        click.echo("Cannot find ports from {} file ".format(platform_file))
+        raise click.Abort()
+
+    child_ports = natsorted(list(child_port_dict.keys()))
+
+    children, speeds = [], []
+    # Update portname and speed of child ports if present
+    for port in child_ports:
+        speed = config_db.get_entry('PORT', port).get('speed')
+        if speed is not None:
+            speeds.append(str(int(speed)//1000)+'G')
+            children.append(port)
+
+    port_data["child ports"] = ",".join(children)
+    port_data["child port speeds"] = ",".join(speeds)
+    return True
+
+
 #
 # 'breakout' group ###
 #
 @interfaces.group(invoke_without_command=True)
+@click.option('-i', '--interface', metavar='<interface_name>',
+              help='Filter breakout details by interface name')
 @click.pass_context
-def breakout(ctx):
+def breakout(ctx, interface):
     """Show Breakout Mode information by interfaces"""
+    if interface is not None and ctx.invoked_subcommand is not None:
+        ctx.fail("--interface is only valid without a breakout subcommand")
+
     # Reading data from Redis configDb
     config_db = ConfigDBConnector()
     config_db.connect()
@@ -242,38 +294,27 @@ def breakout(ctx):
             click.echo("Can not load port config from {} or {} file".format(platform_file, hwsku_file))
             raise click.Abort()
 
-        for port_name in platform_dict:
-            # Check whether port is available in `BREAKOUT_CFG` table or not
-            if  port_name not in cur_brkout_tbl:
-                continue
-            cur_brkout_mode = cur_brkout_tbl[port_name]["brkout_mode"]
+        if interface is not None:
+            interface = try_convert_interfacename_from_alias(ctx, interface)
+            if interface not in platform_dict:
+                ctx.fail("Invalid interface name {}".format(interface))
 
-            # Update default breakout mode and current breakout mode to platform_dict
-            platform_dict[port_name].update(hwsku_dict[port_name])
-            platform_dict[port_name]["Current Breakout Mode"] = cur_brkout_mode
+            details_available = _update_breakout_port_details(
+                interface, platform_dict[interface], cur_brkout_tbl,
+                hwsku_dict, platform_file, config_db)
+            if not details_available:
+                ctx.fail("Breakout information is not available for interface {}".format(interface))
 
-            # List all the child ports if present
-            child_port_dict = get_child_ports(port_name, cur_brkout_mode, platform_file)
-            if not child_port_dict:
-                click.echo("Cannot find ports from {} file ".format(platform_file))
-                raise click.Abort()
+            parsed = OrderedDict([(interface, platform_dict[interface])])
+        else:
+            for port_name in platform_dict:
+                _update_breakout_port_details(
+                    port_name, platform_dict[port_name], cur_brkout_tbl,
+                    hwsku_dict, platform_file, config_db)
 
-            child_ports = natsorted(list(child_port_dict.keys()))
+            # Sorted keys by name in natural sort Order for human readability
+            parsed = OrderedDict((k, platform_dict[k]) for k in natsorted(list(platform_dict.keys())))
 
-            children, speeds = [], []
-            # Update portname and speed of child ports if present
-            for port in child_ports:
-                speed = config_db.get_entry('PORT', port).get('speed')
-                if speed is not None:
-                    speeds.append(str(int(speed)//1000)+'G')
-                    children.append(port)
-
-            platform_dict[port_name]["child ports"] = ",".join(children)
-            platform_dict[port_name]["child port speeds"] = ",".join(speeds)
-
-        # Sorted keys by name in natural sort Order for human readability
-
-        parsed = OrderedDict((k, platform_dict[k]) for k in natsorted(list(platform_dict.keys())))
         click.echo(json.dumps(parsed, indent=4))
 
 
