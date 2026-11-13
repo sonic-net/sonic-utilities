@@ -531,6 +531,9 @@ class PathAddressing:
 
     def __init__(self, config_wrapper=None):
         self.config_wrapper = config_wrapper
+        # Backlink and must counts per schema xpath, see _schema_ref_counts().
+        self._schema_ref_counts_cache = {}
+        self._schema_ref_counts_sy = None
 
     @staticmethod
     def get_path_tokens(path):
@@ -707,10 +710,8 @@ class PathAddressing:
         # Enumerate all keys and retrieve backlinks, store in a list of dictionaries for sorting
         for key in ptr:
             tokens.append(key)
-            path = self.create_path(tokens)
-            try:
-                xpath = sy.configdb_path_to_xpath(path, schema_xpath=True)
-            except KeyError:
+            counts = self._schema_ref_counts(self.create_path(tokens), sy)
+            if counts is None:
                 # Test cases use invalid tables, so we have to handle that even
                 # though it shouldn't be possible in live code as tables without
                 # yang are trimmed
@@ -723,8 +724,8 @@ class PathAddressing:
             else:
                 keys.append({
                             "key": key,
-                            "backlinks": len(sy.find_schema_dependencies(xpath, match_ancestors=True)),
-                            "musts": sy.find_schema_must_count(xpath, match_ancestors=True),
+                            "backlinks": counts[0],
+                            "musts": counts[1],
                             "nsep": str(key).count("|")
                             })
             tokens.pop()
@@ -734,6 +735,28 @@ class PathAddressing:
 
         # Caller doesn't care about the count, just that the list of keys is ordered
         return [d['key'] for d in keys]
+
+    def _schema_ref_counts(self, path, sy):
+        """
+        The (backlinks, musts) counts of the schema node a ConfigDb path maps to, or None if it maps to
+        none. The counts depend on the loaded YANG models alone, not on any config, so they are cached per
+        schema xpath for as long as the same models are in use: every key of a table shares one entry.
+        The patch sorter asks for them at every step of its search, and sonic-yang answers the backlink
+        count with a scan of its whole backlink map.
+        """
+        try:
+            xpath = sy.configdb_path_to_xpath(path, schema_xpath=True)
+        except KeyError:
+            return None
+        if sy is not self._schema_ref_counts_sy:
+            self._schema_ref_counts_cache = {}
+            self._schema_ref_counts_sy = sy
+        counts = self._schema_ref_counts_cache.get(xpath)
+        if counts is None:
+            counts = (len(sy.find_schema_dependencies(xpath, match_ancestors=True)),
+                      sy.find_schema_must_count(xpath, match_ancestors=True))
+            self._schema_ref_counts_cache[xpath] = counts
+        return counts
 
 class TitledLogger(logger.Logger):
     def __init__(self, syslog_identifier, title, verbose, print_all_to_console):
