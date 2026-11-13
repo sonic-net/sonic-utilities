@@ -52,6 +52,7 @@ from .utils import log
 from . import aaa
 from . import bmc
 from . import chassis_modules
+from . import uefi as uefi_cli
 from . import liquid_cool
 from . import console
 from . import feature
@@ -9464,6 +9465,10 @@ def size(db, size):
 @config.group(cls=clicommon.AbbreviationGroup)
 def platform():
     """Platform-related configuration tasks"""
+
+
+uefi_cli.attach(platform)
+
 
 # 'firmware' subgroup ("config platform firmware ...")
 @platform.group(cls=clicommon.AbbreviationGroup)
