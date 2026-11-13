@@ -4,8 +4,10 @@ import json
 import jsonpointer
 import subprocess
 from sonic_py_common import device_info
-from .gu_common import GenericConfigUpdaterError
+from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
 from swsscommon import swsscommon
+
+logger = genericUpdaterLogging.get_logger(title="Field Operation Validator")
 
 # Default FEC modes when STATE_DB does not advertise supported_fecs for a port.
 # Kept local to avoid pulling utilities_common into the GCU wheel.
@@ -213,6 +215,59 @@ def read_statedb_entry(scope, table, key, field):
     return tbl.hget(key, field)[1]
 
 
+def get_breakout_speeds(port):
+    """Speeds (in Mbps, as ints) that ``port`` can take via ANY of its
+    supported breakout modes, derived from platform.json.
+
+    The GCU validates a PORT ``speed`` change before the patch is applied, so
+    STATE_DB still reflects the port's CURRENT lane width. A parent port at
+    full lane width never advertises a reduced-lane breakout speed in its
+    STATE_DB ``supported_speeds`` (e.g. an 8-lane 800G port lists only
+    400000,800000, never the 2-lane 200000 a 4x200G breakout needs), so
+    validating a breakout purely against STATE_DB rejects every legitimate
+    breakout. platform.json's ``breakout_modes`` is the authoritative source
+    for what speeds a port can actually reach.
+
+    Returns an empty set when platform.json (or this port's breakout info) is
+    unavailable, so the caller can fall back to the STATE_DB check on legacy
+    platforms that ship only a port_config.ini.
+    """
+    speeds = set()
+    try:
+        platform_json = device_info.get_path_to_port_config_file()
+    except Exception:
+        return speeds
+    if not platform_json or not platform_json.endswith('.json') or not os.path.isfile(platform_json):
+        return speeds
+    try:
+        with open(platform_json) as f:
+            interfaces = json.load(f).get('interfaces', {})
+    except Exception:
+        return speeds
+    if port not in interfaces:
+        return speeds
+    # Imported lazily: portconfig pulls in sonic-config-engine, which need not
+    # be on the import path for non-port GCU operations.
+    try:
+        from portconfig import get_child_ports
+    except Exception:
+        return speeds
+    for mode in interfaces[port].get('breakout_modes', {}):
+        try:
+            for child_cfg in get_child_ports(port, mode, platform_json).values():
+                speeds.add(int(child_cfg['speed']))
+        except Exception as e:
+            # platform.json is authored by the platform vendor and should never
+            # contain a mode portconfig can't parse; if one does, surface it
+            # loudly but keep deriving speeds from the remaining modes so a
+            # single bad entry can't reject every legitimate breakout.
+            logger.log_error(
+                "skipping unparseable breakout mode '{}' for port {} in {}: {}"
+                .format(mode, port, platform_json, e))
+            continue
+    return speeds
+
+
 def port_config_update_validator(scope, patch_element):
 
     def _validate_field(field, port, value):
@@ -235,12 +290,26 @@ def port_config_update_validator(scope, patch_element):
             # For chassis, skip speed validation as desired speed is not in supported_speeds of StateDB.
             if device_info.is_chassis():
                 return True
+            try:
+                target_speed = int(value)
+            except (TypeError, ValueError):
+                return False
+            # Allowed speeds come from two sources, unioned:
+            #  * platform.json breakout modes — the speeds the port can reach
+            #    via a breakout (covers the reduced-lane speeds STATE_DB can't
+            #    yet know about pre-apply), and
+            #  * STATE_DB supported_speeds — the SAI-reported speeds at the
+            #    port's current lane width (and the only source on legacy
+            #    platforms with no platform.json).
+            allowed_speeds = get_breakout_speeds(port)
             supported_speeds_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_speeds") or ''
             try:
-                supported_speeds = [int(s) for s in supported_speeds_str.split(',') if s]
-                if supported_speeds and int(value) not in supported_speeds:
-                    return False
+                allowed_speeds.update(int(s) for s in supported_speeds_str.split(',') if s)
             except ValueError:
+                return False
+            # With no speed info from either source (e.g. a legacy platform
+            # whose STATE_DB doesn't advertise supported_speeds), don't block.
+            if allowed_speeds and target_speed not in allowed_speeds:
                 return False
             return True
         return False

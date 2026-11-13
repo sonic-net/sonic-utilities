@@ -1,3 +1,7 @@
+import json
+import sys
+import types
+
 import pytest
 import mock
 import unittest
@@ -121,6 +125,46 @@ class TestValidateFieldOperation:
         for scope in ["localhost", "asic0"]:
             assert generic_config_updater.field_operation_validators.\
                 port_config_update_validator(scope, patch_element) is False
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.get_breakout_speeds",
+           mock.Mock(return_value={800000, 400000, 200000, 100000}))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="400000,800000"))
+    def test_port_config_update_validator_breakout_speed_from_platform_json(self):
+        # A breakout speed (200000) the full-lane parent's STATE_DB
+        # supported_speeds (400000,800000) doesn't list, but platform.json's
+        # breakout modes do — must be accepted.
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": "200000"}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.get_breakout_speeds",
+           mock.Mock(return_value={800000, 400000, 200000, 100000}))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="400000,800000"))
+    def test_port_config_update_validator_speed_in_neither_source_rejected(self):
+        # A speed in neither platform.json breakout modes nor STATE_DB is still
+        # rejected.
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": "333000"}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is False
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.get_breakout_speeds",
+           mock.Mock(return_value=set()))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value=""))
+    def test_port_config_update_validator_no_speed_info_is_permissive(self):
+        # Legacy platform: no platform.json breakout info and no STATE_DB
+        # supported_speeds — don't block.
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": "200000"}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
 
     def test_port_config_update_validator_remove(self):
         patch_element = {"path": "/PORT/Ethernet3", "op": "remove"}
@@ -756,6 +800,126 @@ class TestValidateFieldOperation:
         target_config = {"SCHEDULER": {"scheduler.0": {"weight": "20", "type": "DWRR"}}}
         config_wrapper = gu_common.ConfigWrapper()
         config_wrapper.validate_field_operation(old_config, target_config)
+
+
+class TestGetBreakoutSpeeds:
+    """get_breakout_speeds() derives the speeds a port can reach from the
+    breakout_modes in platform.json, and returns an empty set (so the caller
+    falls back to STATE_DB) whenever that information is unavailable."""
+
+    PORT = "Ethernet72"
+    # What portconfig.get_child_ports() would yield for each breakout mode of
+    # an 8-lane 800G port.
+    CHILD_PORTS = {
+        "1x800G": {"Ethernet72": {"speed": "800000"}},
+        "2x400G": {"Ethernet72": {"speed": "400000"}, "Ethernet76": {"speed": "400000"}},
+        "4x200G": {"Ethernet72": {"speed": "200000"}, "Ethernet74": {"speed": "200000"},
+                   "Ethernet76": {"speed": "200000"}, "Ethernet78": {"speed": "200000"}},
+    }
+
+    @staticmethod
+    def _write_platform_json(tmp_path, modes, port="Ethernet72"):
+        path = tmp_path / "platform.json"
+        interfaces = {port: {"breakout_modes": {m: [] for m in modes}}}
+        path.write_text(json.dumps({"interfaces": interfaces}))
+        return str(path)
+
+    def _fake_portconfig(self, bad_modes=()):
+        def get_child_ports(port, mode, platform_json):
+            if mode in bad_modes:
+                raise ValueError("cannot parse mode")
+            return self.CHILD_PORTS[mode]
+        module = types.ModuleType("portconfig")
+        module.get_child_ports = mock.Mock(side_effect=get_child_ports)
+        return module
+
+    def test_speeds_from_all_breakout_modes(self, tmp_path):
+        platform_json = self._write_platform_json(tmp_path, ["1x800G", "2x400G", "4x200G"])
+        portconfig = self._fake_portconfig()
+        with patch.object(fov.device_info, "get_path_to_port_config_file", return_value=platform_json), \
+                patch.dict(sys.modules, {"portconfig": portconfig}):
+            assert fov.get_breakout_speeds(self.PORT) == {800000, 400000, 200000}
+        portconfig.get_child_ports.assert_any_call(self.PORT, "4x200G", platform_json)
+
+    def test_unparseable_mode_is_logged_and_skipped(self, tmp_path):
+        platform_json = self._write_platform_json(tmp_path, ["1x800G", "bogus", "4x200G"])
+        with patch.object(fov.device_info, "get_path_to_port_config_file", return_value=platform_json), \
+                patch.dict(sys.modules, {"portconfig": self._fake_portconfig(bad_modes=("bogus",))}), \
+                patch.object(fov, "logger") as mock_logger:
+            # The bad mode must not stop speeds being derived from the others.
+            assert fov.get_breakout_speeds(self.PORT) == {800000, 200000}
+        mock_logger.log_error.assert_called_once()
+        assert "bogus" in mock_logger.log_error.call_args[0][0]
+
+    def test_port_config_path_lookup_fails(self):
+        with patch.object(fov.device_info, "get_path_to_port_config_file", side_effect=Exception("no platform")):
+            assert fov.get_breakout_speeds(self.PORT) == set()
+
+    @pytest.mark.parametrize("path", [None, "", "/usr/share/sonic/device/x/port_config.ini"])
+    def test_no_platform_json(self, path):
+        # Legacy platforms ship only a port_config.ini (or nothing at all).
+        with patch.object(fov.device_info, "get_path_to_port_config_file", return_value=path):
+            assert fov.get_breakout_speeds(self.PORT) == set()
+
+    def test_platform_json_missing_on_disk(self, tmp_path):
+        missing = str(tmp_path / "platform.json")
+        with patch.object(fov.device_info, "get_path_to_port_config_file", return_value=missing):
+            assert fov.get_breakout_speeds(self.PORT) == set()
+
+    def test_platform_json_unreadable(self, tmp_path):
+        path = tmp_path / "platform.json"
+        path.write_text("{not valid json")
+        with patch.object(fov.device_info, "get_path_to_port_config_file", return_value=str(path)):
+            assert fov.get_breakout_speeds(self.PORT) == set()
+
+    def test_port_not_in_platform_json(self, tmp_path):
+        platform_json = self._write_platform_json(tmp_path, ["1x800G"], port="Ethernet0")
+        with patch.object(fov.device_info, "get_path_to_port_config_file", return_value=platform_json), \
+                patch.dict(sys.modules, {"portconfig": self._fake_portconfig()}):
+            assert fov.get_breakout_speeds(self.PORT) == set()
+
+    def test_portconfig_unavailable(self, tmp_path):
+        platform_json = self._write_platform_json(tmp_path, ["1x800G"])
+        # A None entry in sys.modules makes the import raise ImportError.
+        with patch.object(fov.device_info, "get_path_to_port_config_file", return_value=platform_json), \
+                patch.dict(sys.modules, {"portconfig": None}):
+            assert fov.get_breakout_speeds(self.PORT) == set()
+
+    @pytest.mark.parametrize("speed,expected", [
+        ("200000", True),    # breakout speed known only from platform.json
+        ("800000", True),    # in both sources
+        ("333000", False),   # in neither source
+    ])
+    def test_validator_uses_platform_json_breakout_speeds(self, tmp_path, speed, expected):
+        # End to end through port_config_update_validator with the real
+        # get_breakout_speeds: STATE_DB for the full-lane parent only lists
+        # 400G/800G, platform.json adds the 4x200G breakout speed.
+        platform_json = self._write_platform_json(tmp_path, ["1x800G", "2x400G", "4x200G"])
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": speed}
+        with patch.object(fov.device_info, "is_chassis", return_value=False), \
+                patch.object(fov.device_info, "get_path_to_port_config_file", return_value=platform_json), \
+                patch.dict(sys.modules, {"portconfig": self._fake_portconfig()}), \
+                patch.object(fov, "read_statedb_entry", return_value="400000,800000"):
+            for scope in ["localhost", "asic0"]:
+                assert fov.port_config_update_validator(scope, patch_element) is expected
+
+    @pytest.mark.parametrize("speed", ["fast", None])
+    def test_validator_rejects_non_integer_speed(self, speed):
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": speed}
+        with patch.object(fov.device_info, "is_chassis", return_value=False), \
+                patch.object(fov, "get_breakout_speeds", return_value={200000}), \
+                patch.object(fov, "read_statedb_entry", return_value="200000"):
+            assert fov.port_config_update_validator("localhost", patch_element) is False
+
+    def test_validator_rejects_malformed_state_db_speeds(self):
+        # A non-integer entry in STATE_DB supported_speeds is treated as an
+        # invalid state and rejects the change rather than guessing.
+        patch_element = {"path": "/PORT/Ethernet72/speed", "op": "replace", "value": "200000"}
+        with patch.object(fov.device_info, "is_chassis", return_value=False), \
+                patch.object(fov, "get_breakout_speeds", return_value={200000}), \
+                patch.object(fov, "read_statedb_entry", return_value="400000,garbage"):
+            assert fov.port_config_update_validator("localhost", patch_element) is False
+
 
 class TestGetAsicName(unittest.TestCase):
 
