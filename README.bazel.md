@@ -4,15 +4,32 @@ Pinned owner source: `627858630348effec301290da9054313ec54c2ef`. Public target:
 `@sonic-utilities//:sonic_utilities_wheel`, module `sonic-utilities@1.2`.
 Root source target is `//:sonic_utilities_wheel`.
 
-Uses upstream rules_python `py_wheel` (1.9.0), not a bespoke wheel writer and
+Uses maintained rules_python `py_wheel` (1.9.0.sonic.1 from the canonical SONiC
+registry), not a bespoke wheel producer and
 not `setup.py` with fake installed SONiC packages. Real owner Python files,
-legacy scripts, package data and console entry points are packaged directly.
+legacy scripts, package data and console entry points are retained. The small
+`wheel_install_contract` adapter normalizes Python script shebangs to `#!python`
+(like setuptools), sets executable ZIP modes only for legacy scripts and the SSD
+ELF, and regenerates RECORD. Shell/awk shebangs and script bodies are unchanged.
+The maintained rule supports only a uniform `regular_file_mode`; native `0644`
+is the base, with these explicit `0755` exceptions.
 The setup-time dependency-presence checks become unchanged Requires-Dist
 constraints. `wheel_contract_test` independently parses setup.py and compares
-the entire installed file inventory and bytes, metadata, scripts, entry points,
+repository-derived payload inventory and bytes (apart from those declared
+shebang transforms), ZIP modes, metadata, scripts, entry points,
 plugin packages, extra requirements and RECORD hashes. Existing source includes
 `tests` in its published packages: this migration preserves that unusual choice.
 It does not silently remove test data or expand to undeclared subpackages.
+The contract's source runfiles enumerate the repository independently of the
+producer's PACKAGES/PACKAGE_DATA globs; it also asserts 1,082 full payload files.
+
+Maintainer, maintainer email, keywords and License-File are preserved. License
+bytes/text are unchanged; Core Metadata 2.4 places LICENSE at
+`dist-info/licenses/LICENSE` (still five dist-info members). Setuptools's optional
+`top_level.txt` remains omitted: complete byte-identical dist-info parity is NOT
+claimed. Wheel metadata formatting/producer fields and the corrected AMD64 tag
+also differ intentionally from a setuptools reference. No license expression is
+inferred and no dependency is removed.
 
 ## Important architecture/source boundary
 
@@ -35,7 +52,9 @@ that installed site directory (not source/runfiles). It exercises a real CLI
 entry point and generated executable `connect --help`, command dispatch/errors,
 real interface-range behavior, package metadata and plugin discovery. It does
 not connect serial devices, run service commands, use mock SONiC modules, or
-install anything globally. It checks generated config/show/clear scripts but
+install anything globally. It checks every installed member mode, preserves shell headers, and uses inert
+probes with installed Python headers under a hostile PATH to prove selection of
+the installer-designated interpreter. It checks generated config/show/clear scripts but
 does not claim their execution without full SONiC dependencies.
 
 The small test lock is NOT a complete image runtime lock. Image integration
@@ -62,8 +81,9 @@ that data package and are not represented as a wheel payload or claimed tested.
 ## Reproduction
 
 Use Bazel 8.5.1, a private output root, no home/system rc. Canonical SONiC registry
-and BCR endpoints are in .bazelrc. The standalone owner requires only standard
-Python rules; it does not select local image/Common/shared overrides.
+and BCR endpoints are in .bazelrc. The standalone owner selects patched Python rules; an external consumer root
+must select `rules_python >= 1.9.0.sonic.1` with Python 3.13 (Bazel MVS must not
+resolve back to the unpatched rule). No local absolute override is shipped; it does not select local image/Common/shared overrides.
 
 ```
 bazel query 'deps(//:sonic_utilities_wheel + //:wheel_contract_test + //:wheel_installed_test)' --output=label_kind
@@ -81,5 +101,6 @@ namespace, preventing demonstrated collisions with inherited YANG/containercfgd
 wheels. `//:runtime_wheel_contract_test` verifies that the full original wheel
 minus those709 test files equals the378-file runtime wheel, and every remaining
 file except regenerated RECORD is byte-identical (including metadata/scripts).
-The original full wheel/tests remain unchanged and available. The prebuilt SSD
+The full development payload/tests remain available; both variants use the
+same documented shebang/permission/metadata transforms. The prebuilt SSD
 ELF exception is retained honestly; no production feature is silently removed.

@@ -1,4 +1,4 @@
-load("@rules_python//python:packaging.bzl", "py_wheel")
+load("//bazel:wheel_install_contract.bzl", "utilities_wheel")
 load("@rules_python//python:py_test.bzl", "py_test")
 load("@utilities_test_pip//:requirements.bzl", "requirement")
 load("//bazel:packaging.bzl", "PACKAGES", "PACKAGE_DATA", "SCRIPTS", "ENTRY_POINTS", "REQUIRES", "EXTRA_REQUIRES", "CLASSIFIERS")
@@ -9,7 +9,7 @@ filegroup(
 )
 # No setup.py execution: its host-installed SONiC dependency check is replaced
 # by wheel Requires-Dist metadata, not ignored or replaced with mock packages.
-py_wheel(
+utilities_wheel(
     name = "sonic_utilities_wheel",
     distribution = "sonic-utilities",
     version = "1.2",
@@ -25,17 +25,21 @@ py_wheel(
     summary = "Command-line utilities for SONiC",
     author = "SONiC Team",
     author_email = "linuxnetdev@microsoft.com",
+    maintainer = "Joe LeVeque",
+    maintainer_email = "jolevequ@microsoft.com",
+    keywords = "sonic SONiC utilities command line cli CLI",
+    license_files = ["LICENSE"],
     homepage = "https://github.com/Azure/sonic-utilities",
     license = "Apache 2.0",
     classifiers = CLASSIFIERS,
-    extra_distinfo_files = {"LICENSE": "LICENSE"},
+    extra_distinfo_files = {"LICENSE": "licenses/LICENSE"},
 )
 py_test(
     name = "wheel_contract_test",
     size = "small",
     srcs = ["//bazel:wheel_contract_test.py"],
     main = "//bazel:wheel_contract_test.py",
-    data = [":sonic_utilities_wheel", ":wheel_payload", "setup.py", "//bazel:packaging.json", "ssd-dump/vtFA_RTK_5766_v2"] + SCRIPTS,
+    data = [":sonic_utilities_wheel", ":repository_inventory", "setup.py", "//bazel:packaging.json", "ssd-dump/vtFA_RTK_5766_v2"] + SCRIPTS,
     args = ["$(location :sonic_utilities_wheel)", "$(location setup.py)", "$(location //bazel:packaging.json)"],
 )
 py_test(
@@ -56,7 +60,7 @@ filegroup(
 
 # Keep the exact legacy wheel above for development/tests. Runtime deployment
 # excludes only the top-level tests namespace, which collides with inherited
-# SONiC wheels. All production files/scripts/data/metadata remain byte-identical.
+# SONiC wheels. Both variants apply the same documented install transforms.
 filegroup(
     name = "runtime_wheel_payload",
     srcs = glob([p.replace(".", "/") + "/*.py" for p in PACKAGES] + [p.replace(".", "/") + "/" + pattern for p, patterns in PACKAGE_DATA.items() for pattern in patterns], exclude = ["tests/**"]),
@@ -67,4 +71,11 @@ py_test(
     main = "//bazel/runtime:contract_test.py",
     data = [":sonic_utilities_wheel", "//bazel/runtime:sonic_utilities_wheel"],
     args = ["$(location :sonic_utilities_wheel)", "$(location //bazel/runtime:sonic_utilities_wheel)"],
+)
+
+# Independent of PACKAGES/PACKAGE_DATA and wheel_payload selection. Enumerate
+# repository files so an accidentally omitted producer glob cannot hide itself.
+filegroup(
+    name = "repository_inventory",
+    srcs = glob(["**"], exclude = ["bazel/**", "bazel-*/**", "**/__pycache__/**", "BUILD.bazel", "MODULE.bazel*", "README.bazel.md"]),
 )

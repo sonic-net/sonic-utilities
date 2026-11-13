@@ -7,4 +7,5 @@ with zipfile.ZipFile(sys.argv[1]) as full, zipfile.ZipFile(sys.argv[2]) as runti
     for name in actual:
         if not name.endswith(".dist-info/RECORD"):
             assert full.read(name)==runtime.read(name),name
+        assert full.getinfo(name).external_attr == runtime.getinfo(name).external_attr, name
     print("Runtime-wheel-contract-PASS",len(actual),"files; excluded",len(removed),"developer-test files; all other bytes identical")

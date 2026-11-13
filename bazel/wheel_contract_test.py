@@ -7,6 +7,8 @@ import email
 import hashlib
 import io
 import json
+import re
+import stat
 from pathlib import Path
 import sys
 import unittest
@@ -48,9 +50,27 @@ class WheelContract(unittest.TestCase):
                     expected[data + 'data/' + target + '/' + Path(p).name] = root / p
             self.assertEqual(set(expected), {n for n in names if not n.startswith(di)})
             for name, path in expected.items():
-                self.assertEqual(z.read(name), path.read_bytes(), name)
+                payload = path.read_bytes()
+                if name.startswith(data + 'scripts/'):
+                    first, separator, rest = payload.partition(b'\n')
+                    # Independent expectation for the setuptools-style transform.
+                    if re.fullmatch(br'#!.*python[0-9.]*([ \t].*)?', first):
+                        suffix = re.search(br'python[0-9.]*([ \t].*)?$', first).group(1) or b''
+                        payload = b'#!python' + suffix + separator + rest
+                self.assertEqual(z.read(name), payload, name)
+            self.assertEqual(len(expected), 1082)
+            self.assertEqual(len([n for n in expected if n.startswith('tests/')]), 709)
+            self.assertEqual(len(names - set(expected)), 5)
+            for info in z.infolist():
+                executable = info.filename.startswith(data + 'scripts/') or info.filename == data + 'data/bin/vtFA_RTK_5766_v2'
+                self.assertEqual(stat.S_IMODE(info.external_attr >> 16), 0o755 if executable else 0o644, info.filename)
             metadata = email.message_from_bytes(z.read(di + 'METADATA'))
             self.assertEqual(metadata['Version'], '1.2')
+            for field, setup_field in [('Maintainer', 'maintainer'), ('Maintainer-email', 'maintainer_email'), ('Keywords', 'keywords'), ('License', 'license'), ('Summary', 'description'), ('Author', 'author'), ('Author-email', 'author_email'), ('Home-page', 'url')]:
+                self.assertEqual(metadata[field], ast.literal_eval(kw[setup_field]), field)
+            self.assertEqual(metadata['Metadata-Version'], '2.4')
+            self.assertEqual(metadata.get_all('License-File'), ['LICENSE'])
+            self.assertEqual(z.read(di + 'licenses/LICENSE'), (root / 'LICENSE').read_bytes())
             actual = metadata.get_all('Requires-Dist')
             ordinary = [x for x in actual if 'extra ==' not in x]
             self.assertCountEqual(contract['requires'], ordinary)

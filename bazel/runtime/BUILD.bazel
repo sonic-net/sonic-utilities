@@ -1,7 +1,7 @@
-load("@rules_python//python:packaging.bzl", "py_wheel")
+load("//bazel:wheel_install_contract.bzl", "utilities_wheel")
 load("//bazel:packaging.bzl", "SCRIPTS", "ENTRY_POINTS", "REQUIRES", "EXTRA_REQUIRES", "CLASSIFIERS")
 package(default_visibility = ["//visibility:public"])
-py_wheel(
+utilities_wheel(
     name = "sonic_utilities_wheel",
     distribution = "sonic-utilities",
     version = "1.2",
@@ -17,10 +17,14 @@ py_wheel(
     summary = "Command-line utilities for SONiC",
     author = "SONiC Team",
     author_email = "linuxnetdev@microsoft.com",
+    maintainer = "Joe LeVeque",
+    maintainer_email = "jolevequ@microsoft.com",
+    keywords = "sonic SONiC utilities command line cli CLI",
+    license_files = ["LICENSE"],
     homepage = "https://github.com/Azure/sonic-utilities",
     license = "Apache 2.0",
     classifiers = CLASSIFIERS,
-    extra_distinfo_files = {"//:LICENSE": "LICENSE"},
+    extra_distinfo_files = {"//:LICENSE": "licenses/LICENSE"},
 )
 
 exports_files(["contract_test.py"])
