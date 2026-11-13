@@ -14,6 +14,7 @@ from sonic_py_common import multi_asic
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from utilities_common.general import load_db_config
 
+
 def info(msg):
     click.echo(click.style("Info: ", fg='cyan') + click.style(str(msg), fg='green'))
     syslog.syslog(syslog.LOG_INFO, msg)
@@ -162,9 +163,11 @@ class AclLoader(object):
 
         namespaces = multi_asic.get_all_namespaces()
         for front_asic_namespaces in namespaces['front_ns']:
-            self.per_npu_configdb[front_asic_namespaces] = ConfigDBConnector(use_unix_socket_path=True, authenticate=True, namespace=front_asic_namespaces)
+            self.per_npu_configdb[front_asic_namespaces] = ConfigDBConnector(
+                use_unix_socket_path=True, authenticate=True, namespace=front_asic_namespaces)
             self.per_npu_configdb[front_asic_namespaces].connect()
-            self.per_npu_statedb[front_asic_namespaces] = SonicV2Connector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            self.per_npu_statedb[front_asic_namespaces] = SonicV2Connector(
+                use_unix_socket_path=True, namespace=front_asic_namespaces)
             self.per_npu_statedb[front_asic_namespaces].connect(self.per_npu_statedb[front_asic_namespaces].STATE_DB)
 
         self.read_tables_info()
@@ -326,13 +329,19 @@ class AclLoader(object):
                 relevant_namespaces = session_namespaces.get(key, self.per_npu_statedb.keys())
                 for namespace_key in relevant_namespaces:
                     namespace_statedb = self.per_npu_statedb[namespace_key]
-                    state_db_info = namespace_statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(self.STATE_MIRROR_SESSION_TABLE, key))
-                    self.sessions_db_info[key]["status"][namespace_key] = state_db_info.get("status", "inactive") if state_db_info else "error"
-                    self.sessions_db_info[key]["monitor_port"][namespace_key] = state_db_info.get("monitor_port", "") if state_db_info else ""
+                    state_db_info = namespace_statedb.get_all(
+                        self.statedb.STATE_DB, "{}|{}".format(self.STATE_MIRROR_SESSION_TABLE, key))
+                    self.sessions_db_info[key]["status"][namespace_key] = state_db_info.get(
+                        "status", "inactive") if state_db_info else "error"
+                    self.sessions_db_info[key]["monitor_port"][namespace_key] = state_db_info.get(
+                        "monitor_port", "") if state_db_info else ""
             else:
-                state_db_info = self.statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(self.STATE_MIRROR_SESSION_TABLE, key))
-                self.sessions_db_info[key]["status"] = state_db_info.get("status", "inactive") if state_db_info else "error"
-                self.sessions_db_info[key]["monitor_port"] = state_db_info.get("monitor_port", "") if state_db_info else ""
+                state_db_info = self.statedb.get_all(
+                    self.statedb.STATE_DB, "{}|{}".format(self.STATE_MIRROR_SESSION_TABLE, key))
+                self.sessions_db_info[key]["status"] = state_db_info.get(
+                    "status", "inactive") if state_db_info else "error"
+                self.sessions_db_info[key]["monitor_port"] = state_db_info.get(
+                    "monitor_port", "") if state_db_info else ""
 
     def read_acl_object_status_info(self, keys, state_db_table_name):
         """
@@ -349,10 +358,13 @@ class AclLoader(object):
             if self.per_npu_statedb:
                 status[key]['status'] = {}
                 for namespace_key, namespace_statedb in self.per_npu_statedb.items():
-                    state_db_info = namespace_statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(state_db_table_name, state_db_key))
-                    status[key]['status'][namespace_key] = state_db_info.get("status", "N/A") if state_db_info else "N/A"
+                    state_db_info = namespace_statedb.get_all(
+                        self.statedb.STATE_DB, "{}|{}".format(state_db_table_name, state_db_key))
+                    status[key]['status'][namespace_key] = state_db_info.get(
+                        "status", "N/A") if state_db_info else "N/A"
             else:
-                state_db_info = self.statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(state_db_table_name, state_db_key))
+                state_db_info = self.statedb.get_all(
+                    self.statedb.STATE_DB, "{}|{}".format(state_db_table_name, state_db_key))
                 status[key]['status'] = state_db_info.get("status", "N/A") if state_db_info else "N/A"
 
         return status
@@ -561,11 +573,15 @@ class AclLoader(object):
             # Same information should be there in all state DB's
             # as it is static information about switch capability
             namespace_statedb = list(self.per_npu_statedb.values())[0]
-            aclcapability = namespace_statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(self.ACL_STAGE_CAPABILITY_TABLE, stage.upper()))
-            switchcapability = namespace_statedb.get_all(self.statedb.STATE_DB, "{}|switch".format(self.SWITCH_CAPABILITY_TABLE))
+            aclcapability = namespace_statedb.get_all(
+                self.statedb.STATE_DB, "{}|{}".format(self.ACL_STAGE_CAPABILITY_TABLE, stage.upper()))
+            switchcapability = namespace_statedb.get_all(
+                self.statedb.STATE_DB, "{}|switch".format(self.SWITCH_CAPABILITY_TABLE))
         else:
-            aclcapability = self.statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(self.ACL_STAGE_CAPABILITY_TABLE, stage.upper()))
-            switchcapability = self.statedb.get_all(self.statedb.STATE_DB, "{}|switch".format(self.SWITCH_CAPABILITY_TABLE))
+            aclcapability = self.statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(
+                self.ACL_STAGE_CAPABILITY_TABLE, stage.upper()))
+            switchcapability = self.statedb.get_all(
+                self.statedb.STATE_DB, "{}|switch".format(self.SWITCH_CAPABILITY_TABLE))
         # In the load_minigraph path, it's possible that the STATE_DB entry haven't pop up because orchagent is stopped
         # before loading acl.json. So we skip the validation if any table is empty
         if skip_validation and (not aclcapability or not switchcapability):
@@ -787,7 +803,8 @@ class AclLoader(object):
                 raise AclLoaderException("IP_PROTOCOL={} is not ICMP, but ICMP fields were provided".format(protocol))
 
             if ("ICMPV6_TYPE" in rule_props or "ICMPV6_CODE" in rule_props) and protocol != 58:
-                raise AclLoaderException("IP_PROTOCOL={} is not ICMPV6, but ICMPV6 fields were provided".format(protocol))
+                raise AclLoaderException(
+                    "IP_PROTOCOL={} is not ICMPV6, but ICMPV6 fields were provided".format(protocol))
 
     def convert_rule_to_db_schema(self, table_name, rule, skip_action_validation=False):
         """
@@ -808,11 +825,13 @@ class AclLoader(object):
             try:
                 ether_type =  rule.l2.config.ethertype
             except Exception as e:
-                raise AclLoaderException("l2:ethertype must be provided for rule #{} in table:{} of type L3V4V6".format(rule_idx, table_name))
+                raise AclLoaderException(
+                    "l2:ethertype must be provided for rule #{} in table:{} of type L3V4V6".format(rule_idx, table_name))
             if ether_type not in ["ETHERTYPE_IPV4", "ETHERTYPE_IPV6"]:
                 # Ether type must be v4 or v6 to match IP fields, L4 (TCP/UDP) fields or ICMP fields
                 if rule.ip or rule.transport:
-                    raise AclLoaderException("ethertype={} is neither ETHERTYPE_IPV4 nor ETHERTYPE_IPV6 for IP rule #{} in table:{} type L3V4V6".format(rule.l2.config.ethertype, rule_idx, table_name))
+                    raise AclLoaderException("ethertype={} is neither ETHERTYPE_IPV4 nor ETHERTYPE_IPV6 for IP rule #{} in table:{} type L3V4V6".format(
+                        rule.l2.config.ethertype, rule_idx, table_name))
             rule_props["ETHER_TYPE"] = str(self.ethertype_map[ether_type])
         elif self.is_table_l3v6(table_name):
             rule_props["IP_TYPE"] = "IPV6ANY"  # ETHERTYPE is not supported for DATAACLV6
@@ -900,7 +919,6 @@ class AclLoader(object):
                 for namespace_configdb in self.per_npu_configdb.values():
                     namespace_configdb.mod_entry(self.ACL_RULE, key, None)
 
-
         self.configdb.mod_config({self.ACL_RULE: self.rules_info})
         # Program for per front asic namespace also if present
         for namespace_configdb in self.per_npu_configdb.values():
@@ -946,7 +964,6 @@ class AclLoader(object):
             # Program for per-asic namespace also if present
             for namespace_configdb in self.per_npu_configdb.values():
                 namespace_configdb.mod_entry(self.ACL_RULE, key, None)
-
 
         # Add all new dataplane rules
         for key in new_dataplane_rules:
@@ -1089,7 +1106,6 @@ class AclLoader(object):
             data.append([key, val["meter_type"], val["mode"], val.get("cir", ""), val.get("cbs", "")])
 
         print(tabulate.tabulate(data, headers=header, tablefmt="simple", missingval=""))
-
 
     def show_rule(self, table_name, rule_id):
         """

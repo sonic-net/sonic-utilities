@@ -17,6 +17,7 @@ from swsscommon import swsscommon
 topo = None
 dedicated_dbs = {}
 
+
 def clean_up_config():
     # Set SonicDBConfig variables to initial state
     # so that it can be loaded with single or multiple
@@ -25,6 +26,7 @@ def clean_up_config():
     SonicDBConfig._sonic_db_global_config_init = False
     SonicDBConfig._sonic_db_config_init = False
     swsscommon.SonicDBConfig.reset()
+
 
 def load_namespace_config(global_db_file_path=None):
     # To support multi asic testing
@@ -37,6 +39,7 @@ def load_namespace_config(global_db_file_path=None):
     SonicDBConfig.load_sonic_global_db_config(global_db_file_path=global_db_file_path)
     swsscommon.SonicDBConfig.load_sonic_global_db_config(global_db_file_path)
 
+
 def load_database_config():
     # Load local database_config.json for single namespace test scenario
     clean_up_config()
@@ -47,6 +50,7 @@ def load_database_config():
 
 
 _old_connect_SonicV2Connector = SonicV2Connector.connect
+
 
 def connect_SonicV2Connector(self, db_name, retry_on=True):
     # add topo to kwargs for testing different topology
@@ -62,11 +66,14 @@ def connect_SonicV2Connector(self, db_name, retry_on=True):
     self.dbintf.redis_kwargs['decode_responses'] = True
     _old_connect_SonicV2Connector(self, db_name, retry_on)
 
+
 def _subscribe_keyspace_notification(self, db_name, client):
     pass
 
+
 def mock_close(self, db_name):
     pass
+
 
 def config_set(self, *args):
     pass
