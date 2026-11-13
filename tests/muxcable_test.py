@@ -697,7 +697,7 @@ class TestMuxcable(object):
 
         assert result is connection
         get_port.assert_not_called()
-        connector.assert_called_once_with('STATE_DB', 0, False, namespace)
+        connector.assert_called_once_with('STATE_DB', 0, False, namespace, True)
 
     @mock.patch('show.muxcable.get_hwmode_mux_direction_port', mock.MagicMock(return_value=({ 0 :"active",
                                                                                               1  :"standby",

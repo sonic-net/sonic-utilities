@@ -701,7 +701,7 @@ class TestStaticRoutes(object):
         result = runner.invoke(config.config.commands["route"],
                                ["add", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
         assert result.exit_code == 0
-        mock_config_db_connector.assert_called_once_with(use_unix_socket_path=True, namespace='')
+        mock_config_db_connector.assert_called_once_with(use_unix_socket_path=True, namespace='', authenticate=True)
         assert ('default', '1.2.3.4/32') in cfgdb.get_table('STATIC_ROUTE')
 
     def test_add_duplicate_nexthop_static_route(self):

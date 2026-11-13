@@ -88,7 +88,7 @@ class Table:
         return True, ret
 
 
-def conn_side_effect(arg, _1, _2, namespace):
+def conn_side_effect(arg, _1, _2, namespace, authenticate=False):
     return db_conns[namespace][arg]
 
 
@@ -244,7 +244,10 @@ class TestRouteCheck(object):
                 getattr(route_check, function_name)(namespace, *arguments)
 
         get_port.assert_not_called()
-        connector.assert_called_once_with(db_name, route_check.REDIS_TIMEOUT_MSECS, False, namespace)
+        if function_name == 'mitigate_installed_not_offloaded_frr_routes':
+            connector.assert_called_once_with(db_name, route_check.REDIS_TIMEOUT_MSECS, False, namespace, True)
+        else:
+            connector.assert_called_once_with(db_name, route_check.REDIS_TIMEOUT_MSECS, False, namespace)
 
     def init(self):
         route_check.UNIT_TESTING = 1

@@ -2,6 +2,7 @@ import ipaddress
 
 import click
 from natsort import natsorted
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 
@@ -39,9 +40,9 @@ def advertised_routes(args):
         profile_filter = 'NO_PROFILE'
         table = []
 
-        state_db = SonicV2Connector(namespace=ns)
+        state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB', ns), namespace=ns)
         state_db.connect(state_db.STATE_DB)
-        appl_db = SonicV2Connector(namespace=ns)
+        appl_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
         appl_db.connect(appl_db.APPL_DB)
 
         bgp_profile_keys = appl_db.keys(appl_db.APPL_DB, "BGP_PROFILE_TABLE:*")
@@ -127,7 +128,7 @@ def guid(guid):
 
     ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
     for ns in ns_list:
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         vnet_table = config_db.get_table('VNET')
@@ -154,7 +155,7 @@ def name(vnet_name):
 
     ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
     for ns in ns_list:
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         vnet_data, interfaces = get_vnet_info(config_db, vnet_name)
@@ -181,7 +182,7 @@ def brief():
             click.echo("\nNamespace: {}".format(ns))
 
         table = []
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         # Fetching data from config_db for VNET
@@ -211,7 +212,7 @@ def alias(vnet_alias):
     if vnet_alias is not None:
         # Search for specific alias across namespaces
         for ns in ns_list:
-            config_db = ConfigDBConnector(namespace=ns)
+            config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
             config_db.connect()
 
             vnet_data = config_db.get_table('VNET')
@@ -230,7 +231,7 @@ def alias(vnet_alias):
                 click.echo("\nNamespace: {}".format(ns))
 
             table = []
-            config_db = ConfigDBConnector(namespace=ns)
+            config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
             config_db.connect()
 
             vnet_data = config_db.get_table('VNET')
@@ -252,7 +253,7 @@ def interfaces():
             click.echo("\nNamespace: {}".format(ns))
 
         vnet_intfs = {}
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         # Fetching data from config_db for interfaces
@@ -325,7 +326,7 @@ def neighbors():
 
         vnet_intfs = {}
         nbrs_data = {}
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         # Fetching data from config_db for interfaces
@@ -375,7 +376,7 @@ def neighbors():
                 else:
                     vnet_intfs[vnet_name] = [k]
 
-        appl_db = SonicV2Connector(namespace=ns)
+        appl_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
         appl_db.connect(appl_db.APPL_DB)
 
         # Fetching data from appl_db for neighbors
@@ -433,9 +434,9 @@ def endpoint(args):
             monitor_dict = {}
             table = []
 
-            state_db = SonicV2Connector(namespace=ns)
+            state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB', ns), namespace=ns)
             state_db.connect(state_db.STATE_DB)
-            appl_db = SonicV2Connector(namespace=ns)
+            appl_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
             appl_db.connect(appl_db.APPL_DB)
 
             # Fetching data from appl_db for VNET TUNNEL ROUTES
@@ -486,9 +487,9 @@ def endpoint(args):
             monitor_list = []
             have_status = False
 
-            state_db = SonicV2Connector(namespace=ns)
+            state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB', ns), namespace=ns)
             state_db.connect(state_db.STATE_DB)
-            appl_db = SonicV2Connector(namespace=ns)
+            appl_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
             appl_db.connect(appl_db.APPL_DB)
 
             vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
@@ -590,8 +591,8 @@ def all(vnet_name):
         if multi_asic.is_multi_asic() and len(ns_list) > 1:
             click.echo("\nNamespace: {}".format(ns))
 
-        appl_db = SonicV2Connector(namespace=ns)
-        state_db = SonicV2Connector(namespace=ns)
+        appl_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
+        state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB', ns), namespace=ns)
 
         _show_local_helper(vnet_name=vnet_name, appl_db=appl_db)
         click.echo()
@@ -609,7 +610,7 @@ def local(vnet_name):
         if multi_asic.is_multi_asic() and len(ns_list) > 1:
             click.echo("\nNamespace: {}".format(ns))
 
-        appl_db = SonicV2Connector(namespace=ns)
+        appl_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
 
         _show_local_helper(vnet_name=vnet_name, appl_db=appl_db)
 
@@ -625,8 +626,8 @@ def tunnel(vnet_name):
         if multi_asic.is_multi_asic() and len(ns_list) > 1:
             click.echo("\nNamespace: {}".format(ns))
 
-        appl_db = SonicV2Connector(namespace=ns)
-        state_db = SonicV2Connector(namespace=ns)
+        appl_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
+        state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB', ns), namespace=ns)
 
         _show_tunnel_helper(vnet_name=vnet_name, appl_db=appl_db, state_db=state_db)
 

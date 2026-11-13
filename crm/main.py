@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import click
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import ConfigDBConnector
 from tabulate import tabulate
 from sonic_py_common import multi_asic
@@ -74,7 +75,10 @@ class Crm:
             # Get the namespace list
             namespaces = multi_asic.get_namespace_list()
 
-            configdb = ConfigDBConnector(namespace=namespaces[0])
+            configdb = ConfigDBConnector(
+                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespaces[0]),
+                namespace=namespaces[0],
+            )
             configdb.connect()
 
         crm_info = configdb.get_entry('CRM', 'Config')
@@ -97,7 +101,10 @@ class Crm:
             # Get the namespace list
             namespaces = multi_asic.get_namespace_list()
 
-            configdb = ConfigDBConnector(namespace=namespaces[0])
+            configdb = ConfigDBConnector(
+                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespaces[0]),
+                namespace=namespaces[0],
+            )
             configdb.connect()
 
         crm_info = configdb.get_entry('CRM', 'Config')

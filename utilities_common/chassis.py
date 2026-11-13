@@ -9,7 +9,8 @@ def chassis_db_socket_available(db_name):
     Legacy images may admit display users only through the shared TCP endpoint.
     Both transports retain the same unprotected chassis Redis policy.
     """
-    if not device_info.is_chassis_db_local():
+    is_local = getattr(device_info, "is_chassis_db_local", None)
+    if is_local is None or not is_local():
         return False
     path = SonicDBConfig.getDbSock(db_name)
     return bool(path) and os.access(path, os.R_OK | os.W_OK)

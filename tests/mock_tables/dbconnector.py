@@ -24,22 +24,26 @@ def clean_up_config():
     SonicDBConfig._sonic_db_config = {}
     SonicDBConfig._sonic_db_global_config_init = False
     SonicDBConfig._sonic_db_config_init = False
+    swsscommon.SonicDBConfig.reset()
 
-def load_namespace_config():
+def load_namespace_config(global_db_file_path=None):
     # To support multi asic testing
     # SonicDBConfig load_sonic_global_db_config
     # is invoked to load multiple namespaces
     clean_up_config()
-    SonicDBConfig.load_sonic_global_db_config(
-        global_db_file_path=os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 'database_global.json'))
+    if global_db_file_path is None:
+        global_db_file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'database_global.json')
+    SonicDBConfig.load_sonic_global_db_config(global_db_file_path=global_db_file_path)
+    swsscommon.SonicDBConfig.load_sonic_global_db_config(global_db_file_path)
 
 def load_database_config():
     # Load local database_config.json for single namespace test scenario
     clean_up_config()
-    SonicDBConfig.load_sonic_db_config(
-        sonic_db_file_path=os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 'database_config.json'))
+    db_file_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'database_config.json')
+    SonicDBConfig.load_sonic_db_config(sonic_db_file_path=db_file_path)
+    swsscommon.SonicDBConfig.load_sonic_db_config(db_file_path)
 
 
 _old_connect_SonicV2Connector = SonicV2Connector.connect
@@ -277,5 +281,13 @@ SonicV2Connector.connect = connect_SonicV2Connector
 swsscommon.SonicV2Connector = SonicV2Connector
 swsscommon.ConfigDBConnector = ConfigDBConnector
 swsscommon.ConfigDBPipeConnector = ConfigDBPipeConnector
+
+# Scripts can import Db before installing these unit-test connectors.
+# Keep its cached constructor aliases on the same mock classes.
+_db_module = sys.modules.get('utilities_common.db')
+if _db_module is not None:
+    _db_module.ConfigDBConnector = ConfigDBConnector
+    _db_module.ConfigDBPipeConnector = ConfigDBPipeConnector
+    _db_module.SonicV2Connector = SonicV2Connector
 swsscommon.CounterTable = CounterTable
 swsscommon.PortCounter = PortCounter

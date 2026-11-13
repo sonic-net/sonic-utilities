@@ -1952,10 +1952,11 @@ class TestPortConfigurationSnapshot:
         ))
         monkeypatch.setattr(cpoutil, "current_port_config", {})
 
+    @pytest.mark.parametrize("use_unix_socket_path", [False, True])
     @pytest.mark.parametrize("namespaces", [[""], ["asic0", "asic1"]])
     @pytest.mark.parametrize("port_count", [1, 130])
     def test_table_reads_scale_with_namespaces_not_ports(
-            self, monkeypatch, shared_port_mapping, namespaces, port_count):
+            self, monkeypatch, shared_port_mapping, namespaces, port_count, use_unix_socket_path):
         ports = ["Ethernet{}".format(index * 8) for index in range(port_count)]
         physical = {port: [index + 1] for index, port in enumerate(ports)}
         self.configure(monkeypatch, shared_port_mapping, ports, physical)
@@ -1973,7 +1974,16 @@ class TestPortConfigurationSnapshot:
         for namespace, database in databases.items():
             database.get_table.return_value = tables[namespace]
         namespace_list = mock.Mock(return_value=namespaces)
-        connector = mock.Mock(side_effect=lambda namespace: databases[namespace])
+        selected_transport = use_unix_socket_path
+        monkeypatch.setattr(cpoutil.multi_asic, "use_local_redis_socket",
+                            mock.Mock(return_value=selected_transport))
+
+        def make_reader(namespace, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is selected_transport
+            assert authenticate is False
+            return databases[namespace]
+
+        connector = mock.Mock(side_effect=make_reader)
         monkeypatch.setattr(cpoutil.multi_asic, "get_namespace_list", namespace_list)
         monkeypatch.setattr(cpoutil.multi_asic.swsscommon, "ConfigDBConnector", connector)
 
@@ -1981,7 +1991,9 @@ class TestPortConfigurationSnapshot:
 
         assert cpoutil.current_port_config == expected
         namespace_list.assert_called_once_with(None)
-        assert connector.call_args_list == [mock.call(namespace=ns) for ns in namespaces]
+        assert connector.call_args_list == [
+            mock.call(use_unix_socket_path=selected_transport, namespace=ns) for ns in namespaces
+        ]
         for database in databases.values():
             database.connect.assert_called_once_with()
             database.get_table.assert_called_once_with("PORT")

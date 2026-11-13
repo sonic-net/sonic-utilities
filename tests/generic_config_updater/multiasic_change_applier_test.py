@@ -199,7 +199,7 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
         current_config = applier.apply(current_config, change)
 
         # Assert ConfigDBConnector called with the correct namespace
-        mock_ConfigDBConnector.assert_called_once_with(use_unix_socket_path=True, namespace="")
+        mock_ConfigDBConnector.assert_called_once_with(use_unix_socket_path=True, namespace="", authenticate=True)
 
     @patch('generic_config_updater.gu_common.get_config_db_as_json', autospec=True)
     @patch('generic_config_updater.change_applier.ConfigDBConnector', autospec=True)
@@ -220,7 +220,7 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
         current_config = applier.apply(current_config, change)
 
         # Assert ConfigDBConnector called with the correct scope
-        mock_ConfigDBConnector.assert_called_once_with(use_unix_socket_path=True, namespace="asic0")
+        mock_ConfigDBConnector.assert_called_once_with(use_unix_socket_path=True, namespace="asic0", authenticate=True)
 
     @patch('generic_config_updater.gu_common.get_config_db_as_json', autospec=True)
     @patch('generic_config_updater.change_applier.ConfigDBConnector', autospec=True)

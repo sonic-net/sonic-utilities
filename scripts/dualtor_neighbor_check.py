@@ -777,7 +777,7 @@ def main():
     config_db = swsscommon.ConfigDBConnector(use_unix_socket_path=True)
     config_db.connect()
     appl_db = swsscommon.DBConnector(
-        "APPL_DB", REDIS_TIMEOUT_MSECS, False, DEFAULT_NAMESPACE
+        "APPL_DB", REDIS_TIMEOUT_MSECS, False, DEFAULT_NAMESPACE, True
     )
 
     mux_cables = get_mux_cable_config(config_db)

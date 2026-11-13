@@ -12,6 +12,7 @@ from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
 from sonic_py_common import syslogger
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from portconfig import get_child_ports
 import sonic_platform_base.sonic_sfp.sfputilhelper
@@ -220,7 +221,7 @@ def tpid(interfacename, namespace, display, verbose):
 def breakout(ctx):
     """Show Breakout Mode information by interfaces"""
     # Reading data from Redis configDb
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
     ctx.obj = {'db': config_db}
 
@@ -553,7 +554,7 @@ def flap(ctx, interfacename, namespace, display):
 def get_all_port_errors(interfacename):
 
     port_operr_table = {}
-    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host=REDIS_HOSTIP)
     db.connect(db.STATE_DB)
 
     # Retrieve the errors data from the PORT_OPERR_TABLE

@@ -13,6 +13,7 @@ import utilities_common.multi_asic as multi_asic_util
 from importlib import reload
 from natsort import natsorted
 from sonic_py_common import device_info
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
@@ -193,7 +194,7 @@ def display_storm_all():
     header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
     body = []
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
 
     table = config_db.get_table('PORT_STORM_CONTROL')
@@ -227,7 +228,7 @@ def display_storm_all():
 #
 def connect_storm_control_config_db(namespace=None):
     if namespace is None:
-        config_db = ConfigDBConnector()
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
         config_db.connect()
     else:
         config_db = multi_asic.connect_config_db_for_ns(namespace)
@@ -282,7 +283,7 @@ def connect_config_db():
     """
     Connects to config_db
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
     return config_db
 
@@ -290,7 +291,7 @@ def is_gearbox_configured():
     """
     Checks whether Gearbox is configured or not
     """
-    app_db = SonicV2Connector()
+    app_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB'))
     try:
         app_db.connect(app_db.APPL_DB)
 
@@ -390,7 +391,7 @@ def get_interface_bind_to_vrf(config_db, vrf_name):
 @click.pass_context
 def vrf(ctx, vrf_name):
     """Show vrf config"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
     header = ['VRF', 'Interfaces']
     body = []
@@ -422,7 +423,7 @@ def vrf(ctx, vrf_name):
 def event_counters():
     """Show events counter"""
     # dump keys as formatted
-    counters_db = SonicV2Connector(host='127.0.0.1')
+    counters_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'), host='127.0.0.1')
     counters_db.connect(counters_db.COUNTERS_DB, retry_on=False)
 
     header = ['name', 'count']
@@ -602,7 +603,7 @@ def management_interface():
 def address ():
     """Show IP address configured for management interface"""
 
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
 
     # Fetching data from config_db for MGMT_INTERFACE
@@ -619,7 +620,7 @@ def address ():
 @click.pass_context
 def snmpagentaddress (ctx):
     """Show SNMP agent listening IP address configuration"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
     agenttable = config_db.get_table('SNMP_AGENT_ADDRESS_CONFIG')
 
@@ -637,7 +638,7 @@ def snmpagentaddress (ctx):
 @click.pass_context
 def snmptrap (ctx):
     """Show SNMP agent Trap server configuration"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
     traptable = config_db.get_table('SNMP_TRAP_CONFIG')
 
@@ -1278,7 +1279,7 @@ def mac(ctx, vlan, port, address, type, count, local, verbose, namespace):
 @mac.command('aging-time')
 @click.pass_context
 def aging_time(ctx):
-    app_db = SonicV2Connector()
+    app_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB'))
     app_db.connect(app_db.APPL_DB)
     table = "SWITCH_TABLE*"
     keys = app_db.keys(app_db.APPL_DB, table)
@@ -1450,7 +1451,7 @@ def interfaces(ctx, namespace, display):
 @interfaces.command()
 def loopback_action():
     """show ip interfaces loopback-action"""
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
     header = ['Interface', 'Action']
     body = []
@@ -1630,7 +1631,7 @@ def link_local_mode(namespace, verbose):
     ns_list = masic.get_ns_list_based_on_options()
 
     for ns in ns_list:
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
         interface = ""
 
@@ -2426,7 +2427,7 @@ def radius(db):
             for key in entry:
                 output += ('               %s %s\n' % (key, str(entry[key])))
 
-    counters_db = SonicV2Connector(host='127.0.0.1')
+    counters_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'), host='127.0.0.1')
     counters_db.connect(counters_db.COUNTERS_DB, retry_on=False)
 
     if radius['global'].get('statistics', False) and (data != {}):

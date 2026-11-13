@@ -1,8 +1,10 @@
 import io
+import os
 import sys
 from contextlib import ExitStack, redirect_stdout, redirect_stderr
 from pathlib import Path
 from types import SimpleNamespace
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pytest
@@ -75,6 +77,10 @@ def invoke_local(module, component, arguments, program, uid=0):
         if component == 'ecn':
             handlers['EcnConfig'].return_value.get_profile_data.return_value = {}
             handlers['EcnConfig'].return_value.validate_profile_data.return_value = True
+            handlers['EcnConfig'].return_value.updated_profile_tables = {}
+            directory = stack.enter_context(TemporaryDirectory(prefix='ecn-authentication-test-'))
+            stack.enter_context(patch.dict(os.environ, {
+                'ECNCONFIG_FILE': str(Path(directory) / 'profiles.json')}))
         if component == 'drop':
             with redirect_stdout(output), redirect_stderr(output):
                 try:

@@ -1,3 +1,4 @@
+from sonic_py_common._redis_transport import use_local_redis_socket
 from sonic_py_common import multi_asic, device_info
 from swsscommon.swsscommon import ConfigDBConnector, ConfigDBPipeConnector, SonicV2Connector, SonicDBConfig
 from utilities_common import constants
@@ -8,7 +9,9 @@ class Db(object):
     def __init__(self, authenticate=False):
         self.cfgdb_clients = {}
         self.db_clients = {}
-        options = {"use_unix_socket_path": True, "authenticate": True} if authenticate else {}
+        options = {"use_unix_socket_path": authenticate or use_local_redis_socket("CONFIG_DB")}
+        if authenticate:
+            options["authenticate"] = True
         self.cfgdb = ConfigDBConnector(**options)
         self.cfgdb.connect()
         self.cfgdb_pipe = ConfigDBPipeConnector(**options)

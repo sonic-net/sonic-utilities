@@ -20,6 +20,7 @@ try:
 except KeyError:
     pass
 
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector
 
 header = ['Name', 'Leaking']
@@ -29,7 +30,7 @@ STATUS_FIELD_NAME = 'leak_status'
 
 class LeakageShow(object):
     def __init__(self):
-        self.db = SonicV2Connector(host="127.0.0.1")
+        self.db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
 
     def show(self):

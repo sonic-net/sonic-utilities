@@ -3,6 +3,7 @@ import json
 
 from natsort import natsorted
 from tabulate import tabulate
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector
 from utilities_common.cli import UserCache
 
@@ -16,7 +17,7 @@ class SRv6Stat(object):
     COUNTER_BYTES = "SAI_COUNTER_STAT_BYTES"
 
     def __init__(self):
-        self.db = SonicV2Connector()
+        self.db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'))
         self.db.connect(self.db.COUNTERS_DB)
         self.user_cache = UserCache()
         self.user_cache_file = os.path.join(self.user_cache.get_directory(), self.COUNTERS_CACHE_FILE)

@@ -848,7 +848,7 @@ def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_app
     All of the above mentioned cases must be considered as a bug, but even in that case we will report an error in the log but
     given that this script ensures the route is installed in the hardware it will automitigate such a bug.
     """
-    db = swsscommon.DBConnector('APPL_STATE_DB', REDIS_TIMEOUT_MSECS, False, namespace)
+    db = swsscommon.DBConnector('APPL_STATE_DB', REDIS_TIMEOUT_MSECS, False, namespace, True)
     response_producer = swsscommon.NotificationProducer(db, f'{APPL_DB_NAME}_{swsscommon.APP_ROUTE_TABLE_NAME}_RESPONSE_CHANNEL')
     for entry in [entry for entry in missed_frr_rt if entry['prefix'] in rt_appl]:
         fvs = swsscommon.FieldValuePairs([('err_str', 'SWSS_RC_SUCCESS'), ('protocol', entry['protocol'])])

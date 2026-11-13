@@ -42,6 +42,7 @@ import argparse
 import sys
 
 from tabulate import tabulate
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import ConfigDBConnector
 
 
@@ -49,7 +50,7 @@ class NatConfig(object):
 
     def __init__(self):
         super(NatConfig,self).__init__()
-        self.config_db = ConfigDBConnector()
+        self.config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
         self.config_db.connect()
         return
 

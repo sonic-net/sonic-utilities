@@ -70,6 +70,7 @@ try:
 except KeyError:
     pass
 
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 from sonic_py_common import multi_asic
@@ -138,7 +139,10 @@ class EcnConfig(object):
         Get parameters of a WRED profile
         """
         if self.namespace or not multi_asic.is_multi_asic():
-            db = ConfigDBConnector(namespace=self.namespace)
+            db = ConfigDBConnector(
+                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', self.namespace),
+                namespace=self.namespace,
+            )
             db.connect()
             wred_profiles = db.get_table(WRED_PROFILE_TABLE_NAME)
         else:
