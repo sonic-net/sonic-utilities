@@ -318,7 +318,11 @@ class TestChangeApplierRestartServices(unittest.TestCase):
             "PORT": {"restart_on_change": [{"fields": ["speed"], "modified_only": True, "units": ["telemetry"]}]},
             "SYSLOG_SERVER": {"restart_on_change": [{"units": ["rsyslog-config"], "reset_failed": ["rsyslog"]}]},
             "DEVICE_METADATA": {
-                "restart_on_change": [{"fields": ["docker_routing_config_mode"], "units": ["bgp"]}],
+                "restart_on_change": [
+                    {"fields": ["docker_routing_config_mode"], "units": ["bgp"]},
+                    {"fields": ["synchronous_mode"], "defaults": {"synchronous_mode": "enable"},
+                     "units": ["swss"], "reset_failed": ["syncd"], "per_asic": True},
+                ],
             },
             "VLAN": {"services_to_validate": ["vlan-service"]},
         }
@@ -459,6 +463,45 @@ class TestChangeApplierRestartServices(unittest.TestCase):
         assert self.restart_after((old, upd))
         self.restart.assert_called_once_with("telemetry")
 
+    def test_defaults__unset_field_takes_default(self):
+        for old_meta, upd_meta in (({}, {"synchronous_mode": "enable"}),
+                                   ({"synchronous_mode": "enable"}, {}),
+                                   ({"synchronous_mode": ""}, {"synchronous_mode": "enable"})):
+            old = self.updated(DEVICE_METADATA={"localhost": old_meta})
+            assert self.restart_after((old, self.updated(DEVICE_METADATA={"localhost": upd_meta})))
+        assert self.restart_after((self.OLD, self.updated(DEVICE_METADATA=None)))
+        self.restart.assert_not_called()
+        for old_meta, upd_meta in (({}, {"synchronous_mode": "disable"}),
+                                   ({"synchronous_mode": "disable"}, {})):
+            self.restart.reset_mock()
+            old = self.updated(DEVICE_METADATA={"localhost": old_meta})
+            assert self.restart_after((old, self.updated(DEVICE_METADATA={"localhost": upd_meta})))
+            self.restart.assert_called_once_with("swss")
+
+    def test_per_asic__asic_scope_restarts_the_asic_instance(self):
+        applier = generic_config_updater.change_applier.ChangeApplier(scope="asic1")
+        upd = self.updated(DEVICE_METADATA={"localhost": {"hostname": "sw1", "synchronous_mode": "disable"}})
+        assert self.restart_after((self.OLD, upd), applier=applier)
+        self.command.assert_called_once_with(["systemctl", "reset-failed", "swss@1", "syncd@1"])
+        self.restart.assert_called_once_with("swss@1")
+
+    def test_per_asic__disabled_feature__no_restart(self):
+        applier = generic_config_updater.change_applier.ChangeApplier(scope="asic1")
+        upd = self.updated(DEVICE_METADATA={"localhost": {"synchronous_mode": "disable"}},
+                           FEATURE={"swss": {"state": "disabled"}})
+        assert self.restart_after((self.OLD, upd), applier=applier)
+        self.restart.assert_not_called()
+
+    def test_per_asic__host_scope(self):
+        upd = self.updated(DEVICE_METADATA={"localhost": {"hostname": "sw1", "synchronous_mode": "disable"}})
+        with patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=True):
+            assert self.restart_after((self.OLD, upd))
+        self.restart.assert_not_called()
+        with patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=False):
+            assert self.restart_after((self.OLD, upd))
+        self.command.assert_called_once_with(["systemctl", "reset-failed", "swss", "syncd"])
+        self.restart.assert_called_once_with("swss")
+
     def test_reset_failed__clears_extra_units_first(self):
         upd = self.updated(SYSLOG_SERVER={"10.0.0.1": {}})
         assert self.restart_after((self.OLD, upd))
@@ -530,13 +573,20 @@ class TestShippedRestartConf(unittest.TestCase):
             assert isinstance(rules, list), tbl
             for rule in rules:
                 assert isinstance(rule, dict) and "units" in rule, tbl
-                assert set(rule) <= {"units", "fields", "reset_failed", "modified_only", "host_only"}, tbl
+                assert set(rule) <= {"units", "fields", "reset_failed", "modified_only", "host_only",
+                                     "per_asic", "defaults"}, tbl
                 for key in ("units", "fields", "reset_failed"):
                     values = rule.get(key, ["x"])
                     assert isinstance(values, list) and values, tbl
                     assert all(isinstance(v, str) and v for v in values), tbl
-                for key in ("modified_only", "host_only"):
+                for key in ("modified_only", "host_only", "per_asic"):
                     assert rule.get(key, True) is True, tbl
+                assert not (rule.get("host_only") and rule.get("per_asic")), tbl
+                defaults = rule.get("defaults", {"x": "x"})
+                assert isinstance(defaults, dict) and defaults, tbl
+                assert all(isinstance(v, str) and v for v in defaults.values()), tbl
+                if "defaults" in rule:
+                    assert set(defaults) <= set(rule.get("fields", [])), tbl
 
     # snmpd.conf is rendered from these tables only when the snmp container starts.
     SNMP_TABLES = ["SNMP", "SNMP_COMMUNITY", "SNMP_USER", "SNMP_AGENT_ADDRESS_CONFIG", "SNMP_TRAP_CONFIG"]

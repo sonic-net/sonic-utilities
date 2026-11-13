@@ -80,19 +80,20 @@ class DryRunChangeApplier:
         return True
 
 
-def _field_value(entry, field):
+def _field_value(entry, field, defaults):
     value = entry.get(field)
-    return None if value in ("", []) else value
+    return defaults.get(field) if value in (None, "", []) else value
 
 
 def _restart_rule_matches(rule, old_tbl, upd_tbl):
     fields = rule.get("fields")
     if fields is None:
         return old_tbl != upd_tbl
+    defaults = rule.get("defaults", {})
     for key in set(old_tbl) | set(upd_tbl):
         for field in fields:
-            old_value = _field_value(old_tbl.get(key, {}), field)
-            upd_value = _field_value(upd_tbl.get(key, {}), field)
+            old_value = _field_value(old_tbl.get(key, {}), field, defaults)
+            upd_value = _field_value(upd_tbl.get(key, {}), field, defaults)
             if old_value == upd_value:
                 continue
             if rule.get("modified_only") and (old_value is None or upd_value is None):
@@ -218,10 +219,17 @@ class ChangeApplier:
             for rule in tbl_conf.get("restart_on_change", []):
                 if rule.get("host_only") and not is_host:
                     continue
-                if _restart_rule_matches(rule, old_cfg.get(tbl, {}), upd_cfg.get(tbl, {})):
-                    for unit in rule.get("units", []):
-                        self.restart_tables[unit].add(tbl)
-                        self.restart_resets[unit].update(rule.get("reset_failed", []))
+                if not _restart_rule_matches(rule, old_cfg.get(tbl, {}), upd_cfg.get(tbl, {})):
+                    continue
+                suffix = ""
+                if rule.get("per_asic"):
+                    if not is_host:
+                        suffix = "@" + multi_asic.get_asic_id_from_name(self.scope)
+                    elif multi_asic.is_multi_asic():
+                        continue
+                for unit in rule.get("units", []):
+                    self.restart_tables[unit + suffix].add(tbl)
+                    self.restart_resets[unit + suffix].update(u + suffix for u in rule.get("reset_failed", []))
         self.restart_features = upd_cfg.get("FEATURE", {})
 
     def restart_services(self):
@@ -233,7 +241,7 @@ class ChangeApplier:
         ok = True
         for unit in sorted(units):
             changed = ", ".join(sorted(units[unit]))
-            if self.restart_features.get(unit, {}).get("state") in ("disabled", "always_disabled"):
+            if self.restart_features.get(unit.split("@")[0], {}).get("state") in ("disabled", "always_disabled"):
                 log_notice("{} changed; {} is disabled, not restarting it".format(changed, unit))
                 continue
             log_notice("{} changed; restarting {}".format(changed, unit))

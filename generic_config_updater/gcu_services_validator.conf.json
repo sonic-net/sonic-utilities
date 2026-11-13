@@ -26,7 +26,8 @@
         "A table may also list 'restart_on_change' rules, each as",
         "    { 'units': [ <systemd unit>, ... ], 'fields': [ <field>, ... ],",
         "      'modified_only': true, 'reset_failed': [ <unit>, ... ],",
-        "      'host_only': true }",
+        "      'host_only': true, 'per_asic': true,",
+        "      'defaults': { <field>: <value>, ... } }",
         "Only 'units' is required. Rules are matched against each change",
         "of a patch as it is applied. After the last change (or after one",
         "fails), each unit of a matched rule is restarted once, after",
@@ -34,10 +35,14 @@
         "Without 'fields' any difference in the table matches. With it,",
         "the rule matches when one of those fields differs in some key of",
         "the table; a missing, empty-string or empty-list value counts as",
-        "unset. With 'modified_only', a field only counts when it is set",
-        "both before and after.",
+        "unset, and an unset field with a 'defaults' entry takes that value.",
+        "With 'modified_only', a field only counts when it is set both",
+        "before and after.",
         "Rules apply in every scope whose patch changes the table, unless",
-        "'host_only' limits them to the host scope. A unit whose FEATURE",
+        "'host_only' limits them to the host scope. With 'per_asic', the",
+        "units run one instance per ASIC: an ASIC scope restarts",
+        "<unit>@<asic id> (and <reset_failed unit>@<asic id>), and the host",
+        "scope of a multi-ASIC device restarts nothing. A unit whose FEATURE",
         "state is disabled or always_disabled is skipped.",
         ""
     ],
@@ -74,6 +79,36 @@
         },
         "TELEMETRY": {
             "restart_on_change": [ { "fields": [ "vrf" ], "units": [ "telemetry" ] } ]
+        },
+        "DEVICE_METADATA": {
+            "restart_on_change": [
+                {
+                    "fields": [ "bgp_asn", "bgp_router_id", "bgp_adv_lo_prefix_as_128", "default_bgp_status",
+                                "docker_routing_config_mode", "frr_mgmt_framework_config",
+                                "nexthop_group", "zebra_nexthop" ],
+                    "defaults": { "bgp_adv_lo_prefix_as_128": "false", "default_bgp_status": "up",
+                                  "docker_routing_config_mode": "separated", "frr_mgmt_framework_config": "false",
+                                  "nexthop_group": "disabled", "zebra_nexthop": "enabled" },
+                    "units": [ "bgp" ],
+                    "per_asic": true
+                },
+                {
+                    "fields": [ "mac", "synchronous_mode", "buffer_model", "switch_id", "max_cores",
+                                "ring_thread_enabled", "orch_northbond_dash_zmq_enabled", "suppress-fib-pending" ],
+                    "defaults": { "synchronous_mode": "enable", "buffer_model": "traditional",
+                                  "ring_thread_enabled": "false", "orch_northbond_dash_zmq_enabled": "true",
+                                  "suppress-fib-pending": "disabled" },
+                    "units": [ "swss" ],
+                    "reset_failed": [ "syncd" ],
+                    "per_asic": true
+                },
+                {
+                    "fields": [ "has_sonic_dhcpv4_relay" ],
+                    "defaults": { "has_sonic_dhcpv4_relay": "False" },
+                    "units": [ "dhcp_relay" ],
+                    "host_only": true
+                }
+            ]
         },
         "SNMP": {
             "restart_on_change": [ { "units": [ "snmp" ], "host_only": true } ]

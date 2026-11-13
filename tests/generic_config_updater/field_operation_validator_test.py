@@ -467,6 +467,40 @@ class TestValidateFieldOperation:
             target_config
         )
 
+    @pytest.mark.parametrize("old_meta, target_meta, message", [
+        ({"hwsku": "SKU-A", "hostname": "sw1"}, {"hwsku": "SKU-B", "hostname": "sw1"},
+         "hwsku cannot be changed from SKU-A to SKU-B"),
+        ({"hwsku": "SKU-A"}, {}, "hwsku cannot be changed from SKU-A to None"),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "switch_type": "voq"},
+         "switch_type cannot be changed from switch to voq"),
+        ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "fabric"},
+         "switch_type cannot be changed from voq to fabric"),
+    ])
+    @pytest.mark.parametrize("scope", ["", "asic0"])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_device_metadata_refused(self, old_meta, target_meta, message, scope):
+        config_wrapper = gu_common.ConfigWrapper(scope=scope)
+        old_config = {"DEVICE_METADATA": {"localhost": old_meta}}
+        target_config = {"DEVICE_METADATA": {"localhost": target_meta}}
+        with pytest.raises(gu_common.IllegalPatchOperationError) as err:
+            config_wrapper.validate_field_operation(old_config, target_config)
+        assert message in str(err.value)
+        assert "config reload" in str(err.value)
+
+    @pytest.mark.parametrize("old_meta, target_meta", [
+        ({"hwsku": "SKU-A", "hostname": "sw1"}, {"hwsku": "SKU-A", "hostname": "sw2"}),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "switch_type": "switch"}),
+        ({"hwsku": "SKU-A", "switch_type": "switch"}, {"hwsku": "SKU-A", "switch_type": ""}),
+        ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "voq", "bgp_asn": "65100"}),
+    ])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_device_metadata_allowed(self, old_meta, target_meta):
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation({"DEVICE_METADATA": {"localhost": old_meta}},
+                                                {"DEVICE_METADATA": {"localhost": target_meta}})
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "20241211.49"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name",

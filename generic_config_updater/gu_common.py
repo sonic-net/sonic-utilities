@@ -203,6 +203,7 @@ class ConfigWrapper:
                     raise IllegalPatchOperationError("Given patch operation is invalid. Operation: {} is illegal on field: {}".format(operation, field))
 
         self.illegal_dataacl_check(old_config, target_config)
+        self.illegal_device_metadata_check(old_config, target_config)
 
         def _invoke_validating_function(cmd, jsonpatch_element):
             # cmd is in the format as <package/module name>.<method name>
@@ -277,6 +278,23 @@ class ConfigWrapper:
                         acl table type changed in {}".format(
                             key, modified_common_dacl_table
                     ))
+
+    def illegal_device_metadata_check(self, old_config, target_config):
+        '''
+        Block DEVICE_METADATA|localhost fields that only a config reload applies: containers
+        bind-mount the hwsku directory when they are created, and the hwsku and switch_type
+        select the port, buffer and QoS config and the templates that services render at start.
+        '''
+        defaults = {"hwsku": None, "switch_type": "switch"}
+        old_meta = old_config.get("DEVICE_METADATA", {}).get("localhost", {})
+        target_meta = target_config.get("DEVICE_METADATA", {}).get("localhost", {})
+        for field, default in defaults.items():
+            old_value = old_meta.get(field) or default
+            target_value = target_meta.get(field) or default
+            if old_value != target_value:
+                raise IllegalPatchOperationError(
+                    "DEVICE_METADATA|localhost {} cannot be changed from {} to {} by a patch; "
+                    "it needs a config reload".format(field, old_value, target_value))
 
     def validate_lanes(self, config_db):
         if "PORT" not in config_db:

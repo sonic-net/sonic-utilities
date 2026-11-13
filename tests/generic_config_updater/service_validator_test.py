@@ -1,7 +1,7 @@
 import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from generic_config_updater.services_validator import (
     command_wrapper,
@@ -414,6 +414,59 @@ test_dhcp_data = [
         }
     ]
 
+RESTART_BGP = "systemctl reset-failed bgp,systemctl restart bgp"
+RESTART_SWSS = "systemctl reset-failed swss syncd,systemctl restart swss"
+RESTART_DHCP_RELAY = "systemctl reset-failed dhcp_relay,systemctl restart dhcp_relay"
+
+# DEVICE_METADATA|localhost fields read only when a service starts: field, unit restart, a non-default value
+DEVICE_METADATA_RESTART_FIELDS = [
+    ("bgp_asn", RESTART_BGP, "65100"),
+    ("bgp_router_id", RESTART_BGP, "10.1.0.1"),
+    ("bgp_adv_lo_prefix_as_128", RESTART_BGP, "true"),
+    ("default_bgp_status", RESTART_BGP, "down"),
+    ("docker_routing_config_mode", RESTART_BGP, "unified"),
+    ("frr_mgmt_framework_config", RESTART_BGP, "true"),
+    ("nexthop_group", RESTART_BGP, "enabled"),
+    ("zebra_nexthop", RESTART_BGP, "disabled"),
+    ("mac", RESTART_SWSS, "e8:e4:9d:12:ad:d2"),
+    ("synchronous_mode", RESTART_SWSS, "disable"),
+    ("buffer_model", RESTART_SWSS, "dynamic"),
+    ("switch_id", RESTART_SWSS, "2"),
+    ("max_cores", RESTART_SWSS, "48"),
+    ("ring_thread_enabled", RESTART_SWSS, "true"),
+    ("orch_northbond_dash_zmq_enabled", RESTART_SWSS, "false"),
+    ("suppress-fib-pending", RESTART_SWSS, "enabled"),
+    ("has_sonic_dhcpv4_relay", RESTART_DHCP_RELAY, "True"),
+]
+
+test_device_metadata_data = [
+    {"old": {"DEVICE_METADATA": {"localhost": {"hostname": "sw1"}}},
+     "upd": {"DEVICE_METADATA": {"localhost": {"hostname": "sw1", field: value}}},
+     "cmd": cmd}
+    for field, cmd, value in DEVICE_METADATA_RESTART_FIELDS
+] + [
+    # Applied live, or not handled by a restart: no restart
+    {"old": {"DEVICE_METADATA": {"localhost": {"hostname": "sw1", "timezone": "UTC", "default_lacp_mode": "coupled"}}},
+     "upd": {"DEVICE_METADATA": {"localhost": {"hostname": "sw2", "timezone": "Etc/GMT+8",
+                                               "default_lacp_mode": "independent"}}},
+     "cmd": ""},
+    # Fields set to the value the services use when they are absent: no restart
+    {"old": {"DEVICE_METADATA": {"localhost": {"hostname": "sw1"}}},
+     "upd": {"DEVICE_METADATA": {"localhost": {
+         "hostname": "sw1", "synchronous_mode": "enable", "buffer_model": "traditional",
+         "ring_thread_enabled": "false", "orch_northbond_dash_zmq_enabled": "true",
+         "suppress-fib-pending": "disabled", "default_bgp_status": "up", "nexthop_group": "disabled",
+         "zebra_nexthop": "enabled", "bgp_adv_lo_prefix_as_128": "false",
+         "has_sonic_dhcpv4_relay": "False"}}},
+     "cmd": ""},
+    # One restart per unit, bgp before swss
+    {"old": {"DEVICE_METADATA": {"localhost": {"bgp_asn": "65100", "synchronous_mode": "enable"}}},
+     "upd": {"DEVICE_METADATA": {"localhost": {"bgp_asn": "65200", "bgp_router_id": "10.1.0.1",
+                                               "synchronous_mode": "disable", "buffer_model": "dynamic"}}},
+     "cmd": RESTART_BGP + "," + RESTART_SWSS},
+]
+
+
 test_port_speed_data = [
         {"old": {"PORT": {"Ethernet0": {"speed": "100000"}}},
          "upd": {"PORT": {"Ethernet0": {"speed": "100000"}}},
@@ -579,9 +632,42 @@ class TestRestartRules(unittest.TestCase):
             assert applier.restart_services()
         mock_restart.assert_called_once_with("chrony")
 
+    @patch("generic_config_updater.services_validator._service_restart", return_value=True)
+    @patch("generic_config_updater.services_validator.command_wrapper", return_value=0)
+    @patch("generic_config_updater.change_applier.get_config_db")
+    def test_device_metadata__asic_scope_restarts_asic_instances(self, mock_db, mock_command, mock_restart):
+        meta = {field: value for field, _, value in DEVICE_METADATA_RESTART_FIELDS}
+        with patch.object(ChangeApplier, "updater_conf", self.shipped_conf()):
+            applier = ChangeApplier(scope="asic2")
+            applier._collect_restarts({}, {"DEVICE_METADATA": {"localhost": meta}})
+            assert applier.restart_services()
+        assert mock_restart.call_args_list == [call("bgp@2"), call("swss@2")]
+        assert mock_command.call_args_list == [call(["systemctl", "reset-failed", "bgp@2"]),
+                                               call(["systemctl", "reset-failed", "swss@2", "syncd@2"])]
+
+    @patch("generic_config_updater.services_validator._service_restart", return_value=True)
+    @patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=True)
+    @patch("generic_config_updater.services_validator.command_wrapper", return_value=0)
+    @patch("generic_config_updater.change_applier.get_config_db")
+    def test_device_metadata__multi_asic_host_restarts_host_units_only(self, mock_db, mock_command, mock_multi,
+                                                                       mock_restart):
+        meta = {field: value for field, _, value in DEVICE_METADATA_RESTART_FIELDS}
+        with patch.object(ChangeApplier, "updater_conf", self.shipped_conf()):
+            applier = ChangeApplier()
+            applier._collect_restarts({}, {"DEVICE_METADATA": {"localhost": meta}})
+            assert applier.restart_services()
+        mock_restart.assert_called_once_with("dhcp_relay")
+
+    def test_device_metadata__reload_only_fields_have_no_rule(self):
+        rules = self.shipped_conf()["tables"]["DEVICE_METADATA"]["restart_on_change"]
+        fields = {field for rule in rules for field in rule["fields"]}
+        assert fields == {field for field, _, _ in DEVICE_METADATA_RESTART_FIELDS}
+        assert not fields & {"hwsku", "switch_type"}
+
+    @patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=False)
     @patch("generic_config_updater.change_applier.get_config_db")
     @patch("generic_config_updater.services_validator.subprocess.run")
-    def test_restart_rules(self, mock_subprocess, mock_db):
+    def test_restart_rules(self, mock_subprocess, mock_db, mock_multi):
         mock_subprocess.return_value = MockSubprocessResult(0)
         conf = self.shipped_conf()
         nsenter = self.NSENTER
@@ -593,7 +679,8 @@ class TestRestartRules(unittest.TestCase):
                          test_gnmi_data,
                          test_telemetry_data,
                          test_port_speed_data,
-                         test_dhcp_data):
+                         test_dhcp_data,
+                         test_device_metadata_data):
                 for entry in data:
                     mock_subprocess.reset_mock()
                     applier._collect_restarts(entry["old"], entry["upd"])
