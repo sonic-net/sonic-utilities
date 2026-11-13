@@ -475,6 +475,14 @@ class TestValidateFieldOperation:
          "switch_type cannot be changed from switch to voq"),
         ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "fabric"},
          "switch_type cannot be changed from voq to fabric"),
+        ({"hwsku": "SKU-A", "type": "ToRRouter"}, {"hwsku": "SKU-A", "type": "LeafRouter"},
+         "type cannot be changed from ToRRouter to LeafRouter"),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "subtype": "DualToR"},
+         "subtype cannot be changed from None to DualToR"),
+        ({"hwsku": "SKU-A", "sub_role": "FrontEnd"}, {"hwsku": "SKU-A", "sub_role": "BackEnd"},
+         "sub_role cannot be changed from FrontEnd to BackEnd"),
+        ({"hwsku": "SKU-A", "asic_id": "06:00.0"}, {"hwsku": "SKU-A", "asic_id": "07:00.0"},
+         "asic_id cannot be changed from 06:00.0 to 07:00.0"),
     ])
     @pytest.mark.parametrize("scope", ["", "asic0"])
     @patch("os.path.exists", mock.Mock(return_value=True))
@@ -486,13 +494,15 @@ class TestValidateFieldOperation:
         with pytest.raises(gu_common.IllegalPatchOperationError) as err:
             config_wrapper.validate_field_operation(old_config, target_config)
         assert message in str(err.value)
-        assert "config reload" in str(err.value)
+        assert "needs a config reload" in str(err.value)
 
     @pytest.mark.parametrize("old_meta, target_meta", [
         ({"hwsku": "SKU-A", "hostname": "sw1"}, {"hwsku": "SKU-A", "hostname": "sw2"}),
         ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "switch_type": "switch"}),
         ({"hwsku": "SKU-A", "switch_type": "switch"}, {"hwsku": "SKU-A", "switch_type": ""}),
         ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "voq", "bgp_asn": "65100"}),
+        ({"hwsku": "SKU-A", "asic_id": "06:00.0"}, {"hwsku": "SKU-A"}),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "asic_id": "06:00.0"}),
     ])
     @patch("os.path.exists", mock.Mock(return_value=True))
     @patch("builtins.open", mock_open(read_data='{"tables": {}}'))

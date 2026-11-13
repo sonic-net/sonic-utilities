@@ -281,20 +281,30 @@ class ConfigWrapper:
 
     def illegal_device_metadata_check(self, old_config, target_config):
         '''
-        Block DEVICE_METADATA|localhost fields that only a config reload applies: containers
-        bind-mount the hwsku directory when they are created, and the hwsku and switch_type
-        select the port, buffer and QoS config and the templates that services render at start.
+        Block DEVICE_METADATA|localhost fields that a service restart cannot apply: they pick the
+        hwsku files or port/buffer/QoS/CoPP config, or one-shot boot services read them.
+        A chassis supervisor's swss writes asic_id at start, so it is only checked when set on both sides.
         '''
-        defaults = {"hwsku": None, "switch_type": "switch"}
+        reload = "a config reload"
+        fields = {
+            "hwsku": (None, reload),
+            "switch_type": ("switch", reload),
+            "type": (None, reload),
+            "subtype": (None, reload),
+            "sub_role": (None, reload),
+            "asic_id": (None, reload),
+        }
         old_meta = old_config.get("DEVICE_METADATA", {}).get("localhost", {})
         target_meta = target_config.get("DEVICE_METADATA", {}).get("localhost", {})
-        for field, default in defaults.items():
+        for field, (default, action) in fields.items():
             old_value = old_meta.get(field) or default
             target_value = target_meta.get(field) or default
+            if field == "asic_id" and not (old_value and target_value):
+                continue
             if old_value != target_value:
                 raise IllegalPatchOperationError(
                     "DEVICE_METADATA|localhost {} cannot be changed from {} to {} by a patch; "
-                    "it needs a config reload".format(field, old_value, target_value))
+                    "it needs {}".format(field, old_value, target_value, action))
 
     def validate_lanes(self, config_db):
         if "PORT" not in config_db:

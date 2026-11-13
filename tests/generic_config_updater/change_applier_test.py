@@ -485,6 +485,13 @@ class TestChangeApplierRestartServices(unittest.TestCase):
         self.command.assert_called_once_with(["systemctl", "reset-failed", "swss@1", "syncd@1"])
         self.restart.assert_called_once_with("swss@1")
 
+    def test_swss_restarts_first(self):
+        upd = self.updated(SNMP={}, DEVICE_METADATA={"localhost": {"docker_routing_config_mode": "split",
+                                                                   "synchronous_mode": "disable"}})
+        with patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=False):
+            assert self.restart_after((self.OLD, upd))
+        assert self.restart.call_args_list == [call("swss"), call("bgp"), call("snmp")]
+
     def test_per_asic__disabled_feature__no_restart(self):
         applier = generic_config_updater.change_applier.ChangeApplier(scope="asic1")
         upd = self.updated(DEVICE_METADATA={"localhost": {"synchronous_mode": "disable"}},

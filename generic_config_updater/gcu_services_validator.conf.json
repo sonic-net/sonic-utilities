@@ -32,6 +32,7 @@
         "of a patch as it is applied. After the last change (or after one",
         "fails), each unit of a matched rule is restarted once, after",
         "'systemctl reset-failed' of the unit and of the 'reset_failed' units.",
+        "swss restarts first, as restarting it also restarts its dependents.",
         "Without 'fields' any difference in the table matches. With it,",
         "the rule matches when one of those fields differs in some key of",
         "the table; a missing, empty-string or empty-list value counts as",
@@ -84,7 +85,7 @@
             "restart_on_change": [
                 {
                     "fields": [ "bgp_asn", "bgp_router_id", "bgp_adv_lo_prefix_as_128", "default_bgp_status",
-                                "docker_routing_config_mode", "frr_mgmt_framework_config",
+                                "deployment_id", "docker_routing_config_mode", "frr_mgmt_framework_config",
                                 "nexthop_group", "zebra_nexthop" ],
                     "defaults": { "bgp_adv_lo_prefix_as_128": "false", "default_bgp_status": "up",
                                   "docker_routing_config_mode": "separated", "frr_mgmt_framework_config": "false",
@@ -103,7 +104,7 @@
                     "per_asic": true
                 },
                 {
-                    "fields": [ "has_sonic_dhcpv4_relay" ],
+                    "fields": [ "deployment_id", "has_sonic_dhcpv4_relay" ],
                     "defaults": { "has_sonic_dhcpv4_relay": "False" },
                     "units": [ "dhcp_relay" ],
                     "host_only": true

@@ -424,6 +424,7 @@ DEVICE_METADATA_RESTART_FIELDS = [
     ("bgp_router_id", RESTART_BGP, "10.1.0.1"),
     ("bgp_adv_lo_prefix_as_128", RESTART_BGP, "true"),
     ("default_bgp_status", RESTART_BGP, "down"),
+    ("deployment_id", RESTART_BGP + "," + RESTART_DHCP_RELAY, "8"),
     ("docker_routing_config_mode", RESTART_BGP, "unified"),
     ("frr_mgmt_framework_config", RESTART_BGP, "true"),
     ("nexthop_group", RESTART_BGP, "enabled"),
@@ -459,11 +460,12 @@ test_device_metadata_data = [
          "zebra_nexthop": "enabled", "bgp_adv_lo_prefix_as_128": "false",
          "has_sonic_dhcpv4_relay": "False"}}},
      "cmd": ""},
-    # One restart per unit, bgp before swss
+    # One restart per unit, swss first since it restarts its dependents
     {"old": {"DEVICE_METADATA": {"localhost": {"bgp_asn": "65100", "synchronous_mode": "enable"}}},
      "upd": {"DEVICE_METADATA": {"localhost": {"bgp_asn": "65200", "bgp_router_id": "10.1.0.1",
-                                               "synchronous_mode": "disable", "buffer_model": "dynamic"}}},
-     "cmd": RESTART_BGP + "," + RESTART_SWSS},
+                                               "synchronous_mode": "disable", "buffer_model": "dynamic",
+                                               "deployment_id": "8"}}},
+     "cmd": RESTART_SWSS + "," + RESTART_BGP + "," + RESTART_DHCP_RELAY},
 ]
 
 
@@ -641,9 +643,9 @@ class TestRestartRules(unittest.TestCase):
             applier = ChangeApplier(scope="asic2")
             applier._collect_restarts({}, {"DEVICE_METADATA": {"localhost": meta}})
             assert applier.restart_services()
-        assert mock_restart.call_args_list == [call("bgp@2"), call("swss@2")]
-        assert mock_command.call_args_list == [call(["systemctl", "reset-failed", "bgp@2"]),
-                                               call(["systemctl", "reset-failed", "swss@2", "syncd@2"])]
+        assert mock_restart.call_args_list == [call("swss@2"), call("bgp@2")]
+        assert mock_command.call_args_list == [call(["systemctl", "reset-failed", "swss@2", "syncd@2"]),
+                                               call(["systemctl", "reset-failed", "bgp@2"])]
 
     @patch("generic_config_updater.services_validator._service_restart", return_value=True)
     @patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=True)
@@ -662,7 +664,7 @@ class TestRestartRules(unittest.TestCase):
         rules = self.shipped_conf()["tables"]["DEVICE_METADATA"]["restart_on_change"]
         fields = {field for rule in rules for field in rule["fields"]}
         assert fields == {field for field, _, _ in DEVICE_METADATA_RESTART_FIELDS}
-        assert not fields & {"hwsku", "switch_type"}
+        assert not fields & {"hwsku", "switch_type", "type", "subtype", "sub_role", "asic_id"}
 
     @patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=False)
     @patch("generic_config_updater.change_applier.get_config_db")

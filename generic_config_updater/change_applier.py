@@ -239,7 +239,7 @@ class ChangeApplier:
         units, self.restart_tables = self.restart_tables, defaultdict(set)
         resets, self.restart_resets = self.restart_resets, defaultdict(set)
         ok = True
-        for unit in sorted(units):
+        for unit in sorted(units, key=lambda u: (u.split("@")[0] != "swss", u)):
             changed = ", ".join(sorted(units[unit]))
             if self.restart_features.get(unit.split("@")[0], {}).get("state") in ("disabled", "always_disabled"):
                 log_notice("{} changed; {} is disabled, not restarting it".format(changed, unit))
