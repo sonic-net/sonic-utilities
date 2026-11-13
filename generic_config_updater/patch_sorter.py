@@ -988,9 +988,27 @@ class NoDependencyMoveValidator:
         self.logger = genericUpdaterLogging.get_logger(title="Patch Sorter - NoDependency")
 
     def validate(self, group: JsonMoveGroup, diff, simulated_config) -> Tuple[bool, Optional[str]]:
-        reload_config = True
         # Note: all moves in a group are guaranteed to be the same operation type
-        for move in group:
+        moves = list(group)
+
+        # _validate_replace() derives the paths it checks from diff.current_config
+        # against simulated_config -- whole configs, not the move it is handed -- so
+        # every member of a REPLACE group asks the identical question. Ask it once.
+        # Each check costs two full-config YANG loads (added paths against the
+        # simulated config, deleted paths against the current one), so repeating it
+        # per member makes a group of N cost 2N loads to learn one answer.
+        # The single-operation-type rule is not enforced by JsonMoveGroup, so check
+        # every member rather than let moves[0] speak for the rest. A mixed group
+        # falls through to the per-member loop below.
+        if moves and all(move.op_type == OperationType.REPLACE for move in moves):
+            if not self._validate_replace(moves[0], diff, simulated_config):
+                return False, None
+            return True, None
+
+        # ADD and REMOVE members are each checked against a single config side, so the
+        # loaded tree is reused between members and there is nothing to collapse.
+        reload_config = True
+        for move in moves:
             if not self.__validate_move(move, diff, simulated_config, reload_config=reload_config):
                 return False, None
             reload_config = False
@@ -1018,6 +1036,13 @@ class NoDependencyMoveValidator:
     # NOTE: this function can be used for validating JsonChange as well which might have more than one move.
     def _validate_replace(self, move, diff, simulated_config):
         """
+        NOTE: 'move' is not used. The paths checked are derived from
+        diff.current_config against simulated_config, so every move in a group
+        asks the same question -- validate() relies on that to call this once per
+        REPLACE group instead of once per member. Narrowing these paths to the
+        move's own subtree would break that, and validate() would have to go back
+        to calling this per member.
+
         The table below shows how mixed deletion/addition within replace affect this validation.
 
         The table is answring the question whether the change is valid:
@@ -1586,13 +1611,16 @@ class BulkLowLevelMoveGenerator:
 
     def __traverse(self, op, current_ptr, target_ptr, tokens, min_moves, restricted_only: bool = False):
         if isinstance(current_ptr, dict):
+            # If current and target are different types, skip. This has to precede the
+            # leaf check below, which indexes target_ptr by key: a non-dict target now
+            # reaches that predicate, where a leaf-list child used to short-circuit the
+            # left operand before it was evaluated.
+            if not isinstance(target_ptr, dict):
+                return
+
             if self.__children_are_leafs(current_ptr) and self.__children_are_leafs(target_ptr):
                 for move in self.__output_bulk_move(op, current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
-                return
-
-            # If current and target are different types, skip
-            if not isinstance(target_ptr, dict):
                 return
 
             # Recurse across children, sorted by backlinks
@@ -1618,7 +1646,13 @@ class BulkLowLevelMoveGenerator:
 
     def __children_are_leafs(self, config_ptr):
         for key in config_ptr:
-            if isinstance(config_ptr[key], dict) or isinstance(config_ptr[key], list):
+            if isinstance(config_ptr[key], dict):
+                return False
+            # A leaf-list is a leaf for grouping purposes: it is replaced as a whole
+            # value, exactly like a scalar leaf. Only lists of non-scalars remain out
+            # of scope, see the list TODO in __traverse.
+            if isinstance(config_ptr[key], list) and \
+                    not BulkLeafListMoveGenerator._is_leaf_list(config_ptr[key]):
                 return False
         return True
 
