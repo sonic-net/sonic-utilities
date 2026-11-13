@@ -1,0 +1,502 @@
+#!/usr/bin/env python3
+"""CPO STATE_DB display command framework; query methods are not implemented."""
+
+import click
+
+
+_QUERY_NOT_IMPLEMENTED = "CPO display is not implemented yet (framework draft)."
+
+
+class CPOShow:
+    """Collect CPO views and coordinate topology, DB reads and formatting.
+
+    Reuse cpoutil.mapping.CpoMapping for associations. Platform OE/ELS objects
+    provide format dictionaries only; utilities_common.cpo_format owns the
+    formatting functions. All business methods below are intentional stubs.
+    """
+
+    def __init__(self, namespace=None):
+        """Allocate command-local state without DB, platform or hardware I/O."""
+        self.namespace = namespace
+        self.results = {}
+        self.diagnostics = []
+        self._mapping = None
+        self._port_configs = {}
+        self._dbs = {}
+        self._row_cache = {}
+        self._format_maps = {}
+
+    def get_map(self, ports=None):
+        """Populate port-to-OE/ELS/bank/laser mappings using files only.
+
+        Reuse CpoMapping; do not open a database or construct a chassis."""
+        raise click.ClickException(_QUERY_NOT_IMPLEMENTED)
+
+    def get_resource(self, kind, command, selector=None, bank=None, history=False):
+        """Populate one or all OE/ELS resource views.
+
+        Resolve CpoMapping selections, read STATE_DB, then aggregate by
+        resource and bank. Leave formatting and printing to display()."""
+        raise click.ClickException(_QUERY_NOT_IMPLEMENTED)
+
+    def get_port(self, command, ports=None, dump_dom=False):
+        """Populate the hidden transceiver-facing port view.
+
+        Reuse resource reads, selecting this port's lanes/lasers, and keep
+        OE and ELS sections separate. None selects all CPO ports."""
+        raise click.ClickException(_QUERY_NOT_IMPLEMENTED)
+
+    def display(self, json_output=False, show_suppressed=False):
+        """Render collected results and print them once.
+
+        Table output uses cpo_format functions and merged format maps;
+        JSON preserves raw DB keys/values. Diagnostics belong on stderr."""
+        raise click.ClickException(_QUERY_NOT_IMPLEMENTED)
+
+    def _load_topology(self):
+        """Return a cached CpoMapping built from device_info.get_cpo_data().
+
+        Handle unavailable or invalid topology without loading cpoutil.main."""
+        raise NotImplementedError("CPOShow._load_topology is not implemented yet")
+
+    def _load_port_config(self, namespace, file_only=False):
+        """Return normalized index/lanes for the selected namespace.
+
+        file_only uses platform/port configuration files for map; runtime
+        queries use the active PORT snapshot, including breakout ports."""
+        raise NotImplementedError("CPOShow._load_port_config is not implemented yet")
+
+    def _connect_db(self, namespace):
+        """Lazily open and cache a STATE_DB connector for this namespace.
+
+        Connections must be closed when the command ends; never access hardware."""
+        raise NotImplementedError("CPOShow._connect_db is not implemented yet")
+
+    def _get_db_port(self, port, table):
+        """Resolve the actual row key for a logical port and a specific table.
+
+        Match the publisher's key for each table. For example, OE DOM data
+        uses the first breakout subport, while TRANSCEIVER_STATUS_SW uses
+        the requested logical port. Confirm the key for each ELS table with
+        its publisher instead of inheriting the OE rule."""
+        raise NotImplementedError("CPOShow._get_db_port is not implemented yet")
+
+    def _read_hash(self, namespace, table, db_port):
+        """Read one raw STATE_DB hash at table|db_port in the given namespace.
+
+        db_port is the resolved publication key, which can differ from the
+        requested logical port. Cache rows by (namespace, table, db_port)
+        on this CPOShow instance so several ports sharing a row read it
+        once per invocation. Keep an absent row distinct from a connection
+        or read failure; neither tells us whether hardware is present.
+        Leave field selection, merging and formatting to the caller."""
+        raise NotImplementedError("CPOShow._read_hash is not implemented yet")
+
+    def _read_tables(self, kind, command, port, history=False):
+        """Collect the published table groups required by one OE/ELS view.
+
+        Select tables by kind and command (e.g. sensor and threshold for
+        DOM), resolve each table's port key, and use _read_hash for each row.
+        Keep DOM and status flags separate. Read their change-count, set-time
+        and clear-time tables only when history is requested. Preserve the
+        source table and any published timestamps for later rendering;
+        separate reads do not form an atomic snapshot. Use the STATE_DB
+        contract directly without importing xcvrd internals."""
+        raise NotImplementedError("CPOShow._read_tables is not implemented yet")
+
+    def _aggregate_resource(self, kind, resource_id, ports, bank=None):
+        """Combine shared-port rows without losing bank or source information.
+
+        Deduplicate module fields, retain conflicting sources, and do not
+        overwrite identically named channel keys from different banks."""
+        raise NotImplementedError("CPOShow._aggregate_resource is not implemented yet")
+
+    def _select_port_data(self, kind, port, data):
+        """Project raw resource data onto this logical port's lanes or lasers.
+
+        Reuse CpoMapping.interface_context; distinguish ASIC lane IDs,
+        bank-local host lanes and ELS laser IDs, including shared lasers."""
+        raise NotImplementedError("CPOShow._select_port_data is not implemented yet")
+
+    def _load_format_maps(self, kind, resource_id, bank=None):
+        """Return common maps merged with this OE/ELS object's format hooks.
+
+        Hooks supply static labels/units, not measurements. Do not call
+        get_api() or read EEPROM; cache per device/bank and fall back to
+        common maps if a hook is absent or fails. JSON skips this step."""
+        raise NotImplementedError("CPOShow._load_format_maps is not implemented yet")
+
+    def _derive_lpmode(self, status):
+        """Derive On/Off/N/A from published status after its semantics are agreed.
+
+        Do not call hardware get_lpmode or treat missing status as a value."""
+        raise NotImplementedError("CPOShow._derive_lpmode is not implemented yet")
+
+    def _derive_error_status(self, oe_status, els_status, lane_selection):
+        """Derive the first module/DP/config issue for the selected lanes.
+
+        Missing fields are unknown, not OK. The accepted DP states and
+        hardware-fetch interface remain outside this framework draft."""
+        raise NotImplementedError("CPOShow._derive_error_status is not implemented yet")
+
+    def _format_map(self):
+        """Return a topology table without exposing internal physical-port indices."""
+        raise NotImplementedError("CPOShow._format_map is not implemented yet")
+
+    def _format_resource(self, kind, command):
+        """Return a resource view using shared cpo_format functions.
+
+        Load the resource's format maps and pass them with the raw data;
+        formatting functions do not call platform objects themselves."""
+        raise NotImplementedError("CPOShow._format_resource is not implemented yet")
+
+    def _format_port(self, command):
+        """Return OE/ELS port sections or the existing two-column table layout.
+
+        Reuse resource formatting, preserving per-port lane selection."""
+        raise NotImplementedError("CPOShow._format_port is not implemented yet")
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cli():
+    """Display CPO information (framework draft; queries are not implemented)."""
+    pass
+
+
+@cli.command('map')
+@click.argument('port', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def map(port, namespace, json_output):
+    """Show port-to-OE/ELS/bank/laser associations."""
+    cpo = CPOShow(namespace)
+    cpo.get_map(ports=(port,) if port else None)
+    cpo.display(json_output=json_output)
+
+
+@cli.group()
+def oe():
+    """Show OE resource views."""
+    pass
+
+
+@oe.command('list')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_list(namespace, json_output):
+    """List resources and their associated ports."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "list")
+    cpo.display(json_output=json_output)
+
+
+@oe.command('info')
+@click.argument('oe_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_info(oe_index, namespace, json_output):
+    """Show static identification fields."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "info", selector=oe_index)
+    cpo.display(json_output=json_output)
+
+
+@oe.command('status')
+@click.argument('oe_index', required=False)
+@click.option('-b', '--bank', type=click.IntRange(min=0), help='Select one bank.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_status(oe_index, bank, namespace, json_output):
+    """Show published module and channel status."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "status", selector=oe_index, bank=bank)
+    cpo.display(json_output=json_output)
+
+
+@oe.command('lpmode')
+@click.argument('oe_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_lpmode(oe_index, namespace, json_output):
+    """Show low-power mode derived from published status."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "lpmode", selector=oe_index)
+    cpo.display(json_output=json_output)
+
+
+@oe.command('flag')
+@click.argument('oe_index', required=False)
+@click.option('-b', '--bank', type=click.IntRange(min=0), help='Select one bank.')
+@click.option('--history', is_flag=True, help='Include count/set/clear metadata.')
+@click.option('--show-suppressed', is_flag=True, help='List unmapped fields for diagnosis.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_flag(oe_index, bank, history, show_suppressed, namespace, json_output):
+    """Show published flags and optional change history."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "flag", selector=oe_index, bank=bank, history=history)
+    cpo.display(json_output=json_output, show_suppressed=show_suppressed)
+
+
+@oe.command('dom')
+@click.argument('oe_index', required=False)
+@click.option('-b', '--bank', type=click.IntRange(min=0), help='Select one bank.')
+@click.option('--show-suppressed', is_flag=True, help='List unmapped fields for diagnosis.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_dom(oe_index, bank, show_suppressed, namespace, json_output):
+    """Show published monitoring values and thresholds."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "dom", selector=oe_index, bank=bank)
+    cpo.display(json_output=json_output, show_suppressed=show_suppressed)
+
+
+@oe.command('temperature')
+@click.argument('oe_index', required=False)
+@click.option('--show-suppressed', is_flag=True, help='List unmapped fields for diagnosis.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_temperature(oe_index, show_suppressed, namespace, json_output):
+    """Show module temperature, with the sensor-table fallback."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "temperature", selector=oe_index)
+    cpo.display(json_output=json_output, show_suppressed=show_suppressed)
+
+
+@oe.command('voltage')
+@click.argument('oe_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_voltage(oe_index, namespace, json_output):
+    """Show module voltage and thresholds."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "voltage", selector=oe_index)
+    cpo.display(json_output=json_output)
+
+
+@oe.command('firmware-info')
+@click.argument('oe_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def oe_firmware_info(oe_index, namespace, json_output):
+    """Show published firmware versions; do not access hardware."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("oe", "firmware-info", selector=oe_index)
+    cpo.display(json_output=json_output)
+
+
+@cli.group()
+def els():
+    """Show ELS resource views."""
+    pass
+
+
+@els.command('list')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_list(namespace, json_output):
+    """List resources and their associated ports."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "list")
+    cpo.display(json_output=json_output)
+
+
+@els.command('presence')
+@click.argument('els_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_presence(els_index, namespace, json_output):
+    """Show presence from published information rows."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "presence", selector=els_index)
+    cpo.display(json_output=json_output)
+
+
+@els.command('info')
+@click.argument('els_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_info(els_index, namespace, json_output):
+    """Show static identification fields."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "info", selector=els_index)
+    cpo.display(json_output=json_output)
+
+
+@els.command('status')
+@click.argument('els_index', required=False)
+@click.option('-b', '--bank', type=click.IntRange(min=0), help='Select one bank.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_status(els_index, bank, namespace, json_output):
+    """Show published module and channel status."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "status", selector=els_index, bank=bank)
+    cpo.display(json_output=json_output)
+
+
+@els.command('lpmode')
+@click.argument('els_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_lpmode(els_index, namespace, json_output):
+    """Show low-power mode derived from published status."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "lpmode", selector=els_index)
+    cpo.display(json_output=json_output)
+
+
+@els.command('flag')
+@click.argument('els_index', required=False)
+@click.option('-b', '--bank', type=click.IntRange(min=0), help='Select one bank.')
+@click.option('--history', is_flag=True, help='Include count/set/clear metadata.')
+@click.option('--show-suppressed', is_flag=True, help='List unmapped fields for diagnosis.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_flag(els_index, bank, history, show_suppressed, namespace, json_output):
+    """Show published flags and optional change history."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "flag", selector=els_index, bank=bank, history=history)
+    cpo.display(json_output=json_output, show_suppressed=show_suppressed)
+
+
+@els.command('dom')
+@click.argument('els_index', required=False)
+@click.option('-b', '--bank', type=click.IntRange(min=0), help='Select one bank.')
+@click.option('--show-suppressed', is_flag=True, help='List unmapped fields for diagnosis.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_dom(els_index, bank, show_suppressed, namespace, json_output):
+    """Show published monitoring values and thresholds."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "dom", selector=els_index, bank=bank)
+    cpo.display(json_output=json_output, show_suppressed=show_suppressed)
+
+
+@els.command('temperature')
+@click.argument('els_index', required=False)
+@click.option('--show-suppressed', is_flag=True, help='List unmapped fields for diagnosis.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_temperature(els_index, show_suppressed, namespace, json_output):
+    """Show module temperature, with the sensor-table fallback."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "temperature", selector=els_index)
+    cpo.display(json_output=json_output, show_suppressed=show_suppressed)
+
+
+@els.command('voltage')
+@click.argument('els_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_voltage(els_index, namespace, json_output):
+    """Show module voltage and thresholds."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "voltage", selector=els_index)
+    cpo.display(json_output=json_output)
+
+
+@els.command('firmware-info')
+@click.argument('els_index', required=False)
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def els_firmware_info(els_index, namespace, json_output):
+    """Show published firmware versions; do not access hardware."""
+    cpo = CPOShow(namespace)
+    cpo.get_resource("els", "firmware-info", selector=els_index)
+    cpo.display(json_output=json_output)
+
+
+@cli.group(hidden=True)
+def port():
+    """Internal CPO port views reserved for transceiver command dispatch."""
+    pass
+
+
+@port.command('eeprom')
+@click.option('-p', '--port', 'ports', multiple=True, help='Repeat for a batch of canonical ports.')
+@click.option('--all', 'all_ports', is_flag=True, help='Select all CPO ports.')
+@click.option('-d', '--dom', 'dump_dom', is_flag=True, help='Also show OE and ELS DOM sections.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def port_eeprom(ports, all_ports, dump_dom, namespace, json_output):
+    """Reserve the CPO port eeprom view."""
+    if ports and all_ports:
+        raise click.UsageError("--port and --all are mutually exclusive.")
+    cpo = CPOShow(namespace)
+    cpo.get_port("eeprom", ports=ports or None, dump_dom=dump_dom)
+    cpo.display(json_output=json_output)
+
+
+@port.command('info')
+@click.option('-p', '--port', 'ports', multiple=True, help='Repeat for a batch of canonical ports.')
+@click.option('--all', 'all_ports', is_flag=True, help='Select all CPO ports.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def port_info(ports, all_ports, namespace, json_output):
+    """Reserve the CPO port info view."""
+    if ports and all_ports:
+        raise click.UsageError("--port and --all are mutually exclusive.")
+    cpo = CPOShow(namespace)
+    cpo.get_port("info", ports=ports or None)
+    cpo.display(json_output=json_output)
+
+
+@port.command('status')
+@click.option('-p', '--port', 'ports', multiple=True, help='Repeat for a batch of canonical ports.')
+@click.option('--all', 'all_ports', is_flag=True, help='Select all CPO ports.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def port_status(ports, all_ports, namespace, json_output):
+    """Reserve the CPO port status view."""
+    if ports and all_ports:
+        raise click.UsageError("--port and --all are mutually exclusive.")
+    cpo = CPOShow(namespace)
+    cpo.get_port("status", ports=ports or None)
+    cpo.display(json_output=json_output)
+
+
+@port.command('presence')
+@click.option('-p', '--port', 'ports', multiple=True, help='Repeat for a batch of canonical ports.')
+@click.option('--all', 'all_ports', is_flag=True, help='Select all CPO ports.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def port_presence(ports, all_ports, namespace, json_output):
+    """Reserve the CPO port presence view."""
+    if ports and all_ports:
+        raise click.UsageError("--port and --all are mutually exclusive.")
+    cpo = CPOShow(namespace)
+    cpo.get_port("presence", ports=ports or None)
+    cpo.display(json_output=json_output)
+
+
+@port.command('lpmode')
+@click.option('-p', '--port', 'ports', multiple=True, help='Repeat for a batch of canonical ports.')
+@click.option('--all', 'all_ports', is_flag=True, help='Select all CPO ports.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def port_lpmode(ports, all_ports, namespace, json_output):
+    """Reserve the CPO port lpmode view."""
+    if ports and all_ports:
+        raise click.UsageError("--port and --all are mutually exclusive.")
+    cpo = CPOShow(namespace)
+    cpo.get_port("lpmode", ports=ports or None)
+    cpo.display(json_output=json_output)
+
+
+@port.command('error-status')
+@click.option('-p', '--port', 'ports', multiple=True, help='Repeat for a batch of canonical ports.')
+@click.option('--all', 'all_ports', is_flag=True, help='Select all CPO ports.')
+@click.option('-n', '--namespace', default=None, help='ASIC namespace name or all.')
+@click.option('-j', '--json', 'json_output', is_flag=True, help='Preserve raw DB keys and values.')
+def port_error_status(ports, all_ports, namespace, json_output):
+    """Reserve the CPO port error-status view."""
+    if ports and all_ports:
+        raise click.UsageError("--port and --all are mutually exclusive.")
+    cpo = CPOShow(namespace)
+    cpo.get_port("error-status", ports=ports or None)
+    cpo.display(json_output=json_output)
+
+
+if __name__ == "__main__":
+    cli()

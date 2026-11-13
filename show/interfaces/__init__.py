@@ -613,6 +613,18 @@ def errors(ctx, interfacename):
     # Display the formatted table
     click.echo(tabulate(body, header))
 
+def run_transceiver_show(command, interfacename, namespace, verbose,
+                         dump_dom=False, fetch_from_hardware=False):
+    """Reserve the future CPO/SFP dispatch boundary; existing callers stay unchanged.
+
+    Convert aliases, classify selected ports with one chassis, then batch CPO
+    queries through cposhow port while retaining the existing SFP executables.
+    pm stays on its current path. Hardware fetch requires a separate cpoutil
+    contract and must never silently fall back to STATE_DB.
+    """
+    raise NotImplementedError("CPO/SFP transceiver dispatch is not implemented yet")
+
+
 #
 # transceiver group (show interfaces trasceiver ...)
 #

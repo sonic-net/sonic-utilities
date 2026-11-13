@@ -122,6 +122,7 @@ setup(
         'scripts/buffershow',
         'scripts/coredump-compress',
         'scripts/configlet',
+        'scripts/cposhow',
         'scripts/db_migrator.py',
         'scripts/decode-syseeprom',
         'scripts/dropcheck',

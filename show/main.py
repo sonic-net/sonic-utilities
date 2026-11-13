@@ -77,6 +77,7 @@ from . import srv6
 from . import switch
 from . import icmp
 from . import copp
+from . import cpo
 from . import orchagent
 
 # Global Variables
@@ -296,6 +297,7 @@ def cli(ctx):
 # Add groups from other modules
 cli.add_command(acl.acl)
 cli.add_command(chassis_modules.chassis)
+cli.add_command(cpo.cpo)
 cli.add_command(dropcounters.dropcounters)
 cli.add_command(evpn.evpn)
 cli.add_command(fabric.fabric)
