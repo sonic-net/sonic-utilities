@@ -95,6 +95,33 @@ def rsyslog_validator(old_config, upd_config, keys):
     old_syslog = old_config.get("SYSLOG_SERVER", {})
     upd_syslog = upd_config.get("SYSLOG_SERVER", {})
 
+    for server, row in (upd_syslog or {}).items():
+        if not isinstance(row, dict):
+            continue
+        proto = str(row.get("protocol", "")).lower()
+        ts = str(row.get("transport_security", "")).lower()
+        is_tls = proto == "tls" or ts in ("true", "tls", "enabled", "1")
+        if is_tls and not row.get("tls_profile_id"):
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"SYSLOG_SERVER|{server} TLS requires tls_profile_id",
+                       print_to_console)
+            return False
+        if is_tls and not row.get("tls_permitted_peers"):
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"SYSLOG_SERVER|{server} TLS requires tls_permitted_peers",
+                       print_to_console)
+            return False
+        if row.get("tls_permitted_peers") and not is_tls:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"SYSLOG_SERVER|{server} tls_permitted_peers requires protocol tls",
+                       print_to_console)
+            return False
+        if row.get("tls_profile_id") and not is_tls:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"SYSLOG_SERVER|{server} tls_profile_id requires protocol tls",
+                       print_to_console)
+            return False
+
     if old_syslog != upd_syslog:
         command_wrapper(["systemctl", "reset-failed", "rsyslog-config", "rsyslog"])
         rc = command_wrapper(["systemctl", "restart", "rsyslog-config"])
