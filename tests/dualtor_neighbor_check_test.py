@@ -250,7 +250,6 @@ class TestDualtorNeighborCheck(object):
             )
             mock_run_neighbor_check.assert_not_called()
 
-
     @pytest.mark.parametrize("cached_sha", [None, "previous-script-sha"])
     def test_main_refreshes_script_cache_using_writer_connection(self, cached_sha, mock_log_functions):
         args = MagicMock()

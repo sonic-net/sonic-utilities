@@ -162,9 +162,11 @@ class AclLoader(object):
 
         namespaces = multi_asic.get_all_namespaces()
         for front_asic_namespaces in namespaces['front_ns']:
-            self.per_npu_configdb[front_asic_namespaces] = ConfigDBConnector(use_unix_socket_path=True, authenticate=True, namespace=front_asic_namespaces)
+            self.per_npu_configdb[front_asic_namespaces] = ConfigDBConnector(
+                use_unix_socket_path=True, authenticate=True, namespace=front_asic_namespaces)
             self.per_npu_configdb[front_asic_namespaces].connect()
-            self.per_npu_statedb[front_asic_namespaces] = SonicV2Connector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            self.per_npu_statedb[front_asic_namespaces] = SonicV2Connector(
+                use_unix_socket_path=True, namespace=front_asic_namespaces)
             self.per_npu_statedb[front_asic_namespaces].connect(self.per_npu_statedb[front_asic_namespaces].STATE_DB)
 
         self.read_tables_info()

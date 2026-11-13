@@ -17,6 +17,7 @@ from swsscommon import swsscommon
 topo = None
 dedicated_dbs = {}
 
+
 def clean_up_config():
     # Set SonicDBConfig variables to initial state
     # so that it can be loaded with single or multiple
