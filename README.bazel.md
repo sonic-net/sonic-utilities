@@ -86,10 +86,15 @@ must select `rules_python >= 1.9.0.sonic.1` with Python 3.13 (Bazel MVS must not
 resolve back to the unpatched rule). No local absolute override is shipped; it does not select local image/Common/shared overrides.
 
 ```
-bazel query 'deps(//:sonic_utilities_wheel + //:wheel_contract_test + //:wheel_installed_test)' --output=label_kind
-bazel test --jobs=1 --local_resources=memory=2048 --nocache_test_results \
-  --test_output=all //:wheel_contract_test //:wheel_installed_test
+bazel build --lockfile_mode=update //:sonic_utilities_wheel //bazel/runtime:sonic_utilities_wheel
+bazel test --lockfile_mode=update --test_output=errors \
+  //:wheel_contract_test //:wheel_installed_test //:runtime_wheel_contract_test
 ```
+
+The **Bazel wheels (AMD64)** check runs these commands on pull requests and
+pushes to `master`. Its `sonic-utilities-wheels-amd64` artifact keeps the two
+identically named wheels in separate `full/` and `runtime/` directories, with
+checksums, the tested revision, the generated module lock and the resolved graph.
 
 The wheel graph does not produce DEBs or include fixture DEBs. No services,
 deployment, public writes, pushes or repository settings changes are required.

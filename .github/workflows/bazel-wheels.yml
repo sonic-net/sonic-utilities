@@ -1,0 +1,65 @@
+name: Bazel wheels
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    name: Bazel wheels (AMD64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          bazelisk-version: 1.29.0
+
+      - name: Build the development and runtime wheels
+        run: |
+          test "$RUNNER_ARCH" = X64
+          test "$(uname -m)" = x86_64
+          test "$(dpkg --print-architecture)" = amd64
+          test ! -e MODULE.bazel.lock
+          git check-ignore --quiet MODULE.bazel.lock
+          bazel build --lockfile_mode=update //:sonic_utilities_wheel //bazel/runtime:sonic_utilities_wheel
+
+      - name: Check wheel contents and run the installed CLI smoke test
+        run: |
+          bazel test --lockfile_mode=update --test_output=errors \
+            //:wheel_contract_test //:wheel_installed_test //:runtime_wheel_contract_test
+
+      - name: Collect wheels and build evidence
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          out="$RUNNER_TEMP/sonic-utilities-wheels"
+          mkdir -p "$out"/{full,runtime}
+          # Both targets produce the same distribution filename.
+          for variant in full runtime; do
+            target=//:sonic_utilities_wheel
+            if [[ $variant == runtime ]]; then target=//bazel/runtime:sonic_utilities_wheel; fi
+            wheel=$(bazel cquery --lockfile_mode=update --output=files "$target")
+            [[ $wheel == *.whl && -f "$wheel" ]]
+            cp "$wheel" "$out/$variant/"
+          done
+          bazel mod graph --lockfile_mode=update > "$out/module-graph.txt"
+          cp MODULE.bazel.lock "$out/"
+          printf 'source=%s\ncheckout=%s\nrunner=%s\nuserspace=%s\n' \
+            "$SOURCE_SHA" "$(git rev-parse HEAD)" "$RUNNER_ARCH" "$(dpkg --print-architecture)" > "$out/build.txt"
+          bazel --version >> "$out/build.txt"
+          git diff --exit-code HEAD --
+          cd "$out"
+          sha256sum full/*.whl runtime/*.whl MODULE.bazel.lock module-graph.txt build.txt > SHA256SUMS
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sonic-utilities-wheels-amd64
+          path: ${{ runner.temp }}/sonic-utilities-wheels/
+          if-no-files-found: error
