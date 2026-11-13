@@ -1398,9 +1398,12 @@ class BulkKeyLevelMoveGenerator:
             # If the number of separators changed, do not group these operations with the previous ones.
             num_separators = key.count("|")
             if group is not None and (prev_num_separators != num_separators or table != prev_table):
-                # Special case if we are deleting all the current keys in a table to emit a table delete too
-                if len(list(group)) == len(diff.current_config[table if prev_table == "" else prev_table]):
-                    group.append(JsonMove(diff, OperationType.REMOVE, [table]))
+                # Special case if we are deleting all the current keys in a table to emit a table delete too.
+                # NOTE: the group belongs to prev_table -- `table` is already the *next* table, the one
+                #       whose first key triggered this flush -- so both the count check and the table
+                #       delete must name prev_table.
+                if len(group) == len(diff.current_config[prev_table]):
+                    group.append(JsonMove(diff, OperationType.REMOVE, [prev_table]))
                 yield group
                 group = None
 
@@ -1413,9 +1416,12 @@ class BulkKeyLevelMoveGenerator:
 
         # Pending group, emit
         if group is not None:
-            # Special case if we are deleting all the current keys in a table to emit a table delete too
-            if len(list(group)) == len(diff.current_config[table]):
-                group.append(JsonMove(diff, OperationType.REMOVE, [table]))
+            # Special case if we are deleting all the current keys in a table to emit a table delete too.
+            # prev_table is the group's table here too: the loop above always assigns it, so on exit it
+            # holds the same value as table. Naming it at both emits keeps the note above true of the
+            # whole loop rather than of one site.
+            if len(group) == len(diff.current_config[prev_table]):
+                group.append(JsonMove(diff, OperationType.REMOVE, [prev_table]))
             yield group
 
         prev_num_separators = -1

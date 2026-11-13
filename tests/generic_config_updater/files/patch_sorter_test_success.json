@@ -1010,15 +1010,15 @@
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet1"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet2"
-                }
-            ],
-            [
+                },
+                {
+                    "op": "remove",
+                    "path": "/VLAN_MEMBER/Vlan100|Ethernet3"
+                },
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER"
