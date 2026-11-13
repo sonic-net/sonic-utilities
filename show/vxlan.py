@@ -220,7 +220,8 @@ def vrfvnimap():
         vrf_keys = vrf_table.keys()
         if vrf_keys is not None:
             for key in natsorted(vrf_keys):
-                if ('vni' in vrf_table[key]):
+                if ('vni' in vrf_table[key] and
+                        str(vrf_table[key]['vni']) != '0'):
                     body.append([key, vrf_table[key]['vni']])
                     num += 1
 
