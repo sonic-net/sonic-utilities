@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import shlex
 import sys
 
 import subprocess
@@ -51,7 +53,7 @@ def readJsonFile(fileName):
     return result
 
 
-def try_convert_interfacename_from_alias(ctx, interfacename):
+def try_convert_interfacename_from_alias(ctx, interfacename, ignore_missing=False):
     """try to convert interface name from alias"""
 
     if clicommon.get_interface_naming_mode() == "alias":
@@ -60,6 +62,8 @@ def try_convert_interfacename_from_alias(ctx, interfacename):
         # TODO: ideally alias_to_name should return None when it cannot find
         # the port name for the alias
         if interfacename == alias:
+            if ignore_missing:
+                return None
             ctx.fail("cannot find interface name for alias {}".format(alias))
 
     return interfacename
@@ -152,31 +156,118 @@ def naming_mode(verbose):
     click.echo(clicommon.get_interface_naming_mode())
 
 
+def _is_packet_chassis_supervisor():
+    return device_info.is_supervisor() and device_info.is_packet_chassis()
+
+
+def _validate_location(ctx, param, value):
+    if value is not None and not _is_packet_chassis_supervisor():
+        raise click.BadParameter(
+            'is only supported on chassis-packet supervisors',
+            param_hint=param.name)
+    return value
+
+
+class _PacketChassisLocationOption(click.Option):
+    def get_help_record(self, ctx):
+        if not _is_packet_chassis_supervisor():
+            return None
+        return super().get_help_record(ctx)
+
+
 @interfaces.command()
 @click.argument('interfacename', required=False)
 @multi_asic_util.multi_asic_click_options
+@click.option('--location', '-l', help='Chassis location to query',
+              cls=_PacketChassisLocationOption, callback=_validate_location)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def status(interfacename, namespace, display, verbose):
+def status(interfacename, namespace, display, location, verbose):
     """Show Interface status information"""
 
     if device_info.is_supervisor():
+        if device_info.is_packet_chassis():
+            if location is None or location.lower() == 'all':
+                remote_returncode = _run_remote_status('all')
+                if display == 'all':
+                    click.echo(f"======== {_get_local_supervisor_name()} output: ========")
+                    local_status = _run_local_status(
+                        interfacename, namespace, display, verbose, ignore_missing_alias=True)
+                    if not local_status:
+                        click.echo(
+                            f"Interface alias {interfacename} is not present on "
+                            f"{_get_local_supervisor_name()}; displaying remote results only.")
+                _show_internal_interfaces_hint(interfacename, display)
+                sys.exit(remote_returncode)
+            elif re.fullmatch(r'supervisor\d*', location, re.IGNORECASE):
+                requested_supervisor = location.upper()
+                local_supervisor = _get_local_supervisor_name()
+                if requested_supervisor != 'SUPERVISOR' and requested_supervisor != local_supervisor:
+                    raise click.BadParameter(
+                        f'{requested_supervisor} is not the local supervisor ({local_supervisor})',
+                        param_hint='--location')
+                if display == 'all':
+                    click.echo(f"======== {_get_local_supervisor_name()} output: ========")
+                    _run_local_status(interfacename, namespace, display, verbose)
+                _show_internal_interfaces_hint(interfacename, display)
+            elif re.fullmatch(r'line-card\d+', location, re.IGNORECASE):
+                sys.exit(_run_remote_status(location.upper()))
+            else:
+                raise click.BadParameter(
+                    'use SUPERVISOR, LINE-CARD<n>, or all', param_hint='--location')
+            return
+
         # the command will be executed directly by rexec
         click.echo("Since the current device is a chassis supervisor, "
                    "this command will be executed remotely on all linecards")
         proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
         sys.exit(proc.returncode)
 
+    ignore_missing_alias = os.getenv('SONIC_CLI_AGGREGATE_QUERY') == '1'
+    _run_local_status(
+        interfacename, namespace, display, verbose,
+        ignore_missing_alias=ignore_missing_alias)
+
+
+def _get_local_supervisor_name():
+    try:
+        from sonic_platform import platform
+        chassis = platform.Platform().get_chassis()
+        local_slot = chassis.get_my_slot()
+        if local_slot is not None:
+            for module in chassis.get_all_modules():
+                if str(module.get_slot()) != str(local_slot):
+                    continue
+                module_name = module.get_name()
+                if module_name and re.fullmatch(
+                        r'supervisor\d+', str(module_name), re.IGNORECASE):
+                    return str(module_name).upper()
+    except Exception:
+        pass
+
+    hostname = device_info.get_hostname()
+    match = re.search(r'(?:^|[-_])(?:rp|supervisor)(\d*)$', hostname, re.IGNORECASE)
+    return f"SUPERVISOR{match.group(1) or '0'}" if match else 'SUPERVISOR0'
+
+
+def _show_internal_interfaces_hint(interfacename, display):
+    if interfacename is None and display != 'all':
+        click.echo('Use -d all to display internal interfaces.')
+
+
+def _run_local_status(interfacename, namespace, display, verbose, ignore_missing_alias=False):
     ctx = click.get_current_context()
 
     cmd = ['intfutil', '-c', 'status']
 
     if interfacename is not None:
-        interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+        interfacename = try_convert_interfacename_from_alias(
+            ctx, interfacename, ignore_missing=ignore_missing_alias)
+        if interfacename is None:
+            return False
 
         cmd += ['-i', str(interfacename)]
         if multi_asic.is_multi_asic():
             cmd += ['-d', str(display)]
-
     else:
         cmd += ['-d', str(display)]
 
@@ -184,6 +275,40 @@ def status(interfacename, namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+    return True
+
+
+def _remote_status_command(ignore_missing_alias=False):
+    args = []
+    skip_next = False
+    for arg in sys.argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in ('-l', '--location'):
+            skip_next = True
+            continue
+        if arg.startswith('-l') and arg != '-l':
+            continue
+        if arg.startswith('--location='):
+            continue
+        args.append(arg)
+    if clicommon.get_interface_naming_mode() == 'alias':
+        env_args = ['env', 'SONIC_CLI_IFACE_MODE=alias']
+        if ignore_missing_alias:
+            env_args.append('SONIC_CLI_AGGREGATE_QUERY=1')
+        args = env_args + args
+    return shlex.join(args)
+
+
+def _run_remote_status(location):
+    # An aggregate query spans line cards, so an alias that belongs to one
+    # location is expected to be absent on the others. Preserve the existing
+    # error for an explicitly selected line card.
+    ignore_missing_alias = location.lower() == 'all'
+    proc = subprocess.run(
+        ['rexec', location, '-c', _remote_status_command(ignore_missing_alias)])
+    return proc.returncode
 
 
 @interfaces.command()
