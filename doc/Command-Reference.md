@@ -39,6 +39,9 @@
   * [BMC config commands](#bmc-config-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
+* [IS-IS](#is-is)
+  * [IS-IS show commands](#is-is-show-commands)
+  * [IS-IS config commands](#is-is-config-commands)
 * [BGP](#bgp)
   * [BGP show commands](#bgp-show-commands)
   * [BGP config commands](#bgp-config-commands)
@@ -2730,6 +2733,90 @@ This command displays the state and key parameters of all BFD sessions that matc
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
+
+## IS-IS Configuration and Show Commands
+
+The following is the implemented Click syntax. `INSTANCE` is always explicit for parent
+operations and initial interface binding; `--vrf` defaults to `default` for parent
+operations and is inferred/checked for interface binding. `LEVEL` is `level-1`,
+`level-2` or the write convenience `both`.
+
+| Function | Command |
+| -------- | ---------------- |
+| Instance lifecycle | `config isis instance <add\|enable\|disable\|del> INSTANCE [--vrf VRF]` |
+| NET list | `config isis net <add\|del> INSTANCE NET [--vrf VRF]` |
+| Instance scalar setting | `config isis set INSTANCE FIELD VALUE [--vrf VRF]` |
+| Instance reset | `config isis reset INSTANCE FIELD [--vrf VRF]` |
+| Level setting/reset | `config isis level <set\|reset> INSTANCE LEVEL FIELD [VALUE] [--vrf VRF]` |
+| Complete SPF backoff tuple | `config isis spf-backoff set INSTANCE INIT SHORT LONG HOLD LEARN [--vrf VRF]` |
+| Remove SPF backoff | `config isis spf-backoff reset INSTANCE [--vrf VRF]` |
+| Bind/unbind | `config interface isis bind INTERFACE INSTANCE [--vrf VRF]`; `config interface isis unbind INTERFACE` |
+| Interface admin state | `config interface isis <enable\|disable> INTERFACE` |
+| Independent AF control | `config interface isis af INTERFACE <ipv4\|ipv6> <enable\|disable\|reset>` |
+| Interface scalar setting/reset | `config interface isis <set\|reset> INTERFACE FIELD [VALUE]` |
+| Interface level setting/reset | `config interface isis level <set\|reset> INTERFACE LEVEL FIELD [VALUE]` |
+| Redistribution | `config isis redistribute add INSTANCE AF PROTOCOL LEVEL [--metric VALUE] [--route-map NAME] [--vrf VRF]` |
+| Redistribution removal | `config isis redistribute del INSTANCE AF PROTOCOL LEVEL [--vrf VRF]` |
+
+`FIELD` is a documented Click choice, not an arbitrary FRR passthrough. Instance
+choices include level type, hostname, metric style, LSP MTU, overload and IPv6 MT.
+Interface choices include level type, network type and passive mode. Level choices
+are restricted to the corresponding table's fields. Optional values in the compact
+table are mandatory for `set` and forbidden for `reset`.
+
+The exposed protocol allowlist is IPv4 `connected`, `static`, `kernel`, `bgp`,
+`ospf`, `rip`; IPv6 `connected`, `static`, `kernel`, `bgp`, `ospf6`, `ripng`.
+A route-map must reference an existing `ROUTE_MAP_SET` entry. Table-direct redistribution has an additional table-ID
+dimension and must not be collapsed into a protocol-only row. Default origination
+is a separate FRR object, not an alias for redistributing static routes. Table-direct and default origination are outside this iteration.
+
+Operational commands cover summary, neighbors, interface, database, route,
+hostname, topology and VRF inventory. Implement filters only when the pinned
+command/output can faithfully represent them. Do not return another instance's
+state under an instance filter; exact native command mapping is an acceptance gate.
+
+Boolean scalar values are `true` or `false`. Configuration requires sudo.
+Use `config isis -n NAMESPACE` and `config interface -n NAMESPACE isis` for the
+same ASIC. AF and MT default to false; enable each explicitly when required.
+
+#### Operational commands
+
+| Command | Scope and format |
+| ------- | ---------------- |
+| `show isis summary` | `--vrf VRF`, `--json`, `--instance NAME` with JSON |
+| `show isis neighbor` | Same options; one VRF per JSON query |
+| `show isis database [detail]` | Same options; one VRF per JSON query |
+| `show isis interface` | Same options; one VRF per JSON query |
+| `show isis route` / `show isis topology` | `--vrf VRF`, `--level level-1\|level-2`, `--json`; JSON rejected for multiple areas |
+| `show isis hostname` | `--vrf VRF`, text only |
+| `show isis vrf` | All-VRF summary, optional `--json` |
+
+All support `-n` / `--namespace`. `--instance` requires JSON and one VRF; it
+filters native area objects, never substitutes another area's data. FRR's
+route/topology JSON can overwrite multiple areas, and most all-VRF JSON writers
+can overwrite VRFs. Unsupported combinations fail explicitly; text remains
+available. Native command errors propagate to the caller.
+
+
+### Example
+
+Commands for a default-VRF, Level-2 dual-stack point-to-point interface:
+
+```bash
+config isis instance add CORE
+config isis net add CORE 49.0001.0000.0000.0001.00
+config isis set CORE level-type level-2-only
+config interface isis bind Ethernet0 CORE
+config interface isis set Ethernet0 network-type point-to-point
+config interface isis set Ethernet0 level-type level-2-only
+config interface isis af Ethernet0 ipv4 enable
+config interface isis af Ethernet0 ipv6 enable
+config interface isis enable Ethernet0
+config isis instance enable CORE
+```
+
+Addressing and routed-interface prerequisites are configured separately. IPv6 MT
+is an explicit instance setting and is not implicitly enabled by IPv6 routing.
 
 ## BGP
 

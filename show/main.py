@@ -72,6 +72,7 @@ from . import syslog
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import isis
 from . import llr
 from . import srv6
 from . import switch
@@ -339,6 +340,7 @@ if is_gearbox_configured():
 
 # bgp module
 cli.add_command(bgp_cli.BGP)
+cli.add_command(isis.isis)
 
 #
 # 'vrf' command ("show vrf")

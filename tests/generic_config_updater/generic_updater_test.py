@@ -16,6 +16,27 @@ import generic_config_updater.change_applier as ca
 # import generic_updater as gu
 
 class TestPatchApplier(unittest.TestCase):
+    def test_apply__isis_area_retirement__rejected_before_any_change(self):
+        for replacement in (None, {'enabled': 'false'}):
+            with self.subTest(replacement=replacement):
+                patch_applier = self.__create_patch_applier()
+                old = {'ISIS_INSTANCE': {'default|CORE': {'enabled': 'true'},
+                                         'default|EDGE': {'enabled': 'true'}}}
+                target = {'ISIS_INSTANCE': {'default|CORE': {'enabled': 'true'}}}
+                if replacement is not None:
+                    target['ISIS_INSTANCE']['default|EDGE'] = replacement
+                patch_applier.config_wrapper.get_config_db_as_json.side_effect = None
+                patch_applier.config_wrapper.get_config_db_as_json.return_value = old
+                patch_applier.patch_wrapper.simulate_config_db_patch.side_effect = None
+                patch_applier.patch_wrapper.simulate_config_db_patch.return_value = target
+                operation = {'op': 'remove', 'path': '/ISIS_INSTANCE/default|EDGE'}
+                if replacement is not None:
+                    operation = {'op': 'replace', 'path': '/ISIS_INSTANCE/default|EDGE/enabled', 'value': 'false'}
+                with self.assertRaisesRegex(ValueError, 'operation refused until FRR is fixed'):
+                    patch_applier.apply([operation])
+                patch_applier.patchsorter.sort.assert_not_called()
+                patch_applier.changeapplier.apply.assert_not_called()
+
     def test_apply__invalid_patch_producing_empty_tables__failure(self):
         # Arrange
         patch_applier = self.__create_patch_applier(valid_patch_does_not_produce_empty_tables=False)
