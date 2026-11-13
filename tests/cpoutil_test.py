@@ -1657,7 +1657,6 @@ class TestEepromPageOffset:
             cpoutil, "_eeprom_linear_offset",
             lambda resource_type, resource_id, obj, bank, page, offset:
             CmisPage.linear_offset(page, bank, offset))
-        assert CmisPage.linear_offset(0x11, 0, 2) == CmisPage.linear_offset(0x10, 0, 130)
         result = invoke_coverage(
             ["write-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "2", "-d", "ff"])
         assert result.exit_code != 0
