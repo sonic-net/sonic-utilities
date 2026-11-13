@@ -79,10 +79,17 @@ class ChangeApplier:
     def __init__(self, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
         self.config_db = get_config_db(self.scope)
+        # Tables that daemons write on their own.  They are excluded from the
+        # "is the patch reflected in ConfigDB" comparison, otherwise a daemon
+        # that happens to write while a patch is being applied makes an
+        # otherwise successful update fail.  LOGGER is filled by every swss
+        # process at start-up (Logger::linkToDb), e.g. by the daemons of a
+        # feature that was just enabled.
         self.backend_tables = [
             "BUFFER_PG",
             "BUFFER_PROFILE",
-            "FLEX_COUNTER_TABLE"
+            "FLEX_COUNTER_TABLE",
+            "LOGGER"
         ]
         if (not ChangeApplier.updater_conf) and os.path.exists(UPDATER_CONF_FILE):
             with open(UPDATER_CONF_FILE, "r") as s:
