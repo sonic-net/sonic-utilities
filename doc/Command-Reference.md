@@ -2704,15 +2704,6 @@ Requalify both values whenever either changes. The reason behind a forced result
   config chassis modules shutdown-timeout SWITCH-HOST <seconds>
   ```
 
-**show chassis modules status**
-
-On a BMC, this command appends `Result` after the existing `Shutdown-Timeout (sec)` column. For a `SWITCH-HOST` row, it shows the most recent operation result from `HOST_STATE|switch-host`; a missing value is shown as `-`. Other module types show `N/A` in this column. The request ID of that operation is `op_request_id` in the same STATE_DB key. Non-BMC output is unchanged.
-
-- Usage:
-  ```bash
-  show chassis modules status [<module_name>]
-  ```
-
 To restart the switch host, shut it down and then start it again:
 
 ```bash
@@ -2721,8 +2712,8 @@ config chassis modules startup SWITCH-HOST
 ```
 
 The second command may be written while the shutdown is still in flight: it
-is queued and runs once the shutdown has completed. `show chassis modules status`
-reports each step's result.
+is queued and runs once the shutdown has completed. The `OP_DONE` syslog line
+from `bmcctld` reports each step's result.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bmc)
 

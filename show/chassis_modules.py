@@ -17,9 +17,6 @@ CHASSIS_MODULE_INFO_OPERSTATUS_FIELD = 'oper_status'
 CHASSIS_MODULE_INFO_ADMINSTATUS_FIELD = 'admin_status'
 CHASSIS_MODULE_INFO_SERIAL_FIELD = 'serial'
 
-HOST_STATE_KEY = 'HOST_STATE|switch-host'
-HOST_STATE_OP_RESULT_FIELD = 'op_result'
-
 CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
 CHASSIS_MIDPLANE_INFO_IP_FIELD = 'ip_address'
 CHASSIS_MIDPLANE_INFO_ACCESS_FIELD = 'access'
@@ -60,7 +57,7 @@ def status(db, chassis_module_name):
         # BMC-only timing fields configured via 'config chassis modules
         # power-on-delay' / 'shutdown-timeout' for SWITCH-HOST modules.
         header.remove('Physical-Slot')
-        header.extend(['Power-On-Delay (sec)', 'Shutdown-Timeout (sec)', 'Result'])
+        header.extend(['Power-On-Delay (sec)', 'Shutdown-Timeout (sec)'])
 
     chassis_cfg_table = db.cfgdb.get_table('CHASSIS_MODULE')
 
@@ -75,10 +72,6 @@ def status(db, chassis_module_name):
     if not keys:
         print('Key {} not found in {} table'.format(key_pattern, CHASSIS_MODULE_INFO_TABLE))
         return
-
-    host_state = {}
-    if bmc:
-        host_state = state_db.get_all(state_db.STATE_DB, HOST_STATE_KEY) or {}
 
     # On BMC, oper_status is read directly from the platform API.
     # ModuleHelper.__init__ does not raise on chassis load failure; it logs and keeps
@@ -163,12 +156,10 @@ def status(db, chassis_module_name):
                 cfg = config_data or {}
                 power_on_delay = cfg.get('power_on_delay', '0')
                 shutdown_timeout = cfg.get('graceful_shutdown_timeout', '120')
-                op_result = host_state.get(HOST_STATE_OP_RESULT_FIELD, '-')
             else:
                 power_on_delay = 'N/A'
                 shutdown_timeout = 'N/A'
-                op_result = 'N/A'
-            row.extend([power_on_delay, shutdown_timeout, op_result])
+            row.extend([power_on_delay, shutdown_timeout])
 
         table.append(tuple(row))
 
