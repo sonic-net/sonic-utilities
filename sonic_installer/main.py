@@ -791,7 +791,7 @@ def prune_stale_db_certs(bootloader):
         secure_boot_db.prune_db_certificates(
             config,
             images=bootloader.get_installed_images(),
-            auto=True,
+            commit=True,
         )
     except (secure_boot_db.ScriptError, OSError, subprocess.SubprocessError) as e:
         echo_and_log("Warning: Secure Boot db prune failed: {}. Verify db before rebooting".format(e),
