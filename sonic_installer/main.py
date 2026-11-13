@@ -864,6 +864,7 @@ def cleanup():
 DOCKER_CONTAINER_LIST = [
     "bgp",
     "dhcp_relay",
+    "gnmi",
     "lldp",
     "macsec",
     "nat",
@@ -876,7 +877,6 @@ DOCKER_CONTAINER_LIST = [
     "swss",
     "syncd",
     "teamd",
-    "telemetry",
     "mgmt-framework"
 ]
 

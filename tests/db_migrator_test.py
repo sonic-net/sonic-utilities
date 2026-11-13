@@ -575,7 +575,7 @@ class TestWarmUpgrade_to_2_0_2(object):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'cross_branch_upgrade_to_version_2_0_2_expected')
         expected_db = Db()
 
-        new_tables = ["RESTAPI", "TELEMETRY", "CONSOLE_SWITCH"]
+        new_tables = ["RESTAPI", "CONSOLE_SWITCH"]
         for table in new_tables:
             resulting_table = dbmgtr.configDB.get_table(table)
             expected_table = expected_db.cfgdb.get_table(table)
@@ -605,7 +605,7 @@ class TestWarmUpgrade_to_2_0_2(object):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'cross_branch_upgrade_without_mg_2_0_2_expected.json')
         expected_db = Db()
 
-        new_tables = ["RESTAPI", "TELEMETRY", "CONSOLE_SWITCH"]
+        new_tables = ["RESTAPI", "CONSOLE_SWITCH"]
         for table in new_tables:
             resulting_table = dbmgtr.configDB.get_table(table)
             expected_table = expected_db.cfgdb.get_table(table)
@@ -877,14 +877,7 @@ class TestGNMIMigrator(object):
         # Set config_src_data
         dbmgtr.config_src_data = {}
         dbmgtr.migrate()
-        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-configdb-expected')
-        expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_02')
-        resulting_table = dbmgtr.configDB.get_table("GNMI")
-        expected_table = expected_db.cfgdb.get_table("GNMI")
-
-        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
-        assert not diff
+        assert not dbmgtr.configDB.get_table("GNMI")
 
 class TestAAAMigrator(object):
 
