@@ -7,6 +7,7 @@ import click
 from tabulate import tabulate
 import utilities_common.cli as clicommon
 from sonic_py_common import device_info
+from show import uefi as show_uefi
 
 #
 # Helper functions
@@ -49,6 +50,9 @@ def get_chassis_info():
 def platform():
     """Show platform-specific hardware info"""
     pass
+
+
+show_uefi.attach(platform)
 
 
 # 'summary' subcommand ("show platform summary")

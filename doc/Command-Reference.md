@@ -177,6 +177,9 @@
   * [Platform Component Firmware show commands](#platform-component-firmware-show-commands)
   * [Platform Component Firmware config commands](#platform-component-firmware-config-commands)
   * [Platform Component Firmware vendor specific behaviour](#platform-component-firmware-vendor-specific-behaviour)
+* [Platform Security UEFI](#platform-security-uefi)
+  * [UEFI show commands](#uefi-show-commands)
+  * [UEFI config commands](#uefi-config-commands)
 * [Platform Specific Commands](#platform-specific-commands)
   * [Mellanox Platform Specific Commands](#mellanox-platform-specific-commands)
   * [Barefoot Platform Specific Commands](#barefoot-platform-specific-commands)
@@ -297,6 +300,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v13 | Nov-12-2026 | Add platform security UEFI show and config commands |
 | v12 | Jul-16-2026 | Add console mirror commands |
 | v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
@@ -11297,6 +11301,124 @@ CPLD component can be specified arbitrary.
 Note: the update will have the same effect if any of CPLD1/CPLD2/CPLD3/CPLD4 will be used
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#platform-component-firmware)
+
+
+## Platform Security UEFI
+
+UEFI Secure Boot key management for PK, KEK, db, and dbx. Design: [SONiC HLD PR 1451](https://github.com/sonic-net/SONiC/pull/1451).
+
+The CLI is apply-only. AUTH2 and ESL files are built on the owner host (`openssl`, `cert-to-efi-sig-list`, `sign-efi-sig-list`). The switch never takes a private key and does not retry a firmware reject. Default backend is efitools (`efi-readvar` / `efi-updatevar`) plus efivarfs. A platform package may replace that backend.
+
+There is no `secureboot enable` / `disable`. Enforcement follows ownership claim and unclaim.
+
+### UEFI show commands
+
+**show platform security uefi status**
+
+Show `SetupMode` and `SecureBoot`.
+
+- Usage:
+  ```
+  show platform security uefi status
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show platform security uefi status
+  SetupMode: 0 (User Mode)
+  SecureBoot: 1 (enforcing)
+  ```
+
+**show platform security uefi variables**
+
+Show PK, KEK, db, and/or dbx via `efi-readvar`. A named variable uses `efi-readvar -v`.
+
+- Usage:
+  ```
+  show platform security uefi variables [all|pk|kek|db|dbx]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show platform security uefi variables pk
+  Variable PK, length 1234
+  PK: list 0, type X509
+  ```
+
+**show platform security uefi inspect**
+
+Dump AUTH2/ESL layout (EFI_TIME, PKCS#7, certificates or hashes). Does not apply the file. Empty ESL is the unclaim payload.
+
+- Usage:
+  ```
+  show platform security uefi inspect <file.auth|file.esl>
+  ```
+
+**show platform security uefi compare**
+
+Compare the current store to an AUTH2/ESL file. Does not apply the file.
+
+- Usage:
+  ```
+  show platform security uefi compare [pk|kek|db|dbx] <file.auth|file.esl>
+  ```
+
+**show platform security uefi health**
+
+Certificate hygiene warnings (Setup Mode leftover keys, expiry, db/dbx overlap). Firmware may still trust expired certificates.
+
+- Usage:
+  ```
+  show platform security uefi health
+  ```
+
+### UEFI config commands
+
+Writes need `sudo` / config privilege. `-y` skips the confirm prompt.
+
+**config platform security uefi enroll**
+
+Setup Mode enrollment. `kek` / `db` / `dbx` take an unsigned ESL (`efi-updatevar -e`). `pk` takes a self-signed AUTH2 (`efi-updatevar -f`) and is the ownership claim.
+
+- Usage:
+  ```
+  sudo config platform security uefi enroll [-y] [pk|kek|db|dbx] <file.esl|file.auth>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config platform security uefi enroll -y kek KEK.esl
+  admin@sonic:~$ sudo config platform security uefi enroll -y pk PK.auth
+  ```
+
+**config platform security uefi append**
+
+User Mode AUTH2 append (`efi-updatevar -a`). The AUTH2 must be built with `sign-efi-sig-list -a`. Revoke is `append dbx`.
+
+- Usage:
+  ```
+  sudo config platform security uefi append [-y] [pk|kek|db|dbx] <file.auth>
+  ```
+
+**config platform security uefi update**
+
+User Mode AUTH2 replace (`efi-updatevar -f`). Certificates omitted from the ESL are removed. `update pk` with a new certificate stays in User Mode.
+
+- Usage:
+  ```
+  sudo config platform security uefi update [-y] [pk|kek|db|dbx] <file.auth>
+  ```
+
+**config platform security uefi unclaim**
+
+Empty-PK AUTH2; returns to Setup Mode. This is not `update pk` with a new certificate.
+
+- Usage:
+  ```
+  sudo config platform security uefi unclaim [-y] PK.empty.auth
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#platform-security-uefi)
 
 
 ## Platform Specific Commands
