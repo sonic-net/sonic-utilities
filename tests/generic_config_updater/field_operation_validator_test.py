@@ -467,6 +467,61 @@ class TestValidateFieldOperation:
             target_config
         )
 
+    @pytest.mark.parametrize("old_meta, target_meta, message", [
+        ({"hwsku": "SKU-A", "hostname": "sw1"}, {"hwsku": "SKU-B", "hostname": "sw1"},
+         "hwsku cannot be changed from SKU-A to SKU-B"),
+        ({"hwsku": "SKU-A"}, {}, "hwsku cannot be changed from SKU-A to None"),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "switch_type": "voq"},
+         "switch_type cannot be changed from switch to voq"),
+        ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "fabric"},
+         "switch_type cannot be changed from voq to fabric"),
+        ({"hwsku": "SKU-A", "asic_id": "06:00.0"}, {"hwsku": "SKU-A", "asic_id": "07:00.0"},
+         "asic_id cannot be changed from 06:00.0 to 07:00.0"),
+    ])
+    @pytest.mark.parametrize("scope", ["", "asic0"])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_device_metadata_refused(self, old_meta, target_meta, message, scope):
+        config_wrapper = gu_common.ConfigWrapper(scope=scope)
+        old_config = {"DEVICE_METADATA": {"localhost": old_meta}}
+        target_config = {"DEVICE_METADATA": {"localhost": target_meta}}
+        with pytest.raises(gu_common.IllegalPatchOperationError) as err:
+            config_wrapper.validate_field_operation(old_config, target_config)
+        assert message in str(err.value)
+        assert "needs a config reload" in str(err.value)
+
+    @pytest.mark.parametrize("old_meta, target_meta", [
+        ({"hwsku": "SKU-A", "hostname": "sw1"}, {"hwsku": "SKU-A", "hostname": "sw2"}),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "switch_type": "switch"}),
+        ({"hwsku": "SKU-A", "switch_type": "switch"}, {"hwsku": "SKU-A", "switch_type": ""}),
+        ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "voq", "bgp_asn": "65100"}),
+        ({"hwsku": "SKU-A", "asic_id": "06:00.0"}, {"hwsku": "SKU-A"}),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "asic_id": "06:00.0"}),
+        ({"hwsku": "SKU-A", "type": "ToRRouter"}, {"hwsku": "SKU-A", "type": "LeafRouter"}),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "subtype": "DualToR"}),
+        ({"hwsku": "SKU-A", "sub_role": "FrontEnd"}, {"hwsku": "SKU-A", "sub_role": "BackEnd"}),
+    ])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_device_metadata_allowed(self, old_meta, target_meta):
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation({"DEVICE_METADATA": {"localhost": old_meta}},
+                                                {"DEVICE_METADATA": {"localhost": target_meta}})
+
+    @pytest.mark.parametrize("scope, legal", [("", True), ("localhost", True), ("asic0", False)])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_sub_role_refused_in_asic_scope(self, scope, legal):
+        config_wrapper = gu_common.ConfigWrapper(scope=scope)
+        old_config = {"DEVICE_METADATA": {"localhost": {"hwsku": "SKU-A", "sub_role": "FrontEnd"}}}
+        target_config = {"DEVICE_METADATA": {"localhost": {"hwsku": "SKU-A", "sub_role": "BackEnd"}}}
+        if legal:
+            config_wrapper.validate_field_operation(old_config, target_config)
+        else:
+            with pytest.raises(gu_common.IllegalPatchOperationError,
+                               match="sub_role cannot be changed from FrontEnd to BackEnd"):
+                config_wrapper.validate_field_operation(old_config, target_config)
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "20241211.49"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
