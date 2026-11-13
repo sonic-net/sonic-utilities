@@ -1,6 +1,8 @@
 import sys
 import os
 import json
+from contextlib import ExitStack
+from types import SimpleNamespace
 from unittest import mock
 
 import click
@@ -61,7 +63,23 @@ class MockerChassis(object):
             MockerChassis.counter += 1
             return "red"
 
+
+def mock_healthcheck():
+    """Runs the mocked checks and returns their JSON as the check binary prints it."""
+    if not MockerConfig().config_file_exists():
+        return 1, '', 'System health configuration file not found, exit...'
+    manager = MockerManager()
+    stat = manager.check(None)
+    output = {
+        'led': MockerChassis().get_status_led(),
+        'stat': stat,
+        'ignore': {'services': manager.config.ignore_services, 'devices': manager.config.ignore_devices},
+    }
+    return 0, json.dumps(output), ''
+
 import show.main as show
+real_run_healthcheck = show.system_health.run_healthcheck
+real_healthcheck_installed = show.system_health.healthcheck_installed
 
 class TestHealth(object):
     original_cli = None
@@ -69,7 +87,13 @@ class TestHealth(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        # pop_all() keeps the patches only when all of them started; closing them also restores the environment.
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.dict(os.environ, {"UTILITIES_UNIT_TESTING": "1"}))
+            stack.enter_context(mock.patch('show.system_health.healthcheck_installed', return_value=True))
+            stack.enter_context(mock.patch('show.system_health.run_healthcheck', side_effect=mock_healthcheck))
+            stack.enter_context(mock.patch('show.system_health.os.geteuid', return_value=0))
+            cls.patches = stack.pop_all()
         global original_cli
         original_cli = show.cli
 
@@ -310,6 +334,196 @@ psu.voltage  Ignored   Device
 """
         assert result.output == expected
 
+    def test_health_check_failure(self):
+        runner = CliRunner()
+        with mock.patch('show.system_health.run_healthcheck', return_value=(2, '', 'cannot connect to redis\n')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert result.output == "System health check failed: cannot connect to redis (exit code 2)\n"
+
+    def test_health_check_exit_code_1(self):
+        """Exit code 1 is the missing configuration file: the binary's own message is shown, as Python printed it."""
+        runner = CliRunner()
+        with mock.patch('show.system_health.run_healthcheck', return_value=(1, '', 'Another reason to stop\n')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert result.output == "Another reason to stop\n"
+        with mock.patch('show.system_health.run_healthcheck', return_value=(1, '', '')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert result.output == "System health configuration file not found, exit...\n"
+
+    def test_health_check_failure_without_stderr(self):
+        runner = CliRunner()
+        with mock.patch('show.system_health.run_healthcheck', return_value=(101, '', '')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert result.output == "System health check failed: exit code 101\n"
+
+    def test_health_check_killed_by_signal(self):
+        runner = CliRunner()
+        with mock.patch('show.system_health.run_healthcheck', return_value=(-9, '', '')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert result.output == "System health check failed: killed by signal 9\n"
+        with mock.patch('show.system_health.run_healthcheck', return_value=(-11, '', 'Fatal Python error\n')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.output == "System health check failed: Fatal Python error (killed by signal 11)\n"
+
+    def test_health_check_prints_before_the_report(self):
+        """What the checks printed (here the LED message of a platform without set_status_led) comes first."""
+        stat = {'Hardware': {'fan1': {'status': 'OK', 'message': '', 'type': 'Fan'}}}
+        output = json.dumps({'led': 'green', 'stat': stat, 'ignore': {'services': [], 'devices': []}})
+        runner = CliRunner()
+        with mock.patch('show.system_health.run_healthcheck',
+                        return_value=(0, output, 'chassis.set_status_led is not implemented\n')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 0
+        assert result.output == """\
+chassis.set_status_led is not implemented
+System status summary
+
+  System status LED  green
+  Services:
+    Status: OK
+  Hardware:
+    Status: OK
+"""
+
+    def test_health_check_os_error(self):
+        runner = CliRunner()
+        with mock.patch('show.system_health.run_healthcheck', side_effect=PermissionError(13, 'Permission denied')):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert result.output == "System health check failed: [Errno 13] Permission denied\n"
+
+    def test_health_check_invalid_output(self):
+        runner = CliRunner()
+        expected = "System health check failed: invalid output from {}\n".format(show.system_health.HEALTHCHECK_PATH)
+        for stdout in ['', 'not json', '[]', '{"led": "green"}', '{"led": null, "stat": {}}',
+                       '{"led": "green", "stat": {}, "ignore": []}',
+                       '{"led": "green", "stat": {}, "ignore": null}',
+                       '{"led": "green", "stat": {"Hardware": []}}',
+                       '{"led": "green", "stat": {"Hardware": {"fan1": "OK"}}}',
+                       '{"led": "green", "stat": {"Hardware": {"fan1": {"status": "OK", "message": ""}}}}',
+                       ('{"led": "green", "stat": {"Services": {"bgp": '
+                        '{"status": "OK", "message": null, "type": "x"}}}}'),
+                       '{"led": "green", "stat": {}, "ignore": {"services": "bgp"}}',
+                       '{"led": "green", "stat": {}, "ignore": {"devices": [1]}}']:
+            with mock.patch('show.system_health.run_healthcheck', return_value=(0, stdout, '')):
+                result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+            assert result.exit_code == 1, stdout
+            assert result.output == expected, stdout
+
+    def test_health_requires_root(self):
+        runner = CliRunner()
+        with mock.patch('show.system_health.os.geteuid', return_value=1000):
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert result.output == "Root privileges are required for this operation\n"
+
+    def test_run_healthcheck(self):
+        with mock.patch('show.system_health.subprocess.run') as run:
+            run.return_value = mock.Mock(returncode=0, stdout='{}', stderr='')
+            assert real_run_healthcheck() == (0, '{}', '')
+        # No overall limit, as the in-process checks had none: the binary bounds each command and API call.
+        run.assert_called_once_with(show.system_health.HEALTHCHECK_CMD, capture_output=True, text=True,
+                                    errors='replace')
+
+    def test_healthcheck_installed(self):
+        with mock.patch('show.system_health.os.path.isfile', return_value=True) as isfile, \
+                mock.patch('show.system_health.os.access', return_value=True) as access:
+            assert real_healthcheck_installed()
+            access.return_value = False
+            assert not real_healthcheck_installed()
+        isfile.assert_called_with(show.system_health.HEALTHCHECK_PATH)
+        access.assert_called_with(show.system_health.HEALTHCHECK_PATH, os.X_OK)
+
+    @staticmethod
+    def health_checker_package(config_file_exists, calls):
+        """Stand-ins for the Python health_checker package and the vendor's Chassis, recording what is called."""
+        class Config:
+            ignore_services = []
+            ignore_devices = []
+
+            def config_file_exists(self):
+                calls.append('config_file_exists')
+                return config_file_exists
+
+        class Manager:
+            def __init__(self):
+                self.config = Config()
+
+            def check(self, chassis):
+                calls.append('check')
+                return {'Hardware': {'fan1': {'status': 'OK', 'message': '', 'type': 'Fan'}}}
+
+        class Chassis:
+            def __init__(self):
+                calls.append('Chassis')
+
+            def initizalize_system_led(self):
+                calls.append('initialize LED')
+
+            def get_status_led(self):
+                calls.append('get_status_led')
+                return 'green'
+
+        return {'health_checker.manager': SimpleNamespace(HealthCheckerManager=Manager),
+                'sonic_platform.chassis': SimpleNamespace(Chassis=Chassis)}
+
+    def test_health_without_healthcheck_binary(self):
+        """Without the binary the checks run in process through the Python health_checker package."""
+        calls = []
+        runner = CliRunner()
+        with mock.patch('show.system_health.healthcheck_installed', return_value=False), \
+                mock.patch.dict(sys.modules, self.health_checker_package(True, calls)), \
+                mock.patch('show.system_health.syslog.syslog') as log, \
+                mock.patch('show.system_health.run_healthcheck') as run:
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        run.assert_not_called()
+        log.assert_called_once_with(
+            show.system_health.syslog.LOG_NOTICE,
+            "show system-health: {} is not installed, running the Python health_checker package "
+            "instead".format(show.system_health.HEALTHCHECK_PATH))
+        assert result.output == """\
+System status summary
+
+  System status LED  green
+  Services:
+    Status: OK
+  Hardware:
+    Status: OK
+"""
+        # The LED is initialized after the checks, then read for the report.
+        assert calls == ['config_file_exists', 'Chassis', 'check', 'initialize LED', 'get_status_led']
+
+    def test_health_without_healthcheck_binary_or_configuration_file(self):
+        calls = []
+        runner = CliRunner()
+        with mock.patch('show.system_health.healthcheck_installed', return_value=False), \
+                mock.patch.dict(sys.modules, self.health_checker_package(False, calls)), \
+                mock.patch('show.system_health.syslog.syslog'), \
+                mock.patch('show.system_health.run_healthcheck') as run:
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        run.assert_not_called()
+        assert result.exit_code == 1
+        assert result.output == "System health configuration file not found, exit...\n"
+        assert calls == ['config_file_exists']
+
+    def test_health_without_healthcheck_binary_or_package(self):
+        runner = CliRunner()
+        with mock.patch('show.system_health.healthcheck_installed', return_value=False), \
+                mock.patch.dict(sys.modules, {'health_checker.manager': None}), \
+                mock.patch('show.system_health.syslog.syslog') as log:
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit)
+        assert result.output.startswith("System health check failed: {} is not installed, and ".format(
+            show.system_health.HEALTHCHECK_PATH))
+        assert 'health_checker.manager' in result.output
+        assert log.call_args.args[0] == show.system_health.syslog.LOG_NOTICE
+
     def test_health_systemready(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["system-health"].commands["sysready-status"])
@@ -433,4 +647,5 @@ swss            OK                OK                  -              -
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
+        cls.patches.close()
         show.cli = original_cli
