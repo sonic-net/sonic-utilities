@@ -55,15 +55,13 @@ class TestDualtorNeighborCheck(object):
         with patch("dualtor_neighbor_check.subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_popen.return_value = mock_proc
-            mock_proc.communicate.return_value = (
-                b"ls: cannot access '/tmp/not-existed': No such file or directory", None)
+            mock_proc.communicate.return_value = (b"ls: cannot access '/tmp/not-existed': No such file or directory", None)
             mock_proc.returncode = 2
 
             with pytest.raises(RuntimeError):
                 dualtor_neighbor_check.run_command("ls /tmp/not-existed")
 
-            mock_popen.assert_called_once_with(shlex.split("ls /tmp/not-existed"),
-                                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            mock_popen.assert_called_once_with(shlex.split("ls /tmp/not-existed"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             mock_proc.communicate.assert_called_once()
 
     def test_flush_neighbor_ipv4(self, mock_log_functions):
@@ -251,6 +249,7 @@ class TestDualtorNeighborCheck(object):
                 True
             )
             mock_run_neighbor_check.assert_not_called()
+
 
     @pytest.mark.parametrize("cached_sha", [None, "previous-script-sha"])
     def test_main_refreshes_script_cache_using_writer_connection(self, cached_sha, mock_log_functions):
@@ -1308,8 +1307,7 @@ class TestDualtorNeighborCheck(object):
         asic_neigh_table = []
         asic_nexthop_table = {}
         mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
-        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01",
-            "Ethernet4", "standby", "yes", "no", "no", "inconsistent"]
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "standby", "yes", "no", "no", "inconsistent"]
         expected_log_output = tabulate.tabulate(
             [expected_output],
             headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES_HOST_ROUTE,
@@ -1384,8 +1382,7 @@ class TestDualtorNeighborCheck(object):
         port_neighbor_modes = {}
         mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
         asic_route_table = []
-        asic_neigh_table = [
-            "{\"ip\":\"192.168.0.102\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
+        asic_neigh_table = ["{\"ip\":\"192.168.0.102\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
         asic_nexthop_table = {}
         mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
         expected_output = ["192.168.0.102", "00:00:00:00:00:00", "N/A", "N/A", "N/A", "yes", "no", "consistent"]
@@ -1431,8 +1428,7 @@ class TestDualtorNeighborCheck(object):
             tablefmt="simple"
         ).split("\n")
         expected_log_warn_calls = [call(line) for line in expected_log_output]
-        expected_log_error_calls = [
-            call("Found neighbors that are inconsistent with mux states: %s", ["192.168.0.102"])]
+        expected_log_error_calls = [call("Found neighbors that are inconsistent with mux states: %s", ["192.168.0.102"])]
         expected_log_error_calls.extend([call("Failed HOST-ROUTE neighbors:")])
         expected_log_error_calls.extend([call(line) for line in expected_log_output])
 
