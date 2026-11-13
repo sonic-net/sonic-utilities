@@ -320,6 +320,7 @@ class TestChangeApplierRestartServices(unittest.TestCase):
             "DEVICE_METADATA": {
                 "restart_on_change": [
                     {"fields": ["docker_routing_config_mode"], "units": ["bgp"]},
+                    {"fields": ["type"], "units": ["radv", "swss", "copp-config", "bgp"]},
                     {"fields": ["synchronous_mode"], "defaults": {"synchronous_mode": "enable"},
                      "units": ["swss"], "reset_failed": ["syncd"], "per_asic": True},
                 ],
@@ -491,6 +492,12 @@ class TestChangeApplierRestartServices(unittest.TestCase):
         with patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=False):
             assert self.restart_after((self.OLD, upd))
         assert self.restart.call_args_list == [call("swss"), call("bgp"), call("snmp")]
+
+    def test_copp_config_restarts_before_swss(self):
+        upd = self.updated(DEVICE_METADATA={"localhost": {"type": "MgmtToRRouter"}})
+        with patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=False):
+            assert self.restart_after((self.OLD, upd))
+        assert self.restart.call_args_list == [call("copp-config"), call("swss"), call("bgp"), call("radv")]
 
     def test_per_asic__disabled_feature__no_restart(self):
         applier = generic_config_updater.change_applier.ChangeApplier(scope="asic1")

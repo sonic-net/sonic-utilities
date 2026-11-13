@@ -475,12 +475,6 @@ class TestValidateFieldOperation:
          "switch_type cannot be changed from switch to voq"),
         ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "fabric"},
          "switch_type cannot be changed from voq to fabric"),
-        ({"hwsku": "SKU-A", "type": "ToRRouter"}, {"hwsku": "SKU-A", "type": "LeafRouter"},
-         "type cannot be changed from ToRRouter to LeafRouter"),
-        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "subtype": "DualToR"},
-         "subtype cannot be changed from None to DualToR"),
-        ({"hwsku": "SKU-A", "sub_role": "FrontEnd"}, {"hwsku": "SKU-A", "sub_role": "BackEnd"},
-         "sub_role cannot be changed from FrontEnd to BackEnd"),
         ({"hwsku": "SKU-A", "asic_id": "06:00.0"}, {"hwsku": "SKU-A", "asic_id": "07:00.0"},
          "asic_id cannot be changed from 06:00.0 to 07:00.0"),
     ])
@@ -503,6 +497,9 @@ class TestValidateFieldOperation:
         ({"hwsku": "SKU-A", "switch_type": "voq"}, {"hwsku": "SKU-A", "switch_type": "voq", "bgp_asn": "65100"}),
         ({"hwsku": "SKU-A", "asic_id": "06:00.0"}, {"hwsku": "SKU-A"}),
         ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "asic_id": "06:00.0"}),
+        ({"hwsku": "SKU-A", "type": "ToRRouter"}, {"hwsku": "SKU-A", "type": "LeafRouter"}),
+        ({"hwsku": "SKU-A"}, {"hwsku": "SKU-A", "subtype": "DualToR"}),
+        ({"hwsku": "SKU-A", "sub_role": "FrontEnd"}, {"hwsku": "SKU-A", "sub_role": "BackEnd"}),
     ])
     @patch("os.path.exists", mock.Mock(return_value=True))
     @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
@@ -510,6 +507,20 @@ class TestValidateFieldOperation:
         config_wrapper = gu_common.ConfigWrapper()
         config_wrapper.validate_field_operation({"DEVICE_METADATA": {"localhost": old_meta}},
                                                 {"DEVICE_METADATA": {"localhost": target_meta}})
+
+    @pytest.mark.parametrize("scope, legal", [("", True), ("localhost", True), ("asic0", False)])
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='{"tables": {}}'))
+    def test_validate_field_operation_sub_role_refused_in_asic_scope(self, scope, legal):
+        config_wrapper = gu_common.ConfigWrapper(scope=scope)
+        old_config = {"DEVICE_METADATA": {"localhost": {"hwsku": "SKU-A", "sub_role": "FrontEnd"}}}
+        target_config = {"DEVICE_METADATA": {"localhost": {"hwsku": "SKU-A", "sub_role": "BackEnd"}}}
+        if legal:
+            config_wrapper.validate_field_operation(old_config, target_config)
+        else:
+            with pytest.raises(gu_common.IllegalPatchOperationError,
+                               match="sub_role cannot be changed from FrontEnd to BackEnd"):
+                config_wrapper.validate_field_operation(old_config, target_config)
 
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "20241211.49"}))

@@ -85,6 +85,14 @@ def _field_value(entry, field, defaults):
     return defaults.get(field) if value in (None, "", []) else value
 
 
+RESTART_FIRST = ("copp-config", "swss")
+
+
+def _restart_order(unit):
+    base = unit.split("@")[0]
+    return (RESTART_FIRST.index(base) if base in RESTART_FIRST else len(RESTART_FIRST), unit)
+
+
 def _restart_rule_matches(rule, old_tbl, upd_tbl):
     fields = rule.get("fields")
     if fields is None:
@@ -239,7 +247,7 @@ class ChangeApplier:
         units, self.restart_tables = self.restart_tables, defaultdict(set)
         resets, self.restart_resets = self.restart_resets, defaultdict(set)
         ok = True
-        for unit in sorted(units, key=lambda u: (u.split("@")[0] != "swss", u)):
+        for unit in sorted(units, key=_restart_order):
             changed = ", ".join(sorted(units[unit]))
             if self.restart_features.get(unit.split("@")[0], {}).get("state") in ("disabled", "always_disabled"):
                 log_notice("{} changed; {} is disabled, not restarting it".format(changed, unit))

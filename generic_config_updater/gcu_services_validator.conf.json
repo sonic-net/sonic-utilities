@@ -32,7 +32,9 @@
         "of a patch as it is applied. After the last change (or after one",
         "fails), each unit of a matched rule is restarted once, after",
         "'systemctl reset-failed' of the unit and of the 'reset_failed' units.",
-        "swss restarts first, as restarting it also restarts its dependents.",
+        "Within a scope, copp-config restarts first, as coppmgrd reads the file",
+        "it renders when swss starts; then swss, as restarting it also restarts",
+        "its dependents.",
         "Without 'fields' any difference in the table matches. With it,",
         "the rule matches when one of those fields differs in some key of",
         "the table; a missing, empty-string or empty-list value counts as",
@@ -86,7 +88,7 @@
                 {
                     "fields": [ "bgp_asn", "bgp_router_id", "bgp_adv_lo_prefix_as_128", "default_bgp_status",
                                 "deployment_id", "docker_routing_config_mode", "frr_mgmt_framework_config",
-                                "nexthop_group", "zebra_nexthop" ],
+                                "nexthop_group", "zebra_nexthop", "type", "subtype", "sub_role" ],
                     "defaults": { "bgp_adv_lo_prefix_as_128": "false", "default_bgp_status": "up",
                                   "docker_routing_config_mode": "separated", "frr_mgmt_framework_config": "false",
                                   "nexthop_group": "disabled", "zebra_nexthop": "enabled" },
@@ -95,7 +97,8 @@
                 },
                 {
                     "fields": [ "mac", "synchronous_mode", "buffer_model", "switch_id", "max_cores",
-                                "ring_thread_enabled", "orch_northbond_dash_zmq_enabled", "suppress-fib-pending" ],
+                                "ring_thread_enabled", "orch_northbond_dash_zmq_enabled", "suppress-fib-pending",
+                                "type", "subtype", "sub_role" ],
                     "defaults": { "synchronous_mode": "enable", "buffer_model": "traditional",
                                   "ring_thread_enabled": "false", "orch_northbond_dash_zmq_enabled": "true",
                                   "suppress-fib-pending": "disabled" },
@@ -104,9 +107,19 @@
                     "per_asic": true
                 },
                 {
-                    "fields": [ "deployment_id", "has_sonic_dhcpv4_relay" ],
+                    "fields": [ "deployment_id", "subtype", "has_sonic_dhcpv4_relay" ],
                     "defaults": { "has_sonic_dhcpv4_relay": "False" },
                     "units": [ "dhcp_relay" ],
+                    "host_only": true
+                },
+                {
+                    "fields": [ "type" ],
+                    "units": [ "chrony", "copp-config", "featured", "gnmi", "radv" ],
+                    "host_only": true
+                },
+                {
+                    "fields": [ "subtype" ],
+                    "units": [ "caclmgrd", "chrony", "dhcp_server", "gnmi", "pmon" ],
                     "host_only": true
                 }
             ]

@@ -418,6 +418,11 @@ RESTART_BGP = "systemctl reset-failed bgp,systemctl restart bgp"
 RESTART_SWSS = "systemctl reset-failed swss syncd,systemctl restart swss"
 RESTART_DHCP_RELAY = "systemctl reset-failed dhcp_relay,systemctl restart dhcp_relay"
 
+
+def restart(*units):
+    return ",".join("systemctl reset-failed {0},systemctl restart {0}".format(unit) for unit in units)
+
+
 # DEVICE_METADATA|localhost fields read only when a service starts: field, unit restart, a non-default value
 DEVICE_METADATA_RESTART_FIELDS = [
     ("bgp_asn", RESTART_BGP, "65100"),
@@ -429,6 +434,11 @@ DEVICE_METADATA_RESTART_FIELDS = [
     ("frr_mgmt_framework_config", RESTART_BGP, "true"),
     ("nexthop_group", RESTART_BGP, "enabled"),
     ("zebra_nexthop", RESTART_BGP, "disabled"),
+    ("type", ",".join([restart("copp-config"), RESTART_SWSS, RESTART_BGP,
+                       restart("chrony", "featured", "gnmi", "radv")]), "LeafRouter"),
+    ("subtype", ",".join([RESTART_SWSS, RESTART_BGP,
+                          restart("caclmgrd", "chrony", "dhcp_relay", "dhcp_server", "gnmi", "pmon")]), "DualToR"),
+    ("sub_role", RESTART_SWSS + "," + RESTART_BGP, "FrontEnd"),
     ("mac", RESTART_SWSS, "e8:e4:9d:12:ad:d2"),
     ("synchronous_mode", RESTART_SWSS, "disable"),
     ("buffer_model", RESTART_SWSS, "dynamic"),
@@ -658,13 +668,14 @@ class TestRestartRules(unittest.TestCase):
             applier = ChangeApplier()
             applier._collect_restarts({}, {"DEVICE_METADATA": {"localhost": meta}})
             assert applier.restart_services()
-        mock_restart.assert_called_once_with("dhcp_relay")
+        assert mock_restart.call_args_list == [call(unit) for unit in (
+            "copp-config", "caclmgrd", "chrony", "dhcp_relay", "dhcp_server", "featured", "gnmi", "pmon", "radv")]
 
     def test_device_metadata__reload_only_fields_have_no_rule(self):
         rules = self.shipped_conf()["tables"]["DEVICE_METADATA"]["restart_on_change"]
         fields = {field for rule in rules for field in rule["fields"]}
         assert fields == {field for field, _, _ in DEVICE_METADATA_RESTART_FIELDS}
-        assert not fields & {"hwsku", "switch_type", "type", "subtype", "sub_role", "asic_id"}
+        assert not fields & {"hwsku", "switch_type", "asic_id"}
 
     @patch("generic_config_updater.change_applier.multi_asic.is_multi_asic", return_value=False)
     @patch("generic_config_updater.change_applier.get_config_db")

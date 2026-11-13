@@ -282,18 +282,18 @@ class ConfigWrapper:
     def illegal_device_metadata_check(self, old_config, target_config):
         '''
         Block DEVICE_METADATA|localhost fields that a service restart cannot apply: they pick the
-        hwsku files or port/buffer/QoS/CoPP config, or one-shot boot services read them.
+        hwsku files, the switch_type or the ASIC a namespace is bound to.
         A chassis supervisor's swss writes asic_id at start, so it is only checked when set on both sides.
+        An ASIC's sub_role picks front-end or back-end namespaces, which host daemons read at start.
         '''
         reload = "a config reload"
         fields = {
             "hwsku": (None, reload),
             "switch_type": ("switch", reload),
-            "type": (None, reload),
-            "subtype": (None, reload),
-            "sub_role": (None, reload),
             "asic_id": (None, reload),
         }
+        if self.scope not in (None, multi_asic.DEFAULT_NAMESPACE, HOST_NAMESPACE):
+            fields["sub_role"] = (None, reload)
         old_meta = old_config.get("DEVICE_METADATA", {}).get("localhost", {})
         target_meta = target_config.get("DEVICE_METADATA", {}).get("localhost", {})
         for field, (default, action) in fields.items():
