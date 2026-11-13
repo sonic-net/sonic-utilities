@@ -6,7 +6,6 @@ import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic, device_info
-from sonic_py_common.general import getstatusoutput_noshell_pipe
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
@@ -76,29 +75,6 @@ class AliasedGroup(click.Group):
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
         ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
-
-
-# To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continuous execution of this
-# bash oneliner. To be revisited once routing-stack info is tracked somewhere.
-def get_routing_stack():
-    result = 'frr'
-
-    cmd0 = ["sudo", "docker", "ps", "--format", "{{.Image}}\t{{.Names}}"]
-    cmd1 = ["awk", '$2 ~ /^bgp([0-9]+)?$/']
-    cmd2 = ["cut", "-d-", "-f3"]
-    cmd3 = ["cut", "-d:", "-f1"]
-    cmd4 = ["head", "-n", "1"]
-
-    try:
-        _, result = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-    except OSError as e:
-        raise OSError("Cannot detect routing-stack")
-
-    return (result)
-
-# Global Routing-Stack variable
-routing_stack = get_routing_stack()
 
 
 def run_command(command, pager=False, return_output=False, return_exitstatus=False):
@@ -196,18 +172,11 @@ cli.add_command(orchagent_clear.orchagent)
 
 #
 # Inserting BGP functionality into cli's clear parse-chain.
-# BGP commands are determined by the routing-stack being elected.
 #
-if routing_stack == "quagga":
-    from .bgp_quagga_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_quagga_v6 import bgp
-    ipv6.add_command(bgp)
-elif routing_stack == "frr":
-    from .bgp_quagga_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_frr_v6 import bgp
-    ipv6.add_command(bgp)
+from .bgp_frr_v4 import bgp as bgp_v4  # noqa: E402
+ip.add_command(bgp_v4)
+from .bgp_frr_v6 import bgp as bgp_v6  # noqa: E402
+ipv6.add_command(bgp_v6)
 
 @cli.command()
 def counters():

@@ -239,6 +239,7 @@ setup(
             'show = show.main:cli',
             'sonic-clear = clear.main:cli',
             'sonic-installer = sonic_installer.main:sonic_installer',
+            'remove_stale_db_certs.py = sonic_installer.secure_boot_db:main',
             'sonic_installer = sonic_installer.main:sonic_installer',  # Deprecated
             'sonic-package-manager = sonic_package_manager.main:cli',
             'spm = sonic_package_manager.main:cli',
@@ -289,6 +290,7 @@ setup(
         'wheel'
     ],
     tests_require = [
+        'scapy',
         'pyfakefs',
         'responses',
         'pytest',
@@ -297,6 +299,7 @@ setup(
     ],
     extras_require = {
         'testing': [
+            'scapy',
             'pyfakefs',
             'responses',
             'pytest',

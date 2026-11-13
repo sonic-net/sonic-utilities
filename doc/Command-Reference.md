@@ -254,7 +254,6 @@
   * [Debug Dumps](#debug-dumps)
   * [Event Driven Techsupport Invocation](#event-driven-techsupport-invocation)
 * [Routing Stack](#routing-stack)
-* [Quagga BGP Show Commands](#Quagga-BGP-Show-Commands)
 * [ZTP Configuration And Show Commands](#ztp-configuration-and-show-commands)
   * [ZTP show commands](#ztp-show-commands)
   * [ZTP configuration commands](#ztp-configuration-commands)
@@ -632,8 +631,6 @@ This command displays relevant information as the SONiC and Linux kernel version
   docker-router-advertiser   latest              b1a62023958c        255MB
   docker-platform-monitor    HEAD.32-21ea29a     40b40a4b2164        287MB
   docker-platform-monitor    latest              40b40a4b2164        287MB
-  docker-fpm-quagga          HEAD.32-21ea29a     546036fe6838        282MB
-  docker-fpm-quagga          latest              546036fe6838        282MB
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#basic-show-commands)
 
@@ -1904,6 +1901,7 @@ This command displays the global configuration fields and the list of all tacacs
   TACPLUS global auth_type pap (default)
   TACPLUS global timeout 99
   TACPLUS global passkey <EMPTY_STRING> (default)
+  TACPLUS global traceid_authorization False (default)
 
   TACPLUS_SERVER address 10.11.12.14
                          priority 9
@@ -1924,9 +1922,10 @@ Some of the parameters like authtype, passkey and timeout can be either configur
 
 1) Add/Delete the tacacs+ server details.
 2) authtype - global configuration that is applied to all servers if there is no server specific configuration.
-3) default - reset the authtype or passkey or timeout to the default values.
+3) default - reset the authtype, passkey, timeout or traceid-authorization to the default values.
 4) passkey - global configuration that is applied to all servers if there is no server specific configuration.
 5) timeout - global configuration that is applied to all servers if there is no server specific configuration.
+6) traceid-authorization - control whether validated SSH_CLIENT_TRACEID values are sent in TACACS+ command authorization requests.
 
 **config tacacs add**
 
@@ -2000,12 +1999,12 @@ When user has not configured server specific authtype, this global value shall b
 
 **config tacacs default**
 
-This command is used to reset the global value for authtype or passkey or timeout to default value.
-Default for authtype is "pap", default for passkey is EMPTY_STRING and default for timeout is 5 seconds.
+This command is used to reset the global value for authtype, passkey, timeout or traceid-authorization to default value.
+Default for authtype is "pap", default for passkey is EMPTY_STRING, default for timeout is 5 seconds and default for traceid-authorization is disabled.
 
 - Usage:
   ```
-  config tacacs default (authtype | passkey | timeout)
+  config tacacs default (authtype | passkey | timeout | traceid-authorization)
   ```
 
 - Example (This will reset the global authtype back to the default value "pap"):
@@ -2047,6 +2046,28 @@ When user has not configured server specific timeout, this global value shall be
 - Example: To configure non-default timeout value
   ```
   admin@sonic:~$ sudo config tacacs timeout 60
+  ```
+
+**config tacacs traceid-authorization**
+
+This command controls whether validated `SSH_CLIENT_TRACEID` values are sent as the `traceid` attribute in TACACS+ command authorization requests. The feature is disabled by default.
+
+- Usage:
+  ```
+  config tacacs traceid-authorization (enable | disable | default)
+  config tacacs default traceid-authorization
+  ```
+
+  - Options:
+    - `enable`: Send valid `SSH_CLIENT_TRACEID` values in TACACS+ command authorization requests.
+    - `disable`: Explicitly disable sending `SSH_CLIENT_TRACEID` values.
+    - `default`: Remove the explicit configuration and use the default value, which is disabled.
+
+  The `config tacacs default traceid-authorization` command also restores the disabled default.
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config tacacs traceid-authorization enable
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#tacacs)
@@ -2712,27 +2733,17 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
 
 ## BGP
 
-This section explains all the BGP show commands and BGP configuration commands in both "Quagga" and "FRR" routing software that are supported in SONiC.
-In 201811 and older versions "Quagga" was enabled by default. In current version "FRR" is enabled by default.
-Most of the FRR show commands start with "show bgp". Similar commands in Quagga starts with "show ip bgp". All sub-options supported in all these show commands are common for FRR and Quagga.
-Detailed show commands examples for Quagga are provided at the end of this document.This section captures only the commands supported by FRR.
+This section explains the BGP show and configuration commands supported by SONiC's FRR routing stack.
 
 ### BGP show commands
 
 
-**show bgp summary (Versions >= 201904 using default FRR routing stack)**
+**show ip bgp summary**
 
-**show ip bgp summary (Versions <= 201811 using Quagga routing stack)**
-
-This command displays the summary of all IPv4 & IPv6 bgp neighbors that are configured and the corresponding states.
+This command displays the summary of all configured IPv4 BGP neighbors and their states.
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
-  ```
-  show bgp summary
-  ```
-  *Versions <= 201811 using Quagga routing stack*
   ```
   show ip bgp summary
   ```
@@ -2756,72 +2767,34 @@ This command displays the summary of all IPv4 & IPv6 bgp neighbors that are conf
 
   Total number of neighbors 4
   ```
+**show ip bgp neighbors**
 
-- Example:
-  ```
-  admin@sonic:~$ show bgp summary
+This command displays IPv4 BGP neighbor details when no optional argument is specified.
 
-  IPv4 Unicast Summary:
-  BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
-  BGP table version 6465
-  RIB entries 12807, using 2001 KiB of memory
-  Peers 4, using 83 KiB of memory
-  Peer groups 2, using 128 bytes of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd
-  10.0.0.57       4      64600    3995    4001        0    0    0 00:39:32         6400
-  10.0.0.59       4      64600    3995    3998        0    0    0 00:39:32         6400
-  10.0.0.61       4      64600    3995    4001        0    0    0 00:39:32         6400
-  10.0.0.63       4      64600    3995    3998        0    0    0 00:39:32         6400
-
-  Total number of neighbors 4
-
-  IPv6 Unicast Summary:
-  BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
-  BGP table version 12803
-  RIB entries 12805, using 2001 KiB of memory
-  Peers 4, using 83 KiB of memory
-  Peer groups 2, using 128 bytes of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd
-  fc00::72        4      64600    3995    5208        0    0    0 00:39:30         6400
-  fc00::76        4      64600    3994    5208        0    0    0 00:39:30         6400
-  fc00::7a        4      64600    3993    5208        0    0    0 00:39:30         6400
-  fc00::7e        4      64600    3993    5208        0    0    0 00:39:30         6400
-
-  Total number of neighbors 4
-  ```
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp summary" for Quagga.
-
-
-
-**show bgp neighbors (Versions >= 201904 using default FRR routing stack)**
-
-**show ip bgp neighbors (Versions <= 201811 using Quagga routing stack)**
-
-This command displays all the details of IPv4 & IPv6 BGP neighbors when no optional argument is specified.
-
-When the optional argument IPv4_address is specified, it displays the detailed neighbor information about that specific IPv4 neighbor.
+When an optional IPv4 address or configured interface name is specified, it displays detailed information about that neighbor. Interface names identify unnumbered neighbors and must preserve the case of the configured key, for example `Ethernet16`.
 
 Command has got additional optional arguments to display only the advertised routes, or the received routes, or all routes.
 
-In order to get details for an IPv6 neigbor, use "show bgp ipv6 neighbor <ipv6_address>" command.
+Use `show ipv6 bgp neighbors <ipv6-address>` to display details for an IPv6 neighbor.
 
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
   ```
-  show bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
+  show ip bgp neighbors [(<ipv4-address> | <interface-name>) [advertised-routes | received-routes | routes]]
   ```
-  *Versions <= 201811 using Quagga routing stack*
-  ```
-  show ip bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
-  ```
+
+Interface-based examples:
+
+```
+show ip bgp neighbors Ethernet16
+show ip bgp neighbors Ethernet16 advertised-routes
+show ip bgp vrf Vrf-red neighbors Ethernet16 routes
+```
 
 - Example:
   ```
-  admin@sonic:~$ show bgp neighbors
+  admin@sonic:~$ show ip bgp neighbors
   BGP neighbor is 10.0.0.57, remote AS 64600, local AS 65100, external link
   Description: ARISTA01T1
   BGP version 4, remote router ID 100.1.0.29, local router ID 10.1.0.32
@@ -2875,20 +2848,18 @@ In order to get details for an IPv6 neigbor, use "show bgp ipv6 neighbor <ipv6_a
    Read thread: on  Write thread: on
   ```
 
-Optionally, you can specify an IP address in order to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
+Optionally, you can specify an IPv4 address or configured interface name to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
 
 - Example:
   ```
-  admin@sonic:~$ show bgp neighbors 10.0.0.57
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57
 
-  admin@sonic:~$ show bgp neighbors 10.0.0.57 advertised-routes
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57 advertised-routes
 
-  admin@sonic:~$ show bgp neighbors 10.0.0.57 received-routes
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57 received-routes
 
-  admin@sonic:~$ show bgp neighbors 10.0.0.57 routes
+  admin@sonic:~$ show ip bgp neighbors 10.0.0.57 routes
   ```
-
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp neighbors" for Quagga.
 
 **show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
 
@@ -2923,26 +2894,19 @@ This command displays all the details of IPv4 Border Gateway Protocol (BGP) pref
   admin@sonic:~$ show ip bgp network 10.1.0.32/32 longer-prefixes
   ```
 
-**show bgp ipv6 summary (Versions >= 201904 using default FRR routing stack)**
-
-**show ipv6 bgp summary (Versions <= 201811 using Quagga routing stack)**
+**show ipv6 bgp summary**
 
 This command displays the summary of all IPv6 bgp neighbors that are configured and the corresponding states.
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
-  ```
-  show bgp ipv6 summary
-  ```
-  *Versions <= 201811 using Quagga routing stack*
   ```
   show ipv6 bgp summary
   ```
 
 - Example:
   ```
-  admin@sonic:~$ show bgp ipv6 summary
+  admin@sonic:~$ show ipv6 bgp summary
   BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
   BGP table version 12803
   RIB entries 12805, using 2001 KiB of memory
@@ -2957,38 +2921,33 @@ This command displays the summary of all IPv6 bgp neighbors that are configured 
 
   Total number of neighbors 4
   ```
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ipv6 bgp summary" for Quagga.
+**show ipv6 bgp neighbors**
 
-
-
-**show bgp ipv6 neighbors (Versions >= 201904 using default FRR routing stack)**
-
-**show ipv6 bgp neighbors (Versions <= 201811 using Quagga routing stack)**
-
-This command displays all the details of one particular IPv6 Border Gateway Protocol (BGP) neighbor. Option is also available to display only the advertised routes, or the received routes, or all routes.
+This command displays IPv6 BGP neighbor information. A neighbor can be selected by IPv6 address or by the case-sensitive configured interface name of an unnumbered neighbor. Options are available to display advertised routes, received routes, or routes. The interface must be a configured BGP neighbor; arbitrary interface names are not accepted.
 
 
 - Usage:
 
-  *Versions >= 201904 using default FRR routing stack*
   ```
-  show bgp ipv6 neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
-  ```
-  *Versions <= 201811 using Quagga routing stack*
-  ```
-  show ipv6 bgp neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
+  show ipv6 bgp neighbors [(<ipv6-address> | <interface-name>) [advertised-routes | received-routes | routes]]
   ```
 
 - Example:
   ```
-  admin@sonic:~$ show bgp ipv6 neighbors fc00::72 advertised-routes
+  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 advertised-routes
 
-  admin@sonic:~$ show bgp ipv6 neighbors fc00::72 received-routes
+  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 received-routes
 
-  admin@sonic:~$ show bgp ipv6 neighbors fc00::72 routes
+  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 routes
   ```
-  Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp summary" for Quagga.
 
+Interface-based examples:
+
+```
+show ipv6 bgp neighbors Ethernet16
+show ipv6 bgp neighbors Ethernet16 advertised-routes
+show ipv6 bgp vrf Vrf-red neighbors Ethernet16 routes
+```
 
 **show ipv6 bgp network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
 
@@ -3181,11 +3140,11 @@ When the session is shutdown using this command, BGP state in "show ip bgp summa
 
 **config bgp shutdown neighbor**
 
-This command is to shut down a BGP session with a neighbor by that neighbor's IP address or hostname
+This command shuts down a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. The dedicated interface lookup is case-sensitive and checks both the neighbor key and the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` table. If it does not match, the existing lowercase neighbor-key and hostname lookups are retained. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```
-  sudo config bgp shutdown neighbor (<ip_address> | <hostname>)
+  sudo config bgp shutdown neighbor (<ip_address> | <interface_name> | <hostname>)
   ```
 
 - Examples:
@@ -3194,6 +3153,9 @@ This command is to shut down a BGP session with a neighbor by that neighbor's IP
   ```
   ```
   admin@sonic:~$ sudo config bgp shutdown neighbor SONIC02SPINE
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp shutdown neighbor Ethernet16
   ```
 
 
@@ -3214,11 +3176,11 @@ This command is used to start up all the IPv4 & IPv6 BGP neighbors
 
 **config bgp startup neighbor**
 
-This command is used to start up the particular IPv4 or IPv6 BGP neighbor using either the IP address or hostname.
+This command starts up a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. The dedicated interface lookup is case-sensitive and checks both the neighbor key and the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` table. If it does not match, the existing lowercase neighbor-key and hostname lookups are retained. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```
-  config bgp startup neighbor (<ip-address> | <hostname>)
+  config bgp startup neighbor (<ip-address> | <interface_name> | <hostname>)
   ```
 
 - Examples:
@@ -3227,6 +3189,9 @@ This command is used to start up the particular IPv4 or IPv6 BGP neighbor using 
   ```
   ```
   admin@sonic:~$ sudo config bgp startup neighbor SONIC02SPINE
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp startup neighbor Ethernet16
   ```
 
 
@@ -8424,7 +8389,7 @@ The type of interfaces include the following.
 #### show ip protocol
 
 This command displays the route-map that is configured for the routing protocol.
-Refer the routing stack [Quagga Command Reference](https://www.nongnu.org/quagga/docs/quagga.pdf) or [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) to know more about this command.
+See the [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) for more information about this command.
 
 - Usage:
   ```
@@ -8564,7 +8529,7 @@ The type of interfaces include the following.
 **show ipv6 protocol**
 
 This command displays the route-map that is configured for the IPv6 routing protocol.
-Refer the routing stack [Quagga Command Reference](https://www.nongnu.org/quagga/docs/quagga.pdf) or [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) to know more about this command.
+See the [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) for more information about this command.
 
 
 - Usage:
@@ -10218,13 +10183,13 @@ This command displays all the mirror sessions that are configured.
   ```
   admin@sonic:~$ show mirror_session
   ERSPAN Sessions
-  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ------     --------  --------   --------  -----  ------  -----  -------  ---------  --------------  ----------  -----------
+  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  ---------  --------  ---------  --------  -----  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
   everflow0  active    10.1.0.32  10.0.0.7
 
   SPAN Sessions
-  Name    Status    DST Port    SRC Port       Direction
-  ------  --------  ----------  -------------  -----------
+  Name    Status    DST Port    SRC Port       Direction    Queue    Label    Policer
+  ------  --------  ----------  -------------  -----------  -------  -------  ---------
   port0   active    Ethernet0   PortChannel10  rx
   ```
 
@@ -10251,39 +10216,40 @@ While adding a new ERSPAN session, users need to configure the following fields 
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
 10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
 11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
+12) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>] [--label <label>]
   ```
 
   The following command is also supported to be backward compatible.
   This command will be deprecated in future releases.
   ```
-  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue]
+  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [--label <label>]
   ```
 
 - Example:
   ```
   root@T1-2:~# config mirror_session add mrr_legacy 1.2.3.4 20.21.22.23 8 100 0x6558 0
   root@T1-2:~# show mirror_session
-  Name         Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------    --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_legacy   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0
+  Name        Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  ----------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  mrr_legacy  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0
 
 
-  root@T1-2:~# config mirror_session erspan add mrr_abcd 1.2.3.4 20.21.22.23 8 100 0x6558 0
+  root@T1-2:~# config mirror_session erspan add mrr_abcd 1.2.3.4 20.21.22.23 8 100 0x6558 0 --label erspan_label
   root@T1-2:~# show mirror_session
-  Name       Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------  --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_abcd   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label         Policer    Sample Rate    Truncate Size
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  ------------  ---------  -------------  ---------------
+  mrr_abcd  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                                           erspan_label
   root@T1-2:~#
 
   root@T1-2:~# config mirror_session erspan add mrr_port 1.2.3.4 20.21.22.23 8 100 0x6558 0 Ethernet0
   root@T1-2:~# show mirror_session
-  Name       Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------  --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_port   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0                                   Ethernet0   both
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  mrr_port  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                  Ethernet0   both
   root@T1-2:~#
   ```
 
@@ -10293,19 +10259,20 @@ While adding a new SPAN session, users need to configure the following fields th
 3) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
 4) optional - Queue in which packets shall be sent out of the device. Valid values 0 to 7 for most of the devices. Users need to know their device and the number of queues supported in that device.
 5) optional - Policer which will be used to control the rate at which frames are mirrored.
+6) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
 
 - Usage:
   ```
-  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [policer <policer_name>]
+  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [policer <policer_name>] [--label <label>]
   ```
 
 - Example:
   ```
-  root@T1-2:~# config mirror_session span add port0 Ethernet0 Ethernet4,PortChannel001,Ethernet8
+  root@T1-2:~# config mirror_session span add port0 Ethernet0 Ethernet4,PortChannel001,Ethernet8 --label span_label
   root@T1-2:~# show mirror_session
-  Name    Status    DST Port    SRC Port                           Direction
-  ------  --------  ----------  ---------------------------------  -----------
-  port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both
+  Name    Status    DST Port    SRC Port                           Direction    Queue    Label       Policer
+  ------  --------  ----------  ---------------------------------  -----------  -------  ----------  ---------
+  port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both                  span_label
   root@T1-2:~#
   ```
 
@@ -10820,6 +10787,27 @@ This command displays a list of NTP peers known to the server as well as a summa
 
 This sub-section of commands is used to add or remove the configured NTP servers.
 
+These commands update CONFIG_DB. With the default validation mode and an active
+`hostcfgd` daemon after warm/fast boot finalization, `hostcfgd` applies the changes
+and restarts chrony asynchronously. If `hostcfgd` is inactive, such as before its
+delayed startup, or warm/fast boot is still in progress, the CLI restarts chrony
+synchronously and prints `Restarting chrony service...`. A failure to read the
+boot state produces a warning and uses the same synchronous fallback.
+
+`hostcfgd` can be active before it subscribes to configuration changes. The boot
+state check covers its wait for warm/fast boot, but is not an atomic subscription
+readiness check. If that wait times out before boot finalization, overlapping
+CLI and `hostcfgd` restarts remain possible until the boot flag clears.
+
+When YANG validation is enabled (`yang_config_validation=enable` in
+`DEVICE_METADATA|localhost`), GCU's `ntp_validator` restarts chrony synchronously;
+these commands do not add another direct restart. Overlapping GCU and `hostcfgd`
+restarts in that mode are not prevented by this change.
+
+Command completion does not confirm time synchronization; use `show ntp` to
+check synchronization. The examples below use the default validation mode with
+an active `hostcfgd` after boot finalization.
+
 **config ntp add**
 
 This command is used to add a NTP server IP address to the NTP server list.  Note that more that one NTP server IP address can be added in the device.
@@ -10833,7 +10821,6 @@ This command is used to add a NTP server IP address to the NTP server list.  Not
   ```
   admin@sonic:~$ sudo config ntp add 9.9.9.9
   NTP server 9.9.9.9 added to configuration
-  Restarting ntp-config service...
   ```
 
 **config ntp delete**
@@ -10849,7 +10836,6 @@ This command is used to delete a configured NTP server IP address.
   ```
   admin@sonic:~$ sudo config ntp del 9.9.9.9
   NTP server 9.9.9.9 removed from configuration
-  Restarting ntp-config service...
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#NTP)
@@ -13401,7 +13387,7 @@ This command is used to display the startup configuration for the BGP module.
 - Example:
   ```
   admin@sonic:~$ show startupconfiguration bgp
-  Routing-Stack is: quagga
+  Routing-Stack is: frr
   !
   ! =========== Managed by sonic-cfggen DO NOT edit manually! ====================
   ! generated by templates/quagga/bgpd.conf.j2 with config DB data
@@ -16312,231 +16298,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#troubl
 
 ## Routing Stack
 
-SONiC software is agnostic of the routing software that is being used in the device. For example, users can use either Quagga or FRR routing stack as per their requirement.
-A separate shell (vtysh) is provided to configure such routing stacks.
-Once if users go to "vtysh", they can use the routing stack specific commands as given in the following example.
-
-- Example (Quagga Routing Stack):
-  ```
-  admin@sonic:~$ vtysh
-
-  Hello, this is Quagga (version 0.99.24.1).
-  Copyright 1996-2005 Kunihiro Ishiguro, et al.
-
-  sonic# show route-map (This command displays the route-map that is configured for the routing protocol.)
-  ZEBRA:
-  route-map RM_SET_SRC, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      src 10.12.0.102
-    Call clause:
-    Action:
-      Exit routemap
-  ```
-
-Refer the routing stack [Quagga Command Reference](https://www.nongnu.org/quagga/docs/quagga.pdf) or [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) to know more about about the routing stack configuration.
+SONiC uses FRR as its routing stack. Use `vtysh` to access the FRR CLI and configure routing protocols. See the [FRR Command Reference](https://buildmedia.readthedocs.org/media/pdf/frrouting/latest/frrouting.pdf) for the available commands.
 
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#routing-stack)
 
-
-## Quagga BGP Show Commands
-
-**show ip bgp summary**
-
-This command displays the summary of all IPv4 bgp neighbors that are configured and the corresponding states.
-
-- Usage:
-  ```
-  show ip bgp summary
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show ip bgp summary
-  BGP router identifier 1.2.3.4, local AS number 65061
-  RIB entries 6124, using 670 KiB of memory
-  Peers 2, using 143 KiB of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd
-  192.168.1.161    4 65501   88698  102781        0    0    0 08w5d14h        2
-  192.168.1.163    4 65502   88698  102780        0    0    0 08w5d14h        2
-
-  Total number of neighbors 2
-  ```
-
-**show ip bgp neighbors**
-
-This command displays all the details of IPv4 & IPv6 BGP neighbors when no optional argument is specified.
-
-When the optional argument IPv4_address is specified, it displays the detailed neighbor information about that specific IPv4 neighbor.
-
-Command has got additional optional arguments to display only the advertised routes, or the received routes, or all routes.
-
-In order to get details for an IPv6 neigbor, use "show ipv6 bgp neighbor <ipv6_address>" command.
-
-- Usage:
-  ```
-  show ip bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show ip bgp neighbors
-  BGP neighbor is 192.168.1.161, remote AS 65501, local AS 65061, external link
-   Description: ARISTA01T0
-    BGP version 4, remote router ID 1.2.3.4
-    BGP state = Established, up for 08w5d14h
-    Last read 00:00:46, hold time is 180, keepalive interval is 60 seconds
-    Neighbor capabilities:
-      4 Byte AS: advertised and received
-      Dynamic: received
-      Route refresh: advertised and received(old & new)
-      Address family IPv4 Unicast: advertised and received
-      Graceful Restart Capabilty: advertised and received
-        Remote Restart timer is 120 seconds
-        Address families by peer:
-          IPv4 Unicast(not preserved)
-    Graceful restart informations:
-      End-of-RIB send: IPv4 Unicast
-      End-of-RIB received: IPv4 Unicast
-    Message statistics:
-      Inq depth is 0
-      Outq depth is 0
-                           Sent       Rcvd
-      Opens:                  1          1
-      Notifications:          0          0
-      Updates:            14066          3
-      Keepalives:         88718      88698
-      Route Refresh:          0          0
-      Capability:             0          0
-      Total:             102785      88702
-    Minimum time between advertisement runs is 30 seconds
-
-   For address family: IPv4 Unicast
-    Community attribute sent to this neighbor(both)
-    2 accepted prefixes
-
-    Connections established 1; dropped 0
-    Last reset never
-  Local host: 192.168.1.160, Local port: 32961
-  Foreign host: 192.168.1.161, Foreign port: 179
-  Nexthop: 192.168.1.160
-  Nexthop global: fe80::f60f:1bff:fe89:bc00
-  Nexthop local: ::
-  BGP connection: non shared network
-  Read thread: on  Write thread: off
-  ```
-
-Optionally, you can specify an IP address in order to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
-
-
-- Examples:
-  ```
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161
-
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161 advertised-routes
-
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161 received-routes
-
-  admin@sonic:~$ show ip bgp neighbors 192.168.1.161 routes
-  ```
-
-**show ipv6 bgp summary**
-
-This command displays the summary of all IPv4 bgp neighbors that are configured and the corresponding states.
-
-- Usage:
-  ```
-  show ipv6 bgp summary
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show ipv6 bgp summary
-  BGP router identifier 10.1.0.32, local AS number 65100
-  RIB entries 12809, using 1401 KiB of memory
-  Peers 8, using 36 KiB of memory
-
-  Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd
-  fc00::72        4 64600   12588   12591        0    0    0 06:51:17     6402
-  fc00::76        4 64600   12587    6190        0    0    0 06:51:28     6402
-  fc00::7a        4 64600   12587    9391        0    0    0 06:51:23     6402
-  fc00::7e        4 64600   12589   12592        0    0    0 06:51:25     6402
-
-  Total number of neighbors 4
-  ```
-
-**show ipv6 bgp neighbors**
-
-This command displays all the details of one particular IPv6 Border Gateway Protocol (BGP) neighbor. Option is also available to display only the advertised routes, or the received routes, or all routes.
-
-- Usage:
-  ```
-  show ipv6 bgp neighbors <ipv6-address> (advertised-routes | received-routes | routes)
-  ```
-
-- Examples:
-  ```
-  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 advertised-routes
-
-  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 received-routes
-
-  admin@sonic:~$ show ipv6 bgp neighbors fc00::72 routes
-  ```
-
-**show route-map**
-
-This command displays the routing policy that takes precedence over the other route processes that are configured.
-
-- Usage:
-  ```
-  show route-map
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show route-map
-  ZEBRA:
-  route-map RM_SET_SRC, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      src 10.12.0.102
-    Call clause:
-    Action:
-      Exit routemap
-  ZEBRA:
-  route-map RM_SET_SRC6, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      src fc00:1::102
-    Call clause:
-    Action:
-      Exit routemap
-  BGP:
-  route-map FROM_BGP_SPEAKER_V4, permit, sequence 10
-    Match clauses:
-    Set clauses:
-    Call clause:
-    Action:
-      Exit routemap
-  BGP:
-  route-map TO_BGP_SPEAKER_V4, deny, sequence 10
-    Match clauses:
-    Set clauses:
-    Call clause:
-    Action:
-      Exit routemap
-  BGP:
-  route-map ISOLATE, permit, sequence 10
-    Match clauses:
-    Set clauses:
-      as-path prepend 65000
-    Call clause:
-    Action:
-      Exit routemap
-  ```
-Go Back To [Beginning of the document](#) or [Beginning of this section](#quagga-bgp-show-commands)
 
 ## ZTP Configuration and Show Commands
 

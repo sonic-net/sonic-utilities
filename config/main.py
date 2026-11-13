@@ -45,6 +45,7 @@ from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
 from utilities_common import hft as hft_common
+from utilities_common.mirror import connect_mirror_session_state_db, is_mirror_session_label_capable
 
 from .utils import log
 
@@ -808,6 +809,27 @@ def _is_neighbor_ipaddress(config_db, ipaddress):
     entry = config_db.get_entry('BGP_NEIGHBOR', ipaddress)
     return True if entry else False
 
+
+def _is_neighbor_interface(config_db, interface_name):
+    """Return whether an exact interface name is a configured BGP neighbor."""
+    if not config_db.get_entry('BGP_NEIGHBOR', interface_name):
+        return False
+
+    interface_tables = (
+        'INTERFACE',
+        'PORTCHANNEL_INTERFACE',
+        'VLAN_INTERFACE',
+        'VLAN_SUB_INTERFACE',
+    )
+    for table in interface_tables:
+        for key in config_db.get_keys(table):
+            name = key[0] if isinstance(key, tuple) else key
+            if name == interface_name:
+                return True
+
+    return False
+
+
 def _get_all_neighbor_ipaddresses(config_db):
     """Returns list of strings containing IP addresses of all BGP neighbors
     """
@@ -837,22 +859,24 @@ def _change_bgp_session_status_by_addr(config_db, ipaddress, status, verbose):
     config_db.mod_entry('bgp_neighbor', ipaddress, {'admin_status': status})
 
 def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
-    """Start up or shut down BGP session by IP address or hostname
+    """Start up or shut down BGP session by IP address, interface name or hostname
     """
-    ip_addrs = []
+    neighbor_keys = []
 
     # If we were passed an IP address, convert it to lowercase because IPv6 addresses were
     # stored in ConfigDB with all lowercase alphabet characters during minigraph parsing
-    if _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
-        ip_addrs.append(ipaddr_or_hostname.lower())
+    if _is_neighbor_interface(config_db, ipaddr_or_hostname):
+        neighbor_keys.append(ipaddr_or_hostname)
+    elif _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
+        neighbor_keys.append(ipaddr_or_hostname.lower())
     else:
         # If <ipaddr_or_hostname> is not the IP address of a neighbor, check to see if it's a hostname
-        ip_addrs = _get_neighbor_ipaddress_list_by_hostname(config_db, ipaddr_or_hostname)
+        neighbor_keys = _get_neighbor_ipaddress_list_by_hostname(config_db, ipaddr_or_hostname)
 
-    if not ip_addrs:
+    if not neighbor_keys:
         return False
 
-    for ip_addr in ip_addrs:
+    for ip_addr in neighbor_keys:
         _change_bgp_session_status_by_addr(config_db, ip_addr, status, verbose)
 
     return True
@@ -1477,6 +1501,49 @@ def mirror_session_exists(config_db, session_name):
     return bool(config_db.get_entry('MIRROR_SESSION', session_name))
 
 
+def validate_mirror_session_label(ctx, param, label):
+    """Validate an optional mirror-session label."""
+    if label is None:
+        return None
+
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{1,31}', label):
+        raise click.BadParameter(
+            "must be 1 to 31 characters using only letters, digits, '_' or '-'",
+            ctx=ctx,
+            param=param
+        )
+
+    return label
+
+
+def validate_mirror_session_label_uniqueness(ctx, config_db, label):
+    """Validate mirror-session label uniqueness in one ASIC namespace."""
+    if label is None:
+        return
+
+    for session_name, session in config_db.get_table('MIRROR_SESSION').items():
+        if session.get('label') == label:
+            ctx.fail("label {} is already used by {}".format(label, session_name))
+
+
+def validate_mirror_session_label_capability(ctx, state_db):
+    """Validate mirror-session label support on the target ASIC namespace."""
+    if state_db is None:
+        return
+
+    if not is_mirror_session_label_capable(state_db):
+        ctx.fail("Mirror session label is not supported")
+
+
+def log_mirror_session_created(session_name, session_info):
+    details = ",".join("{}={}".format(key, value) for key, value in session_info.items())
+    log.log_notice("Created mirror session {}: {}".format(session_name, details))
+
+
+def log_mirror_session_removed(session_name):
+    log.log_notice("Removed mirror session {}".format(session_name))
+
+
 def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction,
                                    namespace=None, front_asic_configdbs=None):
     """ Check if SPAN mirror-session config is valid """
@@ -1897,7 +1964,7 @@ def config(ctx):
         print("Caught an exception: " + str(e))
         raise click.Abort()
 
-    if asic_type == 'cisco-8000':
+    if asic_type in ('cisco-8000', 'cisco'):
         from sonic_platform.cli.cisco import cisco
         platform.add_command(cisco)
 
@@ -3407,10 +3474,14 @@ def mirror_session():
 @click.argument('ttl', metavar='<ttl>', type=TTL_RANGE, required=True)
 @click.argument('gre_type', metavar='[gre_type]', callback=validate_gre_type, required=False)
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
-@click.option('--policer')
-def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer):
+@click.option("-l", "--label", "label", callback=validate_mirror_session_label,
+              help="Configures stable label to persist the hardware mirror slot across warm reboot")
+@click.option('--policer',
+              help="Policer used to control the rate at which frames are mirrored")
+def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, label, policer):
     """ Add ERSPAN mirror session.(Legacy support) """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
+               gre_type=gre_type, queue=queue, label=label, policer=policer)
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='erspan')
 @click.pass_context
@@ -3433,24 +3504,24 @@ def erspan(ctx):
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
-@click.option('--policer')
+@click.option("-l", "--label", "label", callback=validate_mirror_session_label,
+              help="Configures stable label to persist the hardware mirror slot across warm reboot")
+@click.option('--policer',
+              help="Policer used to control the rate at which frames are mirrored")
 @click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
               help="Sampling rate (1-in-N), 2..4294967295. 0 disables sampling")
 @click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
               help="Truncation size in bytes, 64..9216. 0 disables truncation")
-def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
-               sample_rate, truncate_size):
+def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, src_port, direction,
+               label, policer, sample_rate, truncate_size):
     """ Add ERSPAN mirror session """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
-               queue, policer, src_port, direction,
-               sample_rate, truncate_size)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
+               gre_type=gre_type, queue=queue, src_port=src_port, direction=direction,
+               label=label, policer=policer, sample_rate=sample_rate, truncate_size=truncate_size)
 
 
-def gather_session_info(session_info, policer, queue, src_port, direction,
-                        sample_rate=0, truncate_size=0):
-    if policer:
-        session_info['policer'] = policer
-
+def gather_session_info(session_info, queue=None, src_port=None, direction=None,
+                        label=None, policer=None, sample_rate=0, truncate_size=0):
     if queue is not None:
         session_info['queue'] = queue
 
@@ -3459,6 +3530,12 @@ def gather_session_info(session_info, policer, queue, src_port, direction,
         if not direction:
             direction = "both"
         session_info['direction'] = direction.upper()
+
+    if label is not None:
+        session_info['label'] = label
+
+    if policer is not None:
+        session_info['policer'] = policer
 
     if sample_rate:
         session_info['sample_rate'] = str(sample_rate)
@@ -3469,9 +3546,9 @@ def gather_session_info(session_info, policer, queue, src_port, direction,
     return session_info
 
 
-def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
-               policer, src_port=None, direction=None,
-               sample_rate=0, truncate_size=0):
+def add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
+               gre_type=None, queue=None, src_port=None, direction=None,
+               label=None, policer=None, sample_rate=0, truncate_size=0):
     session_info = {
             "type" : "ERSPAN",
             "src_ip": src_ip,
@@ -3483,8 +3560,9 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
     if gre_type is not None:
         session_info['gre_type'] = gre_type
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction,
-                                       sample_rate, truncate_size)
+    session_info = gather_session_info(session_info, queue=queue, src_port=src_port, direction=direction,
+                                       label=label, policer=policer, sample_rate=sample_rate,
+                                       truncate_size=truncate_size)
     raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
@@ -3495,15 +3573,24 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, authenticate=True))
         config_db.connect()
+        state_db = None
+        if label:
+            state_db = connect_mirror_session_state_db()
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(config_db, session_name, None, raw_src_port, direction) is False:
                 return
+        # Capability and uniqueness are not part of validate_mirror_session_config:
+        # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+        # syntax, not ASIC label support or uniqueness in this namespace.
+        validate_mirror_session_label_capability(ctx, state_db)
+        validate_mirror_session_label_uniqueness(ctx, config_db, label)
         if raw_src_port:
             session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
 
     else:
         # Validate and write src_port only in the matching namespace
@@ -3523,11 +3610,15 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
                              if k not in ('src_port', 'direction')}
 
         per_npu_configdb = {}
+        per_npu_statedb = {}
         for front_asic_namespaces in namespaces['front_ns']:
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(
                 ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces, authenticate=True)
             )
             per_npu_configdb[front_asic_namespaces].connect()
+            per_npu_statedb[front_asic_namespaces] = None
+            if label:
+                per_npu_statedb[front_asic_namespaces] = connect_mirror_session_state_db(front_asic_namespaces)
 
         ns_session_infos = {}
         for front_asic_namespaces in namespaces['front_ns']:
@@ -3565,6 +3656,11 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
                         return
                 ns_session_info = dict(base_session_info)
 
+            # Capability and uniqueness are not part of validate_mirror_session_config:
+            # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+            # syntax, not ASIC label support or uniqueness in this namespace.
+            validate_mirror_session_label_capability(ctx, per_npu_statedb[front_asic_namespaces])
+            validate_mirror_session_label_uniqueness(ctx, per_npu_configdb[front_asic_namespaces], label)
             ns_session_infos[front_asic_namespaces] = ns_session_info
 
         for front_asic_namespaces in namespaces['front_ns']:
@@ -3576,6 +3672,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
                 )
             except ValueError as e:
                 ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='span')
 @click.pass_context
@@ -3590,13 +3687,20 @@ def span(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
-@click.option('--policer')
-def span_add(session_name, dst_port, src_port, direction, queue, policer):
+@click.option("-l", "--label", "label", callback=validate_mirror_session_label,
+              help="Configures stable label to persist the hardware mirror slot across warm reboot")
+@click.option('--policer',
+              help="Policer used to control the rate at which frames are mirrored")
+def span_add(session_name, dst_port, src_port, direction, queue, label, policer):
     """ Add SPAN mirror session """
-    add_span(session_name, dst_port, src_port, direction, queue, policer)
+    add_span(session_name, dst_port,
+             src_port=src_port, direction=direction, queue=queue,
+             label=label, policer=policer)
 
 
-def add_span(session_name, dst_port, src_port, direction, queue, policer):
+def add_span(session_name, dst_port,
+             src_port=None, direction=None, queue=None,
+             label=None, policer=None):
     # Save original dst_port for namespace detection (before alias conversion)
     original_dst_port = dst_port
 
@@ -3611,7 +3715,8 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             "dst_port": dst_port,
             }
 
-    session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    session_info = gather_session_info(session_info, queue=queue, src_port=src_port, direction=direction,
+                                       label=label, policer=policer)
     raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
@@ -3622,15 +3727,24 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, authenticate=True))
         config_db.connect()
+        state_db = None
+        if label:
+            state_db = connect_mirror_session_state_db()
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(config_db, session_name, dst_port, raw_src_port, direction) is False:
                 return
+        # Capability and uniqueness are not part of validate_mirror_session_config:
+        # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+        # syntax, not ASIC label support or uniqueness in this namespace.
+        validate_mirror_session_label_capability(ctx, state_db)
+        validate_mirror_session_label_uniqueness(ctx, config_db, label)
         if raw_src_port:
             session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
     else:
         # Auto-detect namespace from destination port
         dst_port_namespace = get_port_namespace(original_dst_port)
@@ -3659,6 +3773,9 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             per_npu_configdb[front_asic_namespaces].connect()
 
         config_db = per_npu_configdb[dst_port_namespace]
+        state_db = None
+        if label:
+            state_db = connect_mirror_session_state_db(dst_port_namespace)
         if ADHOC_VALIDATION:
             if validate_mirror_session_config(
                 config_db,
@@ -3670,12 +3787,18 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
                 front_asic_configdbs=per_npu_configdb
             ) is False:
                 return
+        # Capability and uniqueness are not part of validate_mirror_session_config:
+        # that helper runs only when ADHOC_VALIDATION is true. YANG covers label
+        # syntax, not ASIC label support or uniqueness in this namespace.
+        validate_mirror_session_label_capability(ctx, state_db)
+        validate_mirror_session_label_uniqueness(ctx, config_db, label)
         if raw_src_port:
             session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        log_mirror_session_created(session_name, session_info)
 
 
 @mirror_session.command()
@@ -3691,20 +3814,26 @@ def remove(session_name):
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, authenticate=True))
         config_db.connect()
-        try:
-            config_db.set_entry("MIRROR_SESSION", session_name, None)
-        except JsonPatchConflict as e:
-            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        if config_db.get_entry("MIRROR_SESSION", session_name):
+            try:
+                config_db.set_entry("MIRROR_SESSION", session_name, None)
+            except JsonPatchConflict as e:
+                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+            log_mirror_session_removed(session_name)
     else:
         per_npu_configdb = {}
+        session_removed = False
         for front_asic_namespaces in namespaces['front_ns']:
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces, authenticate=True))  # noqa: E501
             per_npu_configdb[front_asic_namespaces].connect()
             if per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name):
                 try:
                     per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, None)
+                    session_removed = True
                 except JsonPatchConflict as e:
                     ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        if session_removed:
+            log_mirror_session_removed(session_name)
 
 #
 # 'pfcwd' group ('config pfcwd ...')
@@ -5227,10 +5356,10 @@ def all(verbose):
 
 # 'neighbor' subcommand
 @shutdown.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
+@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_interface_or_hostname>', required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 def neighbor(ipaddr_or_hostname, verbose):
-    """Shut down BGP session by neighbor IP address or hostname.
+    """Shut down BGP session by neighbor IP address, interface name or hostname.
        User can specify either internal or external BGP neighbor to shutdown
     """
     log.log_info("'bgp shutdown neighbor {}' executing...".format(ipaddr_or_hostname))
@@ -5282,13 +5411,13 @@ def all(verbose):
 
 # 'neighbor' subcommand
 @startup.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
+@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_interface_or_hostname>', required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 def neighbor(ipaddr_or_hostname, verbose):
-    log.log_info("'bgp startup neighbor {}' executing...".format(ipaddr_or_hostname))
-    """Start up BGP session by neighbor IP address or hostname.
+    """Start up BGP session by neighbor IP address, interface name or hostname.
        User can specify either internal or external BGP neighbor to startup
     """
+    log.log_info("'bgp startup neighbor {}' executing...".format(ipaddr_or_hostname))
     namespaces = [DEFAULT_NAMESPACE]
     found_neighbor = False
 
@@ -9585,6 +9714,29 @@ def ntp(ctx):
         config_db.connect()
         ctx.obj = {'db': config_db}
 
+
+def _restart_chrony_if_needed(ctx, db):
+    # YANG validation already restarts chrony through GCU.
+    if db.yang_enabled:
+        return
+    # Type=simple reports hostcfgd active while it waits for warm/fast boot,
+    # before subscribing to NTP changes. Its initial load only seeds the cache.
+    if subprocess.call(['systemctl', 'is-active', '--quiet', 'hostcfgd']) == 0:
+        try:
+            state_db = swsscommon.DBConnector('STATE_DB', 0)
+            if not swsscommon.RestartWaiter.isAdvancedBootInProgress(state_db):
+                return
+        except RuntimeError as e:
+            log.log_warning(
+                "Unable to check warm/fast boot state: {}; restarting chrony synchronously.".format(e),
+                also_print_to_console=True)
+    try:
+        click.echo("Restarting chrony service...")
+        clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
+    except SystemExit as e:
+        ctx.fail("Restart service chrony failed with error {}".format(e))
+
+
 @ntp.command('add')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
 @click.option('--association-type', type=click.Choice(["server", "pool"], case_sensitive=False), default="server",
@@ -9615,11 +9767,7 @@ def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         click.echo("NTP server {} added to configuration".format(ntp_ip_address))
-        try:
-            click.echo("Restarting chrony service...")
-            clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
-        except SystemExit as e:
-            ctx.fail("Restart service chrony failed with error {}".format(e))
+        _restart_chrony_if_needed(ctx, db)
 
 @ntp.command('del')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
@@ -9636,11 +9784,7 @@ def del_ntp_server(ctx, ntp_ip_address):
         click.echo("NTP server {} removed from configuration".format(ntp_ip_address))
     else:
         ctx.fail("NTP server {} is not configured.".format(ntp_ip_address))
-    try:
-        click.echo("Restarting chrony service...")
-        clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
-    except SystemExit as e:
-        ctx.fail("Restart service chrony failed with error {}".format(e))
+    _restart_chrony_if_needed(ctx, db)
 
 #
 # 'sflow' group ('config sflow ...')

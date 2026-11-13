@@ -1,6 +1,7 @@
 import click
 
 from sonic_py_common import multi_asic
+from swsscommon.swsscommon import isInterfaceNameValid
 import utilities_common.cli as clicommon
 from show.main import ipv6
 from show import bgp_cli
@@ -31,7 +32,7 @@ def summary(namespace, display):
 
 # 'neighbors' subcommand ("show ipv6 bgp neighbors")
 @bgp.command()
-@click.argument('ipaddress', required=False)
+@click.argument('ipaddress', metavar='[<ipv6-address>|<interface-name>]', required=False)
 @click.argument('info_type',
                 type=click.Choice(
                     ['routes', 'advertised-routes', 'received-routes']),
@@ -45,7 +46,7 @@ def summary(namespace, display):
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def neighbors(ipaddress, info_type, namespace):
-    """Show IPv6 BGP neighbors"""
+    """Show IPv6 BGP neighbors by IPv6 address or configured interface name."""
     neighbors_helper(ipaddress, info_type, namespace)
 
 
@@ -101,7 +102,7 @@ def vrf_summary(ctx, namespace, display):
 
 # 'neighbors' subcommand ("show ipv6 bgp vrf neighbors")
 @vrf.command('neighbors')
-@click.argument('ipaddress', required=False)
+@click.argument('ipaddress', metavar='[<ipv6-address>|<interface-name>]', required=False)
 @click.argument('info_type',
                 type=click.Choice(
                     ['routes', 'advertised-routes', 'received-routes']),
@@ -116,7 +117,7 @@ def vrf_summary(ctx, namespace, display):
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
 @click.pass_context
 def vrf_neighbors(ctx, ipaddress, info_type, namespace):
-    """Show IPv6 BGP neighbors"""
+    """Show IPv6 BGP neighbors by IPv6 address or configured interface name."""
     vrf = ctx.parent.params['vrf']
     neighbors_helper(ipaddress, info_type, namespace, vrf)
 
@@ -157,7 +158,9 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF)
     command = 'show bgp vrf {}'.format(vrf)
 
     if ipaddress is not None:
-        if not bgp_util.is_ipv6_address(ipaddress):
+        valid_address = bgp_util.is_ipv6_address(ipaddress)
+        if not valid_address and (
+                bgp_util.is_ipv4_address(ipaddress) or not isInterfaceNameValid(ipaddress)):
             ctx = click.get_current_context()
             ctx.fail("{} is not valid ipv6 address\n".format(ipaddress))
         try:
@@ -172,6 +175,8 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF)
             namespace = actual_namespace
         except ValueError as err:
             ctx = click.get_current_context()
+            if not valid_address:
+                ctx.fail("{} is not valid ipv6 address\n".format(ipaddress))
             ctx.fail("{}\n".format(err))
     else:
         ipaddress = ""
