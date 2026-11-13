@@ -17,7 +17,6 @@ from swsscommon import swsscommon
 topo = None
 dedicated_dbs = {}
 
-
 def clean_up_config():
     # Set SonicDBConfig variables to initial state
     # so that it can be loaded with single or multiple
@@ -26,6 +25,7 @@ def clean_up_config():
     SonicDBConfig._sonic_db_global_config_init = False
     SonicDBConfig._sonic_db_config_init = False
     swsscommon.SonicDBConfig.reset()
+
 
 def load_namespace_config(global_db_file_path=None):
     # To support multi asic testing
