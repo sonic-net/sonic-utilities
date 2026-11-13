@@ -760,6 +760,9 @@
         "admin_status": "up",
         "members@": "Ethernet116",
         "min_links": "1",
+        "fallback": "true",
+        "fallback_timeout": "90",
+        "fast_rate": "true",
         "tpid": "0x8100",
         "mtu": "9100"
     },
