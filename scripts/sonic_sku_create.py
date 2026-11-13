@@ -337,6 +337,7 @@ class SkuCreate(object):
         f_in = open(new_file, 'r')
 
         idx = 1
+        has_speed = "speed" in f_in.readline().split()
         for line in f_in.readlines():
             line.strip()
             if len(line.rstrip()) == 0:
@@ -347,7 +348,7 @@ class SkuCreate(object):
  
             line = line.lstrip()
             line_arr = line.split()
-            if len(line_arr) in (4, 5):
+            if has_speed and len(line_arr) in (4, 5):
                 self.portconfig_dict[idx] = [f"Ethernet{idx}", [1, 2, 3, 4], line_arr[2], str(idx), line_arr[-1]]
                 idx += 1
             else:
