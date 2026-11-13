@@ -1216,15 +1216,19 @@ save_redis() {
     local cleanup_method=${4:-dummy_cleanup_method}
     trap 'handle_error $? $LINENO' ERR
     local db_name=$1
+    local dump_transport=unix_socket
+    case "$db_name" in
+        CHASSIS_APP_DB|CHASSIS_STATE_DB) dump_transport=tcp ;;
+    esac
     if [ $# -ge 2 ] && [ -n "$2" ]; then
         local dest_file_name=$2
     else
         local dest_file_name="$db_name"
     fi
     if $host_namespace; then
-        save_cmd "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+        save_cmd "sonic-db-dump -t '$dump_transport' -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
     else
-        save_cmd_all_ns "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+        save_cmd_all_ns "sonic-db-dump -t '$dump_transport' -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
     fi
 }
 
@@ -1567,7 +1571,7 @@ collect_mellanox_sai_sdk_dump() {
     local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump${asic_id}_$(date +"%m_%d_%Y_%I_%M_%p")"
 
     if [[ "$( docker container inspect -f '{{.State.Running}}' $container_name )" == "true" ]]; then
-        if [[ x"$(sonic-db-cli $namespace APPL_DB EXISTS PORT_TABLE:PortInitDone)" == x"1" ]]; then
+        if [[ x"$(sonic-db-cli -s $namespace APPL_DB EXISTS PORT_TABLE:PortInitDone)" == x"1" ]]; then
             ${CMD_PREFIX}docker exec $container_name mkdir -p $sai_dump_folder
             ${CMD_PREFIX}docker exec $container_name saisdkdump -f $sai_dump_filename
 
@@ -2953,7 +2957,7 @@ main() {
     wait
 
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
-    local device_type=`sonic-db-cli CONFIG_DB hget 'DEVICE_METADATA|localhost' type`
+    local device_type=`sonic-db-cli -s CONFIG_DB hget 'DEVICE_METADATA|localhost' type`
     local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
 
     # 1st counter snapshot early (self-skips on a Switch-BMC); need 2 for a trend.
@@ -3448,7 +3452,7 @@ if [ -f "$CHASSIS_DB_CONF" ]; then
     IS_CHASSIS_MODULE=true
 fi
 
-switch_type=$(sonic-db-cli CONFIG_DB hget "DEVICE_METADATA|localhost" "switch_type")
+switch_type=$(sonic-db-cli -s CONFIG_DB hget "DEVICE_METADATA|localhost" "switch_type")
 
 # define IS_VOQ_CHASSIS for voq based platform (chassis or multi-asic Pizza Box)
 # This is for "show fabric ..." commands 

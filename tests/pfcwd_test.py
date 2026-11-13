@@ -3,6 +3,8 @@ import os
 import sys
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 from click.testing import CliRunner
 
 from utilities_common.db import Db
@@ -1136,3 +1138,90 @@ class TestMultiAsicPfcwdShow(object):
         importlib.reload(mock_tables.mock_single_asic)
         import pfcwd.main
         importlib.reload(pfcwd.main)
+
+
+class TestPfcwdCliAuthentication(object):
+    @pytest.mark.parametrize('uid', [0, 65534])
+    @pytest.mark.parametrize('command', [
+        ['start', '200'],
+        ['stop'],
+        ['interval', '200'],
+        ['start_default'],
+        ['counter_poll', 'enable'],
+        ['big_red_switch', 'enable'],
+        ['pfc_stat_history', 'enable'],
+    ])
+    def test_writer_entrypoint_requests_authentication(self, command, uid):
+        import pfcwd.main as pfcwd
+
+        requests = []
+        original_init = Db.__init__
+
+        def record_init(db, *args, **kwargs):
+            requests.append(kwargs.get('authenticate', False))
+            original_init(db, *args, **kwargs)
+
+        with patch.object(Db, '__init__', record_init), \
+                patch.object(pfcwd, 'load_db_config'), \
+                patch.object(pfcwd.os, 'geteuid', return_value=uid), \
+                patch.object(pfcwd, 'PfcwdCli') as handler:
+            result = CliRunner().invoke(pfcwd.get_pfcwd_clis(), command)
+
+        assert result.exit_code == 0, result.output
+        assert requests == [True]
+        assert isinstance(handler.call_args.args[0], Db)
+
+    @pytest.mark.parametrize('uid', [0, 65534])
+    @pytest.mark.parametrize('command', [['show', 'stats'], ['show', 'config']])
+    def test_show_entrypoint_keeps_default_reader(self, command, uid):
+        import pfcwd.main as pfcwd
+
+        requests = []
+        original_init = Db.__init__
+
+        def record_init(db, *args, **kwargs):
+            requests.append(kwargs.get('authenticate', False))
+            original_init(db, *args, **kwargs)
+
+        with patch.object(Db, '__init__', record_init), \
+                patch.object(pfcwd, 'load_db_config'), \
+                patch.object(pfcwd.os, 'geteuid', return_value=uid), \
+                patch.object(pfcwd, 'PfcwdCli') as handler:
+            result = CliRunner().invoke(pfcwd.get_pfcwd_clis(), command)
+
+        assert result.exit_code == 0, result.output
+        assert requests == [False]
+        assert isinstance(handler.call_args.args[0], Db)
+
+    @pytest.mark.parametrize('uid', [0, 65534])
+    @pytest.mark.parametrize('command', [
+        'start', 'stop', 'interval', 'start_default',
+        'counter_poll', 'big_red_switch', 'pfc_stat_history',
+    ])
+    def test_writer_help_does_not_open_database(self, command, uid):
+        import pfcwd.main as pfcwd
+
+        with patch.object(Db, '__init__', side_effect=AssertionError('help opened database')), \
+                patch.object(pfcwd, 'load_db_config'), \
+                patch.object(pfcwd.os, 'geteuid', return_value=uid):
+            result = CliRunner().invoke(pfcwd.get_pfcwd_clis(), [command, '--help'])
+
+        assert result.exit_code == 0, result.output
+        assert 'Usage:' in result.output
+
+    @pytest.mark.parametrize('command', [
+        ['start', '200'], ['stop'], ['interval', '200'], ['start_default'],
+        ['counter_poll', 'enable'], ['big_red_switch', 'enable'],
+        ['pfc_stat_history', 'enable'],
+    ])
+    def test_writer_keeps_explicit_database_context(self, command):
+        import pfcwd.main as pfcwd
+
+        db = Db()
+        with patch.object(Db, '__init__', side_effect=AssertionError('context was replaced')), \
+                patch.object(pfcwd, 'load_db_config'), \
+                patch.object(pfcwd, 'PfcwdCli') as handler:
+            result = CliRunner().invoke(pfcwd.get_pfcwd_clis(), command, obj=db)
+
+        assert result.exit_code == 0, result.output
+        assert handler.call_args.args[0] is db

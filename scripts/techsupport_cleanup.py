@@ -49,7 +49,7 @@ def main():
     parser.add_argument('name', type=str, help='TechSupport Dump Name')
     args = parser.parse_args()
     syslog.openlog(logoption=syslog.LOG_PID)
-    db = SonicV2Connector(use_unix_socket_path=True)
+    db = SonicV2Connector(use_unix_socket_path=True, authenticate=True)
     db.connect(CFG_DB)
     db.connect(STATE_DB)
     handle_techsupport_creation_event(args.name, db)

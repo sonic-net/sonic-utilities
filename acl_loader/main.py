@@ -135,11 +135,11 @@ class AclLoader(object):
         self.acl_table_status = {}
         self.acl_rule_status = {}
 
-        self.configdb = ConfigDBConnector()
+        self.configdb = ConfigDBConnector(use_unix_socket_path=True, authenticate=True)
         self.configdb.connect()
-        self.statedb = SonicV2Connector(host="127.0.0.1")
+        self.statedb = SonicV2Connector(use_unix_socket_path=True, host="127.0.0.1")
         self.statedb.connect(self.statedb.STATE_DB)
-        self.appldb = SonicV2Connector(host="127.0.0.1")
+        self.appldb = SonicV2Connector(use_unix_socket_path=True, host="127.0.0.1")
         self.appldb.connect(self.statedb.APPL_DB)
 
         # For multi-npu architecture we will have both global and per front asic namespace.
@@ -162,9 +162,11 @@ class AclLoader(object):
 
         namespaces = multi_asic.get_all_namespaces()
         for front_asic_namespaces in namespaces['front_ns']:
-            self.per_npu_configdb[front_asic_namespaces] = ConfigDBConnector(namespace=front_asic_namespaces)
+            self.per_npu_configdb[front_asic_namespaces] = ConfigDBConnector(
+                use_unix_socket_path=True, authenticate=True, namespace=front_asic_namespaces)
             self.per_npu_configdb[front_asic_namespaces].connect()
-            self.per_npu_statedb[front_asic_namespaces] = SonicV2Connector(namespace=front_asic_namespaces)
+            self.per_npu_statedb[front_asic_namespaces] = SonicV2Connector(
+                use_unix_socket_path=True, namespace=front_asic_namespaces)
             self.per_npu_statedb[front_asic_namespaces].connect(self.per_npu_statedb[front_asic_namespaces].STATE_DB)
 
         self.read_tables_info()

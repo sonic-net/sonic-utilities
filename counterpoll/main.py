@@ -5,6 +5,7 @@ import utilities_common.multi_asic as multi_asic_util
 from utilities_common.llr import is_llr_capable
 from tabulate import tabulate
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from swsscommon.swsscommon import CFG_FLEX_COUNTER_TABLE_NAME as CFG_FLEX_COUNTER_TABLE
 
@@ -40,7 +41,7 @@ def connect_to_db(namespace):
     else:
         if not SonicDBConfig.isGlobalInit():
             SonicDBConfig.initializeGlobalConfig()
-    configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
+    configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace), authenticate=True)
     configdb.connect()
     return configdb
 
@@ -571,7 +572,7 @@ def eni_disable(ctx):
 @click.pass_context
 def ha_set(ctx):
     """ HA set counter commands """
-    ctx.obj = ConfigDBConnector()
+    ctx.obj = ConfigDBConnector(use_unix_socket_path=True, authenticate=True)
     ctx.obj.connect()
 
 
@@ -961,7 +962,7 @@ def register_dynamic_commands(cmds):
     Dynamically register commands based on condition callback.
     """
     try:
-        db = ConfigDBConnector()
+        db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
         db.connect()
     except RuntimeError as e:
         # Runs at import time. swsscommon raises RuntimeError when CONFIG_DB is

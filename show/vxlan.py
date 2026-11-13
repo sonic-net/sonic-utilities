@@ -3,6 +3,7 @@ from sonic_py_common import multi_asic
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from natsort import natsorted
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 
@@ -28,7 +29,7 @@ def name(vxlan_name):
             click.echo("\nNamespace: {}".format(ns))
 
         table = []
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         # Fetching data from config_db for VXLAN TUNNEL
@@ -70,7 +71,7 @@ def tunnel():
             click.echo("\nNamespace: {}".format(ns))
 
         table = []
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         # Fetching data from config_db for VXLAN TUNNEL
@@ -113,7 +114,7 @@ def interface():
         if multi_asic.is_multi_asic() and len(ns_list) > 1:
             click.echo("\nNamespace: {}".format(ns))
 
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         # Fetching VTEP keys from config DB
@@ -171,7 +172,7 @@ def vlanvnimap(count):
 
         body = []
         total_count = 0
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         if count is not None:
@@ -213,7 +214,7 @@ def vrfvnimap():
 
         body = []
         num = 0
-        config_db = ConfigDBConnector(namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
         config_db.connect()
 
         vrf_table = config_db.get_table('VRF')
@@ -249,7 +250,7 @@ def remotevtep(count):
 
         body = []
         total_count = 0
-        db = SonicV2Connector(namespace=ns)
+        db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB', ns), namespace=ns)
         db.connect(db.STATE_DB)
 
         vxlan_keys = db.keys(db.STATE_DB, 'VXLAN_TUNNEL_TABLE|*')
@@ -299,7 +300,7 @@ def remotevni(remote_vtep_ip, count):
 
         body = []
         total_count = 0
-        db = SonicV2Connector(namespace=ns)
+        db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
         db.connect(db.APPL_DB)
 
         if remote_vtep_ip == 'all':
@@ -354,7 +355,7 @@ def remotemac(remote_vtep_ip, count):
 
         body = []
         total_count = 0
-        db = SonicV2Connector(namespace=ns)
+        db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB', ns), namespace=ns)
         db.connect(db.APPL_DB)
 
         vxlan_keys = db.keys(db.APPL_DB, 'VXLAN_FDB_TABLE:*')
@@ -399,7 +400,7 @@ def counters(tunnel, period, verbose):
     if namespace is None and tunnel is not None:
         filtered = []
         for ns in ns_list:
-            config_db = ConfigDBConnector(namespace=ns)
+            config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
             config_db.connect()
             if config_db.get_entry('VXLAN_TUNNEL', tunnel):
                 filtered.append(ns)

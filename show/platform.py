@@ -1,3 +1,4 @@
+from sonic_py_common._redis_transport import use_local_redis_socket
 import os
 import json
 import subprocess
@@ -317,7 +318,7 @@ LIQUID_COOLING_INFO_TABLE = 'LIQUID_COOLING_INFO'
 
 def _get_state_db():
     from swsscommon.swsscommon import SonicV2Connector
-    state_db = SonicV2Connector(host="127.0.0.1")
+    state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host="127.0.0.1")
     state_db.connect(state_db.STATE_DB)
     return state_db
 

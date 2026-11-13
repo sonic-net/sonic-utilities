@@ -39,8 +39,8 @@ function debug()
 
 function check_warm_boot()
 {
-    SYSTEM_WARM_START=`$SONIC_DB_CLI STATE_DB hget "WARM_RESTART_ENABLE_TABLE|system" enable`
-    SERVICE_WARM_START=`$SONIC_DB_CLI STATE_DB hget "WARM_RESTART_ENABLE_TABLE|${SERVICE}" enable`
+    SYSTEM_WARM_START=`$SONIC_DB_CLI -s STATE_DB hget "WARM_RESTART_ENABLE_TABLE|system" enable`
+    SERVICE_WARM_START=`$SONIC_DB_CLI -s STATE_DB hget "WARM_RESTART_ENABLE_TABLE|${SERVICE}" enable`
     if [[ x"$SYSTEM_WARM_START" == x"true" ]] || [[ x"$SERVICE_WARM_START" == x"true" ]]; then
         WARM_BOOT="true"
 {#- TODO: restore count validation for SONiC packages #}
@@ -51,7 +51,7 @@ function check_warm_boot()
 
 function check_fast_boot()
 {
-    SYSTEM_FAST_REBOOT=`$SONIC_DB_CLI STATE_DB hget "FAST_RESTART_ENABLE_TABLE|system" enable`
+    SYSTEM_FAST_REBOOT=`$SONIC_DB_CLI -s STATE_DB hget "FAST_RESTART_ENABLE_TABLE|system" enable`
     if [[ x"${SYSTEM_FAST_REBOOT}" == x"true" ]]; then
         FAST_BOOT="true"
     else

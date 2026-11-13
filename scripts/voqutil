@@ -10,6 +10,7 @@ from natsort import natsorted
 from tabulate import tabulate
 from utilities_common import multi_asic as multi_asic_util
 from swsscommon import swsscommon
+from utilities_common.chassis import chassis_db_socket_available
 
 # mock the redis for unit test purposes #
 try:
@@ -288,7 +289,7 @@ class SystemNeighStatus(object):
         return table
 
     def get_systemneigh_status(self):
-        self.db = swsscommon.SonicV2Connector(use_unix_socket_path=False)
+        self.db = swsscommon.SonicV2Connector(use_unix_socket_path=chassis_db_socket_available("CHASSIS_APP_DB"))
         self.db.connect(self.db.CHASSIS_APP_DB, False)
         self.chassis_app_db_keys_system_neigh = chassis_app_db_keys_get_system_neigh(self.db)
         if self.chassis_app_db_keys_system_neigh:
@@ -356,7 +357,7 @@ class SystemLagStatus(object):
         return table
 
     def get_systemlag_status(self):
-        self.db = swsscommon.SonicV2Connector(use_unix_socket_path=False)
+        self.db = swsscommon.SonicV2Connector(use_unix_socket_path=chassis_db_socket_available("CHASSIS_APP_DB"))
         self.db.connect(self.db.CHASSIS_APP_DB, False)
         self.chassis_app_db_keys_system_lag = chassis_app_db_keys_get_system_lag(self.db, None)
         if self.chassis_app_db_keys_system_lag:

@@ -1,5 +1,19 @@
 import os
 from sonic_py_common import device_info
+from swsscommon.swsscommon import SonicDBConfig
+
+
+def chassis_db_socket_available(db_name):
+    """Use an owned shared socket only when this caller has Linux admission.
+
+    Legacy images may admit display users only through the shared TCP endpoint.
+    Both transports retain the same unprotected chassis Redis policy.
+    """
+    is_local = getattr(device_info, "is_chassis_db_local", None)
+    if is_local is None or not is_local():
+        return False
+    path = SonicDBConfig.getDbSock(db_name)
+    return bool(path) and os.access(path, os.R_OK | os.W_OK)
 
 def get_chassis_local_interfaces():
     lst = []

@@ -14,6 +14,8 @@ from utilities_common.db import Db
 #sys.modules['os.geteuid'] = mock.Mock()
 #sys.modules['platform_sfputil'] = mock.Mock()
 import config.main as config
+import config.muxcable as muxcable
+import show.muxcable as show_muxcable
 import show.main as show
 
 
@@ -671,11 +673,31 @@ show_muxcable_resetcause_expected_port_output_json="""\
 """
 
 class TestMuxcable(object):
+    @pytest.fixture(autouse=True)
+    def administrator(self, monkeypatch):
+        # These mocked command/output tests invoke administrator callbacks directly.
+        monkeypatch.setattr(os, 'geteuid', lambda: 0)
+
     @classmethod
     def setup_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         #show.muxcable.platform_sfputil.logical = mock.Mock(return_value=["Ethernet0", "Ethernet4"])
         print("SETUP")
+
+    @pytest.mark.parametrize('module', [muxcable, show_muxcable], ids=['config', 'show'])
+    @pytest.mark.parametrize('namespace', ['', 'asic0'])
+    def test_db_connect_uses_local_socket(self, module, namespace):
+        connection = mock.Mock()
+
+        with mock.patch.object(module.swsscommon.SonicDBConfig, 'getDbPort',
+                               side_effect=RuntimeError('transport must be explicit')) as get_port, \
+                mock.patch.object(module.swsscommon, 'DBConnector',
+                                  return_value=connection) as connector:
+            result = module.db_connect('STATE_DB', namespace)
+
+        assert result is connection
+        get_port.assert_not_called()
+        connector.assert_called_once_with('STATE_DB', 0, False, namespace, True)
 
     @mock.patch('show.muxcable.get_hwmode_mux_direction_port', mock.MagicMock(return_value=({ 0 :"active",
                                                                                               1  :"standby",

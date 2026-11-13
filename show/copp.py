@@ -1,6 +1,7 @@
 import click
 import json
 import utilities_common.cli as clicommon
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
 from tabulate import tabulate
@@ -49,7 +50,7 @@ def print_single_copp_entry(entry, trap_id=None, group=None):
     click.echo("Red Action.................. {}".format(entry.get("red_action", "")))
 
     if trap_id:
-        state_db = SonicV2Connector()
+        state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'))
         state_db.connect(state_db.STATE_DB)
         hw_status = get_copp_trap_hw_status(trap_id, state_db)
         click.echo("HW Status................... {}".format(hw_status))
@@ -207,7 +208,7 @@ def configuration(_db, ctx):
     if not merged_group or not merged_traps:
         return
 
-    state_db = SonicV2Connector()
+    state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'))
     state_db.connect(state_db.STATE_DB)
 
     # Extract all trap_ids and trap_group from merged_traps

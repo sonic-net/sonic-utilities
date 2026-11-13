@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
+import pytest
 
 import show.main as show
 
@@ -647,6 +648,12 @@ class TestShowSRv6EdgeCases(object):
 
 
 class TestShowSRv6MultiAsic(object):
+    @pytest.fixture(params=[False, True], ids=['tcp-reader', 'unix-reader'])
+    def reader_transport(self, request):
+        # Exercise forwarding of either selected transport without relying on host sockets.
+        with patch('show.srv6.use_local_redis_socket', return_value=request.param):
+            yield request.param
+
     def setup_method(self):
         print('SETUP MULTI-ASIC')
 
@@ -654,7 +661,7 @@ class TestShowSRv6MultiAsic(object):
     @patch('sonic_py_common.multi_asic.is_multi_asic')
     @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_locators_multi_asic_all_namespaces(
-        self, mock_config_db, mock_is_multi_asic, mock_get_namespaces
+        self, mock_config_db, mock_is_multi_asic, mock_get_namespaces, reader_transport
     ):
         # Setup multi-ASIC environment
         mock_is_multi_asic.return_value = True
@@ -664,7 +671,9 @@ class TestShowSRv6MultiAsic(object):
         mock_db_asic0 = MagicMock()
         mock_db_asic1 = MagicMock()
 
-        def config_db_side_effect(namespace=None):
+        def config_db_side_effect(namespace=None, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is reader_transport
+            assert authenticate is False
             if namespace == 'asic0':
                 return mock_db_asic0
             elif namespace == 'asic1':
@@ -712,7 +721,7 @@ class TestShowSRv6MultiAsic(object):
     @patch('show.srv6.SonicV2Connector')
     @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_static_sids_multi_asic_all_namespaces(
-        self, mock_config_db, mock_sonic_v2, mock_is_multi_asic, mock_get_namespaces
+        self, mock_config_db, mock_sonic_v2, mock_is_multi_asic, mock_get_namespaces, reader_transport
     ):
         # Setup multi-ASIC environment
         mock_is_multi_asic.return_value = True
@@ -722,7 +731,9 @@ class TestShowSRv6MultiAsic(object):
         mock_config_db_asic0 = MagicMock()
         mock_config_db_asic1 = MagicMock()
 
-        def config_db_side_effect(namespace=None):
+        def config_db_side_effect(namespace=None, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is reader_transport
+            assert authenticate is False
             if namespace == 'asic0':
                 return mock_config_db_asic0
             elif namespace == 'asic1':
@@ -735,7 +746,9 @@ class TestShowSRv6MultiAsic(object):
         mock_asic_db_asic0 = MagicMock()
         mock_asic_db_asic1 = MagicMock()
 
-        def sonic_v2_side_effect(namespace=None):
+        def sonic_v2_side_effect(namespace=None, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is reader_transport
+            assert authenticate is False
             if namespace == 'asic0':
                 return mock_asic_db_asic0
             elif namespace == 'asic1':
@@ -788,7 +801,7 @@ class TestShowSRv6MultiAsic(object):
     @patch('sonic_py_common.multi_asic.is_multi_asic')
     @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_locators_multi_asic_empty_namespaces(
-        self, mock_config_db, mock_is_multi_asic, mock_get_namespaces
+        self, mock_config_db, mock_is_multi_asic, mock_get_namespaces, reader_transport
     ):
         # Setup multi-ASIC environment with empty data
         mock_is_multi_asic.return_value = True
@@ -798,7 +811,9 @@ class TestShowSRv6MultiAsic(object):
         mock_db_asic0 = MagicMock()
         mock_db_asic1 = MagicMock()
 
-        def config_db_side_effect(namespace=None):
+        def config_db_side_effect(namespace=None, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is reader_transport
+            assert authenticate is False
             if namespace == 'asic0':
                 return mock_db_asic0
             elif namespace == 'asic1':
@@ -862,7 +877,7 @@ class TestShowSRv6MultiAsic(object):
     @patch('show.srv6.SonicV2Connector')
     @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_static_sids_multi_asic_mixed_offload_status(
-        self, mock_config_db, mock_sonic_v2, mock_is_multi_asic, mock_get_namespaces
+        self, mock_config_db, mock_sonic_v2, mock_is_multi_asic, mock_get_namespaces, reader_transport
     ):
         # Test scenario where SIDs from different ASICs have different offload status
         mock_is_multi_asic.return_value = True
@@ -872,7 +887,9 @@ class TestShowSRv6MultiAsic(object):
         mock_config_db_asic0 = MagicMock()
         mock_config_db_asic1 = MagicMock()
 
-        def config_db_side_effect(namespace=None):
+        def config_db_side_effect(namespace=None, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is reader_transport
+            assert authenticate is False
             if namespace == 'asic0':
                 return mock_config_db_asic0
             elif namespace == 'asic1':
@@ -885,7 +902,9 @@ class TestShowSRv6MultiAsic(object):
         mock_asic_db_asic0 = MagicMock()
         mock_asic_db_asic1 = MagicMock()
 
-        def sonic_v2_side_effect(namespace=None):
+        def sonic_v2_side_effect(namespace=None, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is reader_transport
+            assert authenticate is False
             if namespace == 'asic0':
                 return mock_asic_db_asic0
             elif namespace == 'asic1':
@@ -942,7 +961,7 @@ class TestShowSRv6MultiAsic(object):
     @patch('sonic_py_common.multi_asic.is_multi_asic')
     @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_locators_multi_asic_with_locator_filter(
-        self, mock_config_db, mock_is_multi_asic, mock_get_namespaces
+        self, mock_config_db, mock_is_multi_asic, mock_get_namespaces, reader_transport
     ):
         # Test filtering by specific locator in multi-ASIC scenario
         mock_is_multi_asic.return_value = True
@@ -952,7 +971,9 @@ class TestShowSRv6MultiAsic(object):
         mock_db_asic0 = MagicMock()
         mock_db_asic1 = MagicMock()
 
-        def config_db_side_effect(namespace=None):
+        def config_db_side_effect(namespace=None, *, use_unix_socket_path=False, authenticate=False):
+            assert use_unix_socket_path is reader_transport
+            assert authenticate is False
             if namespace == 'asic0':
                 return mock_db_asic0
             elif namespace == 'asic1':

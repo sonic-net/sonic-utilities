@@ -2,6 +2,7 @@ import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 
@@ -44,7 +45,7 @@ def state(namespace, redis_unix_socket_path):
 
 
 def show_warm_restart_state_for_namespace(namespace):
-    db = SonicV2Connector(namespace=namespace)
+    db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB', namespace), namespace=namespace)
     db.connect(db.STATE_DB, False)   # Make one attempt only
 
     TABLE_NAME_SEPARATOR = '|'
@@ -108,13 +109,20 @@ def config(namespace, redis_unix_socket_path):
 
 
 def show_warm_restart_config_for_namespace(namespace, **kwargs):
-    config_db = ConfigDBConnector(namespace=namespace, **kwargs)
+    config_db = ConfigDBConnector(
+        use_unix_socket_path=bool(kwargs.get('unix_socket_path')) or use_local_redis_socket('CONFIG_DB', namespace),
+        namespace=namespace,
+        **kwargs,
+    )
     config_db.connect(wait_for_init=False)
     data = config_db.get_table('WARM_RESTART')
     # Python dictionary keys() Method
     keys = list(data.keys())
 
-    state_db = SonicV2Connector(namespace=namespace)
+    state_db = SonicV2Connector(
+        use_unix_socket_path=use_local_redis_socket('STATE_DB', namespace),
+        namespace=namespace,
+    )
     state_db.connect(state_db.STATE_DB, False)   # Make one attempt only
     TABLE_NAME_SEPARATOR = '|'
     prefix = 'WARM_RESTART_ENABLE_TABLE' + TABLE_NAME_SEPARATOR

@@ -33,7 +33,7 @@ VENDOR_MODEL_REGEX = re.compile(r"CAC\w{3}321P2P\w{2}MS")
 
 
 def db_connect(db_name, namespace=EMPTY_NAMESPACE):
-    return swsscommon.DBConnector(db_name, REDIS_TIMEOUT_MSECS, True, namespace)
+    return swsscommon.DBConnector(db_name, REDIS_TIMEOUT_MSECS, False, namespace, True)
 
 
 target_dict = { "NIC":"0",
@@ -369,9 +369,9 @@ def mode(db, state, port, json_output):
     for namespace in namespaces:
         asic_id = multi_asic.get_asic_index_from_namespace(namespace)
         # replace these with correct macros
-        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_configdb[asic_id].connect()
-        per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_statedb[asic_id].connect(per_npu_statedb[asic_id].STATE_DB)
 
         mux_tbl_cfg_db[asic_id] = per_npu_configdb[asic_id].get_table("MUX_CABLE")
@@ -459,9 +459,9 @@ def probertype(db, probertype, port):
     for namespace in namespaces:
         asic_id = multi_asic.get_asic_index_from_namespace(namespace)
         # replace these with correct macros
-        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_configdb[asic_id].connect()
-        per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_statedb[asic_id].connect(per_npu_statedb[asic_id].STATE_DB)
 
         port_table_keys[asic_id] = per_npu_statedb[asic_id].keys(
@@ -514,7 +514,7 @@ def kill_radv(db, knob):
 
     namespaces = multi_asic.get_front_end_namespaces()
     for namespace in namespaces:
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         config_db.connect()
 
         mux_lmgrd_cfg_tbl = config_db.get_table("MUX_LINKMGR")
@@ -542,9 +542,10 @@ def packetloss(db, action, port):
     for namespace in namespaces:
         asic_id = multi_asic.get_asic_index_from_namespace(namespace)
         # replace these with correct macros
-        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_configdb[asic_id].connect()
-        per_npu_statedb[asic_id] = swsscommon.SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_statedb[asic_id] = swsscommon.SonicV2Connector(
+            use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_statedb[asic_id].connect(per_npu_statedb[asic_id].STATE_DB)
 
         port_table_keys[asic_id] = per_npu_statedb[asic_id].keys(
@@ -1379,7 +1380,7 @@ def telemetry(db, state):
     for namespace in namespaces:
         asic_id = multi_asic.get_asic_index_from_namespace(namespace)
         # replace these with correct macros
-        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         per_npu_configdb[asic_id].connect()
 
         xcvrd_log_cfg_db_tbl[asic_id] = per_npu_configdb[asic_id].get_table("XCVRD_LOG")
@@ -1416,7 +1417,7 @@ def reset_heartbeat_suspend(db, port):
     namespaces = multi_asic.get_front_end_namespaces()
     for namespace in namespaces:
         asic_index = multi_asic.get_asic_index_from_namespace(namespace)
-        config_dbs[asic_index] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        config_dbs[asic_index] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
         config_dbs[asic_index].connect()
         mux_linkmgrd_tables[asic_index] = config_dbs[asic_index].get_table("MUX_LINKMGR")
         mux_config_tables[asic_index] = config_dbs[asic_index].get_table("MUX_CABLE")

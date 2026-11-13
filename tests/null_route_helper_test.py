@@ -1,5 +1,6 @@
 import pytest
 import os
+from unittest.mock import MagicMock
 from .utils import load_source
 
 from click.testing import CliRunner
@@ -9,6 +10,38 @@ from swsscommon.swsscommon import ConfigDBConnector
 null_route_helper = load_source('null_route_helper', os.path.join(os.path.dirname(__file__), '..',
                                                                   'scripts', 'null_route_helper'))
 null_route_helper.ConfigDBConnector = ConfigDBConnector
+
+
+@pytest.mark.parametrize('command', ['list', 'block'])
+@pytest.mark.parametrize('reader_socket', [False, True])
+def test_only_write_commands_request_writer_credentials(monkeypatch, command, reader_socket):
+    writes = []
+    connection = MagicMock()
+    connection.get_entry.return_value = {'type': 'L3'}
+    connection.get_table.return_value = {}
+
+    def connect(**options):
+        authenticated = options.get('authenticate', False)
+        if command == 'list' and authenticated:
+            raise PermissionError('Reader cannot access writer credentials')
+
+        def write(*args):
+            if not authenticated:
+                raise PermissionError('Writer authentication is required')
+            writes.append(args)
+
+        connection.set_entry.side_effect = write
+        connection.mod_entry.side_effect = write
+        return connection
+
+    monkeypatch.setattr(null_route_helper, 'ConfigDBConnector', connect)
+    monkeypatch.setattr(null_route_helper, 'use_local_redis_socket', lambda name: reader_socket)
+    arguments = [command, 'NULL_ROUTE_V4']
+    if command == 'block':
+        arguments.append('192.0.2.1')
+    result = CliRunner().invoke(null_route_helper.cli, arguments)
+    assert result.exit_code == 0, result.output
+    assert bool(writes) is (command == 'block')
 
 expected_stdout_v4 = "" + \
 """Table          Rule                      Priority  Action    Match

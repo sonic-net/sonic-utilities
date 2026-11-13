@@ -364,7 +364,7 @@ def print_flows(file_path, file_only=False):
 def is_dpu_type():
     """Check if switch type is DPU from CONFIG_DB."""
     try:
-        config_db = swsscommon.DBConnector("CONFIG_DB", 0, True)
+        config_db = swsscommon.DBConnector("CONFIG_DB", 0, False)
         table = swsscommon.Table(config_db, "DEVICE_METADATA")
         exists, switch_type = table.hget("localhost", "switch_type")
 

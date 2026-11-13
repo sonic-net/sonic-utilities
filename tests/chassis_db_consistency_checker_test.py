@@ -338,3 +338,34 @@ def test_run_redis_dump(monkeypatch, caplog):
     # Now call script functions; they will use the mocked run
     table = chassis_db_consistency_checker.get_chassis_lag_db_table()
     assert table == {"hostname|asic0|PortChannel1": "100"}
+
+
+@pytest.fixture(autouse=True)
+def configured_asic_dump_endpoints(monkeypatch):
+    config = chassis_db_consistency_checker.SonicDBConfig
+    monkeypatch.setattr(config, 'getDbSock', lambda database, namespace: '/run/redis/{}/redis.sock'.format(namespace))
+    monkeypatch.setattr(config, 'getDbId', lambda database, namespace: 1)
+    monkeypatch.setattr(config, 'load_sonic_global_db_config', lambda: None)
+
+
+@pytest.mark.parametrize('namespace', ['', 'asic0', 'asic3'])
+def test_local_dump_uses_configured_namespace_socket(monkeypatch, namespace):
+    from unittest.mock import Mock
+    config = chassis_db_consistency_checker.SonicDBConfig
+    socket = '/run/redis/socket with spaces/{}.sock'.format(namespace)
+    monkeypatch.setattr(config, 'getDbSock', lambda db, ns: socket if (db, ns) == ('ASIC_DB', namespace) else None)
+    monkeypatch.setattr(config, 'getDbId', lambda db, ns: 9)
+    run = Mock(return_value={})
+    monkeypatch.setattr(chassis_db_consistency_checker, 'run_redis_dump', run)
+    assert chassis_db_consistency_checker.get_lag_ids_asic_namespace(namespace) == set()
+    run.assert_called_once_with(['redis-dump', '-s', socket, '-d', '9', '-k', '*SAI_OBJECT_TYPE_LAG:*', '-y'])
+
+
+def test_chassis_peer_dump_remains_tcp(monkeypatch):
+    from unittest.mock import Mock
+    run = Mock(return_value={})
+    monkeypatch.setattr(chassis_db_consistency_checker, 'run_redis_dump', run)
+    chassis_db_consistency_checker.get_chassis_lag_db_table()
+    command = run.call_args.args[0]
+    assert command[:5] == ['redis-dump', '-H', 'redis_chassis.server', '-p', '6380']
+    assert '-s' not in command
