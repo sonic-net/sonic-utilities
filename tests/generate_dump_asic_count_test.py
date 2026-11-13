@@ -25,12 +25,15 @@ def extract_function(name):
     return text[start:end]
 
 
+FALLBACK_LINE = "$asic_count_known || save_asic_count_unknown"
+
+
 def extract_main_asic_count_block():
-    """Return the lines of main that set NUM_ASICS from get_asic_count."""
+    """Return the lines of main that set NUM_ASICS and record a failed probe."""
     main = extract_function("main")
-    start = main.index("if ! NUM_ASICS=$(get_asic_count)")
+    start = main.index("local asic_count_known=true")
     end = main.index("\n    fi\n", start) + len("\n    fi\n")
-    return main[start:end]
+    return main[start:end] + FALLBACK_LINE + "\n"
 
 
 # A fake `python3` that prints the given streams and exits with PY_RC.
@@ -82,7 +85,7 @@ def run_save_asic_count_unknown(logdir, noop=False):
 
 def run_main_asic_count(logdir, py_stdout="", py_stderr="", py_rc=0):
     """Run main's NUM_ASICS block with the real helpers and a fake `python3`."""
-    script = "{}\n{}\n{}\n{}\necho \"NUM_ASICS=$NUM_ASICS RETURN_CODE=$RETURN_CODE\"\n".format(
+    script = "{}\n{}\n{}\nmain_block() {{\n{}}}\nmain_block\necho \"NUM_ASICS=$NUM_ASICS RETURN_CODE=$RETURN_CODE\"\n".format(
         recorder_prelude(logdir),
         FAKE_PYTHON,
         extract_function("get_asic_count"),
@@ -175,3 +178,11 @@ def test_main_falls_back_when_probe_fails(tmp_path):
     assert "NUM_ASICS=1 RETURN_CODE=1" in result.stdout
     assert "WARNING: unable to determine the ASIC count" in result.stderr
     assert (logdir / "asic_count.status").exists()
+
+
+def test_main_records_fallback_after_initial_tar():
+    # A marker written before the initial tar is archived twice, once there and
+    # again by save_to_tar.
+    main = extract_function("main")
+    assert main.count(FALLBACK_LINE) == 1
+    assert main.index(FALLBACK_LINE) > main.index("$TAR $V -chf $TARFILE -C $DUMPDIR $BASE")

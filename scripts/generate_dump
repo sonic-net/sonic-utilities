@@ -2623,8 +2623,9 @@ main() {
     trap 'handle_error $? $LINENO' ERR
     local start_t=0
     local end_t=0
+    local asic_count_known=true
     if ! NUM_ASICS=$(get_asic_count); then
-        save_asic_count_unknown
+        asic_count_known=false
         NUM_ASICS=1
     fi
     if [[ ( "$NUM_ASICS" > 1 ) ]]; then
@@ -2643,6 +2644,9 @@ main() {
     $LN $V -s /usr/local/bin/generate_dump $TARDIR
     $TAR $V -chf $TARFILE -C $DUMPDIR $BASE
     $RM $V -f $TARDIR/generate_dump
+
+    # After the initial tar, so save_to_tar archives the marker only once.
+    $asic_count_known || save_asic_count_unknown
 
     # Start populating timing data
     echo $BASE > $TECHSUPPORT_TIME_INFO
