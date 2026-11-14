@@ -412,8 +412,6 @@ def add(db, server_ip_address, source, port, vrf):
 
     try:
         add_entry(db.cfgdb, table, key, data)
-        clicommon.run_command(['systemctl', 'reset-failed', 'rsyslog-config', 'rsyslog'], display_cmd=True)
-        clicommon.run_command(['systemctl', 'restart', 'rsyslog-config'], display_cmd=True)
         log.log_notice("Added remote syslog logging: server={},source={},port={},vrf={}".format(
             server_ip_address,
             data.get(SYSLOG_SOURCE, "N/A"),
@@ -444,8 +442,6 @@ def delete(db, server_ip_address):
 
     try:
         del_entry(db.cfgdb, table, key)
-        clicommon.run_command(['systemctl', 'reset-failed', 'rsyslog-config', 'rsyslog'], display_cmd=True)
-        clicommon.run_command(['systemctl', 'restart', 'rsyslog-config'], display_cmd=True)
         log.log_notice("Removed remote syslog logging: server={}".format(server_ip_address))
     except Exception as e:
         log.log_error("Failed to remove remote syslog logging: {}".format(str(e)))

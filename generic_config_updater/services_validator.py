@@ -91,18 +91,6 @@ def _service_restart(svc_name):
     return rc == 0
 
 
-def rsyslog_validator(old_config, upd_config, keys):
-    old_syslog = old_config.get("SYSLOG_SERVER", {})
-    upd_syslog = upd_config.get("SYSLOG_SERVER", {})
-
-    if old_syslog != upd_syslog:
-        command_wrapper(["systemctl", "reset-failed", "rsyslog-config", "rsyslog"])
-        rc = command_wrapper(["systemctl", "restart", "rsyslog-config"])
-        if rc != 0:
-            return False
-    return True
-
-
 def port_speed_change_validator(old_config, upd_config, keys):
     old_ports = old_config.get("PORT", {})
     upd_ports = upd_config.get("PORT", {})
@@ -163,10 +151,6 @@ def caclmgrd_validator(old_config, upd_config, keys):
             return True
     # No update to ACL_RULE.
     return True
-
-
-def ntp_validator(old_config, upd_config, keys):
-    return _service_restart("chrony")
 
 
 def gnmi_validator(old_config, upd_config, keys):
