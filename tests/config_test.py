@@ -3876,6 +3876,40 @@ class TestConfigNtp(object):
             mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
         assert result.output == expected_output
 
+    @pytest.mark.parametrize("operation", ["add", "del"])
+    @pytest.mark.parametrize("platform", [None, "x86_64-kvm_x86_64-r0"], ids=["host", "vs-platform"])
+    @pytest.mark.parametrize("in_container", [False, True], ids=["no-container-marker", "container-marker"])
+    @patch('utilities_common.cli.run_command')
+    def test_ntp_server_execution_environment(self, mock_run_command, in_container, platform, operation,
+                                              monkeypatch, mock_hostcfgd_status, mock_boot_state):
+        config.ADHOC_VALIDATION = True
+        mock_hostcfgd_status.return_value = 3
+        if platform:
+            monkeypatch.setenv("PLATFORM", platform)
+        else:
+            monkeypatch.delenv("PLATFORM", raising=False)
+        original_isfile = os.path.isfile
+        monkeypatch.setattr(os.path, "isfile", lambda path:
+                            in_container if path == '/.dockerenv' else original_isfile(path))
+        db = Db()
+        address = "192.0.2.123"
+        if operation == "del":
+            db.cfgdb.set_entry("NTP_SERVER", address, {})
+
+        result = CliRunner().invoke(config.config.commands["ntp"], [operation, address], obj={'db': db.cfgdb})
+
+        assert result.exit_code == 0, result.output
+        assert (address in db.cfgdb.get_table("NTP_SERVER")) == (operation == "add")
+        if platform and in_container:
+            assert "skipping service restart in standalone Docker VS" in result.output
+            mock_hostcfgd_status.assert_not_called()
+            mock_run_command.assert_not_called()
+        else:
+            assert "skipping service restart" not in result.output
+            mock_hostcfgd_status.assert_called_once_with(['systemctl', 'is-active', '--quiet', 'hostcfgd'])
+            mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        mock_boot_state.DBConnector.assert_not_called()
+
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_version_3(self, mock_run_command):
         config.ADHOC_VALIDATION = True
@@ -4064,12 +4098,41 @@ class TestConfigNtp(object):
         mock_hostcfgd_status.assert_not_called()
         mock_boot_state.DBConnector.assert_not_called()
 
+    @pytest.mark.parametrize("operation", ["add", "del"])
+    @patch('utilities_common.cli.run_command')
+    def test_ntp_server_invalid_request_in_standalone_vs(self, mock_run_command, operation,
+                                                         monkeypatch, mock_hostcfgd_status):
+        config.ADHOC_VALIDATION = True
+        monkeypatch.setenv("PLATFORM", "x86_64-kvm_x86_64-r0")
+        address = "invalid-address" if operation == "add" else "192.0.2.123"
+        db = Db()
+        initial = db.cfgdb.get_table("NTP_SERVER")
+        original_isfile = os.path.isfile
+        monkeypatch.setattr(os.path, "isfile", lambda path:
+                            True if path == '/.dockerenv' else original_isfile(path))
+
+        result = CliRunner().invoke(config.config.commands["ntp"], [operation, address], obj={'db': db.cfgdb})
+
+        assert result.exit_code != 0
+        assert db.cfgdb.get_table("NTP_SERVER") == initial
+        assert "skipping service restart" not in result.output
+        mock_hostcfgd_status.assert_not_called()
+        mock_run_command.assert_not_called()
+
+    @pytest.mark.parametrize("platform", [None, "x86_64-kvm_x86_64-r0"], ids=["host", "vs-vm"])
     @pytest.mark.parametrize("hostcfgd_status", [0, 3], ids=["active-warm-fast-boot", "inactive"])
     @pytest.mark.parametrize("operation", ["add", "del"])
     @patch('utilities_common.cli.run_command', side_effect=SystemExit(1))
-    def test_ntp_server_restart_failure(self, mock_run_command, operation, hostcfgd_status,
-                                        mock_hostcfgd_status, mock_boot_state):
+    def test_ntp_server_restart_failure(self, mock_run_command, operation, hostcfgd_status, platform,
+                                        monkeypatch, mock_hostcfgd_status, mock_boot_state):
         config.ADHOC_VALIDATION = True
+        if platform:
+            monkeypatch.setenv("PLATFORM", platform)
+        else:
+            monkeypatch.delenv("PLATFORM", raising=False)
+        original_isfile = os.path.isfile
+        monkeypatch.setattr(os.path, "isfile", lambda path:
+                            False if path == '/.dockerenv' else original_isfile(path))
         mock_hostcfgd_status.return_value = hostcfgd_status
         mock_boot_state.RestartWaiter.isAdvancedBootInProgress.return_value = True
         runner = CliRunner()

@@ -9718,6 +9718,11 @@ def _restart_chrony_if_needed(ctx, db):
     # YANG validation already restarts chrony through GCU.
     if db.yang_enabled:
         return
+    # docker-sonic-vs supplies PLATFORM and has no systemd-managed NTP service.
+    # Full SONiC VS VMs still need the normal hostcfgd/chrony handling.
+    if os.getenv('PLATFORM') and os.path.isfile('/.dockerenv'):
+        click.echo("NTP configuration updated; skipping service restart in standalone Docker VS.")
+        return
     # Type=simple reports hostcfgd active while it waits for warm/fast boot,
     # before subscribing to NTP changes. Its initial load only seeds the cache.
     if subprocess.call(['systemctl', 'is-active', '--quiet', 'hostcfgd']) == 0:

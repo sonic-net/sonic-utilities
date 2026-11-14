@@ -10775,6 +10775,12 @@ This command displays a list of NTP peers known to the server as well as a summa
 
 This sub-section of commands is used to add or remove the configured NTP servers.
 
+In a standalone `docker-sonic-vs` container, the default validation mode updates
+CONFIG_DB and skips NTP service handling because the image has no systemd-managed
+NTP daemon. The CLI prints `NTP configuration updated; skipping service restart in
+standalone Docker VS.` This does not enable time synchronization inside the
+container. Full SONiC VS virtual machines retain normal service handling.
+
 These commands update CONFIG_DB. With the default validation mode and an active
 `hostcfgd` daemon after warm/fast boot finalization, `hostcfgd` applies the changes
 and restarts chrony asynchronously. If `hostcfgd` is inactive, such as before its
