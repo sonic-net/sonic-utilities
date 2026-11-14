@@ -10777,13 +10777,20 @@ This command is used to add a NTP server IP address to the NTP server list.  Not
 
 - Usage:
   ```
-  config ntp add <ip_address>
+  config ntp add [--association-type <server|pool>] [--iburst|--no-iburst] [--version <3|4>] <ip_address>
   ```
+
+- Options:
+  - `--association-type`: add the address as a `server` (default) or a `pool`.
+  - `--iburst` / `--no-iburst`: enable or disable aggressive polling at startup. If neither is given, iburst is enabled.
+  - `--version`: NTP protocol version to use with this server.
 
 - Example:
   ```
   admin@sonic:~$ sudo config ntp add 9.9.9.9
   NTP server 9.9.9.9 added to configuration
+  admin@sonic:~$ sudo config ntp add --no-iburst 9.9.9.10
+  NTP server 9.9.9.10 added to configuration
   ```
 
 **config ntp delete**

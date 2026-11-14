@@ -9611,7 +9611,8 @@ def _restart_chrony_if_needed(ctx, db):
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
 @click.option('--association-type', type=click.Choice(["server", "pool"], case_sensitive=False), default="server",
               help="Define the association type for this NTP server")
-@click.option('--iburst', is_flag=True, help="Enable iburst for this NTP server")
+@click.option('--iburst/--no-iburst', default=None,
+              help="Enable or disable iburst for this NTP server (default: enabled)")
 @click.option('--version', type=int, help="Specify the version for this NTP server")
 @click.pass_context
 def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
@@ -9630,8 +9631,8 @@ def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
             ntp_server_options['version'] = version
         if association_type != "server":
             ntp_server_options['association_type'] = association_type
-        if iburst:
-            ntp_server_options['iburst'] = "on"
+        if iburst is not None:
+            ntp_server_options['iburst'] = "on" if iburst else "off"
         try:
             db.set_entry('NTP_SERVER', ntp_ip_address, ntp_server_options)
         except ValueError as e:
