@@ -1,0 +1,16 @@
+{
+    "ACL_TABLE|DATAACL": {
+        "policy_desc": "DATAACL",
+        "ports@": "Ethernet0",
+        "stage": "ingress",
+        "type": "L3"
+    },
+    "ACL_RULE|DATAACL|RULE_1": {
+        "PRIORITY": "9999",
+        "PACKET_ACTION": "DROP",
+        "SRC_IP": "10.0.0.2/32"
+    },
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_202611_01"
+    }
+}
