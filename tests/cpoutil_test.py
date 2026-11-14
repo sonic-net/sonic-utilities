@@ -977,7 +977,6 @@ class TestHelperCoverage(object):
                 "Ethernet0": {
                     "Data Path State Indicator": {"lane00": "Active"},
                     "ELS": "ELS0",
-                    "ELS Status": {"module_state": "Ready"},
                     "ELS Lane State": {"lane00": "Active"},
                     "ELS Lasers": [0],
                     "Shared ELS Lasers": [],
@@ -1411,8 +1410,8 @@ class TestOptionalElsApis:
         cpo = cpoutil.CpoBase(None, CoverageFakeEndpoint(CoverageFakeApi()), CoverageFakeEndpoint(els_api))
         self.install(monkeypatch, cpo)
         status = invoke_coverage(["show", "els", "status", "0", "--json"])
-        assert status.exit_code == 0, status.output
-        assert json.loads(status.output) == {"els0": "ModuleReady"}
+        assert status.exit_code != 0
+        assert "ELS get_lpmode is not implemented" in status.output
         result = invoke_coverage(command)
         assert result.exit_code != 0
         assert "not implemented for this platform" in result.output
@@ -1420,7 +1419,6 @@ class TestOptionalElsApis:
 
     @pytest.mark.parametrize("arguments", [
         ["show", "els", "status", "0"],
-        ["show", "interface", "lane-status", "-p", "Ethernet0"],
     ])
     def test_unsupported_els_reads_do_not_change_oe(
             self, coverage_environment, monkeypatch, arguments):
@@ -1437,12 +1435,12 @@ class TestOptionalElsApis:
         assert "has no attribute" not in result.output
         assert oe_api.calls == [] and els_api.calls == []
 
-    def test_els_module_state_read_failure_is_not_reported_as_success(self, coverage_environment):
+    def test_els_status_invalid_low_power_readback_is_not_reported_as_success(self, coverage_environment):
         cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
-        cpo.api.get_module_state = mock.Mock(return_value=None)
+        cpo.get_lpmode = mock.Mock(return_value=None)
         result = invoke_coverage(["show", "els", "status", "0", "--json"])
         assert result.exit_code != 0
-        assert "module state API returned no data" in result.output
+        assert "ELS get_lpmode returned invalid data" in result.output
 
     def test_public_eeprom_uses_the_selected_endpoint(self, coverage_environment, monkeypatch):
         oe = CoverageFakeCpo()
@@ -1736,7 +1734,7 @@ class TestInterfaceElsEepromBank:
 
 
 class TestLaneStatusLaserAssociation:
-    """Each displayed OE lane must show the laser the topology associates with it."""
+    """Display OE lanes and selected ELS lasers in separate tables."""
 
     # Laser states chosen so that any wrong pairing changes the displayed state.
     LASER_STATES = {"LaneState1": "Active", "LaneState2": "Inactive", "LaneState3": "Disabled"}
@@ -1765,16 +1763,45 @@ class TestLaneStatusLaserAssociation:
             "lane{:02d}".format(position): laser for position, laser, _ in self.EXPECTED
         }
 
-    def test_table_shows_the_correct_laser_and_state_in_every_row(self, nonuniform):
+    def test_tables_show_oe_lanes_and_each_selected_laser_once(self, nonuniform):
         result = invoke_coverage(["show", "interface", "lane-status", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         rows = [line.split() for line in result.output.splitlines() if line.startswith("Ethernet0")]
         lane_rows = [row for row in rows if "DataPathActivated" in row]
         assert len(lane_rows) == len(self.EXPECTED)
-        for row, (_, laser, state) in zip(lane_rows, self.EXPECTED):
-            # Columns end with: ELS, Laser, ELS Lane State, Shared
-            assert row[-4:] == ["ELS0", str(laser), state, "No"], row
-        assert "per-lane association unavailable" not in result.output
+        assert all(len(row) == 4 for row in lane_rows)  # Interface, Lane N, state
+        laser_rows = [row for row in rows if row[1] == "ELS0"]
+        assert laser_rows == [
+            ["Ethernet0", "ELS0", "0", "Active", "No"],
+            ["Ethernet0", "ELS0", "1", "Inactive", "No"],
+            ["Ethernet0", "ELS0", "2", "Disabled", "No"],
+        ]
+        assert result.output.count("OE datapath state:") == 1
+        assert result.output.count("ELS lane state:") == 1
+        assert "ELS status:" not in result.output
+
+    @pytest.mark.parametrize("json_output", [False, True])
+    @pytest.mark.parametrize("module_status", ["absent", "raises"])
+    def test_module_status_api_is_not_required(self, nonuniform, monkeypatch, json_output, module_status):
+        # A platform can implement lane-state reads without the module aggregate.
+        api = nonuniform.api
+        if module_status == "absent":
+            monkeypatch.delattr(type(api), "get_elsfp_status")
+        else:
+            monkeypatch.setattr(api, "get_elsfp_status", mock.Mock(
+                side_effect=AssertionError("Unexpected ELS module status read")))
+        arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+        if json_output:
+            arguments.append("--json")
+        result = invoke_coverage(arguments)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert "ELS Status" not in record
+            assert record["ELS Lane State"] == {"lane00": "Active", "lane01": "Inactive", "lane02": "Disabled"}
+        else:
+            assert "ELS lane state:" in result.output
+            assert "Status field" not in result.output
 
     def test_asic_lane_ids_differ_from_lane_positions(self, monkeypatch, coverage_environment):
         data = TestExplicitLaserMapping.nonuniform_topology()
@@ -1799,9 +1826,14 @@ class TestLaneStatusLaserAssociation:
         assert table.exit_code == 0, table.output
         lane_rows = [line.split() for line in table.output.splitlines()
                      if line.startswith("Ethernet0") and "DataPathActivated" in line]
-        assert lane_rows and all(row[-3:] == ["N/A", "N/A", "N/A"] for row in lane_rows)
-        assert "per-lane association unavailable" in table.output
-        assert "0: Active, 1: Inactive" in table.output
+        assert len(lane_rows) == 2
+        assert all(len(row) == 4 for row in lane_rows)
+        laser_rows = [line.split() for line in table.output.splitlines()
+                      if line.startswith("Ethernet0") and "ELS0" in line]
+        assert laser_rows == [
+            ["Ethernet0", "ELS0", "0", "Active", "No"],
+            ["Ethernet0", "ELS0", "1", "Inactive", "No"],
+        ]
 
 
 class TestBreakoutWithoutLaneMapping:
@@ -1848,7 +1880,7 @@ class TestBreakoutWithoutLaneMapping:
         lane_rows = [line.split() for line in table.output.splitlines()
                      if line.startswith("Ethernet") and "DataPathActivated" in line]
         assert [row[0] for row in lane_rows] == ["Ethernet0", "Ethernet1"]
-        assert all(row[-3:] == ["N/A", "N/A", "N/A"] for row in lane_rows)
+        assert all(len(row) == 4 for row in lane_rows)
         assert table.output.count(cpoutil.UNRESOLVED_LASERS) == 2
 
     def test_full_port_on_same_topology_still_resolves_lasers(self, coverage_environment, monkeypatch):
@@ -2369,15 +2401,17 @@ def test_els_public_threshold_heading_and_vendor_extensions():
     ("oe", "oe", "OE"), ("els", "elsfp", "ELS"),
 ])
 @pytest.mark.parametrize("low_power", [True, False])
+@pytest.mark.parametrize("status_alias", [False, True])
 def test_endpoint_lpmode_query_uses_platform_hook(
-        coverage_environment, monkeypatch, resource, selected_name, label, low_power):
+        coverage_environment, monkeypatch, resource, selected_name, label, low_power, status_alias):
     endpoints = {name: mock.Mock() for name in ("oe", "elsfp")}
     for name, endpoint in endpoints.items():
         endpoint.get_lpmode.return_value = low_power if name == selected_name else not low_power
         endpoint.get_api.side_effect = AssertionError("CLI must not bypass the endpoint hook")
     cpo = cpoutil.CpoBase(None, endpoints["oe"], endpoints["elsfp"])
     monkeypatch.setitem(cpoutil.cpo_object_map[resource], resource + "0", cpo)
-    result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
+    command = "status" if resource == "els" and status_alias else "lpmode"
+    result = invoke_coverage(["show", resource, command, "0", "--json"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {resource + "0": low_power}
     endpoints[selected_name].get_lpmode.assert_called_once_with()

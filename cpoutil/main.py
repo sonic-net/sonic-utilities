@@ -36,7 +36,6 @@ from cpoutil.helper import (
     CPO_DOM_VALUE_UNIT_MAP,
     CPO_DOM_MODULE_THRESHOLD_UNIT_MAP,
     ELS_DOM_MONITOR_MAP,
-    ELS_STATUS_FIELD_MAP,
     ELS_THRESHOLD_MAP,
     ELS_DOM_MONITOR_UNIT_MAP,
     ELS_THRESHOLD_UNIT_MAP,
@@ -935,77 +934,50 @@ def print_lane_status_records(records, json_output):
         return
 
     lane_rows = []
-    status_rows = []
+    laser_rows = []
     for interface, values in records.items():
         lane_states = values.get("Data Path State Indicator", {})
-        lanes = sorted(lane_states, key=_natural_sort_key)
         lasers = values.get("ELS Lasers", [])
-        lane_lasers = values.get("Lane Lasers", {})
         els_lane_states = values.get("ELS Lane State", {})
         shared = set(values.get("Shared ELS Lasers", []))
         els_id = values.get("ELS", "N/A")
-        for lane in lanes:
-            # Use only the topology's lane-to-laser association; never infer
-            # it from row positions.
-            laser = lane_lasers.get(lane)
-            if laser is None:
-                laser_display, laser_state, shared_display = "N/A", "N/A", "N/A"
-            else:
-                laser_display = laser
-                laser_state = els_lane_states.get("lane{:02d}".format(laser), "N/A")
-                shared_display = "Yes" if laser in shared else "No"
+        oe_error = values.get("OE Datapath State Error")
+        els_error = values.get("ELS Lane State Error")
+        if oe_error:
+            lane_rows.append((interface, "N/A", oe_error))
+        for lane in sorted(lane_states, key=_natural_sort_key):
             lane_rows.append((
                 interface,
                 _display_field(lane),
                 lane_states[lane],
-                els_id,
-                laser_display,
-                laser_state,
-                shared_display,
-            ))
-        if lasers is None:
-            status_rows.append((interface, els_id, "Lasers", UNRESOLVED_LASERS))
-        elif lasers and any(lane_lasers.get(lane) is None for lane in lanes):
-            status_rows.append((
-                interface, els_id, "Lasers (per-lane association unavailable)",
-                ", ".join(
-                    "{}: {}".format(laser, els_lane_states.get("lane{:02d}".format(laser), "N/A"))
-                    for laser in lasers
-                ),
             ))
 
-        status = values.get("ELS Status")
-        if isinstance(status, dict):
-            for field in sorted(status, key=_natural_sort_key):
-                status_rows.append((
-                    interface,
-                    els_id,
-                    ELS_STATUS_FIELD_MAP.get(field, field),
-                    _display_value(status[field]),
+        # ELS lasers and OE lanes are separate resources. Display each selected
+        # laser once per interface, without guessing a lane-to-laser pairing.
+        if els_error:
+            laser_rows.append((interface, els_id, "N/A", els_error, "N/A"))
+        elif lasers is None:
+            laser_rows.append((interface, els_id, UNRESOLVED_LASERS, "N/A", "N/A"))
+        else:
+            for laser in sorted(lasers):
+                laser_rows.append((
+                    interface, els_id, laser,
+                    els_lane_states.get("lane{:02d}".format(laser), "N/A"),
+                    "Yes" if laser in shared else "No",
                 ))
-        elif status is not None:
-            status_rows.append((interface, els_id, "Status", status))
 
+    click.echo("OE datapath state:")
     click.echo(tabulate(
         lane_rows,
-        (
-            "Interface",
-            "Lane",
-            "Data Path State",
-            "ELS",
-            "Laser",
-            "ELS Lane State",
-            "Shared",
-        ),
+        ("Interface", "Lane", "Data Path State"),
         tablefmt="simple",
     ))
-    if status_rows:
-        click.echo("\nELS status:")
-        click.echo(tabulate(
-            status_rows,
-            ("Interface", "ELS", "Status field", "Value"),
-            tablefmt="simple",
-        ))
+    click.echo("\nELS lane state:")
+    click.echo(tabulate(
+        laser_rows,
+        ("Interface", "ELS", "Laser", "ELS Lane State", "Shared"),
+        tablefmt="simple",
+    ))
 
 
 def output_option(function):
@@ -1282,39 +1254,45 @@ def show_interface_speed_application(port, json_output):
               help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_lane_status(port, json_output):
-    """Display OE datapath and ELS status."""
+    """Display OE datapath state and ELS lane state."""
     records = {}
     try:
         with _eeprom_read_snapshot() as attach_snapshot:
             for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-                oe_api = get_oe_api(cpo, port_name)
-                els_api = get_els_api(cpo, port_name)
-                attach_snapshot(cpo.oe, oe_api)
-                attach_snapshot(cpo.elsfp, els_api)
                 context = cpo_mapping.interface_context(logical_port, current_port_config, require_lasers=False)
                 laser_ids = context["laser_ids"]
-                els_status = els_api.get_elsfp_status()
-                if not isinstance(els_status, dict) or not els_status:
-                    raise CpoCommandError(
-                        "ELSFP status API returned no usable data for '{}'".format(port_name)
-                    )
-                records[port_name] = {
-                    "Data Path State Indicator": _select_lane_values(
-                        oe_api.get_datapath_state(), context["lane_positions"]
-                    ),
+                record = {
+                    "Data Path State Indicator": {},
                     "ELS": context["mapping"].els_name.upper(),
-                    "ELS Status": els_status,
-                    "ELS Lane State": _select_els_laser_values(
-                        els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
-                    ) if laser_ids is not None else {},
+                    "ELS Lane State": {},
                     "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
                     "Lane Lasers": _lane_lasers(context),
                     "Shared ELS Lasers": list(context["shared_laser_ids"]),
                 }
-    except (NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(
-            "This functionality is not implemented: {}".format(exc)
-        )
+                try:
+                    oe_api = get_oe_api(cpo, port_name)
+                    attach_snapshot(cpo.oe, oe_api)
+                    record["Data Path State Indicator"] = _select_lane_values(
+                        oe_api.get_datapath_state(), context["lane_positions"]
+                    )
+                except (NotImplementedError, AttributeError, CpoCommandError) as exc:
+                    if isinstance(exc, CpoCommandError) and not isinstance(
+                            exc.__cause__, (NotImplementedError, AttributeError)):
+                        raise
+                    record["OE Datapath State Error"] = "Not supported"
+                if laser_ids is not None:
+                    try:
+                        els_api = get_els_api(cpo, port_name)
+                        attach_snapshot(cpo.elsfp, els_api)
+                        record["ELS Lane State"] = _select_els_laser_values(
+                            els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
+                        )
+                    except (NotImplementedError, AttributeError, CpoCommandError) as exc:
+                        if isinstance(exc, CpoCommandError) and not isinstance(
+                                exc.__cause__, (NotImplementedError, AttributeError)):
+                            raise
+                        record["ELS Lane State Error"] = "Not supported"
+                records[port_name] = record
     except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     print_lane_status_records(records, json_output)
@@ -1418,26 +1396,8 @@ def show_els_lpmode(els_index, json_output):
     )
 
 
-@show_els.command("status")
-@click.argument("els_index", required=False)
-@output_option
-def show_els_status(els_index, json_output):
-    """Display the independent ELS module state."""
-    records = {}
-    try:
-        for resource_id, cpo in get_resource_cpo_objects(
-                EXTERNAL_LASER_SOURCE, els_index):
-            state = get_els_api(cpo, resource_id).get_module_state()
-            if state is None:
-                raise CpoCommandError("The ELSFP module state API returned no data")
-            records[resource_id] = state
-    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(str(exc))
-    print_records(
-        records,
-        json_output,
-        ("ELS", "Status"),
-    )
+# Status is an alias of the endpoint low-power query.
+show_els.add_command(show_els_lpmode, name="status")
 
 
 @show_els.command("temperature")
