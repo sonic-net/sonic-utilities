@@ -1,3 +1,5 @@
+import os
+
 import click
 import utilities_common.cli as clicommon
 import utilities_common.dhcp_relay_util as dhcp_relay_util
@@ -259,44 +261,55 @@ def del_vlan(ctx, vid, multiple, no_restart_dhcp_relay):
 
     vlans = db.cfgdb.get_keys('VLAN')
     if not vlans:
-        docker_exec_cmd = ['docker', 'exec', '-i', 'swss']
+        ndppd_cmd_prefix = get_ndppd_command_prefix()
         _, rc = clicommon.run_command(
-            docker_exec_cmd + ['supervisorctl', 'status', 'ndppd'], ignore_error=True, return_cmd=True)
+            ndppd_cmd_prefix + ['supervisorctl', 'status', 'ndppd'], ignore_error=True, return_cmd=True)
         if rc == 0:
             click.echo("No VLANs remaining, stopping ndppd service")
             clicommon.run_command(
-                docker_exec_cmd + ['supervisorctl', 'stop', 'ndppd'], ignore_error=True, return_cmd=True)
+                ndppd_cmd_prefix + ['supervisorctl', 'stop', 'ndppd'], ignore_error=True, return_cmd=True)
             clicommon.run_command(
-                docker_exec_cmd + ['rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'], ignore_error=True, return_cmd=True)
-            clicommon.run_command(docker_exec_cmd + ['supervisorctl', 'update'], return_cmd=True)
+                ndppd_cmd_prefix + ['rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'],
+                ignore_error=True, return_cmd=True)
+            clicommon.run_command(ndppd_cmd_prefix + ['supervisorctl', 'update'], return_cmd=True)
+
+
+def get_ndppd_command_prefix():
+    """Run ndppd commands locally in the standalone VS container, or in swss."""
+    # docker-sonic-vs supplies PLATFORM and runs all services in one container.
+    # A full SONiC VS VM still has a separate swss container and must use Docker.
+    if os.getenv('PLATFORM') and os.path.isfile('/.dockerenv'):
+        return []
+    return ['docker', 'exec', '-i', 'swss']
 
 
 def restart_ndppd():
-    verify_swss_running_cmd = ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', 'swss']
-    docker_exec_cmd = ['docker', 'exec', '-i', 'swss']
+    ndppd_cmd_prefix = get_ndppd_command_prefix()
     ndppd_config_gen_cmd = ['sonic-cfggen', '-d', '-t', '/usr/share/sonic/templates/ndppd.conf.j2,/etc/ndppd.conf']
     ndppd_restart_cmd = ['supervisorctl', 'restart', 'ndppd']
     ndppd_status_cmd = ["supervisorctl", "status", "ndppd"]
     ndppd_conf_copy_cmd = ['cp', '/usr/share/sonic/templates/ndppd.conf', '/etc/supervisor/conf.d/']
     supervisor_update_cmd = ['supervisorctl', 'update']
 
-    output, _ = clicommon.run_command(verify_swss_running_cmd, return_cmd=True)
+    if ndppd_cmd_prefix:
+        verify_swss_running_cmd = ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', 'swss']
+        output, _ = clicommon.run_command(verify_swss_running_cmd, return_cmd=True)
 
-    if output and output.strip() != "running":
-        click.echo(click.style('SWSS container is not running, '
-                               'changes will take effect the next time the SWSS container starts', fg='red'),)
-        return
+        if output and output.strip() != "running":
+            click.echo(click.style('SWSS container is not running, '
+                                   'changes will take effect the next time the SWSS container starts', fg='red'),)
+            return
 
-    _, rc = clicommon.run_command(docker_exec_cmd + ndppd_status_cmd, ignore_error=True, return_cmd=True)
+    _, rc = clicommon.run_command(ndppd_cmd_prefix + ndppd_status_cmd, ignore_error=True, return_cmd=True)
 
     if rc != 0:
-        clicommon.run_command(docker_exec_cmd + ndppd_conf_copy_cmd)
-        clicommon.run_command(docker_exec_cmd + supervisor_update_cmd, return_cmd=True)
+        clicommon.run_command(ndppd_cmd_prefix + ndppd_conf_copy_cmd)
+        clicommon.run_command(ndppd_cmd_prefix + supervisor_update_cmd, return_cmd=True)
 
     click.echo("Starting ndppd service")
-    clicommon.run_command(docker_exec_cmd + ndppd_config_gen_cmd)
+    clicommon.run_command(ndppd_cmd_prefix + ndppd_config_gen_cmd)
     sleep(3)
-    clicommon.run_command(docker_exec_cmd + ndppd_restart_cmd, return_cmd=True)
+    clicommon.run_command(ndppd_cmd_prefix + ndppd_restart_cmd, return_cmd=True)
 
 
 @vlan.command('proxy_arp')

@@ -14638,6 +14638,12 @@ This command is to add or delete a member port into multiple already created vla
 
 This command is used to enable or disable proxy ARP for a VLAN interface
 
+On a standalone `docker-sonic-vs` instance, ndppd is managed by the local
+supervisord rather than a separate `swss` container. Proxy ARP requires the ndppd
+binary and SONiC ndppd templates to be installed in that image. Deleting the last
+VLAN stops and unregisters ndppd if it is running; an image without a registered
+ndppd service can still delete VLANs.
+
 - Usage:
   ```
   config vlan [-n <namespace>] proxy_arp <vlan_id> enabled/disabled
