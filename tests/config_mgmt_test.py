@@ -129,7 +129,10 @@ class TestConfigMgmt(TestCase):
             ['00:11:22:BB:CC:DD', '00:11:22:bb:cc:dd']
 
         # verify correct function call to writeConfigDB
-        assert cmdpb.writeConfigDB.call_count == 3
+        # breakout of Ethernet0-3 removes ACL/VLAN_MEMBER dependencies, which are
+        # now pushed as a separate update before the port deletion:
+        # shutdown, dependency deletion, port deletion and port addition.
+        assert cmdpb.writeConfigDB.call_count == 4
         print(cmdpb.writeConfigDB.call_args_list[0])
         # args is populated if call is done as writeConfigDB(a, b), kwargs is
         # populated if call is done as writeConfigDB(A=a, B=b)
@@ -141,6 +144,95 @@ class TestConfigMgmt(TestCase):
         # Make sure no DEVICE_METADATA in the args to func
         assert "DEVICE_METADATA" not in args
 
+        return
+
+    def _firstArg(self, call):
+        '''
+        Return the first positional argument of a mock call.
+        '''
+        (args, kwargs) = call
+        if isinstance(args, tuple):
+            args = args[0]
+        return args
+
+    def test_dpb_deletes_deps_before_ports(self):
+        '''
+        For a port with dependencies (e.g. a PortChannel/VLAN member), breakout
+        must push the dependency deletions to Config DB first, and the port
+        deletions as a separate update afterwards, so that orchagent reliably
+        removes the port from ASIC DB.
+        '''
+        curConfig = deepcopy(configDbJson)
+        cmdpb = self.config_mgmt_dpb(curConfig)
+        dPorts = ['Ethernet0', 'Ethernet1', 'Ethernet2', 'Ethernet3']
+
+        # delete diff that carries both dependency tables and the PORT deletions
+        delConfig = {
+            'VLAN_MEMBER': {'Vlan100|Ethernet0': None, 'Vlan100|Ethernet2': None},
+            'ACL_TABLE': {
+                'NO-NSW-PACL-V4': {
+                    'ports': ['Ethernet4', 'Ethernet8', 'Ethernet10']
+                }
+            },
+            'PORT': {port: None for port in dPorts}
+        }
+        addConfig = {'PORT': {'Ethernet0': {'speed': '50000', 'lanes': '65,66'}}}
+
+        cmdpb._deletePorts = mock.MagicMock(return_value=(delConfig, None, True))
+        cmdpb._addPorts = mock.MagicMock(return_value=(addConfig, True))
+        # isolate the delete/add writes from the shutdown write
+        cmdpb._shutdownIntf = mock.MagicMock(return_value=None)
+
+        deps, ret = cmdpb.breakOutPort(delPorts=dPorts, portJson={'PORT': {}},
+                                       force=True, loadDefConfig=False)
+        assert ret is True
+
+        # Expect three writes: dependency deletion, port deletion, port addition
+        assert cmdpb.writeConfigDB.call_count == 3
+        depArgs = self._firstArg(cmdpb.writeConfigDB.call_args_list[0])
+        portArgs = self._firstArg(cmdpb.writeConfigDB.call_args_list[1])
+        addArgs = self._firstArg(cmdpb.writeConfigDB.call_args_list[2])
+
+        # dependencies are pushed first, without touching the PORT table
+        assert 'PORT' not in depArgs
+        assert depArgs == {
+            'VLAN_MEMBER': {'Vlan100|Ethernet0': None, 'Vlan100|Ethernet2': None},
+            'ACL_TABLE': {
+                'NO-NSW-PACL-V4': {
+                    'ports': ['Ethernet4', 'Ethernet8', 'Ethernet10']
+                }
+            }
+        }
+        # then the port deletions are pushed as a separate update
+        assert portArgs == {'PORT': {port: None for port in dPorts}}
+        # and finally the port additions
+        assert addArgs == addConfig
+        return
+
+    def test_dpb_no_deps_single_delete_write(self):
+        '''
+        For a port without dependencies, breakout must not add an extra update:
+        the port deletion is pushed to Config DB in a single write.
+        '''
+        curConfig = deepcopy(configDbJson)
+        cmdpb = self.config_mgmt_dpb(curConfig)
+        dPorts = ['Ethernet4', 'Ethernet5', 'Ethernet6', 'Ethernet7']
+
+        delConfig = {'PORT': {port: None for port in dPorts}}
+        addConfig = {'PORT': {'Ethernet4': {'speed': '50000', 'lanes': '69,70'}}}
+
+        cmdpb._deletePorts = mock.MagicMock(return_value=(delConfig, None, True))
+        cmdpb._addPorts = mock.MagicMock(return_value=(addConfig, True))
+        cmdpb._shutdownIntf = mock.MagicMock(return_value=None)
+
+        deps, ret = cmdpb.breakOutPort(delPorts=dPorts, portJson={'PORT': {}},
+                                       force=True, loadDefConfig=False)
+        assert ret is True
+
+        # Only two writes: the single port deletion and the port addition
+        assert cmdpb.writeConfigDB.call_count == 2
+        assert self._firstArg(cmdpb.writeConfigDB.call_args_list[0]) == delConfig
+        assert self._firstArg(cmdpb.writeConfigDB.call_args_list[1]) == addConfig
         return
 
     @pytest.mark.skip(reason="not stable")
