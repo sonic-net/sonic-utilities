@@ -2245,29 +2245,66 @@ class DfsSorter:
             return None
         self.visited[diff_hash] = True
 
-        moves = self.move_wrapper.generate(diff)
+        # Each frame contains its move iterator, current diff, trace parent,
+        # and the trace item selected in the parent frame. This preserves DFS
+        # order without relying on the Python call stack for large patches.
+        stack = [
+            (iter(self.move_wrapper.generate(diff)), diff, path_tracker, None)
+        ]
+        selected_moves = []
 
-        for move in moves:
+        while stack:
+            (
+                moves,
+                current_diff,
+                current_path_tracker,
+                incoming_path_item,
+            ) = stack[-1]
+            try:
+                move = next(moves)
+            except StopIteration:
+                stack.pop()
+                if stack:
+                    selected_moves.pop()
+                if incoming_path_item is not None:
+                    if len(incoming_path_item.children):
+                        incoming_path_item.status = PatchStatus.PATH_ISSUE
+                    else:
+                        incoming_path_item.status = PatchStatus.RECURSE_REJECT
+                continue
+
             path_item = None
-            if path_tracker is not None:
-                path_item = path_tracker.append(move)
+            if current_path_tracker is not None:
+                path_item = current_path_tracker.append(move)
 
-            success, errmsg = self.move_wrapper.validate(move, diff)
+            success, errmsg = self.move_wrapper.validate(move, current_diff)
             if success:
-                # NOTE: due to the recursive nature, we can't modify in-place as on error we will
-                #       receive "RuntimeError: dictionary changed size during iteration"
-                new_diff = self.move_wrapper.simulate(move, diff, in_place=False)
-                new_moves = self.sort(new_diff, path_item)
-                if new_moves is not None:
+                # Do not modify in-place because failed paths must leave the
+                # current diff available for subsequent moves.
+                new_diff = self.move_wrapper.simulate(
+                    move, current_diff, in_place=False
+                )
+                if new_diff.has_no_diff():
                     if path_item is not None:
                         path_item.status = PatchStatus.VALID
-                    return [move] + new_moves
-                else:
+                        for _, _, _, ancestor_path_item in stack:
+                            if ancestor_path_item is not None:
+                                ancestor_path_item.status = PatchStatus.VALID
+                    return selected_moves + [move]
+
+                new_diff_hash = hash(new_diff)
+                if new_diff_hash in self.visited:
                     if path_item is not None:
-                        if len(path_item.children):
-                            path_item.status = PatchStatus.PATH_ISSUE
-                        else:
-                            path_item.status = PatchStatus.RECURSE_REJECT
+                        path_item.status = PatchStatus.RECURSE_REJECT
+                    continue
+                self.visited[new_diff_hash] = True
+                selected_moves.append(move)
+                stack.append((
+                    iter(self.move_wrapper.generate(new_diff)),
+                    new_diff,
+                    path_item,
+                    path_item,
+                ))
             else:
                 if path_item is not None:
                     path_item.status = PatchStatus.INVALID
