@@ -618,19 +618,6 @@ class DBMigrator():
         if not certs:
             self.configDB.set_entry("RESTAPI", "certs", restapi_data.get("certs"))
 
-    def migrate_telemetry(self):
-        # TELEMETRY - add missing key
-        if not self.config_src_data or 'TELEMETRY' not in self.config_src_data:
-            return
-        telemetry_data = self.config_src_data['TELEMETRY']
-        log.log_notice('Migrate TELEMETRY configuration')
-        gnmi = self.configDB.get_entry('TELEMETRY', 'gnmi')
-        if not gnmi:
-            self.configDB.set_entry("TELEMETRY", "gnmi", telemetry_data.get("gnmi"))
-        certs = self.configDB.get_entry('TELEMETRY', 'certs')
-        if not certs:
-            self.configDB.set_entry("TELEMETRY", "certs", telemetry_data.get("certs"))
-
     def migrate_gnmi(self):
         # If there's GNMI table in CONFIG_DB, no need to migrate
         gnmi = self.configDB.get_entry('GNMI', 'gnmi')
@@ -646,14 +633,18 @@ class DBMigrator():
                     self.configDB.set_entry("GNMI", "gnmi", gnmi_data.get('gnmi'))
                 if 'certs' in gnmi_data:
                     self.configDB.set_entry("GNMI", "certs", gnmi_data.get('certs'))
-        else:
-            # If there's no minigraph or golden config, copy configuration from CONFIG_DB TELEMETRY table
-            gnmi = self.configDB.get_entry('TELEMETRY', 'gnmi')
-            if gnmi:
-                self.configDB.set_entry("GNMI", "gnmi", gnmi)
-            certs = self.configDB.get_entry('TELEMETRY', 'certs')
-            if certs:
-                self.configDB.set_entry("GNMI", "certs", certs)
+
+    def migrate_telemetry_to_gnmi(self):
+        # The telemetry container is gone; carry its TELEMETRY config over to GNMI
+        # so gnmi keeps serving TLS with client auth, then remove the stale entries.
+        for key, value in self.configDB.get_table('TELEMETRY').items():
+            if key in ('gnmi', 'certs') and not self.configDB.get_entry('GNMI', key):
+                log.log_notice('Migrate TELEMETRY|{} to GNMI|{}'.format(key, key))
+                self.configDB.set_entry('GNMI', key, value)
+            self.configDB.set_entry('TELEMETRY', key, None)
+        if self.configDB.get_entry('FEATURE', 'telemetry'):
+            log.log_notice('Remove FEATURE|telemetry')
+            self.configDB.set_entry('FEATURE', 'telemetry', None)
 
     def migrate_console_switch(self):
         # CONSOLE_SWITCH - add missing key
@@ -1117,7 +1108,6 @@ class DBMigrator():
         log.log_info('Handling version_2_0_1')
         self.migrate_vxlan_config()
         self.migrate_restapi()
-        self.migrate_telemetry()
         self.migrate_console_switch()
         self.migrate_device_metadata()
 
@@ -1472,6 +1462,8 @@ class DBMigrator():
                 # in new_config, but not override existing configuration.
                 new_cfg = {**init_cfg, **curr_cfg}
                 self.configDB.set_entry(init_cfg_table, key, new_cfg)
+
+        self.migrate_telemetry_to_gnmi()
 
         # Avoiding copp table migration is platform specific at the moment as I understood this might cause issues for some
         # vendors, probably Broadcom. This change can be checked with any specific vendor and if this works fine the platform
