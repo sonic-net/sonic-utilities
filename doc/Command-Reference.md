@@ -5557,7 +5557,7 @@ Shows the config of given feature or all if no feature is given. The "fallback" 
   bgp             enabled   enabled        local
   database        enabled   disabled       local
   dhcp_relay      enabled   enabled        kube
-  gnmi            enabled   enabled        local
+  gnmi            enabled   enabled        kube
   lldp            enabled   enabled        kube     true
   mgmt-framework  enabled   enabled        local
   nat             disabled  enabled        local
@@ -5588,7 +5588,7 @@ The subset of features are configurable for remote management and only those rep
   bgp             enabled   enabled        up                                                                     local       local           none
   database        enabled   disabled                                                                              local
   dhcp_relay      enabled   enabled        up             2020-11-15 18:21:09  249e70102f55   20201230.100        kube        local
-  gnmi            enabled   enabled        up                                                                     local       local           none
+  gnmi            enabled   enabled        down           2020-11-15 18:24:59                 20201230.100        kube        none
   lldp            enabled   enabled        up             2020-11-15 18:21:09  779c2d55ee12   20201230.100        kube        local
   mgmt-framework  enabled   enabled        up                                                                     local       local           none
   nat             disabled  enabled                                                                               local
