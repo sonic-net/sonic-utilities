@@ -1,4 +1,74 @@
 {
+    "PFC_WD_STORM_HISTORY|Ethernet0|3": {
+        "last_storm": "1",
+        "storm_1_detected": "1761017629123456"
+    },
+    "PFC_WD_STORM_HISTORY|Ethernet4|3": {
+        "last_storm": "2",
+        "storm_1_detected": "1761010000000000",
+        "storm_1_restored": "1761010000475000",
+        "storm_1_duration_ms": "475",
+        "storm_1_tx_packets": "1200",
+        "storm_1_tx_dropped": "1200",
+        "storm_1_rx_packets": "980",
+        "storm_1_rx_dropped": "980",
+        "storm_2_detected": "1761013600000000",
+        "storm_2_restored": "1761013600100000"
+    },
+    "PFC_WD_STORM_HISTORY|Ethernet8|4": {
+        "last_storm": "10",
+        "storm_1_detected": "1761005400000000",
+        "storm_1_restored": "1761005400200000",
+        "storm_1_duration_ms": "200",
+        "storm_1_tx_packets": "10",
+        "storm_1_tx_dropped": "10",
+        "storm_1_rx_packets": "5",
+        "storm_1_rx_dropped": "5",
+        "storm_2_detected": "1761007800000000",
+        "storm_2_restored": "1761007800300000",
+        "storm_2_duration_ms": "300",
+        "storm_2_tx_packets": "20",
+        "storm_2_tx_dropped": "20",
+        "storm_2_rx_packets": "10",
+        "storm_2_rx_dropped": "10",
+        "storm_3_detected": "1761011000000000",
+        "storm_3_restored": "1761011000150000",
+        "storm_3_duration_ms": "150",
+        "storm_3_tx_packets": "100",
+        "storm_3_tx_dropped": "100",
+        "storm_3_rx_packets": "50",
+        "storm_3_rx_dropped": "50",
+        "storm_4_detected": "1761012000000000",
+        "storm_4_restored": "1761012000120000",
+        "storm_4_duration_ms": "120",
+        "storm_4_tx_packets": "80",
+        "storm_4_tx_dropped": "80",
+        "storm_4_rx_packets": "40",
+        "storm_4_rx_dropped": "40",
+        "storm_9_restored": "1761022800000000",
+        "storm_10_detected": "abc",
+        "storm_x_detected": "1761026400000000"
+    },
+    "PFC_WD_STORM_HISTORY|Ethernet8|3": {
+        "last_storm": "2",
+        "storm_1_detected": "1760994000000000",
+        "storm_1_restored": "1760994000250000",
+        "storm_1_duration_ms": "250",
+        "storm_1_tx_packets": "30",
+        "storm_1_tx_dropped": "30",
+        "storm_1_rx_packets": "15",
+        "storm_1_rx_dropped": "15",
+        "storm_2_detected": "1760997600000000",
+        "storm_2_interrupted": "1760998032000000"
+    },
+    "PFC_WD_STORM_HISTORY|Ethernet999|3": {
+        "last_storm": "1",
+        "storm_1_detected": "1761030000000000"
+    },
+    "PFC_WD_STORM_HISTORY|garbage": {
+        "last_storm": "1",
+        "storm_1_detected": "1761031800000000"
+    },
     "TRANSCEIVER_INFO|Ethernet0": {
         "type": "QSFP28 or later",
         "vendor_rev": "AC",
