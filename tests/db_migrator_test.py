@@ -870,14 +870,26 @@ class TestGNMIMigrator(object):
         diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
         assert not diff
 
-    def test_dns_nameserver_migrator_configdb(self):
-        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-input')
+    @pytest.mark.parametrize('input_db, expected_db_name', [
+        ('gnmi-input', 'gnmi-configdb-expected'),
+        ('gnmi-existing-input', 'gnmi-existing-expected'),
+        ('gnmi-empty-input', 'gnmi-empty-expected'),
+    ])
+    def test_telemetry_to_gnmi_migrator(self, input_db, expected_db_name):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', input_db)
         import db_migrator
         dbmgtr = db_migrator.DBMigrator(None)
-        # Set config_src_data
         dbmgtr.config_src_data = {}
         dbmgtr.migrate()
-        assert not dbmgtr.configDB.get_table("GNMI")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', expected_db_name)
+        expected_db = Db()
+        resulting_table = dbmgtr.configDB.get_table("GNMI")
+        expected_table = expected_db.cfgdb.get_table("GNMI")
+
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
+        assert not dbmgtr.configDB.get_table("TELEMETRY")
+        assert not dbmgtr.configDB.get_entry("FEATURE", "telemetry")
 
 class TestAAAMigrator(object):
 

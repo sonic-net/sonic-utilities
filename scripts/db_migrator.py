@@ -634,6 +634,18 @@ class DBMigrator():
                 if 'certs' in gnmi_data:
                     self.configDB.set_entry("GNMI", "certs", gnmi_data.get('certs'))
 
+    def migrate_telemetry_to_gnmi(self):
+        # The telemetry container is gone; carry its TELEMETRY config over to GNMI
+        # so gnmi keeps serving TLS with client auth, then remove the stale entries.
+        for key, value in self.configDB.get_table('TELEMETRY').items():
+            if key in ('gnmi', 'certs') and not self.configDB.get_entry('GNMI', key):
+                log.log_notice('Migrate TELEMETRY|{} to GNMI|{}'.format(key, key))
+                self.configDB.set_entry('GNMI', key, value)
+            self.configDB.set_entry('TELEMETRY', key, None)
+        if self.configDB.get_entry('FEATURE', 'telemetry'):
+            log.log_notice('Remove FEATURE|telemetry')
+            self.configDB.set_entry('FEATURE', 'telemetry', None)
+
     def migrate_console_switch(self):
         # CONSOLE_SWITCH - add missing key
         if not self.config_src_data or 'CONSOLE_SWITCH' not in self.config_src_data:
@@ -1450,6 +1462,8 @@ class DBMigrator():
                 # in new_config, but not override existing configuration.
                 new_cfg = {**init_cfg, **curr_cfg}
                 self.configDB.set_entry(init_cfg_table, key, new_cfg)
+
+        self.migrate_telemetry_to_gnmi()
 
         # Avoiding copp table migration is platform specific at the moment as I understood this might cause issues for some
         # vendors, probably Broadcom. This change can be checked with any specific vendor and if this works fine the platform

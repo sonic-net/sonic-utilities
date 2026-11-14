@@ -9,6 +9,10 @@
         "ca_crt": "/etc/sonic/telemetry/dsmsroot.cer", 
         "server_crt": "/etc/sonic/telemetry/streamingtelemetryserver.cer"
     },
+    "FEATURE|telemetry": {
+        "state": "enabled",
+        "auto_restart": "enabled"
+    },
     "VERSIONS|DATABASE": {
         "VERSION": "version_202311_01"
     }
