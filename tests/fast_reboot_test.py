@@ -73,6 +73,7 @@ probe_teamd_retry_count() { echo probe; }
 pause_orchagent() { echo pause; }
 increase_teamd_retry_count() { echo increase; return "$INCREASE_STATUS"; }
 filter_routes() { echo filter; }
+mark_shutdown_in_progress() { :; }
 start_lag_keepalive() { echo keepalive; return "$KEEPALIVE_STATUS"; }
 ''' + sequence + '\necho shutdown\n'
     env = dict(os.environ, REBOOT_TYPE=reboot_type, NUM_ASIC="1",
