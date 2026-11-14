@@ -37,7 +37,8 @@ from collections import OrderedDict
 from tabulate import tabulate
 from lxml import etree as ET
 from lxml.etree import QName
-from sonic_py_common.general import check_output_pipe
+
+from utilities_common import constants
 
 minigraph_ns = "Microsoft.Search.Autopilot.Evolution"
 minigraph_ns1 = "http://schemas.datacontract.org/2004/07/Microsoft.Search.Autopilot.Evolution"
@@ -336,6 +337,7 @@ class SkuCreate(object):
         f_in = open(new_file, 'r')
 
         idx = 1
+        has_speed = "speed" in f_in.readline().split()
         for line in f_in.readlines():
             line.strip()
             if len(line.rstrip()) == 0:
@@ -346,8 +348,8 @@ class SkuCreate(object):
  
             line = line.lstrip()
             line_arr = line.split()
-            if len(line_arr) == 5:
-                self.portconfig_dict[idx] = ["Ethernet"+str(idx),[1,2,3,4], line_arr[2],  str(idx), line_arr[4]]
+            if has_speed and len(line_arr) in (4, 5):
+                self.portconfig_dict[idx] = [f"Ethernet{idx}", [1, 2, 3, 4], line_arr[2], str(idx), line_arr[-1]]
                 idx += 1
             else:
                 print("port_config.ini file does not contain all fields, Exiting...", file=sys.stderr) 
@@ -436,9 +438,10 @@ class SkuCreate(object):
                         alias_str = "etp{:d}".format(alias_index)
                     else:
                         alias_str = "etp{:d}{:s}".format(alias_index,alias_arr[int(i/step)])
-                    index_str = "{:d}".format(alias_index)
+                    index_str = "{:<9d} ".format(alias_index) if "index" in title else ""
                     lanes_str_result = lanes_str_result + ":" + lanes_str
-                    out_str = "{:15s} {:20s} {:11s} {:9s} {:10s}\n".format(port_str,lanes_str,alias_str,index_str,str(speed))
+                    out_str = "{:15s} {:20s} {:11s} {}{:10s}\n".format(
+                        port_str, lanes_str, alias_str, index_str, str(speed))
                     f_out.write(out_str)
             else:
                 if port_found == True:
@@ -802,12 +805,7 @@ def main(argv):
                 sku.cfg_file = args.port_split_path[0] + "/config_db.json"
                 sku.parse_platform_from_config_db_file(sku.cfg_file)
             else:
-                try:
-                    sku_name = check_output_pipe(["show", "platform", "summary"], ["grep", "HwSKU"]).rstrip().split()[1]
-                except KeyError:
-                    print("Couldn't find HwSku info in Platform summary", file=sys.stderr)
-                    sys.exit(1)
-                sku.ini_file = sku.default_sku_path + "/" + sku_name + "/port_config.ini"
+                sku.ini_file = constants.RUNTIME_PORT_CONFIG_FILE
                 sku.cfg_file = "/etc/sonic/config_db.json"
 
             if sku.platform in platform_4:
