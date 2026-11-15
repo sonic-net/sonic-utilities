@@ -1128,42 +1128,63 @@ def show_interface_dom(port, json_output):
 
     OE and ELS data use separate sections; cable length fields are combined.
     JSON includes presence and each endpoint's info, dom and thresholds.
+    Ports on one OE bank share that bank's read, and ports on one ELS bank
+    share that bank's read. The bank comes from the platform topology.
     """
     records = {}
     output = []
     failed_ports = []
+    # The ports of one OE bank, and of one ELS bank, read the same data: read
+    # each bank once and share its sections and failures among its ports.
+    # The key is the topology device and bank, so each vendor's cpo.json
+    # decides which ports share a read.
+    oe_banks = {}
+    els_banks = {}
     try:
         with _eeprom_read_snapshot() as attach_snapshot:
-            for port_name, _, cpo in get_port_cpo_objects(port):
+            for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
                 present = get_cpo_presence(cpo, port_name)
                 record = {"present": present, "oe": {}, "els": {}}
                 records[port_name] = record
                 if not present:
                     output.append(_format_interface_dom(port_name, record))
                     continue
-                oe_api = get_oe_api(cpo, port_name)
-                els_api = get_els_api(cpo, port_name)
-                attach_snapshot(cpo.oe, oe_api)
-                attach_snapshot(cpo.elsfp, els_api)
+                mapping = cpo_mapping.resolve_interface(logical_port, current_port_config)
 
-                failures = []
-                record["oe"] = {
-                    "info": _combine_cable_info(
-                        _read_dom_section(failures, "OE", "info", oe_api.get_transceiver_info)),
-                    "dom": _read_dom_section(failures, "OE", "dom", oe_api.get_transceiver_dom_real_value),
-                    "thresholds": _read_dom_section(
-                        failures, "OE", "thresholds", oe_api.get_transceiver_threshold_info),
-                }
-                els_info = _read_dom_section(failures, "ELS", "info", els_api.get_elsfp_info)
-                record["els"] = {
-                    "info": _combine_cable_info(els_info),
-                    "dom": _filter_els_dom_lanes(
-                        _read_dom_section(failures, "ELS", "dom", els_api.get_elsfp_dom_real_value),
-                        _get_els_lane_count(els_info),
-                    ),
-                    "thresholds": _read_dom_section(
-                        failures, "ELS", "thresholds", els_api.get_elsfp_threshold_info),
-                }
+                oe_key = (mapping.oe_name, mapping.oe_bank)
+                if oe_key not in oe_banks:
+                    oe_api = get_oe_api(cpo, port_name)
+                    attach_snapshot(cpo.oe, oe_api)
+                    oe_failures = []
+                    oe_banks[oe_key] = ({
+                        "info": _combine_cable_info(
+                            _read_dom_section(oe_failures, "OE", "info", oe_api.get_transceiver_info)),
+                        "dom": _read_dom_section(
+                            oe_failures, "OE", "dom", oe_api.get_transceiver_dom_real_value),
+                        "thresholds": _read_dom_section(
+                            oe_failures, "OE", "thresholds", oe_api.get_transceiver_threshold_info),
+                    }, oe_failures)
+
+                els_key = (mapping.els_name, mapping.els_bank)
+                if els_key not in els_banks:
+                    els_api = get_els_api(cpo, port_name)
+                    attach_snapshot(cpo.elsfp, els_api)
+                    els_failures = []
+                    els_info = _read_dom_section(els_failures, "ELS", "info", els_api.get_elsfp_info)
+                    els_banks[els_key] = ({
+                        "info": _combine_cable_info(els_info),
+                        "dom": _filter_els_dom_lanes(
+                            _read_dom_section(
+                                els_failures, "ELS", "dom", els_api.get_elsfp_dom_real_value),
+                            _get_els_lane_count(els_info),
+                        ),
+                        "thresholds": _read_dom_section(
+                            els_failures, "ELS", "thresholds", els_api.get_elsfp_threshold_info),
+                    }, els_failures)
+
+                record["oe"], oe_failures = oe_banks[oe_key]
+                record["els"], els_failures = els_banks[els_key]
+                failures = oe_failures + els_failures
                 if failures:
                     record["read_errors"] = failures
                     failed_ports.append("{} ({})".format(port_name, ", ".join(failures)))

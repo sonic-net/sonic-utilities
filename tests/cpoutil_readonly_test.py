@@ -223,6 +223,78 @@ def invoke(command):
         return CliRunner().invoke(cpoutil.cli, command)
 
 
+_OE_DOM_METHODS = (
+    "get_transceiver_info",
+    "get_transceiver_dom_real_value",
+    "get_transceiver_threshold_info",
+)
+_ELS_DOM_METHODS = (
+    "get_elsfp_info",
+    "get_elsfp_dom_real_value",
+    "get_elsfp_threshold_info",
+)
+
+
+def _counting_cpo(tag):
+    """One port's CPO. DOM values identify this object so a shared read is visible."""
+    cpo = FakeCpo()
+    api = cpo.api
+    api.get_transceiver_info = mock.Mock(return_value={"manufacturer": "OE {}".format(tag)})
+    api.get_transceiver_dom_real_value = mock.Mock(return_value={"temperature": float(tag)})
+    api.get_transceiver_threshold_info = mock.Mock(return_value={"temphighalarm": float(tag)})
+    api.get_elsfp_info = mock.Mock(return_value={"manufacturer": "ELS {}".format(tag)})
+    api.get_elsfp_dom_real_value = mock.Mock(return_value={"temperature": float(tag) + 0.5})
+    api.get_elsfp_threshold_info = mock.Mock(return_value={"temperature_alarm_high": float(tag)})
+    return cpo
+
+
+def _install_dom_ports(specs):
+    """Install one logical port per spec.
+
+    A spec has name, physical, tag, oe, oe_bank, els, and an optional els_bank.
+    Omitting els_bank leaves that laser source unbanked.
+    """
+    devices = {}
+    interfaces = {}
+    port_config = {}
+    ports = {}
+    for spec in specs:
+        oe = devices.setdefault(spec["oe"], {"device_type": "optical_engine", "max_banks": 1})
+        oe["max_banks"] = max(oe["max_banks"], spec["oe_bank"] + 1)
+        devices.setdefault(spec["els"], {
+            "device_type": "external_laser_source",
+            "laser_to_asic_lane_mapping": {},
+        })
+        els_association = {"device_id": spec["els"]}
+        if "els_bank" in spec:
+            els_association["bank"] = spec["els_bank"]
+            els = devices[spec["els"]]
+            els["max_banks"] = max(els.get("max_banks", 1), spec["els_bank"] + 1)
+        interfaces[spec["name"]] = {
+            "index": [spec["physical"]],
+            "lanes": [1, 2],
+            "associated_devices": [
+                {"device_id": spec["oe"], "bank": spec["oe_bank"]},
+                els_association,
+            ],
+        }
+        port_config[spec["name"]] = {"index": (spec["physical"],), "lanes": (1, 2)}
+        cpo = _counting_cpo(spec["tag"])
+        ports[spec["physical"]] = cpo
+        spec["cpo"] = cpo
+    cpoutil.cpo_mapping = CpoMapping(
+        {"devices": devices, "interfaces": interfaces, "platform_data": {"interfaces": {}}},
+        port_config,
+    )
+    cpoutil.current_port_config = port_config
+    cpoutil.cpo_object_map = {
+        OPTICAL_ENGINE: {},
+        EXTERNAL_LASER_SOURCE: {},
+        PORT: ports,
+    }
+    return specs
+
+
 class TestDirectPlatformApiCommands(object):
     def setup_method(self):
         cpo = FakeCpo()
@@ -382,6 +454,38 @@ class TestDirectPlatformApiCommands(object):
         assert isinstance(values["oe"]["dom"]["temperature"], float)
         for section in values["els"].values():
             assert not any(key.startswith("els_") for key in section)
+
+    def test_interface_dom_reads_each_mapped_bank_once(self):
+        # OE groups and ELS groups are independent. A second bank of the same
+        # device is its own read, as is a different device.
+        specs = _install_dom_ports([
+            {"name": "Ethernet0", "physical": 1, "tag": 1,
+             "oe": "oe0", "oe_bank": 0, "els": "els0", "els_bank": 0},
+            {"name": "Ethernet8", "physical": 2, "tag": 2,
+             "oe": "oe0", "oe_bank": 0, "els": "els1", "els_bank": 0},
+            {"name": "Ethernet16", "physical": 3, "tag": 3,
+             "oe": "oe1", "oe_bank": 0, "els": "els0", "els_bank": 0},
+            {"name": "Ethernet24", "physical": 4, "tag": 4,
+             "oe": "oe0", "oe_bank": 1, "els": "els1", "els_bank": 1},
+        ])
+        result = invoke(["show", "interface", "dom", "--json"])
+        assert result.exit_code == 0, result.output
+        values = json.loads(result.output)
+        assert values["Ethernet0"]["oe"]["info"]["manufacturer"] == "OE 1"
+        assert values["Ethernet8"]["oe"]["info"]["manufacturer"] == "OE 1"
+        assert values["Ethernet16"]["oe"]["info"]["manufacturer"] == "OE 3"
+        assert values["Ethernet24"]["oe"]["info"]["manufacturer"] == "OE 4"
+        assert values["Ethernet0"]["els"]["info"]["manufacturer"] == "ELS 1"
+        assert values["Ethernet8"]["els"]["info"]["manufacturer"] == "ELS 2"
+        assert values["Ethernet16"]["els"]["info"]["manufacturer"] == "ELS 1"
+        assert values["Ethernet24"]["els"]["info"]["manufacturer"] == "ELS 4"
+        called = {"Ethernet0": (1, 1), "Ethernet8": (0, 1), "Ethernet16": (1, 0), "Ethernet24": (1, 1)}
+        for spec in specs:
+            oe_calls, els_calls = called[spec["name"]]
+            for method in _OE_DOM_METHODS:
+                assert getattr(spec["cpo"].api, method).call_count == oe_calls
+            for method in _ELS_DOM_METHODS:
+                assert getattr(spec["cpo"].api, method).call_count == els_calls
 
     def test_interface_dom_queries_cpo_presence_before_endpoint_apis(self):
         self.cpo.get_presence = mock.Mock(return_value=True)
@@ -775,10 +879,33 @@ class TestDomEepromSnapshot:
             cpo = cpoutil.CpoBase(None, oe, els)
             cpo.get_presence = mock.Mock(return_value=True)
             cpos[port] = cpo
-        monkeypatch.setattr(cpoutil, "current_port_config", {
+        port_config = {
             "Ethernet{}".format(index * 8): {"index": str(index + 1), "lanes": (1, 2)}
             for index in range(3)
-        })
+        }
+        # Separate OE and ELS devices, so each port still reads. The files are
+        # shared; the byte snapshot is what collapses those reads.
+        devices = {}
+        interfaces = {}
+        for index in range(3):
+            oe, els = "oe{}".format(index), "els{}".format(index)
+            devices[oe] = {"device_type": "optical_engine", "max_banks": 1}
+            devices[els] = {
+                "device_type": "external_laser_source", "laser_to_asic_lane_mapping": {},
+            }
+            interfaces["Ethernet{}".format(index * 8)] = {
+                "index": [index + 1],
+                "lanes": [1, 2],
+                "associated_devices": [
+                    {"device_id": oe, "bank": 0},
+                    {"device_id": els},
+                ],
+            }
+        monkeypatch.setattr(cpoutil, "current_port_config", port_config)
+        monkeypatch.setattr(cpoutil, "cpo_mapping", CpoMapping(
+            {"devices": devices, "interfaces": interfaces, "platform_data": {"interfaces": {}}},
+            port_config,
+        ))
         monkeypatch.setattr(cpoutil, "cpo_object_map", {
             PORT: cpos, OPTICAL_ENGINE: {"oe0": cpos[1]}, EXTERNAL_LASER_SOURCE: {"els0": cpos[1]},
         })
