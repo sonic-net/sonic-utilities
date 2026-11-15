@@ -4,12 +4,10 @@ from unittest.mock import patch
 from generic_config_updater.services_validator import (
     command_wrapper,
     vlan_validator,
-    rsyslog_validator,
     caclmgrd_validator,
     vlanintf_validator,
     port_speed_change_validator,
 )
-from generic_config_updater.services_validator import ntp_validator
 from generic_config_updater.services_validator import gnmi_validator, telemetry_validator
 
 # Mimics subprocess.run call
