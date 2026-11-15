@@ -1,5 +1,13 @@
+import os
+
 import click
 import utilities_common.cli as clicommon
+
+
+def _run_acl_show(command, verbose):
+    if os.geteuid() != 0:
+        command = ['/usr/bin/sudo', '-n', '/usr/local/bin/acl-loader', *command[1:]]
+    clicommon.run_command(command, display_cmd=verbose)
 
 
 #
@@ -22,12 +30,12 @@ def rule(table_name, rule_id, verbose):
     cmd = ['acl-loader', 'show', 'rule']
 
     if table_name is not None:
-        cmd += [str(table_name)]
+        cmd += ['--', str(table_name)]
 
     if rule_id is not None:
         cmd += [str(rule_id)]
 
-    clicommon.run_command(cmd, display_cmd=verbose)
+    _run_acl_show(cmd, verbose)
 
 
 # 'table' subcommand  ("show acl table")
@@ -39,6 +47,6 @@ def table(table_name, verbose):
     cmd = ['acl-loader', 'show', 'table']
 
     if table_name is not None:
-        cmd += [str(table_name)]
+        cmd += ['--', str(table_name)]
 
-    clicommon.run_command(cmd, display_cmd=verbose)
+    _run_acl_show(cmd, verbose)

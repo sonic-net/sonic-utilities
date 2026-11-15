@@ -135,3 +135,26 @@ class TestShowACLApplDb(object):
         assert result.exit_code == 0
         print(result.output)
         assert result.output == APPL_DB_ACL_SHOW_RULE
+
+
+def test_control_plane_table_in_current_namespace(monkeypatch):
+    from unittest.mock import MagicMock
+
+    host_table = {'HOST_ACL': {'type': 'CTRLPLANE'}}
+    asic_table = {'SSH_TEST_1': {'type': 'CTRLPLANE'}}
+
+    def config_connector(**kwargs):
+        connector = MagicMock()
+        tables = asic_table if kwargs.get('namespace') == 'asic0' else host_table
+        connector.get_table.side_effect = lambda name: tables if name == 'ACL_TABLE' else {}
+        return connector
+
+    reader = MagicMock()
+    reader.keys.return_value = []
+    monkeypatch.setattr(acl_loader_show, 'ConfigDBConnector', config_connector)
+    monkeypatch.setattr(acl_loader_show, 'SonicV2Connector', lambda **kwargs: reader)
+    monkeypatch.setattr(acl_loader_show, 'load_db_config', lambda: None)
+    monkeypatch.setattr(acl_loader_show.multi_asic, 'get_current_namespace', lambda: 'asic0')
+    monkeypatch.setattr(acl_loader_show.multi_asic, 'get_all_namespaces', lambda: {'front_ns': ['asic0']})
+    loader = AclLoader()
+    assert loader.tables_db_info == asic_table
