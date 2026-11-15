@@ -8820,6 +8820,8 @@ def add_table(ctx, table_name, table_type, description, ports, stage, namespace)
     """
     Add ACL table
     """
+    if namespace is None:
+        namespace = multi_asic.get_current_namespace() or DEFAULT_NAMESPACE
     config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=True, authenticate=True)
     config_db.connect()
 
@@ -8853,6 +8855,8 @@ def remove_table(table_name, namespace):
     """
     Remove ACL table
     """
+    if namespace is None:
+        namespace = multi_asic.get_current_namespace() or DEFAULT_NAMESPACE
     config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=True, authenticate=True)
     config_db.connect()
     config_db.set_entry("ACL_TABLE", table_name, None)
