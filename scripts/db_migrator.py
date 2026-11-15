@@ -11,6 +11,7 @@ from sonic_py_common import device_info, logger
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, SonicDBConfig
 from minigraph import parse_xml
 from utilities_common.helper import update_config
+from utilities_common.json_utils import load_json_with_duplicate_check
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
@@ -128,24 +129,51 @@ class DBMigrator():
 
         try:
             with open(self.config_source_file) as f:
-                golden_data = json.load(f)
+                golden_data = load_json_with_duplicate_check(f)
 
             if not isinstance(golden_data, dict):
                 raise ValueError("top-level value must be a JSON object")
 
-            if ns is None:
-                return golden_data
+            wrapped_config = (
+                "localhost" in golden_data
+                or any(
+                    isinstance(key, str)
+                    and key.startswith("asic")
+                    and key[4:].isdigit()
+                    for key in golden_data
+                )
+            )
+            host_namespace = ns is None or ns == DEFAULT_NAMESPACE
 
-            config_namespace = "localhost" if ns == DEFAULT_NAMESPACE else ns
-            golden_config_data = golden_data.get(config_namespace)
-            if golden_config_data is not None and not isinstance(golden_config_data, dict):
+            if wrapped_config:
+                config_namespace = "localhost" if host_namespace else ns
+                if config_namespace not in golden_data:
+                    if required:
+                        raise ValueError(
+                            "namespace '{}' is missing".format(config_namespace)
+                        )
+                    return None
+                golden_config_data = golden_data[config_namespace]
+            elif host_namespace:
+                config_namespace = "localhost"
+                golden_config_data = golden_data
+            else:
+                if required:
+                    raise ValueError(
+                        "flat golden config cannot be used for namespace '{}'".format(ns)
+                    )
+                return None
+
+            if not isinstance(golden_config_data, dict):
                 raise ValueError(
                     "namespace '{}' must contain a JSON object".format(config_namespace)
                 )
-            if required and golden_config_data is None:
-                raise ValueError(
-                    "namespace '{}' is missing".format(config_namespace)
-                )
+            if not golden_config_data:
+                if required:
+                    raise ValueError(
+                        "namespace '{}' must not be empty".format(config_namespace)
+                    )
+                return None
             return golden_config_data
         except Exception as e:
             message = "Failed to load golden config '{}': {}".format(
