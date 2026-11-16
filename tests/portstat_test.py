@@ -68,6 +68,47 @@ Ethernet4      N/A     110,412             1                 0            N/A   
 Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A  0              4.81e-10 (89%)            3
 """  # noqa: E501
 
+intf_fec_counters_fec_hist = """\
+Symbol Errors Per Codeword      Codewords
+----------------------------  -----------
+BIN0                              1000000
+BIN1                               900000
+BIN2                               800000
+BIN3                               700000
+BIN4                               600000
+BIN5                               500000
+BIN6                               400000
+BIN7                               300000
+BIN8                                    0
+BIN9                                    0
+BIN10                                   0
+BIN11                                   0
+BIN12                                   0
+BIN13                                   0
+BIN14                                   0
+BIN15                                   0
+"""
+
+intf_fec_counters_fec_hist_after_clear = """\
+Symbol Errors Per Codeword      Codewords
+----------------------------  -----------
+BIN0                                    0
+BIN1                                    0
+BIN2                                    0
+BIN3                                    0
+BIN4                                    0
+BIN5                                    0
+BIN6                                    0
+BIN7                                    0
+BIN8                                    0
+BIN9                                    0
+BIN10                                   0
+BIN11                                   0
+BIN12                                   0
+BIN13                                   0
+BIN14                                   0
+BIN15                                   0"""
+
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
@@ -505,7 +546,7 @@ class TestPortStat(object):
         assert invoked_cmd[:2] == ['portstat', '-fh']
         assert '-i' in invoked_cmd
         assert invoked_cmd[invoked_cmd.index('-i') + 1] == 'Ethernet0'
-        assert '--relative-timestamp' in invoked_cmd
+        assert '--relative-timestamp' not in invoked_cmd
 
     def test_show_intf_counters_fec_histogram_multi_asic_and_namespace(self):
         runner = CliRunner()
@@ -646,13 +687,13 @@ class TestPortStat(object):
         loader.exec_module(module)
         return module
 
-    def test_clear_fec_rate_aggregates(self):
-        # Verify _clear_fec_rate_aggregates issues an HDEL for every port OID
-        # in COUNTERS_PORT_NAME_MAP, targeting exactly the FEC rate/window
-        # aggregate fields declared in scripts/portstat.
+    def test_reset_fec_rate_fields(self):
+        # Verify _reset_fec_rate_fields issues an HDEL for every port OID
+        # in COUNTERS_PORT_NAME_MAP, targeting exactly the FEC running-max
+        # fields declared in scripts/portstat.
         portstat_script = self._load_portstat_script()
-        expected_fields = portstat_script.FEC_RATE_AGGREGATE_FIELDS
-        assert len(expected_fields) == 10
+        expected_fields = portstat_script.FEC_RATE_RESET_FIELDS
+        assert expected_fields == ('FEC_PRE_BER_MAX',)
 
         port_name_map = {
             'Ethernet0': 'oid:0x1000000000001',
@@ -670,7 +711,7 @@ class TestPortStat(object):
         mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['']
         mock_portstat.get_db_client.return_value = mock_db
 
-        portstat_script._clear_fec_rate_aggregates(mock_portstat)
+        portstat_script._reset_fec_rate_fields(mock_portstat)
 
         assert mock_redis.hdel.call_count == len(port_name_map)
         called_keys = set()
@@ -681,7 +722,7 @@ class TestPortStat(object):
             assert fields == expected_fields
         assert called_keys == {'RATES:' + oid for oid in port_name_map.values()}
 
-    def test_clear_fec_rate_aggregates_ns_list_exception(self):
+    def test_reset_fec_rate_fields_ns_list_exception(self):
         # If enumerating namespaces fails, the helper must warn and return
         # rather than raising out of the clear path.
         portstat_script = self._load_portstat_script()
@@ -689,11 +730,11 @@ class TestPortStat(object):
         mock_portstat = mock.MagicMock()
         mock_portstat.multi_asic.get_ns_list_based_on_options.side_effect = Exception("boom")
 
-        portstat_script._clear_fec_rate_aggregates(mock_portstat)
+        portstat_script._reset_fec_rate_fields(mock_portstat)
 
         mock_portstat.get_db_client.assert_not_called()
 
-    def test_clear_fec_rate_aggregates_empty_port_map(self):
+    def test_reset_fec_rate_fields_empty_port_map(self):
         # A namespace with no COUNTERS_PORT_NAME_MAP entries must be skipped
         # without issuing any HDEL.
         portstat_script = self._load_portstat_script()
@@ -706,11 +747,11 @@ class TestPortStat(object):
         mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['']
         mock_portstat.get_db_client.return_value = mock_db
 
-        portstat_script._clear_fec_rate_aggregates(mock_portstat)
+        portstat_script._reset_fec_rate_fields(mock_portstat)
 
         mock_db.get_redis_client.assert_not_called()
 
-    def test_clear_fec_rate_aggregates_redis_exception(self):
+    def test_reset_fec_rate_fields_redis_exception(self):
         # A per-namespace redis failure must be warned about and must not
         # prevent other namespaces from being processed.
         portstat_script = self._load_portstat_script()
@@ -725,7 +766,79 @@ class TestPortStat(object):
         mock_portstat.get_db_client.return_value = mock_db
 
         # Should not raise despite the redis failure.
-        portstat_script._clear_fec_rate_aggregates(mock_portstat)
+        portstat_script._reset_fec_rate_fields(mock_portstat)
+
+    def _run_portstat_clear_main(self, argv):
+        # Run scripts/portstat main() in-process for a clear, with the DB
+        # access mocked, and report whether the FEC rate reset was invoked.
+        portstat_script = self._load_portstat_script()
+        mock_portstat = mock.MagicMock()
+        mock_portstat.get_cnstat_dict.return_value = ({'time': '2026-01-01T00:00:00'}, {})
+        with mock.patch.object(portstat_script, 'Portstat', return_value=mock_portstat), \
+                mock.patch.object(portstat_script, '_reset_fec_rate_fields') as mock_reset, \
+                mock.patch('sys.argv', argv):
+            with pytest.raises(SystemExit) as exc:
+                portstat_script.main()
+        assert exc.value.code == 0
+        return mock_reset
+
+    def test_clear_untagged_resets_fec_rate_fields(self):
+        remove_tmp_cnstat_file()
+        mock_reset = self._run_portstat_clear_main(['portstat', '-c'])
+        mock_reset.assert_called_once()
+        remove_tmp_cnstat_file()
+
+    def test_clear_tagged_does_not_reset_fec_rate_fields(self):
+        # A tagged snapshot belongs to a single consumer, so it must not
+        # reset the global FEC running-max fields.
+        remove_tmp_cnstat_file()
+        mock_reset = self._run_portstat_clear_main(['portstat', '-c', '-t', 'fec_test_tag'])
+        mock_reset.assert_not_called()
+        remove_tmp_cnstat_file()
+
+    def test_get_fec_max_t_since_snapshot(self):
+        from utilities_common.portstat import get_fec_max_t_since_snapshot
+
+        def bins(values):
+            return {'fec_bin{}'.format(i): v for i, v in enumerate(values)}
+
+        old = bins(['100'] * 16)
+        # No new codewords in any bin since the snapshot.
+        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old, '5') == '-1'
+        # Highest bin that moved wins, regardless of lower bins.
+        new = bins(['200', '150'] + ['100'] * 5 + ['101'] + ['100'] * 8)
+        assert get_fec_max_t_since_snapshot(new, old, '5') == '7'
+        # Missing snapshot value for a bin counts as 0.
+        old_na = dict(old, fec_bin3='N/A')
+        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old_na, '5') == '3'
+        # Histogram not supported: fall back to the RATES value.
+        assert get_fec_max_t_since_snapshot(bins(['N/A'] * 16), old, '5') == '5'
+        assert get_fec_max_t_since_snapshot({}, {}, 'N/A') == 'N/A'
+
+    def test_show_intf_fec_counters_max_t_after_clear(self):
+        # After a clear, FEC_MAX_T is derived from histogram bins that moved
+        # since the snapshot; ports without histogram bins keep the RATES
+        # value.
+        remove_tmp_cnstat_file()
+        return_code, _ = get_result_and_return_code(['portstat', '-c'])
+        assert return_code == 0
+
+        # Simulate 10 codewords with 7 symbol errors arriving after the clear.
+        cache_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
+        with open(cache_file, 'r') as f:
+            cnstat_cached = json.load(f)
+        cnstat_cached['Ethernet0']['fec_bin7'] = str(int(cnstat_cached['Ethernet0']['fec_bin7']) - 10)
+        with open(cache_file, 'w') as f:
+            json.dump(cnstat_cached, f)
+
+        return_code, result = get_result_and_return_code(['portstat', '-f'])
+        assert return_code == 0
+        max_t = {line.split()[0]: line.split()[-1] for line in result.splitlines()
+                 if line.startswith('Ethernet')}
+        assert float(max_t['Ethernet0']) == 7
+        assert float(max_t['Ethernet4']) == 0
+        assert float(max_t['Ethernet8']) == 3
+        remove_tmp_cnstat_file()
 
     def test_clear_counters_cache_contains_fec_bins(self):
         # After portstat -c, the per-user snapshot cache must contain all 16
@@ -747,42 +860,48 @@ class TestPortStat(object):
                 assert 'fec_bin{}'.format(i) in entry
 
     def test_show_intf_counters_fec_histogram_no_cache(self):
-        # With no prior clear (no snapshot cache), portstat -fh must still
-        # render successfully and display lifetime BIN values.
+        # With no prior clear (no snapshot cache), portstat -fh must render
+        # the lifetime BIN values in the same format as before.
         remove_tmp_cnstat_file()
         return_code, result = get_result_and_return_code(
             ['portstat', '-fh', '-i', 'Ethernet0'])
         assert return_code == 0
-        for i in range(16):
-            assert 'BIN{}'.format(i) in result
-        assert 'Last Updated' in result
+        assert result == intf_fec_counters_fec_hist
 
-    def test_show_intf_counters_fec_histogram_relative_timestamp_render(self):
-        # The --relative-timestamp flag adds a Relative Time column to the
-        # single-interface vertical view; the header renders regardless of
-        # whether per-bin timestamps are present.
+    def test_show_intf_counters_fec_histogram_after_clear(self):
+        # After portstat -c, portstat -fh must show the histogram relative to
+        # the cached snapshot, i.e. all bins reset to 0.
         remove_tmp_cnstat_file()
-        return_code, result = get_result_and_return_code(
-            ['portstat', '-fh', '-i', 'Ethernet0', '--relative-timestamp'])
+        return_code, _ = get_result_and_return_code(['portstat', '-c'])
         assert return_code == 0
-        assert 'Last Updated' in result
-        assert 'Relative Time' in result
 
-    def test_format_relative_time(self):
-        from utilities_common.portstat import format_relative_time
-        now_ms = 1_700_000_000_000
-        with mock.patch('utilities_common.portstat.time.time', return_value=now_ms / 1000.0):
-            assert format_relative_time(now_ms - 5_000) == '5 seconds ago'
-            assert format_relative_time(now_ms - 1_000) == '1 second ago'
-            assert format_relative_time(now_ms - 120_000) == '2 minutes ago'
-            assert format_relative_time(now_ms - 3 * 3600_000) == '3 hours ago'
-            assert format_relative_time(now_ms - 2 * 86400_000) == '2 days ago'
+        return_code, result = get_result_and_return_code(
+            ['portstat', '-fh', '-i', 'Ethernet0'])
+        assert return_code == 0
+        verify_after_clear(result, intf_fec_counters_fec_hist_after_clear)
+        remove_tmp_cnstat_file()
+
+    def test_print_fec_hist_vertical_counters_not_available(self, capsys):
+        # COUNTERS_PORT_NAME_MAP not populated yet (e.g. early boot or port
+        # counters disabled): only the 'time' key is present.
+        from utilities_common.portstat import Portstat
+        portstat = Portstat.__new__(Portstat)
+        with pytest.raises(SystemExit) as exc:
+            portstat.print_fec_hist_vertical({'time': None}, {}, 'Ethernet0')
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert captured.out == ''
+        assert "FEC histogram counters are not available" in captured.err
 
     def test_print_fec_hist_vertical_interface_not_found(self, capsys):
         from utilities_common.portstat import Portstat
         portstat = Portstat.__new__(Portstat)
-        portstat.print_fec_hist_vertical({}, {}, 'Ethernet0')
-        assert "Interface Ethernet0 not found" in capsys.readouterr().out
+        with pytest.raises(SystemExit) as exc:
+            portstat.print_fec_hist_vertical({'time': None, 'Ethernet4': {}}, {}, 'Ethernet0')
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert captured.out == ''
+        assert "Port Ethernet0 not found in COUNTERS_PORT_NAME_MAP" in captured.err
 
     def test_show_intf_counters_on_sup(self):
         remove_tmp_cnstat_file()

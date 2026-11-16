@@ -6490,7 +6490,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters errors
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
-  show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-histogram <interface_name>
   show interfaces counters fec-stats
   show interfaces counters detailed <interface_name>
   show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
@@ -6672,26 +6672,28 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
 
 - Example:
   ```
-  admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
-  Symbol Errors Per Codeword  Codewords
-  --------------------------  ---------
-  BIN0:                       1000000
-  BIN1:                       900000
-  BIN2:                       800000
-  BIN3:                       700000
-  BIN4:                       600000
-  BIN5:                       500000
-  BIN6:                       400000
-  BIN7:                       300000
-  BIN8:                       0
-  BIN9:                       0
-  BIN10:                      0
-  BIN11:                      0
-  BIN12:                      0
-  BIN13:                      0
-  BIN14:                      0
-  BIN15:                      0
+  admin@str-s6000-acs-11:/usr/bin$ show interfaces counters fec-histogram Ethernet0
+  Symbol Errors Per Codeword      Codewords
+  ----------------------------  -----------
+  BIN0                              1000000
+  BIN1                               900000
+  BIN2                               800000
+  BIN3                               700000
+  BIN4                               600000
+  BIN5                               500000
+  BIN6                               400000
+  BIN7                               300000
+  BIN8                                    0
+  BIN9                                    0
+  BIN10                                   0
+  BIN11                                   0
+  BIN12                                   0
+  BIN13                                   0
+  BIN14                                   0
+  BIN15                                   0
   ```
+
+  After `sonic-clear counters`, the codewords are shown relative to the time of the clear, and the output is preceded by a `Last cached time was ...` line.
 
 The "fec-stats" subcommand is used to disply the interface fec related statistic.
 
@@ -6706,6 +6708,12 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   ```
 
   FEC_MAX_T - Is the maximum NON-ZERO FEC histogram BIN (starting from Bin0). -1 indicates the value is invalid (For eg during link down)
+
+- NOTE: `sonic-clear counters` affects the FEC statistics as follows:
+  - FEC_CORR, FEC_UNCORR and FEC_SYMBOL_ERR are shown relative to the time of the clear, like the other interface counters.
+  - FEC_MAX_T is computed from the FEC histogram BINs that counted codewords since the clear (-1 if none did). With `-p <period>` it is computed over the period instead.
+  - FEC_PRE_BER_MAX is a running maximum, so it is reset in COUNTERS_DB and starts tracking again from the next polling interval. Like `sonic-clear ... watermark`, this reset is global and is seen by all users. It is not reset when counters are saved under a tag (`portstat -c -t <tag>`).
+  - FEC_PRE_BER, FEC_POST_BER, FLR(O) and FLR(P) are computed over the most recent polling interval and are not affected.
 
 For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
 
@@ -6727,13 +6735,27 @@ For debugging link related issues where you need to clear the FEC histogram and 
   ```
   root@sonic:~# portstat -fh -i Ethernet504
   Last cached time was 2025-10-02T16:43:57.934081
-        IFACE         BIN0    BIN1    BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
-  -----------  -----------  ------  ------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
-  Ethernet504  624,891,017  13,331     172       0       0       0       0       0       0       0        0        0        0        0        0        0
-  root@str-7060x6-c09-u25:~#
-  ``` 
+  Symbol Errors Per Codeword      Codewords
+  ----------------------------  -----------
+  BIN0                            624891017
+  BIN1                                13331
+  BIN2                                  172
+  BIN3                                    0
+  BIN4                                    0
+  BIN5                                    0
+  BIN6                                    0
+  BIN7                                    0
+  BIN8                                    0
+  BIN9                                    0
+  BIN10                                   0
+  BIN11                                   0
+  BIN12                                   0
+  BIN13                                   0
+  BIN14                                   0
+  BIN15                                   0
+  ```
 
-  To clear the FEC histogram use `portstat -c`. NOTE: This will clear all counters. 
+  To clear the FEC histogram use `sonic-clear counters` (or `portstat -c`). NOTE: This will clear all interface counters.
 
 The "trim" subcommand is used to display the interface packet trimming related statistic.
 

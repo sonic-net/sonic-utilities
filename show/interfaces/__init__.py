@@ -887,7 +887,7 @@ def fec_stats(namespace, display, period, json_fmt, verbose, nonzero):
 def fec_histogram(ctx, interfacename, namespace, display):
     """Show interface counters fec-histogram"""
 
-    cmd = ['portstat', '-fh', '--relative-timestamp']
+    cmd = ['portstat', '-fh']
 
     interfacename = try_convert_interfacename_from_alias(ctx, interfacename, check_db=True)
     cmd += ['-i', str(interfacename)]
