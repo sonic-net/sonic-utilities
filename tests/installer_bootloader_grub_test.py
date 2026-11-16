@@ -10,6 +10,19 @@ installed_images = [
     f'{grub.IMAGE_PREFIX}expeliarmus-abcde',
 ]
 
+
+def test_pruning_discovers_installed_images_through_grub(tmp_path, monkeypatch):
+    from sonic_installer import bootloader, secure_boot_db
+
+    config_dir = tmp_path / "grub"
+    config_dir.mkdir()
+    (config_dir / "grub.cfg").write_text("".join(f"menuentry '{image}' {{\n}}\n" for image in installed_images))
+    monkeypatch.setattr(grub, "HOST_PATH", str(tmp_path))
+    monkeypatch.setattr(bootloader, "BOOTLOADERS", [grub.GrubBootloader])
+    monkeypatch.setattr(secure_boot_db, "run", Mock(side_effect=AssertionError("unexpected subprocess")))
+    assert secure_boot_db.installed_images() == installed_images
+
+
 def test_set_default_image():
     image = installed_images[0]
     expected_call = [call(['grub-set-default', '--boot-directory=' + grub.HOST_PATH, str(installed_images.index(image))])]
@@ -40,6 +53,7 @@ def test_install_image():
         bootloader = grub.GrubBootloader()
         bootloader.install_image(image_path)
         mock_cmd.assert_has_calls(expected_calls)
+
 
 @patch("sonic_installer.bootloader.grub.subprocess.call", Mock())
 @patch("sonic_installer.bootloader.grub.open")
