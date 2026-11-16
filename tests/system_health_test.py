@@ -442,7 +442,7 @@ swss            OK                OK                  -              -
             'BMC': {
                 'BMC-LastUpdate': {'status': 'OK', 'message': 'Last updated: 2026-09-30T10:00:00Z', 'type': 'BMC'},
                 'BMC-RefreshInterval': {'status': 'OK', 'message': 'BMC Refresh Interval: 300s', 'type': 'BMC'},
-                'Services|pmon': {'status': 'Not OK', 'message': 'pmon is not running', 'type': 'BMC'},
+                'pmon': {'status': 'Not OK', 'message': 'pmon is not running', 'type': 'BMC'},
             },
         }
         f = io.StringIO()
