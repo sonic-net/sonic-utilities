@@ -270,7 +270,7 @@ def _show_ptp_status(config, time_status):
     body = [
         ['clock type', clock_type],
         ['domain', default_ds.get('domain-number', NOT_SET)],
-        #['announce interval', config.get('announce-interval', NOT_SET)],
+        # ['announce interval', config.get('announce-interval', NOT_SET)],
         ['clock id', clock_identity_str],
         ['clock class', clock_class_str],
         ['clock accuracy', clock_accuracy_str],
@@ -295,7 +295,7 @@ def _show_ptp_status(config, time_status):
 
     click.echo('Parent Clock')
     body = [
-        #['ip address', parent_ds.get('ip-address', NOT_SET)],
+        # ['ip address', parent_ds.get('ip-address', NOT_SET)],
         ['parent clock id', parent_clock_identity_str],
         ['gm clock id', parent_ds.get('grandmaster-identity', NOT_SET)],
         ['gm clock class', grandmaster_clock_class_str],
@@ -368,7 +368,7 @@ def show_ptp_status(db):
 
         click.echo("PTP Instance: {}".format(entry_key))
         click.echo('')
-        
+
         _show_ptp_status(config, time_status)
 
 

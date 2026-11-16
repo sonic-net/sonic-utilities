@@ -6,7 +6,7 @@ import show.main as show
 from utilities_common.db import Db
 
 
-def _ptp_status_cmd():
+def _ptp_port_status_cmd():
     return show.cli.commands["ptp"].commands["port"].commands["status"]
 
 
@@ -35,7 +35,7 @@ class TestShowPtpPortStatus(object):
 
     def test_show_ptp_port_status_default_disabled(self):
         runner = CliRunner()
-        result = runner.invoke(_ptp_status_cmd(), [], obj=Db())
+        result = runner.invoke(_ptp_port_status_cmd(), [], obj=Db())
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert "Interface" in result.output
@@ -48,7 +48,7 @@ class TestShowPtpPortStatus(object):
 
     def test_show_ptp_port_status_single_port_disabled(self):
         runner = CliRunner()
-        result = runner.invoke(_ptp_status_cmd(), ["Ethernet0"], obj=Db())
+        result = runner.invoke(_ptp_port_status_cmd(), ["Ethernet0"], obj=Db())
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert "Ethernet0" in result.output
@@ -63,7 +63,7 @@ class TestShowPtpPortStatus(object):
         db.cfgdb.set_entry('PTP_PORT', 'Ethernet0', {'unicast_listen': 'false'})
         try:
             runner = CliRunner()
-            result = runner.invoke(_ptp_status_cmd(), ["Ethernet0"], obj=db)
+            result = runner.invoke(_ptp_port_status_cmd(), ["Ethernet0"], obj=db)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             assert "Ethernet0" in result.output
@@ -79,7 +79,7 @@ class TestShowPtpPortStatus(object):
         db.cfgdb.mod_entry('PORT', 'Ethernet4', {'ptp_mode': 'two-step'})
         try:
             runner = CliRunner()
-            result = runner.invoke(_ptp_status_cmd(), ["Ethernet4"], obj=db)
+            result = runner.invoke(_ptp_port_status_cmd(), ["Ethernet4"], obj=db)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             assert "Ethernet4" in result.output
@@ -90,7 +90,7 @@ class TestShowPtpPortStatus(object):
 
     def test_show_ptp_port_status_invalid_interface(self):
         runner = CliRunner()
-        result = runner.invoke(_ptp_status_cmd(), ["Ethernet999"], obj=Db())
+        result = runner.invoke(_ptp_port_status_cmd(), ["Ethernet999"], obj=Db())
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert "does not exist in the PORT table" in result.output

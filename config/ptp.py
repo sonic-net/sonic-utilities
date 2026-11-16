@@ -152,7 +152,8 @@ def unicast_master_table_ip_add(db, table_id, ip_address):
     key = (str(table_id), ip_address)
     if ADHOC_VALIDATION:
         ip_keys = config_db.get_keys(PTP_UNICAST_MASTER_TABLE_IP)
-        if key in ip_keys or (str(table_id), ip_address) in [(str(k[0]), k[1]) for k in ip_keys if isinstance(k, tuple)]:
+        existing_keys = [(str(k[0]), k[1]) for k in ip_keys if isinstance(k, tuple)]
+        if key in ip_keys or key in existing_keys:
             ctx.fail(f"IP {ip_address} already exists in PTP unicast master table {table_id}")
 
     config_db.set_entry(PTP_UNICAST_MASTER_TABLE_IP, key, {'NULL': 'NULL'})
@@ -176,7 +177,8 @@ def unicast_master_table_ip_remove(db, table_id, ip_address):
 
     if ADHOC_VALIDATION:
         ip_keys = config_db.get_keys(PTP_UNICAST_MASTER_TABLE_IP)
-        if key not in ip_keys and (str(table_id), ip_address) not in [(str(k[0]), k[1]) for k in ip_keys if isinstance(k, tuple)]:
+        existing_keys = [(str(k[0]), k[1]) for k in ip_keys if isinstance(k, tuple)]
+        if key not in ip_keys and key not in existing_keys:
             ctx.fail(f"IP {ip_address} does not exist in PTP unicast master table {table_id}")
 
     config_db.set_entry(PTP_UNICAST_MASTER_TABLE_IP, key, None)
