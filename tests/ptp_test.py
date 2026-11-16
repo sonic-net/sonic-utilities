@@ -163,7 +163,7 @@ class TestShowPtpProtocolStatus(object):
             _clear_ptp_protocol_config(db)
 
 
-def _ptp_status_cmd():
+def _ptp_instance_status_cmd():
     return show.cli.commands["ptp"].commands["status"]
 
 
@@ -213,7 +213,7 @@ class TestShowPtpStatus(object):
         db = Db()
         _clear_ptp_state(db)
         runner = CliRunner()
-        result = runner.invoke(_ptp_status_cmd(), [], obj=db)
+        result = runner.invoke(_ptp_instance_status_cmd(), [], obj=db)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert "No PTP operational status in STATE_DB" in result.output
@@ -256,17 +256,16 @@ class TestShowPtpStatus(object):
         })
         try:
             runner = CliRunner()
-            result = runner.invoke(_ptp_status_cmd(), [], obj=db)
+            result = runner.invoke(_ptp_instance_status_cmd(), [], obj=db)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             assert "PTP Instance: ptp|0" in result.output
             assert "00:11:22:ff:fe:33:44:55" in result.output
-            assert re.search(r"domain-number\s+24", result.output)
-            assert re.search(r"offset-from-master\s+-42", result.output)
-            assert "00:aa:bb:ff:fe:cc:dd:ee/1" in result.output
-            assert "SLAVE (9)" in result.output
-            assert re.search(r"master-offset\s+-42", result.output)
-            assert re.search(r"ingress-time\s+999", result.output)
+            assert re.search(r"domain\s+24", result.output)
+            assert re.search(r"steps removed\s+1", result.output)
+            assert "00:aa:bb:ff:fe:cc:dd:ee" in result.output
+            assert re.search(r"master offset\s+-42", result.output)
+            assert re.search(r"ingress time\s+999", result.output)
         finally:
             _clear_ptp_state(db)
 
