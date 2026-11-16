@@ -4870,7 +4870,7 @@ class TestLoadMinigraph(object):
                 return_value=namespaces), \
                 pytest.raises(ValueError, match="zero-based and contiguous"):
             config._validate_multiasic_scope_configs(
-                self._valid_multiasic_golden_config()
+                TestLoadGoldenConfig._valid_multiasic_golden_config()
             )
 
     @classmethod
