@@ -172,11 +172,10 @@ def intfsorted(intf_list):
 
 def get_fec_max_t_since_snapshot(cntr, old_cntr, fallback):
     """
-        Return the highest FEC histogram bin (number of symbol errors per
-        codeword) that counted any codewords since the snapshot, or '-1' if
-        none did, as a string like the FEC_MAX_T value in RATES. Mirrors find_maxT() in port_rates.lua, but on the diffed
-        bins so that FEC_MAX_T honours 'sonic-clear counters'.
-        Returns `fallback` if the histogram bins are not available.
+        Return the highest FEC histogram bin that counted codewords since the
+        baseline, or '-1' if none did. Like find_maxT() in port_rates.lua, but
+        on the diffed bins so it follows 'sonic-clear counters'.
+        Returns `fallback` if the bins are not available.
     """
     max_t = -1
     for i in range(16):
