@@ -1412,8 +1412,8 @@ class TestOptionalElsApis:
         cpo = cpoutil.CpoBase(None, CoverageFakeEndpoint(CoverageFakeApi()), CoverageFakeEndpoint(els_api))
         self.install(monkeypatch, cpo)
         status = invoke_coverage(["show", "els", "status", "0", "--json"])
-        assert status.exit_code != 0
-        assert "ELS get_lpmode is not implemented" in status.output
+        assert status.exit_code == 0, status.output
+        assert json.loads(status.output) == {"els0": "ModuleReady"}
         result = invoke_coverage(command)
         assert result.exit_code != 0
         assert "not implemented for this platform" in result.output
@@ -1437,12 +1437,12 @@ class TestOptionalElsApis:
         assert "has no attribute" not in result.output
         assert oe_api.calls == [] and els_api.calls == []
 
-    def test_els_status_invalid_low_power_readback_is_not_reported_as_success(self, coverage_environment):
+    def test_els_module_state_read_failure_is_not_reported_as_success(self, coverage_environment):
         cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
-        cpo.get_lpmode = mock.Mock(return_value=None)
+        cpo.api.get_module_state = mock.Mock(return_value=None)
         result = invoke_coverage(["show", "els", "status", "0", "--json"])
         assert result.exit_code != 0
-        assert "ELS get_lpmode returned invalid data" in result.output
+        assert "module state API returned no data" in result.output
 
     def test_public_eeprom_uses_the_selected_endpoint(self, coverage_environment, monkeypatch):
         oe = CoverageFakeCpo()
@@ -2402,17 +2402,15 @@ def test_els_public_threshold_heading_and_vendor_extensions():
     ("oe", "oe", "OE"), ("els", "elsfp", "ELS"),
 ])
 @pytest.mark.parametrize("low_power", [True, False])
-@pytest.mark.parametrize("status_alias", [False, True])
 def test_endpoint_lpmode_query_uses_platform_hook(
-        coverage_environment, monkeypatch, resource, selected_name, label, low_power, status_alias):
+        coverage_environment, monkeypatch, resource, selected_name, label, low_power):
     endpoints = {name: mock.Mock() for name in ("oe", "elsfp")}
     for name, endpoint in endpoints.items():
         endpoint.get_lpmode.return_value = low_power if name == selected_name else not low_power
         endpoint.get_api.side_effect = AssertionError("CLI must not bypass the endpoint hook")
     cpo = cpoutil.CpoBase(None, endpoints["oe"], endpoints["elsfp"])
     monkeypatch.setitem(cpoutil.cpo_object_map[resource], resource + "0", cpo)
-    command = "status" if resource == "els" and status_alias else "lpmode"
-    result = invoke_coverage(["show", resource, command, "0", "--json"])
+    result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {resource + "0": low_power}
     endpoints[selected_name].get_lpmode.assert_called_once_with()
