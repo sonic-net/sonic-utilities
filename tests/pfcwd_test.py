@@ -183,7 +183,7 @@ class TestPfcwd(object):
         assert len(storms) == 5
         expected_keys = {'queue', 'ordinal', 'detected', 'restored', 'interrupted', 'duration_ms',
                          'tx_packets', 'tx_dropped_packets', 'rx_packets',
-                         'rx_dropped_packets'}
+                         'rx_dropped_packets', 'recovery_mechanism'}
         for storm in storms:
             assert set(storm.keys()) == expected_keys
             assert not [k for k in storm if k.startswith('_')]
@@ -198,6 +198,7 @@ class TestPfcwd(object):
             'restored': '2025-10-21T01:26:40.475000Z',
             'interrupted': None,
             'duration_ms': 475, 'tx_packets': 1200, 'tx_dropped_packets': 1200,
+            'recovery_mechanism': 'unknown',
             'rx_packets': 980, 'rx_dropped_packets': 980,
         }
         assert ('Ethernet8:4', 2) not in by_key and ('Ethernet8:4', 1) not in by_key
@@ -244,11 +245,13 @@ class TestPfcwd(object):
     def test_pfcwd_show_history_json_sw_mode(self):
         data = self._invoke_history_json()
         assert data['recovery_mechanism'] == 'software'
+        assert {s['recovery_mechanism'] for s in data['storms']} == {'software'}
 
     @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
     def test_pfcwd_show_history_json_hw_mode(self):
         data = self._invoke_history_json()
         assert data['recovery_mechanism'] == 'hardware'
+        assert {s['recovery_mechanism'] for s in data['storms']} == {'hardware'}
 
     def test_pfcwd_show_config(self):
         self.executor(test_vectors.testData['pfcwd_show_config'])
@@ -1008,6 +1011,63 @@ class TestMultiAsicPfcwdShow(object):
     def test_pfcwd_show_history_masic_all(self):
         output = self._invoke_history_masic(['--history', '-d', 'all'])
         assert output == test_vectors.show_pfcwd_history_masic_all
+
+    def test_pfcwd_show_history_masic_frontend_explicit_queue(self):
+        # An explicitly named queue overrides -d frontend, as for regular stats
+        output = self._invoke_history_masic(
+            ['--history', '-d', 'frontend', 'Ethernet-BP0:3']
+        )
+        rows = [tuple(row.split()[:2]) for row in output.splitlines()[2:]]
+        assert rows == [('Ethernet-BP0:3', '1')]
+
+    def test_pfcwd_show_history_masic_json_mixed_modes(self):
+        # Each storm reports the mechanism of the ASIC it came from; asic0 runs
+        # the hardware watchdog, asic1 the software one
+        import pfcwd.main as pfcwd
+        real_get_all = swsscommon.SonicV2Connector.get_all
+        real_keys = swsscommon.SonicV2Connector.keys
+        asic1_storm = 'PFC_WD_STORM_HISTORY|Ethernet64|3'
+
+        def get_all(self, db_id, key):
+            ns = getattr(self, 'namespace', None)
+            if key == 'PFC_WD_STATE_TABLE|PFC_WD':
+                if ns == 'asic0':
+                    return {'RECOVERY_MECHANISM': 'HARDWARE'}
+                return {'RECOVERY_MECHANISM': 'SOFTWARE'}
+            if key == asic1_storm:
+                return {
+                    'last_storm': '1',
+                    'storm_1_detected': '1761000200000000',
+                    'storm_1_restored': '1761000200200000',
+                    'storm_1_duration_ms': '200',
+                    'storm_1_tx_packets': '40',
+                    'storm_1_tx_dropped': '40',
+                    'storm_1_rx_packets': '20',
+                    'storm_1_rx_dropped': '20',
+                }
+            return real_get_all(self, db_id, key)
+
+        def keys(self, db_id, pattern=None):
+            found = real_keys(self, db_id, pattern) or []
+            if (getattr(self, 'namespace', None) == 'asic1'
+                    and pattern == 'PFC_WD_STORM_HISTORY|*'):
+                found = list(found) + [asic1_storm]
+            return found
+
+        with patch.object(swsscommon.SonicV2Connector, 'get_all', new=get_all), \
+                patch.object(swsscommon.SonicV2Connector, 'keys', new=keys):
+            result = CliRunner().invoke(
+                pfcwd.cli.commands['show'].commands['stats'],
+                ['--history', '--json', '-d', 'all'], obj=Db()
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data['recovery_mechanism'] == 'mixed'
+        by_queue = {s['queue']: s['recovery_mechanism'] for s in data['storms']}
+        assert by_queue['Ethernet0:3'] == 'hardware'
+        assert by_queue['Ethernet-BP0:3'] == 'hardware'
+        assert by_queue['Ethernet64:3'] == 'software'
 
     def test_pfcwd_stats_with_queues(self):
         import pfcwd.main as pfcwd
