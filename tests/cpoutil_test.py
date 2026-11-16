@@ -2406,6 +2406,7 @@ def test_endpoint_lpmode_query_uses_platform_hook(
         coverage_environment, monkeypatch, resource, selected_name, label, low_power):
     endpoints = {name: mock.Mock() for name in ("oe", "elsfp")}
     for name, endpoint in endpoints.items():
+        endpoint.get_presence.return_value = True
         endpoint.get_lpmode.return_value = low_power if name == selected_name else not low_power
         endpoint.get_api.side_effect = AssertionError("CLI must not bypass the endpoint hook")
     cpo = cpoutil.CpoBase(None, endpoints["oe"], endpoints["elsfp"])
@@ -2425,7 +2426,7 @@ def test_endpoint_lpmode_query_uses_platform_hook(
 @pytest.mark.parametrize("failure", ["missing", "unimplemented", "hardware", "invalid"])
 def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
         coverage_environment, monkeypatch, resource, selected_name, label, failure):
-    endpoint = mock.Mock()
+    endpoint = mock.Mock(get_presence=mock.Mock(return_value=True))
     if failure == "missing":
         del endpoint.get_lpmode
     elif failure == "unimplemented":
@@ -2450,7 +2451,7 @@ def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
 @pytest.mark.parametrize("value", [None, 0, 1, "Low Power Mode", "High Power Mode", "False"])
 def test_endpoint_lpmode_rejects_non_boolean_values(
         coverage_environment, monkeypatch, resource, endpoint_name, value):
-    endpoint = mock.Mock()
+    endpoint = mock.Mock(get_presence=mock.Mock(return_value=True))
     endpoint.get_lpmode.return_value = value
     endpoint.get_api.side_effect = AssertionError("No API fallback")
     cpo = cpoutil.CpoBase(None, endpoint if endpoint_name == "oe" else mock.Mock(),

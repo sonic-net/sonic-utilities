@@ -366,6 +366,39 @@ class TestDirectPlatformApiCommands(object):
         assert result.exit_code != 0
         assert "ELS get_lpmode returned invalid data" in result.output
 
+    @pytest.mark.parametrize("command, value, displayed", [
+        ("lpmode", False, "Off"),
+        ("status", "High power mode", "High power mode"),
+        ("temperature", 32.5, "32.5"),
+    ])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_els_queries_skip_absent_endpoint(self, command, value, displayed, json_output):
+        absent = mock.Mock(get_presence=mock.Mock(return_value=False))
+        absent.get_lpmode.side_effect = AssertionError("lpmode read on absent ELS")
+        absent.get_api.side_effect = AssertionError("API access on absent ELS")
+        present = mock.Mock(get_presence=mock.Mock(return_value=True))
+        present.get_lpmode.return_value = value
+        present.get_api.return_value.get_module_state.return_value = value
+        present.get_api.return_value.get_module_temperature.return_value = value
+        resources = [
+            ("els0", mock.Mock(elsfp=absent)),
+            ("els1", mock.Mock(elsfp=present)),
+        ]
+        arguments = ["show", "els", command]
+        if json_output:
+            arguments.append("--json")
+        with mock.patch.object(cpoutil, "get_resource_cpo_objects", return_value=resources):
+            result = invoke(arguments)
+        assert result.exit_code == 0, result.output
+        absent.get_presence.assert_called_once_with()
+        absent.get_lpmode.assert_not_called()
+        absent.get_api.assert_not_called()
+        if json_output:
+            assert json.loads(result.output) == {"els0": None, "els1": value}
+        else:
+            assert any("ELS0" in line and "Not Present" in line for line in result.output.splitlines())
+            assert any("ELS1" in line and displayed in line for line in result.output.splitlines())
+
     def test_interface_dom_calls_public_oe_and_els_apis(self):
         result = invoke([
             "show", "interface", "dom", "-p", "Ethernet0", "--json"
@@ -654,6 +687,7 @@ class TestDirectPlatformApiCommands(object):
             endpoints[resource].get_api.return_value = partial
         self.cpo.oe = endpoints["oe"]
         self.cpo.elsfp = endpoints["els"]
+        self.cpo.elsfp.get_presence.return_value = True
         arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
         if json_output:
             arguments.append("--json")
@@ -692,6 +726,27 @@ class TestDirectPlatformApiCommands(object):
             assert record["Data Path State Indicator"] == record["ELS Lane State"] == {}
         else:
             assert result.output.count("Not supported") == 2
+
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_lane_status_keeps_oe_when_els_is_absent(self, json_output):
+        absent = mock.Mock(get_presence=mock.Mock(return_value=False))
+        absent.get_api.side_effect = AssertionError("API access on absent ELS")
+        self.cpo.elsfp = absent
+        args = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+        if json_output:
+            args.append("--json")
+        result = invoke(args)
+        assert result.exit_code == 0, result.output
+        absent.get_presence.assert_called_once_with()
+        absent.get_api.assert_not_called()
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert record["Data Path State Indicator"]["lane00"] == "DataPathActivated"
+            assert record["ELS Lane State"] == {}
+            assert record["ELS Lane State Error"] == "Not Present"
+        else:
+            assert "DataPathActivated" in result.output
+            assert "Not Present" in result.output
 
     def test_els_lane_state_preserves_api_strings(self):
         with mock.patch.object(
@@ -750,7 +805,8 @@ class TestDirectPlatformApiCommands(object):
         els_api = mock.Mock(spec=["get_module_state"])
         els_api.get_module_state.side_effect = NotImplementedError(
             "Independent ELS module state is not implemented")
-        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api))
+        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api),
+                                  get_presence=mock.Mock(return_value=True))
         missing = invoke(["show", "els", "status", "0", "--json"])
         assert missing.exit_code != 0
         assert (
@@ -789,6 +845,9 @@ class TestDirectPlatformApiCommands(object):
 
 
 class DomOptoeEndpoint(cpoutil.OptoeEepromReadWriteMixin):
+    def get_presence(self):
+        return True
+
     def __init__(self, path):
         self.path = str(path)
 
