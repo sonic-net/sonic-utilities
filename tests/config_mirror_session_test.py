@@ -77,25 +77,33 @@ def test_mirror_session_add():
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None)
+        mocked.assert_called_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=10, queue=100, label=None, policer=None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0X1234", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None)
+        mocked.assert_called_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=0x1234, queue=100, label=None, policer=None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0", "0"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None)
+        mocked.assert_called_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=0, queue=0, label=None, policer=None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, None, None, None)
+        mocked.assert_called_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=None, queue=None, label=None, policer=None)
 
 
 def test_mirror_session_erspan_add():
@@ -162,19 +170,28 @@ def test_mirror_session_erspan_add():
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, None, None, 0, 0)
+        mocked.assert_called_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=10, queue=100, src_port=None, direction=None,
+            label=None, policer=None, sample_rate=0, truncate_size=0)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0x1234", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None, None, None, 0, 0)
+        mocked.assert_called_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=0x1234, queue=100, src_port=None, direction=None,
+            label=None, policer=None, sample_rate=0, truncate_size=0)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["erspan"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0", "0"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None, None, None, 0, 0)
+        mocked.assert_called_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=0, queue=0, src_port=None, direction=None,
+            label=None, policer=None, sample_rate=0, truncate_size=0)
 
 
 @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
@@ -297,13 +314,17 @@ def test_mirror_session_span_add():
                 config.config.commands["mirror_session"].commands["span"].commands["add"],
                 ["test_session", "Ethernet8", "Ethernet4", "tx", "100"])
 
-        mocked.assert_called_with("test_session", "Ethernet8", "Ethernet4", "tx", 100, None)
+        mocked.assert_called_with(
+            "test_session", "Ethernet8",
+            src_port="Ethernet4", direction="tx", queue=100, label=None, policer=None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["span"].commands["add"],
                 ["test_session", "Ethernet0", "Ethernet4", "rx", "0"])
 
-        mocked.assert_called_with("test_session", "Ethernet0", "Ethernet4", "rx", 0, None)
+        mocked.assert_called_with(
+            "test_session", "Ethernet0",
+            src_port="Ethernet4", direction="rx", queue=0, label=None, policer=None)
 
 
 @patch("config.main.ConfigDBConnector", spec=True, connect=mock.Mock())
@@ -351,6 +372,8 @@ def test_mirror_session_remove_multi_asic_invalid_yang_validation(mock_db_connec
 
 @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
 @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
+@patch("config.main.ValidatedConfigDBConnector.get_entry",
+       mock.Mock(return_value={'type': 'SPAN', 'dst_port': 'Ethernet0'}), create=True)
 def test_mirror_session_remove_invalid_yang_validation():
     config.ADHOC_VALIDATION = False
     runner = CliRunner()
@@ -386,7 +409,8 @@ def test_add_span_validates_before_src_port_alias_conversion():
              mock.patch("config.main.clicommon.get_interface_naming_mode", return_value="alias"), \
              mock.patch("config.main.interface_alias_to_name",
                         side_effect=lambda _db, name: {"Eth0": "Ethernet0", "Eth4": "Ethernet4"}.get(name, name)):
-            config.add_span("test_session", "Eth0", "Eth4", "rx", 0, None)
+            config.add_span("test_session", "Eth0",
+                            src_port="Eth4", direction="rx", queue=0, policer=None)
 
     assert mock_validate.call_args[0][3] == "Eth4"
     assert db.set_entry.call_args[0][2]["src_port"] == "Ethernet4"
@@ -404,7 +428,8 @@ def test_add_erspan_validates_before_src_port_alias_conversion():
              mock.patch("config.main.clicommon.get_interface_naming_mode", return_value="alias"), \
              mock.patch("config.main.interface_alias_to_name",
                         side_effect=lambda _db, name: {"Eth4": "Ethernet4"}.get(name, name)):
-            config.add_erspan("test_session", "1.1.1.1", "2.2.2.2", 8, 63, 10, 0, None, "Eth4", "rx")
+            config.add_erspan("test_session", "1.1.1.1", "2.2.2.2", 8, 63, 10, 0,
+                              src_port="Eth4", direction="rx")
 
     assert mock_validate.call_args[0][3] == "Eth4"
     assert db.set_entry.call_args[0][2]["src_port"] == "Ethernet4"
@@ -422,7 +447,8 @@ def test_mirror_session_span_add_multi_asic_writes_only_destination_namespace():
                         side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get('namespace'))), \
              mock.patch('config.main.ValidatedConfigDBConnector', side_effect=lambda conn: dbs[conn.namespace]), \
              mock.patch('config.main.validate_mirror_session_config', return_value=True) as mock_validate:
-            config.add_span("test_session", "Ethernet0", "Ethernet4", "rx", 0, None)
+            config.add_span("test_session", "Ethernet0",
+                            src_port="Ethernet4", direction="rx", queue=0, policer=None)
 
     # asic0 should not have any writes
     dbs["asic0"].set_entry.assert_not_called()
@@ -449,7 +475,8 @@ def test_mirror_session_span_add_multi_asic_rejects_cross_asic_source_port():
                         side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get('namespace'))), \
              mock.patch('config.main.ValidatedConfigDBConnector', side_effect=lambda conn: dbs[conn.namespace]):
             with pytest.raises(click.UsageError):
-                config.add_span("test_session", "Ethernet0", "Ethernet64", "rx", 0, None)
+                config.add_span("test_session", "Ethernet0",
+                                src_port="Ethernet64", direction="rx", queue=0, policer=None)
 
     # No writes to any namespace
     dbs["asic0"].set_entry.assert_not_called()
@@ -469,10 +496,13 @@ def test_mirror_session_erspan_add_multi_asic_splits_source_ports_by_namespace()
                         side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get('namespace'))), \
              mock.patch('config.main.ValidatedConfigDBConnector', side_effect=lambda conn: dbs[conn.namespace]), \
              mock.patch('config.main.validate_mirror_session_config', return_value=True), \
-             mock.patch('config.main.interface_name_is_valid', return_value=True):
+             mock.patch('config.main.interface_name_is_valid', return_value=True), \
+             mock.patch('config.main.connect_mirror_session_state_db', return_value=mock.MagicMock()), \
+             mock.patch('config.main.is_mirror_session_label_capable', return_value=True):
             config.add_erspan(
-                "test_session", "1.1.1.1", "2.2.2.2", 8, 63, 10, 0, None,
-                "Ethernet0,Ethernet8", "rx"
+                "test_session", "1.1.1.1", "2.2.2.2", 8, 63, 10, 0,
+                policer=None, src_port="Ethernet0,Ethernet8", direction="rx",
+                label="stable_label"
             )
 
     # Each namespace should get exactly one write
@@ -483,6 +513,10 @@ def test_mirror_session_erspan_add_multi_asic_splits_source_ports_by_namespace()
     asic1_value = dbs["asic1"].set_entry.call_args[0][2]
     asic2_value = dbs["asic2"].set_entry.call_args[0][2]
 
+    assert all(
+        value["label"] == "stable_label"
+        for value in (asic0_value, asic1_value, asic2_value)
+    )
     # asic0 gets Ethernet0's src_port
     assert asic0_value["src_port"] == "Ethernet0"
     assert asic0_value["direction"] == "RX"
@@ -506,7 +540,8 @@ def test_mirror_session_remove_multi_asic_skips_missing_sessions():
     with mock.patch('config.main.multi_asic.get_all_namespaces', return_value={'front_ns': ['asic0', 'asic1']}), \
          mock.patch('config.main.ConfigDBConnector',
                     side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get('namespace'))), \
-         mock.patch('config.main.ValidatedConfigDBConnector', side_effect=lambda conn: dbs[conn.namespace]):
+         mock.patch('config.main.ValidatedConfigDBConnector', side_effect=lambda conn: dbs[conn.namespace]), \
+         mock.patch('config.main.log.log_notice') as mock_notice:
         result = runner.invoke(
             config.config.commands["mirror_session"].commands["remove"],
             ["sess1"]
@@ -517,6 +552,32 @@ def test_mirror_session_remove_multi_asic_skips_missing_sessions():
     dbs["asic0"].set_entry.assert_called_once_with("MIRROR_SESSION", "sess1", None)
     # asic1 does not have the session, so set_entry should not be called
     dbs["asic1"].set_entry.assert_not_called()
+    mock_notice.assert_called_once_with("Removed mirror session sess1")
+
+
+def test_mirror_session_remove_multi_asic_skips_syslog_when_missing():
+    config.ADHOC_VALIDATION = False
+    asic0_db = mock.MagicMock()
+    asic0_db.get_entry.return_value = {}
+    asic1_db = mock.MagicMock()
+    asic1_db.get_entry.return_value = {}
+    dbs = {"asic0": asic0_db, "asic1": asic1_db}
+
+    runner = CliRunner()
+    with mock.patch('config.main.multi_asic.get_all_namespaces', return_value={'front_ns': ['asic0', 'asic1']}), \
+         mock.patch('config.main.ConfigDBConnector',
+                    side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get('namespace'))), \
+         mock.patch('config.main.ValidatedConfigDBConnector', side_effect=lambda conn: dbs[conn.namespace]), \
+         mock.patch('config.main.log.log_notice') as mock_notice:
+        result = runner.invoke(
+            config.config.commands["mirror_session"].commands["remove"],
+            ["sess1"]
+        )
+        assert result.exit_code == 0
+
+    dbs["asic0"].set_entry.assert_not_called()
+    dbs["asic1"].set_entry.assert_not_called()
+    mock_notice.assert_not_called()
 
 
 def test_split_mirror_ports():
@@ -593,8 +654,8 @@ def test_erspan_multi_asic_validation_failure_prevents_all_writes():
                         return_value=True):
             config.add_erspan(
                 "test_session", "1.1.1.1", "2.2.2.2",
-                8, 63, 10, 0, None,
-                "Ethernet0,Ethernet8", "rx"
+                8, 63, 10, 0,
+                policer=None, src_port="Ethernet0,Ethernet8", direction="rx"
             )
 
     dbs["asic0"].set_entry.assert_not_called()
@@ -616,7 +677,7 @@ def test_erspan_multi_asic_rejects_non_front_panel_source_port():
                                match="not a front-panel port"):
                 config.add_erspan(
                     "test_session", "1.1.1.1", "2.2.2.2",
-                    8, 63, 10, 0, None, "Ethernet128", "rx"
+                    8, 63, 10, 0, policer=None, src_port="Ethernet128", direction="rx"
                 )
 
 
@@ -633,7 +694,7 @@ def test_erspan_multi_asic_rejects_invalid_source_port():
                                match="Source Interface.*invalid"):
                 config.add_erspan(
                     "test_session", "1.1.1.1", "2.2.2.2",
-                    8, 63, 10, 0, None, "InvalidPort", "rx"
+                    8, 63, 10, 0, policer=None, src_port="InvalidPort", direction="rx"
                 )
 
 
@@ -651,7 +712,7 @@ def test_span_multi_asic_rejects_invalid_source_port():
                                match="Source Interface.*invalid"):
                 config.add_span(
                     "test_session", "Ethernet0",
-                    "BadPort", "rx", 0, None
+                    src_port="BadPort", direction="rx", queue=0, policer=None
                 )
 
 
@@ -917,5 +978,262 @@ def test_mirror_session_erspan_add_with_valid_sample_rate_and_truncate():
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "64",
                  "--sample_rate", "50000", "--truncate_size", "128"])
         assert result.exit_code == 0
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2",
-                                  8, 64, None, None, None, None, None, 50000, 128)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 64,
+                                  gre_type=None, queue=None, src_port=None, direction=None,
+                                  label=None, policer=None, sample_rate=50000, truncate_size=128)
+
+
+def test_mirror_session_add_label_options():
+    runner = CliRunner()
+
+    with mock.patch('config.main.add_erspan') as mocked:
+        result = runner.invoke(
+            config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+            ["test_session", "100.1.1.1", "2.2.2.2", "8", "63",
+             "--label", "erspan_label"])
+        assert result.exit_code == 0
+        mocked.assert_called_once_with(
+            "test_session", "100.1.1.1", "2.2.2.2", 8, 63,
+            gre_type=None, queue=None, src_port=None, direction=None,
+            label="erspan_label", policer=None, sample_rate=0, truncate_size=0)
+
+    with mock.patch('config.main.add_span') as mocked:
+        result = runner.invoke(
+            config.config.commands["mirror_session"].commands["span"].commands["add"],
+            ["test_session", "Ethernet0", "--label", "span-label"])
+        assert result.exit_code == 0
+        mocked.assert_called_once_with(
+            "test_session", "Ethernet0",
+            src_port=None, direction=None, queue=None,
+            label="span-label", policer=None)
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("contains space", id="space"),
+        pytest.param("punctuation!", id="punctuation"),
+        pytest.param("L" * 32, id="too-long"),
+    ],
+)
+def test_mirror_session_rejects_invalid_label(label):
+    runner = CliRunner()
+    result = runner.invoke(
+        config.config.commands["mirror_session"].commands["span"].commands["add"],
+        ["test_session", "Ethernet0", "--label", label])
+
+    assert result.exit_code != 0
+    assert "must be 1 to 31 characters" in result.output
+
+
+def test_gather_session_info_serializes_optional_label():
+    base = {"type": "SPAN", "dst_port": "Ethernet0"}
+    assert "label" not in config.gather_session_info(dict(base))
+    assert config.gather_session_info(
+        dict(base), label="stable_label")["label"] == "stable_label"
+
+
+def test_validate_mirror_session_label_uniqueness_rejects_duplicate():
+    db = mock.MagicMock()
+    db.get_table.return_value = {
+        "existing_session": {"type": "ERSPAN", "label": "stable_label"}
+    }
+
+    with click.Context(click.Command("test")) as ctx:
+        with pytest.raises(click.UsageError, match="label stable_label is already used by existing_session"):
+            config.validate_mirror_session_label_uniqueness(ctx, db, "stable_label")
+
+
+def test_is_mirror_session_label_capable():
+    state_db = mock.Mock()
+    state_db.STATE_DB = "STATE_DB"
+
+    state_db.get.return_value = "true"
+    assert config.is_mirror_session_label_capable(state_db) is True
+
+    state_db.get.return_value = "false"
+    assert config.is_mirror_session_label_capable(state_db) is False
+
+    state_db.get.return_value = None
+    assert config.is_mirror_session_label_capable(state_db) is False
+
+
+def test_connect_mirror_session_state_db():
+    with mock.patch("utilities_common.mirror.SonicV2Connector") as mock_connector:
+        mock_instance = mock.Mock()
+        mock_instance.STATE_DB = "STATE_DB"
+        mock_connector.return_value = mock_instance
+
+        returned = config.connect_mirror_session_state_db("asic0")
+
+        mock_connector.assert_called_once_with(use_unix_socket_path=True, namespace="asic0")
+        mock_instance.connect.assert_called_once_with("STATE_DB", False)
+        assert returned is mock_instance
+
+
+def test_validate_mirror_session_label_capability_rejects_unsupported():
+    state_db = mock.MagicMock()
+
+    with click.Context(click.Command("test")) as ctx:
+        with mock.patch("config.main.is_mirror_session_label_capable", return_value=False):
+            with pytest.raises(click.UsageError, match="Mirror session label is not supported"):
+                config.validate_mirror_session_label_capability(ctx, state_db)
+
+
+def test_validate_mirror_session_label_capability_skips_unlabeled():
+    with click.Context(click.Command("test")) as ctx:
+        with mock.patch("config.main.is_mirror_session_label_capable") as mock_capable:
+            config.validate_mirror_session_label_capability(ctx, None)
+            mock_capable.assert_not_called()
+
+
+def test_mirror_session_label_rejected_when_capability_false():
+    db = mock.MagicMock()
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces", return_value={"front_ns": []}), \
+             mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+             mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
+             mock.patch("config.main.validate_mirror_session_config", return_value=True), \
+             mock.patch("config.main.connect_mirror_session_state_db", return_value=mock.MagicMock()), \
+             mock.patch("config.main.is_mirror_session_label_capable", return_value=False):
+            with pytest.raises(click.UsageError, match="Mirror session label is not supported"):
+                config.add_span(
+                    "test_session", "Ethernet0",
+                    src_port=None, direction=None, queue=None,
+                    label="span_label", policer=None
+                )
+            db.set_entry.assert_not_called()
+
+            with pytest.raises(click.UsageError, match="Mirror session label is not supported"):
+                config.add_erspan(
+                    "test_session", "1.1.1.1", "2.2.2.2", 8, 63,
+                    label="erspan_label"
+                )
+            db.set_entry.assert_not_called()
+
+
+def test_mirror_session_unlabeled_add_skips_label_capability():
+    db = mock.MagicMock()
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces", return_value={"front_ns": []}), \
+             mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+             mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
+             mock.patch("config.main.validate_mirror_session_config", return_value=True), \
+             mock.patch("config.main.connect_mirror_session_state_db") as mock_connect, \
+             mock.patch("config.main.is_mirror_session_label_capable") as mock_capable:
+            config.add_span(
+                "test_session", "Ethernet0",
+                src_port=None, direction=None, queue=None,
+                label=None, policer=None
+            )
+            mock_connect.assert_not_called()
+            mock_capable.assert_not_called()
+            db.set_entry.assert_called_once()
+
+
+def test_mirror_session_unlabeled_erspan_add_skips_label_capability():
+    db = mock.MagicMock()
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces", return_value={"front_ns": []}), \
+             mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+             mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
+             mock.patch("config.main.validate_mirror_session_config", return_value=True), \
+             mock.patch("config.main.connect_mirror_session_state_db") as mock_connect, \
+             mock.patch("config.main.is_mirror_session_label_capable") as mock_capable:
+            config.add_erspan(
+                "test_session", "1.1.1.1", "2.2.2.2", 8, 63,
+                label=None
+            )
+            mock_connect.assert_not_called()
+            mock_capable.assert_not_called()
+            db.set_entry.assert_called_once()
+
+
+def test_mirror_session_erspan_label_rejected_if_any_asic_incapable():
+    dbs = {"asic0": mock.MagicMock(), "asic1": mock.MagicMock()}
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces",
+                        return_value={"front_ns": ["asic0", "asic1"]}), \
+             mock.patch("config.main.ConfigDBConnector",
+                        side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get("namespace"))), \
+             mock.patch("config.main.ValidatedConfigDBConnector", side_effect=lambda conn: dbs[conn.namespace]), \
+             mock.patch("config.main.validate_mirror_session_config", return_value=True), \
+             mock.patch("config.main.connect_mirror_session_state_db",
+                        side_effect=lambda namespace=None: mock.MagicMock(namespace=namespace)), \
+             mock.patch("config.main.is_mirror_session_label_capable",
+                        side_effect=lambda state_db: state_db.namespace == "asic0"):
+            with pytest.raises(click.UsageError, match="Mirror session label is not supported"):
+                config.add_erspan(
+                    "test_session", "1.1.1.1", "2.2.2.2", 8, 63,
+                    label="stable_label"
+                )
+
+    dbs["asic0"].set_entry.assert_not_called()
+    dbs["asic1"].set_entry.assert_not_called()
+
+
+def test_log_mirror_session_created_includes_session_fields():
+    with mock.patch("config.main.log.log_notice") as mock_notice:
+        config.log_mirror_session_created(
+            "erspan1",
+            {"type": "ERSPAN", "src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "ttl": 63},
+        )
+        mock_notice.assert_called_once_with(
+            "Created mirror session erspan1: type=ERSPAN,src_ip=1.1.1.1,dst_ip=2.2.2.2,ttl=63"
+        )
+
+
+def test_mirror_session_create_remove_syslog():
+    db = mock.MagicMock()
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces", return_value={"front_ns": []}), \
+             mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+             mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
+             mock.patch("config.main.validate_mirror_session_config", return_value=True), \
+             mock.patch("config.main.connect_mirror_session_state_db", return_value=mock.MagicMock()), \
+             mock.patch("config.main.is_mirror_session_label_capable", return_value=True), \
+             mock.patch("config.main.log.log_notice") as mock_notice:
+            config.add_span(
+                "test_session", "Ethernet0",
+                src_port=None, direction=None, queue=None,
+                label="span_label", policer=None
+            )
+            mock_notice.assert_called_with(
+                "Created mirror session test_session: type=SPAN,dst_port=Ethernet0,label=span_label"
+            )
+
+    runner = CliRunner()
+    db = mock.MagicMock()
+    db.get_entry.return_value = {"type": "SPAN", "dst_port": "Ethernet0"}
+    with mock.patch("config.main.multi_asic.get_all_namespaces", return_value={"front_ns": []}), \
+         mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+         mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
+         mock.patch("config.main.log.log_notice") as mock_notice:
+        result = runner.invoke(
+            config.config.commands["mirror_session"].commands["remove"],
+            ["test_session"])
+        assert result.exit_code == 0
+        db.set_entry.assert_called_once_with("MIRROR_SESSION", "test_session", None)
+        mock_notice.assert_called_with("Removed mirror session test_session")
+
+
+def test_mirror_session_remove_skips_syslog_when_missing():
+    runner = CliRunner()
+    db = mock.MagicMock()
+    db.get_entry.return_value = {}
+    with mock.patch("config.main.multi_asic.get_all_namespaces", return_value={"front_ns": []}), \
+         mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+         mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
+         mock.patch("config.main.log.log_notice") as mock_notice:
+        result = runner.invoke(
+            config.config.commands["mirror_session"].commands["remove"],
+            ["test_session"])
+        assert result.exit_code == 0
+        db.set_entry.assert_not_called()
+        mock_notice.assert_not_called()

@@ -131,9 +131,11 @@ class NbrBase(object):
         """
         cmd = self.cmd
         if self.namespace is not None and self.namespace != constants.DEFAULT_NAMESPACE:
-            cmd = "ip netns exec {} {}".format(self.namespace, self.cmd)
+            cmd = ["ip", "netns", "exec", self.namespace] + self.cmd
 
-        p = subprocess.Popen(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # cmd is an argv list (not a shell string): ipaddr/iface/namespace values can never be
+        # interpreted as shell metacharacters, regardless of their content.
+        p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (output, err) = p.communicate()
         rc = p.wait()
 
@@ -184,17 +186,18 @@ class NbrBase(object):
 class ArpShow(NbrBase):
 
     HEADER = ['Address', 'MacAddress', 'Iface', 'Vlan']
-    CMD = "/usr/sbin/arp -n "
+    CMD = ["/usr/sbin/arp", "-n"]
 
     def __init__(self, ipaddr, iface, namespace=None):
 
-        if ipaddr is not None:
-            self.CMD += ipaddr
-
+        cmd = list(self.CMD)
         if iface is not None:
-            self.CMD += ' -i ' + iface
+            cmd += ['-i', iface]
 
-        NbrBase.__init__(self, self.CMD, namespace)
+        if ipaddr is not None:
+            cmd += ['--', ipaddr]
+
+        NbrBase.__init__(self, cmd, namespace)
         return
 
     def display(self):
@@ -223,18 +226,19 @@ class ArpShow(NbrBase):
 class NeighShow(NbrBase):
 
     HEADER = ['Address', 'MacAddress', 'Iface', 'Vlan', 'Status']
-    CMD = "/bin/ip -6 neigh show "
+    CMD = ["/bin/ip", "-6", "neigh", "show"]
 
     def __init__(self, ipaddr, iface, namespace=None):
 
+        cmd = list(self.CMD)
         if ipaddr is not None:
-            self.CMD += ipaddr
+            cmd.append(ipaddr)
 
         if iface is not None:
-            self.CMD += ' dev ' + iface
+            cmd += ['dev', iface]
 
         self.iface = iface
-        NbrBase.__init__(self, self.CMD, namespace)
+        NbrBase.__init__(self, cmd, namespace)
         return
 
     def display(self):
