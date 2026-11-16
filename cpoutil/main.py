@@ -1661,10 +1661,18 @@ def _validate_eeprom_range(bank, page, offset, size):
         )
 
 
-def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
-    """Restrict raw access to pages and memory halves declared by the endpoint."""
+def _eeprom_page_start(page):
+    """Return the physical start offset of a memory-map page."""
     from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import CmisAdministrativeLowerPage
 
+    # A lower-memory layout mirrored to a nonzero page occupies upper memory.
+    if page.page == 0 and isinstance(page, CmisAdministrativeLowerPage):
+        return 0
+    return EEPROM_PAGE_OFFSET
+
+
+def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
+    """Restrict raw access to pages and memory halves declared by the endpoint."""
     label = str(resource_id).upper()
     api = get_oe_api(cpo, label) if resource_type == OPTICAL_ENGINE else get_els_api(cpo, label)
     mem_map = getattr(getattr(api, "xcvr_eeprom", None), "mem_map", None)
@@ -1677,10 +1685,9 @@ def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
         raise CpoCommandError(
             "Page 0x{:02x} is not declared for '{}'; valid pages: {}".format(page, label, valid_pages)
         )
-    has_lower = any(isinstance(item, CmisAdministrativeLowerPage) for item in selected)
-    has_upper = any(not isinstance(item, CmisAdministrativeLowerPage) for item in selected)
-    if (offset < EEPROM_PAGE_OFFSET and not has_lower
-            or offset + size > EEPROM_PAGE_OFFSET and not has_upper):
+    starts = {_eeprom_page_start(item) for item in selected}
+    if (offset < EEPROM_PAGE_OFFSET and 0 not in starts
+            or offset + size > EEPROM_PAGE_OFFSET and EEPROM_PAGE_OFFSET not in starts):
         raise CpoCommandError(
             "Page 0x{:02x} does not cover offsets 0x{:02x}-0x{:02x} for '{}'".format(
                 page, offset, offset + size - 1, label)
@@ -1924,9 +1931,7 @@ def _full_eeprom_sections(banks):
 
 def _els_eeprom_sections(eeprom, resource_id):
     """Read physical pages already resolved by the selected ELS API map."""
-    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import (
-        CmisAdministrativeLowerPage,
-    )
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
 
     mem_map = getattr(eeprom, "mem_map", None)
     if mem_map is None or not getattr(mem_map, "pages", None):
@@ -1938,14 +1943,15 @@ def _els_eeprom_sections(eeprom, resource_id):
 
     sections = []
     for page in mem_map.pages:
-        lower = isinstance(page, CmisAdministrativeLowerPage)
-        offset = 0 if lower else EEPROM_PAGE_OFFSET
+        offset = _eeprom_page_start(page)
         title = "{} page {:x}h".format(
-            "Lower" if lower else "Upper", page.page
+            "Lower" if offset == 0 else "Upper", page.page
         )
         if page.bank:
             title += " bank {:x}h".format(page.bank)
-        sections.append((title, page.getaddr(offset), offset))
+        # Raw dumps already use physical offsets. Mirrored pages' getaddr()
+        # accepts a logical lower-memory offset and can add the shift itself.
+        sections.append((title, CmisPage.linear_offset(page.page, page.bank, offset), offset))
     return sections
 
 

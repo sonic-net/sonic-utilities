@@ -1147,7 +1147,8 @@ class TestCommandCoverage(object):
 
         mem_map = ElsfpMemMap(ElsfpCodes)
         for index, page in enumerate(mem_map.pages):
-            page._page = 0xB0 + index
+            if index:
+                page._page = 0xB0 + index
         coverage_environment.api.xcvr_eeprom = mock.Mock(
             mem_map=mem_map,
             reader=coverage_environment.read_eeprom,
@@ -1155,7 +1156,7 @@ class TestCommandCoverage(object):
 
         result = invoke_coverage(["read-eeprom", "els", "-i", "0"])
         assert result.exit_code == 0, result.output
-        assert "Lower page b0h" in result.output
+        assert "Lower page 0h" in result.output
         assert "Upper page b7h" in result.output
         assert coverage_environment.reads == [
             (page.getaddr(0 if index == 0 else 128), 128)
@@ -1169,6 +1170,7 @@ class TestCommandCoverage(object):
         from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.elsfp.elsfp import (
             ElsfpMemMap,
         )
+        from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
 
         mem_map = ElsfpMemMap(ElsfpCodes)
         mem_map.pages = mem_map.pages[:3]
@@ -1190,11 +1192,11 @@ class TestCommandCoverage(object):
 
         result = invoke_coverage(["read-eeprom", "els", "-i", "0"])
         assert result.exit_code == 0, result.output
-        assert "Lower page {:x}h".format(0xB0 + page_offset) in result.output
+        assert "Upper page {:x}h".format(0xB0 + page_offset) in result.output
         assert "Upper page {:x}h".format(0xB2 + page_offset) in result.output
         assert api_reads == [
-            (page.getaddr(0 if index == 0 else 128), 128)
-            for index, page in enumerate(mem_map.pages)
+            (CmisPage.linear_offset(page.page, page.bank, 0x80), 128)
+            for page in mem_map.pages
         ]
         coverage_environment.read_eeprom.assert_not_called()
 
@@ -1649,13 +1651,12 @@ class TestEepromPageOffset:
         assert coverage_environment.writes == []
 
     def test_page_11_offset_2_never_reaches_tx_disable(self, coverage_environment, monkeypatch):
-        # With real CMIS addressing, page 0x11 offset 2 equals page 0x10 offset 130.
+        # Reject the invalid request before it reaches platform address calculation.
         from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
         monkeypatch.setattr(
             cpoutil, "_eeprom_linear_offset",
             lambda resource_type, resource_id, obj, bank, page, offset:
             CmisPage.linear_offset(page, bank, offset))
-        assert CmisPage.linear_offset(0x11, 0, 2) == CmisPage.linear_offset(0x10, 0, 130)
         result = invoke_coverage(
             ["write-eeprom", "oe", "-i", "0", "-b", "0", "-n", "0x11", "-o", "2", "-d", "ff"])
         assert result.exit_code != 0
