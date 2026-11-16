@@ -37,6 +37,9 @@ import struct, sys
 data, prefix, count, pos = open(sys.argv[1], "rb").read(), sys.argv[2], 0, 0
 while pos < len(data):
     list_size, header_size, sig_size = struct.unpack_from("<III", data, pos + 16)
+    if data[pos:pos + 16] != bytes.fromhex("a159c0a5e494a74a87b5ab155c2bf072"):
+        pos += list_size
+        continue
     for entry in range(pos + 28 + header_size, pos + list_size, sig_size):
         open("%%s-%%d.der" %% (prefix, count), "wb").write(data[entry + 16:entry + sig_size])
         count += 1
@@ -133,7 +136,15 @@ if [ "$1" = "--list" ]; then
     exit
 fi
 name="$(basename "$3")"
-[ "$name" != "$UNSIGNED_BINARY" ] && cmp -s "$2" "{signers}/$name"
+[ "$name" != "$UNSIGNED_BINARY" ] || exit 1
+# Compare names explicitly so the fake signer lookup is case-sensitive on every host.
+for signer in "{signers}"/*; do
+    if [ "$(basename "$signer")" = "$name" ]; then
+        cmp -s "$2" "$signer"
+        exit $?
+    fi
+done
+exit 1
 """)
     # The fake openssl rejects reinstall-* updates, as for a replace-only (non-append) .auth.
     _write_executable(fake_bin / "openssl", f'#!/bin/sh\n[ "$1" = x509 ] && exec "{REAL_OPENSSL}" "$@"\n'
@@ -448,10 +459,13 @@ def test_invalid_auth_header_never_changes_firmware(env, safe_updates, capsys, k
     payload = b"" if filename == "remove-all-db.auth" else _esl(env["certs"][0])
     (env["auth_dir"] / filename).write_bytes(_auth(payload, **kwargs))
     code, _, err = _run(capsys, mode)
-    if mode == "--auto" and filename != "remove-all-db.auth":
+    if mode == "--auto":
         assert code == 0
-        assert "could not parse an ESL" in err
-        assert "prune skipped (unsafe plan" in err
+        if filename != "remove-all-db.auth":
+            assert "could not parse an ESL" in err
+            assert "prune skipped (unsafe plan" in err
+        else:
+            assert "cannot establish ownership" in err
     else:
         assert code == 2
     assert err
@@ -575,7 +589,7 @@ def test_missing_or_empty_auth_directory_skips_analysis(env, monkeypatch, capsys
 
 
 @pytest.mark.parametrize("has_removable_certificate", [False, True])
-def test_multi_certificate_auth_only_drops_certificates_not_reinstalled(
+def test_multi_certificate_auth_plan_identifies_only_unreinstalled_certificates(
         env, safe_updates, tmp_path, capsys, has_removable_certificate):
     cert0, cert1 = env["certs"]
     reinstalled = _make_cert("REINSTALLED")
@@ -596,62 +610,96 @@ def test_multi_certificate_auth_only_drops_certificates_not_reinstalled(
 
     code, out, err = _run(capsys, "--auto")
     assert code == 0
-    assert not err
     if has_removable_certificate:
-        assert "Pruning 1 stale" in out
-        assert env["marker"].read_text().splitlines() == [
-            "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
-        ]
-        assert prune.read_efi_variable(safe_updates, "db") == _esl(cert0, reinstalled) + _esl(cert1)
+        assert "cannot establish ownership" in err
     else:
-        assert "No stale db certificates to prune." in out
-        assert not env["marker"].exists()
-        assert prune.read_efi_variable(safe_updates, "db") == _esl(*original_certs)
+        assert "No unused db certificates found in the SONiC scan; db is unchanged." in out
+        assert not err
+    assert not env["marker"].exists()
+    assert prune.read_efi_variable(safe_updates, "db") == _esl(*original_certs)
     assert auth.read_bytes() == original_auth
 
 
-def test_auto_skips_when_no_certificates_are_stale(env, monkeypatch, capsys):
+@pytest.mark.parametrize("has_reinstall_auth", [False, True])
+def test_auto_preserves_unrelated_enrolled_trust_outside_sonic_scan(
+        env, safe_updates, tmp_path, monkeypatch, capsys, has_reinstall_auth):
+    recovery_cert = _make_cert("RECOVERY")
+    original = _esl(*env["certs"], recovery_cert)
+    _write_var(safe_updates.efivars_dir, "db", original)
+    recovery = safe_updates.esp_path / "ONIE" / "recovery.efi"
+    recovery.parent.mkdir()
+    recovery.write_text("recovery binary outside the SONiC scan")
+    (env["fake_bin"].parent / "signers" / recovery.name).write_bytes(
+        recovery_cert.public_bytes(serialization.Encoding.PEM))
+    if has_reinstall_auth:
+        (safe_updates.auth_dir / "DB-recovery.auth").write_bytes(_auth(_esl(recovery_cert)))
+
+    plan = prune.analyze(safe_updates, tmp_path, images=["SONiC-OS-test"])
+    assert recovery not in plan.records
+    assert [cert.subject for cert in plan.drop] == ["CN=RECOVERY"]
+    assert not plan.missing and not plan.boot_chain_at_risk
+    update = Mock(side_effect=AssertionError("automatic firmware update forbidden"))
+    monkeypatch.setattr(prune, "update_db", update)
+    code, _, err = _run(capsys, "--auto")
+    assert code == 0 and "cannot establish ownership" in err
+    update.assert_not_called()
+    assert prune.read_efi_variable(safe_updates, "db") == original
+    assert not env["marker"].exists()
+
+
+def test_auto_preserves_non_x509_db_entries(env, safe_updates, monkeypatch, capsys):
+    # EFI_CERT_SHA256_GUID entries authorize images by digest, outside the X.509 plan.
+    digest_entry = OWNER_GUID + bytes(range(32))
+    digest_list = (
+        uuid.UUID("c1c41626-504c-4092-aca9-41f936934328").bytes_le
+        + struct.pack("<III", ESL_HEADER_SIZE + len(digest_entry), 0, len(digest_entry))
+        + digest_entry
+    )
+    original = prune.read_efi_variable(safe_updates, "db") + digest_list
+    _write_var(safe_updates.efivars_dir, "db", original)
+    update = Mock(side_effect=AssertionError("automatic firmware update forbidden"))
+    monkeypatch.setattr(prune, "update_db", update)
+    code, _, err = _run(capsys, "--auto")
+    assert code == 0 and "cannot establish ownership" in err
+    update.assert_not_called()
+    assert prune.read_efi_variable(safe_updates, "db") == original
+    assert not env["marker"].exists()
+
+
+def test_auto_skips_when_no_certificates_are_unused(env, monkeypatch, capsys):
     plan = Mock(used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[])
     monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
     apply = Mock()
     monkeypatch.setattr(prune, "apply_plan", apply)
     assert prune.prune_db_certificates(prune.Config.from_env(), auto=True) == 0
-    assert "No stale db certificates" in capsys.readouterr().out
+    assert "No unused db certificates" in capsys.readouterr().out
     apply.assert_not_called()
     assert not env["marker"].exists()
 
 
 @pytest.mark.parametrize("verbose", [False, True])
-def test_auto_validates_before_updates_and_keeps_default_output_concise(env, monkeypatch, capsys, verbose):
+@pytest.mark.parametrize("commit", [False, True])
+def test_auto_skips_reset_without_validating_or_writing(env, monkeypatch, capsys, verbose, commit):
     config = prune.Config.from_env()
-    auth = env["auth_dir"] / "DB-cert0.auth"
-    kernel = config.host_path / "image-test" / "boot" / "vmlinuz-test"
-    cert = config.auth_dir / "cert.pem"
-    plan = Mock(
-        used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[Mock()],
-        selected_auths=[auth], boot_critical_binaries=[kernel],
-    )
+    plan = Mock(used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[Mock()])
     monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
     print_plan = Mock()
     monkeypatch.setattr(prune, "print_plan", print_plan)
-    operations = Mock()
-    operations.update.return_value = True
-    operations.read.return_value = [Mock(pem=cert)]
-    operations.verify.return_value = True
-    monkeypatch.setattr(prune, "validate_updates", operations.validate)
-    monkeypatch.setattr(prune, "update_db", operations.update)
-    monkeypatch.setattr(prune, "read_efi_certificates", operations.read)
-    monkeypatch.setattr(prune, "succeeds", operations.verify)
-    assert prune.prune_db_certificates(config, auto=True, verbose=verbose) == 0
-    assert [item[0] for item in operations.mock_calls] == ["validate", "update", "update", "read", "verify"]
-    assert operations.update.call_args_list == [
-        call(config, config.remove_all_auth, append=False), call(config, auth, append=True),
-    ]
-    out = capsys.readouterr().out
-    assert "Pruning 1 stale" in out and "Done: db reset" in out
-    assert ("verifies against the new db" in out) == verbose
-    assert ("Reinstalling" in out) == verbose
+    validate = Mock(side_effect=AssertionError("automatic validation should not be needed"))
+    apply = Mock(side_effect=AssertionError("automatic firmware reset forbidden"))
+    monkeypatch.setattr(prune, "validate_updates", validate)
+    monkeypatch.setattr(prune, "apply_plan", apply)
+    assert prune.prune_db_certificates(config, auto=True, commit=commit, verbose=verbose) == 0
+    validate.assert_not_called()
+    apply.assert_not_called()
+    captured = capsys.readouterr()
+    assert "cannot establish ownership" in captured.err
+    assert "db is unchanged" in captured.err
+    assert "Pruning" not in captured.out and "Done:" not in captured.out
     assert print_plan.call_count == int(verbose)
+    if verbose:
+        assert print_plan.call_args.args[2] is False
+    assert not env["marker"].exists()
 
 
 @pytest.mark.parametrize("error", [
@@ -718,9 +766,8 @@ def test_read_commands_are_bounded_but_firmware_writes_are_not(env, monkeypatch)
     run.assert_called_with(["efi-updatevar", "-a", "-f", str(auth), "db"])
 
 
-@pytest.mark.parametrize("mode", ["--commit", "--auto"])
-def test_safe_pruning_restores_all_signers_before_success(env, safe_updates, capsys, mode):
-    code, out, err = _run(capsys, mode)
+def test_manual_reset_restores_all_signers_before_success(env, safe_updates, capsys):
+    code, out, err = _run(capsys, "--commit")
     assert code == 0, err
     assert env["marker"].read_text().splitlines() == [
         "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
@@ -730,10 +777,39 @@ def test_safe_pruning_restores_all_signers_before_success(env, safe_updates, cap
     assert "DO NOT REBOOT" not in err
 
 
-@pytest.mark.parametrize("mode", ["--commit", "--auto"])
-def test_failed_append_restores_other_signers_and_warns_against_reboot(env, safe_updates, monkeypatch, capsys, mode):
+@pytest.mark.parametrize("wipe_error", [
+    None, OSError("cannot start wipe"), prune.subprocess.TimeoutExpired("wipe", 600),
+    prune.ScriptError("failed wipe"), RuntimeError("unexpected wipe failure"),
+])
+def test_failed_wipe_attempts_all_reinstalls_and_remains_fatal(
+        env, safe_updates, tmp_path, monkeypatch, capsys, wipe_error):
+    plan = prune.analyze(safe_updates, tmp_path, images=["SONiC-OS-test"])
+
+    def update(config, auth, append):
+        if not append:
+            if wipe_error is not None:
+                raise wipe_error
+            return False
+        return True
+
+    update = Mock(side_effect=update)
+    monkeypatch.setattr(prune, "update_db", update)
+    # Even successful verification cannot turn a failed write attempt into success.
+    monkeypatch.setattr(prune, "read_efi_certificates", Mock(return_value=plan.db_certs))
+    monkeypatch.setattr(prune, "succeeds", Mock(return_value=True))
+    with pytest.raises(prune.DbUpdateError):
+        prune.apply_plan(safe_updates, plan, tmp_path)
+    assert update.call_args_list == [
+        call(safe_updates, safe_updates.remove_all_auth, append=False),
+        *[call(safe_updates, auth, append=True) for auth in plan.selected_auths],
+    ]
+    assert "Done:" not in capsys.readouterr().out
+    assert not env["marker"].exists()
+
+
+def test_failed_append_restores_other_signers_and_warns_against_reboot(env, safe_updates, monkeypatch, capsys):
     monkeypatch.setenv("FAIL_AUTH", "DB-cert0.auth")
-    code, out, err = _run(capsys, mode)
+    code, out, err = _run(capsys, "--commit")
     assert code == 2
     assert env["marker"].read_text().splitlines() == [
         "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
@@ -743,7 +819,7 @@ def test_failed_append_restores_other_signers_and_warns_against_reboot(env, safe
     assert "Done:" not in out
 
 
-@pytest.mark.parametrize("mode", ["--commit", "--auto", "--verbose-auto"])
+@pytest.mark.parametrize("mode", ["--commit", "--verbose-commit"])
 @pytest.mark.parametrize("failure", ["write", "flush", "closed"])
 def test_stdout_failure_after_wipe_does_not_interrupt_restoration(
         env, safe_updates, monkeypatch, mode, failure):
@@ -763,7 +839,7 @@ def test_stdout_failure_after_wipe_does_not_interrupt_restoration(
             return result
 
         output_patch.setattr(prune, "update_db", break_stdout_after_wipe)
-        argv = ["--auto", "-v"] if mode == "--verbose-auto" else [mode]
+        argv = ["--commit", "-v"] if mode == "--verbose-commit" else [mode]
         assert prune.main(argv) == 0
     assert env["marker"].read_text().splitlines() == [
         "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
@@ -779,14 +855,17 @@ def test_broken_stderr_does_not_abandon_remaining_reinstalls(env, safe_updates, 
     with monkeypatch.context() as output_patch:
         output_patch.setattr(sys, "stderr", stderr)
         with pytest.raises(prune.ScriptError, match="DO NOT REBOOT"):
-            prune.prune_db_certificates(safe_updates, auto=True)
+            prune.prune_db_certificates(safe_updates, commit=True)
     assert env["marker"].read_text().splitlines() == [
         "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
     ]
     assert prune.read_efi_variable(safe_updates, "db") == _esl(env["certs"][1])
 
 
-@pytest.mark.parametrize("error", [OSError("cannot start writer"), prune.subprocess.TimeoutExpired("writer", 600)])
+@pytest.mark.parametrize("error", [
+    OSError("cannot start writer"), prune.subprocess.TimeoutExpired("writer", 600),
+    prune.ScriptError("invalid restore"), RuntimeError("unexpected restore failure"),
+])
 def test_append_exception_does_not_abandon_other_reinstalls(env, safe_updates, monkeypatch, capsys, error):
     update = prune.update_db
 
@@ -796,7 +875,7 @@ def test_append_exception_does_not_abandon_other_reinstalls(env, safe_updates, m
         return update(config, auth, append)
 
     monkeypatch.setattr(prune, "update_db", fail_first_append)
-    code, out, err = _run(capsys, "--auto")
+    code, out, err = _run(capsys, "--commit")
     assert code == 2
     assert prune.read_efi_variable(safe_updates, "db") == _esl(env["certs"][1])
     assert str(error) in err and "DO NOT REBOOT" in err
@@ -804,7 +883,8 @@ def test_append_exception_does_not_abandon_other_reinstalls(env, safe_updates, m
 
 
 @pytest.mark.parametrize("error", [
-    OSError("cannot read updated db"), prune.subprocess.TimeoutExpired("verification", 600),
+    prune.ScriptError("cannot parse updated db"), OSError("cannot read updated db"),
+    prune.subprocess.TimeoutExpired("verification", 600),
     KeyboardInterrupt(), SystemExit(143), RuntimeError("unexpected verification failure"),
 ])
 def test_post_write_failure_preserves_error_and_warns_against_reboot(
@@ -817,9 +897,14 @@ def test_post_write_failure_preserves_error_and_warns_against_reboot(
         return read(*args, **kwargs)
 
     monkeypatch.setattr(prune, "read_efi_certificates", fail_readback)
-    with pytest.raises(type(error)) as caught:
-        prune.prune_db_certificates(safe_updates, auto=True)
-    assert caught.value is error
+    expected = prune.DbUpdateError if isinstance(error, Exception) else type(error)
+    with pytest.raises(expected) as caught:
+        prune.prune_db_certificates(safe_updates, commit=True)
+    if isinstance(error, Exception):
+        assert str(error) in str(caught.value)
+        assert caught.value.__cause__ is error
+    else:
+        assert caught.value is error
     assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
     captured = capsys.readouterr()
     assert "DO NOT REBOOT" in captured.err
@@ -852,7 +937,7 @@ def test_chattr_timeout_does_not_prevent_firmware_update(env, monkeypatch, capsy
 
 def test_validation_timeout_does_not_warn_of_firmware_changes(env, safe_updates, monkeypatch, capsys):
     monkeypatch.setattr(prune, "validate_updates", Mock(side_effect=prune.subprocess.TimeoutExpired("openssl", 600)))
-    code, _, err = _run(capsys, "--auto")
+    code, _, err = _run(capsys, "--commit")
     assert code == 2
     assert "timed out" in err
     assert "DO NOT REBOOT" not in err
@@ -881,7 +966,7 @@ def test_cancellation_restores_certificates_before_propagating(
     monkeypatch.setattr(prune, "update_db", cancel_during_update)
     expected = KeyboardInterrupt if signum == prune.signal.SIGINT else SystemExit
     with pytest.raises(expected) as error:
-        prune.prune_db_certificates(safe_updates, auto=True)
+        prune.prune_db_certificates(safe_updates, commit=True)
     if signum != prune.signal.SIGINT:
         assert error.value.code == 128 + signum
     assert prune.read_efi_variable(safe_updates, "db") == _esl(*env["certs"])
@@ -920,7 +1005,7 @@ def test_custom_cancellation_handler_runs_after_restoration(env, safe_updates, m
 
     monkeypatch.setattr(prune, "update_db", cancel_after_wipe)
     try:
-        assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+        assert prune.prune_db_certificates(safe_updates, commit=True) == 0
         assert calls == [signum]
         assert prune.signal.getsignal(signum) is caller_handler
     finally:
@@ -948,7 +1033,7 @@ signal.signal(signal.SIGINT, signal.default_int_handler)
 if {int(signum)} in (signal.SIGTSTP, signal.SIGTTIN, signal.SIGTTOU):
     signal.signal({int(signum)}, lambda received, frame: sys.exit(128 + received))
 try:
-    prune.prune_db_certificates(prune.Config.from_env(), images=["SONiC-OS-test"], auto=True)
+    prune.prune_db_certificates(prune.Config.from_env(), images=["SONiC-OS-test"], commit=True)
 except KeyboardInterrupt:
     raise SystemExit(130)
 """
@@ -989,7 +1074,7 @@ def test_default_terminal_stop_is_replayed_after_verification(env, safe_updates,
     raise_signal = Mock(side_effect=replay)
     monkeypatch.setattr(prune.signal, "raise_signal", raise_signal)
     try:
-        assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+        assert prune.prune_db_certificates(safe_updates, commit=True) == 0
         raise_signal.assert_called_once_with(signum)
     finally:
         prune.signal.signal(signum, original)
@@ -1009,7 +1094,7 @@ def test_restoration_error_takes_priority_over_pending_cancellation(env, safe_up
 
     monkeypatch.setattr(prune, "update_db", cancel_after_wipe)
     with pytest.raises(prune.ScriptError, match="DO NOT REBOOT"):
-        prune.prune_db_certificates(safe_updates, auto=True)
+        prune.prune_db_certificates(safe_updates, commit=True)
     assert env["marker"].read_text().splitlines() == [
         "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
     ]
@@ -1025,7 +1110,7 @@ def test_cancellation_before_writes_is_not_deferred(env, safe_updates, monkeypat
 
     monkeypatch.setattr(prune, "validate_updates", cancel_validation)
     with pytest.raises(KeyboardInterrupt):
-        prune.prune_db_certificates(safe_updates, auto=True)
+        prune.prune_db_certificates(safe_updates, commit=True)
     assert not env["marker"].exists()
 
 
@@ -1033,5 +1118,5 @@ def test_pruning_preserves_existing_signal_handler(safe_updates, monkeypatch):
     monkeypatch.setattr(prune.signal, "getsignal", Mock(return_value=prune.signal.SIG_IGN))
     handler = Mock()
     monkeypatch.setattr(prune.signal, "signal", handler)
-    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+    assert prune.prune_db_certificates(safe_updates, commit=True) == 0
     handler.assert_not_called()
