@@ -35,6 +35,9 @@ STATUS_SUCCESSFUL = 0
 VENDOR_NAME = "Credo"
 VENDOR_MODEL_REGEX = re.compile(r"CAC\w{3}321P2P\w{2}MS")
 
+# APP_DB MUX_CABLE_TABLE state values for admin-initiated switchovers
+ADMIN_MUX_STATE_PREFIX = "admin_"
+
 #define table names that interact with Cli
 XCVRD_GET_BER_CMD_TABLE = "XCVRD_GET_BER_CMD"
 XCVRD_GET_BER_RSP_TABLE = "XCVRD_GET_BER_RSP"
@@ -461,6 +464,19 @@ def get_value_for_key_in_dict(mdict, port, key, table_name):
     return value
 
 
+def get_mux_forwarding_state(state_value):
+    """Strip the admin_ qualifier from a MUX_CABLE_TABLE state value.
+
+    linkmgrd publishes admin_active/admin_standby for admin-initiated switchovers;
+    both forward exactly like active/standby, so comparisons against the hardware
+    state must be made on the forwarding side only.
+    """
+    if state_value and state_value.startswith(ADMIN_MUX_STATE_PREFIX):
+        return state_value[len(ADMIN_MUX_STATE_PREFIX):]
+
+    return state_value
+
+
 def get_value_for_key_in_config_tbl(config_db, port, key, table):
     info_dict = {}
     info_dict = config_db.get_entry(table, port)
@@ -502,7 +518,7 @@ def create_json_dump_per_port_status(db, port_status_dict, muxcable_info_dict, m
         hwstatus = "absent"
     elif res_dict[1] == "not Y-Cable port":
         hwstatus = "not Y-Cable port"
-    elif res_dict[1] == status_value:
+    elif res_dict[1] == get_mux_forwarding_state(status_value):
         hwstatus = "consistent"
     else:
         hwstatus = "inconsistent"
@@ -541,7 +557,7 @@ def create_table_dump_per_port_status(db, print_data, muxcable_info_dict, muxcab
         hwstatus = "absent"
     elif res_dict[1] == "not Y-Cable port":
         hwstatus = "not Y-Cable port"
-    elif res_dict[1] == status_value:
+    elif res_dict[1] == get_mux_forwarding_state(status_value):
         hwstatus = "consistent"
     else:
         hwstatus = "inconsistent"
