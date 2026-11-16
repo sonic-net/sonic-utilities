@@ -133,6 +133,30 @@ def test_explicit_binding_vrf_and_interface_validation(isis_db):
     ok(db, 'unbind', 'Ethernet0', interface=True)
 
 
+def test_vlan_binding_accepts_empty_routed_base_row(isis_db, monkeypatch):
+    db = isis_db
+    db.cfgdb.set_entry('VLAN_INTERFACE', 'Vlan3999', {'NULL': 'NULL'})
+    original_get_entry = db.cfgdb.get_entry
+
+    def sdk_get_entry(table, key):
+        if table == 'VLAN_INTERFACE' and key == 'Vlan3999':
+            return {}
+        return original_get_entry(table, key)
+
+    # Native SDK hides the NULL placeholder even when the base key exists.
+    monkeypatch.setattr(db.cfgdb, 'get_entry', sdk_get_entry)
+    ok(db, 'bind', 'Vlan3999', 'CORE', interface=True)
+    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Vlan3999')['vrf'] == 'default'
+
+
+def test_vlan_binding_requires_routed_base_row(isis_db):
+    db = isis_db
+    db.cfgdb.set_entry('VLAN_INTERFACE', ('Vlan3999', '198.18.100.1/24'), {'NULL': 'NULL'})
+    result = invoke(db, 'bind', 'Vlan3999', 'CORE', interface=True)
+    assert result.exit_code != 0
+    assert not db.cfgdb.get_entry('ISIS_INTERFACE', 'Vlan3999')
+
+
 def test_net_and_instance_identity(isis_db):
     db = isis_db
     ok(db, 'instance', 'add', 'EDGE')

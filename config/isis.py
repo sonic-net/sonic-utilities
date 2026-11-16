@@ -16,13 +16,13 @@ log.set_min_log_priority_info()
 
 
 def _resolve_interface(ctx, db, name):
-    _snapshot(ctx)  # Include interface/member changes in the compare-and-commit boundary.
+    snapshot = _snapshot(ctx)  # Include interface/member changes in the compare-and-commit boundary.
     # Import lazily: main registers this module's command groups.
     from config.main import (interface_alias_to_name, interface_name_is_valid,
                              interface_is_in_portchannel, interface_is_in_vlan)
     if clicommon.get_interface_naming_mode() == 'alias':
         name = interface_alias_to_name(db, name)
-    if not db.get_entry("VLAN_INTERFACE", name) and not interface_name_is_valid(db, name):
+    if name not in snapshot.get('VLAN_INTERFACE', {}) and not interface_name_is_valid(db, name):
         ctx.fail("Interface '{}' does not exist".format(name))
     if (interface_is_in_portchannel(db.get_table('PORTCHANNEL_MEMBER'), name) or
             interface_is_in_vlan(db.get_table('VLAN_MEMBER'), name)):
