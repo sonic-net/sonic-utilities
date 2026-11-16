@@ -804,13 +804,13 @@ class TestPortStat(object):
 
         old = bins(['100'] * 16)
         # No new codewords in any bin since the snapshot.
-        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old, '5') == '-1'
+        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old, '5') == -1.0
         # Highest bin that moved wins, regardless of lower bins.
         new = bins(['200', '150'] + ['100'] * 5 + ['101'] + ['100'] * 8)
-        assert get_fec_max_t_since_snapshot(new, old, '5') == '7'
+        assert get_fec_max_t_since_snapshot(new, old, '5') == 7.0
         # Missing snapshot value for a bin counts as 0.
         old_na = dict(old, fec_bin3='N/A')
-        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old_na, '5') == '3'
+        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old_na, '5') == 3.0
         # Histogram not supported: fall back to the RATES value.
         assert get_fec_max_t_since_snapshot(bins(['N/A'] * 16), old, '5') == '5'
         assert get_fec_max_t_since_snapshot({}, {}, 'N/A') == 'N/A'
