@@ -874,6 +874,9 @@ class TestGNMIMigrator(object):
         ('gnmi-input', 'gnmi-configdb-expected'),
         ('gnmi-existing-input', 'gnmi-existing-expected'),
         ('gnmi-empty-input', 'gnmi-empty-expected'),
+        ('gnmi-partial-input', 'gnmi-partial-expected'),
+        ('gnmi-conflict-input', 'gnmi-conflict-expected'),
+        ('gnmi-certs-present-input', 'gnmi-certs-present-expected'),
     ])
     def test_telemetry_to_gnmi_migrator(self, input_db, expected_db_name):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', input_db)

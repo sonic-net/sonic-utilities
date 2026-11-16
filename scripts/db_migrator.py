@@ -637,11 +637,20 @@ class DBMigrator():
     def migrate_telemetry_to_gnmi(self):
         # The telemetry container is gone; carry its TELEMETRY config over to GNMI
         # so gnmi keeps serving TLS with client auth, then remove the stale entries.
-        for key, value in self.configDB.get_table('TELEMETRY').items():
-            if key in ('gnmi', 'certs') and not self.configDB.get_entry('GNMI', key):
-                log.log_notice('Migrate TELEMETRY|{} to GNMI|{}'.format(key, key))
-                self.configDB.set_entry('GNMI', key, value)
-            self.configDB.set_entry('TELEMETRY', key, None)
+        telemetry = self.configDB.get_table('TELEMETRY')
+        if telemetry.get('gnmi'):
+            # Merge per field: the gnmi sidecar can create GNMI|gnmi with only
+            # user_auth, which must not drop the port and client_auth in TELEMETRY.
+            gnmi_existing = self.configDB.get_entry('GNMI', 'gnmi')
+            merged = {**telemetry['gnmi'], **gnmi_existing}
+            if merged != gnmi_existing:
+                log.log_notice('Merge TELEMETRY|gnmi into GNMI|gnmi')
+                self.configDB.set_entry('GNMI', 'gnmi', merged)
+        # Cert, key and CA paths must come from one source, so copy certs whole.
+        if telemetry.get('certs') and not self.configDB.get_entry('GNMI', 'certs'):
+            log.log_notice('Migrate TELEMETRY|certs to GNMI|certs')
+            self.configDB.set_entry('GNMI', 'certs', telemetry['certs'])
+        self.configDB.delete_table('TELEMETRY')
         if self.configDB.get_entry('FEATURE', 'telemetry'):
             log.log_notice('Remove FEATURE|telemetry')
             self.configDB.set_entry('FEATURE', 'telemetry', None)
