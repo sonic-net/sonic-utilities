@@ -354,7 +354,7 @@ def _ensure_private_directory(path):
                 "Evidence path is not a real directory: {}".format(path)
             )
         _require_current_owner(metadata, path)
-        os.chmod(path, 0o700)
+        os.chmod(path, stat.S_IRWXU)
     else:
         os.makedirs(path, mode=0o700)
     _fsync_directory(os.path.dirname(path) or ".")

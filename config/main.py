@@ -53,7 +53,6 @@ from utilities_common import hft as hft_common
 from utilities_common.generation_transaction import (
     GenerationCleanupError,
     GenerationRecoveryError,
-    GenerationRollbackError,
     GenerationTransaction,
 )
 from utilities_common.mirror import connect_mirror_session_state_db, is_mirror_session_label_capable
@@ -1828,8 +1827,6 @@ def multiasic_save_to_singlefile(db, filename):
         json.dump(all_current_config, file, indent=4)
         file.flush()
         os.fsync(file.fileno())
-
-
 
 
 def _validate_multiasic_scope_configs(config, namespaces=None):
