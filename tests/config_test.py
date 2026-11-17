@@ -3832,16 +3832,18 @@ class TestConfigNtp(object):
         import config.main
         importlib.reload(config.main)
 
-    def test_add_ntp_server(self):
+    @pytest.mark.parametrize("address", ["10.10.10.4", "2001:db8::4"])
+    def test_add_ntp_server(self, address):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
+        result = runner.invoke(config.config.commands["ntp"], ["add", address], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        assert db.cfgdb.get_table("NTP_SERVER")[address] == {}
 
     def test_add_ntp_server_version_3(self):
         config.ADHOC_VALIDATION = True
@@ -3853,6 +3855,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        assert db.cfgdb.get_entry("NTP_SERVER", "10.10.10.4") == {"version": "3"}
 
     def test_add_ntp_server_with_iburst(self):
         config.ADHOC_VALIDATION = True
@@ -3864,6 +3867,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        assert db.cfgdb.get_entry("NTP_SERVER", "10.10.10.4") == {"iburst": "on"}
 
     def test_add_ntp_server_with_server_association(self):
         config.ADHOC_VALIDATION = True
@@ -3876,6 +3880,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        assert db.cfgdb.get_table("NTP_SERVER")["10.10.10.4"] == {}
 
     def test_add_ntp_server_with_pool_association(self):
         config.ADHOC_VALIDATION = True
@@ -3888,6 +3893,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        assert db.cfgdb.get_table("NTP_SERVER")["10.10.10.4"] == {"association_type": "pool"}
 
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
            mock.Mock(side_effect=ValueError))
