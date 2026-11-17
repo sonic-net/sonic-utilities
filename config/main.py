@@ -2,6 +2,7 @@
 
 import click
 import datetime
+import importlib
 import ipaddress
 import json
 import netaddr
@@ -24,7 +25,6 @@ from generic_config_updater.gu_common import HOST_NAMESPACE
 from generic_config_updater.main import (
     apply_patch_from_file as _gcu_apply_patch_from_file
 )
-from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
 from portconfig import get_child_ports
 from socket import AF_INET, AF_INET6
@@ -75,6 +75,42 @@ from . import bgp_cli
 from . import stp
 from . import evpn_mh
 from . import llr
+
+
+def _load_config_engine_module(module_name):
+    try:
+        return importlib.import_module(module_name)
+    except ImportError:
+        import pkgutil
+
+        # Discoverability distinguishes an absent module from its own import failures.
+        try:
+            module_exists = pkgutil.find_loader(module_name) is not None
+        except ImportError:
+            module_exists = True
+
+        if not module_exists:
+            return None
+        raise
+
+
+_config_encoder = _load_config_engine_module("config_encoder")
+_device_desc = _load_config_engine_module("device_desc")
+_legacy_minigraph = None
+
+if _config_encoder is None or _device_desc is None:
+    # Keep mixed-version images usable until sonic-config-engine is upgraded.
+    _legacy_minigraph = importlib.import_module("minigraph")
+
+if _config_encoder is None:
+    minigraph_encoder = _legacy_minigraph.minigraph_encoder
+else:
+    minigraph_encoder = _config_encoder.minigraph_encoder
+
+if _device_desc is None:
+    parse_device_desc_xml = _legacy_minigraph.parse_device_desc_xml
+else:
+    parse_device_desc_xml = _device_desc.parse_device_desc_xml
 
 # mock masic APIs for unit test
 try:
