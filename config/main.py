@@ -2,7 +2,6 @@
 
 import click
 import datetime
-import importlib
 import ipaddress
 import json
 import netaddr
@@ -77,9 +76,19 @@ from . import evpn_mh
 from . import llr
 
 
-def _load_config_engine_module(module_name):
+def _import_config_encoder():
+    import config_encoder
+    return config_encoder
+
+
+def _import_device_desc():
+    import device_desc
+    return device_desc
+
+
+def _load_config_engine_module(module_name, importer):
     try:
-        return importlib.import_module(module_name)
+        return importer()
     except ImportError:
         import pkgutil
 
@@ -94,13 +103,14 @@ def _load_config_engine_module(module_name):
         raise
 
 
-_config_encoder = _load_config_engine_module("config_encoder")
-_device_desc = _load_config_engine_module("device_desc")
+_config_encoder = _load_config_engine_module("config_encoder", _import_config_encoder)
+_device_desc = _load_config_engine_module("device_desc", _import_device_desc)
 _legacy_minigraph = None
 
 if _config_encoder is None or _device_desc is None:
     # Keep mixed-version images usable until sonic-config-engine is upgraded.
-    _legacy_minigraph = importlib.import_module("minigraph")
+    import minigraph
+    _legacy_minigraph = minigraph
 
 if _config_encoder is None:
     minigraph_encoder = _legacy_minigraph.minigraph_encoder
