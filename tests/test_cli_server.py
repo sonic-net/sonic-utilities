@@ -1,0 +1,994 @@
+"""Tests for the cli_server fork-server (execution + completion daemon).
+
+These deliberately avoid importing show.main / config.main: cli_server's
+own logic (fork, SCM_RIGHTS, exit-code translation, privilege drop,
+fallback, staleness) is independent of what CLI is actually loaded, and is
+exercised here with a minimal fake "cli" object instead.
+"""
+
+import array
+import ast
+import inspect
+import json
+import os
+import signal
+import socket
+import struct
+import sys
+import textwrap
+from unittest import mock
+
+import pytest
+
+from utilities_common import cli_server
+
+
+class _FakeCli:
+    """Stands in for click's Group.main(args=..., prog_name=...)."""
+
+    def __init__(self, action):
+        self._action = action
+
+    def main(self, args, prog_name):
+        self._action(args, prog_name)
+
+
+@pytest.fixture
+def sock_paths(tmp_path, monkeypatch):
+    sock_path = str(tmp_path / "cli.sock")
+    monkeypatch.setattr(cli_server, "SOCKET_PATH", sock_path)
+    return sock_path
+
+
+def _listen(sock_path):
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+    return server
+
+
+# --------------------------------------------------------------------------- #
+# Fallback / never-re-run semantics
+# --------------------------------------------------------------------------- #
+
+def test_try_run_falls_back_when_socket_missing(sock_paths):
+    assert cli_server.try_run("show") is None
+
+
+def test_try_run_falls_back_when_disabled(sock_paths, monkeypatch):
+    monkeypatch.setenv("SONIC_CLI_DAEMON", "0")
+    assert cli_server.try_run("show") is None
+
+
+def test_try_run_never_falls_back_after_daemon_dies_mid_command(sock_paths):
+    """If the daemon accepted the request but closes without a result,
+    the client must return 1, not None -- config is not idempotent and
+    must never be silently re-run on the legacy cold path.
+    """
+    server = _listen(sock_paths)
+    try:
+        r, w = os.pipe()
+        try:
+            import threading
+
+            # try_run() calls signal.signal(), which CPython only allows
+            # from the main thread -- so the *server* side (which has no
+            # such restriction) runs on the background thread instead,
+            # and the client call stays on the main thread.
+            def fake_daemon():
+                conn, _ = server.accept()
+                # Blocking recv() only returns once the client's
+                # sendmsg() has actually completed -- this removes the
+                # send/close race and proves we are simulating a crash
+                # *after* the request was accepted, not a failed send.
+                conn.recv(4)
+                conn.close()  # die before ever sending a result
+
+            t = threading.Thread(target=fake_daemon)
+            t.start()
+            rc = cli_server._try_run_with_fds("config", (r, w, w))
+            t.join(timeout=5)
+        finally:
+            os.close(r)
+            os.close(w)
+    finally:
+        server.close()
+
+    assert rc == 1
+
+
+def test_client_does_not_retry_on_post_connect_send_failure(sock_paths, monkeypatch):
+    """An OSError from sendmsg() does not prove the daemon received zero
+    bytes -- it may have already accepted a partial request and started
+    executing. Once connect() has succeeded, a send failure must report
+    failure (1), not fall back to the cold path and risk re-running a
+    non-idempotent config command.
+    """
+    server = _listen(sock_paths)
+    try:
+        monkeypatch.setattr(
+            socket.socket, "sendmsg",
+            mock.Mock(side_effect=OSError("simulated send failure")),
+        )
+        rc = cli_server.try_run("config")
+    finally:
+        server.close()
+
+    assert rc == 1
+
+
+def test_client_completes_partial_sendmsg_write(sock_paths):
+    """sendmsg() on a stream socket may write only part of the buffer;
+    the client must send the remainder itself rather than assuming the
+    daemon received a complete frame.
+    """
+    import threading
+
+    server = _listen(sock_paths)
+    received = bytearray()
+    try:
+        def fake_daemon():
+            conn, _ = server.accept()
+            while len(received) < 4 or len(received) < 4 + struct.unpack("!I", bytes(received[:4]))[0]:
+                chunk = conn.recv(65536)
+                if not chunk:
+                    break
+                received.extend(chunk)
+            conn.close()
+
+        t = threading.Thread(target=fake_daemon)
+        t.start()
+
+        real_sendmsg = socket.socket.sendmsg
+
+        def half_sendmsg(self, buffers, ancdata=(), *a, **kw):
+            data = buffers[0]
+            half = max(1, len(data) // 2)
+            return real_sendmsg(self, [data[:half]], ancdata, *a, **kw)
+
+        r, w = os.pipe()
+        try:
+            with mock.patch.object(socket.socket, "sendmsg", half_sendmsg):
+                cli_server._try_run_with_fds("show", (r, w, w))
+        finally:
+            os.close(r)
+            os.close(w)
+        t.join(timeout=5)
+    finally:
+        server.close()
+
+    assert len(received) >= 4
+    (length,) = struct.unpack("!I", bytes(received[:4]))
+    assert len(received) == 4 + length
+    req = json.loads(bytes(received[4:4 + length]).decode("utf-8"))
+    assert req["prog"] == "show"
+
+
+def test_client_clears_connect_timeout_before_sending():
+    """``settimeout()`` applies to every subsequent operation on the
+    socket, not just ``connect()`` -- the short connect deadline must be
+    cleared before ``sendmsg()``/``sendall()`` run, or it also limits
+    those: a large forwarded environment, or a daemon that's briefly not
+    reading, could time out mid-send and be treated the same as an
+    outright failure.
+    """
+    source = inspect.getsource(cli_server._try_run_with_fds)
+    clear_timeout = source.index("sock.settimeout(None)")
+    first_send = source.index("sock.sendmsg(")
+    assert clear_timeout < first_send
+
+
+def test_client_waits_past_connect_timeout_for_a_slow_command(sock_paths, monkeypatch):
+    """The connect timeout must not leak into how long the client waits
+    for the daemon's response: commands (especially `config`) can
+    legitimately run far longer than any reasonable connect deadline.
+    """
+    import threading
+    import time
+
+    monkeypatch.setattr(cli_server, "CONNECT_TIMEOUT_SEC", 0.05)
+    server = _listen(sock_paths)
+    try:
+        def fake_daemon():
+            conn, _ = server.accept()
+            conn.recv(4)
+            time.sleep(0.3)  # much longer than CONNECT_TIMEOUT_SEC above
+            conn.sendall(json.dumps({"exit_code": 7}).encode("utf-8") + b"\n")
+            conn.close()
+
+        t = threading.Thread(target=fake_daemon)
+        t.start()
+        r, w = os.pipe()
+        try:
+            rc = cli_server._try_run_with_fds("show", (r, w, w))
+        finally:
+            os.close(r)
+            os.close(w)
+        t.join(timeout=5)
+    finally:
+        server.close()
+
+    assert rc == 7
+
+
+# --------------------------------------------------------------------------- #
+# Exit code translation (real fork, real wait status -- not hand-crafted bits)
+# --------------------------------------------------------------------------- #
+
+def test_exit_code_from_wait_status_normal_exit():
+    pid = os.fork()
+    if pid == 0:
+        os._exit(7)
+    _pid, status = os.waitpid(pid, 0)
+    assert cli_server._exit_code_from_wait_status(status) == 7
+
+
+def test_exit_code_from_wait_status_signal():
+    pid = os.fork()
+    if pid == 0:
+        os.kill(os.getpid(), signal.SIGTERM)
+        os._exit(1)  # not reached if the signal fires first
+    _pid, status = os.waitpid(pid, 0)
+    assert cli_server._exit_code_from_wait_status(status) == 128 + signal.SIGTERM
+
+
+# --------------------------------------------------------------------------- #
+# Privilege drop (pure function, no real root required)
+# --------------------------------------------------------------------------- #
+
+def test_drop_privileges_noop_when_daemon_not_root(monkeypatch):
+    monkeypatch.setattr(os, "getuid", lambda: 1000)
+    setuid = mock.Mock()
+    monkeypatch.setattr(os, "setuid", setuid)
+    cli_server._drop_privileges(uid=1000, gid=1000)
+    setuid.assert_not_called()
+
+
+def test_drop_privileges_noop_when_caller_is_root(monkeypatch):
+    monkeypatch.setattr(os, "getuid", lambda: 0)
+    setuid = mock.Mock()
+    monkeypatch.setattr(os, "setuid", setuid)
+    cli_server._drop_privileges(uid=0, gid=0)
+    setuid.assert_not_called()
+
+
+def test_drop_privileges_drops_for_non_root_caller(monkeypatch):
+    monkeypatch.setattr(os, "getuid", lambda: 0)
+    calls = []
+    monkeypatch.setattr(os, "initgroups", lambda user, gid: calls.append(("initgroups", user, gid)))
+    monkeypatch.setattr(os, "setgid", lambda gid: calls.append(("setgid", gid)))
+    monkeypatch.setattr(os, "setuid", lambda uid: calls.append(("setuid", uid)))
+
+    fake_pwrec = mock.Mock(pw_name="admin")
+    with mock.patch("pwd.getpwuid", return_value=fake_pwrec) as getpwuid:
+        cli_server._drop_privileges(uid=1001, gid=1001)
+        getpwuid.assert_called_once_with(1001)
+
+    assert calls == [
+        ("initgroups", "admin", 1001),
+        ("setgid", 1001),
+        ("setuid", 1001),
+    ]
+
+
+# --------------------------------------------------------------------------- #
+# Full round trip: argv / env / cwd propagation, completion via forwarded env
+# --------------------------------------------------------------------------- #
+
+def _run_round_trip(prog, cli_action, argv, env_extra=None, cwd=None):
+    """Drives one real client<->supervisor<->child round trip over a real
+    AF_UNIX socket, with real fds standing in for the client's stdio.
+    Returns (exit_code, captured_stdout_bytes).
+    """
+    out_r, out_w = os.pipe()
+    in_r, in_w = os.pipe()
+    os.close(in_w)  # child never reads stdin in these tests
+
+    cli_server._clis[prog] = _FakeCli(cli_action)
+    try:
+        import tempfile
+
+        tmp_dir = tempfile.mkdtemp()
+        sock_path = os.path.join(tmp_dir, "cli.sock")
+        sock_dir_server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock_dir_server.bind(sock_path)
+        sock_dir_server.listen(1)
+
+        client_env = dict(os.environ)
+        if env_extra:
+            client_env.update(env_extra)
+
+        req = json.dumps({
+            "prog": prog,
+            "argv": argv,
+            "env": client_env,
+            "cwd": cwd or os.getcwd(),
+        }).encode("utf-8")
+
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(sock_path)
+        client.sendmsg(
+            [struct.pack("!I", len(req)) + req],
+            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [in_r, out_w, out_w]))],
+        )
+
+        conn, _ = sock_dir_server.accept()
+        supervisor_pid = os.fork()
+        if supervisor_pid == 0:
+            sock_dir_server.close()
+            client.close()
+            os.close(out_w)
+            os.close(in_r)
+            cli_server._serve_request(conn)
+            os._exit(0)
+
+        conn.close()
+        os.close(out_w)
+        os.close(in_r)
+
+        resp_buf = b""
+        client.settimeout(10)
+        while True:
+            chunk = client.recv(4096)
+            if not chunk:
+                break
+            resp_buf += chunk
+        resp = json.loads(resp_buf.decode().strip())
+
+        captured = b""
+        while True:
+            chunk = os.read(out_r, 4096)
+            if not chunk:
+                break
+            captured += chunk
+
+        os.waitpid(supervisor_pid, 0)
+        return resp.get("exit_code"), captured
+    finally:
+        cli_server._clis.pop(prog, None)
+        try:
+            os.close(out_r)
+        except OSError:
+            pass
+        try:
+            sock_dir_server.close()
+        except Exception:
+            pass
+
+
+def test_argv_and_env_reach_the_command():
+    # The action runs inside a forked child (via os.fork() in
+    # _serve_request): mutating a closed-over dict is invisible to this
+    # (parent) process once forked, so results must travel back through
+    # the captured stdout pipe -- the same channel a real command uses.
+    def action(args, prog_name):
+        sys.stdout.write(json.dumps({
+            "args": args,
+            "prog_name": prog_name,
+            "env_marker": os.environ.get("SONIC_TEST_MARKER"),
+        }))
+        sys.stdout.write("\n")
+        sys.exit(0)
+
+    code, out = _run_round_trip(
+        "show", action, argv=["version"], env_extra={"SONIC_TEST_MARKER": "hello"}
+    )
+    assert code == 0
+    seen = json.loads(out.decode().strip())
+    assert seen["args"] == ["version"]
+    assert seen["prog_name"] == "show"
+    assert seen["env_marker"] == "hello"
+
+
+def test_completion_env_forwarded_to_child():
+    """No special-casing needed for Tab completion: the child just sees
+    _SHOW_COMPLETE in the forwarded environment, same as a real command.
+    """
+    def action(args, prog_name):
+        sys.stdout.write(json.dumps({
+            "complete_env": os.environ.get("_SHOW_COMPLETE"),
+        }))
+        sys.stdout.write("\n")
+        sys.exit(0)
+
+    code, out = _run_round_trip(
+        "show",
+        action,
+        argv=[],
+        env_extra={"_SHOW_COMPLETE": "bash_complete", "COMP_WORDS": "show ", "COMP_CWORD": "1"},
+    )
+    assert code == 0
+    seen = json.loads(out.decode().strip())
+    assert seen["complete_env"] == "bash_complete"
+
+
+def test_system_exit_with_int_code():
+    def action(args, prog_name):
+        sys.exit(42)
+
+    code, _out = _run_round_trip("show", action, argv=[])
+    assert code == 42
+
+
+def test_system_exit_with_string_message_maps_to_one():
+    def action(args, prog_name):
+        sys.exit("Root privileges are required for this operation")
+
+    code, _out = _run_round_trip("config", action, argv=[])
+    assert code == 1
+
+
+def test_keyboard_interrupt_maps_to_130():
+    def action(args, prog_name):
+        raise KeyboardInterrupt()
+
+    code, _out = _run_round_trip("show", action, argv=[])
+    assert code == 130
+
+
+def test_chdir_failure_reports_error_instead_of_running_in_wrong_directory():
+    """The cold path never hits this: a normal fork+exec just inherits
+    the shell's real cwd. This warm child starts in the *daemon's*
+    directory and must explicitly switch to the caller's -- silently
+    continuing on failure would run the command against the wrong
+    directory, and a relative file argument could then read or write a
+    different path than the caller intended.
+    """
+    def action(args, prog_name):
+        # Must never be reached: the chdir failure has to short-circuit
+        # before the CLI action runs.
+        sys.stdout.write("ran-anyway")
+        sys.exit(0)
+
+    code, out = _run_round_trip("show", action, argv=[], cwd="/no/such/directory")
+    assert code == 1
+    assert b"ran-anyway" not in out
+    assert b"no/such/directory" in out
+
+
+def test_child_resets_signal_dispositions_before_setup_work():
+    """The forked command child inherits the *daemon's* SIGHUP (re-exec
+    self) and SIGTERM/SIGINT (unlink the shared socket + exit) handlers
+    via fork(). Those resets must be the first thing ``_run_child`` does
+    -- before dup2/setsid/tty-claim/privilege-drop -- or a signal
+    forwarded by the client early enough in that window runs daemon-level
+    logic (re-exec, or unlinking the one shared socket every other
+    connection depends on) inside what must behave as an isolated command
+    process.
+
+    A full fork+signal-delivery-race reproduction is inherently
+    non-deterministic, so this pins the required source ordering instead.
+    """
+    source = inspect.getsource(cli_server._run_child)
+    first_signal_reset = source.index("signal.signal(signal.SIGINT")
+    first_setup_call = min(
+        source.index(needle) for needle in ("os.dup2(", "os.setsid()", "_drop_privileges(")
+    )
+    assert first_signal_reset < first_setup_call
+
+    tree = ast.parse(textwrap.dedent(source))
+    func = tree.body[0]
+    assert isinstance(func, ast.FunctionDef)
+    body_stmts = func.body
+    if isinstance(body_stmts[0], ast.Expr) and isinstance(body_stmts[0].value, ast.Constant):
+        body_stmts = body_stmts[1:]  # skip the docstring
+
+    resets = {"SIGINT", "SIGTERM", "SIGQUIT", "SIGHUP", "SIGCHLD"}
+    for stmt in body_stmts:
+        call = stmt.value if isinstance(stmt, ast.Expr) else None
+        if not (isinstance(call, ast.Call) and getattr(call.func, "attr", None) == "signal"):
+            break
+        resets.discard(call.args[0].attr)
+    assert not resets, "not reset before other setup work: %s" % resets
+
+
+def test_sigchld_handler_installed_before_fork_in_serve_request():
+    """If the SIGCHLD handler is installed *after* ``os.fork()``, a child
+    that exits quickly (``show --help``) can deliver SIGCHLD into the gap
+    between fork() and the handler install. With no handler registered
+    yet, that delivery is simply discarded (SIGCHLD's default disposition
+    is Ignore) and the later select() loop waits forever even though
+    waitpid() could reap the already-dead child immediately.
+    """
+    source = inspect.getsource(cli_server._serve_request)
+    handler_install = source.index("signal.signal(signal.SIGCHLD, _on_sigchld)")
+    fork_call = source.index("os.fork()")
+    assert handler_install < fork_call
+
+
+# --------------------------------------------------------------------------- #
+# Signal forwarding
+# --------------------------------------------------------------------------- #
+
+def test_relay_signals_targets_process_group_not_just_leader(monkeypatch):
+    """``_run_child`` calls ``setsid()``, so the forked command is its own
+    process-group leader. Signaling only the leader pid (``os.kill``)
+    leaves any subprocess it spawns running after Ctrl-C/termination;
+    signaling the group (``os.killpg``) reaches those descendants too.
+    """
+    calls = []
+    monkeypatch.setattr(os, "killpg", lambda pgid, sig: calls.append((pgid, sig)))
+    monkeypatch.setattr(os, "kill", mock.Mock(side_effect=AssertionError("must use killpg, not kill")))
+
+    remaining = cli_server._relay_signals(
+        b"", json.dumps({"signal": signal.SIGINT}).encode("utf-8") + b"\n", 4321,
+    )
+
+    assert calls == [(4321, signal.SIGINT)]
+    assert remaining == b""
+
+
+def test_relay_signals_buffers_partial_frame_across_reads(monkeypatch):
+    """recv() may split a signal frame at any byte boundary; a frame
+    delivered in two pieces must still be forwarded once complete, not
+    silently dropped because neither individual chunk parses as JSON.
+    """
+    calls = []
+    monkeypatch.setattr(os, "killpg", lambda pgid, sig: calls.append((pgid, sig)))
+
+    frame = json.dumps({"signal": signal.SIGINT}).encode("utf-8") + b"\n"
+    split_at = len(frame) - 3
+    buf = cli_server._relay_signals(b"", frame[:split_at], 4321)
+    assert calls == []  # incomplete frame -- must not be dropped or misparsed
+
+    buf = cli_server._relay_signals(buf, frame[split_at:], 4321)
+    assert calls == [(4321, signal.SIGINT)]
+    assert buf == b""
+
+
+@pytest.mark.parametrize("payload", [
+    b"42",                                  # valid JSON, not a dict
+    b"[1, 2, 3]",                           # valid JSON, not a dict
+    b'{"signal": "SIGINT"}',                # dict, but non-integer signal
+    b'{"signal": -5}',                      # dict, but non-positive signal
+    b'{"signal": null}',                    # dict, but missing/null signal
+])
+def test_relay_signals_ignores_malformed_frames_without_crashing(monkeypatch, payload):
+    """Signal frames are client-controlled after the request is accepted.
+    A valid JSON scalar/list, or a dict with a non-integer/non-positive
+    "signal", must be ignored rather than raising out of .get() or
+    os.killpg() -- an uncaught exception here would kill the supervisor
+    without ever sending a response, while the already-forked command
+    child keeps running unwatched.
+    """
+    calls = []
+    monkeypatch.setattr(os, "killpg", lambda pgid, sig: calls.append((pgid, sig)))
+
+    buf = cli_server._relay_signals(b"", payload + b"\n", 4321)
+
+    assert calls == []
+    assert buf == b""
+
+
+def test_recv_request_rejects_oversized_length_header(sock_paths):
+    """A caller can send an arbitrary length prefix (e.g. 0xffffffff) with
+    no body. Without an upper bound, the forked supervisor would block in
+    recv() waiting for a body that may never arrive, tying up process
+    resources indefinitely.
+    """
+    server = _listen(sock_paths)
+    try:
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(sock_paths)
+        client.sendall(struct.pack("!I", 0xFFFFFFFF))
+        conn, _ = server.accept()
+        try:
+            with pytest.raises(ValueError):
+                cli_server._recv_request(conn)
+        finally:
+            conn.close()
+            client.close()
+    finally:
+        server.close()
+
+
+def test_recv_request_separates_trailing_bytes_from_declared_body(sock_paths):
+    """The initial recvmsg() can return the length-prefixed request and
+    already-queued signal bytes together. `body` must be capped to the
+    declared length; anything past it belongs to the caller as leftover,
+    not to the JSON payload.
+    """
+    server = _listen(sock_paths)
+    try:
+        req = json.dumps({"prog": "show", "argv": [], "env": {}, "cwd": "/"}).encode("utf-8")
+        trailing = json.dumps({"signal": signal.SIGINT}).encode("utf-8") + b"\n"
+
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(sock_paths)
+        client.sendmsg(
+            [struct.pack("!I", len(req)) + req + trailing],
+            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [0, 1, 2]))],
+        )
+        conn, _ = server.accept()
+        try:
+            parsed, fds, leftover = cli_server._recv_request(conn)
+        finally:
+            conn.close()
+            client.close()
+    finally:
+        server.close()
+
+    assert parsed == {"prog": "show", "argv": [], "env": {}, "cwd": "/"}
+    assert len(fds) == 3
+    assert leftover == trailing
+
+
+# --------------------------------------------------------------------------- #
+# Socket permissions (defense-in-depth on top of SO_PEERCRED + setuid)
+# --------------------------------------------------------------------------- #
+
+def test_set_socket_permissions_is_group_restricted_not_world_writable(tmp_path):
+    sock_path = tmp_path / "cli.sock"
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        server.bind(str(sock_path))
+        cli_server._set_socket_permissions(str(sock_path))
+        mode = os.stat(sock_path).st_mode & 0o777
+        assert mode == 0o660
+    finally:
+        server.close()
+
+
+def test_set_socket_permissions_logs_when_group_is_missing(tmp_path, monkeypatch):
+    """If the configured group doesn't exist, the socket silently stays
+    root-only (safe -- clients just fall back) but nothing would tell an
+    operator why the daemon stopped accelerating anything for non-root
+    users. This must be surfaced, not swallowed.
+    """
+    sock_path = tmp_path / "cli.sock"
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        server.bind(str(sock_path))
+        monkeypatch.setenv("SONIC_CLI_SOCKET_GROUP", "no-such-group")
+        logged = []
+        monkeypatch.setattr(
+            cli_server.syslog, "syslog",
+            lambda priority, message: logged.append((priority, message)),
+        )
+        cli_server._set_socket_permissions(str(sock_path))
+    finally:
+        server.close()
+
+    assert len(logged) == 1
+    priority, message = logged[0]
+    assert priority == cli_server.syslog.LOG_WARNING
+    assert "no-such-group" in message
+
+
+# --------------------------------------------------------------------------- #
+# Staleness detection
+# --------------------------------------------------------------------------- #
+
+def test_watch_mtimes_changed_detects_edit(tmp_path, monkeypatch):
+    fake_module = tmp_path / "fake_show_main.py"
+    fake_module.write_text("x = 1\n")
+
+    monkeypatch.setattr(cli_server, "_watch_mtimes", {str(fake_module): os.stat(fake_module).st_mtime})
+    assert cli_server._watch_mtimes_changed() is False
+
+    # Simulate a package upgrade touching the file.
+    import time
+
+    time.sleep(0.01)
+    fake_module.write_text("x = 2\n")
+    os.utime(fake_module, None)
+    assert cli_server._watch_mtimes_changed() is True
+
+
+def test_watch_mtimes_changed_true_when_file_removed(tmp_path, monkeypatch):
+    fake_module = tmp_path / "fake_show_main.py"
+    fake_module.write_text("x = 1\n")
+    mtime = os.stat(fake_module).st_mtime
+    monkeypatch.setattr(cli_server, "_watch_mtimes", {str(fake_module): mtime})
+    os.remove(fake_module)
+    assert cli_server._watch_mtimes_changed() is True
+
+
+def _fake_plugin_pkgs(monkeypatch, tmp_path):
+    """Register fake show.plugins / config.plugins packages (module objects
+    with only __path__) so _plugin_dirs() sees tmp dirs, not the real tree."""
+    import types
+
+    dirs = {}
+    for name in ("show", "config"):
+        d = tmp_path / name / "plugins"
+        d.mkdir(parents=True)
+        mod = types.ModuleType(name + ".plugins")
+        mod.__path__ = [str(d)]
+        monkeypatch.setitem(sys.modules, name + ".plugins", mod)
+        dirs[name] = d
+    return dirs
+
+
+def test_snapshot_watch_covers_plugin_dirs_and_files(tmp_path, monkeypatch):
+    dirs = _fake_plugin_pkgs(monkeypatch, tmp_path)
+    (dirs["show"] / "a.py").write_text("x = 1\n")
+    (dirs["show"] / "notes.txt").write_text("not a plugin\n")
+
+    snap = cli_server._snapshot_watch_mtimes()
+
+    assert str(dirs["show"]) in snap
+    assert str(dirs["config"]) in snap
+    assert str(dirs["show"] / "a.py") in snap
+    assert str(dirs["show"] / "notes.txt") not in snap
+
+
+def test_plugin_added_removed_or_upgraded_marks_daemon_stale(tmp_path, monkeypatch):
+    import time
+
+    dirs = _fake_plugin_pkgs(monkeypatch, tmp_path)
+    plugin = dirs["show"] / "a.py"
+    plugin.write_text("x = 1\n")
+
+    def _rearm():
+        monkeypatch.setattr(cli_server, "_watch_mtimes", cli_server._snapshot_watch_mtimes())
+        assert cli_server._watch_mtimes_changed() is False
+
+    _rearm()
+    # install a new plugin (sonic-package-manager extract) -> dir mtime moves
+    time.sleep(0.02)
+    (dirs["config"] / "b.py").write_text("y = 1\n")
+    assert cli_server._watch_mtimes_changed() is True
+
+    _rearm()
+    # in-place upgrade of an existing plugin -> file mtime moves
+    time.sleep(0.02)
+    plugin.write_text("x = 2\n")
+    assert cli_server._watch_mtimes_changed() is True
+
+    _rearm()
+    # uninstall
+    time.sleep(0.02)
+    os.remove(plugin)
+    assert cli_server._watch_mtimes_changed() is True
+
+
+def test_reply_fallback_tolerates_request_that_arrives_late():
+    """Re-exec race: the daemon answers 'fallback' (and starts closing)
+    before a just-connected client has sent its request. The client's send
+    must still succeed (EPIPE would make it report failure for a command
+    that never ran) and it must still read the fallback line."""
+    import threading
+    import time
+
+    server_side, client_side = socket.socketpair()
+    t = threading.Thread(target=cli_server._reply_fallback, args=(server_side,))
+    t.start()
+    time.sleep(0.1)  # reply + half-close happened before the request lands
+    client_side.sendall(b"request that arrives after the reply")
+    client_side.settimeout(2)
+    data = b""
+    while True:
+        chunk = client_side.recv(4096)
+        if not chunk:
+            break
+        data += chunk
+    client_side.close()
+    t.join()
+    assert json.loads(data.decode().strip()) == {"fallback": True}
+
+
+
+# --------------------------------------------------------------------------- #
+# pty mode: a terminal caller gets a command child with a real controlling tty
+# --------------------------------------------------------------------------- #
+
+def _pty_round_trip(action, winsize=(37, 91), env=None):
+    """Run `action` through the real client and supervisor with the client's stdio on a pty
+    (standing in for the user's terminal). Returns (exit_code, bytes_the_user_saw, name_of_the_users_tty)."""
+    import fcntl
+    import pty
+    import select
+    import tempfile
+    import termios
+
+    user_master, user_tty = pty.openpty()
+    user_ttyname = os.ttyname(user_tty)
+    fcntl.ioctl(user_tty, termios.TIOCSWINSZ, struct.pack("HHHH", *winsize, 0, 0))
+    sock_path = os.path.join(tempfile.mkdtemp(), "cli.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+    cli_server._clis["show"] = _FakeCli(action)
+    old_path = cli_server.SOCKET_PATH
+    cli_server.SOCKET_PATH = sock_path
+    sup = os.fork()
+    if sup == 0:
+        try:
+            conn, _ = server.accept()
+            cli_server._serve_request(conn)
+        finally:
+            os._exit(0)
+    server.close()
+    try:
+        saved = {k: os.environ.get(k) for k in (env or {})}
+        os.environ.update(env or {})
+        rc = cli_server._try_run_with_fds("show", (user_tty, user_tty, user_tty))
+        seen = b""
+        while select.select([user_master], [], [], 0.3)[0]:
+            try:
+                data = os.read(user_master, 65536)
+            except OSError:
+                break
+            if not data:
+                break
+            seen += data
+        os.waitpid(sup, 0)
+        return rc, seen, user_ttyname
+    finally:
+        for k, v in (saved if env else {}).items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        cli_server.SOCKET_PATH = old_path
+        cli_server._clis.pop("show", None)
+        os.close(user_master)
+        os.close(user_tty)
+
+
+def test_client_pty_spec_is_none_without_a_terminal():
+    r, w = os.pipe()
+    try:
+        assert cli_server._client_pty_spec((r, w, w)) is None
+    finally:
+        os.close(r)
+        os.close(w)
+
+
+def test_client_pty_spec_can_be_disabled(monkeypatch):
+    import pty
+
+    master, slave = pty.openpty()
+    try:
+        assert cli_server._client_pty_spec((slave, slave, slave))["mask"] == [True, True, True]
+        monkeypatch.setenv("SONIC_CLI_DAEMON_PTY", "0")
+        assert cli_server._client_pty_spec((slave, slave, slave)) is None
+    finally:
+        os.close(master)
+        os.close(slave)
+
+
+def test_pty_mode_child_has_a_controlling_terminal_and_the_callers_window_size():
+    def action(_args, _prog):
+        with open("/dev/tty", "w") as tty:  # ENXIO in the plain fd-passing mode
+            tty.write("DEVTTY-OK\n")
+        sys.stdout.write("ISATTY=%s SIZE=%s\n" % (os.isatty(1), tuple(os.get_terminal_size(1))))
+        sys.stdout.write("OWN-SESSION=%s\n" % (os.getsid(0) == os.getpid()))
+        sys.stdout.write("TTYNAME=%s\n" % os.ttyname(1))
+
+    rc, seen, user_tty = _pty_round_trip(action, winsize=(37, 91))
+    text = seen.decode()
+    assert rc == 0
+    assert "TTYNAME=%s" % user_tty not in text  # a fresh pty, not the caller's terminal
+    assert "DEVTTY-OK" in text
+    assert "ISATTY=True SIZE=(91, 37)" in text
+    assert "OWN-SESSION=True" in text
+
+
+def test_pty_mode_exit_code_and_output_ordering():
+    def action(_args, _prog):
+        sys.stdout.write("first\n")
+        sys.stdout.flush()
+        sys.exit(7)
+
+    rc, seen, _user_tty = _pty_round_trip(action)
+    assert rc == 7
+    assert seen.decode().replace("\r\n", "\n") == "first\n"
+
+
+def test_pty_mode_can_be_disabled_and_falls_back_to_plain_fds():
+    def action(_args, _prog):
+        sys.stdout.write("TTYNAME=%s\n" % os.ttyname(1))
+
+    rc, seen, user_tty = _pty_round_trip(action, env={"SONIC_CLI_DAEMON_PTY": "0"})
+    assert rc == 0
+    assert "TTYNAME=%s" % user_tty in seen.decode()  # the caller's own terminal fd was passed
+
+
+def test_pty_mode_forwards_keyboard_input_to_the_command():
+    # The caller's stdin is a tty: bytes the user types must reach the child's stdin
+    # (prompts, getpass), echoed by the child's own tty line discipline.
+    import fcntl
+    import pty
+    import select
+    import tempfile
+
+    def action(_args, _prog):
+        line = sys.stdin.readline()
+        sys.stdout.write("GOT:%s" % line)
+
+    user_master, user_tty = pty.openpty()
+    sock_path = os.path.join(tempfile.mkdtemp(), "cli.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+    cli_server._clis["show"] = _FakeCli(action)
+    old_path = cli_server.SOCKET_PATH
+    cli_server.SOCKET_PATH = sock_path
+    sup = os.fork()
+    if sup == 0:
+        try:
+            conn, _ = server.accept()
+            cli_server._serve_request(conn)
+        finally:
+            os._exit(0)
+    server.close()
+    try:
+        client_pid = os.fork()
+        if client_pid == 0:
+            rc = cli_server._try_run_with_fds("show", (user_tty, user_tty, user_tty))
+            os._exit(rc)
+        seen = b""
+        for i in range(60):
+            if i == 5:  # after the client switched the terminal to raw mode (that flushes input)
+                os.write(user_master, b"hello\n")
+            if select.select([user_master], [], [], 0.2)[0]:
+                try:
+                    seen += os.read(user_master, 65536)
+                except OSError:
+                    break
+            if b"GOT:hello" in seen:
+                break
+        _pid, status = os.waitpid(client_pid, 0)
+        os.waitpid(sup, 0)
+        assert b"GOT:hello" in seen
+        assert os.WEXITSTATUS(status) == 0
+    finally:
+        cli_server.SOCKET_PATH = old_path
+        cli_server._clis.pop("show", None)
+        os.close(user_master)
+        os.close(user_tty)
+
+
+def test_supervisor_survives_a_stop_of_its_child_and_relays_sigcont():
+    # Ctrl-Z stops the command child; SIGCHLD fires for the stop too. The supervisor must keep
+    # relaying (SIGCONT) instead of blocking in waitpid() until the child exits.
+    import threading
+    import time
+
+    def action(_args, _prog):
+        time.sleep(0.5)
+        sys.stdout.write("RESUMED-AND-DONE\n")
+
+    r, w = os.pipe()
+    sock_path_dir = __import__("tempfile").mkdtemp()
+    sock_path = os.path.join(sock_path_dir, "cli.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+    cli_server._clis["show"] = _FakeCli(action)
+    sup = os.fork()
+    if sup == 0:
+        try:
+            conn, _ = server.accept()
+            cli_server._serve_request(conn)
+        finally:
+            os._exit(0)
+    server.close()
+    try:
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(sock_path)
+        req = json.dumps({"prog": "show", "argv": [], "env": dict(os.environ), "cwd": os.getcwd()}).encode()
+        client.sendmsg([struct.pack("!I", len(req)) + req],
+                       [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [r, w, w]))])
+        time.sleep(0.2)
+        client.sendall(json.dumps({"signal": int(signal.SIGSTOP)}).encode() + b"\n")
+        time.sleep(1.0)  # the command would have finished by now had it not been stopped
+        client.settimeout(0.3)
+        with pytest.raises(socket.timeout):
+            client.recv(4096)  # no result yet: the supervisor is still waiting for the stopped child
+        client.settimeout(10)
+        client.sendall(json.dumps({"signal": int(signal.SIGCONT)}).encode() + b"\n")
+        resp = json.loads(client.recv(4096).decode().strip())
+        os.close(w)
+        out = os.read(r, 4096).decode()
+        assert resp == {"exit_code": 0}
+        assert "RESUMED-AND-DONE" in out
+        os.waitpid(sup, 0)
+    finally:
+        cli_server._clis.pop("show", None)
+        try:
+            os.close(r)
+        except OSError:
+            pass
