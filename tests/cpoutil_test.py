@@ -1437,12 +1437,22 @@ class TestOptionalElsApis:
         assert "has no attribute" not in result.output
         assert oe_api.calls == [] and els_api.calls == []
 
-    def test_els_module_state_read_failure_is_not_reported_as_success(self, coverage_environment):
-        cpo = cpoutil.cpo_object_map[EXTERNAL_LASER_SOURCE]["els0"]
-        cpo.api.get_module_state = mock.Mock(return_value=None)
-        result = invoke_coverage(["show", "els", "status", "0", "--json"])
-        assert result.exit_code != 0
-        assert "module state API returned no data" in result.output
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_els_missing_module_state_preserves_other_results(self, coverage_environment, monkeypatch, json_output):
+        missing = CoverageFakeCpo()
+        missing.api.get_module_state = mock.Mock(return_value=None)
+        present = CoverageFakeCpo()
+        present.api.get_module_state = mock.Mock(return_value="ModuleReady")
+        monkeypatch.setattr(cpoutil, "get_resource_cpo_objects", mock.Mock(
+            return_value=[("els0", missing), ("els1", present)]))
+        cmd = ["show", "els", "status"] + (["--json"] if json_output else [])
+        result = invoke_coverage(cmd)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            assert json.loads(result.output) == {"els0": None, "els1": "ModuleReady"}
+        else:
+            assert any("ELS0" in line and "N/A" in line for line in result.output.splitlines())
+            assert any("ELS1" in line and "ModuleReady" in line for line in result.output.splitlines())
 
     def test_public_eeprom_uses_the_selected_endpoint(self, coverage_environment, monkeypatch):
         oe = CoverageFakeCpo()

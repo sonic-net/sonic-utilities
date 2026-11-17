@@ -306,30 +306,13 @@ def get_els_api(cpo, label):
     return api
 
 
-def get_els_presence(cpo, label):
-    """Read presence from the selected ELS endpoint."""
-    try:
-        present = cpo.elsfp.get_presence()
-    except (AttributeError, NotImplementedError) as exc:
-        raise CpoCommandError(
-            "ELS presence is not implemented for '{}'".format(label)
-        ) from exc
-    except OSError as exc:
-        raise CpoCommandError(
-            "Failed to read ELS presence for '{}': {}".format(label, exc)
-        ) from exc
-    if not isinstance(present, bool):
-        raise CpoCommandError(
-            "ELS presence API returned invalid data for '{}'".format(label)
-        )
-    return present
-
-
-def get_cpo_presence(cpo, label):
-    """Read virtual-module presence without inferring it from an endpoint."""
+def get_cpo_presence(cpo, label, *, allow_unsupported=False):
+    """Read associated ELSFP presence through the CPO port object."""
     try:
         present = cpo.get_presence()
     except (NotImplementedError, AttributeError) as exc:
+        if allow_unsupported:
+            return None
         raise CpoCommandError(
             "CPO presence is not implemented for '{}'".format(label)
         ) from exc
@@ -1301,7 +1284,7 @@ def show_interface_lane_status(port, json_output):
                         raise
                     record["OE Datapath State Error"] = "Not supported"
                 try:
-                    if not get_els_presence(cpo, record["ELS"]):
+                    if get_cpo_presence(cpo, record["ELS"], allow_unsupported=True) is False:
                         record["ELS Lane State Error"] = ELS_NOT_PRESENT
                     elif laser_ids is not None:
                         els_api = get_els_api(cpo, port_name)
@@ -1400,7 +1383,7 @@ def show_els_lpmode(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            if not get_els_presence(cpo, resource_id):
+            if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
                 records[resource_id] = None if json_output else ELS_NOT_PRESENT
                 continue
             lpmode = cpo.elsfp.get_lpmode()
@@ -1430,13 +1413,10 @@ def show_els_status(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            if not get_els_presence(cpo, resource_id):
+            if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
                 records[resource_id] = None if json_output else ELS_NOT_PRESENT
                 continue
-            state = get_els_api(cpo, resource_id).get_module_state()
-            if state is None:
-                raise CpoCommandError("The ELSFP module state API returned no data")
-            records[resource_id] = state
+            records[resource_id] = get_els_api(cpo, resource_id).get_module_state()
     except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1455,7 +1435,7 @@ def show_els_temperature(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            if not get_els_presence(cpo, resource_id):
+            if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
                 records[resource_id] = None if json_output else ELS_NOT_PRESENT
                 continue
             api = get_els_api(cpo, resource_id)
