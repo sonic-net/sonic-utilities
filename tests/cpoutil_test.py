@@ -2433,7 +2433,7 @@ def test_endpoint_lpmode_query_uses_platform_hook(
 @pytest.mark.parametrize("resource, selected_name, label", [
     ("oe", "oe", "OE"), ("els", "elsfp", "ELS"),
 ])
-@pytest.mark.parametrize("failure", ["missing", "unimplemented", "hardware", "invalid"])
+@pytest.mark.parametrize("failure", ["missing", "unimplemented", "hardware"])
 def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
         coverage_environment, monkeypatch, resource, selected_name, label, failure):
     endpoint = mock.Mock(get_presence=mock.Mock(return_value=True))
@@ -2441,10 +2441,8 @@ def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
         del endpoint.get_lpmode
     elif failure == "unimplemented":
         endpoint.get_lpmode.side_effect = NotImplementedError()
-    elif failure == "hardware":
-        endpoint.get_lpmode.side_effect = OSError("read failed")
     else:
-        endpoint.get_lpmode.return_value = None
+        endpoint.get_lpmode.side_effect = OSError("read failed")
     endpoint.get_api.side_effect = AssertionError("No API fallback")
     cpo = cpoutil.CpoBase(None, endpoint if selected_name == "oe" else mock.Mock(),
                           endpoint if selected_name == "elsfp" else mock.Mock())
@@ -2459,7 +2457,7 @@ def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
 
 @pytest.mark.parametrize("resource, endpoint_name", [("oe", "oe"), ("els", "elsfp")])
 @pytest.mark.parametrize("value", [None, 0, 1, "Low Power Mode", "High Power Mode", "False"])
-def test_endpoint_lpmode_rejects_non_boolean_values(
+def test_endpoint_lpmode_handles_non_boolean_values(
         coverage_environment, monkeypatch, resource, endpoint_name, value):
     endpoint = mock.Mock(get_presence=mock.Mock(return_value=True))
     endpoint.get_lpmode.return_value = value
@@ -2468,8 +2466,12 @@ def test_endpoint_lpmode_rejects_non_boolean_values(
                           endpoint if endpoint_name == "elsfp" else mock.Mock())
     monkeypatch.setitem(cpoutil.cpo_object_map[resource], resource + "0", cpo)
     result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
-    assert result.exit_code != 0
-    assert "get_lpmode returned invalid data" in result.output
-    assert "Traceback" not in result.output
+    if resource == "els":
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"els0": None}
+    else:
+        assert result.exit_code != 0
+        assert "get_lpmode returned invalid data" in result.output
+        assert "Traceback" not in result.output
     endpoint.get_lpmode.assert_called_once_with()
     endpoint.get_api.assert_not_called()

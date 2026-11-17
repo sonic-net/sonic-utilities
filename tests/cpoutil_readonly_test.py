@@ -357,14 +357,24 @@ class TestDirectPlatformApiCommands(object):
         table = invoke(["show", "els", "lpmode", "0"])
         assert "Off" in table.output
 
-    def test_els_lpmode_rejects_platform_hook_strings(self):
-        with mock.patch.object(
-                self.cpo,
-                "get_lpmode",
-                return_value="Low Power Mode"):
-            result = invoke(["show", "els", "lpmode", "0", "--json"])
-        assert result.exit_code != 0
-        assert "ELS get_lpmode returned invalid data" in result.output
+    @pytest.mark.parametrize("json_output", [False, True])
+    @pytest.mark.parametrize("invalid", [None, "Low Power Mode"])
+    def test_els_lpmode_keeps_results_after_unavailable_state(self, json_output, invalid):
+        resources = []
+        for resource_id, lpmode in [("els0", invalid), ("els1", False), ("els2", True)]:
+            endpoint = mock.Mock(get_lpmode=mock.Mock(return_value=lpmode))
+            cpo = mock.Mock(elsfp=endpoint, get_presence=mock.Mock(return_value=True))
+            resources.append((resource_id, cpo))
+        args = ["show", "els", "lpmode"] + (["--json"] if json_output else [])
+        with mock.patch.object(cpoutil, "get_resource_cpo_objects", return_value=resources):
+            result = invoke(args)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            assert json.loads(result.output) == {"els0": None, "els1": False, "els2": True}
+        else:
+            assert [line.split() for line in result.output.splitlines()[-3:]] == [
+                ["ELS0", "N/A"], ["ELS1", "Off"], ["ELS2", "On"],
+            ]
 
     @pytest.mark.parametrize("command, value, displayed", [
         ("lpmode", False, "Off"),
@@ -1178,8 +1188,8 @@ class TestReadOptimizations:
     def test_els_lpmode_does_not_treat_unavailable_state_as_full_power(self, state):
         with mock.patch.object(self.cpo, "get_lpmode", return_value=state):
             result = invoke(["show", "els", "lpmode", "0", "--json"])
-        assert result.exit_code != 0
-        assert "Traceback" not in result.output
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"els0": None}
 
     @pytest.mark.parametrize("port", [None, "Ethernet0"])
     @pytest.mark.parametrize("json_output", [False, True])

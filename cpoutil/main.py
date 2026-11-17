@@ -1387,11 +1387,7 @@ def show_els_lpmode(els_index, json_output):
                 records[resource_id] = None if json_output else ELS_NOT_PRESENT
                 continue
             lpmode = cpo.elsfp.get_lpmode()
-            if not isinstance(lpmode, bool):
-                raise CpoCommandError(
-                    "ELS get_lpmode returned invalid data for '{}'".format(resource_id)
-                )
-            records[resource_id] = lpmode
+            records[resource_id] = lpmode if isinstance(lpmode, bool) else None
     except (AttributeError, NotImplementedError) as exc:
         raise click.ClickException(
             "ELS get_lpmode is not implemented for this platform"
