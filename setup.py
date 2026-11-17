@@ -208,7 +208,8 @@ setup(
         'scripts/wredstat',
         'scripts/sonic-error-report',
         'scripts/chassis_db_consistency_checker.py',
-        'scripts/sonic-dpu-flow-dump.py'
+        'scripts/sonic-dpu-flow-dump.py',
+        'scripts/port_check.py'
     ],
     entry_points={
         'console_scripts': [
