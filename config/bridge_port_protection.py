@@ -4,22 +4,11 @@ import re
 
 import click
 import sonic_yang
-from sonic_py_common import multi_asic
-from swsscommon.swsscommon import ConfigDBConnector
-
-import utilities_common.cli as clicommon
-import utilities_common.multi_asic as multi_asic_util
 
 
 TABLE = "BRIDGE_PORT_PROTECTION"
 YANG_DIR = "/usr/local/yang-models"
-DEFAULTS = {
-    "protection_mode": "SOFTWARE",
-    "admin_mode": "AUTO",
-    "revertive": "false",
-    "wait_to_restore_time_ms": "0",
-}
-KEYS = click.Choice([*DEFAULTS, "delete"])
+KEYS = click.Choice(["protection_mode", "admin_mode", "revertive", "wait_to_restore_time_ms", "delete"])
 
 
 def interface_name(value):
@@ -62,8 +51,7 @@ def apply_policy(ctx, config_db, interface, key, value):
         if not portchannel:
             ctx.fail("{} does not exist in PORTCHANNEL.".format(name))
         normalized = normalize_value(ctx, key, value)
-        entry = dict(DEFAULTS)
-        entry.update(config_db.get_entry(TABLE, name))
+        entry = dict(config_db.get_entry(TABLE, name))
         entry[key] = normalized
 
         # Validate this policy and its leafref target even when global YANG
@@ -89,40 +77,3 @@ def apply_policy(ctx, config_db, interface, key, value):
 def protection(ctx, interface, key, value):
     """Set software protection policy, or delete its configuration."""
     apply_policy(ctx, ctx.obj["db"], interface, key, value)
-
-
-def interface_group(name):
-    @click.group(name=name)
-    @click.option("-n", "--namespace", default=None,
-                  type=multi_asic_util.LazyChoice(multi_asic_util.multi_asic_ns_choices),
-                  help="ASIC namespace (required on multi-ASIC systems).")
-    @click.pass_context
-    def group(ctx, namespace):
-        """Configure protection on this PortChannel."""
-        if multi_asic.is_multi_asic() and namespace is None:
-            ctx.fail("Specify --namespace on a multi-ASIC system.")
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace or "")
-        config_db.connect()
-        ctx.obj = {"db": config_db}
-
-    @group.command(name="protection")
-    @click.argument("key", type=KEYS)
-    @click.argument("value", required=False)
-    @click.pass_context
-    def configure(ctx, key, value):
-        """Set software policy: protection_mode, admin_mode, revertive, or WTR."""
-        apply_policy(ctx, ctx.obj["db"], name, key, value)
-
-    return group
-
-
-class BridgePortProtectionGroup(clicommon.AbbreviationGroup):
-    """Preserve normal commands and resolve config portchannelN protection."""
-
-    def get_command(self, ctx, cmd_name):
-        command = super().get_command(ctx, cmd_name)
-        if command is not None:
-            return command
-        if interface_name(cmd_name) is not None:
-            return interface_group(cmd_name)
-        return None

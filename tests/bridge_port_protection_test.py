@@ -48,11 +48,10 @@ def configure(cli, key, value=None, interface="PortChannel0"):
     ("wait_to_restore_time_ms", "5000", "5000"),
     ("wait_to_restore_time_ms", "4294967295", "4294967295"),
 ])
-def test_valid_policy_and_materialized_defaults(cli, yang_validator, key, value, stored):
+def test_valid_policy_stores_only_explicit_field(cli, yang_validator, key, value, stored):
     result = configure(cli, key, value)
     assert result.exit_code == 0, result.output
-    expected = dict(policy.DEFAULTS)
-    expected[key] = stored
+    expected = {key: stored}
     assert cli[1].cfgdb.get_entry(policy.TABLE, "PortChannel0") == expected
     yang_validator.assert_called_once_with(policy.YANG_DIR, print_log_enabled=False)
     assert yang_validator.return_value.mock_calls == [
@@ -65,19 +64,15 @@ def test_valid_policy_and_materialized_defaults(cli, yang_validator, key, value,
     ]
 
 
-def test_exact_interface_syntax_preserves_other_fields(cli, monkeypatch):
-    runner, db = cli
-    monkeypatch.setattr(policy, "ConfigDBConnector", lambda **kwargs: db.cfgdb)
-    monkeypatch.setattr(db.cfgdb, "connect", lambda: None)
-    monkeypatch.setattr(policy.multi_asic, "is_multi_asic", lambda: False)
-    group = config.config.get_command(click.Context(config.config), "portchannel0")
-    for key, value in [("protection_mode", "software"), ("admin_mode", "auto"),
-                       ("revertive", "false"), ("wait_to_restore_time_ms", "5000")]:
-        result = runner.invoke(group, ["protection", key, value])
-        assert result.exit_code == 0, result.output
-    assert db.cfgdb.get_entry(policy.TABLE, "PortChannel0") == {
-        **policy.DEFAULTS, "wait_to_restore_time_ms": "5000"
-    }
+@pytest.mark.parametrize("existing", [
+    {"revertive": "true"},
+    {"protection_mode": "SOFTWARE", "admin_mode": "PROTECTION", "wait_to_restore_time_ms": "5000"},
+])
+def test_update_preserves_explicit_fields_without_materializing_defaults(cli, existing):
+    cli[1].cfgdb.set_entry(policy.TABLE, "PortChannel0", existing)
+    result = configure(cli, "admin_mode", "primary")
+    assert result.exit_code == 0, result.output
+    assert cli[1].cfgdb.get_entry(policy.TABLE, "PortChannel0") == {**existing, "admin_mode": "PRIMARY"}
 
 
 @pytest.mark.parametrize("key,value", [
@@ -116,7 +111,7 @@ def test_delete_is_idempotent_and_rejects_value(cli):
 
 
 @pytest.mark.parametrize("adhoc", [True, False])
-@pytest.mark.parametrize("entry", [{}, {"NULL": "NULL"}, dict(policy.DEFAULTS)])
+@pytest.mark.parametrize("entry", [{}, {"NULL": "NULL"}, {"admin_mode": "AUTO"}])
 def test_portchannel_delete_requires_protection_removal(cli, monkeypatch, adhoc, entry):
     runner, db = cli
     monkeypatch.setattr(config, "ADHOC_VALIDATION", adhoc)
@@ -151,7 +146,7 @@ def test_yang_validation_failure_preserves_existing_policy(cli, yang_validator):
     assert "Unknown field convergence_mode" in result.output
     validator.loadData.assert_called_once_with(configdbJson={
         "PORTCHANNEL": {"PortChannel0": {"admin_status": "up"}},
-        policy.TABLE: {"PortChannel0": {**policy.DEFAULTS, "convergence_mode": "AUTO"}},
+        policy.TABLE: {"PortChannel0": {"admin_mode": "AUTO", "convergence_mode": "AUTO"}},
     })
     assert cli[1].cfgdb.get_entry(policy.TABLE, "PortChannel0") == {"convergence_mode": "AUTO"}
 
@@ -173,29 +168,26 @@ def test_save_failure_is_reported(cli, monkeypatch):
     assert "write failed" in result.output
 
 
-def test_dynamic_group_preserves_existing_commands_and_rejects_unknown():
+def test_root_group_preserves_commands_and_rejects_interface_shorthand():
     ctx = click.Context(config.config)
     assert config.config.get_command(ctx, "portchannel") is config.config.commands["portchannel"]
-    assert config.config.get_command(ctx, "unknown-command") is None
+    for name in ("unknown-command", "portchannel0", "PortChannel9999"):
+        assert config.config.get_command(ctx, name) is None
 
 
-def test_dynamic_group_requires_namespace_on_multi_asic(cli, monkeypatch):
-    monkeypatch.setattr(policy.multi_asic, "is_multi_asic", lambda: True)
-    result = cli[0].invoke(policy.interface_group("portchannel0"), ["protection", "admin_mode", "auto"])
-    assert result.exit_code != 0
-    assert "Specify --namespace" in result.output
-
-
-def test_dynamic_group_uses_explicit_namespace(cli, monkeypatch):
-    monkeypatch.setattr(policy.multi_asic, "is_multi_asic", lambda: True)
-    monkeypatch.setattr(policy.multi_asic_util, "multi_asic_ns_choices", lambda: ["asic0"])
+def test_portchannel_protection_uses_explicit_namespace(cli, monkeypatch):
     connector = mock.Mock(return_value=cli[1].cfgdb)
-    monkeypatch.setattr(policy, "ConfigDBConnector", connector)
+    monkeypatch.setattr(config, "ConfigDBConnector", connector)
     monkeypatch.setattr(cli[1].cfgdb, "connect", lambda: None)
-    result = cli[0].invoke(policy.interface_group("portchannel0"),
-                           ["--namespace", "asic0", "protection", "admin_mode", "auto"])
+    # The existing PortChannel group owns namespace validation and connection.
+    namespace_option = next(param for param in config.portchannel.params if param.name == "namespace")
+    monkeypatch.setattr(namespace_option, "type", click.Choice(["asic0"]))
+    result = cli[0].invoke(config.portchannel,
+                           ["-n", "asic0", "protection", "PortChannel0", "admin_mode", "auto"],
+                           obj=cli[1])
     assert result.exit_code == 0, result.output
     connector.assert_called_once_with(use_unix_socket_path=True, namespace="asic0")
+    assert cli[1].cfgdb.get_entry(policy.TABLE, "PortChannel0") == {"admin_mode": "AUTO"}
 
 
 def state_client(entries):

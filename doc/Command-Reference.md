@@ -184,6 +184,7 @@
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
   * [PortChannel Config commands](#portchannel-config-commands)
+  * [Bridge-port protection](#bridge-port-protection)
 * [Packet Trimming](#packet-trimming)
   * [Packet Trimming Show commands](#packet-trimming-show-commands)
   * [Packet Trimming Config commands](#packet-trimming-config-commands)
@@ -11827,6 +11828,50 @@ This command adds or deletes a member port to/from the already created portchann
   ```
   admin@sonic:~$ sudo config portchannel member add PortChannel0011 Ethernet4
   ```
+
+### Bridge-port protection
+
+**config portchannel protection**
+
+Configure software bridge-port protection on an existing PortChannel. Physical interfaces and subinterfaces are not supported. Remove protection configuration before deleting the PortChannel.
+
+- Usage:
+  ```bash
+  config portchannel [-n <namespace>] protection <PortChannel> <setting> <value>
+  config portchannel [-n <namespace>] protection <PortChannel> delete
+  ```
+
+| Setting | Accepted values | Effective default in this software implementation |
+| --- | --- | --- |
+| `protection_mode` | `software` | `SOFTWARE` |
+| `admin_mode` | `auto`, `primary`, `protection` | `AUTO` |
+| `revertive` | `true`, `false` | `false` |
+| `wait_to_restore_time_ms` | Integer `0..4294967295`, milliseconds | `0` |
+
+Each command stores the selected field and preserves previously configured fields. Unspecified fields are left absent from CONFIG_DB; the model and SWSS supply their effective defaults. Hardware protection configuration is not supported by this CLI implementation.
+
+`auto` follows aggregate PortChannel operational state. `primary` pins the local path; `protection` requests the backup path. With `auto` and `revertive=true`, restoration waits for a continuous link-up interval of `wait_to_restore_time_ms`; zero means no delay. Updates are accepted while the existing PortChannel is down.
+
+- Example:
+  ```bash
+  sudo config portchannel protection PortChannel0 protection_mode software
+  sudo config portchannel protection PortChannel0 admin_mode auto
+  sudo config portchannel protection PortChannel0 revertive true
+  sudo config portchannel protection PortChannel0 wait_to_restore_time_ms 5000
+  sudo config portchannel protection PortChannel0 delete
+  ```
+
+**show bridge-port-protection**
+
+Display protection state from STATE_DB for all protected interfaces or one interface:
+
+```bash
+show bridge-port-protection [<PortChannel>] [-n <namespace>] [--verbose]
+```
+
+`STATE` is the last confirmed SAI-observed `PRIMARY`/`PROTECTION` path, distinct from configured `ADMIN_MODE`. Before the first valid observation it is shown as an em dash. For software protection, `RECONCILIATION` is `STEADY` only after matching successful readback; otherwise it is `INCONSISTENT`. `LAST_RESYNC` is the latest successful SAI readback time. `--verbose` adds reconciliation timing, arbitration-source and cache diagnostics; hardware-only fields display `n/a` in software mode.
+
+On multi-ASIC systems use the existing PortChannel `-n` option to select the configuration namespace. Show defaults to all front-end namespaces and adds a NAMESPACE column. These options do not establish multi-ASIC feature qualification.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#portchannels)
 

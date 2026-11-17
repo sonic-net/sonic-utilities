@@ -1879,7 +1879,7 @@ def check_dhcpv4_relay_dependencies(db, object_name, object_type):
 
 
 # This is our main entrypoint - the main 'config' command
-@click.group(cls=bridge_port_protection.BridgePortProtectionGroup, context_settings=CONTEXT_SETTINGS)
+@click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 def config(ctx):
     """SONiC command line - 'config' command"""
