@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 import pytest
 from contextlib import contextmanager
@@ -10,6 +11,7 @@ from sonic_installer.main import (
 from click.testing import CliRunner
 from unittest.mock import patch, Mock, call
 import sonic_installer.common as sonic_installer_common
+from sonic_installer import secure_boot_db
 
 
 def test_run_command():
@@ -336,3 +338,111 @@ def test_install_uses_resolved_swap_values(
     resolve_total_mem_threshold.assert_called_once_with(
         TOTAL_MEM_THRESHOLD_DEFAULT, TOTAL_MEM_THRESHOLD_DEFAULT)
     swap.assert_called_with(True, 3072, 8192, 1200)
+
+
+def _remove_with_prune(state="enabled", error=None, efivars_error=None):
+    bootloader = Mock()
+    bootloader.get_installed_images.side_effect = [["cur", "old"], ["cur"]]
+    bootloader.get_current_image.return_value = "cur"
+
+    def after_removal(*args, **kwargs):
+        bootloader.remove_image.assert_called_once_with("old")
+        if error is not None:
+            raise error
+        return 0
+
+    with patch("sonic_installer.main.get_bootloader", return_value=bootloader), \
+            patch("os.geteuid", return_value=0), \
+            patch("sonic_installer.main.subprocess.run", side_effect=AssertionError("unexpected subprocess")), \
+            patch("sonic_installer.main.secure_boot_db.ensure_efivars",
+                  side_effect=efivars_error) as ensure_efivars, \
+            patch("sonic_installer.main.secure_boot_db.secure_boot_state", return_value=state) as boot_state, \
+            patch("sonic_installer.main.secure_boot_db.prune_db_certificates", side_effect=after_removal) as prune:
+        result = CliRunner().invoke(sonic_installer, ["remove", "-y", "old"])
+    assert result.exit_code == 0, (result.output, result.exception)
+    bootloader.remove_image.assert_called_once_with("old")
+    bootloader.is_secure_upgrade_image_verification_supported.assert_not_called()
+    ensure_efivars.assert_called_once()
+    if efivars_error is None:
+        boot_state.assert_called_once_with(ensure_efivars.call_args.args[0])
+    else:
+        boot_state.assert_not_called()
+    if prune.called:
+        assert prune.call_args.args[0] is ensure_efivars.call_args.args[0]
+    return result, prune
+
+
+def test_remove_prunes_db_certs_without_flag():
+    _, prune = _remove_with_prune()
+    prune.assert_called_once()
+    assert isinstance(prune.call_args.args[0], secure_boot_db.Config)
+    assert prune.call_args.kwargs == {"images": ["cur"], "auto": True}
+
+
+@pytest.mark.parametrize("error", [
+    secure_boot_db.ScriptError("invalid authenticated update"),
+    OSError("missing utility"),
+    subprocess.TimeoutExpired("openssl", 600),
+])
+def test_remove_warns_when_prune_fails(error):
+    result, prune = _remove_with_prune(error=error)
+    prune.assert_called_once()
+    assert "prune failed" in result.output
+    assert str(error) in result.output
+    assert "Verify db before rebooting" in result.output
+
+
+@pytest.mark.parametrize("state", ["disabled", "unknown"])
+def test_remove_skips_prune_when_secure_boot_not_enabled(state):
+    result, prune = _remove_with_prune(state=state)
+    prune.assert_not_called()
+    if state == "unknown":
+        assert "Secure Boot state is unknown" in result.output
+    else:
+        assert "Warning:" not in result.output
+
+
+def test_remove_warns_when_efivars_unavailable():
+    result, prune = _remove_with_prune(efivars_error=secure_boot_db.ScriptError("efivars unavailable"))
+    prune.assert_not_called()
+    assert "efivars unavailable" in result.output
+    assert "prune failed" in result.output
+
+
+@pytest.mark.parametrize("old_images", [[], ["old1", "old2"]])
+def test_cleanup_prunes_only_when_images_were_removed(old_images):
+    bootloader = Mock()
+    bootloader.get_installed_images.side_effect = [["cur", "next"] + old_images, ["cur", "next"]]
+    bootloader.get_current_image.return_value = "cur"
+    bootloader.get_next_image.return_value = "next"
+    operations = []
+    bootloader.remove_image.side_effect = operations.append
+    with patch("sonic_installer.main.get_bootloader", return_value=bootloader), \
+            patch("os.geteuid", return_value=0), \
+            patch("sonic_installer.main.secure_boot_db.ensure_efivars"), \
+            patch("sonic_installer.main.secure_boot_db.secure_boot_state", return_value="enabled"), \
+            patch("sonic_installer.main.secure_boot_db.prune_db_certificates",
+                  side_effect=lambda *args, **kwargs: operations.append("prune")) as prune:
+        result = CliRunner().invoke(sonic_installer, ["cleanup", "-y"])
+    assert result.exit_code == 0, (result.output, result.exception)
+    if old_images:
+        assert operations == old_images + ["prune"]
+        prune.assert_called_once()
+        assert prune.call_args.kwargs == {"images": ["cur", "next"], "auto": True}
+    else:
+        assert operations == []
+        prune.assert_not_called()
+
+
+@pytest.mark.parametrize("image", ["cur", "missing"])
+def test_rejected_removal_does_not_prune(image):
+    bootloader = Mock()
+    bootloader.get_installed_images.return_value = ["cur", "old"]
+    bootloader.get_current_image.return_value = "cur"
+    with patch("sonic_installer.main.get_bootloader", return_value=bootloader), \
+            patch("os.geteuid", return_value=0), \
+            patch("sonic_installer.main.secure_boot_db.prune_db_certificates") as prune:
+        result = CliRunner().invoke(sonic_installer, ["remove", "-y", image])
+    assert result.exit_code != 0
+    bootloader.remove_image.assert_not_called()
+    prune.assert_not_called()
