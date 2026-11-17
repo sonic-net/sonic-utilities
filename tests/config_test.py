@@ -3893,7 +3893,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert db.cfgdb.get_table("NTP_SERVER")["10.10.10.4"] == {"association_type": "pool"}
+        assert db.cfgdb.get_table("NTP_SERVER")["pool.ntp.org"] == {"association_type": "pool"}
 
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
            mock.Mock(side_effect=ValueError))
