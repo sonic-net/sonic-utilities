@@ -57,7 +57,9 @@ def try_convert_interfacename_from_alias(ctx, interfacename, ignore_missing=Fals
     """
     Try to convert interface name from alias
 
-    If `check_db` is true, this function will check if `interfacename` exists in CONFIG_DB
+    Args:
+        ignore_missing: Return None instead of failing when an alias is not found.
+        check_db: Check that the interface exists in CONFIG_DB when not using alias mode.
     """
 
     if clicommon.get_interface_naming_mode() == "alias":
