@@ -52,7 +52,7 @@ show_interface_tpid_output="""\
      Ethernet28       etp8      up       up     N/A
      Ethernet32       etp9      up       up  0x8100
      Ethernet36      etp10      up       up  0x8100
-    Ethernet112      etp29      up       up  0x8100
+    Ethernet112      etp29    down       up  0x8100
     Ethernet116      etp30      up       up  0x8100
     Ethernet120      etp31      up       up  0x8100
     Ethernet124      etp32      up       up  0x8100
