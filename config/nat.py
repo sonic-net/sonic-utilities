@@ -944,7 +944,7 @@ def remove_binding(ctx, binding_name):
 def remove_bindings(ctx):
     """Remove all Bindings for Dynamic configuration"""
 
-    config_db = ValidatedConfigBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
 
     binding_table_name = 'NAT_BINDINGS'
