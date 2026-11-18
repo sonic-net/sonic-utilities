@@ -292,6 +292,7 @@ def vlan_enable_stp(db, vlan_name):
 def interface_enable_stp(db, interface_name):
     fvs = {'enabled': 'true',
            'root_guard': 'false',
+           'loop_guard': 'false',
            'bpdu_guard': 'false',
            'bpdu_guard_do_disable': 'false',
            'portfast': 'false',
@@ -361,6 +362,7 @@ def is_portchannel_member_port(db, interface_name):
 def enable_stp_for_interfaces(db):
     fvs = {'enabled': 'true',
            'root_guard': 'false',
+           'loop_guard': 'false',
            'bpdu_guard': 'false',
            'bpdu_guard_do_disable': 'false',
            'portfast': 'false',
@@ -446,6 +448,7 @@ def enable_mst_for_interfaces(db):
         'bpdu_guard': 'false',
         'bpdu_guard_do': 'false',
         'root_guard': 'false',
+        'loop_guard': 'false',
         'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
         }
@@ -1350,6 +1353,7 @@ def stp_interface_enable(_db, interface_name):
     fvs = {
         'enabled': 'true',
         'root_guard': 'false',
+        'loop_guard': 'false',
         'bpdu_guard': 'false',
         'bpdu_guard_do_disable': 'false'
     }
@@ -1531,6 +1535,39 @@ def stp_interface_root_guard_disable(_db, interface_name):
         fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
     db.mod_entry('STP_PORT', interface_name, fvs)
+
+
+# config spanning_tree interface loop_guard {enable|disable} <ifname>
+# This command allow enabling or disabling of loop_guard on an interface.
+@spanning_tree_interface.group('loop_guard')
+@clicommon.pass_db
+def spanning_tree_interface_loop_guard(_db):
+    """Configure STP loop guard for interface"""
+    pass
+
+
+@spanning_tree_interface_loop_guard.command('enable')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_loop_guard_enable(_db, interface_name):
+    """Enable STP loop guard for interface"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'loop_guard': 'true'})
+
+
+@spanning_tree_interface_loop_guard.command('disable')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_loop_guard_disable(_db, interface_name):
+    """Disable STP loop guard for interface"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'loop_guard': 'false'})
 
 
 # config spanning_tree interface priority <ifname> <port_priority-value>
