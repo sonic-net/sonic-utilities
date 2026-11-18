@@ -1817,7 +1817,7 @@ def mst_instance_vlan_add(_db, instance_id, vlan_id):
     db = _db.cfgdb
 
     # Validate instance_id range
-    if not (0 < instance_id < MST_MAX_INSTANCES):
+    if not (0 <= instance_id < MST_MAX_INSTANCES):
         ctx.fail(f"Instance ID must be in range 0-{MST_MAX_INSTANCES - 1}")
     # Disallow VLAN configuration for MST instance 0
     if instance_id == 0:
@@ -1825,8 +1825,8 @@ def mst_instance_vlan_add(_db, instance_id, vlan_id):
 
     # Check if instance exists
     instance_key = f"MST_INSTANCE|{instance_id}"
-    if not db.get_entry('STP_MST_INST', instance_key):
-        ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
+    # if not db.get_entry('STP_MST_INST', instance_key):
+    #     ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
 
     # Validate VLAN ID range
     if not (1 <= vlan_id <= 4094):
@@ -1839,8 +1839,11 @@ def mst_instance_vlan_add(_db, instance_id, vlan_id):
 
     # Update VLAN list in MST instance
     instance_entry = db.get_entry('STP_MST_INST', instance_key)
-    vlan_list = instance_entry.get('vlan_list', "")
-    vlans = set(vlan_list.split(',')) if vlan_list else set()
+    vlan_list = ""
+    vlans = set()
+    if instance_entry and instance_entry.get('vlan_list', ""):
+        vlan_list = instance_entry.get('vlan_list', "")
+        vlans = set(vlan_list.split(',')) if vlan_list else set()
 
     if str(vlan_id) in vlans:
         ctx.fail(f"VLAN {vlan_id} is already mapped to MST instance {instance_id}.")
@@ -1888,7 +1891,10 @@ def mst_instance_vlan_del(_db, instance_id, vlan_id):
         ctx.fail(f"VLAN {vlan_id} is not mapped to MST instance {instance_id}.")
 
     vlans.remove(str(vlan_id))
-    updated_vlan_list = ",".join(sorted(vlans, key=int))
-    db.mod_entry('STP_MST_INST', instance_key, {'vlan_list': updated_vlan_list})
-
-    click.echo(f"VLAN {vlan_id} removed from MST instance {instance_id}.")
+    if not vlans:
+        click.echo(f"VLAN {vlan_id} removed. No VLANs remaining in MST instance {instance_id}")
+        db.set_entry('STP_MST_INST', instance_key, None)
+    else:
+        updated_vlan_list = ",".join(sorted(vlans, key=int))
+        db.mod_entry('STP_MST_INST', instance_key, {'vlan_list': updated_vlan_list})
+        click.echo(f"VLAN {vlan_id} removed from MST instance {instance_id}.")
