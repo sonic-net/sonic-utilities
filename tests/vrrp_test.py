@@ -19,6 +19,11 @@ class TestConfigVRRP(object):
             return_value=cls.mock_run_bgp_command())
         print("SETUP")
 
+    @classmethod
+    def teardown_class(cls):
+        bgp_util.run_bgp_command = cls._old_run_bgp_command
+        print("TEARDOWN")
+
     ''' Tests for VRRPv4 and VRRPv6  '''
 
     def mock_run_bgp_command():

@@ -55,10 +55,7 @@ class TestBgpNetwork(object):
 
     @classmethod
     def setup_class(cls):
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
         from .mock_tables import dbconnector
-        dbconnector.load_database_config
 
 
     @pytest.mark.parametrize(
@@ -113,7 +110,3 @@ class TestMultiAsicBgpNetwork(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config

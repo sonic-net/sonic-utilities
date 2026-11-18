@@ -150,12 +150,10 @@ class TestFdbshow():
     @pytest.fixture(scope="class", autouse=True)
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         os.environ["FDBSHOW_UNIT_TESTING"] = "1"
         yield
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["FDBSHOW_UNIT_TESTING"] = "0"
 
@@ -593,3 +591,78 @@ class TestFdbshow():
         print("result = {}".format(result))
         assert return_code == 1
         assert result == show_mac_invalid_address_output.strip("\n")
+
+    def test_show_mac_evpn_mh_endpoint_ip(self):
+        """Cover the endpoint_ip path (VXLAN remote MAC)"""
+        self.set_mock_variant("8")
+
+        result = self.runner.invoke(show.cli.commands["mac"], [])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "192.168.1.1" in result.output
+
+        return_code, result = get_result_and_return_code(['fdbshow'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "192.168.1.1" in result
+
+    def test_show_mac_evpn_mh_nhg(self):
+        """Cover the NHG bridge port path (SAI_BRIDGE_PORT_TYPE_BRIDGE_PORT_NEXT_HOP_GROUP)"""
+        self.set_mock_variant("8")
+
+        result = self.runner.invoke(show.cli.commands["mac"], [])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "10.0.0.1" in result.output
+
+        return_code, result = get_result_and_return_code(['fdbshow'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "10.0.0.1" in result
+
+    def test_show_mac_local_flag(self):
+        """Cover the -l/--local flag: remote MACs (endpoint_ip and NHG) are skipped"""
+        self.set_mock_variant("8")
+
+        return_code, result = get_result_and_return_code(['fdbshow', '-l'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "192.168.1.1" not in result
+        assert "10.0.0.1" not in result
+
+    def test_show_mac_zero_endpoint_ip(self):
+        """An all-zero endpoint address (MAC moved from a VTEP to a local port) is no endpoint"""
+        self.set_mock_variant("8")
+
+        for args in (['fdbshow'], ['fdbshow', '-l']):
+            return_code, result = get_result_and_return_code(args)
+            print("return_code: {}".format(return_code))
+            print("result = {}".format(result))
+            assert return_code == 0
+            for mac in ("aa:bb:cc:dd:ee:03", "aa:bb:cc:dd:ee:04"):
+                rows = [line.split() for line in result.splitlines() if mac in line.lower()]
+                assert len(rows) == 1
+                assert rows[0][3] == "Ethernet0"
+
+    def test_show_mac_zero_endpoint_ip_nhg(self):
+        """A zero endpoint address on an NHG bridge port still resolves through the multihoming lookup"""
+        self.set_mock_variant("8")
+
+        return_code, result = get_result_and_return_code(['fdbshow'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        rows = [line.split() for line in result.splitlines() if "aa:bb:cc:dd:ee:05" in line.lower()]
+        assert len(rows) == 1
+        assert rows[0][3] == "10.0.0.1"
+
+        return_code, result = get_result_and_return_code(['fdbshow', '-l'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert "aa:bb:cc:dd:ee:05" not in result.lower()

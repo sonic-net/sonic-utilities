@@ -271,7 +271,7 @@ CMIS_STATUS_MAP = {
     'postfecberhighalarm_flag': 'Postfec ber high alarm flag',
     'postfecberhighwarning_flag': 'Postfec ber high warning flag',
     'postfecberlowwarning_flag': 'Postfec ber low warning flag',
-    'postfecberlowalarm_flag': 'Postfec ber low alarm flag'
+    'postfecberlowalarm_flag': 'Postfec ber low alarm flag',
 }
 
 CMIS_VDM_TO_LEGACY_STATUS_MAP = {

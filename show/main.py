@@ -18,6 +18,7 @@ from utilities_common import util_base
 from utilities_common import hft as hft_common
 from utilities_common.db import Db
 from datetime import datetime
+import utilities_common.bgp_util as bgp_util
 import utilities_common.constants as constants
 from utilities_common.general import load_db_config
 from json.decoder import JSONDecodeError
@@ -41,8 +42,10 @@ except KeyError:
 
 from . import acl
 from . import bgp_common
+from .vtysh_helper import vtysh_command
 from . import chassis_modules
 from . import dropcounters
+from . import evpn
 from . import fabric
 from . import feature
 from . import fgnhg
@@ -69,10 +72,12 @@ from . import syslog
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import llr
 from . import srv6
 from . import switch
 from . import icmp
 from . import copp
+from . import orchagent
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -85,25 +90,6 @@ VLAN_SUB_INTERFACE_SEPARATOR = '.'
 GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 
 COMMAND_TIMEOUT = 300
-
-# To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continuous execution of this
-# bash oneliner. To be revisited once routing-stack info is tracked somewhere.
-def get_routing_stack():
-    result = 'frr'
-    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
-
-    try:
-        stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
-        result = stdout.rstrip('\n')
-    except Exception as err:
-        click.echo('Failed to get routing stack: {}'.format(err), err=True)
-
-    return result
-
-
-# Global Routing-Stack variable
-routing_stack = get_routing_stack()
 
 # Read given JSON file
 def readJsonFile(fileName):
@@ -205,20 +191,26 @@ def display_storm_all():
 
     click.echo(tabulate(body, header, tablefmt="grid"))
 
+
+#
+# Connect to the CONFIG_DB that holds storm-control configuration. On
+# multi-ASIC platforms storm-control config lives in the per-ASIC CONFIG_DB,
+# so connect to the requested namespace instead of the default (host) database.
+#
+def connect_storm_control_config_db(namespace=None):
+    if namespace is None:
+        config_db = ConfigDBConnector()
+        config_db.connect()
+    else:
+        config_db = multi_asic.connect_config_db_for_ns(namespace)
+    return config_db
+
+
 #
 # Get storm-control configurations per interface append to body
 #
-def get_storm_interface(intf, body):
-    storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
-
-    config_db = ConfigDBConnector()
-    config_db.connect()
-
-    table = config_db.get_table('PORT_STORM_CONTROL')
-
-    #To avoid further looping below
-    if not table:
-        return
+def get_storm_interface(intf, body, config_db):
+    storm_type_list = ['broadcast', 'unknown-unicast', 'unknown-multicast']
 
     for storm_type in storm_type_list:
         storm_key = intf + '|' + storm_type
@@ -228,10 +220,11 @@ def get_storm_interface(intf, body):
             kbps = data['kbps']
             body.append([intf, storm_type, kbps])
 
+
 #
 # Display storm-control data of given interface
 #
-def display_storm_interface(intf):
+def display_storm_interface(intf, namespace=None):
     """ Show storm-control """
 
     storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
@@ -239,8 +232,7 @@ def display_storm_interface(intf):
     header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
     body = []
 
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = connect_storm_control_config_db(namespace)
 
     table = config_db.get_table('PORT_STORM_CONTROL')
 
@@ -305,6 +297,7 @@ def cli(ctx):
 cli.add_command(acl.acl)
 cli.add_command(chassis_modules.chassis)
 cli.add_command(dropcounters.dropcounters)
+cli.add_command(evpn.evpn)
 cli.add_command(fabric.fabric)
 cli.add_command(feature.feature)
 cli.add_command(fgnhg.fgnhg)
@@ -330,10 +323,12 @@ cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
 cli.add_command(stp.spanning_tree)
+cli.add_command(llr.llr)
 cli.add_command(srv6.srv6)
 cli.add_command(switch.switch)
 cli.add_command(icmp.icmp)
 cli.add_command(copp.copp)
+cli.add_command(orchagent.orchagent)
 
 # syslog module
 cli.add_command(syslog.syslog)
@@ -364,13 +359,16 @@ def get_interface_bind_to_vrf(config_db, vrf_name):
 
 @cli.command()
 @click.argument('vrf_name', required=False)
-def vrf(vrf_name):
+@click.pass_context
+def vrf(ctx, vrf_name):
     """Show vrf config"""
     config_db = ConfigDBConnector()
     config_db.connect()
     header = ['VRF', 'Interfaces']
     body = []
     vrf_dict = config_db.get_table('VRF')
+    if vrf_name is not None and vrf_name not in vrf_dict:
+        ctx.fail(f"VRF {vrf_name} is not configured.")
     if vrf_dict:
         vrfs = []
         if vrf_name is None:
@@ -515,9 +513,13 @@ def storm_control(ctx, namespace, display):
         if namespace is None:
             display_storm_all()
         else:
-            interfaces = multi_asic.multi_asic_get_ip_intf_from_ns(namespace)
-            for intf in interfaces:
-                get_storm_interface(intf, body)
+            config_db = connect_storm_control_config_db(namespace)
+            table = config_db.get_table('PORT_STORM_CONTROL')
+            # To avoid further looping below
+            if table:
+                interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
+                for intf in interfaces:
+                    get_storm_interface(intf, body, config_db)
             click.echo(tabulate(body, header, tablefmt="grid"))
 
 @storm_control.command('interface')
@@ -530,7 +532,7 @@ def interface(ctx, interface):
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
         ctx.fail('-n/--namespace option required. provide namespace from list {}'.format(multi_asic.get_namespace_list()))
     if interface:
-        display_storm_interface(interface)
+        display_storm_interface(interface, namespace)
 
 #
 # 'mgmt-vrf' group ("show mgmt-vrf ...")
@@ -727,15 +729,19 @@ def pfcwd():
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def config(namespace, display, verbose):
+def config(namespace, display, json_output, verbose):
     """Show pfc watchdog config"""
 
     cmd = ['pfcwd', 'show', 'config', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if json_output:
+        cmd += ['--json']
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
@@ -831,7 +837,8 @@ def counters(interfacename, namespace, display, all, trim, voq, nonzero, json, v
 @click.option('--json', is_flag=True, help="JSON output")
 @click.option('--voq', is_flag=True, help="VOQ counters")
 @click.option('-nz', '--nonzero', is_flag=True, help="Non Zero Counters")
-def wredcounters(interfacename, namespace, display, verbose, json, voq, nonzero):
+@click.option('--summary', is_flag=True, help="Summary counters")
+def wredcounters(interfacename, namespace, display, verbose, json, voq, nonzero, summary):
     """Show queue wredcounters"""
 
     cmd = ["wredstat"]
@@ -854,6 +861,9 @@ def wredcounters(interfacename, namespace, display, verbose, json, voq, nonzero)
 
     if nonzero:
         cmd += ["-nz"]
+
+    if summary:
+        cmd += ["-s"]
 
     run_command(cmd, display_cmd=verbose)
 
@@ -1200,6 +1210,7 @@ def pwm_headroom_pool(namespace):
 @click.option('-a', '--address')
 @click.option('-t', '--type')
 @click.option('-c', '--count', is_flag=True)
+@click.option('-l', '--local', is_flag=True)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.option('-n',
               '--namespace',
@@ -1209,7 +1220,7 @@ def pwm_headroom_pool(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def mac(ctx, vlan, port, address, type, count, verbose, namespace):
+def mac(ctx, vlan, port, address, type, count, local, verbose, namespace):
     """Show MAC (FDB) entries"""
 
     if ctx.invoked_subcommand is not None:
@@ -1234,6 +1245,9 @@ def mac(ctx, vlan, port, address, type, count, verbose, namespace):
 
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+
+    if local:
+        cmd += ["-l"]
 
     run_command(cmd, display_cmd=verbose)
 
@@ -1264,7 +1278,7 @@ def aging_time(ctx):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def route_map(route_map_name, verbose):
     """show route-map"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show route-map']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show route-map']
     if route_map_name is not None:
         cmd[-1] += ' {}'.format(route_map_name)
     run_command(cmd, display_cmd=verbose)
@@ -1281,7 +1295,7 @@ def vrrp(ctx, verbose):
     if ctx.invoked_subcommand is not None:
         return
 
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1293,7 +1307,7 @@ def vrrp(ctx, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_interface(ctx, interface_name, vrid, verbose):
     """show vrrp interface <interface_name> <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp']
     if vrid is not None:
         cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
     else:
@@ -1308,7 +1322,7 @@ def vrrp_interface(ctx, interface_name, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_vrid(ctx, vrid, verbose):
     """show vrrp vrid <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp {}'.format(vrid)]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp {}'.format(vrid)]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1318,7 +1332,7 @@ def vrrp_vrid(ctx, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_summary(ctx, verbose):
     """show vrrp summary"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp summary']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp summary']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1333,7 +1347,7 @@ def vrrp6(ctx, verbose):
     if ctx.invoked_subcommand is not None:
         return
 
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1345,7 +1359,7 @@ def vrrp6(ctx, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_interface(ctx, interface_name, vrid, verbose):
     """show vrrp6 interface <interface_name> <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6']
     if vrid is not None:
         cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
     else:
@@ -1360,7 +1374,7 @@ def vrrp6_interface(ctx, interface_name, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_vrid(ctx, vrid, verbose):
     """show vrrp6 vrid <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 {}'.format(vrid)]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6 {}'.format(vrid)]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1370,7 +1384,7 @@ def vrrp6_vrid(ctx, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_summary(ctx, verbose):
     """show vrrp6 summary"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 summary']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6 summary']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1440,8 +1454,9 @@ def loopback_action():
 # 'route' subcommand ("show ip route")
 #
 
-@ip.command()
-@click.argument('args', metavar='[IPADDRESS] [vrf <vrf_name>] [...]', nargs=-1, required=False)
+
+@ip.command(cls=vtysh_command("show ip route"))
+@click.argument('args', nargs=-1, required=False)
 @click.option('--display', '-d', 'display', default=None, show_default=False, type=str, help='all|frontend')
 @click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1459,7 +1474,7 @@ def route(args, namespace, display, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def prefix_list(prefix_list_name, verbose):
     """show ip prefix-list"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show ip prefix-list']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show ip prefix-list']
     if prefix_list_name is not None:
         cmd[-1] += ' {}'.format(prefix_list_name)
     run_command(cmd, display_cmd=verbose)
@@ -1470,7 +1485,7 @@ def prefix_list(prefix_list_name, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def protocol(verbose):
     """Show IPv4 protocol information"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', "show ip protocol"]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', "show ip protocol"]
     run_command(cmd, display_cmd=verbose)
 
 #
@@ -1506,7 +1521,7 @@ def ipv6():
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def prefix_list(prefix_list_name, verbose):
     """show ip prefix-list"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show ipv6 prefix-list']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show ipv6 prefix-list']
     if prefix_list_name is not None:
         cmd[-1] += ' {}'.format(prefix_list_name)
     run_command(cmd, display_cmd=verbose)
@@ -1537,8 +1552,8 @@ def interfaces(namespace, display):
 # 'route' subcommand ("show ipv6 route")
 #
 
-@ipv6.command()
-@click.argument('args', metavar='[IPADDRESS] [vrf <vrf_name>] [...]', nargs=-1, required=False)
+@ipv6.command(cls=vtysh_command("show ipv6 route"))
+@click.argument('args', nargs=-1, required=False)
 @click.option('--display', '-d', 'display', default=None, show_default=False, type=str, help='all|frontend')
 @click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1547,34 +1562,21 @@ def route(args, namespace, display, verbose):
     # Call common handler to handle the show ipv6 route cmd
     bgp_common.show_routes(args, namespace, display, verbose, "ipv6")
 
-
 # 'protocol' command
 @ipv6.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def protocol(verbose):
     """Show IPv6 protocol information"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 protocol"]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', "show ipv6 protocol"]
     run_command(cmd, display_cmd=verbose)
 
 #
 # Inserting BGP functionality into cli's show parse-chain.
-# BGP commands are determined by the routing-stack being elected.
 #
-if routing_stack == "quagga":
-    from .bgp_quagga_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_quagga_v6 import bgp
-    ipv6.add_command(bgp)
-elif routing_stack == "frr":
-    from .bgp_frr_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_frr_v6 import bgp
-    ipv6.add_command(bgp)
-elif device_info.is_supervisor():
-    from .bgp_frr_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_frr_v6 import bgp
-    ipv6.add_command(bgp)
+from .bgp_frr_v4 import bgp as bgp_v4  # noqa: E305,E402
+ip.add_command(bgp_v4)
+from .bgp_frr_v6 import bgp as bgp_v6  # noqa: E402
+ipv6.add_command(bgp_v6)
 #
 # 'link-local-mode' subcommand ("show ipv6 link-local-mode")
 #
@@ -1687,21 +1689,51 @@ def logging(process, lines, follow, verbose):
     else:
         log_path = "/var/log"
     if follow:
-        cmd = ['sudo', 'tail', '-F', '{}/syslog'.format(log_path)]
-        run_command(cmd, display_cmd=verbose)
-    else:
-        if os.path.isfile("{}/syslog.1".format(log_path)):
-            cmd = "sudo cat {}/syslog.1 {}/syslog".format(log_path, log_path)
-        else:
-            cmd = "sudo cat {}/syslog".format(log_path)
+        run_command(['sudo', 'tail', '-F', '{}/syslog'.format(log_path)], display_cmd=verbose)
+        return
 
-        if process is not None:
-            cmd += " | grep '{}'".format(process)
+    log_files = ["{}/syslog.1".format(log_path)] if os.path.isfile("{}/syslog.1".format(log_path)) else []
+    log_files.append("{}/syslog".format(log_path))
+    cat_cmd = ["sudo", "cat"] + log_files
 
-        if lines is not None:
-            cmd += " | tail -{}".format(lines)
+    if process is None and lines is None:
+        run_command(cat_cmd, display_cmd=verbose)
+        return
 
-        run_command(cmd, display_cmd=verbose, shell=True)
+    # Only "cat" needs root, to read the log files; "grep"/"tail" run as the
+    # invoking user -- same privilege boundary as the old
+    # "sudo cat ... | grep ... | tail ..." shell form, instead of running the
+    # user-controlled process regex (or tail) as root.
+    cmds = [cat_cmd]
+    if process is not None:
+        # "-h" keeps output filename-free across multiple files; "--" stops
+        # a process value starting with "-" from being read as a grep option.
+        cmds.append(["grep", "-h", "--", process])
+    if lines is not None:
+        cmds.append(["tail", "-n", str(lines)])
+
+    if verbose:
+        click.echo(click.style("Command: ", fg='cyan') +
+                   click.style(' | '.join(' '.join(cmd) for cmd in cmds), fg='green'))
+
+    # Chain the pipeline manually (rather than via getstatusoutput_noshell_pipe,
+    # which buffers the whole output via communicate()) so the last stage
+    # inherits the terminal's stdout and streams line-by-line, while still
+    # avoiding a shell entirely.
+    procs = []
+    stdin = None
+    for i, cmd in enumerate(cmds):
+        stdout = subprocess.PIPE if i < len(cmds) - 1 else None
+        procs.append(subprocess.Popen(cmd, stdin=stdin, stdout=stdout))
+        if stdin is not None:
+            stdin.close()  # SIGPIPE upstream if a downstream stage exits early
+        stdin = procs[-1].stdout
+
+    for proc in procs:
+        proc.wait()
+    rc = next((proc.returncode for proc in reversed(procs) if proc.returncode), 0)
+    if rc:
+        sys.exit(rc)
 
 #
 # 'version' command ("show version")
@@ -1732,6 +1764,8 @@ def version(brief):
     click.echo("ASIC: {}".format(platform_info['asic_type']))
     click.echo("ASIC Count: {}".format(platform_info['asic_count']))
     click.echo("Serial Number: {}".format(chassis_info['serial']))
+    if chassis_info.get('switch_host_serial') != 'N/A':
+        click.echo("Switch-Host Serial Number: {}".format(chassis_info['switch_host_serial']))
     click.echo("Model Number: {}".format(chassis_info['model']))
     click.echo("Hardware Revision: {}".format(chassis_info['revision']))
     click.echo("Uptime: {}".format(sys_uptime.stdout.read().strip()))
@@ -1780,7 +1814,9 @@ def users(verbose):
 @click.option('--silent', is_flag=True, help="Run techsupport in silent mode")
 @click.option('--debug-dump', is_flag=True, help="Collect Debug Dump Output")
 @click.option('--redirect-stderr', '-r', is_flag=True, help="Redirect an intermediate errors to STDERR")
-def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop, silent, debug_dump, redirect_stderr):
+@click.option('--flow-dump', is_flag=True, help="Collect DPU flow dump (Only valid on DPU platforms)")
+def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
+                silent, debug_dump, redirect_stderr, flow_dump):
     """Gather information for troubleshooting"""
     cmd = ["sudo"]
 
@@ -1801,6 +1837,9 @@ def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop,
 
     if debug_dump:
         cmd += ["-d"]
+
+    if flow_dump:
+        cmd += ["-f"]
 
     cmd += ['-t', str(cmd_timeout)]
     if redirect_stderr:
@@ -2162,22 +2201,8 @@ def startupconfiguration():
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def bgp(verbose):
     """Show BGP startup configuration"""
-    cmd0 = ['sudo', 'docker', 'ps']
-    cmd1 = ['grep', 'bgp']
-    cmd2 = ['awk', '{print$2}']
-    cmd3 = ['cut', '-d-', '-f3']
-    cmd4 = ['cut', '-d:', "-f1"]
-    _, stdout = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-    result = stdout.rstrip()
-    click.echo("Routing-Stack is: {}".format(result))
-    if result == "quagga":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/quagga/bgpd.conf'], display_cmd=verbose)
-    elif result == "frr":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=verbose)
-    elif result == "gobgp":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/gpbgp/bgpd.conf'], display_cmd=verbose)
-    else:
-        click.echo("Unidentified routing-stack")
+    click.echo("Routing-Stack is: frr")
+    run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=verbose)
 
 #
 # 'ntp' command ("show ntp")
@@ -2294,10 +2319,10 @@ def aaa(db):
 
 
 @cli.command()
-def tacacs():
+@clicommon.pass_db
+def tacacs(db):
     """Show TACACS+ configuration"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = db.cfgdb
     output = ''
     data = config_db.get_table('TACPLUS')
 
@@ -2305,7 +2330,8 @@ def tacacs():
         'global': {
             'auth_type': 'pap (default)',
             'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'passkey': '<EMPTY_STRING> (default)',
+            'traceid_authorization': 'False (default)'
         }
     }
     if 'global' in data:
@@ -2526,6 +2552,36 @@ def ztp(status, verbose):
        cmd += ["--verbose"]
     run_command(cmd, display_cmd=verbose)
 
+#
+# 'static anycast gateway' command ("show static-anycast-gateway")
+#
+
+
+@cli.command('static-anycast-gateway')
+@clicommon.pass_db
+def sag(db):
+    """Show static anycast gateway information"""
+    header = ['MacAddress', 'Interfaces']
+    body = []
+
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL') or {}
+    sag_mac = sag_entry.get('gateway_mac')
+    intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
+    enabled_vlans = [key for key, value in intf_dict.items()
+                     if value.get('static_anycast_gateway') == 'true']
+
+    if sag_mac:
+        for vlan_name in enabled_vlans:
+            if not body:
+                body.append([sag_mac, vlan_name])
+            else:
+                body.append(['', vlan_name])
+
+    click.echo("Static Anycast Gateway Information")
+    if enabled_vlans and not sag_mac:
+        click.echo("Warning: static-anycast-gateway is enabled on VLAN interfaces but "
+                   "SAG gateway_mac is not configured")
+    click.echo(tabulate(body, header, tablefmt='simple'))
 
 #
 # 'bmp' group ("show bmp ...")
@@ -2756,7 +2812,7 @@ def suppress_pending_fib(db):
     for ns in namespace_list:
         config_db = db.cfgdb_clients[ns]
         field_values = config_db.get_entry('DEVICE_METADATA', 'localhost')
-        state = field_values.get('suppress-fib-pending', 'enabled').title()
+        state = field_values.get('suppress-fib-pending', 'disabled').title()
 
         if masic:
             click.echo("{}: {}".format(ns, state))

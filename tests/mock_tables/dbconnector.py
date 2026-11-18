@@ -113,7 +113,10 @@ class MockPubSub:
     def clear(self):
         pass
 
-INPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Allow per-worker override via env var so subprocesses (e.g. portstat)
+# also read from the worker's sandbox copy of mock_tables.
+INPUT_DIR = os.environ.get('MOCK_TABLES_DIR', os.path.dirname(os.path.abspath(__file__)))
 
 
 class SwssSyncClient(mockredis.MockRedis):

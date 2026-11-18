@@ -5,7 +5,6 @@ from unittest import mock
 
 import show.main as show
 from . import show_ip_route_common
-import utilities_common.multi_asic as multi_asic_util
 from click.testing import CliRunner
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -17,8 +16,6 @@ class TestMultiAsicVoqLcShowIpRouteDisplayAllCommands(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         from .mock_tables import mock_multi_asic
         reload(mock_multi_asic)
@@ -88,7 +85,7 @@ class TestMultiAsicVoqLcShowIpRouteDisplayAllCommands(object):
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['ip_route_lc_2'], indirect=['setup_multi_asic_bgp_instance'])
     @mock.patch("sonic_py_common.device_info.is_voq_chassis", mock.MagicMock(return_value=True))
-    @mock.patch.object(multi_asic_util.MultiAsic, "get_ns_list_based_on_options",
+    @mock.patch("utilities_common.multi_asic.MultiAsic.get_ns_list_based_on_options",
                        mock.MagicMock(return_value=["asic0", "asic1"]))
     def test_voq_chassis_lc_def_route_2(
             self,
@@ -105,8 +102,5 @@ class TestMultiAsicVoqLcShowIpRouteDisplayAllCommands(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         from .mock_tables import mock_single_asic
         reload(mock_single_asic)

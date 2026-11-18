@@ -19,6 +19,11 @@ sys.path.append("scripts")
 import route_check  # noqa: E402
 
 
+def get_missing_prefixes(result):
+    """Extract prefix strings from missing_routes dicts for assertion comparison."""
+    return {entry['prefix'] for entry in result}
+
+
 class ChunkedBytesIO:
     def __init__(self, chunks):
         self.chunks = chunks
@@ -79,7 +84,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert result == (["192.168.1.0/24"], [])
+        assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_json_split_across_chunks(self):
         """Test parsing when JSON is split across multiple chunks"""
@@ -116,7 +121,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == {"10.0.0.0/8", "172.16.0.0/12"}
+        assert get_missing_prefixes(result[0]) == {"10.0.0.0/8", "172.16.0.0/12"}
 
     def test_routes_with_offloaded_flag(self):
         """Test that routes with offloaded=True are not included in missing
@@ -144,7 +149,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert result == (["192.168.2.0/24"], [])
+        assert result == ([{"prefix": "192.168.2.0/24", "protocol": "bgp"}], [])
 
     def test_filter_connected_kernel_static_protocols(self):
         """Test that connected, kernel and static protocols are filtered out"""
@@ -186,7 +191,7 @@ class TestFetchRoutes:
             result = route_check.fetch_routes()
 
         # Only BGP route should be in the result
-        assert result == (["192.168.4.0/24"], [])
+        assert result == ([{"prefix": "192.168.4.0/24", "protocol": "bgp"}], [])
 
     def test_filter_non_default_vrf(self):
         """Test that routes in non-default VRF are filtered out"""
@@ -221,7 +226,7 @@ class TestFetchRoutes:
             result = route_check.fetch_routes()
 
         # Only default VRF route should be in the result
-        assert result == (["192.168.2.0/24"], [])
+        assert result == ([{"prefix": "192.168.2.0/24", "protocol": "bgp"}], [])
 
     def test_filter_not_selected_routes(self):
         """Test that routes not selected as best are filtered out"""
@@ -249,7 +254,7 @@ class TestFetchRoutes:
             result = route_check.fetch_routes()
 
         # Only selected route should be in the result
-        assert result == (["192.168.2.0/24"], [])
+        assert result == ([{"prefix": "192.168.2.0/24", "protocol": "bgp"}], [])
 
     def test_empty_json_response(self):
         """Test handling of empty JSON response"""
@@ -297,7 +302,7 @@ class TestFetchRoutes:
             with patch('route_check.subprocess.Popen', return_value=mock_proc):
                 result = route_check.fetch_routes()
 
-            assert result == (["192.168.1.0/24"], [])
+            assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_very_small_chunks(self):
         """Test parsing with very small chunk sizes (byte-by-byte)"""
@@ -324,7 +329,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert result == (["10.0.0.0/8"], [])
+        assert result == ([{"prefix": "10.0.0.0/8", "protocol": "bgp"}], [])
 
     def test_large_json_with_many_routes(self):
         """Test parsing large JSON with many route entries"""
@@ -350,7 +355,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == set(expected_missing)
+        assert get_missing_prefixes(result[0]) == set(expected_missing)
         assert len(result[0]) == 100
 
     def test_ipv6_command(self):
@@ -377,7 +382,7 @@ class TestFetchRoutes:
             call_args = mock_popen.call_args[0][0]
             assert call_args == ["sudo", "vtysh", "-c", "show ipv6 route json"]
 
-        assert result == (["2001:db8::/32"], [])
+        assert result == ([{"prefix": "2001:db8::/32", "protocol": "bgp"}], [])
 
     def test_subprocess_non_zero_exit_code(self):
         """Test handling of subprocess with non-zero exit code"""
@@ -402,7 +407,7 @@ class TestFetchRoutes:
             result = route_check.fetch_routes()
 
         # Should still return the parsed routes
-        assert result == (["192.168.1.0/24"], [])
+        assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_file_not_found_error(self):
         """Test handling of FileNotFoundError when vtysh is not found"""
@@ -469,7 +474,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert result == (["192.168.1.0/24"], [])
+        assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_variable_chunk_boundary(self):
         """Test when chunk boundary falls at variious locations"""
@@ -500,7 +505,7 @@ class TestFetchRoutes:
             with patch('route_check.subprocess.Popen', return_value=mock_proc):
                 result = route_check.fetch_routes()
 
-            assert result == (["192.168.1.0/24"], [])
+            assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_chunk_boundary_in_string_value(self):
         """Test when chunk boundary falls in the middle of a string value"""
@@ -532,7 +537,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert result == (["192.168.1.0/24"], [])
+        assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_escaped_quotes_in_json(self):
         """Test handling of escaped quotes in JSON strings"""
@@ -553,7 +558,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert result == (["192.168.1.0/24"], [])
+        assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_whitespace_handling(self):
         """Test handling of JSON with various whitespace"""
@@ -576,7 +581,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert result == (["192.168.1.0/24"], [])
+        assert result == ([{"prefix": "192.168.1.0/24", "protocol": "bgp"}], [])
 
     def test_mixed_ipv4_and_ipv6_routes(self):
         """Test parsing JSON with both IPv4 and IPv6 routes"""
@@ -603,7 +608,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == {"192.168.1.0/24", "2001:db8::/32"}
+        assert get_missing_prefixes(result[0]) == {"192.168.1.0/24", "2001:db8::/32"}
 
     def test_malformed_json_in_buffer(self):
         """Test handling of malformed JSON that cannot be parsed"""
@@ -649,7 +654,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == {"192.168.1.0/24",
+        assert get_missing_prefixes(result[0]) == {"192.168.1.0/24",
                                   "192.168.2.0/24",
                                   "192.168.3.0/24"}
 
@@ -693,7 +698,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
+        assert get_missing_prefixes(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
 
     def test_incremental_parsing_across_multiple_chunks(self):
         # Create a large JSON with many prefixes
@@ -727,7 +732,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == set(expected_missing)
+        assert get_missing_prefixes(result[0]) == set(expected_missing)
         assert len(result[0]) == 50
 
     def test_incremental_parsing_prefix_boundary_at_comma(self):
@@ -766,7 +771,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
+        assert get_missing_prefixes(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
 
     def test_incremental_parsing_mixed_offloaded_states(self):
         """Test incremental parsing with mixed offloaded states across multiple prefixes"""
@@ -808,7 +813,7 @@ class TestFetchRoutes:
             result = route_check.fetch_routes()
 
         # Only the non-offloaded routes should be in the result
-        assert set(result[0]) == {"192.168.2.0/24", "192.168.4.0/24"}
+        assert get_missing_prefixes(result[0]) == {"192.168.2.0/24", "192.168.4.0/24"}
 
     def test_incremental_parsing_with_whitespace_variations(self):
         """Test incremental parsing with various whitespace formatting"""
@@ -840,7 +845,7 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
+        assert get_missing_prefixes(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
 
     def test_incremental_parsing_prefix_with_special_characters(self):
         """Test incremental parsing of prefixes with special characters in descriptions"""
@@ -869,4 +874,4 @@ class TestFetchRoutes:
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
             result = route_check.fetch_routes()
 
-        assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
+        assert get_missing_prefixes(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}

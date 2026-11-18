@@ -15,6 +15,8 @@ EXPECTED_BASE_COMMAND = ['sudo']
             (['--allow-process-stop'], ['generate_dump', '-v', '-a', '-t', '5']),
             (['--silent'], ['generate_dump', '-t', '5']),
             (['--debug-dump', '--redirect-stderr'], ['generate_dump', '-v', '-d', '-t', '5', '-r']),
+            (['--flow-dump'], ['generate_dump', '-v', '-f', '-t', '5']),
+            (['--debug-dump', '--flow-dump'], ['generate_dump', '-v', '-d', '-f', '-t', '5']),
         ]
 )
 def test_techsupport(run_command, cli_arguments, expected):

@@ -246,8 +246,6 @@ class TestMultiAsicVxlan:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
         from mock_tables import mock_multi_asic
@@ -452,10 +450,6 @@ class TestMultiAsicVxlan:
         from mock_tables import dbconnector
         dbconnector.load_database_config()
 
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
         reload(utilities_common.multi_asic)
         reload(show.vxlan)

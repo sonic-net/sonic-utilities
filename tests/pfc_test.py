@@ -21,7 +21,6 @@ class TestPfcBase(object):
     def setup_class(cls):
         print("SETUP")
         os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     def executor(self, cliobj, command, expected_rc=0, expected_output=None, expected_cfgdb_entries=None,
                  runner=CliRunner()):
@@ -60,9 +59,6 @@ class TestPfc(TestPfcBase):
         super().setup_class()
 
         from mock_tables import dbconnector
-        from mock_tables import mock_single_asic
-        reload(mock_single_asic)
-        dbconnector.load_database_config()
 
         import utilities_common
         reload(utilities_common.multi_asic)

@@ -202,6 +202,36 @@ class TestValidateFieldOperation:
             assert generic_config_updater.field_operation_validators.\
                 port_config_update_validator(scope, patch_element) is False
 
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_invalid_fec_for_chassis(self):
+        # "rsf" is not in supported fecs, but for chassis, skip fec validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rsf"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_valid_fec_for_nonchassis(self):
+        # "rs" is in supported fecs; on non-chassis the normal validation should pass it
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rs"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="rs, fc"))
+    def test_port_config_update_validator_invalid_fec_for_nonchassis(self):
+        # "rsf" is not in supported fecs; on non-chassis the normal validation must reject it
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"fec": "rsf"}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is False
+
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
            mock.Mock(return_value="unknown"))
     def test_rdma_config_update_validator_unknown_asic(self):
@@ -421,6 +451,25 @@ class TestValidateFieldOperation:
             "path": "/PFC_WD/Ethernet8/pfc_stat_history",
             "op": "replace",
             "value": "enable"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                rdma_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "SONiC.20220530"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="spc1"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"PFC_WD": {"validator_data": {
+        "rdma_config_update_validator": {"PFCWD enable/disable": {"fields": [
+            "restoration_time", "detection_time", "action", "global/poll_interval", "pfc_stat_history"
+        ], "operations": ["remove", "replace", "add"], "platforms": {"spc1": "20181100"}}}}}}}'''))
+    def test_rdma_config_update_validator_spc_asic_add_pfcwd_global_poll_interval(self):
+        patch_element = {
+            "path": "/PFC_WD/GLOBAL",
+            "op": "add",
+            "value": {"POLL_INTERVAL": "200"}
         }
         for scope in ["localhost", "asic0"]:
             assert generic_config_updater.field_operation_validators.\
@@ -785,6 +834,15 @@ class TestGetAsicName(unittest.TestCase):
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
+    def test_get_asic_spc6(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'mellanox'}
+        mock_popen.return_value = mock.Mock()
+        mock_popen.return_value.communicate.return_value = ["Mellanox-SN6600_LD-P64O128C2", 0]
+        for scope in ["localhost", "asic0"]:
+            self.assertEqual(fov.get_asic_name(), "spc6")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
     def test_get_asic_th(self, mock_popen, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
         mock_popen.return_value = mock.Mock()
@@ -824,8 +882,9 @@ class TestGetAsicName(unittest.TestCase):
     def test_get_asic_th5(self, mock_popen, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
         mock_popen.return_value = mock.Mock()
-        mock_popen.return_value.communicate.return_value = ["Nokia-IXR7220-H5-64D", 0]
-        for scope in ["localhost", "asic0"]:
+        for hwsku in ["Nokia-IXR7220-H5-64D", "NH-4010", "NH-4010-128x400G-2x25G", "NH-4010-256x200G-2x25G",
+                      "NH-4020", "NH-4020-128x400G-2x25G", "NH-4020-256x200G-2x25G"]:
+            mock_popen.return_value.communicate.return_value = [hwsku, 0]
             self.assertEqual(fov.get_asic_name(), "th5")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
@@ -893,10 +952,24 @@ class TestGetAsicName(unittest.TestCase):
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
+    def test_get_asic_q3d(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
+        mock_popen.return_value = mock.Mock()
+        for hwsku in ["Arista-7280R4-32QF-32DF-64O", "NH-5010-F-O64", "NH-5010-F-O32-C32"]:
+            mock_popen.return_value.communicate.return_value = [hwsku, 0]
+            self.assertEqual(fov.get_asic_name(), "q3d")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
     def test_get_asic_cisco(self, mock_popen, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'cisco-8000'}
         for scope in ["localhost", "asic0"]:
             self.assertEqual(fov.get_asic_name(), "cisco-8000")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    def test_get_asic_cisco_short_name(self, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'cisco'}
+        self.assertEqual(fov.get_asic_name(), "cisco")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     def test_get_asic_marvell_teralynx(self, mock_get_sonic_version_info):

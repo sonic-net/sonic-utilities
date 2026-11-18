@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 import sys
 import os
 import utilities_common.cli as clicommon
 import syslog
 import traceback
-from swsscommon.swsscommon import ConfigDBConnector
+from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
+from sonic_py_common import multi_asic
 
 ROUTE_IDX = 1
 
-def get_connected_routes():
-    cmd = ['sudo', 'vtysh', '-c', "show ip route connected json"]
+
+def get_connected_routes(namespace):
+    if namespace:
+        ns_name = multi_asic.get_asic_id_from_name(namespace)
+        vtysh_cmd = ['sudo', 'vtysh', '-n', ns_name]
+    else:
+        vtysh_cmd = ['sudo', 'vtysh']
+
+    cmd = vtysh_cmd + ['-c', "show ip route connected json"]
     connected_routes = []
     output, ret = clicommon.run_command(cmd, return_cmd=True)
     if ret != 0:
@@ -21,7 +30,16 @@ def get_connected_routes():
         for route in route_info.keys():
             connected_routes.append(route)
 
+    cmd = vtysh_cmd + ['-c', "show ipv6 route connected json"]
+    output, ret = clicommon.run_command(cmd, return_cmd=True)
+    if ret != 0:
+        raise RuntimeError("Failed to execute {}: {}".format(" ".join(cmd), output.rstrip('\n')))
+    if output is not None:
+        route_info = json.loads(output)
+        connected_routes.extend(route_info)
+
     return connected_routes
+
 
 def get_route(db, route):
     key = 'ROUTE_TABLE:%s' % route
@@ -31,8 +49,9 @@ def get_route(db, route):
     else:
         return None
 
-def generate_default_route_entries():
-    db = ConfigDBConnector()
+
+def generate_default_route_entries(namespace):
+    db = ConfigDBConnector(namespace=namespace)
     db.db_connect(db.APPL_DB)
 
     default_routes = []
@@ -47,8 +66,9 @@ def generate_default_route_entries():
 
     return default_routes
 
-def filter_routes(preserved_routes):
-    db = ConfigDBConnector()
+
+def filter_routes(namespace, preserved_routes):
+    db = ConfigDBConnector(namespace=namespace)
     db.db_connect(db.APPL_DB)
 
     key = 'ROUTE_TABLE:*'
@@ -59,12 +79,24 @@ def filter_routes(preserved_routes):
         if stripped_route not in preserved_routes:
             db.delete(db.APPL_DB, route)
 
+
 def main():
-    default_routes = generate_default_route_entries()
-    connected_routes = get_connected_routes()
+    parser = argparse.ArgumentParser(description='Filter routes for fast-reboot')
+    parser.add_argument('-n', '--namespace', default=multi_asic.DEFAULT_NAMESPACE,
+                        type=str, help='namespace to use')
+    args = parser.parse_args()
+
+    namespace = args.namespace if args.namespace else None
+
+    if multi_asic.is_multi_asic():
+        SonicDBConfig.initializeGlobalConfig()
+
+    default_routes = generate_default_route_entries(namespace)
+    connected_routes = get_connected_routes(namespace)
     preserved_routes = set(default_routes + connected_routes)
-    filter_routes(preserved_routes)
+    filter_routes(namespace, preserved_routes)
     return 0
+
 
 if __name__ == '__main__':
     res = 0

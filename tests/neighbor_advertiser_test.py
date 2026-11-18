@@ -66,3 +66,19 @@ class TestNeighborAdvertiser(object):
         for key in expected_mapping.keys():
             assert(key in tunnel_mapping.keys())
             assert(expected_mapping[key] == tunnel_mapping[key])
+
+    def test_add_vxlan_tunnel_sets_pipe_ttl_mode(self):
+        config_db = mock.MagicMock()
+        with mock.patch.object(neighbor_advertiser, 'get_loopback_addr', return_value='10.0.0.1'), \
+                mock.patch.object(neighbor_advertiser, 'config_db', config_db):
+            neighbor_advertiser.add_vxlan_tunnel('10.0.0.2')
+
+        config_db.set_entry.assert_called_once_with(
+            'VXLAN_TUNNEL',
+            neighbor_advertiser.VXLAN_TUNNEL_NAME,
+            {
+                'src_ip': '10.0.0.1',
+                'dst_ip': '10.0.0.2',
+                'ttl_mode': 'pipe'
+            }
+        )

@@ -204,6 +204,7 @@ class ManifestSchema:
             ManifestField('delayed', DefaultMarshaller(bool), False),
             ManifestField('check_up_status', DefaultMarshaller(bool), False),
             ManifestField('type', DefaultMarshaller(str), ''),
+            ManifestField('stop-time', DefaultMarshaller(str), ''),
             ManifestRoot('warm-shutdown', [
                 ManifestArray('after', DefaultMarshaller(str)),
                 ManifestArray('before', DefaultMarshaller(str)),
@@ -218,6 +219,10 @@ class ManifestSchema:
         ]),
         ManifestRoot('container', [
             ManifestField('privileged', DefaultMarshaller(bool), False),
+            ManifestArray('cap-add', DefaultMarshaller(str)),
+            ManifestArray('security-opt', DefaultMarshaller(str)),
+            ManifestArray('ulimits', DefaultMarshaller(str)),
+            ManifestArray('devices', DefaultMarshaller(str)),
             ManifestArray('volumes', DefaultMarshaller(str)),
             ManifestArray('mounts', ManifestRoot('mounts', [
                 ManifestField('source', DefaultMarshaller(str)),

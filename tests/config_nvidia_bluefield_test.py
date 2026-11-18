@@ -29,7 +29,11 @@ from config.plugins.nvidia_bluefield import (
     run_nasa_cli,
     cleanup_dump_files,
     get_packet_debug_mode,
-    get_sai_debug_mode
+    get_sai_debug_mode,
+    is_sdk_techsupport_ct_dump_enabled,
+    set_sdk_techsupport_ct_dump_state,
+    SDK_TECHSUPPORT_CT_DUMP_SENTINEL,
+    SDK_TECHSUPPORT_CT_DUMP_RUN_DIR,
 )
 
 
@@ -161,6 +165,35 @@ class TestNvidiaBluefieldSdk(TestCase):
         assert status == 'disabled'
         assert filename is None
 
+    def test_is_sdk_techsupport_ct_dump_enabled(self):
+        self.container.exec_run.return_value = (0, b"enabled\n")
+        assert is_sdk_techsupport_ct_dump_enabled(self.docker_client) == (0, True)
+        cmd = self.container.exec_run.call_args.args[0]
+        assert cmd == (
+            f"sh -c 'if [ -f {SDK_TECHSUPPORT_CT_DUMP_SENTINEL} ]; "
+            f"then echo enabled; else echo disabled; fi'"
+        )
+
+        self.container.exec_run.return_value = (0, b"disabled\n")
+        assert is_sdk_techsupport_ct_dump_enabled(self.docker_client) == (0, False)
+
+        # A failed probe (syncd error) must be distinguishable from "disabled".
+        self.container.exec_run.return_value = (1, b"")
+        assert is_sdk_techsupport_ct_dump_enabled(self.docker_client) == (1, None)
+
+    def test_set_sdk_techsupport_ct_dump_state(self):
+        set_sdk_techsupport_ct_dump_state('enabled', self.docker_client)
+        cmd = self.container.exec_run.call_args.args[0]
+        assert cmd == (
+            f"sh -c 'mkdir -p {SDK_TECHSUPPORT_CT_DUMP_RUN_DIR} && "
+            f"touch {SDK_TECHSUPPORT_CT_DUMP_SENTINEL}'"
+        )
+
+        self.container.exec_run.reset_mock()
+        set_sdk_techsupport_ct_dump_state('disabled', self.docker_client)
+        cmd = self.container.exec_run.call_args.args[0]
+        assert cmd == f"sh -c 'rm -f {SDK_TECHSUPPORT_CT_DUMP_SENTINEL}'"
+
 
 class TestNvidiaBluefieldCliSdk(TestCase):
 
@@ -262,3 +295,72 @@ class TestNvidiaBluefieldCliSdk(TestCase):
         assert '/usr/sbin/cli/nasa_cli.py -u --exit_on_failure -l /tmp/nasa_cli_cmd.txt' in cmd_run
         assert result.exit_code == 0
         assert "Config recording disabled" in result.output
+
+    @mock.patch('docker.from_env')
+    @mock.patch('config.plugins.nvidia_bluefield.is_sdk_techsupport_ct_dump_enabled', return_value=(0, False))
+    @mock.patch('config.plugins.nvidia_bluefield.set_sdk_techsupport_ct_dump_state', return_value=(0, ""))
+    @mock.patch('sonic_py_common.device_info.get_sonic_version_info', return_value=ASIC_TYPE_NVDA_BF)
+    def test_techsupport_ct_dump_cli(
+        self,
+        m_device_info,  # noqa: ARG002
+        m_set_state,
+        m_is_enabled,
+        m_docker
+    ):
+        helper = util_base.UtilHelper()
+        helper.load_and_register_plugins(plugins, config.config)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["platform"].commands["nvidia-bluefield"].commands["sdk"],
+            ["techsupport-ct-dump", "enabled"]
+        )
+        assert result.exit_code == 0
+        assert "SDK Connection Table dump in techsupport enabled." in result.output
+        m_set_state.assert_called_once_with('enabled', m_docker.return_value)
+
+        m_set_state.reset_mock()
+        m_is_enabled.return_value = (0, True)
+
+        result = runner.invoke(
+            config.config.commands["platform"].commands["nvidia-bluefield"].commands["sdk"],
+            ["techsupport-ct-dump", "enabled"]
+        )
+        assert result.exit_code == 0
+        assert "already enabled" in result.output
+        m_set_state.assert_not_called()
+
+        m_is_enabled.return_value = (0, True)
+        m_set_state.reset_mock()
+        m_set_state.return_value = (0, "")
+
+        result = runner.invoke(
+            config.config.commands["platform"].commands["nvidia-bluefield"].commands["sdk"],
+            ["techsupport-ct-dump", "disabled"]
+        )
+        assert result.exit_code == 0
+        assert "SDK Connection Table dump in techsupport disabled." in result.output
+        m_set_state.assert_called_once_with('disabled', m_docker.return_value)
+
+        m_set_state.reset_mock()
+        m_is_enabled.return_value = (0, False)
+
+        result = runner.invoke(
+            config.config.commands["platform"].commands["nvidia-bluefield"].commands["sdk"],
+            ["techsupport-ct-dump", "disabled"]
+        )
+        assert result.exit_code == 0
+        assert "already disabled" in result.output
+        m_set_state.assert_not_called()
+
+        # A failed probe must report the syncd error, not exit successfully.
+        m_set_state.reset_mock()
+        m_is_enabled.return_value = (1, None)
+
+        result = runner.invoke(
+            config.config.commands["platform"].commands["nvidia-bluefield"].commands["sdk"],
+            ["techsupport-ct-dump", "enabled"]
+        )
+        assert result.exit_code == 1
+        assert "Could not probe SDK Connection Table dump state" in result.output
+        m_set_state.assert_not_called()

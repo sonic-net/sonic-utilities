@@ -18,6 +18,7 @@ import click
 import sonic_platform
 import sonic_platform_base.sonic_sfp.sfputilhelper
 from sfputil.debug import debug
+from sfputil.port import filter_cpo_ports, is_cpo_port, reject_cpo_ports
 from sonic_platform_base.sfp_base import SfpBase
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from natsort import natsorted
@@ -111,7 +112,7 @@ QSFP_DD_DATA_MAP = {
     'supported_max_tx_power': 'Supported Max TX Power',
     'supported_min_tx_power': 'Supported Min TX Power',
     'supported_max_laser_freq': 'Supported Max Laser Frequency',
-    'supported_min_laser_freq': 'Supported Min Laser Frequency'
+    'supported_min_laser_freq': 'Supported Min Laser Frequency',
 }
 
 SFP_DOM_CHANNEL_MONITOR_MAP = {
@@ -336,6 +337,10 @@ def format_dict_value_to_string(sorted_key_table,
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
+    # Gracefully handle missing/invalid info dicts
+    if sfp_info_dict is None or not isinstance(sfp_info_dict, dict):
+        output += '{}EEPROM info: N/A\n'.format(indent)
+        return output
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     if is_sfp_cmis:
         # Use the utility function with the local QSFP_DD_DATA_MAP for CMIS transceivers
@@ -493,29 +498,23 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
 
 #
 def get_physical_port_name(logical_port, physical_port, ganged):
-    """
-        Returns:
-          port_num if physical
-          logical_port:port_num if logical port and is a ganged port
-          logical_port if logical and not ganged
-    """
-    if logical_port == physical_port:
-        return str(logical_port)
-    elif ganged:
-        return "{}:{} (ganged)".format(logical_port, physical_port)
-    else:
-        return logical_port
+    """Preserve the sfputil entry point while sharing port-label formatting."""
+    return platform_sfputil_helper.get_physical_port_name(logical_port, physical_port, ganged)
 
 
 def logical_port_name_to_physical_port_list(port_name):
     if port_name.startswith("Ethernet"):
         if platform_sfputil.is_logical_port(port_name):
-            return platform_sfputil.get_logical_to_physical(port_name)
+            physical_ports = platform_sfputil.get_logical_to_physical(port_name)
+            reject_cpo_ports(port_name, physical_ports, platform_chassis)
+            return physical_ports
         else:
             click.echo("Error: Invalid port '{}'".format(port_name))
             return None
     else:
-        return [int(port_name)]
+        physical_ports = [int(port_name)]
+        reject_cpo_ports(port_name, physical_ports, platform_chassis)
+        return physical_ports
 
 def logical_port_to_physical_port_index(port_name):
     if not platform_sfputil.is_logical_port(port_name):
@@ -642,6 +641,9 @@ def eeprom(port, dump_dom, namespace):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
@@ -688,36 +690,41 @@ def eeprom(port, dump_dom, namespace):
                     click.echo("Sfp.get_transceiver_info() is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                output += convert_sfp_info_to_output_string(xcvr_info)
+                if xcvr_info is None:
+                    output += "{}{}\n".format(' ' * 8, "Error: Failed to read EEPROM for this port")
+                else:
+                    output += convert_sfp_info_to_output_string(xcvr_info)
 
-                if dump_dom:
-                    try:
-                        api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
-                    except NotImplementedError:
-                        output += "API is currently not implemented for this platform\n"
-                        click.echo(output)
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
-                    if api is None:
-                        output += "API is none while getting DOM info!\n"
-                        click.echo(output)
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
-                    try:
-                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
-                    except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
-                                   "for this platform")
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                    if dump_dom:
+                        try:
+                            api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
+                        except NotImplementedError:
+                            output += "API is currently not implemented for this platform\n"
+                            click.echo(output)
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                        if api is None:
+                            output += "API is none while getting DOM info!\n"
+                            click.echo(output)
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                        try:
+                            xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
+                        except NotImplementedError:
+                            click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
+                                       "for this platform")
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    try:
-                        xcvr_dom_threshold_info = platform_chassis.get_sfp(physical_port).get_transceiver_threshold_info()
-                        if xcvr_dom_threshold_info:
-                            xcvr_dom_info.update(xcvr_dom_threshold_info)
-                    except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_threshold_info() is currently not implemented for this platform")
-                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                        try:
+                            xcvr_dom_threshold_info = platform_chassis.get_sfp(
+                                physical_port).get_transceiver_threshold_info()
+                            if xcvr_dom_threshold_info:
+                                xcvr_dom_info.update(xcvr_dom_threshold_info)
+                        except NotImplementedError:
+                            click.echo("Sfp.get_transceiver_threshold_info() is currently "
+                                       "not implemented for this platform")
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    output += convert_dom_to_output_string(xcvr_info['type'],
-                                                           is_sfp_cmis, xcvr_dom_info)
+                        output += convert_dom_to_output_string(xcvr_info['type'],
+                                                               is_sfp_cmis, xcvr_dom_info)
 
             output += '\n'
 
@@ -727,7 +734,9 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
+@click.option('-n', '--page', metavar='<page_number>',
+              help="Display SFP EEPROM hexdump for <page_number> "
+                   "(decimal, hex (with 0x prefix) or octal (with 0o prefix))")
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
@@ -742,6 +751,9 @@ def eeprom_hexdump(port, page):
         if page is not None:
             page = validate_eeprom_page(page)
         logical_port_list = natsorted(platform_sfputil.logical)
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
         lines = []
         for logical_port_name in logical_port_list:
             return_code, output = eeprom_hexdump_single_port(logical_port_name, page)
@@ -752,23 +764,25 @@ def eeprom_hexdump(port, page):
             lines.append(output)
         click.echo('\n'.join(lines))
 
-def validate_eeprom_page(page):
+
+def validate_eeprom_page(page: str) -> int:
     """
     Validate input page module EEPROM
     Args:
-        page: str page input by user
+        page: str page input by user (supports decimal, hex with 0x prefix, and octal with 0o prefix)
     Returns:
         int page
     """
     try:
-        page = int(str(page), base=16)
+        validated_page = int(page, base=0)
     except ValueError:
-        click.echo('Please enter a numeric page number')
+        click.echo(f'Please enter a numeric page number (decimal, hex with 0x prefix and octal with '
+                   f'0o prefix). Got: "{page}"')
         sys.exit(ERROR_NOT_IMPLEMENTED)
-    if page < 0 or page > MAX_EEPROM_PAGE:
-        click.echo(f'Error: Invalid page number {page}')
+    if validated_page < 0 or validated_page > MAX_EEPROM_PAGE:
+        click.echo(f'Error: Invalid page number {page}. Must be between 0 and {MAX_EEPROM_PAGE}')
         sys.exit(ERROR_INVALID_PAGE)
-    return page
+    return validated_page
 
 def eeprom_hexdump_single_port(logical_port_name, page):
     """
@@ -996,6 +1010,9 @@ def presence(port):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
@@ -1045,6 +1062,9 @@ def fetch_error_status_from_platform_api(port):
     """
     if port is None:
         logical_port_list = natsort.natsorted(platform_sfputil.logical)
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         logical_port_list = [port]
 
@@ -1083,6 +1103,9 @@ def fetch_error_status_from_state_db(port, state_db):
     sorted_ports = natsort.natsorted(status)
     output = []
     for port in sorted_ports:
+        physical_ports = platform_sfputil.get_logical_to_physical(port)
+        if port and any(is_cpo_port(index, platform_chassis) for index in physical_ports):
+            continue
         if is_port_type_rj45(port):
             description = "N/A"
         else:
@@ -1114,6 +1137,11 @@ def error_status(port, fetch_from_hardware):
         click.echo("Valid values for port: {}\n".format(str(platform_sfputil.logical)))
         sys.exit(ERROR_INVALID_PORT)
 
+    if port:
+        # Resolve only to reject CPO ports; this command does not need the
+        # physical-port list returned by the resolver.
+        logical_port_name_to_physical_port_list(port)
+
     if fetch_from_hardware:
         output_table = fetch_error_status_from_platform_api(port)
     else:
@@ -1133,7 +1161,8 @@ def error_status(port, fetch_from_hardware):
 # 'lpmode' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP low-power mode status for port <port_name> only")
-def lpmode(port):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def lpmode(port, use_lpmode_pin):
     """Display low-power mode status of SFP transceiver(s)"""
     logical_port_list = []
     output_table = []
@@ -1142,6 +1171,9 @@ def lpmode(port):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
@@ -1173,9 +1205,13 @@ def lpmode(port):
                     if not sfp.get_presence():
                         output_table.append([port_name, "Not Present"])
                         continue
-                    lpmode = sfp.get_lpmode()
-                except NotImplementedError:
-                    click.echo("This functionality is currently not implemented for this platform")
+                    if use_lpmode_pin:
+                        lpmode = sfp.get_lpmode_via_pin()
+                    else:
+                        lpmode = sfp.get_lpmode()
+                except (NotImplementedError, AttributeError) as e:
+                    click.echo("This functionality is currently not implemented for this platform "
+                               "({}: {})".format(type(e).__name__, e))
                     sys.exit(ERROR_NOT_IMPLEMENTED)
 
                 if lpmode:
@@ -1191,6 +1227,9 @@ def show_firmware_version(physical_port):
     try:
         sfp = platform_chassis.get_sfp(physical_port)
         api = sfp.get_xcvr_api()
+        if api is None:
+            click.echo("Error: Failed to access transceiver EEPROM")
+            sys.exit(EXIT_FAIL)
         out = api.get_module_fw_info()
         click.echo(out['info'])
     except NotImplementedError:
@@ -1231,7 +1270,7 @@ def lpmode():
 
 
 # Helper method for setting low-power mode
-def set_lpmode(logical_port, enable):
+def set_lpmode(logical_port, enable, use_lpmode_pin=False):
     ganged = False
     i = 1
 
@@ -1261,9 +1300,13 @@ def set_lpmode(logical_port, enable):
             click.echo("{} low-power mode for port {} ... ".format(
                 "Enabling" if enable else "Disabling",
                 get_physical_port_name(logical_port, i, ganged)), nl=False)
-            result = sfp.set_lpmode(enable)
-        except NotImplementedError:
-            click.echo("This functionality is currently not implemented for this platform")
+            if use_lpmode_pin:
+                result = sfp.set_lpmode_via_pin(enable)
+            else:
+                result = sfp.set_lpmode(enable)
+        except (NotImplementedError, AttributeError) as e:
+            click.echo("This functionality is currently not implemented for this platform "
+                       "({}: {})".format(type(e).__name__, e))
             sys.exit(ERROR_NOT_IMPLEMENTED)
 
         if result:
@@ -1274,20 +1317,25 @@ def set_lpmode(logical_port, enable):
         i += 1
 
 
+# 'show' subcommand — alias of `sfputil show lpmode`
+lpmode.add_command(show.commands['lpmode'], name='show')
+
 # 'off' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def off(port_name):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def off(port_name, use_lpmode_pin):
     """Disable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, False)
+    set_lpmode(port_name, False, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'on' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def on(port_name):
+@click.option('--use-lpmode-pin', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def on(port_name, use_lpmode_pin):
     """Enable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, True)
+    set_lpmode(port_name, True, use_lpmode_pin=use_lpmode_pin)
 
 
 # 'reset' subcommand
@@ -1413,6 +1461,10 @@ def firmware():
     """Download/Upgrade firmware on the transceiver"""
     pass
 
+
+# 'show' subcommand — alias of `sfputil show fwversion`
+firmware.add_command(show.commands['fwversion'], name='show')
+
 def run_firmware(port_name, mode):
     """
         Make the inactive firmware as the current running firmware
@@ -1467,36 +1519,32 @@ def is_fw_switch_done(port_name):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     try:
-        MAX_WAIT = 60 # 60s timeout.
-        is_busy = 1 # Initial to 1 for entering while loop at least one time.
+        MAX_WAIT = 60
         timeout_time = time.time() + MAX_WAIT
-        while is_busy and (time.time() < timeout_time):
+        while time.time() < timeout_time:
             fw_info = api.get_module_fw_info()
-            is_busy = 1 if (fw_info['status'] == False) and (fw_info['result'] is not None) else 0
+            if fw_info['status'] is True and fw_info['result'] is not None:
+                (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
+                 ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
+
+                if (ImageARunning == 1) and (ImageAInvalid == 1):
+                    click.echo("FW info error : ImageA shows running, but also shows invalid!")
+                    return -1
+                elif (ImageBRunning == 1) and (ImageBInvalid == 1):
+                    click.echo("FW info error : ImageB shows running, but also shows invalid!")
+                    return -1
+                elif (ImageARunning == 1) and (ImageACommitted == 0):
+                    click.echo("FW images switch successful : ImageA is running")
+                    return 1
+                elif (ImageBRunning == 1) and (ImageBCommitted == 0):
+                    click.echo("FW images switch successful : ImageB is running")
+                    return 1
+                # Switch not done yet — module may have returned stale pre-reset data, keep polling
+
             time.sleep(2)
 
-        if fw_info['status'] == True:
-            (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
-             ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
-
-            if (ImageARunning == 1) and (ImageAInvalid == 1):       # ImageA is running, but also invalid.
-                click.echo("FW info error : ImageA shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageBRunning == 1) and (ImageBInvalid == 1):     # ImageB is running, but also invalid.
-                click.echo("FW info error : ImageB shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageARunning == 1) and (ImageACommitted == 0):   # ImageA is running, but not committed.
-                click.echo("FW images switch successful : ImageA is running")
-                status = 1  # run_firmware is done. 
-            elif (ImageBRunning == 1) and (ImageBCommitted == 0):   # ImageB is running, but not committed.
-                click.echo("FW images switch successful : ImageB is running")
-                status = 1  # run_firmware is done. 
-            else:                                                   # No image is running, or running and committed image is same.
-                click.echo("FW info error : Failed to switch into uncommitted image!")
-                status = -1 # Failure for Switching images.
-        else:
-            click.echo("FW switch : Timeout!")
-            status = -1     # Timeout or check code error or CDB not supported.
+        click.echo("FW switch : Timeout!")
+        status = -1
 
     except NotImplementedError:
         click.echo("This functionality is not applicable for this transceiver")
@@ -1543,7 +1591,7 @@ def download_firmware(port_name, filepath):
     try:
         fwinfo = api.get_module_fw_mgmt_feature()
         if fwinfo['status'] == True:
-            startLPLsize, maxblocksize, lplonly_flag, autopaging_flag, writelength = fwinfo['feature']
+            startLPLsize, maxblocksize, lplonly_flag, _, _ = fwinfo['feature']
         else:
             click.echo("Failed to fetch CDB Firmware management features")
             sys.exit(EXIT_FAIL)
@@ -1552,11 +1600,11 @@ def download_firmware(port_name, filepath):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     click.echo('CDB: Starting firmware download')
-    startdata = fd.read(startLPLsize)
-    status = api.cdb_start_firmware_download(startLPLsize, startdata, file_size)
+    status = api.cdb_start_firmware_download(filepath)
     if status != 1:
         click.echo('CDB: Start firmware download failed - status {}'.format(status))
         sys.exit(EXIT_FAIL)
+    fd.seek(startLPLsize)
 
     # Increase the optoe driver's write max to speed up firmware download
     try:
@@ -1581,7 +1629,7 @@ def download_firmware(port_name, filepath):
             if lplonly_flag:
                 status = api.cdb_lpl_block_write(address, data)
             else:
-                status = api.cdb_epl_block_write(address, data, autopaging_flag, writelength)
+                status = api.cdb_epl_block_write(address, data)
             if (status != 1):
                 click.echo("CDB: firmware download failed! - status {}".format(status))
                 sys.exit(EXIT_FAIL)
@@ -1812,7 +1860,9 @@ def target(port_name, target):
 # 'read-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-s', '--size', metavar='<size>', type=click.IntRange(1, MAX_EEPROM_OFFSET + 1), help="Size of byte to be read", required=True)
 @click.option('--no-format', is_flag=True, help="Display non formatted data")
@@ -1862,7 +1912,9 @@ def read_eeprom(port, page, offset, size, no_format, wire_addr):
 # 'write-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-d', '--data', metavar='<data>', help="Hex string EEPROM data", required=True)
 @click.option('--wire-addr', help="Wire address of sff8472")

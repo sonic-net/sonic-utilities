@@ -17,11 +17,15 @@ sys.path.insert(0, modules_path)
 
 
 class TestMmuConfigBase(object):
+    # Per-worker file path to avoid race conditions in parallel test runs.
+    _mmuconfig_file = None
+
     @classmethod
     def setup_class(cls):
         print('SETUP')
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        worker_tmp = os.environ.get('WORKER_TMP', '/tmp')
+        cls._mmuconfig_file = os.path.join(worker_tmp, 'mmuconfig')
+        os.environ['MMUCONFIG_FILE'] = cls._mmuconfig_file
 
     def executor(self, input):
         runner = CliRunner()
@@ -52,7 +56,7 @@ class TestMmuConfigBase(object):
             assert exit_code != 0
 
         if 'cmp_args' in input:
-            fd = open('/tmp/mmuconfig', 'r')
+            fd = open(self._mmuconfig_file, 'r')
             cmp_data = json.load(fd)
             for args in input['cmp_args']:
                 namespace, profile, name, value = args.split(',')
@@ -67,10 +71,10 @@ class TestMmuConfigBase(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        if os.path.isfile('/tmp/mmuconfig'):
-            os.remove('/tmp/mmuconfig')
+        if cls._mmuconfig_file and os.path.isfile(cls._mmuconfig_file):
+            os.remove(cls._mmuconfig_file)
+        os.environ.pop('MMUCONFIG_FILE', None)
         print("TEARDOWN")
 
 

@@ -5,12 +5,13 @@ import time
 import re
 import subprocess
 import utilities_common.cli as clicommon
-from utilities_common.chassis import is_smartswitch, get_all_dpus
+from utilities_common.chassis import is_smartswitch, is_bmc, get_all_dpus
 from utilities_common.module import ModuleHelper
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
+SERVICE_STOP_TIMEOUT_SECS = 60
 
 
 class StateDBHelper:
@@ -57,13 +58,15 @@ def ensure_statedb_connected(db):
 def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb
     fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name)
-    if not fvs:
-        if is_smartswitch():
-            return 'down'
-        else:
-            return 'up'
-    else:
-        return fvs['admin_status']
+    admin_status = fvs.get('admin_status') if fvs else None
+    if admin_status:
+        return admin_status
+    if is_smartswitch():
+        return 'down'
+    if is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
+        # On BMC, SWITCH-HOST default is 'down' to keep it powered off on boot
+        return 'down'
+    return 'up'
 
 #
 # Name: check_config_module_state_with_timeout
@@ -82,13 +85,66 @@ def check_config_module_state_with_timeout(ctx, db, chassis_module_name, state):
 
 def get_asic_list_from_db(chassisdb, chassis_module_name):
     asic_list = []
-    asics_keys_list = chassisdb.keys("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE*")
+    asics_keys_list = chassisdb.keys("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE*") or []
     for asic_key in asics_keys_list:
         name = chassisdb.get("CHASSIS_STATE_DB", asic_key, "name")
         if name == chassis_module_name:
             asic_id = int(re.search(r"(\d+)$", asic_key).group())
             asic_list.append(asic_id)
     return asic_list
+
+
+def wait_for_service_inactive(service, timeout_secs=SERVICE_STOP_TIMEOUT_SECS):
+    """Poll systemd until <service> is no longer active. Returns False on timeout."""
+    deadline = time.time() + timeout_secs
+    while True:
+        if subprocess.call(["systemctl", "is-active", "--quiet", service]) != 0:
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(1)
+
+
+def wait_for_container_stopped(container, timeout_secs=SERVICE_STOP_TIMEOUT_SECS):
+    """Poll docker until <container> is no longer running. Returns False on timeout."""
+    deadline = time.time() + timeout_secs
+    while True:
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.Running}}", container],
+                capture_output=True, text=True, check=False)
+        except OSError:
+            return True
+        if result.returncode != 0 or result.stdout.strip() != "true":
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(1)
+
+
+def fabric_module_stop_asics(db, chassis_module_name):
+    """Stop swss/syncd for the card's ASICs. Returns False if any is still running."""
+    chassisdb = db.db
+    chassisdb.connect("CHASSIS_STATE_DB")
+    asic_list = get_asic_list_from_db(chassisdb, chassis_module_name)
+
+    for asic in asic_list:
+        click.echo("Stop swss@{} and peer services".format(asic))
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss@{}.service'.format(asic)])
+        # swss.sh does not stop syncd on warm/fast boot
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'syncd@{}.service'.format(asic)])
+
+    for asic in asic_list:
+        for service in ('swss@{}.service'.format(asic), 'syncd@{}.service'.format(asic)):
+            if not wait_for_service_inactive(service):
+                click.echo("Stop {} failed".format(service))
+                return False
+        for container in ('swss{}'.format(asic), 'syncd{}'.format(asic)):
+            if not wait_for_container_stopped(container):
+                click.echo("Container {} is still running".format(container))
+                return False
+
+    return True
 
 
 #
@@ -103,17 +159,7 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
         return
 
     if state == "down":
-        for asic in asic_list:
-            click.echo("Stop swss@{} and peer services".format(asic))
-            clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss@{}.service'.format(asic)])
-
-        is_active = subprocess.call(["systemctl", "is-active", "--quiet", "swss@{}.service".format(asic)])
-
-        if is_active == 0:  # zero active,  non-zero, inactive
-            click.echo("Stop swss@{} and peer services failed".format(asic))
-            return
-
-        click.echo("Delete related CAHSSIS_FABRIC_ASIC_TABLE entries")
+        click.echo("Delete related CHASSIS_FABRIC_ASIC_TABLE entries")
 
         for asic in asic_list:
             chassisdb.delete("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic" + str(asic))
@@ -141,16 +187,27 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
                 type=click.Choice(get_all_dpus(), case_sensitive=False) if is_smartswitch() else str
                 )
 def shutdown_chassis_module(db, chassis_module_name):
-    """Chassis-module shutdown of module"""
+    """Shutdown chassis module (sets admin_status to down; default for SWITCH-HOST on BMC)"""
     config_db = db.cfgdb
     ctx = click.get_current_context()
 
-    if not chassis_module_name.startswith(("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")):
-        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', or 'DPU'")
+    allowed_prefixes = ("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")
+    if is_bmc():
+        allowed_prefixes += ("SWITCH-HOST",)
+    if not chassis_module_name.startswith(allowed_prefixes):
+        allowed_prefixes_str = "', '".join(allowed_prefixes)
+        ctx.fail(f"'module_name' has to begin with '{allowed_prefixes_str}'")
 
     if get_config_module_state(db, chassis_module_name) == 'down':
         click.echo(f"Module {chassis_module_name} is already in down state")
         return
+
+    # chassisd powers the card off when admin_status 'down' is written, and
+    # re-adds the ASIC table entries until then. So stop the ASIC services
+    # before the write and restart them only after it.
+    if chassis_module_name.startswith("FABRIC-CARD"):
+        if not fabric_module_stop_asics(db, chassis_module_name):
+            ctx.fail(f"Failed to stop ASIC services for {chassis_module_name}; module left up")
 
     if is_smartswitch():
         module_helper = ModuleHelper()
@@ -163,6 +220,10 @@ def shutdown_chassis_module(db, chassis_module_name):
             'admin_status': 'down',
         }
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+    elif is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
+        click.echo(f"Shutting down chassis module {chassis_module_name}")
+        # Use mod_entry to preserve power_on_delay and graceful_shutdown_timeout in the same entry
+        config_db.mod_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})
     else:
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})
@@ -186,8 +247,12 @@ def startup_chassis_module(db, chassis_module_name):
     config_db = db.cfgdb
     ctx = click.get_current_context()
 
-    if not chassis_module_name.startswith(("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")):
-        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', or 'DPU'")
+    allowed_prefixes = ("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")
+    if is_bmc():
+        allowed_prefixes += ("SWITCH-HOST",)
+    if not chassis_module_name.startswith(allowed_prefixes):
+        allowed_prefixes_str = "', '".join(allowed_prefixes)
+        ctx.fail(f"'module_name' has to begin with '{allowed_prefixes_str}'")
         return
 
     if get_config_module_state(db, chassis_module_name) == 'up':
@@ -205,6 +270,10 @@ def startup_chassis_module(db, chassis_module_name):
             'admin_status': 'up',
         }
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+    elif is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
+        click.echo(f"Starting up chassis module {chassis_module_name}")
+        # Use mod_entry to preserve power_on_delay and graceful_shutdown_timeout in the same entry
+        config_db.mod_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'up'})
     else:
         click.echo(f"Starting up chassis module {chassis_module_name}")
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, None)
@@ -212,3 +281,50 @@ def startup_chassis_module(db, chassis_module_name):
     if chassis_module_name.startswith("FABRIC-CARD"):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'up'):
             fabric_module_set_admin_status(db, chassis_module_name, 'up')
+
+
+if is_bmc():
+
+    #
+    # 'power-on-delay' subcommand ('config chassis modules power-on-delay ...')
+    #
+    @modules.command('power-on-delay')
+    @clicommon.pass_db
+    @click.argument('chassis_module_name', metavar='<module_name>', required=True)
+    @click.argument('seconds', metavar='<seconds>', required=True, type=click.IntRange(min=0))
+    def set_power_on_delay(db, chassis_module_name, seconds):
+        """Configure delay (secs) BMC waits before powering on Switch-Host (default: 0)"""
+        ctx = click.get_current_context()
+
+        if not chassis_module_name.startswith("SWITCH-HOST"):
+            ctx.fail("'power-on-delay' is only applicable to SWITCH-HOST modules")
+
+        config_db = db.cfgdb
+        fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name) or {}
+        fvs['power_on_delay'] = str(seconds)
+        # Seed admin_status of SWITCH-HOST with default if not already set
+        fvs.setdefault('admin_status', 'down')
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+        click.echo(f"Power-on-delay for {chassis_module_name} set to {seconds} seconds")
+
+    #
+    # 'shutdown-timeout' subcommand ('config chassis modules shutdown-timeout ...')
+    #
+    @modules.command('shutdown-timeout')
+    @clicommon.pass_db
+    @click.argument('chassis_module_name', metavar='<module_name>', required=True)
+    @click.argument('seconds', metavar='<seconds>', required=True, type=click.IntRange(min=0))
+    def set_graceful_shutdown_timeout(db, chassis_module_name, seconds):
+        """Configure graceful-shutdown timeout (secs) before BMC forces power-off (0: immediate, default: 120)"""
+        ctx = click.get_current_context()
+
+        if not chassis_module_name.startswith("SWITCH-HOST"):
+            ctx.fail("'shutdown-timeout' is only applicable to SWITCH-HOST modules")
+
+        config_db = db.cfgdb
+        fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name) or {}
+        fvs['graceful_shutdown_timeout'] = str(seconds)
+        # Seed admin_status of SWITCH-HOST with default if not already set
+        fvs.setdefault('admin_status', 'down')
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+        click.echo(f"Shutdown-timeout for {chassis_module_name} set to {seconds} seconds")

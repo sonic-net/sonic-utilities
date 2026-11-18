@@ -255,22 +255,29 @@ def lookup_statedb_and_update_configdb(db, per_npu_statedb, config_db, port, sta
     if str(state_cfg_val) == str(configdb_state):
         port_status_dict[port_name] = 'OK'
     else:
-        if cable_type is not None or soc_ipv4_value is not None:
-            try:
-                config_db.set_entry("MUX_CABLE", port, {"state": state_cfg_val,
-                                                        "server_ipv4": ipv4_value,
-                                                        "server_ipv6": ipv6_value, 
-                                                        "soc_ipv4":soc_ipv4_value, 
-                                                        "cable_type": cable_type})
-            except ValueError as e:
-                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
-        else:
-            try:
-                config_db.set_entry("MUX_CABLE", port, {"state": state_cfg_val,
-                                                        "server_ipv4": ipv4_value,
-                                                        "server_ipv6": ipv6_value}) 
-            except ValueError as e:
-                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        fvs = {"state": state_cfg_val,
+               "server_ipv4": ipv4_value,
+               "server_ipv6": ipv6_value}
+        if soc_ipv4_value is not None:
+            fvs["soc_ipv4"] = soc_ipv4_value
+        if cable_type is not None:
+            fvs["cable_type"] = cable_type
+        soc_ipv6_value = get_optional_value_for_key_in_config_tbl(config_db, port, "soc_ipv6", "MUX_CABLE")
+        if soc_ipv6_value is not None:
+            fvs["soc_ipv6"] = soc_ipv6_value
+        prober_type_val = get_optional_value_for_key_in_config_tbl(config_db, port, "prober_type", "MUX_CABLE")
+        if prober_type_val is not None:
+            fvs["prober_type"] = prober_type_val
+        neighbor_mode_val = get_optional_value_for_key_in_config_tbl(config_db, port, "neighbor_mode", "MUX_CABLE")
+        if neighbor_mode_val is not None:
+            fvs["neighbor_mode"] = neighbor_mode_val
+        pck_loss_data = get_optional_value_for_key_in_config_tbl(config_db, port, "pck_loss_data_reset", "MUX_CABLE")
+        if pck_loss_data is not None:
+            fvs["pck_loss_data_reset"] = pck_loss_data
+        try:
+            config_db.set_entry("MUX_CABLE", port, fvs)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         if (str(state_cfg_val) == 'active' and str(state) != 'active') or (str(state_cfg_val) == 'standby' and str(state) != 'standby'):
             port_status_dict[port_name] = 'INPROGRESS'
         else:
@@ -290,9 +297,15 @@ def update_configdb_pck_loss_data(config_db, port, val):
     cable_type = get_optional_value_for_key_in_config_tbl(config_db, port, "cable_type", "MUX_CABLE")
     if cable_type is not None:
         fvs["cable_type"] = cable_type
+    soc_ipv6_value = get_optional_value_for_key_in_config_tbl(config_db, port, "soc_ipv6", "MUX_CABLE")
+    if soc_ipv6_value is not None:
+        fvs["soc_ipv6"] = soc_ipv6_value
     prober_type_val = get_optional_value_for_key_in_config_tbl(config_db, port, "prober_type", "MUX_CABLE")
     if prober_type_val is not None:
         fvs["prober_type"] = prober_type_val
+    neighbor_mode_val = get_optional_value_for_key_in_config_tbl(config_db, port, "neighbor_mode", "MUX_CABLE")
+    if neighbor_mode_val is not None:
+        fvs["neighbor_mode"] = neighbor_mode_val
 
     fvs["pck_loss_data_reset"] = val
     try:
@@ -316,9 +329,15 @@ def update_configdb_prober_type(config_db, port, val):
     cable_type = get_optional_value_for_key_in_config_tbl(config_db, port, "cable_type", "MUX_CABLE")
     if cable_type is not None:
         fvs["cable_type"] = cable_type
+    soc_ipv6_value = get_optional_value_for_key_in_config_tbl(config_db, port, "soc_ipv6", "MUX_CABLE")
+    if soc_ipv6_value is not None:
+        fvs["soc_ipv6"] = soc_ipv6_value
     pck_loss_data = get_optional_value_for_key_in_config_tbl(config_db, port, "pck_loss_data_reset", "MUX_CABLE")
     if pck_loss_data is not None:
         fvs["pck_loss_data_reset"] = pck_loss_data
+    neighbor_mode_val = get_optional_value_for_key_in_config_tbl(config_db, port, "neighbor_mode", "MUX_CABLE")
+    if neighbor_mode_val is not None:
+        fvs["neighbor_mode"] = neighbor_mode_val
 
     fvs["prober_type"] = val
     try:

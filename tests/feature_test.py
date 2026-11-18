@@ -1,4 +1,5 @@
 import importlib
+import os
 import pytest
 
 from unittest import mock
@@ -186,6 +187,58 @@ Feature 'bgp' state is not consistent across namespaces
 config_feature_bgp_inconsistent_autorestart_output="""\
 Feature 'bgp' auto-restart is not consistent across namespaces
 """
+
+
+class TestSetFeatureStateUnit(object):
+
+    def test_set_feature_state_missing_state_key(self):
+        from config.feature import set_feature_state
+
+        mock_cfgdb = mock.MagicMock()
+        mock_cfgdb.get_entry.return_value = {'auto_restart': 'enabled'}
+        cfgdb_clients = {'': mock_cfgdb, 'asic0': mock_cfgdb}
+
+        with pytest.raises(Exception, match="state is not available in any namespace"):
+            set_feature_state(cfgdb_clients, 'bgp', 'disabled', False)
+
+    def test_set_feature_state_partial_missing_state_key(self):
+        from config.feature import set_feature_state
+
+        mock_cfgdb_with_state = mock.MagicMock()
+        mock_cfgdb_with_state.get_entry.return_value = {'state': 'enabled'}
+
+        mock_cfgdb_no_state = mock.MagicMock()
+        mock_cfgdb_no_state.get_entry.return_value = {'auto_restart': 'enabled'}
+
+        cfgdb_clients = {'': mock_cfgdb_with_state, 'asic0': mock_cfgdb_no_state}
+
+        # Bypass YANG validation so the test does not depend on a Click
+        # context; ValidatedConfigDBConnector(conn) just returns the connector.
+        with mock.patch('config.feature.ValidatedConfigDBConnector', side_effect=lambda conn: conn):
+            set_feature_state(cfgdb_clients, 'bgp', 'disabled', False)
+
+        # Both namespaces are written, so the namespace that was missing
+        # 'state' gets backfilled to the requested value.
+        mock_cfgdb_with_state.mod_entry.assert_called_once_with('FEATURE', 'bgp', {'state': 'disabled'})
+        mock_cfgdb_no_state.mod_entry.assert_called_once_with('FEATURE', 'bgp', {'state': 'disabled'})
+
+    def test_feature_autorestart_missing_auto_restart_key(self, get_cmd_module):
+        from unittest.mock import MagicMock
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        db.cfgdb.set_entry("FEATURE", "test_feat", {"state": "enabled"})
+
+        mock_cfgdb = MagicMock()
+        mock_cfgdb.get_entry.return_value = {"state": "enabled"}
+        with mock.patch.object(db, 'cfgdb_clients', {'': mock_cfgdb}):
+            result = runner.invoke(
+                config.config.commands["feature"].commands["autorestart"],
+                ["test_feat", "disabled"], obj=db)
+        assert result.exit_code == 1
+        assert "auto-restart is not available in any namespace" in result.output
+
 
 class TestFeature(object):
     @classmethod
@@ -495,6 +548,11 @@ class TestFeatureMultiAsic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        from .mock_tables import mock_multi_asic_3_asics
+        importlib.reload(mock_multi_asic_3_asics)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
 
     def test_config_bgp_feature_inconsistent_state(self, get_cmd_module):
         from .mock_tables import dbconnector
@@ -587,5 +645,3 @@ class TestFeatureMultiAsic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)

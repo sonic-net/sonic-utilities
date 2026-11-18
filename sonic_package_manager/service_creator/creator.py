@@ -252,6 +252,7 @@ class ServiceCreator:
 
         image_id = package.image_id
         name = package.manifest['service']['name']
+        stop_time = package.manifest['service']['stop-time']
         container_spec = package.manifest['container']
         script_path = os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh')
         script_template = get_tmpl_path(DOCKER_CTL_SCRIPT_TEMPLATE)
@@ -262,6 +263,18 @@ class ServiceCreator:
 
         if container_spec['privileged']:
             run_opt.append('--privileged')
+
+        for capability in container_spec['cap-add']:
+            run_opt.append(f'--cap-add={capability}')
+
+        for option in container_spec['security-opt']:
+            run_opt.append(f'--security-opt={option}')
+
+        for ulimit in container_spec['ulimits']:
+            run_opt.append(f'--ulimit={ulimit}')
+
+        for device in container_spec['devices']:
+            run_opt.append(f'--device={device}')
 
         run_opt.append('-t')
 
@@ -285,7 +298,8 @@ class ServiceCreator:
             'docker_image_name': package.entry.repository,
             'docker_image_reference': package.entry.docker_image_reference,
             'docker_image_run_opt': run_opt,
-            'sonic_asic_platform': sonic_asic_platform
+            'sonic_asic_platform': sonic_asic_platform,
+            'stop_time': stop_time
         }
         render_template(script_template, script_path, render_ctx, executable=True)
         log.info(f'generated {script_path}')

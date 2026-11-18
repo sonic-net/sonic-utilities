@@ -1,0 +1,21 @@
+rules:
+  - id: no-direct-libyang-import
+    patterns:
+      - pattern-either:
+          - pattern: import yang
+          - pattern: import yang as $X
+          - pattern: from yang import $X
+          - pattern: from yang import $X as $Y
+          - pattern: import libyang
+          - pattern: import libyang as $X
+          - pattern: from libyang import $X
+          - pattern: from libyang import $X as $Y
+    message: >-
+      Do not import libyang directly. sonic-utilities must go through
+      sonic_yang / sonic_yang_ext so that libyang API/ABI changes (libyang1
+      vs libyang2 vs libyang3) are isolated to sonic-yang-mgmt.
+    languages: [python]
+    severity: ERROR
+    paths:
+      exclude:
+        - tests/

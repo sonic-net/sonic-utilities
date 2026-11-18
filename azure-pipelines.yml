@@ -38,18 +38,23 @@ stages:
     displayName: "Python3"
     variables:
       DIFF_COVER_CHECK_THRESHOLD: 80
-      DIFF_COVER_ENABLE: 'true'
-    pool:
-      vmImage: ubuntu-24.04
+      # Use pipeline-owned checks instead of the injected Node 10 coverage tasks.
+      DIFF_COVER_ENABLE: 'false'
+      DIFF_COVER_DISABLE: 'true'
+      DIFF_COVER_REPORTS_READY: 'false'
+    pool: sonicso1ES-amd64
 
     container:
       image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
 
     steps:
+    - checkout: self
+      fetchDepth: 0
+
     - script: |
         set -ex
         sudo apt-get update
-        sudo apt-get install -y python3-pip
+        sudo apt-get install -y python3-pip python3-venv
         sudo pip3 install requests==2.31.0
         sudo apt-get install -y python3-protobuf
       displayName: "Install dependencies"
@@ -82,9 +87,8 @@ stages:
         sudo dpkg -i libnl-genl-3-200_*.deb
         sudo dpkg -i libnl-route-3-200_*.deb
         sudo dpkg -i libnl-nf-3-200_*.deb
-        sudo dpkg -i libyang_1.0.73_amd64.deb
-        sudo dpkg -i libyang-cpp_1.0.73_amd64.deb
-        sudo dpkg -i python3-yang_1.0.73_amd64.deb
+        sudo dpkg -i libyang3_*.deb
+        sudo dpkg -i python3-libyang_*.deb
       workingDirectory: $(Pipeline.Workspace)/target/debs/bookworm/
       displayName: 'Install Debian dependencies'
 
@@ -167,6 +171,18 @@ stages:
         reportDirectory: '$(System.DefaultWorkingDirectory)/htmlcov/'
       displayName: 'Publish Python 3 test coverage'
 
+    - bash: bash .azure-pipelines/check-diff-coverage.sh
+      displayName: "Check PR diff coverage"
+      condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+      workingDirectory: $(Build.SourcesDirectory)
+
+    - task: PublishPipelineArtifact@1
+      displayName: "Publish PR diff coverage reports"
+      condition: and(succeededOrFailed(), eq(variables['Build.Reason'], 'PullRequest'), eq(variables['DIFF_COVER_REPORTS_READY'], 'true'))
+      inputs:
+        targetPath: $(Build.ArtifactStagingDirectory)/diff-coverage
+        artifact: diff-coverage-python3-$(System.JobAttempt)
+
     - script: |
         set -e
         python3 -m build -n
@@ -234,9 +250,8 @@ stages:
         sudo dpkg -i libnl-genl-3-200_*.deb
         sudo dpkg -i libnl-route-3-200_*.deb
         sudo dpkg -i libnl-nf-3-200_*.deb
-        sudo dpkg -i libyang_1.0.73_amd64.deb
-        sudo dpkg -i libyang-cpp_1.0.73_amd64.deb
-        sudo dpkg -i python3-yang_1.0.73_amd64.deb
+        sudo dpkg -i libyang3_*.deb
+        sudo dpkg -i python3-libyang_*.deb
       workingDirectory: $(Pipeline.Workspace)/target/debs/bookworm/
       displayName: 'Install Debian dependencies'
 

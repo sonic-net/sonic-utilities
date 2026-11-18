@@ -220,3 +220,35 @@ class ModuleHelper:
         log.log_info("Getting state_transition_in_progress flag for module {}...".format(module_name))
         return self.try_get_args(self.platform_chassis.get_module(module_index).get_module_state_transition,
                                  module_name, default=False)
+
+    def get_module_oper_status(self, module_name):
+        """
+        Get the operational status of the specified module via the platform API.
+
+        Args:
+            module_name (str): The name of the module.
+        Returns:
+            str: The operational status string (e.g., "Online", "Offline", "Empty"),
+                 or NOT_AVAILABLE if it cannot be retrieved.
+        """
+        if not self.platform_chassis:
+            log.log_error("Platform chassis not loaded, cannot get oper_status for {}".format(module_name))
+            return NOT_AVAILABLE
+
+        module_name = module_name.upper()
+        module_index = self.try_get_args(self.platform_chassis.get_module_index, module_name,
+                                         default=INVALID_MODULE_INDEX)
+        if module_index < 0:
+            log.log_error("Unable to get module-index for {}".format(module_name))
+            return NOT_AVAILABLE
+
+        module = self.platform_chassis.get_module(module_index)
+        if module is None:
+            log.log_error("Unable to get module object for {}".format(module_name))
+            return NOT_AVAILABLE
+
+        if not hasattr(module, 'get_oper_status'):
+            log.log_error("get_oper_status method not found for module {}".format(module_name))
+            return NOT_AVAILABLE
+
+        return self.try_get_args(module.get_oper_status, default=NOT_AVAILABLE)

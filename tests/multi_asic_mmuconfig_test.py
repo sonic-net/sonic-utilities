@@ -1,3 +1,4 @@
+import importlib
 import os
 import sys
 from .mmuconfig_test import TestMmuConfigBase
@@ -15,6 +16,10 @@ class TestMmuConfigMultiAsic(TestMmuConfigBase):
     def setup_class(cls):
         super().setup_class()
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
 
     def test_mmu_show_config_one_masic(self):
         self.executor(testData['mmu_cfg_list_one_masic'])
@@ -46,4 +51,3 @@ class TestMmuConfigMultiAsic(TestMmuConfigBase):
     @classmethod
     def teardown_class(cls):
         super().teardown_class()
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

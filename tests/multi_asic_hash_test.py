@@ -38,7 +38,6 @@ class TestHashMultiAsic:
     @classmethod
     def setup_class(cls):
         logger.info("Setup class: {}".format(cls.__name__))
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
         import mock_tables.mock_multi_asic
@@ -62,13 +61,6 @@ class TestHashMultiAsic:
     @classmethod
     def teardown_class(cls):
         logger.info("Teardown class: {}".format(cls.__name__))
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-
-        from mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from mock_tables import dbconnector
-        dbconnector.load_database_config()
 
         # Reload plugins back to single-asic
         sonic_hash_show = importlib.import_module('show.plugins.sonic-hash')

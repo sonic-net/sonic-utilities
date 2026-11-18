@@ -23,11 +23,15 @@ sys.path.insert(0, modules_path)
 
 
 class TestEcnConfigBase(object):
+    # Per-worker file path to avoid race conditions in parallel test runs.
+    _ecnconfig_file = None
+
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        worker_tmp = os.environ.get('WORKER_TMP', '/tmp')
+        cls._ecnconfig_file = os.path.join(worker_tmp, 'ecnconfig')
+        os.environ['ECNCONFIG_FILE'] = cls._ecnconfig_file
 
     def process_cmp_args(self, cmp_args):
         """
@@ -78,7 +82,7 @@ class TestEcnConfigBase(object):
             assert exit_code != 0
 
         if 'cmp_args' in input:
-            fd = open('/tmp/ecnconfig', 'r')
+            fd = open(self._ecnconfig_file, 'r')
             cmp_data = json.load(fd)
 
             # Verify queue assignments
@@ -114,11 +118,11 @@ class TestEcnConfigBase(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['PATH'] = os.pathsep.join(os.environ['PATH'].split(os.pathsep)[:-1])
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
-        if os.path.isfile('/tmp/ecnconfig'):
-            os.remove('/tmp/ecnconfig')
+        if cls._ecnconfig_file and os.path.isfile(cls._ecnconfig_file):
+            os.remove(cls._ecnconfig_file)
+        os.environ.pop('ECNCONFIG_FILE', None)
         print("TEARDOWN")
 
 

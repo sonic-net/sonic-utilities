@@ -5,7 +5,7 @@ steps:
 
 - script: |
     set -x
-    sudo pip install pre-commit
+    sudo uv pip install --system pre-commit
     pre-commit install-hooks
   displayName: 'Prepare pre-commit check'
 
@@ -20,7 +20,7 @@ steps:
     To run the pre-commit checks locally, you can follow below steps:\n\
       1. Ensure that default python is python3.\n\
       2. Ensure that the 'pre-commit' package is installed:\n\
-         sudo pip install pre-commit\n\
+         sudo uv pip install --system pre-commit\n\
       3. Go to repository root folder\n\
       4. Install the pre-commit hooks:\n\
          pre-commit install\n\

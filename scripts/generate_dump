@@ -46,12 +46,21 @@ NUM_ASICS=1
 HOME=${HOME:-/root}
 USER=${USER:-root}
 TIMEOUT_MIN="5"
+BMC_NOOP_TASK_ID="<task-id>"
 SKIP_BCMCMD=0
 SAVE_STDERR=true
 RETURN_CODE=$EXT_SUCCESS
 DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 IS_SUPERVISOR=false
+IS_CHASSIS_MODULE=false
+IS_VOQ_CHASSIS=false
+# True on a SONiC Switch-BMC (set below from switch_bmc=1 in platform_env.conf).
+# Switch data-plane collectors (ASIC/SDK, ports, FRR/BGP, STP, SAI) self-skip.
+# Distinct from is_bmc_supported() (Redfish debug-dump availability).
+IS_SWITCH_BMC=false
+
+ENABLE_FLOW_DUMP=false
 
 # lock dirs/files
 LOCKDIR="/tmp/techsupport-lock"
@@ -98,6 +107,35 @@ handle_error() {
 
 escape_quotes() {
     echo $1 | sed 's/\"/\\\"/g'
+}
+
+###############################################################################
+# Record an absent source path as a "<path>.not-found" marker (parent dir
+# created first) so it is not mistaken for collected data.
+# Arguments:
+#  root: destination root (e.g. $TARDIR)
+#  src:  absolute source path that was not found
+###############################################################################
+record_missing_path() {
+    local root="$1"
+    local src="$2"
+    local marker="$root/${src#/}.not-found"
+    $MKDIR $V -p "$(dirname "$marker")"
+    echo "$src not found" > "$marker"
+}
+
+###############################################################################
+# In-place sed a file only if it exists - avoids errors scrubbing optional
+# config files absent on minimal images.
+# Arguments:
+#  expr: sed -E expression
+#  file: target file path
+###############################################################################
+sed_if_exists() {
+    local expr="$1"
+    local file="$2"
+    [ -e "$file" ] || return 0
+    sed -i -E "$expr" "$file"
 }
 
 save_bcmcmd() {
@@ -670,7 +708,7 @@ save_nat_info() {
 ###############################################################################
 save_bfd_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show bfd peers" "frr.bfd.peers"
@@ -710,7 +748,7 @@ save_ip_info() {
 ###############################################################################
 save_bgp_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show ip bgp summary" "bgp.summary"
@@ -750,7 +788,7 @@ save_bgp_info() {
 ###############################################################################
 save_evpn_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show bgp l2vpn evpn" "bgp.l2vpn.evpn"
@@ -786,7 +824,7 @@ save_evpn_info() {
 ###############################################################################
 save_frr_info() {
     trap 'handle_error $? $LINENO' ERR
-    if $IS_SUPERVISOR; then
+    if $IS_SUPERVISOR || $IS_SWITCH_BMC; then
         return
     fi
     save_vtysh "show running-config" "frr.running_config"
@@ -820,6 +858,59 @@ save_frr_info() {
 }
 
 ###############################################################################
+# Save chassis database CHASSIS_APP_DB and CHASSIS_STATE_DB
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_chassis_database_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_CHASSIS_MODULE; then
+        return
+    fi
+    if $IS_SUPERVISOR; then
+        # Supervisor, allways dump both database
+        save_redis "CHASSIS_APP_DB" "CHASSIS_APP_DB"  true
+        save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
+    else
+        # In LC, in case database-chassis is not reachable, ping CHASSIS_APP_DB first
+        ret=$(timeout 5 sonic-db-cli CHASSIS_APP_DB PING 2>/dev/null | grep -c True)
+        if [ $ret -gt 0 ]; then
+            save_redis "CHASSIS_APP_DB" "CHASSIS_APP_DB"  true
+            save_redis "CHASSIS_STATE_DB" "CHASSIS_STATE_DB" true
+        fi
+    fi
+}
+
+###############################################################################
+# Save fabric info
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_fabric_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_VOQ_CHASSIS; then
+        return
+    fi
+
+    save_cmd "show fabric counters port" "fabric_counters.port"
+    save_cmd "show fabric counters queue" "fabric_counters.queue"
+    save_cmd "show fabric counters rate" "fabric_counters.rate"
+    save_cmd "show fabric isolation" "fabric_isolation"
+    save_cmd "show fabric monitor capacity" "fabric_monitor.capacity"
+    save_cmd "show fabric reachability" "fabric_reachability"
+    
+}
+
+    
+###############################################################################
 # Save Redis DB contents
 # Globals:
 #  None
@@ -834,7 +925,7 @@ save_redis_info() {
     save_redis "ASIC_DB"
     save_redis "COUNTERS_DB"
     # There are secrets in CONFIG_DB need to be cleanup.
-    save_redis "CONFIG_DB" "CONFIG_DB" remove_secret_from_config_db_dump
+    save_redis "CONFIG_DB" "CONFIG_DB" false remove_secret_from_config_db_dump
     save_redis "FLEX_COUNTER_DB"
     save_redis "STATE_DB"
     save_redis "APPL_STATE_DB"
@@ -869,7 +960,11 @@ save_proc() {
                 echo "$CP $V -r $f $TARDIR/proc"
             fi
         else
-            ( [ -e $f ] && $CP $V -r $f $TARDIR/proc ) || echo "$f not found" > $TARDIR/$f
+            if [ -e "$f" ]; then
+                $CP $V -r "$f" $TARDIR/proc
+            else
+                record_missing_path "$TARDIR" "$f"
+            fi
         fi
     done
 
@@ -907,7 +1002,11 @@ save_sys() {
                 echo "$cp_cmd $V -r -p $f $TARDIR/sys"
             fi
         else
-            ( [ -e $f ] && $cp_cmd $V -r -p $f $TARDIR/sys ) || echo "$f not found" > $TARDIR/$f
+            if [ -e "$f" ]; then
+                $cp_cmd $V -r -p "$f" $TARDIR/sys
+            else
+                record_missing_path "$TARDIR" "$f"
+            fi
         fi
     done
 
@@ -1033,9 +1132,18 @@ save_pstore() {
                 echo "$CP $V -r -p $f/* $TARDIR/pstore"
             fi
         else
-            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
-            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f/* >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
-            ( [ -e $f ] && $CP $V -r -p $f/* $TARDIR/pstore ) || echo "$f not found" > $TARDIR/$f
+            # Handle absent / empty / populated without globbing an empty dir.
+            if [ ! -e "$f" ]; then
+                echo "$f not found" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+            else
+                ls --time-style='+%d-%m-%Y %H:%M:%S' -last "$f" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+                if [ -n "$(find "$f" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+                    # "$f/." copies contents glob-free (no unmatched "$f/*").
+                    $CP $V -r -p "$f/." $TARDIR/pstore
+                else
+                    echo "$f is empty" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+                fi
+            fi
         fi
     done
 
@@ -1098,12 +1206,14 @@ save_proc_stats() {
 # Arguments:
 #  DB name: DB name
 #  Filename: Destination filename, if not given then filename would be DB name
+#  host_namespace: (OPTIONAL) default false. if true, only call save_cmd on host/default namespace 
 #  cleanup_method: (OPTIONAL) the cleanup method to procress dump file after it generated.
 # Returns:
 #  None
 ###############################################################################
 save_redis() {
-    local cleanup_method=${3:-dummy_cleanup_method}
+    local host_namespace=${3:-false}
+    local cleanup_method=${4:-dummy_cleanup_method}
     trap 'handle_error $? $LINENO' ERR
     local db_name=$1
     if [ $# -ge 2 ] && [ -n "$2" ]; then
@@ -1111,7 +1221,11 @@ save_redis() {
     else
         local dest_file_name="$db_name"
     fi
-    save_cmd_all_ns "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    if $host_namespace; then
+        save_cmd "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    else
+        save_cmd_all_ns "sonic-db-dump -n '$db_name' -y" "$dest_file_name.json" false $cleanup_method
+    fi
 }
 
 ###############################################################################
@@ -1158,7 +1272,7 @@ get_route_table_size_by_asic_id_and_ipver() {
         return $RC
     fi
 
-    local route_tab_size=$(python3 -c "\
+    local route_tab_size=$(python3 -I -c "\
 import json
 with open('$filepath') as json_file:
     data = json.load(json_file)
@@ -1183,6 +1297,11 @@ with open('$filepath') as json_file:
 ###############################################################################
 save_saidump_by_route_size() {
     trap 'handle_error $? $LINENO' ERR
+    # Route-size probe uses vtysh and the SAI dump uses syncd - neither exists
+    # on a Switch-BMC.
+    if $IS_SWITCH_BMC; then
+        return
+    fi
 
     for (( i=0; i<$NUM_ASICS; i++ ))
     do
@@ -1480,10 +1599,10 @@ collect_mellanox() {
     trap 'handle_error $? $LINENO' ERR
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
 
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local platform_folder="/usr/share/sonic/device/${platform}"
-    local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
-    local is_smartswitch=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
+    local hwsku=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local is_smartswitch=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
     local cmis_host_mgmt_files=(
         "pmon_daemon_control.json"
@@ -1583,6 +1702,16 @@ collect_mellanox() {
 
     save_cmd "show interfaces autoneg status" "autoneg.status"
 
+    save_cmd "/usr/local/bin/generate_ssd_dump" "ssd.dump"
+    # generate_ssd_dump saved the output of vtFA_RTK_5766_v2 if exists in $ssd_dump_generated_files
+    ssd_dump_generated_files=/tmp/ssd_dump_generated_files
+    if [ -d $ssd_dump_generated_files ]; then
+        for file in $(find_files "$ssd_dump_generated_files"); do
+            save_file ${file} dump false
+        done
+        rm -rf ${ssd_dump_generated_files}
+    fi
+
     wait
 }
 
@@ -1597,8 +1726,8 @@ collect_mellanox() {
 ###############################################################################
 collect_nvidia_sdk_dumps() {
     trap 'handle_error $? $LINENO' ERR
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
-    local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local hwsku=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
     local def_dump_path="/var/log/mellanox/sdk-dumps"
     local sdk_dump_path=`cat /usr/share/sonic/device/${platform}/${hwsku}/sai.profile|grep "SAI_DUMP_STORE_PATH"|cut -d = -f2`
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
@@ -1761,18 +1890,29 @@ get_bcm_dnx_family() {
 collect_broadcom() {
     trap 'handle_error $? $LINENO' ERR
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
-    local hwsku=$(show platform summary --json | python -c 'import sys, json; \
+    local hwsku=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
+    local hsdk=$(bcmcmd bsh -c SOC | grep 'Failed to execute')
 
     # save SAI configuration files (config.bcm, port_config.ini, sai.profile)
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
         # copy all the files in the HWSKU directory
         pushd /usr/share/sonic/device/${platform}/${hwsku} > /dev/null
-        for file in $(find . -maxdepth 2 -type f); do
-            save_file ${file} sai false
-        done
+        # Preserve immediate subdirs (e.g. per-ASIC 0/, 1/) under sai/; basename-only
+        local rel parent supp_sub file
+        while IFS= read -r file; do
+            rel="${file#./}"
+            parent=$(dirname "$rel")
+            if [ "$parent" = "." ]; then
+                supp_sub="sai"
+            else
+                supp_sub="sai/${parent}"
+            fi
+            save_file "${file}" "$supp_sub" false
+        done < <(find . -maxdepth 2 -type f)
+
         popd > /dev/null
 
         if [[ ("$NUM_ASICS" > 1) ]]; then
@@ -1807,9 +1947,14 @@ collect_broadcom() {
     save_cmd "cat /proc/bcm/knet/link" "broadcom.knet.link"
     save_cmd "cat /proc/bcm/knet/rate" "broadcom.knet.rate"
 
-    save_bcmcmd_all_ns "-t5 version" "broadcom.version"
-    save_bcmcmd_all_ns "-t5 soc" "broadcom.soc"
-    save_bcmcmd_all_ns "-t5 ps" "broadcom.ps"
+    save_bcmcmd_all_ns "-t 5 version" "broadcom.version"
+    if [ -z "$hsdk" ]; then
+        save_bcmcmd_all_ns "-t 5 soc" "broadcom.soc"
+    else
+        save_bcmcmd_all_ns "-t 5 attach" "broadcom.attach"
+        save_bcmcmd_all_ns "-t 5 stkmode" "broadcom.stkmode"
+    fi
+    save_bcmcmd_all_ns "-t 5 ps" "broadcom.ps"
     if [ -e /usr/share/sonic/device/${platform}/platform_asic ]; then
        bcm_family=`cat /usr/share/sonic/device/${platform}/platform_asic`
     else
@@ -1877,28 +2022,42 @@ collect_broadcom() {
        save_bcmcmd_all_ns "\"fabric connectivity\"" "fabric.connect.summary"
        save_bcmcmd_all_ns "\"port status\"" "port.status.summary"
     else
-       save_bcmcmd_all_ns "\"l3 nat_ingress show\"" "broadcom.nat.ingress"
-       save_bcmcmd_all_ns "\"l3 nat_egress show\"" "broadcom.nat.egress"
+       if [ -n "$(bcmcmd 'show feature' | grep -i nat)" ]; then
+           save_bcmcmd_all_ns "\"l3 nat_ingress show\"" "broadcom.nat.ingress"
+           save_bcmcmd_all_ns "\"l3 nat_egress show\"" "broadcom.nat.egress"
+       fi
        save_bcmcmd_all_ns "\"ipmc table show\"" "broadcom.ipmc"
        save_bcmcmd_all_ns "\"multicast show\"" "broadcom.multicast"
-       save_bcmcmd_all_ns "\"conf show\"" "conf.summary"
        save_bcmcmd_all_ns "\"fp show\"" "fp.summary"
        save_bcmcmd_all_ns "\"pvlan show\"" "pvlan.summary"
        save_bcmcmd_all_ns "\"l2 show\"" "l2.summary"
        save_bcmcmd_all_ns "\"l3 intf show\"" "l3.intf.summary"
-       save_bcmcmd_all_ns "\"l3 defip show\"" "l3.defip.summary"
-       save_bcmcmd_all_ns "\"l3 l3table show\"" "l3.l3table.summary"
        save_bcmcmd_all_ns "\"l3 egress show\"" "l3.egress.summary"
-       save_bcmcmd_all_ns "\"l3 ecmp egress show\"" "l3.ecmp.egress.summary"
-       save_bcmcmd_all_ns "\"l3 multipath show\"" "l3.multipath.summary"
-       save_bcmcmd_all_ns "\"l3 ip6host show\"" "l3.ip6host.summary"
-       save_bcmcmd_all_ns "\"l3 ip6route show\"" "l3.ip6route.summary"
        save_bcmcmd_all_ns "\"mc show\"" "multicast.summary"
        save_bcmcmd_all_ns "\"cstat *\"" "cstat.summary"
        save_bcmcmd_all_ns "\"mirror show\"" "mirror.summary"
        save_bcmcmd_all_ns "\"mirror dest show\"" "mirror.dest.summary"
        save_bcmcmd_all_ns "\"port *\"" "port.summary"
-       save_bcmcmd_all_ns "\"d chg my_station_tcam\"" "mystation.tcam.summary"
+       if [ -z "$hsdk" ]; then
+           save_bcmcmd_all_ns "\"conf show\"" "conf.summary"
+           save_bcmcmd_all_ns "\"l3 defip show\"" "l3.defip.summary"
+           save_bcmcmd_all_ns "\"l3 l3table show\"" "l3.l3table.summary"
+           save_bcmcmd_all_ns "\"l3 ecmp egress show\"" "l3.ecmp.egress.summary"
+           save_bcmcmd_all_ns "\"l3 multipath show\"" "l3.multipath.summary"
+           save_bcmcmd_all_ns "\"l3 ip6host show\"" "l3.ip6host.summary"
+           save_bcmcmd_all_ns "\"l3 ip6route show\"" "l3.ip6route.summary"
+           save_bcmcmd_all_ns "\"d chg my_station_tcam\"" "mystation.tcam.summary"
+       else
+           # TH5 cmds
+           save_bcmcmd_all_ns "\"show config lt raw\"" "show.config.lt.raw"
+           save_bcmcmd_all_ns "\"l3 route show v6=0\"" "l3.ip4route.show"
+           save_bcmcmd_all_ns "\"l3 host show v6=0\"" "l3.ip4host.show"
+           save_bcmcmd_all_ns "\"l3 ecmp show\"" "l3.ecmp.show"
+           save_bcmcmd_all_ns "\"l3 host show v6=1\"" "l3.ip6host.show"
+           save_bcmcmd_all_ns "\"l3 route show v6=1\"" "l3.ip6route.show"
+           save_bcmcmd_all_ns "\"l2 station show\"" "l2.station.show"
+           save_bcmcmd_all_ns "\"bcmltshell -c 'pt dump -d my_station_tcam'\"" "mystation.tcam.summary"
+       fi
     fi
 
     copy_from_masic_docker "syncd" "/var/log/diagrun.log" "/var/log/diagrun.log"
@@ -1925,31 +2084,6 @@ collect_broadcom() {
 }
 
 ###############################################################################
-# Collect Barefoot specific information
-# Globals:
-#  None
-# Arguments:
-#  None
-# Returns:
-#  None
-###############################################################################
-collect_barefoot() {
-    local bf_logs="/tmp/bf_logs"
-    $( rm -rf ${bf_logs} )
-    $( mkdir  ${bf_logs} )
-    unset array
-    array=( $(docker exec -ti syncd ls -1 | grep bf_drivers.log) )
-    for y in "${array[@]}"; do
-        itstr=`echo ${y} | tr -d "\r\n"`
-        copy_from_masic_docker "syncd" "/${itstr}" "${bf_logs}"
-    done
-
-    for file in $(find /tmp/bf_logs -type f); do
-        save_file "${file}" log true
-    done
-} 
-
-###############################################################################
 # Collect Cisco-8000 specific information
 # Globals:
 #  None
@@ -1960,7 +2094,7 @@ collect_barefoot() {
 ###############################################################################
 collect_cisco_8000() {
     trap 'handle_error $? $LINENO' ERR
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
 
     if [ -d /usr/share/sonic/device/${platform} ]; then
@@ -2012,9 +2146,9 @@ collect_marvell_teralynx() {
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
 
-    local platform=$(show platform summary --json | python -c 'import sys, json; \
+    local platform=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
-    local hwsku=$(show platform summary --json | python -c 'import sys, json; \
+    local hwsku=$(show platform summary --json | python3 -I -c 'import sys, json; \
         print(json.load(sys.stdin)["hwsku"])')
 
     if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
@@ -2056,9 +2190,54 @@ collect_nvidia_bluefield() {
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local sai_dump_folder="/root/saisdkdump"
     local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump_$(date +"%m_%d_%Y_%I_%M_%p")"
+    # SDK techsupport CT dump sentinel path. Keep in sync across:
+    #   config/plugins/nvidia_bluefield.py (SDK_TECHSUPPORT_CT_DUMP_SENTINEL)
+    #   scripts/generate_dump (sdk_techsupport_ct_dump_sentinel)
+    #   sonic-sairedis/syncd/scripts/syncd_init_common.sh (config_syncd_nvidia_bluefield)
+    local sdk_techsupport_ct_dump_sentinel="/var/run/sonic-platform-nvidia-bluefield/sdk-techsupport-ct-dump.enabled"
+    local sdk_techsupport_saisdkdump_profile=""
 
     ${CMD_PREFIX}docker exec syncd mkdir -p $sai_dump_folder
-    ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+
+    local prepare_ct_dump_profile_script='
+profile="$1"
+# Start from the running SAI profile if present, otherwise an empty file
+if [ -f /tmp/sai.profile ]; then cp /tmp/sai.profile "$profile"; else : > "$profile"; fi
+# Guard against a source profile with no trailing newline.
+if [ -s "$profile" ] && [ "$(tail -c1 "$profile")" != "" ]; then
+    echo >> "$profile"
+fi
+# Drop any existing CT_TABLE_DUMP_ENABLE=... lines, then append CT_TABLE_DUMP_ENABLE=true.
+sed -i "/^CT_TABLE_DUMP_ENABLE=/d" "$profile"
+echo CT_TABLE_DUMP_ENABLE=true >> "$profile"
+'
+
+    # Sentinel check: 0 = present, 66 (EX_NOINPUT) = absent, other = docker/syncd failure.
+    # Use || so a non-zero status does not trip the ERR trap before we branch.
+    local sdk_techsupport_ct_dump_sentinel_rc=0
+    docker exec syncd sh -c 'if [ -f "$1" ]; then exit 0; else exit 66; fi' \
+        _ "$sdk_techsupport_ct_dump_sentinel" || sdk_techsupport_ct_dump_sentinel_rc=$?
+
+    if [ "$sdk_techsupport_ct_dump_sentinel_rc" -eq 0 ]; then
+        if $NOOP; then
+            echo "docker exec syncd mktemp /tmp/techsupport-saisdkdump.XXXXXX"
+            sdk_techsupport_saisdkdump_profile="/tmp/techsupport-saisdkdump.XXXXXX"
+        else
+            sdk_techsupport_saisdkdump_profile=$(docker exec syncd mktemp /tmp/techsupport-saisdkdump.XXXXXX)
+        fi
+
+        if ${CMD_PREFIX}docker exec syncd sh -c "$prepare_ct_dump_profile_script" _ "$sdk_techsupport_saisdkdump_profile"; then
+            ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename -p $sdk_techsupport_saisdkdump_profile
+        else
+            echo "Failed to prepare profile to enable CT dump; collecting saisdkdump without it."
+            ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+        fi
+    else
+        if [ "$sdk_techsupport_ct_dump_sentinel_rc" -ne 66 ]; then
+            echo "Failed to check CT dump sentinel in syncd (rc=$sdk_techsupport_ct_dump_sentinel_rc); collecting saisdkdump without CT dump."
+        fi
+        ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+    fi
 
     if [ $? != 0 ]; then
         echo "Failed to collect saisdkdump."
@@ -2072,6 +2251,9 @@ collect_nvidia_bluefield() {
 
     ${CMD_PREFIX}rm -rf $sai_dump_folder
     ${CMD_PREFIX}docker exec syncd rm -rf $sai_dump_folder
+    if [ -n "$sdk_techsupport_saisdkdump_profile" ]; then
+        ${CMD_PREFIX}docker exec syncd rm -f "$sdk_techsupport_saisdkdump_profile"
+    fi
 
     DUMP_FILE=/usr/bin/platform-dump.sh
     if [ -f "$DUMP_FILE" ]; then
@@ -2092,6 +2274,50 @@ collect_nvidia_bluefield() {
     fi
 
     save_cmd "get_component_versions.py" "component_versions"
+}
+
+###############################################################################
+# Collect NVIDIA BMC hw-management dump.
+# hw-management-bmc-generate-dump.sh writes artifacts under /tmp/hw-mgmt-bmc-dump*
+# (e.g. /tmp/hw-mgmt-bmc-dump.tar.gz).
+# Globals:
+#  CMD_PREFIX
+#  TIMEOUT_MIN
+#  TIMEOUT_EXIT_CODE
+#  ALLOW_PROCESS_STOP
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+collect_nvidia_bmc_dump() {
+    trap 'handle_error $? $LINENO' ERR
+    # BMC component firmware versions (BMC image, etc.). Captured before the
+    # hw-management dump so they are collected even if that script is absent or
+    # times out. save_cmd tolerates fwutil failures without aborting the dump.
+    save_cmd "fwutil show status"  "fwutil.status"
+    save_cmd "fwutil show version" "fwutil.version"
+    save_cmd "get_component_versions.py" "component_versions"
+    local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
+    local HW_BMC_DUMP_FILE=/usr/bin/hw-management-bmc-generate-dump.sh
+
+    if [ ! -f "$HW_BMC_DUMP_FILE" ]; then
+        echo "HW Mgmt BMC dump script $HW_BMC_DUMP_FILE does not exist"
+        return 0
+    fi
+
+    ${CMD_PREFIX}${timeout_cmd} "$HW_BMC_DUMP_FILE" $ALLOW_PROCESS_STOP
+    local ret=$?
+    if [ $ret -ne 0 ]; then
+        if [ $ret -eq $TIMEOUT_EXIT_CODE ]; then
+            echo "hw-management-bmc dump timedout after ${TIMEOUT_MIN} minutes."
+        else
+            echo "hw-management-bmc dump failed ..."
+        fi
+    else
+        save_file "/tmp/hw-mgmt-bmc-dump*" "hw-mgmt-bmc" false
+        rm -f /tmp/hw-mgmt-bmc-dump*
+    fi
 }
 
 ###############################################################################
@@ -2201,13 +2427,7 @@ save_log_files() {
 #  0 if BMC is supported, 1 otherwise
 ###############################################################################
 is_bmc_supported() {
-    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
-    # Check if the required file exists
-    if [ ! -f /usr/share/sonic/device/$platform/bmc.json ]; then
-        return 1
-    else
-        return 0
-    fi
+    python3 -I -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
 }
 
 ###############################################################################
@@ -2221,6 +2441,10 @@ trigger_bmc_debug_log_dump() {
     trap 'handle_error $? $LINENO' ERR
     if ! is_bmc_supported; then
         echo "INFO: BMC is not found on this platform. Skipping..."
+        return
+    fi
+    if $NOOP; then
+        echo "python3 /usr/local/bin/bmc_techsupport.py -m trigger"
         return
     fi
     # Trigger BMC redfish API to start BMC debug log dump task
@@ -2247,6 +2471,12 @@ collect_bmc_files() {
 
     local bmc_debug_log_dump_task_id=$1
     local TARBALL_XZ="/tmp/bmc_debug_log_dump.tar.xz"
+
+    if $NOOP; then
+        echo "python3 /usr/local/bin/bmc_techsupport.py -m collect -p $TARBALL_XZ -t $bmc_debug_log_dump_task_id"
+        return
+    fi
+
     # Remove existing tarball files if they exist
     [ -f "$TARBALL_XZ" ] && rm -f "$TARBALL_XZ"
 
@@ -2274,15 +2504,23 @@ collect_bmc_files() {
 #  None
 ###############################################################################
 save_warmboot_files() {
-    # Copy the warmboot files
+    # Copy the warmboot files (single-ASIC: /host/warmboot; multi-ASIC: /host/warmboot0, /host/warmboot1, ...)
     trap 'handle_error $? $LINENO' ERR
     start_t=$(date +%s%3N)
     if $NOOP; then
-        echo "$CP $V -rf /host/warmboot $TARDIR"
+        for d in /host/warmboot*; do
+            [ -d "$d" ] && echo "$CP $V -rf $d $TARDIR"
+        done
     else
         mkdir -p $TARDIR
-        $CP $V -rf /host/warmboot $TARDIR
-        chmod ugo+rw -R $DUMPDIR/$BASE/warmboot
+        for d in /host/warmboot*; do
+            if [ -d "$d" ]; then
+                $CP $V -rf "$d" $TARDIR
+            fi
+        done
+        for d in $TARDIR/warmboot*; do
+            [ -d "$d" ] && chmod ugo+rw -R "$d"
+        done
     fi
     end_t=$(date +%s%3N)
     echo "[ Warm-boot Files ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
@@ -2341,6 +2579,34 @@ save_sai_failure_dump(){
         return
     fi
     for file in $(find_files "/var/log/sai_failure_dump/"); do
+        # A tar dump (*.tar) takes much more space than a gzipped one,
+        # compress it first to save space before collecting it.  Skip the
+        # in-place gzip if a "$file.gz" already exists, so we never clobber a
+        # pre-existing, independent .gz dump (gzip's overwrite would replace
+        # its content with this tar's).  In that case the .tar is collected
+        # as-is (save_file gzips it into the tarball without touching the
+        # sibling on disk).
+        #
+        # If gzip itself fails, that usually means a broken environment (e.g. a
+        # full filesystem) in which the subsequent save_file/tar-append would
+        # likely fail too.  Rather than risk deleting the only intact copy of
+        # the dump, skip this file entirely: leave the original tar in place
+        # under /var/log/sai_failure_dump/ so it can be recovered manually.
+        #
+        # compressed_src records the original tar path ONLY when this iteration
+        # produced the gzip artifact, so cleanup removes that original -- and
+        # never a pre-existing, similarly named file for an input that was
+        # already a *.gz.
+        compressed_src=""
+        if [ -z "${file##*.tar}" ] && [ ! -e "$file.gz" ]; then
+            if gzip "$file"; then
+                compressed_src="$file"
+                file="$file.gz"
+            else
+                # Compression failed -- keep the source tar and move on.
+                continue
+            fi
+        fi
         if $TAR -tf $TARFILE | grep $BASE/log/$(basename $file); then
             # if the files are already collected under the log/ dir
             # just add a symbolic link
@@ -2349,15 +2615,26 @@ save_sai_failure_dump(){
                 file=$file.gz
             fi
             ${CMD_PREFIX}save_symlink ${file} sai_failure_dump log
+            save_status=$?
         else
             if [ ! -z "${file##*.gz}" ]; then
                 ${CMD_PREFIX}save_file ${file} sai_failure_dump true true
             else
                 ${CMD_PREFIX}save_file ${file} sai_failure_dump false true
             fi
+            save_status=$?
         fi
-        #Clean up the file once its part of tech support
-        rm -f $file
+        # Clean up the collected file once it is part of tech support, plus
+        # the original tar this iteration compressed (if any) so no leftover
+        # uncompressed tar is left behind.  Only tracked paths are removed.
+        #
+        # Only clean up on a successful collection.  On a *.tar we compressed,
+        # gzip has already removed the original tar, so the *.tar.gz is now the
+        # only copy -- deleting it after a failed save would lose the dump.
+        # Keep it in place for recovery / a later retry instead.
+        if [ "$save_status" -eq 0 ]; then
+            rm -f -- "$file" ${compressed_src:+"$compressed_src"}
+        fi
     done
 }
 
@@ -2377,7 +2654,7 @@ get_asic_count() {
     then
          redirect_eval=""
     fi
-    local cmd="python -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())'"
+    local cmd="python3 -I -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())'"
     echo `eval ${cmd} ${redirect_eval}`
 }
 
@@ -2393,6 +2670,10 @@ get_asic_count() {
 ###############################################################################
 save_counter_snapshot() {
     trap 'handle_error $? $LINENO' ERR
+    # Front-panel port/ASIC counters - no front-panel ports on a Switch-BMC.
+    if $IS_SWITCH_BMC; then
+        return
+    fi
     local asic_name="$1"
     local idx=$2
     counter_t=$(date +'%d/%m/%Y %H:%M:%S:%6N')
@@ -2401,9 +2682,34 @@ save_counter_snapshot() {
     save_cmd "show interface counters" "interface.counters_$idx"
     save_cmd "show interface counters fec-stats" "interface.counters.fec-stats_$idx"
 
-    for netdev in /sys/class/net/Ethernet* ; do
-        iface=$(basename $netdev)
-        save_cmd "show interface counters fec-histogram $iface" "interface.counters.fec-histogram.$iface.$idx"
+    # Batch size selected to 8 to not overload CPU
+    local fec_histogram_batch_size=8
+    local -a fec_histogram_pids=()
+    local netdev iface pid
+
+    for netdev in /sys/class/net/Ethernet*; do
+        # Skip the literal "Ethernet*" when the glob matches nothing.
+        [ -e "$netdev" ] || continue
+
+        iface=$(basename "$netdev")
+
+        save_cmd \
+            "show interface counters fec-histogram $iface" \
+            "interface.counters.fec-histogram.$iface.$idx" &
+
+        fec_histogram_pids+=("$!")
+
+        if [ "${#fec_histogram_pids[@]}" -ge "$fec_histogram_batch_size" ]; then
+            for pid in "${fec_histogram_pids[@]}"; do
+                wait "$pid"
+            done
+            fec_histogram_pids=()
+        fi
+    done
+
+    # Wait for the final batch, which may contain fewer than eight commands.
+    for pid in "${fec_histogram_pids[@]}"; do
+        wait "$pid"
     done
 
     if ! $IS_SUPERVISOR; then
@@ -2468,6 +2774,77 @@ save_container_files() {
 }
 
 ###############################################################################
+# Save gearbox data
+###############################################################################
+save_gearbox_data() {
+    # Gearbox PHY data - not present on a Switch-BMC.
+    if $IS_SWITCH_BMC; then
+        return
+    fi
+    save_cmd "gearboxutil phys status" "gearbox.phys_status" &
+    save_cmd "gearboxutil interfaces status" "gearbox.interfaces_status" &
+    save_cmd "gearboxutil interfaces fec-stats" "gearbox.interfaces_fec_stats" &
+    save_cmd "gearboxutil interfaces fec-histogram" "gearbox.interfaces_fec_histogram" &
+}
+
+###############################################################################
+# Save DPU Flow Dump for better debugging
+###############################################################################
+start_dpu_flow_dump() {
+    if [[ "${ENABLE_FLOW_DUMP}" != true ]]; then
+        return
+    fi
+
+    if $NOOP; then
+        return
+    fi
+
+    if [[ ! -f /usr/local/bin/sonic-dpu-flow-dump.py ]]; then
+        echo "INFO: sonic-dpu-flow-dump.py not found, skipping DPU flow dump collection." >&2
+        return
+    fi
+
+    local is_dpu
+    is_dpu=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.is_dpu())" 2>/dev/null) || is_dpu="False"
+    if [[ "$is_dpu" != "True" ]]; then
+        return
+    fi
+
+    if [ ! -d $LOGDIR ]; then
+        $MKDIR $V -p $LOGDIR
+    fi
+
+    echo "Started DPU flow dump collection (pid ${BASHPID})."
+
+    local start_t=$(date +%s%3N)
+    local path_file stderr_file
+    path_file=$(mktemp /tmp/ts_dpu_flow_dump_path.XXXXXX)
+    stderr_file=$(mktemp /tmp/ts_dpu_flow_dump_err.XXXXXX)
+    sonic-dpu-flow-dump.py --no-flow-state --file-only > "$path_file" 2>"$stderr_file"
+    local rc=$?
+    if [[ "$rc" -eq 0 ]] && [[ -f "$path_file" ]]; then
+        echo "DPU flow dump collection successful (rc=${rc})."
+        local src
+        src=$(tr -d '\n\r' < "$path_file")
+        if [[ -n "$src" && -f "$src" ]]; then
+            $MV "$src" $LOGDIR
+            echo "DPU flow dump saved: $LOGDIR/$(basename "$src")"
+        fi
+    else
+        if [[ -s "$stderr_file" ]]; then
+            local err_log="${LOGDIR}/dpu_flow_dump.stderr"
+            $CP "$stderr_file" "$err_log"
+            echo "DPU flow dump collection failed (rc=${rc}). Stderr saved: $err_log"
+        else
+            echo "DPU flow dump collection failed or skipped (rc=${rc})."
+        fi
+    fi
+    $RM -f "$path_file" "$stderr_file"
+    local end_t=$(date +%s%3N)
+    echo "[ dpu_flow_dump ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
+}
+
+###############################################################################
 # Main generate_dump routine
 # Globals:
 #  All of them.
@@ -2481,6 +2858,11 @@ main() {
     local start_t=0
     local end_t=0
     NUM_ASICS=$(get_asic_count)
+    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
+        ASIC_SUFFIXES=( $(seq 0 $((NUM_ASICS - 1))) )
+    else
+        ASIC_SUFFIXES=( "" )
+    fi
     ${CMD_PREFIX}renice +5 -p $$ >> /dev/null
     ${CMD_PREFIX}ionice -c 2 -n 5 -p $$ >> /dev/null
 
@@ -2498,9 +2880,15 @@ main() {
     start_t=$(date +%s%3N)
 
     # Trigger BMC debug log dump task - Must be the first task to run
-    bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
-    if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
-        echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+    if $NOOP; then
+        # stdout is command-substituted below, so the noop line is printed here
+        trigger_bmc_debug_log_dump
+        bmc_debug_log_dump_task_id="$BMC_NOOP_TASK_ID"
+    else
+        bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
+        if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
+            echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+        fi
     fi
 
     # Capture /proc state early
@@ -2541,10 +2929,15 @@ main() {
 
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
     local device_type=`sonic-db-cli CONFIG_DB hget 'DEVICE_METADATA|localhost' type`
-    # 1st counter snapshot early. Need 2 snapshots to make sense of counters trend.
+    local platform=$(python3 -I -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+
+    # 1st counter snapshot early (self-skips on a Switch-BMC); need 2 for a trend.
     save_counter_snapshot $asic 1
 
-    save_cmd "show asic-sdk-health-event received" "asic.sdk.health.event" &
+    if ! $IS_SWITCH_BMC; then
+        # ASIC/SDK health event - not supported on a Switch-BMC platform.
+        save_cmd "show asic-sdk-health-event received" "asic.sdk.health.event" &
+    fi
 
     save_cmd "systemd-analyze blame" "systemd.analyze.blame" &
     save_cmd "systemd-analyze dump" "systemd.analyze.dump" &
@@ -2552,6 +2945,9 @@ main() {
     wait
 
     save_chassis_modules_info &
+    wait
+    
+    save_fabric_info &
     wait
     
     save_platform_info &
@@ -2575,39 +2971,53 @@ main() {
     save_bridge_info &
     wait
 
+    # FRR/BGP/EVPN and gearbox collectors self-skip on a Switch-BMC.
     save_frr_info &
 
     save_bgp_info &
     save_evpn_info &
     wait
 
-    save_cmd "show interface status -d all" "interface.status" &
-    save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
-    save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
+    # Generic L3 summary (incl. management interfaces) - keep on all platforms.
     save_cmd "show ip interface -d all" "ip.interface" &
-    save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+    if ! $IS_SWITCH_BMC; then
+        # Front-panel interface/transceiver collectors - none on a Switch-BMC.
+        save_cmd "show interface status -d all" "interface.status" &
+        save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
+        save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
+        # Collect SFP EEPROM data; sfputil filters out CPO ports.
+        save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+        # CPO devices may coexist with pluggable transceivers.
+        if python3 -I -c 'from sonic_py_common import device_info; import sys; sys.exit(0 if device_info.get_cpo_data() else 1)' 2>/dev/null; then
+            save_cmd "cpoutil read-eeprom oe" "interface.cpo.oe.eeprom" &
+            save_cmd "cpoutil read-eeprom els" "interface.cpo.els.eeprom" &
+        fi
+        save_cmd "show interface link-training status" "interface.link_training.status" &
+    fi
+    save_gearbox_data &
     wait
 
     save_cmd "lldpctl" "lldpctl" &
-    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
-        for (( i=0; i<$NUM_ASICS; i++ ))
-        do
-            save_cmd "docker exec lldp$i lldpcli show statistics" "lldp$i.statistics" &
-            save_cmd "docker logs bgp$i" "docker.bgp$i.log" &
-            save_cmd "docker logs swss$i" "docker.swss$i.log" &
-        done
-    else
-        save_cmd "docker exec lldp lldpcli show statistics" "lldp.statistics" &
-        save_cmd "docker logs bgp" "docker.bgp.log" &
-        save_cmd "docker logs swss" "docker.swss.log" &
-    fi
+    for sfx in "${ASIC_SUFFIXES[@]}"; do
+        save_cmd "docker exec lldp${sfx} lldpcli show statistics" "lldp${sfx}.statistics" &
+        save_cmd "docker exec lldp${sfx} lldpcli show configuration" "lldp${sfx}.config" &
+        save_cmd "docker exec lldp${sfx} lldpcli show interfaces" "lldp${sfx}.interfaces" &
+        if ! $IS_SWITCH_BMC; then
+            # bgp/swss containers do not run on a Switch-BMC.
+            save_cmd "docker logs bgp${sfx}" "docker.bgp${sfx}.log" &
+            save_cmd "docker logs swss${sfx}" "docker.swss${sfx}.log" &
+        fi
+    done
     wait
 
- 	save_cmd "stpctl all" "stp.log"
-    save_cmd "show spanning-tree" "stp.show"
-    save_cmd "show spanning-tree statistics" "stp.stats"
-    save_cmd "show spanning-tree bpdu_guard" "stp.bg"
-    save_cmd "show spanning-tree root_guard" "stp.rg"
+    if ! $IS_SWITCH_BMC; then
+        # Spanning-tree - no STP daemon / stpctl on a Switch-BMC.
+        save_cmd "stpctl all" "stp.log"
+        save_cmd "show spanning-tree" "stp.show"
+        save_cmd "show spanning-tree statistics" "stp.stats"
+        save_cmd "show spanning-tree bpdu_guard" "stp.bg"
+        save_cmd "show spanning-tree root_guard" "stp.rg"
+    fi
 
     save_cmd "ps aux" "ps.aux" &
     save_cmd "top -b -n 1" "top" &
@@ -2627,6 +3037,9 @@ main() {
     wait
     save_redis_info &
 
+    save_chassis_database_info &
+    wait
+    
     save_container_files &
 
     if $DEBUG_DUMP
@@ -2651,15 +3064,15 @@ main() {
     save_cmd "who -a" "who" &
     save_cmd "swapon -s" "swapon" &
     wait
-    save_cmd "hdparm -i /dev/sda" "hdparm" &
+    if ! $IS_SWITCH_BMC; then
+        # hdparm not installed; a Switch-BMC boots from eMMC/flash (no /dev/sda).
+        save_cmd "hdparm -i /dev/sda" "hdparm" &
+    fi
     save_cmd "ps -AwwL -o user,pid,lwp,ppid,nlwp,pcpu,pri,nice,vsize,rss,tty,stat,wchan:12,start,bsdtime,command" "ps.extended" &
     wait
 
+    # SAI dump (vtysh route-size probe + syncd) self-skips on a Switch-BMC.
     save_saidump_by_route_size
-
-    if [ "$asic" = "barefoot" ]; then
-        collect_barefoot
-    fi
 
     if [[ "$asic" = "mellanox" ]]; then
         collect_mellanox
@@ -2669,7 +3082,7 @@ main() {
         collect_broadcom
     fi
 
-    if [ "$asic" = "cisco-8000" ]; then
+    if [ "$asic" = "cisco-8000" ] || [ "$asic" = "cisco" ]; then
         collect_cisco_8000
     fi
 
@@ -2689,8 +3102,13 @@ main() {
         collect_pensando
     fi
 
+    if [[ "$asic" = "aspeed" && "$platform" == *"nvidia"* ]]; then
+        collect_nvidia_bmc_dump
+    fi
 
-    # 2nd counter snapshot late. Need 2 snapshots to make sense of counters trend.
+    start_dpu_flow_dump &
+
+    # 2nd counter snapshot late (self-skips on a Switch-BMC); need 2 for a trend.
     save_counter_snapshot $asic 2
 
     # Copying the /etc files to a directory and then tar it
@@ -2710,7 +3128,8 @@ main() {
     $TARDIR/etc/ssh* $TARDIR/etc/mlnx $TARDIR/etc/mft \
     $TARDIR/etc/ssl/certs/* $TARDIR/etc/ssl/private/*
     rm_list=$(find -L $TARDIR -type f \( -iname \*.cer -o -iname \*.crt -o \
-        -iname \*.pem -o -iname \*.key -o -iname \*snmpd.conf\* -o -iname \*get_creds\* \))
+        -iname \*.pem -o -iname \*.key -o -iname \*.pfx -o -iname \*snmpd.conf\* -o -iname \*get_creds\* \
+        -o -path \*/credentials/\* \))
     if [ ! -z "$rm_list" ]
     then
         rm $rm_list
@@ -2806,24 +3225,26 @@ remove_secret_from_etc_files() {
     echo "Remove secret from etc files."
     # Remove tacacs passkey from tacplus_nss.conf
     local secret_regex='s/(secret=)([^,|\S]*)(.*)/\1****\3/g'
-    sed -i -E $secret_regex $dumppath/etc/tacplus_nss.conf
+    sed_if_exists "$secret_regex" "$dumppath/etc/tacplus_nss.conf"
 
     # Remove radius passkey from radius_nss.conf
-    sed -i -E $secret_regex $dumppath/etc/radius_nss.conf
+    sed_if_exists "$secret_regex" "$dumppath/etc/radius_nss.conf"
 
     # Remove tacacs passkey from common-auth-sonic
-    sed -i -E 's/(secret=)(\S*)/\1****/g' $dumppath/etc/pam.d/common-auth-sonic
+    sed_if_exists 's/(secret=)(\S*)/\1****/g' "$dumppath/etc/pam.d/common-auth-sonic"
 
     # Remove tacacs passkey from pam_radius_auth.conf
-    sed -i -E 's/^([^#]\S*\s*)(\S*)/\1****/g' $dumppath/etc/pam_radius_auth.conf
+    sed_if_exists 's/^([^#]\S*\s*)(\S*)/\1****/g' "$dumppath/etc/pam_radius_auth.conf"
 
     # Remove radius passkey from per-server conf file /etc/pam_radius_auth.d/{ip}_{port}.conf
-    for filename in $dumppath/etc/pam_radius_auth.d/*.conf; do
-        sed -i -E 's/^([^#]\S*\s*)(\S*)/\1****/g' $filename
+    # Guard the glob: skip when no *.conf files exist (dir absent or empty).
+    for filename in "$dumppath"/etc/pam_radius_auth.d/*.conf; do
+        [ -e "$filename" ] || continue
+        sed -i -E 's/^([^#]\S*\s*)(\S*)/\1****/g' "$filename"
     done
 
     # Remove snmp community string from snmp.yml
-    sed -i -E 's/(\s*snmp_\S*community\s*:\s*)(\S*)/\1****/g' $dumppath/etc/sonic/snmp.yml
+    sed_if_exists 's/(\s*snmp_\S*community\s*:\s*)(\S*)/\1****/g' "$dumppath/etc/sonic/snmp.yml"
 
     # Remove secret from /etc/sonic/config_db.json
     remove_secret_from_config_db_dump_file $dumppath/etc/sonic/config_db.json
@@ -2874,7 +3295,7 @@ abort() {
 ###############################################################################
 usage() {
     cat <<EOF
-$0 [-xnvh]
+$0 [-xnvhf]
 
 Create a SONiC system dump for support/debugging. Requires root privileges.
 
@@ -2903,11 +3324,12 @@ OPTIONS
         Redirect any intermediate errors to STDERR
     -d
         Collect the output of debug dump cli
+    -f
+        On DPU platforms, also collect a DPU flow dump
 EOF
 }
 
-
-while getopts ":xnvhzas:t:r:d" opt; do
+while getopts ":xnvhzas:t:r:df" opt; do
     case $opt in
         x)
             # enable bash debugging
@@ -2958,6 +3380,9 @@ while getopts ":xnvhzas:t:r:d" opt; do
         d)
             DEBUG_DUMP=true
             ;;
+        f)
+            ENABLE_FLOW_DUMP=true
+            ;;
         /?)
             echo "Invalid option: -$OPTARG" >&2
             exit $EXT_GENERAL
@@ -2975,8 +3400,9 @@ fi
 ##
 ## Attempt Locking
 ##
-platform_name=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
+platform_name=$(show platform summary --json | python3 -I -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
 supervisor=0
+switch_bmc=0
 PLATFORM_ENV_CONF=/usr/share/sonic/device/${platform_name}/platform_env.conf
 if [ -f "$PLATFORM_ENV_CONF" ]; then
     source $PLATFORM_ENV_CONF
@@ -2984,7 +3410,23 @@ fi
 if [[ x"$supervisor" == x"1" ]]; then
     IS_SUPERVISOR=true
 fi
-    
+# Switch-BMC detection, mirroring the supervisor handling above.
+if [[ x"$switch_bmc" == x"1" ]]; then
+    IS_SWITCH_BMC=true
+fi
+CHASSIS_DB_CONF=/usr/share/sonic/device/${platform_name}/chassisdb.conf
+if [ -f "$CHASSIS_DB_CONF" ]; then
+    IS_CHASSIS_MODULE=true
+fi
+
+switch_type=$(sonic-db-cli CONFIG_DB hget "DEVICE_METADATA|localhost" "switch_type")
+
+# define IS_VOQ_CHASSIS for voq based platform (chassis or multi-asic Pizza Box)
+# This is for "show fabric ..." commands 
+if $IS_CHASSIS_MODULE && [[ x"$switch_type" == x"voq" || x"$switch_type" == x"fabric" ]]; then
+    IS_VOQ_CHASSIS=true
+fi
+
 if $MKDIR "${LOCKDIR}" &>/dev/null; then
     trap 'handle_exit' EXIT
     echo "$$" > "${PIDFILE}"

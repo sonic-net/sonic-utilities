@@ -7,6 +7,7 @@ import os
 from swsscommon import swsscommon
 
 from config.config_mgmt import sonic_cfggen
+from sonic_py_common import device_info
 
 from sonic_package_manager.service_creator import ETC_SONIC_PATH
 from sonic_package_manager.service_creator.utils import in_chroot
@@ -92,6 +93,7 @@ class SonicDB:
     configs. """
 
     _running_db_conn = None
+    _namespace_db_conns = None
 
     @classmethod
     def get_connectors(cls):
@@ -103,6 +105,35 @@ class SonicDB:
         yield initial_db_conn
         if running_db_conn is not None:
             yield running_db_conn
+            for ns_conn in cls.get_namespace_db_connectors():
+                yield ns_conn
+
+    @classmethod
+    def get_namespace_db_connectors(cls):
+        """ Returns per-ASIC namespace CONFIG_DB connectors (empty on single-ASIC).
+
+        In chroot this is a fast-path that always returns an empty list
+        without caching. Otherwise the result is resolved once and cached:
+        a namespace that fails to connect raises rather than being skipped,
+        and the cache is populated only once all namespaces connect, so a
+        failed run is retried on the next call.
+        """
+
+        if in_chroot():
+            return []
+
+        if cls._namespace_db_conns is None:
+            conns = []
+            if device_info.is_multi_npu():
+                if not swsscommon.SonicDBConfig.isGlobalInit():
+                    swsscommon.SonicDBConfig.initializeGlobalConfig()
+                for ns in device_info.get_namespaces():
+                    conn = swsscommon.ConfigDBConnector(namespace=ns)
+                    conn.connect()
+                    conns.append(conn)
+            cls._namespace_db_conns = conns
+
+        return cls._namespace_db_conns
 
     @classmethod
     def get_running_db_connector(cls):

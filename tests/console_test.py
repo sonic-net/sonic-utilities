@@ -1,26 +1,52 @@
 import os
 import sys
 import subprocess
+import json
 import jsonpatch
 import pexpect
+import struct
 from unittest import mock
 from mock import patch
 
 import pytest
 
 import config.main as config
+import consutil.lib as consutil_lib
 import consutil.main as consutil
 import tests.mock_tables.dbconnector
 
 from click.testing import CliRunner
 from utilities_common.db import Db
-from consutil.lib import ConsolePortProvider, ConsolePortInfo, ConsoleSession, SysInfoProvider, DbUtils, \
-    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError
+from consutil.lib import (
+    ConnectionFailedError,
+    ConsolePortInfo,
+    ConsolePortProvider,
+    ConsoleSession,
+    DbUtils,
+    InvalidConfigurationError,
+    LineBusyError,
+    LineNotFoundError,
+    SysInfoProvider,
+    console_connect,
+    send_mirror_message,
+)
 from sonic_py_common import device_info
 from jsonpatch import JsonPatchConflict
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 CONSOLE_MOCK_DIR = SCRIPT_DIR + "/console_mock"
+MIRROR_LINE1_PREFIX = (
+    "/var/log/sonic/console-mirror/line1/"
+    "console-mirror-line1-both-20260613T141200Z"
+)
+MIRROR_LINE1_FILE = MIRROR_LINE1_PREFIX + "-part0001.log"
+MIRROR_LINE1_RX_FILE = (
+    "/var/log/sonic/console-mirror/line1/"
+    "console-mirror-line1-rx-20260613T141200Z-part0001.log"
+)
+MIRROR_LINE1_ARCHIVE = MIRROR_LINE1_PREFIX + ".zip"
+MIRROR_LINE1_START_TIME = "2026-06-13T14:12:00Z"
+CONSOLE_LOGGING_CMD = config.config.commands["console"].commands["logging"]
 
 
 class TestConfigConsoleCommands(object):
@@ -65,6 +91,59 @@ class TestConfigConsoleCommands(object):
         db = Db()
 
         result = runner.invoke(config.config.commands["console"].commands["disable"])
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert "Invalid ConfigDB. Error" in result.output
+
+    def test_console_heartbeat_enable(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["enable"], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+
+    def test_console_heartbeat_disable(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["disable"], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+
+    def test_console_heartbeat_invalid_mode(self):
+        runner = CliRunner()
+        db = Db()
+
+        # test with invalid mode argument
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["invalid"], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code != 0
+        assert "Invalid value for '<mode>'" in result.output
+
+    def test_console_heartbeat_missing_mode(self):
+        runner = CliRunner()
+        db = Db()
+
+        # test without mode argument
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], [], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code != 0
+        assert "Missing argument '<mode>'" in result.output
+
+    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+           mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry",
+           mock.Mock(side_effect=ValueError))
+    def test_console_heartbeat_yang_validation(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["enable"], obj=db)
         print(result.exit_code)
         print(sys.stderr, result.output)
         assert "Invalid ConfigDB. Error" in result.output
@@ -647,6 +726,209 @@ class TestConfigConsoleCommands(object):
         print(sys.stderr, result.output)
         assert "Invalid ConfigDB. Error" in result.output
 
+    def test_update_console_logging_non_exists(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "enable"],
+            obj=db,
+        )
+        assert result.exit_code != 0
+        assert "Trying to update console port setting, which is not present." in result.output
+
+    def test_update_console_logging_filename_success(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "filename", "/var/log/console1.log", "--logrotate-size", "10M", "--logrotate-count", "5"],
+            obj=db,
+        )
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("log_file") == "/var/log/console1.log"
+        assert entry.get("logrotate_size") == "10M"
+        assert entry.get("logrotate_count") == "5"
+        assert entry.get("baud_rate") == "9600"
+
+    def test_update_console_logging_filename_defaults(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "filename", "/var/log/console1.log"],
+            obj=db,
+        )
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("log_file") == "/var/log/console1.log"
+        assert entry.get("logrotate_size") == "10M"
+        assert entry.get("logrotate_count") == "10"
+
+    @pytest.mark.parametrize("logrotate_size", ["big", "10m", "10g"])
+    def test_update_console_logging_filename_invalid_size(self, logrotate_size):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "filename", "/var/log/console1.log", "--logrotate-size", logrotate_size, "--logrotate-count", "5"],
+            obj=db,
+        )
+        assert result.exit_code != 0
+        assert "Invalid logrotate size" in result.output
+
+    @pytest.mark.parametrize(("filename", "error_message"), [
+        ("var/log/console1.log", "Log file path must be an absolute path."),
+        ("/var/log/console 1.log", "Log file path must not contain whitespace."),
+        ("/var/log/console1.log\npostrotate", "Log file path must not contain whitespace."),
+        ("/var/log/{console}.log", "Log file path must not contain '{' or '}'."),
+        ("/var/log/console1.log}postrotate{", "Log file path must not contain '{' or '}'."),
+    ])
+    def test_update_console_logging_filename_invalid_path(self, filename, error_message):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "filename", filename],
+            obj=db,
+        )
+        assert result.exit_code != 0
+        assert error_message in result.output
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert "log_file" not in entry
+
+    def test_update_console_logging_filename_partial_logrotate_options(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "filename", "/var/log/console1.log", "--logrotate-size", "10M"],
+            obj=db,
+        )
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("log_file") == "/var/log/console1.log"
+        assert entry.get("logrotate_size") == "10M"
+        assert entry.get("logrotate_count") == "10"
+
+    def test_update_console_logging_enable_applies_defaults(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {"baud_rate": "9600"})
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "enable"],
+            obj=db,
+        )
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("logging_enabled") == "yes"
+        assert entry.get("log_file") == "/var/log/console-1.log"
+        assert entry.get("logrotate_size") == "10M"
+        assert entry.get("logrotate_count") == "10"
+
+    def test_update_console_logging_enable_success(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {
+            "baud_rate": "9600",
+            "log_file": "/var/log/console1.log",
+            "logrotate_size": "10M",
+            "logrotate_count": "5",
+        })
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "enable"],
+            obj=db,
+        )
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("logging_enabled") == "yes"
+        assert entry.get("log_file") == "/var/log/console1.log"
+
+    def test_update_console_logging_disable_success(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {
+            "baud_rate": "9600",
+            "logging_enabled": "yes",
+            "log_file": "/var/log/console1.log",
+            "logrotate_size": "10M",
+            "logrotate_count": "5",
+        })
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "disable"],
+            obj=db,
+        )
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("logging_enabled") == "no"
+        assert entry.get("log_file") == "/var/log/console1.log"
+
+    def test_update_console_logging_enable_no_change(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {
+            "baud_rate": "9600",
+            "logging_enabled": "yes",
+            "log_file": "/var/log/console1.log",
+            "logrotate_size": "10M",
+            "logrotate_count": "5",
+        })
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "enable"],
+            obj=db,
+        )
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry("CONSOLE_PORT", "1")
+        assert entry.get("logging_enabled") == "yes"
+
+    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry",
+           mock.Mock(side_effect=ValueError))
+    def test_update_console_logging_enable_yang_validation(self):
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", "1", {
+            "baud_rate": "9600",
+            "log_file": "/var/log/console1.log",
+            "logrotate_size": "10M",
+            "logrotate_count": "5",
+        })
+
+        result = runner.invoke(
+            CONSOLE_LOGGING_CMD,
+            ["1", "enable"],
+            obj=db,
+        )
+        assert "Invalid ConfigDB. Error" in result.output
+
     def test_console_full_workflow_integration(self):
         """Test complete workflow: add -> update various fields -> delete"""
         runner = CliRunner()
@@ -861,6 +1143,23 @@ class TestConsutilLib(object):
         assert port.session_pid == "223"
         assert port.session_start_date == "2020/11/2"
 
+    @mock.patch(
+        'consutil.lib.SysInfoProvider.list_active_console_processes',
+        mock.MagicMock(return_value={
+            "1": ("111", "2020/11/1"),
+            "2": ("222", "2020/11/2"),
+        }),
+    )
+    def test_console_port_info_refresh_keeps_target_line_state(self):
+        db = Db()
+
+        port = ConsolePortInfo(DbUtils(db), {"LINE": "1"})
+        port.refresh()
+
+        assert port.busy
+        assert port.session_pid == "111"
+        assert port.session_start_date == "2020/11/1"
+
     @mock.patch('consutil.lib.SysInfoProvider.list_active_console_processes',
                 mock.MagicMock(return_value={"2": ("223", "2020/11/2")}))
     def test_console_port_info_refresh_without_session_idle(self):
@@ -927,40 +1226,41 @@ class TestConsutilLib(object):
 
     def test_console_port_info_connect_device_busy(self):
         db = Db()
-        port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "idle"}})
+        port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "busy"}})
 
         port.refresh = mock.MagicMock(return_value=None)
-        mock_proc = mock.MagicMock(spec=subprocess.Popen)
-        mock_proc.send = mock.MagicMock(return_value=None)
-        mock_proc.expect = mock.MagicMock(return_value=1)
-        with mock.patch('pexpect.spawn', mock.MagicMock(return_value=mock_proc)):
-            with pytest.raises(LineBusyError):
-                port.connect()
+        with pytest.raises(LineBusyError):
+            port.connect()
 
+    @mock.patch('os.execvp', mock.MagicMock(side_effect=OSError("bash missing")))
     def test_console_port_info_connect_connection_fail(self):
         db = Db()
         port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "idle"}})
 
         port.refresh = mock.MagicMock(return_value=None)
-        mock_proc = mock.MagicMock(spec=subprocess.Popen)
-        mock_proc.send = mock.MagicMock(return_value=None)
-        mock_proc.expect = mock.MagicMock(return_value=2)
-        with mock.patch('pexpect.spawn', mock.MagicMock(return_value=mock_proc)):
-            with pytest.raises(ConnectionFailedError):
-                port.connect()
+        with pytest.raises(OSError):
+            port.connect()
 
+    @mock.patch('os.execvp', mock.MagicMock(side_effect=SystemExit(0)))
     def test_console_port_info_connect_success(self):
         db = Db()
         port = ConsolePortInfo(DbUtils(db), {"LINE": "1", "baud_rate": "9600", "CUR_STATE": {"state": "idle"}})
 
         port.refresh = mock.MagicMock(return_value=None)
-        mock_proc = mock.MagicMock(spec=subprocess.Popen, pid="223")
-        mock_proc.send = mock.MagicMock(return_value=None)
-        mock_proc.expect = mock.MagicMock(return_value=0)
-        with mock.patch('pexpect.spawn', mock.MagicMock(return_value=mock_proc)):
-            session = port.connect()
-            assert session.proc.pid == "223"
-            assert session.port.line_num == "1"
+        with pytest.raises(SystemExit):
+            port.connect()
+
+        call_args, _ = os.execvp.call_args
+        assert call_args[0] == "/bin/bash"
+        argv = call_args[1]
+        assert argv[0] == "/bin/bash"
+        assert argv[1] == "-c"
+        assert argv[3] == "console_connect"
+        assert argv[4] == "1"
+        assert argv[5] == "A"
+        assert "picocom --quiet" in argv[6]
+        assert "-b 9600" in argv[6]
+        assert "/dev/ttyUSB1" in argv[6]
 
     def test_console_port_info_clear_session_line_not_busy(self):
         db = Db()
@@ -977,6 +1277,24 @@ class TestConsutilLib(object):
 
         port.refresh = mock.MagicMock(return_value=None)
         assert port.clear_session()
+
+    def test_console_port_info_clear_session_kills_target_line_only(self):
+        db = Db()
+        port = ConsolePortInfo(DbUtils(db), {"LINE": "72", "baud_rate": "9600"})
+        active_processes = {
+            "72": ("100", "2020/11/1"),
+            "62": ("200", "2020/11/2"),
+        }
+
+        with mock.patch(
+            'consutil.lib.SysInfoProvider.list_active_console_processes',
+            return_value=active_processes,
+        ), mock.patch('consutil.lib.SysInfoProvider.run_command') as run_command:
+            assert port.clear_session()
+
+        run_command.assert_called_once_with(
+            ['sudo', 'kill', '-SIGTERM', '100']
+        )
 
     def test_console_port_info_clear_session_with_existing_session(self):
         db = Db()
@@ -1102,11 +1420,11 @@ class TestConsutilShow(object):
         print("SETUP")
 
     expect_show_output = ''+ \
-        """  Line    Baud    Flow Control    PID                Start Time    Device
-------  ------  --------------  -----  ------------------------  --------
-     1    9600        Disabled      -                         -   switch1
-    *2    9600        Disabled    223  Wed Mar  6 08:31:35 2019   switch2
-     3    9600         Enabled      -                         -
+        """  Line    Baud    Flow Control    PID                Start Time    Device    Oper State    State Duration
+------  ------  --------------  -----  ------------------------  --------  ------------  ----------------
+     1    9600        Disabled      -                         -   switch1             -                 -
+    *2    9600        Disabled    223  Wed Mar  6 08:31:35 2019   switch2             -                 -
+     3    9600         Enabled      -                         -         -             -                 -
 """
     @mock.patch('consutil.lib.SysInfoProvider.init_device_prefix', mock.MagicMock(return_value=None))
     @mock.patch('consutil.lib.SysInfoProvider.list_active_console_processes',
@@ -1368,6 +1686,569 @@ class TestConsutilConnect(object):
         assert result.exit_code == 0
         assert result.output == "Successful connection to line [1]\nPress ^A ^X to disconnect\n"
 
+    @mock.patch('consutil.lib.SysInfoProvider.list_console_ttys', mock.MagicMock(return_value=["/dev/ttyUSB1"]))
+    @mock.patch('consutil.lib.SysInfoProvider.init_device_prefix', mock.MagicMock(return_value=None))
+    @mock.patch('consutil.lib.ConsolePortInfo.connect',
+                mock.MagicMock(return_value=mock.MagicMock(interact=mock.MagicMock(return_value=None))))
+    def test_console_connect_without_db(self):
+        prepared_db = Db()
+        prepared_db.cfgdb.set_entry("CONSOLE_SWITCH", "console_mgmt", {"enabled": "yes"})
+        prepared_db.cfgdb.set_entry("CONSOLE_PORT", 1, {"remote_device": "switch1", "baud_rate": "9600"})
+
+        with mock.patch('utilities_common.db.Db', return_value=prepared_db) as mock_db_cls:
+            console_connect('1')
+            mock_db_cls.assert_called_once()
+
+
+class TestConsutilMirror(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+
+    def _db_with_console_ports(self):
+        db = Db()
+        db.cfgdb.set_entry("CONSOLE_PORT", 1, {
+                           "remote_device": "switch1", "baud_rate": "9600"})
+        db.cfgdb.set_entry("CONSOLE_PORT", 2, {
+                           "remote_device": "switch2", "baud_rate": "9600"})
+        return db
+
+    def _default_start_response(self):
+        return {
+            "status": "ok",
+            "file_path": MIRROR_LINE1_FILE,
+            "timeout": "24h",
+            "remaining": "24h",
+        }
+
+    @pytest.mark.parametrize(("command", "arguments"), [
+        ("start", ["1"]),
+        ("stop", ["1"]),
+        ("timeout", ["1", "2h"]),
+        ("show", ["1"]),
+    ])
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=1))
+    def test_mirror_commands_require_root(self, command, arguments):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        result = runner.invoke(
+            consutil.consutil.commands["mirror"].commands[command], arguments, obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 2
+        assert "Root privileges are required for this operation" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_start_line_not_found(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        result = runner.invoke(
+            consutil.consutil.commands["mirror"].commands["start"], ['9'], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 3
+        assert "Target [9] does not exist" in result.output
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": "admin"})
+    @mock.patch('os.getuid', mock.MagicMock(side_effect=AssertionError("getuid should not be used under sudo")))
+    @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    @mock.patch('pwd.getpwuid', mock.MagicMock(side_effect=AssertionError("getpwuid should not be used under sudo")))
+    def test_mirror_start_success_with_options(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={
+                            "status": "ok",
+                            "file_path": MIRROR_LINE1_RX_FILE,
+                            "timeout": "30m",
+                            "remaining": "30m"
+                        })) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"],
+                ['--direction', 'rx', '--timeout', '30m',
+                    '--max-file-size', '128', '1'],
+                obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1",
+            {
+                "op": "start",
+                "line": "1",
+                "direction": "rx",
+                "owner_pid": 4321,
+                "started_by": "admin",
+                "timeout": "30m",
+                "max_file_size": 128,
+            })
+        assert "Started mirror on line [1]" in result.output
+        assert "Recording file: {}".format(MIRROR_LINE1_RX_FILE) in result.output
+        assert "Auto-stop timeout: 30m" in result.output
+        assert "Remaining: 30m" in result.output
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": "admin"})
+    @mock.patch('os.getuid', mock.MagicMock(side_effect=AssertionError("getuid should not be used under sudo")))
+    @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_start_uses_protocol_defaults(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value=self._default_start_response())) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
+
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1",
+            {
+                "op": "start",
+                "line": "1",
+                "direction": "both",
+                "owner_pid": 4321,
+                "started_by": "admin",
+            })
+        assert "Recording file: {}".format(MIRROR_LINE1_FILE) in result.output
+        assert "Auto-stop timeout: 24h" in result.output
+        assert "Remaining: 24h" in result.output
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": ""})
+    @mock.patch('os.getuid', mock.MagicMock(return_value=1000))
+    @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    @mock.patch('pwd.getpwuid', mock.MagicMock(side_effect=KeyError))
+    def test_mirror_start_uses_uid_when_user_lookup_fails(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value=self._default_start_response())) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert mock_send.call_args[0][1]["started_by"] == "1000"
+        assert mock_send.call_args[0][1]["direction"] == "both"
+
+    @mock.patch.dict(os.environ, {"SUDO_USER": ""})
+    @mock.patch('os.getuid', mock.MagicMock(return_value=1000))
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    @mock.patch('pwd.getpwuid', mock.MagicMock(return_value=mock.MagicMock(pw_name="admin")))
+    def test_mirror_start_uses_real_user_without_sudo(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value=self._default_start_response())) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
+
+        assert result.exit_code == 0
+        assert mock_send.call_args[0][1]["started_by"] == "admin"
+
+    @pytest.mark.parametrize("duration", ["", "1", "1x", "xm", "0m"])
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_start_rejects_invalid_timeout(self, duration):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        result = runner.invoke(
+            consutil.consutil.commands["mirror"].commands["start"],
+            ['--timeout', duration, '1'],
+            obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code != 0
+        assert "must be a positive duration ending in s, m, h, or d" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_stop_retains_files(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={
+                            "recording_prefix": MIRROR_LINE1_PREFIX
+                        })) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["stop"], ['1'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1", {"op": "stop", "line": "1", "archive": False})
+        assert "Stopped mirror on line [1]" in result.output
+        assert MIRROR_LINE1_PREFIX in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_stop_archive_waits_for_final_response(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        def fake_send(line, request, wait_for_final=False, on_first_reply=None):
+            first = {"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}
+            final = {"status": "ok",
+                     "archive_path": MIRROR_LINE1_ARCHIVE}
+            assert line == "1"
+            assert request == {"op": "stop", "line": "1", "archive": True}
+            assert wait_for_final is True
+            on_first_reply(first)
+            return first, final
+
+        with mock.patch('consutil.main.send_mirror_message', mock.MagicMock(side_effect=fake_send)) as mock_send:
+            result = runner.invoke(consutil.consutil.commands["mirror"].commands["stop"],
+                                   ['--archive', '1'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert mock_send.call_count == 1
+        assert "Expected archive: {}".format(MIRROR_LINE1_ARCHIVE) in result.output
+        assert "Recording archive: {}".format(MIRROR_LINE1_ARCHIVE) in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_timeout_success_by_device_name(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={
+                            "status": "ok",
+                            "timeout": "2h",
+                            "remaining": "2h"
+                        })) as mock_send:
+            result = runner.invoke(consutil.consutil.commands["mirror"].commands["timeout"],
+                                   ['--devicename', 'switch2', '2h'], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "2", {"op": "timeout", "line": "2", "timeout": "2h"})
+        assert "Updated mirror timeout on line [2]" in result.output
+        assert "Remaining: 2h" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_show_all_lines(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        def fake_send(line, request, quiet=False):
+            assert request == {"op": "status", "line": line}
+            assert quiet is True
+            if line == "2":
+                raise OSError("missing socket")
+            return {
+                "status": "ok",
+                "state": "active",
+                "start_time": MIRROR_LINE1_START_TIME,
+                "direction": "both",
+                "timeout": "1h",
+                "remaining": "59m",
+                "file_path": MIRROR_LINE1_FILE,
+            }
+
+        with mock.patch('consutil.main.send_mirror_message', mock.MagicMock(side_effect=fake_send)) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["show"], [], obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert mock_send.call_count == 2
+        assert "Line  State" in result.output
+        assert "1  active" in result.output
+        assert "2  error" in result.output
+        assert MIRROR_LINE1_START_TIME in result.output
+        assert MIRROR_LINE1_FILE in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_show_one_line_by_device_name(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(return_value={"state": "idle"})) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"],
+                ['show', '--devicename', 'switch2'],
+                obj=db)
+
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "2", {"op": "status", "line": "2"}, quiet=True)
+        assert "2  idle" in result.output
+
+    @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
+    def test_mirror_show_reports_runtime_error(self):
+        runner = CliRunner()
+        db = self._db_with_console_ports()
+
+        with mock.patch('consutil.main.send_mirror_message',
+                        mock.MagicMock(side_effect=RuntimeError("invalid response"))) as mock_send:
+            result = runner.invoke(
+                consutil.consutil.commands["mirror"].commands["show"], ['1'], obj=db)
+
+        assert result.exit_code == 0
+        mock_send.assert_called_once_with(
+            "1", {"op": "status", "line": "1"}, quiet=True)
+        assert "1  error" in result.output
+
+
+class TestConsoleMirrorProtocol(object):
+    class FakeSocket(object):
+        def __init__(self, replies):
+            self.replies = replies
+            self.connected_path = None
+            self.connected_timeout = None
+            self.sent_data = b""
+            self.timeout = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def connect(self, path):
+            self.connected_path = path
+            self.connected_timeout = self.timeout
+
+        def sendall(self, data):
+            self.sent_data += data
+
+        def settimeout(self, timeout):
+            self.timeout = timeout
+
+        def recv(self, size):
+            if not self.replies:
+                return b""
+            chunk = self.replies[0][:size]
+            self.replies[0] = self.replies[0][size:]
+            if not self.replies[0]:
+                self.replies.pop(0)
+            return chunk
+
+    class ArchiveTimeoutSocket(FakeSocket):
+        def recv(self, size):
+            if self.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC:
+                raise consutil_lib.socket.timeout()
+            return super().recv(size)
+
+    class SendTimeoutSocket(FakeSocket):
+        def sendall(self, data):
+            raise consutil_lib.socket.timeout("send timed out")
+
+    @staticmethod
+    def _frame(message):
+        payload = json.dumps(message).encode("utf-8")
+        return struct.pack("!I", len(payload)) + payload
+
+    def test_send_mirror_message_success(self):
+        fake_socket = self.FakeSocket(
+            [self._frame({"status": "ok", "file_path": MIRROR_LINE1_FILE})])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            response = send_mirror_message("1", {"op": "status", "line": "1"})
+
+        sent_size = struct.unpack("!I", fake_socket.sent_data[:4])[0]
+        sent_payload = json.loads(
+            fake_socket.sent_data[4:4 + sent_size].decode("utf-8"))
+        assert fake_socket.connected_path == "/run/console-monitor/mirror/line1.sock"
+        assert fake_socket.connected_timeout == \
+            consutil_lib.MIRROR_CONTROL_TIMEOUT_SEC
+        assert sent_payload == {"op": "status", "line": "1"}
+        assert response == {"status": "ok", "file_path": MIRROR_LINE1_FILE}
+
+    def test_send_mirror_message_send_timeout_recommends_status_check(self, capsys):
+        fake_socket = self.SendTimeoutSocket([])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message("1", {"op": "start", "line": "1"})
+
+        assert exc.value.code == consutil_lib.ERR_CMD
+        assert fake_socket.connected_timeout == \
+            consutil_lib.MIRROR_CONTROL_TIMEOUT_SEC
+        output = capsys.readouterr().out
+        assert "send timed out" in output
+        assert "The command outcome may be unknown" in output
+        assert "consutil mirror show 1" in output
+
+    def test_send_mirror_message_final_response(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}),
+            self._frame(
+                {"status": "ok", "archive_path": MIRROR_LINE1_ARCHIVE}),
+        ])
+        first_replies = []
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            first, final = send_mirror_message(
+                "1",
+                {"op": "stop", "line": "1", "archive": True},
+                wait_for_final=True,
+                on_first_reply=first_replies.append)
+
+        assert first == {"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}
+        assert final == {"status": "ok",
+                         "archive_path": MIRROR_LINE1_ARCHIVE}
+        assert first_replies == [first]
+        assert fake_socket.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC
+
+    def test_send_mirror_message_final_response_without_callback(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}),
+            self._frame({"status": "ok", "archive_path": MIRROR_LINE1_ARCHIVE}),
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            first, final = send_mirror_message(
+                "1",
+                {"op": "stop", "line": "1", "archive": True},
+                wait_for_final=True)
+
+        assert first == {"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}
+        assert final == {"status": "ok", "archive_path": MIRROR_LINE1_ARCHIVE}
+
+    def test_send_mirror_message_archive_rejects_unexpected_first_response(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "error", "message": "cannot package"}),
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="cannot package"):
+                send_mirror_message(
+                    "1",
+                    {"op": "stop", "line": "1", "archive": True},
+                    wait_for_final=True,
+                    quiet=True)
+
+    def test_send_mirror_message_archive_rejects_error_final_response(self):
+        fake_socket = self.FakeSocket([
+            self._frame({"status": "packaging"}),
+            self._frame({"status": "error"}),
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="mirror request failed"):
+                send_mirror_message(
+                    "1",
+                    {"op": "stop", "line": "1", "archive": True},
+                    wait_for_final=True,
+                    quiet=True)
+
+    def test_send_mirror_message_archive_timeout_exits_without_waiting(self, capsys):
+        fake_socket = self.ArchiveTimeoutSocket([
+            self._frame({"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}),
+        ])
+        first_replies = []
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message(
+                    "1",
+                    {"op": "stop", "line": "1", "archive": True},
+                    wait_for_final=True,
+                    on_first_reply=first_replies.append)
+
+        assert exc.value.code == consutil_lib.ERR_CMD
+        assert first_replies == [{"status": "packaging", "archive_path": MIRROR_LINE1_ARCHIVE}]
+        assert fake_socket.timeout == consutil_lib.MIRROR_ARCHIVE_RESPONSE_TIMEOUT_SEC
+        assert "timed out waiting for mirror response" in capsys.readouterr().out
+
+    def test_send_mirror_message_exits_on_error_response(self):
+        fake_socket = self.FakeSocket(
+            [self._frame({"status": "error", "error": "busy"})])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message("1", {"op": "start", "line": "1"})
+
+        assert exc.value.code == 2
+
+    def test_send_mirror_message_exits_on_invalid_json_response(self):
+        payload = b"{invalid json"
+        fake_socket = self.FakeSocket(
+            [struct.pack("!I", len(payload)) + payload])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(SystemExit) as exc:
+                send_mirror_message("1", {"op": "status", "line": "1"})
+
+        assert exc.value.code == 2
+
+    @pytest.mark.parametrize("response", [[], None, "ok", 1])
+    def test_send_mirror_message_rejects_non_object_json_response(self, response):
+        fake_socket = self.FakeSocket([self._frame(response)])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="invalid response payload"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_rejects_unexpected_eof(self):
+        fake_socket = self.FakeSocket([b"\x00\x00"])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="unexpected EOF"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_rejects_zero_length_response(self):
+        fake_socket = self.FakeSocket([struct.pack("!I", 0)])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="invalid response size"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_rejects_invalid_utf8_response(self):
+        payload = b"\xff"
+        fake_socket = self.FakeSocket(
+            [struct.pack("!I", len(payload)) + payload])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError, match="invalid response payload"):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
+    def test_send_mirror_message_accepts_fragmented_response(self):
+        frame = self._frame({"status": "ok", "state": "active"})
+        fake_socket = self.FakeSocket([
+            frame[:1],
+            frame[1:3],
+            frame[3:7],
+            frame[7:],
+        ])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            response = send_mirror_message(
+                "1", {"op": "status", "line": "1"})
+
+        assert response == {"status": "ok", "state": "active"}
+
+    def test_send_mirror_message_quiet_reraises_error(self):
+        fake_socket = self.FakeSocket(
+            [struct.pack("!I", consutil_lib.MIRROR_CONTROL_MAX_MESSAGE + 1)])
+
+        with mock.patch('consutil.lib.socket.socket', mock.MagicMock(return_value=fake_socket)):
+            with pytest.raises(RuntimeError):
+                send_mirror_message(
+                    "1", {"op": "status", "line": "1"}, quiet=True)
+
 
 class TestConsutilClear(object):
     @classmethod
@@ -1429,3 +2310,154 @@ class TestConsutilClear(object):
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         assert "Cleared line" in result.output
+
+
+class TestConsolePortInfoStateDuration(object):
+    """Unit tests for ConsolePortInfo.state_duration property"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+
+    def _create_port_info(self, last_state_change=None):
+        """Helper to create a ConsolePortInfo with specified last_state_change"""
+        info = {
+            "LINE": "1",
+            "baud_rate": "9600",
+            "CUR_STATE": {}
+        }
+        if last_state_change is not None:
+            info["CUR_STATE"]["last_state_change"] = last_state_change
+        return ConsolePortInfo(None, info)
+
+    @mock.patch('time.time')
+    def test_state_duration_zero_seconds(self, mock_time):
+        """Test duration of exactly 0 seconds"""
+        mock_time.return_value = 1000
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "0s"
+
+    @mock.patch('time.time')
+    def test_state_duration_only_seconds(self, mock_time):
+        """Test duration with only seconds (less than a minute)"""
+        mock_time.return_value = 1045
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "45s"
+
+    @mock.patch('time.time')
+    def test_state_duration_minutes_and_seconds(self, mock_time):
+        """Test duration with minutes and seconds"""
+        mock_time.return_value = 1000 + 5 * 60 + 30  # 5 minutes 30 seconds
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "5m30s"
+
+    @mock.patch('time.time')
+    def test_state_duration_hours_minutes_seconds(self, mock_time):
+        """Test duration with hours, minutes, and seconds"""
+        mock_time.return_value = 1000 + 2 * 3600 + 15 * 60 + 45  # 2h15m45s
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "2h15m45s"
+
+    @mock.patch('time.time')
+    def test_state_duration_days_hours_minutes_seconds(self, mock_time):
+        """Test duration with days, hours, minutes, and seconds"""
+        mock_time.return_value = 1000 + 3 * 86400 + 5 * 3600 + 30 * 60 + 15  # 3d5h30m15s
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "3d5h30m15s"
+
+    @mock.patch('time.time')
+    def test_state_duration_very_long(self, mock_time):
+        """Test very long duration (e.g., 365 days)"""
+        mock_time.return_value = 1000 + 365 * 86400 + 12 * 3600 + 30 * 60 + 45
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "365d12h30m45s"
+
+    @mock.patch('time.time')
+    def test_state_duration_only_days(self, mock_time):
+        """Test duration with only days (no hours/minutes/seconds)"""
+        mock_time.return_value = 1000 + 7 * 86400  # exactly 7 days
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "7d0h0m0s"  # All parts shown when days present
+
+    @mock.patch('time.time')
+    def test_state_duration_only_hours(self, mock_time):
+        """Test duration with only hours"""
+        mock_time.return_value = 1000 + 5 * 3600  # exactly 5 hours
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "5h0m0s"  # m and s shown when hours present
+
+    @mock.patch('time.time')
+    def test_state_duration_only_minutes(self, mock_time):
+        """Test duration with only minutes"""
+        mock_time.return_value = 1000 + 10 * 60  # exactly 10 minutes
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "10m0s"  # s shown when minutes present
+
+    @mock.patch('time.time')
+    def test_state_duration_negative_time_difference(self, mock_time):
+        """Test handling of negative time difference (future timestamp)"""
+        mock_time.return_value = 500
+        port_info = self._create_port_info("1000")  # timestamp in the future
+        assert port_info.state_duration is None
+
+    def test_state_duration_no_last_state_change(self):
+        """Test when last_state_change is not set"""
+        port_info = self._create_port_info(None)
+        assert port_info.state_duration is None
+
+    def test_state_duration_empty_last_state_change(self):
+        """Test when last_state_change is empty string"""
+        info = {
+            "LINE": "1",
+            "CUR_STATE": {"last_state_change": ""}
+        }
+        port_info = ConsolePortInfo(None, info)
+        assert port_info.state_duration is None
+
+    def test_state_duration_invalid_timestamp_string(self):
+        """Test with invalid (non-numeric) timestamp"""
+        port_info = self._create_port_info("invalid_timestamp")
+        assert port_info.state_duration is None
+
+    def test_state_duration_float_timestamp(self):
+        """Test with float timestamp string (cannot convert directly to int)"""
+        port_info = self._create_port_info("1000.5")
+        # int("1000.5") raises ValueError, so should return None
+        with mock.patch('time.time', return_value=1060.0):
+            assert port_info.state_duration is None
+
+    @mock.patch('time.time')
+    def test_state_duration_shows_zero_middle_components(self, mock_time):
+        """Test that zero components in the middle are shown when higher unit present"""
+        # 1 day, 0 hours, 0 minutes, 30 seconds
+        mock_time.return_value = 1000 + 1 * 86400 + 30
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1d0h0m30s"
+
+    @mock.patch('time.time')
+    def test_state_duration_one_second(self, mock_time):
+        """Test duration of exactly 1 second"""
+        mock_time.return_value = 1001
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1s"
+
+    @mock.patch('time.time')
+    def test_state_duration_exactly_one_minute(self, mock_time):
+        """Test duration of exactly 1 minute"""
+        mock_time.return_value = 1060
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1m0s"  # s shown when minutes present
+
+    @mock.patch('time.time')
+    def test_state_duration_exactly_one_hour(self, mock_time):
+        """Test duration of exactly 1 hour"""
+        mock_time.return_value = 1000 + 3600
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1h0m0s"  # m and s shown when hours present
+
+    @mock.patch('time.time')
+    def test_state_duration_exactly_one_day(self, mock_time):
+        """Test duration of exactly 1 day"""
+        mock_time.return_value = 1000 + 86400
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1d0h0m0s"  # All parts shown when days present

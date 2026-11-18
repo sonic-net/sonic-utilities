@@ -2242,8 +2242,6 @@ show_queue_port_voq_counters_json = """\
 class TestQueue(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ['UTILITIES_UNIT_TESTING_IS_SUP'] = "0"
         print("SETUP")
 
@@ -2457,6 +2455,4 @@ class TestQueue(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")

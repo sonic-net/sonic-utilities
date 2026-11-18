@@ -29,7 +29,6 @@ def load_ssdutil_with_mocked_libs(monkeypatch):
     yield
 
 
-sys.modules['sonic_platform'] = MagicMock()
 sys.modules['sonic_platform_base.sonic_ssd.ssd_generic'] = MagicMock()
 
 

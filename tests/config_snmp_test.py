@@ -23,7 +23,7 @@ json_data_show_run_snmp_contact_expected = """\
 """
 
 config_snmp_contact_add_del_new_contact ="""\
-Contact name testuser and contact email testuser@contoso.com have been added to configuration
+Contact name testuser and contact info testuser@contoso.com have been added to configuration
 Restarting SNMP service...
 """ 
 
@@ -49,45 +49,45 @@ expected_snmp_user_priv_ro_md5_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD'
                                                        'SNMP_USER_ENCRYPTION_TYPE': 'AES',
                                                        'SNMP_USER_PERMISSION': 'RO',
                                                        'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_ro_sha_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                       'SNMP_USER_AUTH_TYPE': 'SHA', 
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'DES', 
-                                                       'SNMP_USER_PERMISSION': 'RO', 
+expected_snmp_user_priv_ro_sha_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
+                                                       'SNMP_USER_AUTH_TYPE': 'SHA',
+                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
+                                                       'SNMP_USER_ENCRYPTION_TYPE': 'DES',
+                                                       'SNMP_USER_PERMISSION': 'RO',
                                                        'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_ro_sha_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                       'SNMP_USER_AUTH_TYPE': 'SHA', 
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'AES', 
-                                                       'SNMP_USER_PERMISSION': 'RO', 
+expected_snmp_user_priv_ro_sha_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
+                                                       'SNMP_USER_AUTH_TYPE': 'SHA',
+                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
+                                                       'SNMP_USER_ENCRYPTION_TYPE': 'AES',
+                                                       'SNMP_USER_PERMISSION': 'RO',
                                                        'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_ro_hmac_sha_2_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                              'SNMP_USER_AUTH_TYPE': 'HMAC-SHA-2', 
-                                                              'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                              'SNMP_USER_ENCRYPTION_TYPE': 'DES', 
-                                                              'SNMP_USER_PERMISSION': 'RO', 
+expected_snmp_user_priv_ro_hmac_sha_2_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
+                                                              'SNMP_USER_AUTH_TYPE': 'HMAC-SHA-2',
+                                                              'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
+                                                              'SNMP_USER_ENCRYPTION_TYPE': 'DES',
+                                                              'SNMP_USER_PERMISSION': 'RO',
                                                               'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_ro_hmac_sha_2_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                              'SNMP_USER_AUTH_TYPE': 'HMAC-SHA-2', 
-                                                              'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                              'SNMP_USER_ENCRYPTION_TYPE': 'AES', 
-                                                              'SNMP_USER_PERMISSION': 'RO', 
+expected_snmp_user_priv_ro_hmac_sha_2_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
+                                                              'SNMP_USER_AUTH_TYPE': 'HMAC-SHA-2',
+                                                              'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
+                                                              'SNMP_USER_ENCRYPTION_TYPE': 'AES',
+                                                              'SNMP_USER_PERMISSION': 'RO',
                                                               'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_rw_md5_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                       'SNMP_USER_AUTH_TYPE': 'MD5', 
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'DES', 
-                                                       'SNMP_USER_PERMISSION': 'RW', 
+expected_snmp_user_priv_rw_md5_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
+                                                       'SNMP_USER_AUTH_TYPE': 'MD5',
+                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
+                                                       'SNMP_USER_ENCRYPTION_TYPE': 'DES',
+                                                       'SNMP_USER_PERMISSION': 'RW',
                                                        'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_rw_md5_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                       'SNMP_USER_AUTH_TYPE': 'MD5', 
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
-                                                       'SNMP_USER_ENCRYPTION_TYPE': 'AES', 
-                                                       'SNMP_USER_PERMISSION': 'RW', 
+expected_snmp_user_priv_rw_md5_aes_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
+                                                       'SNMP_USER_AUTH_TYPE': 'MD5',
+                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
+                                                       'SNMP_USER_ENCRYPTION_TYPE': 'AES',
+                                                       'SNMP_USER_PERMISSION': 'RW',
                                                        'SNMP_USER_TYPE': 'Priv'}
-expected_snmp_user_priv_rw_sha_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass', 
-                                                       'SNMP_USER_AUTH_TYPE': 'SHA', 
-                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass', 
+expected_snmp_user_priv_rw_sha_des_config_db_output = {'SNMP_USER_AUTH_PASSWORD': 'user_auth_pass',
+                                                       'SNMP_USER_AUTH_TYPE': 'SHA',
+                                                       'SNMP_USER_ENCRYPTION_PASSWORD': 'user_encrypt_pass',
                                                        'SNMP_USER_ENCRYPTION_TYPE': 'DES', 
                                                        'SNMP_USER_PERMISSION': 'RW', 
                                                        'SNMP_USER_TYPE': 'Priv'}
@@ -294,16 +294,6 @@ class TestSNMPConfigCommands(object):
             assert result.exit_code == 1
             assert 'Contact already exists.  Use sudo config snmp contact modify instead' in result.output
 
-    def test_config_snmp_contact_add_invalid_email(self):
-        db = Db()
-        runner = CliRunner()
-        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                              ["testuser", "testusercontoso.com"], obj=db)
-            print(result.exit_code)
-            assert result.exit_code == 2
-            assert "Contact email testusercontoso.com is not valid" in result.output
-
 
     # Delete snmp contact tests
     def test_config_snmp_contact_del_new_contact_when_contact_exists(self):
@@ -359,7 +349,7 @@ class TestSNMPConfigCommands(object):
                                                          ["testuser", "testuser@test.com"], obj=db)
             print(result.exit_code)
             assert result.exit_code == 0
-            assert 'SNMP contact testuser email updated to testuser@test.com' in result.output
+            assert 'SNMP contact testuser info updated to testuser@test.com' in result.output
             assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@test.com"}
 
     def test_config_snmp_contact_modify_contact_and_email_with_existing_entry(self):
@@ -380,42 +370,20 @@ class TestSNMPConfigCommands(object):
             assert result.exit_code == 1
             assert 'SNMP contact testuser testuser@contoso.com already exists' in result.output
 
-    def test_config_snmp_contact_modify_existing_contact_with_invalid_email(self):
+    def test_config_snmp_contact_modify_contact_new_name(self):
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
                                     ["testuser", "testuser@contoso.com"], obj=db)
+            assert result.exit_code == 0
+
+            modify_cmd = config.config.commands["snmp"].commands["contact"].commands["modify"]
+            result = runner.invoke(modify_cmd, ["newuser", "newuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
-            assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
-
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"],
-                                                     ["testuser", "testuser@contosocom"], obj=db)
-            print(result.exit_code)
-            assert result.exit_code == 2
-            assert 'Contact email testuser@contosocom is not valid' in result.output
-
-
-    def test_config_snmp_contact_modify_new_contact_with_invalid_email(self):
-        db = Db()
-        runner = CliRunner()
-        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
-            print(result.exit_code)
-            print(result.output)
-            assert result.exit_code == 0
-            assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
-
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"],
-                                                     ["blah", "blah@contoso@com"], obj=db)
-            print(result.exit_code)
-            assert result.exit_code == 2
-            assert 'Contact email blah@contoso@com is not valid' in result.output
+            assert "SNMP contact newuser and contact info newuser@contoso.com updated" in result.output
 
     # Add snmp location tests
     def test_config_snmp_location_add_exiting_location_with_same_location_already_existing(self):
@@ -645,8 +613,8 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_over_64_characters(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", 
-                 "superlongencryptionpasswordtotestbeingoverthesixtyfourcharacterlimit"])
+                               ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES",
+                                "superlongencryptionpasswordtotestbeingoverthesixtyfourcharacterlimit"])
         print(result.exit_code)
         assert result.exit_code == 13
         assert "FAILED: SNMP user password length should be not be greater than 64" in result.output
@@ -654,7 +622,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_excluded_special_characters(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                 ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", "testencrypt@pass"])
+                               ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", "testencrypt@pass"])
         print(result.exit_code)
         assert result.exit_code == 13
         assert "FAILED: SNMP user password should not have any of these special symbols" in result.output
@@ -662,7 +630,7 @@ class TestSNMPConfigCommands(object):
     def test_config_snmp_user_add_user_type_priv_invalid_encrypt_password_not_long_enough(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["user"].commands["add"],
-                              ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", "test1"])
+                               ["test_nopriv_RO_3", "priv", "ro", "md5", "testauthpass", "DES", "test1"])
         print(result.exit_code)
         assert result.exit_code == 13
         assert "FAILED: SNMP user password length should be at least 8 characters" in result.output
@@ -715,6 +683,7 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RO_7", "priv", "ro", "MD5", "user_auth_pass", "DES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RO_7 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_7") == expected_snmp_user_priv_ro_md5_des_config_db_output
 
@@ -726,6 +695,7 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RO_8", "priv", "ro", "MD5", "user_auth_pass", "AES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RO_8 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_8") == expected_snmp_user_priv_ro_md5_aes_config_db_output
 
@@ -783,6 +753,7 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RW_7", "priv", "rw", "MD5", "user_auth_pass", "DES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RW_7 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_7") == expected_snmp_user_priv_rw_md5_des_config_db_output
 
@@ -794,8 +765,25 @@ class TestSNMPConfigCommands(object):
                     ["test_priv_RW_8", "priv", "rw", "MD5", "user_auth_pass", "AES", "user_encrypt_pass"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 0
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
         assert 'SNMP user test_priv_RW_8 added to configuration' in result.output
         assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RW_8") == expected_snmp_user_priv_rw_md5_aes_config_db_output
+
+    def test_config_snmp_user_add_valid_user_priv_ro_lowercase_md5(self):
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(
+                config.config.commands["snmp"].commands["user"].commands["add"],
+                ["test_priv_RO_md5_lower", "priv", "ro", "md5", "user_auth_pass", "DES", "user_encrypt_pass"],
+                obj=db)
+        print(result.exit_code)
+        assert result.exit_code == 0
+        assert "Warning: MD5 authentication is a legacy choice with known cryptographic weaknesses" in result.output
+        assert 'SNMP user test_priv_RO_md5_lower added to configuration' in result.output
+        assert db.cfgdb.get_entry("SNMP_USER", "test_priv_RO_md5_lower") == \
+            expected_snmp_user_priv_ro_md5_des_config_db_output
+        mock_run_command.assert_called()
 
     def test_config_snmp_user_add_valid_user_priv_rw_sha_des(self):
         db = Db()
@@ -861,11 +849,6 @@ class TestSNMPConfigCommands(object):
         assert result.exit_code == 1
         assert 'SNMP user test_nopriv_RO_2 is not configured' in result.output
 
-    @pytest.mark.parametrize("invalid_email", ['test@contoso', 'test.contoso.com', 'testcontoso@com', 
-                                               '123_%contoso.com', 'mytest@contoso.comm'])
-    def test_is_valid_email(self, invalid_email):
-        output = config.is_valid_email(invalid_email)
-        assert output == False
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=ValueError))
@@ -908,5 +891,3 @@ class TestSNMPConfigCommands(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-

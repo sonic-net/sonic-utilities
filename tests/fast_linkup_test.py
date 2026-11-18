@@ -32,8 +32,6 @@ class TestFastLinkupCLI:
     @classmethod
     def teardown_class(cls):
         logger.info("Teardown class: %s", cls.__name__)
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        dbconnector.dedicated_dbs.clear()
 
     def test_config_global_not_supported(self):
         # STATE_DB indicates not supported

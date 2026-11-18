@@ -122,16 +122,10 @@ class TestSingleAsicSwitchStat(TestSwitchStat):
     @classmethod
     def setup_class(cls):
         logger.info("Setup class: {}".format(cls.__name__))
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        dbconnector.clean_up_config()
-        dbconnector.load_database_config()
-        remove_tmp_cnstat_file()
 
     @classmethod
     def teardown_class(cls):
         logger.info("Teardown class: {}".format(cls.__name__))
-        dbconnector.dedicated_dbs.clear()
         dbconnector.clean_up_config()
         remove_tmp_cnstat_file()
 
@@ -257,17 +251,15 @@ class TestMultiAsicSwitchStat(TestSwitchStat):
     @classmethod
     def setup_class(cls):
         logger.info("Setup class: {}".format(cls.__name__))
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         from .mock_tables import mock_multi_asic_3_asics
         importlib.reload(mock_multi_asic_3_asics)
         dbconnector.clean_up_config()
         dbconnector.load_namespace_config()
-        remove_tmp_cnstat_file()
 
     @classmethod
     def teardown_class(cls):
         logger.info("Teardown class: {}".format(cls.__name__))
-        dbconnector.dedicated_dbs.clear()
-        dbconnector.clean_up_config()
         remove_tmp_cnstat_file()
 
     @pytest.fixture(scope="class")

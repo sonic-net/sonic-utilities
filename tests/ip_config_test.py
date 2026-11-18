@@ -38,6 +38,7 @@ Error: VNET Vnet_2000 does not exist!
 
 class TestConfigIP(object):
     _old_run_bgp_command = None
+
     @classmethod
     def setup_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
@@ -588,6 +589,5 @@ class TestConfigIP(object):
     
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         bgp_util.run_bgp_command = cls._old_run_bgp_command
         print("TEARDOWN")

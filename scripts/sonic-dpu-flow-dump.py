@@ -6,13 +6,14 @@ This script triggers a flow dump session, waits for completion, and extracts/pri
 It automatically creates the configuration file in /etc/sonic/ha/flow_dump.json.
 
 Usage:
-    sonic-dpu-flow-dump.py [-f FLOW_STATE] [-t TIMEOUT] [-m MAX_FLOWS] [-v]
+    sonic-dpu-flow-dump.py [--no-flow-state] [-f] [-t TIMEOUT] [-m MAX_FLOWS] [-v]
 
 Options:
-    -f, --flow-state    Flow state (true/false), default: true
-    -t, --timeout       Timeout in seconds, default: 60
-    -m, --max-flows     Maximum number of flows to dump, default: 1000
-    -v, --verbose       Enable verbose output
+    --no-flow-state     Omit flow state from the dump (default: include flow state)
+    -f, --file-only     Print only the output file path (for automation, e.g. techsupport)
+    -t, --timeout       Wait timeout in seconds (default: 60)
+    -m, --max-flows     Maximum flows to dump (default: 1000)
+    -v, --verbose       Verbose logging
 """
 
 import json

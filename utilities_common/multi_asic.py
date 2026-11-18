@@ -9,6 +9,28 @@ from utilities_common import constants
 from utilities_common.general import load_db_config
 
 
+class LazyChoice(click.Choice):
+    """A click.Choice whose choices are computed lazily at validation time.
+
+    This avoids freezing namespace/display choices at module import time,
+    which matters when multi_asic state changes between test invocations
+    (e.g., pytest-xdist workers running both single-asic and multi-asic tests).
+    """
+
+    def __init__(self, choices_func, case_sensitive=True):
+        self._choices_func = choices_func
+        # Initialize with empty list; actual choices come from the property.
+        super().__init__([], case_sensitive=case_sensitive)
+
+    @property
+    def choices(self):
+        return self._choices_func()
+
+    @choices.setter
+    def choices(self, value):
+        pass  # Ignore sets from parent __init__
+
+
 class MultiAsic(object):
 
     def __init__(
@@ -102,7 +124,7 @@ _multi_asic_click_option_display = click.option('--display',
 _multi_asic_click_option_namespace = click.option('--namespace',
                                                   '-n', 'namespace',
                                                   default=None,
-                                                  type=click.Choice(multi_asic_ns_choices()),
+                                                  type=LazyChoice(multi_asic_ns_choices),
                                                   show_default=True,
                                                   help='Namespace name or all')
 _multi_asic_click_options = [
@@ -139,7 +161,7 @@ def multi_asic_click_option_namespace(func=None, required=False, default=None,
     actual_required = required and multi_asic.is_multi_asic()
 
     if type is None:
-        type = click.Choice(multi_asic_ns_choices())
+        type = LazyChoice(multi_asic_ns_choices)
 
     if help is None:
         help = 'Namespace name' if required else 'Namespace name or all'

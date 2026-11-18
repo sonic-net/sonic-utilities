@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from generic_config_updater.services_validator import (
+    command_wrapper,
     vlan_validator,
     rsyslog_validator,
     caclmgrd_validator,
@@ -9,6 +10,7 @@ from generic_config_updater.services_validator import (
     port_speed_change_validator,
 )
 from generic_config_updater.services_validator import ntp_validator
+from generic_config_updater.services_validator import gnmi_validator, telemetry_validator
 
 # Mimics subprocess.run call
 #
@@ -33,9 +35,9 @@ def mock_subprocess_run(cmd_args, capture_output=False, check=False, text=True):
     entry = subprocess_calls[subprocess_call_index]
     subprocess_call_index += 1
 
-    # Convert cmd_args list back to string for comparison
+    # Convert cmd_args list back to string for comparison.
     cmd_str = ' '.join(cmd_args)
-    assert cmd_str == entry["cmd"], msg
+    assert entry["cmd"] in cmd_str, msg
 
     # Get stdout and stderr from entry, default to empty strings
     stdout = entry.get("stdout", "")
@@ -287,11 +289,164 @@ test_vlanintf_failure_data = [
             "stderr": "Device \"Vlan9999\" does not exist.\n",
             "expected_result": False,
             "description": "Non-existent VLAN deletion fails with both stdout and stderr"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {}
+                }
+            },
+            "upd": {},
+            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "rc": 2,
+            "stderr": "RTNETLINK answers: No such file or directory\n",
+            "expected_result": True,
+            "description": "Stale-neighbor race: kernel RTNETLINK ENOENT is tolerated"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {}
+                }
+            },
+            "upd": {},
+            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "rc": 127,
+            "stderr": "sh: ip: No such file or directory\n",
+            "expected_result": False,
+            "description": "Generic ENOENT (missing binary) must not be tolerated"
         }
    ]
 
 
+test_gnmi_data = [
+        {"old": {}, "upd": {}, "cmd": ""},
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50053"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "default"}}},
+            "cmd": "systemctl restart gnmi"
+        },
+        {
+            "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
+            "cmd": ""
+        }
+    ]
+
+
+test_telemetry_data = [
+        {"old": {}, "upd": {}, "cmd": ""},
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50052"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "cmd": ""
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
+            "cmd": "systemctl restart telemetry"
+        },
+        {
+            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
+            "cmd": ""
+        }
+    ]
+
+
 class TestServiceValidator(unittest.TestCase):
+
+    @patch("generic_config_updater.services_validator.logger")
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_command_wrapper_logs_stable_command_format(self, mock_subprocess, mock_logger):
+        mock_subprocess.return_value = MockSubprocessResult(1)
+
+        result = command_wrapper(["systemctl", "restart", "dhcp_relay"])
+
+        self.assertEqual(result, 1)
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command failed: 'nsenter --target 1 --pid --mount --uts --ipc --net "
+            "systemctl restart dhcp_relay', returncode: 1",
+            False
+        )
+
+        mock_logger.reset_mock()
+        mock_subprocess.side_effect = OSError("execution error")
+
+        result = command_wrapper(["systemctl", "restart", "dhcp_relay"])
+
+        self.assertEqual(result, 1)
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command execution failed: 'nsenter --target 1 --pid --mount --uts --ipc --net "
+            "systemctl restart dhcp_relay', error: execution error",
+            False
+        )
+
+    @patch("generic_config_updater.services_validator.logger")
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_command_wrapper_handles_command_formatting_error(self, mock_subprocess, mock_logger):
+        with patch(
+            "generic_config_updater.services_validator.shlex.quote",
+            side_effect=TypeError("formatting error")
+        ):
+            result = command_wrapper(["echo", "value"])
+
+        self.assertEqual(result, 1)
+        mock_subprocess.assert_not_called()
+        mock_logger.log.assert_called_once_with(
+            mock_logger.LOG_PRIORITY_ERROR,
+            "Command execution failed: '['echo', 'value']', error: formatting error",
+            False
+        )
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_change_apply_subprocess_run(self, mock_subprocess):
@@ -416,6 +571,20 @@ class TestServiceValidator(unittest.TestCase):
             caclmgrd_validator(entry["old"], entry["upd"], None)
 
     @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_vlanintf_validator_ignores_invalid_keys(self, mock_subprocess):
+        old_config = {
+            "VLAN_INTERFACE": {
+                "VlanNameThatIsTooLong|192.168.0.1/24": {},
+                "Vlan1000|invalid": {},
+            }
+        }
+
+        result = vlanintf_validator(old_config, {}, None)
+
+        self.assertTrue(result)
+        mock_subprocess.assert_not_called()
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
     def test_vlanintf_validator_failure_vlan_not_found(self, mock_subprocess):
         """Test vlanintf_validator when trying to flush neighbors on non-existent VLAN"""
         global subprocess_calls, subprocess_call_index
@@ -440,3 +609,37 @@ class TestServiceValidator(unittest.TestCase):
 
             assert result == entry["expected_result"], \
                 f"{msg} - Expected {entry['expected_result']} but got {result}"
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_gnmi_validator(self, mock_subprocess):
+        """Test gnmi_validator restarts gnmi service on VRF change"""
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+
+        for entry in test_gnmi_data:
+            subprocess_calls = []
+            subprocess_call_index = 0
+
+            if entry["cmd"]:
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
+
+            result = gnmi_validator(entry["old"], entry["upd"], None)
+            assert result, "gnmi_validator failed: {}".format(str(entry))
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_telemetry_validator(self, mock_subprocess):
+        """Test telemetry_validator restarts telemetry service on VRF change"""
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+
+        for entry in test_telemetry_data:
+            subprocess_calls = []
+            subprocess_call_index = 0
+
+            if entry["cmd"]:
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
+
+            result = telemetry_validator(entry["old"], entry["upd"], None)
+            assert result, "telemetry_validator failed: {}".format(str(entry))

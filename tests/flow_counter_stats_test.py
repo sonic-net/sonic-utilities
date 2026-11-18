@@ -10,7 +10,12 @@ import clear.main as clear
 import config.main as config
 
 from .utils import get_result_and_return_code
-from flow_counter_util.route import FLOW_COUNTER_ROUTE_PATTERN_TABLE, FLOW_COUNTER_ROUTE_MAX_MATCH_FIELD
+from flow_counter_util.route import (
+    FLOW_COUNTER_ROUTE_PATTERN_TABLE,
+    FLOW_COUNTER_ROUTE_MAX_MATCH_FIELD,
+    get_route_flow_counter_capability,
+    FLOW_COUNTER_CAPABILITY_SUPPORT_FIELD,
+)
 from utilities_common.db import Db
 from utilities_common.general import load_module_from_source
 
@@ -278,8 +283,6 @@ class TestTrapStat:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         delete_cache()
 
     def test_show(self):
@@ -353,8 +356,6 @@ class TestTrapStatsMultiAsic:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         delete_cache()
 
@@ -362,9 +363,6 @@ class TestTrapStatsMultiAsic:
     def teardown_class(cls):
         print("TEARDOWN")
         delete_cache()
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         from .mock_tables import mock_single_asic
@@ -409,15 +407,11 @@ class TestConfigRoutePattern:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -673,16 +667,12 @@ class TestRouteStats:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         delete_cache(stat_type='route')
 
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -887,7 +877,6 @@ class TestRouteStatsMultiAsic:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         delete_cache(stat_type='route')
@@ -896,11 +885,6 @@ class TestRouteStatsMultiAsic:
     def teardown_class(cls):
         print("TEARDOWN")
         delete_cache(stat_type='route')
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
 
@@ -938,3 +922,39 @@ class TestRouteStatsMultiAsic:
         assert result.exit_code == 0
         assert expect_after_clear_route_stats_all_multi_asic == result.output
         print(result.output)
+
+
+class TestGetRouteFlowCounterCapability:
+    """Pin the two STATE_DB connector branches introduced for multi-ASIC support.
+
+    namespace=None / ''  → legacy SonicV2Connector(host='127.0.0.1')
+    namespace='asic0'    → SonicV2Connector(use_unix_socket_path=True, namespace='asic0')
+                           + SonicDBConfig.initializeGlobalConfig() when not yet initialised
+    """
+
+    @mock.patch('flow_counter_util.route.SonicV2Connector')
+    def test_no_namespace_uses_host_connector(self, mock_connector):
+        mock_db = mock.MagicMock()
+        mock_connector.return_value = mock_db
+        mock_db.get_all.return_value = {FLOW_COUNTER_CAPABILITY_SUPPORT_FIELD: 'true'}
+
+        for ns in (None, ''):
+            mock_connector.reset_mock()
+            get_route_flow_counter_capability(ns)
+            mock_connector.assert_called_once_with(host='127.0.0.1')
+            mock_db.connect.assert_called_with(mock_db.STATE_DB)
+
+    @mock.patch('flow_counter_util.route.SonicDBConfig')
+    @mock.patch('flow_counter_util.route.SonicV2Connector')
+    def test_namespace_uses_unix_socket_connector(self, mock_connector, mock_db_config):
+        mock_db_config.isGlobalInit.return_value = False
+        mock_db = mock.MagicMock()
+        mock_connector.return_value = mock_db
+        mock_db.get_all.return_value = {FLOW_COUNTER_CAPABILITY_SUPPORT_FIELD: 'true'}
+
+        get_route_flow_counter_capability('asic0')
+
+        mock_db_config.isGlobalInit.assert_called_once()
+        mock_db_config.initializeGlobalConfig.assert_called_once()
+        mock_connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
+        mock_db.connect.assert_called_with(mock_db.STATE_DB)

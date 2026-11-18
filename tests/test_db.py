@@ -6,9 +6,6 @@ from utilities_common.db import Db
 
 
 class TestUtilitiesDb(object):
-    @classmethod
-    def setup_class(cls):
-        dbconnector.load_database_config()
 
     @mock.patch('utilities_common.db.multi_asic_ns_choices', return_value=[])
     @mock.patch('utilities_common.db.SonicDBConfig')

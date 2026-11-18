@@ -24,15 +24,11 @@ class TestPasswHardening:
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
 
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        dbconnector.dedicated_dbs['CONFIG_DB'] = None
 
     def verify_passw_policies_output(self, db, runner, output, expected=EXP_GOOD_FLOW):
         result = runner.invoke(show.cli.commands["passw-hardening"].commands["policies"], [], obj=db)
@@ -219,4 +215,3 @@ class TestPasswHardening:
                 pass
             else:
                 raise e
-

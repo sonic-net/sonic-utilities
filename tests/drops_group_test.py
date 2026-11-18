@@ -134,7 +134,6 @@ class TestDropCounters(object):
     def setup_class(cls):
         print("SETUP")
         remove_tmp_dropstat_file()
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def test_show_capabilities(self):
@@ -210,7 +209,6 @@ class TestDropCounters(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
 
@@ -219,7 +217,6 @@ class TestDropCountersMasic(object):
     def setup_class(cls):
         print("SETUP")
         remove_tmp_dropstat_file()
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         import show.dropcounters
@@ -260,9 +257,6 @@ class TestDropCountersMasic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config
         from .mock_tables import dbconnector
         from .mock_tables import mock_single_asic

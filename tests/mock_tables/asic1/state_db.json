@@ -94,6 +94,7 @@
     "SWITCH_CAPABILITY|switch": {
         "MIRROR": "true",
         "MIRRORV6": "true",
+        "MIRROR_SESSION_LABEL_CAPABLE": "true",
         "ACL_ACTION|PACKET_ACTION": "FORWARD",
         "ECMP_HASH_CAPABLE": "true",
         "LAG_HASH_CAPABLE": "true",
@@ -266,6 +267,8 @@
     },
     "FABRIC_PORT_TABLE|PORT4" : {
         "STATUS": "up",
+        "CONFIG_ISOLATED": "1",
+        "ISOLATE_REASON": "config",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "75"
     },
@@ -282,6 +285,7 @@
         "fabric_capacity": "88632",
         "missing_capacity": "265896",
         "operating_links": "2",
+        "isolated_links": "1",
         "number_of_links": "8",
         "warning_threshold": "100"
     },

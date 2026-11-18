@@ -58,9 +58,6 @@ sys.path.insert(0, test_path)
 sys.path.insert(0, modules_path)
 
 class TestSkuCreate(object):
-    @classmethod
-    def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
 
     def are_file_contents_same(self,fname1,fname2):
         #Open the file for reading in text mode (default mode)
@@ -585,4 +582,3 @@ class TestSkuCreate(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])

@@ -2,6 +2,7 @@ import importlib
 import os
 import sys
 
+import pytest
 from click.testing import CliRunner
 from utilities_common.db import Db
 from jsonpatch import JsonPatchConflict
@@ -168,6 +169,31 @@ AAA accounting login disable (default)
 
 """
 
+show_tacacs_default_output = """\
+TACPLUS global auth_type pap (default)
+TACPLUS global timeout 5 (default)
+TACPLUS global passkey <EMPTY_STRING> (default)
+TACPLUS global traceid_authorization False (default)
+
+"""
+
+show_tacacs_traceid_enable_output = """\
+TACPLUS global auth_type pap (default)
+TACPLUS global timeout 5 (default)
+TACPLUS global passkey <EMPTY_STRING> (default)
+TACPLUS global traceid_authorization True
+
+"""
+
+show_tacacs_traceid_disable_output = """\
+TACPLUS global auth_type pap (default)
+TACPLUS global timeout 5 (default)
+TACPLUS global passkey <EMPTY_STRING> (default)
+TACPLUS global traceid_authorization False
+
+"""
+
+
 class TestAaa(object):
     @classmethod
     def setup_class(cls):
@@ -180,7 +206,6 @@ class TestAaa(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")
 
     def test_show_aaa_default(self):
@@ -483,6 +508,72 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
+    @pytest.mark.parametrize("reset_command", [
+        ["traceid-authorization", "default"],
+        ["default", "traceid-authorization"],
+    ])
+    def test_config_tacacs_traceid_authorization(self, get_cmd_module, reset_command):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_default_output
+
+        result = runner.invoke(config.config.commands["tacacs"],
+                               ["traceid-authorization", "enable"], obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_traceid_enable_output
+
+        result = runner.invoke(config.config.commands["tacacs"], reset_command, obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+        assert 'traceid_authorization' not in db.cfgdb.get_entry('TACPLUS', 'global')
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_default_output
+
+        result = runner.invoke(config.config.commands["tacacs"],
+                               ["traceid-authorization", "disable"], obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_traceid_disable_output
+
+        result = runner.invoke(config.config.commands["tacacs"], reset_command, obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+        assert 'traceid_authorization' not in db.cfgdb.get_entry('TACPLUS', 'global')
+
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_tacacs_default_output
+
+        result = runner.invoke(config.config.commands["tacacs"], reset_command, obj=db)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+        assert 'traceid_authorization' not in db.cfgdb.get_entry('TACPLUS', 'global')
+
+    @pytest.mark.parametrize("options", [[], ["invalid"]])
+    def test_config_tacacs_traceid_authorization_invalid(self, get_cmd_module, options):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+        original_entry = db.cfgdb.get_entry('TACPLUS', 'global')
+
+        result = runner.invoke(config.config.commands["tacacs"], ["traceid-authorization"] + options, obj=db)
+        assert result.exit_code != 0
+        assert "Error:" in result.output
+        assert db.cfgdb.get_entry('TACPLUS', 'global') == original_entry
+
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     def test_config_aaa_tacacs_delete_yang_validation(self):
@@ -507,3 +598,146 @@ class TestAaa(object):
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.10"], obj=obj)
         print(result.exit_code)
         assert result.exit_code != 0
+
+    # ------------------------------------------------------------------
+    # prompt_secret / --prompt / --prompt-key tests
+    # ------------------------------------------------------------------
+
+    def test_tacacs_passkey_prompt(self, get_cmd_module):
+        """--prompt reads secret interactively and stores it."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='hidden123') as mock_prompt:
+            result = runner.invoke(
+                config.config.commands['tacacs'].commands['passkey'],
+                ['--prompt', '--no-confirm'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            mock_prompt.assert_called_once_with('Enter passkey', False)
+
+        entry = db.cfgdb.get_entry('TACPLUS', 'global')
+        assert entry.get('passkey') == 'hidden123'
+
+    def test_tacacs_passkey_prompt_and_positional_conflict(self, get_cmd_module):
+        """Giving both <secret_string> and --prompt is an error."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='hidden123'):
+            result = runner.invoke(
+                config.config.commands['tacacs'].commands['passkey'],
+                ['mysecret', '--prompt'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            assert 'Cannot use both' in result.output
+
+    def test_tacacs_passkey_positional(self, get_cmd_module):
+        """Positional <secret_string> still works (backward compat)."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            config.config.commands['tacacs'].commands['passkey'],
+            ['mykey'], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+
+        entry = db.cfgdb.get_entry('TACPLUS', 'global')
+        assert entry.get('passkey') == 'mykey'
+
+    def test_tacacs_add_prompt_key(self, get_cmd_module):
+        """--prompt-key reads shared secret interactively for tacacs add."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='tackey') as mock_prompt:
+            result = runner.invoke(
+                config.config.commands['tacacs'].commands['add'],
+                ['10.10.10.10', '--prompt-key', '--no-confirm'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            mock_prompt.assert_called_once_with('Enter shared secret', False)
+
+        entry = db.cfgdb.get_entry('TACPLUS_SERVER', '10.10.10.10')
+        assert entry.get('passkey') == 'tackey'
+
+    def test_tacacs_add_prompt_key_and_key_conflict(self, get_cmd_module):
+        """Giving both --key and --prompt-key is an error for tacacs add."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='tackey'):
+            result = runner.invoke(
+                config.config.commands['tacacs'].commands['add'],
+                ['10.10.10.10', '-k', 'explicit', '--prompt-key'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            assert 'Cannot use both' in result.output
+
+    def test_radius_passkey_prompt(self, get_cmd_module):
+        """--prompt reads global passkey interactively for radius."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='radpass') as mock_prompt:
+            result = runner.invoke(
+                config.config.commands['radius'].commands['passkey'],
+                ['--prompt', '--no-confirm'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            mock_prompt.assert_called_once_with('Enter passkey', False)
+
+        entry = db.cfgdb.get_entry('RADIUS', 'global')
+        assert entry.get('passkey') == 'radpass'
+
+    def test_radius_passkey_prompt_and_positional_conflict(self, get_cmd_module):
+        """Giving both <secret_string> and --prompt is an error for radius passkey."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='radpass'):
+            result = runner.invoke(
+                config.config.commands['radius'].commands['passkey'],
+                ['mysecret', '--prompt'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            assert 'Cannot use both' in result.output
+
+    def test_radius_add_prompt_key(self, get_cmd_module):
+        """--prompt-key reads shared secret interactively for radius add."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='radkey') as mock_prompt:
+            result = runner.invoke(
+                config.config.commands['radius'].commands['add'],
+                ['10.10.10.10', '--prompt-key', '--no-confirm'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            mock_prompt.assert_called_once_with('Enter shared secret', False)
+
+        entry = db.cfgdb.get_entry('RADIUS_SERVER', '10.10.10.10')
+        assert entry.get('passkey') == 'radkey'
+
+    def test_radius_add_prompt_key_and_key_conflict(self, get_cmd_module):
+        """Giving both --key and --prompt-key is an error for radius add."""
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with patch('config.aaa.prompt_secret', return_value='radkey'):
+            result = runner.invoke(
+                config.config.commands['radius'].commands['add'],
+                ['10.10.10.10', '-k', 'explicit', '--prompt-key'], obj=db)
+            print(result.output)
+            assert result.exit_code == 0
+            assert 'Cannot use both' in result.output

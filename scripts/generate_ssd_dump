@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+#
+# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. ALL RIGHTS RESERVED.
+#
+# This software product is a proprietary product of Nvidia Corporation and its affiliates
+# (the "Company") and all right, title, and interest in and to the software
+# product, including all associated intellectual property rights, are and
+# shall remain exclusively with the Company.
+#
+# This software product is governed by the End User License Agreement
+# provided with the software product.
+#
+
+# Usage: ./nvme_checks.sh [<ns_dev> [<ctrl_dev>]]
+# Defaults: /dev/nvme0n1 (namespace), /dev/nvme0 (controller)
+# Override timeout/grace via env: TIMEOUT=10s KILL_DELAY=2s ./nvme_checks.sh
+
+NS_DEV=${1:-/dev/nvme0n1}
+CTRL_DEV=${2:-/dev/nvme0}
+TIMEOUT=${TIMEOUT:-5s}
+KILL_DELAY=${KILL_DELAY:-1s}
+
+run_nvme_cmd() {
+  subcmd=$1
+  dev=$2
+  echo -e "\n\nRunning nvme $subcmd $dev (timeout $TIMEOUT)\n\n"
+  if timeout -k "$KILL_DELAY" "$TIMEOUT" nvme "$subcmd" "$dev"; then
+    echo "nvme $subcmd succeeded for $dev."
+  else
+    rc=$?
+    if [[ $rc -eq 124 ]]; then
+      echo "nvme $subcmd timed out after $TIMEOUT and was terminated."
+    else
+      echo "nvme $subcmd failed for $dev (exit code $rc)."
+    fi
+  fi
+}
+
+echo -e "Running nvme list --output=json \n\n"
+nvme_list_output=$(timeout ${TIMEOUT} nvme list --output=json)
+echo ${nvme_list_output}
+
+# Namespace-level commands (require block device like /dev/nvme0n1)
+if [[ -b "$NS_DEV" ]]; then
+  for subcmd in smart-log error-log fw-log; do
+    run_nvme_cmd "$subcmd" "$NS_DEV"
+  done
+else
+  echo "Namespace device $NS_DEV not found (skipping smart-log/error-log/fw-log)."
+fi
+
+# Controller-level command (requires controller device like /dev/nvme0, usually a char device)
+if [[ -c "$CTRL_DEV" || -b "$CTRL_DEV" ]]; then
+  run_nvme_cmd "id-ctrl" "$CTRL_DEV"
+else
+  echo "Controller device $CTRL_DEV not found (skipping id-ctrl)."
+fi
+
+if ! printf '%s' "$nvme_list_output" | jq -e . >/dev/null 2>&1; then
+  echo "nvme list output is empty or invalid JSON"
+elif printf '%s' "$nvme_list_output" | jq -e '.Devices[] | select(.ModelNumber=="Virtium VTPM24CEXI080-BM110006")' >/dev/null; then
+  echo "Found NVMe with ModelNumber VTPM24CEXI080-BM110006"
+  echo -e "\n\nRunning /usr/local/bin/vtFA_RTK_5766_v2 ${CTRL_DEV}\n\n"
+  #Create tmp directory to run vtFA_RTK_5766_v2, then get the output from that directory
+  ssd_dump_generated_files=/tmp/ssd_dump_generated_files
+  rm -rf ${ssd_dump_generated_files}
+  mkdir -p ${ssd_dump_generated_files}
+  cd ${ssd_dump_generated_files}
+  # Try to run vtFA_RTK_5766_v2 with retry
+  RETRIES="2"
+  DELAY="2"
+  attempt=1
+  rc=1
+  while [ "$attempt" -le "$RETRIES" ]; do
+    echo "Attempt $attempt/$RETRIES: vtFA_RTK_5766_v2 $CTRL_DEV (timeout $TIMEOUT)"
+    if timeout -k "$KILL_DELAY" "$TIMEOUT" /usr/local/bin/vtFA_RTK_5766_v2 "$CTRL_DEV"; then
+      echo "vtFA_RTK_5766_v2 succeeded for $CTRL_DEV."
+      rc=0
+      break
+    else
+      rc=$?
+      if [ "$rc" -eq 124 ]; then
+        echo "vtFA_RTK_5766_v2 timed out after $TIMEOUT and was terminated."
+      else
+        echo "vtFA_RTK_5766_v2 failed (exit code $rc)."
+      fi
+      if [ "$attempt" -lt "$RETRIES" ]; then
+        echo "Retrying in $DELAY seconds..."
+        sleep "$DELAY"
+      fi
+    fi
+    attempt=$((attempt + 1))
+  done
+  if [ "$rc" -ne 0 ]; then
+    echo "Failed to run vtFA_RTK_5766_v2 after $RETRIES attempts."
+  fi
+  cd - >/dev/null
+  # generate_dump script will collect files from ${ssd_dump_generated_files} and then remove the folder
+else
+  echo "Skiping vtFA_RTK_5766_v2"
+fi
