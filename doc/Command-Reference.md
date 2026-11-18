@@ -17357,7 +17357,11 @@ These commands read or write raw EEPROM data of an OE, an ELS, or the OE/ELS map
 
 The `-i, --index` option requires an integer OE or ELS index, for example `-i 0`. Device names such as `oe0` and `els0` are not accepted.
 
-Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages accept offsets 0x80-0xFF. ELS access is limited to the ELS's own pages.
+Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages accept offsets 0x80-0xFF. Each operation must stay within the CMIS page boundary.
+
+OE and ELS raw EEPROM access is limited to the pages and memory ranges declared in their respective memory maps. Where both endpoints address the same hardware page, any range allowed by these checks can be accessed through either endpoint, including fields used by the other endpoint.
+
+`write-eeprom` prints `OK` when the platform's EEPROM write method returns a successful result. The command does not read the data back, so `OK` does not confirm that the device stored the new value. A write to a read-only address can report `OK` if the platform reports success even though the device ignores the write.
 
 - Usage:
   ```
