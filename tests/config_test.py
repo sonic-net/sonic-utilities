@@ -3905,6 +3905,20 @@ class TestConfigNtp(object):
         mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
+    def test_add_ntp_server_with_no_iburst(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["ntp"], ["add", "--no-iburst", "10.10.10.4"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("NTP_SERVER", "10.10.10.4") == {"iburst": "off"}
+        mock_run_command.assert_not_called()
+
+    @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_with_server_association(self, mock_run_command):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
