@@ -1285,25 +1285,6 @@ def aging_time(ctx):
             click.echo("Aging time not configured for the {}".format(key.split(':')[-1]))
 
 
-@mac.command('sync-mode')
-@clicommon.pass_db
-@click.pass_context
-def mac_sync_mode_mac(ctx, db):
-    """Show how MAC (FDB) state is synchronized with FRR"""
-    show_mac_sync_mode(ctx, db)
-
-
-#
-# 'fdb' group ("show fdb ...")
-#
-
-@cli.group(cls=clicommon.AliasedGroup)
-@multi_asic_util.multi_asic_click_option_namespace
-def fdb(namespace):
-    """Show FDB (MAC) configuration"""
-    pass
-
-
 def get_mac_sync_mode(config_db):
     # An L3EvpnMH device always synchronizes MACs over FPM, whatever FDB_SYNC says.
     metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
@@ -1320,7 +1301,11 @@ def get_running_mac_sync_mode(state_db):
     return state_db.get('STATE_DB', 'FDB_SYNC|global', 'mac_sync_mode') or 'unknown'
 
 
-def show_mac_sync_mode(ctx, db):
+@mac.command('sync-mode')
+@clicommon.pass_db
+@click.pass_context
+def mac_sync_mode(ctx, db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
     # Each ASIC has its own mode, in the CONFIG_DB of its namespace: the one selected, or all of them.
     try:
         ns_list = multi_asic_util.multi_asic_get_ns_list(multi_asic_util.get_namespace_from_ctx())
@@ -1340,14 +1325,6 @@ def show_mac_sync_mode(ctx, db):
         effective = 'fpm' if configured == 'fpm' else 'kernel'
         if running != 'unknown' and running != effective:
             click.echo("{}The configured mode takes effect when the bgp container restarts.".format(indent))
-
-
-@fdb.command('mac-sync-mode')
-@clicommon.pass_db
-@click.pass_context
-def mac_sync_mode(ctx, db):
-    """Show how MAC (FDB) state is synchronized with FRR"""
-    show_mac_sync_mode(ctx, db)
 
 
 #

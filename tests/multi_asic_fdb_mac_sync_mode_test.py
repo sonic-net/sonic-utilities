@@ -16,7 +16,6 @@ FDB_SYNC_KEY = 'global'
 MAC_SYNC_MODE_FIELD = 'mac_sync_mode'
 DEVICE_METADATA_TABLE = 'DEVICE_METADATA'
 DEVICE_METADATA_KEY = 'localhost'
-SHOW_COMMANDS = (("mac", "sync-mode"), ("fdb", "mac-sync-mode"))
 
 
 class TestMultiAsicFdbMacSyncMode:
@@ -89,27 +88,25 @@ class TestMultiAsicFdbMacSyncMode:
         db = Db()
         db.cfgdb_clients["asic0"].set_entry(FDB_SYNC_TABLE, FDB_SYNC_KEY, {MAC_SYNC_MODE_FIELD: "fpm"})
 
-        for group, command in SHOW_COMMANDS:
-            result = runner.invoke(show.main.cli.commands[group], ["-n", "asic0", command], obj=db)
-            assert result.exit_code == 0, result.output
-            assert result.output == "Configured: fpm\nRunning: unknown\n", f"show {group} -n asic0 {command}"
+        result = runner.invoke(show.main.cli.commands["mac"], ["-n", "asic0", "sync-mode"], obj=db)
+        assert result.exit_code == 0, result.output
+        assert result.output == "Configured: fpm\nRunning: unknown\n"
 
-            result = runner.invoke(show.main.cli.commands[group], ["-n", "asic1", command], obj=db)
-            assert result.exit_code == 0, result.output
-            assert result.output == "Configured: kernel\nRunning: unknown\n", f"show {group} -n asic1 {command}"
+        result = runner.invoke(show.main.cli.commands["mac"], ["-n", "asic1", "sync-mode"], obj=db)
+        assert result.exit_code == 0, result.output
+        assert result.output == "Configured: kernel\nRunning: unknown\n"
 
     def test_show_names_each_namespace_without_a_selection(self):
         runner = CliRunner()
         db = Db()
         db.cfgdb_clients["asic0"].set_entry(FDB_SYNC_TABLE, FDB_SYNC_KEY, {MAC_SYNC_MODE_FIELD: "fpm"})
 
-        for group, command in SHOW_COMMANDS:
-            result = runner.invoke(show.main.cli.commands[group], [command], obj=db)
-            assert result.exit_code == 0, result.output
-            assert result.output == (
-                "asic0:\n  Configured: fpm\n  Running: unknown\n"
-                "asic1:\n  Configured: kernel\n  Running: unknown\n"
-            ), f"show {group} {command}"
+        result = runner.invoke(show.main.cli.commands["mac"], ["sync-mode"], obj=db)
+        assert result.exit_code == 0, result.output
+        assert result.output == (
+            "asic0:\n  Configured: fpm\n  Running: unknown\n"
+            "asic1:\n  Configured: kernel\n  Running: unknown\n"
+        )
 
     def test_show_reads_the_running_mode_of_each_namespace(self):
         # asic0 was configured fpm after its bgp container started in kernel mode; asic1 runs fpm as configured.
@@ -120,14 +117,13 @@ class TestMultiAsicFdbMacSyncMode:
         db.db_clients["asic0"].set("STATE_DB", "FDB_SYNC|global", MAC_SYNC_MODE_FIELD, "kernel")
         db.db_clients["asic1"].set("STATE_DB", "FDB_SYNC|global", MAC_SYNC_MODE_FIELD, "fpm")
         try:
-            for group, command in SHOW_COMMANDS:
-                result = runner.invoke(show.main.cli.commands[group], [command], obj=db)
-                assert result.exit_code == 0, result.output
-                assert result.output == (
-                    "asic0:\n  Configured: fpm\n  Running: kernel\n"
-                    "  The configured mode takes effect when the bgp container restarts.\n"
-                    "asic1:\n  Configured: fpm\n  Running: fpm\n"
-                ), f"show {group} {command}"
+            result = runner.invoke(show.main.cli.commands["mac"], ["sync-mode"], obj=db)
+            assert result.exit_code == 0, result.output
+            assert result.output == (
+                "asic0:\n  Configured: fpm\n  Running: kernel\n"
+                "  The configured mode takes effect when the bgp container restarts.\n"
+                "asic1:\n  Configured: fpm\n  Running: fpm\n"
+            )
         finally:
             for ns in ("asic0", "asic1"):
                 db.db_clients[ns].delete("STATE_DB", "FDB_SYNC|global")
