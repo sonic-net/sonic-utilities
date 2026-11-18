@@ -2084,31 +2084,6 @@ collect_broadcom() {
 }
 
 ###############################################################################
-# Collect Barefoot specific information
-# Globals:
-#  None
-# Arguments:
-#  None
-# Returns:
-#  None
-###############################################################################
-collect_barefoot() {
-    local bf_logs="/tmp/bf_logs"
-    $( rm -rf ${bf_logs} )
-    $( mkdir  ${bf_logs} )
-    unset array
-    array=( $(docker exec -ti syncd ls -1 | grep bf_drivers.log) )
-    for y in "${array[@]}"; do
-        itstr=`echo ${y} | tr -d "\r\n"`
-        copy_from_masic_docker "syncd" "/${itstr}" "${bf_logs}"
-    done
-
-    for file in $(find /tmp/bf_logs -type f); do
-        save_file "${file}" log true
-    done
-} 
-
-###############################################################################
 # Collect Cisco-8000 specific information
 # Globals:
 #  None
@@ -3098,10 +3073,6 @@ main() {
 
     # SAI dump (vtysh route-size probe + syncd) self-skips on a Switch-BMC.
     save_saidump_by_route_size
-
-    if [ "$asic" = "barefoot" ]; then
-        collect_barefoot
-    fi
 
     if [[ "$asic" = "mellanox" ]]; then
         collect_mellanox
