@@ -14,6 +14,7 @@ SUPPORTED_PLATFORMS = (
     'x86_64-nvidia_sn6810_ld_simx-r0',
     'x86_64-nvidia_sn5640-r0',
     'x86_64-kvm_x86_64-r0',
+    'x86_64-arista_7060x6_64pe',
     'x86_64-arista_7060x6_64pe_b',
 )
 
