@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import copy
 import io
 import jsonpatch
 import sys
@@ -2873,6 +2874,62 @@ class RemoveCreateOnlyDependencyMoveGenerator(unittest.TestCase):
                            {'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports'},
                            {'op': 'remove', 'path': '/VLAN_MEMBER'}],
                           moves)
+
+    def test_generate__create_only_field_added__removes_dependents_and_parent(self):
+        current_config = self.__mirror_config()
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'add', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL/gre_type', 'value': '0x8949'}
+        ]).apply(current_config)
+
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+
+        # Same teardown a value change of an existing field gets. The last move is the fallback
+        # that removes the parent of the dependent, the DFS only reaches it when the others fail.
+        self.verify_moves([{'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1/MIRROR_INGRESS_ACTION'},
+                           {'op': 'remove', 'path': '/MIRROR_SESSION'},
+                           {'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1'}],
+                          moves)
+
+    def test_generate__create_only_field_added__only_changed_object_is_removed(self):
+        current_config = self.__mirror_config()
+        current_config['MIRROR_SESSION']['OTHER'] = dict(current_config['MIRROR_SESSION']['EVERFLOW_TUNNEL'])
+        current_config['ACL_RULE']['EVERFLOW|RULE_2'] = {'PRIORITY': '999', 'IP_TYPE': 'IP',
+                                                         'MIRROR_INGRESS_ACTION': 'OTHER'}
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'add', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL/gre_type', 'value': '0x8949'}
+        ]).apply(current_config)
+
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+
+        self.verify_moves([{'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1/MIRROR_INGRESS_ACTION'},
+                           {'op': 'remove', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL'},
+                           {'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1'}],
+                          moves)
+
+    def test_generate__create_only_field_added_with_its_parent__no_moves(self):
+        current_config = self.__mirror_config()
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'add', 'path': '/MIRROR_SESSION/NEW_SESSION',
+             'value': {'dscp': '8', 'dst_ip': '200.1.1.201', 'src_ip': '100.1.1.1', 'ttl': '255', 'type': 'ERSPAN'}}
+        ]).apply(current_config)
+
+        # The new session is created along with its fields, nothing has to be torn down
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+        self.verify_moves([], moves)
+
+    def test_generate__create_only_field_deleted__no_moves(self):
+        current_config = self.__mirror_config()
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'remove', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL/dscp'}
+        ]).apply(current_config)
+
+        # Deleting a create-only field is left to the rest of the sorter
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+        self.verify_moves([], moves)
+
+    def __mirror_config(self):
+        test_case = Files.PATCH_SORTER_TEST_SUCCESS['CREATE_ONLY_PATH_TEST_MIRROR_SESSION__SUCCESS']
+        return copy.deepcopy(test_case['current_config'])
 
     def verify_moves(self, ops, moves):
         moves_ops = []
