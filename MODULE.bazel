@@ -1,7 +1,27 @@
-module(name = "sonic-utilities", version = "1.2", bazel_compatibility = [">=8.5.1", "<=8.5.1"])
+module(
+    name = "sonic-utilities",
+    version = "1.2",
+    bazel_compatibility = [
+        ">=8.5.1",
+        "<=8.5.1",
+    ],
+)
+
 bazel_dep(name = "rules_python", version = "1.9.0.sonic.1")
+
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
-python.toolchain(python_version = "3.13", is_default = True)
+python.toolchain(
+    is_default = True,
+    python_version = "3.13",
+)
+
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
-pip.parse(hub_name = "utilities_test_pip", python_version = "3.13", requirements_lock = "//bazel:requirements_test_lock.txt")
+pip.parse(
+    hub_name = "utilities_test_pip",
+    python_version = "3.13",
+    requirements_lock = "//bazel:requirements_test_lock.txt",
+)
 use_repo(pip, "utilities_test_pip")
+
+# Published source installation API, including executable modes and script normalization.
+bazel_dep(name = "sonic-build-infra", version = "0.0.38-0baa4acc9eac9ccc793b81104b1580d530271cbe", repo_name = "sonic_build_infra")
