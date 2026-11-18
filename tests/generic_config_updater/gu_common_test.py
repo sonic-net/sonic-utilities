@@ -1226,3 +1226,28 @@ class TestPathAddressing(unittest.TestCase):
         check(config={"ANOTHER_TABLE": {}, "TABLE":{"key1":{"key11":{"key111":[1,2,3,4,5]}}}},
               path="/TABLE/key1/key11/key111/5",
               expected=False)
+
+    def test_configdb_sorted_keys_by_backlinks__counts_cached_per_schema_xpath(self):
+        config = {"PORT": {"Ethernet0": {}, "Ethernet4": {}, "Ethernet8": {}}}
+        expected = gu_common.PathAddressing(gu_common.ConfigWrapper()).configdb_sorted_keys_by_backlinks(
+            "/PORT", config)
+        sy = self.path_addressing._create_sonic_yang_with_loaded_models()
+
+        with mock.patch.object(sy, "find_schema_dependencies", wraps=sy.find_schema_dependencies) as lookup:
+            first = self.path_addressing.configdb_sorted_keys_by_backlinks("/PORT", config)
+            second = self.path_addressing.configdb_sorted_keys_by_backlinks("/PORT", config)
+
+        self.assertEqual(expected, first)
+        self.assertEqual(expected, second)
+        # Every PORT key maps to the same schema node, so libyang is asked once.
+        self.assertEqual(1, lookup.call_count)
+
+    def test_configdb_sorted_keys_by_backlinks__other_models__counts_recomputed(self):
+        config = {"PORT": {"Ethernet0": {}}}
+        self.path_addressing.configdb_sorted_keys_by_backlinks("/PORT", config)
+
+        with mock.patch.object(self.sy_only_models, "find_schema_dependencies",
+                               wraps=self.sy_only_models.find_schema_dependencies) as lookup:
+            self.path_addressing.configdb_sorted_keys_by_backlinks("/PORT", config, sy=self.sy_only_models)
+
+        self.assertEqual(1, lookup.call_count)

@@ -394,46 +394,32 @@
                             "ports": [
                                 "Ethernet0"
                             ]
+                        },
+                        "DATAACL": {
+                            "policy_desc": "DATAACL",
+                            "ports": [
+                                "Ethernet4"
+                            ],
+                            "stage": "ingress",
+                            "type": "L3"
+                        },
+                        "EVERFLOW": {
+                            "policy_desc": "EVERFLOW",
+                            "ports": [
+                                "Ethernet8"
+                            ],
+                            "stage": "ingress",
+                            "type": "MIRROR"
+                        },
+                        "EVERFLOWV6": {
+                            "policy_desc": "EVERFLOWV6",
+                            "ports": [
+                                "Ethernet4",
+                                "Ethernet8"
+                            ],
+                            "stage": "ingress",
+                            "type": "MIRRORV6"
                         }
-                    }
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/ACL_TABLE/DATAACL",
-                    "value": {
-                        "policy_desc": "DATAACL",
-                        "ports": [
-                            "Ethernet4"
-                        ],
-                        "stage": "ingress",
-                        "type": "L3"
-                    }
-                },
-                {
-                    "op": "add",
-                    "path": "/ACL_TABLE/EVERFLOW",
-                    "value": {
-                        "policy_desc": "EVERFLOW",
-                        "ports": [
-                            "Ethernet8"
-                        ],
-                        "stage": "ingress",
-                        "type": "MIRROR"
-                    }
-                },
-                {
-                    "op": "add",
-                    "path": "/ACL_TABLE/EVERFLOWV6",
-                    "value": {
-                        "policy_desc": "EVERFLOWV6",
-                        "ports": [
-                            "Ethernet4",
-                            "Ethernet8"
-                        ],
-                        "stage": "ingress",
-                        "type": "MIRRORV6"
                     }
                 }
             ]
@@ -769,39 +755,25 @@
                             "lanes": "65",
                             "description": "",
                             "speed": "10000"
+                        },
+                        "Ethernet3": {
+                            "alias": "Eth1/4",
+                            "lanes": "68",
+                            "description": "",
+                            "speed": "10000"
+                        },
+                        "Ethernet2": {
+                            "alias": "Eth1/3",
+                            "lanes": "67",
+                            "description": "",
+                            "speed": "10000"
+                        },
+                        "Ethernet1": {
+                            "alias": "Eth1/2",
+                            "lanes": "66",
+                            "description": "",
+                            "speed": "10000"
                         }
-                    }
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/PORT/Ethernet3",
-                    "value": {
-                        "alias": "Eth1/4",
-                        "lanes": "68",
-                        "description": "",
-                        "speed": "10000"
-                    }
-                },
-                {
-                    "op": "add",
-                    "path": "/PORT/Ethernet2",
-                    "value": {
-                        "alias": "Eth1/3",
-                        "lanes": "67",
-                        "description": "",
-                        "speed": "10000"
-                    }
-                },
-                {
-                    "op": "add",
-                    "path": "/PORT/Ethernet1",
-                    "value": {
-                        "alias": "Eth1/2",
-                        "lanes": "66",
-                        "description": "",
-                        "speed": "10000"
                     }
                 }
             ],
@@ -812,30 +784,16 @@
                     "value": {
                         "Vlan100|Ethernet0": {
                             "tagging_mode": "untagged"
+                        },
+                        "Vlan100|Ethernet1": {
+                            "tagging_mode": "untagged"
+                        },
+                        "Vlan100|Ethernet3": {
+                            "tagging_mode": "untagged"
+                        },
+                        "Vlan100|Ethernet2": {
+                            "tagging_mode": "untagged"
                         }
-                    }
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/VLAN_MEMBER/Vlan100|Ethernet1",
-                    "value": {
-                        "tagging_mode": "untagged"
-                    }
-                },
-                {
-                    "op": "add",
-                    "path": "/VLAN_MEMBER/Vlan100|Ethernet3",
-                    "value": {
-                        "tagging_mode": "untagged"
-                    }
-                },
-                {
-                    "op": "add",
-                    "path": "/VLAN_MEMBER/Vlan100|Ethernet2",
-                    "value": {
-                        "tagging_mode": "untagged"
                     }
                 }
             ],

@@ -683,6 +683,37 @@ class RequiredValueIdentifier:
 
         return sorted_data
 
+    def get_required_values_of_added_parents(self, current_config, target_config):
+        """
+        The required values that parents the patch creates must start with, as
+        {parent path: {field name: required value}}. A parent is listed if it is missing from the current
+        config, the target gives its required field another value, and a path requiring that value still
+        differs between the two configs. E.g. PORT/Ethernet4 that the target adds admin up together with
+        its QUEUE entries: the port has to be created admin down for those entries to be accepted.
+        """
+        data = self.get_required_value_data([current_config, target_config])
+        added_parents = OrderedDict()
+        for path in data:
+            if not self.path_addressing.is_config_different(path, current_config, target_config):
+                continue
+            for required_path, required_value in data[path]:
+                tokens = self.path_addressing.get_path_tokens(required_path)
+                parent_path = self.path_addressing.create_path(tokens[:-1])
+                if self.path_addressing.get_from_path(current_config, parent_path) is not None:
+                    continue
+                if not self.is_required_value_unmet(target_config, required_path, required_value):
+                    continue
+                added_parents.setdefault(parent_path, {})[tokens[-1]] = required_value
+        return added_parents
+
+    def is_required_value_unmet(self, config, required_path, required_value):
+        """
+        True if the config holds a value at the required path, explicitly or by default, and it is not the
+        required value. A required path the config has no value for (e.g. a port it does not have) is not unmet.
+        """
+        actual_value = self.get_value_or_default(config, required_path)
+        return actual_value is not None and actual_value != required_value
+
     def get_value_or_default(self, config, path):
         value = self.path_addressing.get_from_path(config, path)
         if value is not None:
@@ -885,31 +916,45 @@ class CreateOnlyMoveValidator:
         self.path_addressing = path_addressing
 
         # TODO: create-only fields are hard-coded for now, it should be moved to YANG models
-        self.create_only_filter = CreateOnlyFilter(path_addressing).get_filter()
+        self.create_only = CreateOnlyFilter(path_addressing)
+        self.create_only_filter = self.create_only.get_filter()
 
     def validate(self, group: JsonMoveGroup, diff, simulated_config) -> Tuple[bool, Optional[str]]:
         # NOTE: group not used by this validator
 
+        # Every check below compares an entry in the current config against the same entry in the
+        # simulated config, so an entry the move leaves untouched passes all of them. Check only the
+        # entries that differ, instead of every create-only field in three whole configs.
+        rows = self._changed_rows(diff.current_config, simulated_config)
+        if rows is None:
+            current_config, target_config = diff.current_config, diff.target_config
+        elif not rows:
+            return True, None
+        else:
+            current_config = self._select_rows(diff.current_config, rows)
+            simulated_config = self._select_rows(simulated_config, rows)
+            target_config = self._select_rows(diff.target_config, rows)
+
         # get create-only paths from current config, simulated config and also target config
         # simulated config is the result of the move
         # target config is the final config
-        paths = set(list(self._get_create_only_paths(diff.current_config)) +
+        paths = set(list(self._get_create_only_paths(current_config)) +
                     list(self._get_create_only_paths(simulated_config)) +
-                    list(self._get_create_only_paths(diff.target_config)))
+                    list(self._get_create_only_paths(target_config)))
 
         for path in paths:
             tokens = self.path_addressing.get_path_tokens(path)
-            if self._value_exist_but_different(tokens, diff.current_config, simulated_config):
+            if self._value_exist_but_different(tokens, current_config, simulated_config):
                 return False, None
-            if self._value_added_but_parent_exist(tokens, diff.current_config, simulated_config):
+            if self._value_added_but_parent_exist(tokens, current_config, simulated_config):
                 return False, None
-            if self._value_removed_but_parent_remain(tokens, diff.current_config, simulated_config):
+            if self._value_removed_but_parent_remain(tokens, current_config, simulated_config):
                 return False, None
 
             # if parent of create-only field is added, create-only field should be the same as target
             # i.e. if field is deleted in target, it should be deleted in the move, or
             #      if field is present in target, it should be present in the move
-            if self._parent_added_child_not_as_target(tokens, diff.current_config, simulated_config, diff.target_config):
+            if self._parent_added_child_not_as_target(tokens, current_config, simulated_config, target_config):
                 return False, None
 
         return True, None
@@ -927,6 +972,32 @@ class CreateOnlyMoveValidator:
         else:
             # if child is not in target, check if child is in simulated
             return self.path_addressing.has_path(simulated_config, child_path)
+
+    def _changed_rows(self, current_config, simulated_config):
+        """
+        {table: {keys}} of the entries that differ between the two configs, in the tables that hold
+        create-only fields. None if a pattern does not name its table literally, so every table must be
+        checked.
+        """
+        tables = {pattern[0] for pattern in self.create_only.patterns}
+        if any("*" in table or "@" in table for table in tables):
+            return None
+        rows = {}
+        for table in tables:
+            current_table = current_config.get(table, {})
+            simulated_table = simulated_config.get(table, {})
+            if current_table == simulated_table:
+                continue
+            keys = {key for key in current_table.keys() | simulated_table.keys()
+                    if current_table.get(key) != simulated_table.get(key)}
+            if keys:
+                rows[table] = keys
+        return rows
+
+    @staticmethod
+    def _select_rows(config, rows):
+        return {table: {key: config[table][key] for key in keys if key in config[table]}
+                for table, keys in rows.items() if table in config}
 
     def _get_create_only_paths(self, config):
         for path in self.create_only_filter.get_paths(config):
@@ -1226,10 +1297,7 @@ class RequiredValueMoveValidator:
         for path in data:
             if self.path_addressing.is_config_different(path, current_config, simulated_config):
                 for required_path, required_value in data[path]:
-                    actual_value = self.identifier.get_value_or_default(current_config, required_path)
-                    if actual_value is None: # current config does not have this value at all
-                        continue
-                    if actual_value != required_value:
+                    if self.identifier.is_required_value_unmet(current_config, required_path, required_value):
                         return False, None
 
         # If some changes to the requiring paths are still to take place and the move has changes
@@ -1381,9 +1449,17 @@ class BulkLeafListMoveGenerator:
 class BulkKeyLevelMoveGenerator:
     """
     Same concept as KeyLevelMoveGenerator, but groups additions and removals of sibling keys.
+
+    A key that other changes of the patch need at a required value is added with that value, see
+    RequiredValueIdentifier. E.g. ports the patch creates admin up together with their QUEUE entries are
+    added admin down, all in this one group; adding them as the target has them is refused by
+    RequiredValueMoveValidator, and RequiredValueMoveExtender then adds them admin down one port per step.
+    The admin up afterwards is grouped by BulkKeyGroupLowLevelMoveGenerator.
     """
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
+        self.identifier = RequiredValueIdentifier(path_addressing)
+        self.required_tables = {setting["required_pattern"][0] for setting in self.identifier.settings}
 
     def generate(self, diff):
         prev_num_separators = -1
@@ -1423,36 +1499,104 @@ class BulkKeyLevelMoveGenerator:
         prev_table = ""
 
         # Adding keys in target but not current
+        required_values = None
         for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config, reverse=True):
             table = tokens[0]
             key = tokens[1]
 
-            # We do not support adding the whole table, only grouping key entry creation.
-            if table not in diff.current_config:
-                continue
+            if required_values is None and table in self.required_tables:
+                required_values = self.identifier.get_required_values_of_added_parents(
+                    diff.current_config, diff.target_config)
 
             # If the number of separators changed, do not group these operations with the previous ones.
             num_separators = key.count("|")
             if group is not None and (prev_num_separators != num_separators or table != prev_table):
-                yield group
+                yield self._add_group(diff, prev_table, group, required_values)
                 group = None
 
             prev_table = table
             prev_num_separators = num_separators
             if group is None:
-                group = JsonMoveGroup(self.__class__.__name__)
+                group = []
 
-            group.append(JsonMove(diff, OperationType.ADD, tokens, tokens))
+            group.append(key)
 
         # Pending group, emit
         if group is not None:
-            yield group
+            yield self._add_group(diff, prev_table, group, required_values)
+
+    def _add_group(self, diff, table, keys, required_values):
+        values = {}
+        for key in keys:
+            values[key] = copy.deepcopy(diff.target_config[table][key])
+            if required_values:
+                values[key].update(required_values.get(self.path_addressing.create_path([table, key]), {}))
+
+        group = JsonMoveGroup(self.__class__.__name__)
+        if table in diff.current_config:
+            for key in keys:
+                group.append(JsonMove.from_operation(
+                    {"op": "add", "path": self.path_addressing.create_path([table, key]), "value": values[key]}))
+        else:
+            # A table missing from the current config is created by a single add of the table holding the
+            # group's keys. Adding its keys one by one would need the table to exist first.
+            group.append(JsonMove.from_operation(
+                {"op": "add", "path": self.path_addressing.create_path([table]), "value": values}))
+        return group
 
     def _get_non_existing_keys_tokens(self, config1, config2, reverse):
         for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
             for key in self.path_addressing.configdb_sorted_keys_by_backlinks("/" + table, config1, reverse=reverse):
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
+
+
+class BulkRequiredValueMoveGenerator:
+    """
+    Sets every required value the patch needs, in one move group, before the changes that need it.
+
+    Check RequiredValueIdentifier class description first. A change to a requiring path (e.g. a QUEUE or
+    PORT_QOS_MAP binding of a port) is refused by RequiredValueMoveValidator until its required path holds the
+    required value (e.g. PORT/<port>/admin_status is "down"). Without this generator the required value is only
+    reached by RequiredValueMoveExtender, after each requiring move has been generated and refused, and one
+    port per step.
+
+    This generator looks at the whole patch instead: for every requiring path the patch adds, it collects the
+    required paths that do not hold the required value yet, and offers them as one group, e.g. one change that
+    takes every affected port admin down. The same requiring paths and required values as the validator and the
+    extender are used, so it only ever offers a value the validator would demand anyway. Restoring the value
+    afterwards (the admin up) is already grouped by BulkKeyGroupLowLevelMoveGenerator.
+
+    Only bindings being added are covered, which is what restoring a configuration onto a fresh box consists
+    of. Replacing or removing bindings that exist is left to the extender, so a live box keeps taking those
+    ports down one at a time rather than all at once.
+    """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+        self.identifier = RequiredValueIdentifier(path_addressing)
+
+    def generate(self, diff):
+        current_config = diff.current_config
+        target_config = diff.target_config
+        data = self.identifier.get_required_value_data([current_config, target_config])
+
+        required = OrderedDict()
+        for path in data:
+            if self.path_addressing.get_from_path(current_config, path) is not None:
+                continue
+            if self.path_addressing.get_from_path(target_config, path) is None:
+                continue
+            for required_path, required_value in data[path]:
+                if self.identifier.is_required_value_unmet(current_config, required_path, required_value):
+                    required[required_path] = required_value
+
+        if not required:
+            return
+
+        group = JsonMoveGroup(self.__class__.__name__)
+        for required_path, required_value in required.items():
+            group.append(JsonMove.from_operation({"op": "replace", "path": required_path, "value": required_value}))
+        yield group
 
 
 class BulkKeyGroupLowLevelMoveGenerator:
@@ -2037,10 +2181,7 @@ class RequiredValueMoveExtender:
         for path in data:
             if self.path_addressing.is_config_different(path, current_config, simulated_config):
                 for required_path, required_value in data[path]:
-                    actual_value = self.identifier.get_value_or_default(current_config, required_path)
-                    if actual_value is None: # current config does not have this value at all
-                        continue
-                    if actual_value != required_value:
+                    if self.identifier.is_required_value_unmet(current_config, required_path, required_value):
                         extended_move = JsonMove.from_operation({"op":"replace", "path":required_path, "value":required_value})
                         if extended_move not in processed_moves:
                             processed_moves.add(extended_move)
@@ -2365,6 +2506,7 @@ class SortAlgorithmFactory:
         move_generators = [LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
         move_non_extendable_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
+                                          BulkRequiredValueMoveGenerator(self.path_addressing),
                                           BulkLeafListMoveGenerator(self.path_addressing),
                                           BulkKeyLevelMoveGenerator(self.path_addressing),
                                           KeyLevelMoveGenerator(self.path_addressing),
