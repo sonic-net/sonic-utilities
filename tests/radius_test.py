@@ -3,6 +3,7 @@ import os
 import sys
 import mock
 import jsonpatch
+import pytest
 
 from click.testing import CliRunner
 from utilities_common.db import Db
@@ -89,6 +90,9 @@ config_radius_invalidipaddress_output="""\
 Invalid ip address
 """
 
+config_radius_src_intf_output = ("Interface does not exist or is not supported (valid: "
+                                 "Ethernet<id>/PortChannel<id>/Vlan<id>/Loopback<id>/eth0)")
+
 class TestRadius(object):
     @classmethod
     def setup_class(cls):
@@ -154,6 +158,86 @@ class TestRadius(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_radius_server_invalidkey_output
+
+    def test_config_radius_server_unsupported_source_interface(self):
+        # Must reject and must not create a partial entry
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["radius"],
+                               ["add", "192.0.2.11", "-s", "Invalid0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert config_radius_src_intf_output in result.output
+        assert db.cfgdb.get_entry('RADIUS_SERVER', '192.0.2.11') == {}
+
+    def test_config_radius_server_malformed_source_interface(self):
+        # Prefix match alone must not be accepted
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["radius"],
+                               ["add", "192.0.2.21", "-s", "Ethernetbogus"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert config_radius_src_intf_output in result.output
+        assert db.cfgdb.get_entry('RADIUS_SERVER', '192.0.2.21') == {}
+
+    def test_config_radius_server_existing_source_interface(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["radius"],
+                               ["add", "192.0.2.31", "-s", "Ethernet0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('RADIUS_SERVER', '192.0.2.31').get('src_intf') == 'Ethernet0'
+
+    def test_config_radius_server_loopback_source_interface(self):
+        # Only the IP-prefix key is seeded so the match must come from the tuple key
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry('LOOPBACK_INTERFACE', ('Loopback0', '10.1.0.32/32'), {})
+        result = runner.invoke(config.config.commands["radius"],
+                               ["add", "192.0.2.61", "-s", "Loopback0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('RADIUS_SERVER', '192.0.2.61').get('src_intf') == 'Loopback0'
+
+    def test_config_radius_server_portchannel_source_interface(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["radius"],
+                               ["add", "192.0.2.71", "-s", "PortChannel0001"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('RADIUS_SERVER', '192.0.2.71').get('src_intf') == 'PortChannel0001'
+
+    def test_config_radius_server_vlan_source_interface_not_in_db(self):
+        # YANG only checks the Vlan name pattern, so the VLAN need not exist
+        runner = CliRunner()
+        db = Db()
+        assert 'Vlan3999' not in db.cfgdb.get_table('VLAN')
+        result = runner.invoke(config.config.commands["radius"],
+                               ["add", "192.0.2.41", "-s", "Vlan3999"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('RADIUS_SERVER', '192.0.2.41').get('src_intf') == 'Vlan3999'
+
+    @pytest.mark.parametrize("vlan", ["Vlan4095", "Vlan10000", "Vlanabc"])
+    def test_config_radius_server_invalid_vlan_source_interface(self, vlan):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["radius"],
+                               ["add", "192.0.2.51", "-s", vlan], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert config_radius_src_intf_output in result.output
+        assert db.cfgdb.get_entry('RADIUS_SERVER', '192.0.2.51') == {}
 
     def test_config_radius_nasip_invalid(self):
         runner = CliRunner()
@@ -379,3 +463,4 @@ class TestRadius(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == show_radius_default_output
+
