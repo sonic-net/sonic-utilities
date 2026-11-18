@@ -1,304 +1,462 @@
-"""IS-IS northbound contract, including gs1571 AF/MT/reset regression coverage."""
+"""IS-IS northbound contract: mutations, validation, and FRR query syntax."""
 import copy
-import os
-from unittest import mock
+import json
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
-import config.main as config
-import show.main as show
-from utilities_common.db import Db
-from sonic_isis import SNAPSHOT_TABLES, capture, commit
 
-NET = '49.0001.0000.0000.0001.00'
+import config.isis as config_isis
+import show.isis as show_isis
+from utilities_common.db import Db
+
+
+class ConfigDB:
+    """In-memory rows with ConfigDB's tuple-key and replacement semantics."""
+    def __init__(self, **kwargs):
+        self.tables = {
+            'PORT': {'Ethernet0': {'alias': 'etp1'}, 'Ethernet4': {'alias': 'etp2'}},
+            'INTERFACE': {'Ethernet0': {}, 'Ethernet4': {'vrf_name': 'VrfBlue'}},
+            'VRF': {'VrfBlue': {'NULL': 'NULL'}},
+            'DEVICE_METADATA': {'localhost': {'frr_mgmt_framework_config': 'true'}},
+            'ROUTE_MAP_SET': {'FILTER': {'NULL': 'NULL'}},
+        }
+
+    def connect(self):
+        pass
+
+    def get_table(self, table):
+        return copy.deepcopy(self.tables.get(table, {}))
+
+    def get_entry(self, table, key):
+        return self.get_table(table).get(key, {})
+
+    def set_entry(self, table, key, row):
+        rows = self.tables.setdefault(table, {})
+        if row is None:
+            rows.pop(key, None)
+        else:
+            rows[key] = copy.deepcopy(row)
 
 
 @pytest.fixture
-def isis_db(monkeypatch):
+def cli():
     db = Db()
-    original = {table: copy.deepcopy(db.cfgdb.get_table(table)) for table in SNAPSHOT_TABLES}
-    for table in SNAPSHOT_TABLES:
-        for key in db.cfgdb.get_table(table):
-            db.cfgdb.set_entry(table, key, None)
-    db.cfgdb.set_entry('PORT', 'Ethernet0', {'alias': 'etp1'})
-    db.cfgdb.set_entry('INTERFACE', 'Ethernet0', {'NULL': 'NULL'})
-    db.cfgdb.set_entry('ISIS_INSTANCE', ('default', 'CORE'), {'enabled': 'false', 'net_titles': [NET]})
-    # Standard sonic-utilities fixtures use mockredis, which does not implement
-    # Lua. Local native-Redis mode executes the production capture/CAS scripts.
-    if not os.environ.get('ISIS_TEST_REDIS'):
-        def snapshot(connector):
-            return {table: connector.get_table(table) for table in SNAPSHOT_TABLES}
+    db.cfgdb = ConfigDB()
+    runner = CliRunner()
 
-        def fake_commit(connector, before, updates):
-            if snapshot(connector) != before:
-                raise ValueError('configuration changed; retry')
-            for table, key, row in updates:
-                connector.set_entry(table, key, row)
-        monkeypatch.setattr('config.isis.capture', snapshot)
-        monkeypatch.setattr('config.isis.commit', fake_commit)
-    yield db
-    for table in SNAPSHOT_TABLES:
-        for key in db.cfgdb.get_table(table):
-            db.cfgdb.set_entry(table, key, None)
-        for key, row in original[table].items():
-            db.cfgdb.set_entry(table, key, row)
+    def invoke(args, interface=False, ok=True):
+        group = config_isis.INTERFACE_ISIS if interface else config_isis.ISIS
+        obj = {'config_db': db.cfgdb, 'namespace': None} if interface else db
+        with patch('utilities_common.cli.get_interface_naming_mode', return_value='default'):
+            result = runner.invoke(group, args, obj=obj)
+        if ok:
+            assert result.exit_code == 0, result.output + repr(result.exception)
+        else:
+            assert result.exit_code != 0, result.output
+        return result
+
+    return db.cfgdb, invoke
 
 
-def invoke(db, *args, interface=False):
-    group = config.config.commands['interface'].commands['isis'] if interface else config.config.commands['isis']
-    obj = {'config_db': db.cfgdb, 'namespace': ''} if interface else db
-    return CliRunner().invoke(group, list(args), obj=obj)
+def test_instance_empty_row_and_reset(cli):
+    db, invoke = cli
+    invoke(['add', 'CORE'])
+    key = ('default', 'CORE')
+    assert db.get_entry('ISIS_GLOBALS', key) == {'NULL': 'NULL'}
+    invoke(['lsp-mtu', 'CORE', '1497'])
+    assert db.get_entry('ISIS_GLOBALS', key) == {'lsp_mtu': '1497'}
+    invoke(['add', 'CORE'])
+    assert db.get_entry('ISIS_GLOBALS', key) == {'lsp_mtu': '1497'}
+    invoke(['reset', 'CORE', 'lsp-mtu'])
+    assert db.get_entry('ISIS_GLOBALS', key) == {'NULL': 'NULL'}
+    invoke(['enable', 'CORE'], ok=False)
+    invoke(['timer', 'lsp-mtu', 'CORE', '1400'], ok=False)
+    invoke(['add', '-bad'], ok=False)
+    invoke(['add', 'X' * 65], ok=False)
+    invoke(['add', 'CORE', '--vrf', 'missing'], ok=False)
 
 
-def ok(db, *args, **kwargs):
-    result = invoke(db, *args, **kwargs)
-    assert result.exit_code == 0, result.output or str(result.exception)
-    return result
+def test_net_mutations_preserve_shared_peer_configuration(cli):
+    db, invoke = cli
+    first = '49.abcd.0000.0000.0001.00'
+    second = '49.0002.0000.0000.0001.00'
+    different = '49.0001.0000.0000.0002.00'
+    for name in ('A', 'B'):
+        invoke(['add', name])
+    invoke(['net', 'A', first])
+    invoke(['net', 'B', different], ok=False)
+    invoke(['net', 'B', second])
+    peer = db.get_entry('ISIS_GLOBALS', ('default', 'B'))
+    invoke(['net', 'A', different], ok=False)
+    invoke(['net', 'del', 'A', second], ok=False)
+    invoke(['net', 'A', first.upper()])
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'A'))['net_title'] == first.upper()
+    # Matching deletion ignores case; the stored value retains the user's input.
+    invoke(['net', 'del', 'A', first])
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'A')) == {'NULL': 'NULL'}
+    invoke(['net', 'A', first])
+    invoke(['net', 'A', second])
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'A'))['net_title'] == second
+    invoke(['net', 'del', 'A', second])
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'A')) == {'NULL': 'NULL'}
+    invoke(['net', 'A', 'invalid'], ok=False)
+    invoke(['add', 'del'])
+    invoke(['net', 'del', first])
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'del'))['net_title'] == first
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'B')) == peer
 
 
-def test_instance_lifecycle_and_reference_guard(isis_db):
-    db = isis_db
-    ok(db, 'instance', 'add', 'CORE')
-    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['net_titles'] == [NET]
-    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
-    ok(db, 'set', 'CORE', 'lsp-mtu', '1492')
-    ok(db, 'instance', 'enable', 'CORE')
-    ok(db, 'af', 'Ethernet0', 'ipv6', 'enable', interface=True)
-    ok(db, 'enable', 'Ethernet0', interface=True)
-    original = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
-    ok(db, 'instance', 'disable', 'CORE')
-    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
-    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['lsp_mtu'] == '1492'
-    ok(db, 'disable', 'Ethernet0', interface=True)
-    with mock.patch('config.isis.log.log_error') as log:
-        rejected = invoke(db, 'instance', 'del', 'CORE')
-        assert rejected.exit_code != 0
-        log.assert_not_called()
-    ok(db, 'level', 'set', 'Ethernet0', 'both', 'metric', '30', interface=True)
-    ok(db, 'instance', 'enable', 'CORE')
-    ok(db, 'enable', 'Ethernet0', interface=True)
-    assert db.cfgdb.get_entry('ISIS_INTERFACE_LEVEL', ('Ethernet0', 'level-1'))['metric'] == '30'
-    ok(db, 'unbind', 'Ethernet0', interface=True)
-    assert not db.cfgdb.get_table('ISIS_INTERFACE_LEVEL')
-    ok(db, 'instance', 'del', 'CORE')
-    assert not db.cfgdb.get_table('ISIS_INSTANCE')
+@pytest.mark.parametrize('has_net,peer_count,referenced', [
+    (True, 2, True),
+    (True, 0, False),
+    (False, 2, False),
+])
+def test_instance_delete_preserves_peers_and_cascades_own_policy(cli, has_net, peer_count, referenced):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    if has_net:
+        invoke(['net', 'A', '49.0001.0000.0000.0001.00'])
+    for name, area in [('B', '0002'), ('C', '0003')][:peer_count]:
+        invoke(['add', name])
+        invoke(['net', name, '49.{}.0000.0000.0001.00'.format(area)])
+    invoke(['add', 'A', '--vrf', 'VrfBlue'])
+    invoke(['net', 'A', '49.0001.0000.0000.0002.00', '--vrf', 'VrfBlue'])
+    invoke(['redistribute', 'add', 'A', 'ipv4', 'bgp', 'level-2', '--vrf', 'VrfBlue'])
+    invoke(['redistribute', 'add', 'A', 'ipv4', 'bgp', 'level-2'])
+    if referenced:
+        invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+        before = copy.deepcopy(db.tables)
+        with patch.object(db, 'set_entry', wraps=db.set_entry) as write:
+            result = invoke(['del', 'A'], ok=False)
+        write.assert_not_called()
+        assert db.tables == before
+        assert "Delete IS-IS on interface 'Ethernet0' first" in result.output
+        invoke(['del', 'Ethernet0'], interface=True)
+    peers = {key: row for key, row in db.get_table('ISIS_GLOBALS').items()
+             if key != ('default', 'A')}
+    peer_policies = {key: row for key, row in db.get_table('ISIS_REDISTRIBUTE').items()
+                     if key[:2] != ('default', 'A')}
+    invoke(['del', 'A'])
+    assert db.get_table('ISIS_GLOBALS') == peers
+    assert db.get_table('ISIS_REDISTRIBUTE') == peer_policies
+    for name in ('B', 'C')[:peer_count]:
+        invoke(['del', name])
+    invoke(['del', 'A', '--vrf', 'VrfBlue'])
+    assert not db.get_table('ISIS_GLOBALS')
+    assert not db.get_table('ISIS_REDISTRIBUTE')
 
 
-@pytest.mark.parametrize('family', ['ipv4', 'ipv6'])
-def test_independent_af_controls_and_reset_while_disabled(isis_db, family):
-    db = isis_db
-    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
-    ok(db, 'set', 'Ethernet0', 'passive', 'true', interface=True)
-    original = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
-    for state, value in [('enable', 'true'), ('disable', 'false')]:
-        ok(db, 'af', 'Ethernet0', family, state, interface=True)
-        assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == dict(original, **{family + '_enabled': value})
-    ok(db, 'af', 'Ethernet0', family, 'reset', interface=True)
-    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == original
-    assert invoke(db, 'af', 'Ethernet0', family, 'invalid', interface=True).exit_code == 2
+def test_lsp_both_validation_is_atomic_and_reset_preserves_other_fields(cli):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    invoke(['max-lsp-lifetime', 'A', '1500', '--level', 'level-1'])
+    invoke(['lsp-refresh-interval', 'A', '1000'], ok=False)
+    row = db.get_entry('ISIS_GLOBALS', ('default', 'A'))
+    assert row == {'lsp_lifetime_level_1': '1500'}
+    invoke(['lsp-refresh-interval', 'A', '1000', '--level', 'level-1'])
+    invoke(['lsp-gen-interval', 'A', '120', '--level', 'level-1'])
+    invoke(['reset', 'A', 'max-lsp-lifetime', '--level', 'level-1'], ok=False)
+    invoke(['reset', 'A', 'lsp-refresh-interval', '--level', 'level-1'])
+    row = db.get_entry('ISIS_GLOBALS', ('default', 'A'))
+    assert row == {'lsp_lifetime_level_1': '1500', 'lsp_generation_interval_level_1': '120'}
+    invoke(['reset', 'A', 'lsp-mtu', '--level', 'both'], ok=False)
+    invoke(['spf-interval', 'A', '0'], ok=False)
 
 
-def test_mt_is_distinct_from_interface_af_and_reset_preserves_fields(isis_db):
-    db = isis_db
-    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
-    before = db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')
-    ok(db, 'set', 'CORE', 'ipv6-multi-topology', 'true')
-    ok(db, 'reset', 'CORE', 'ipv6-multi-topology')
-    assert 'ipv6_multi_topology' not in db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))
-    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0') == before
-    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['net_titles'] == [NET]
+def test_unrelated_global_attributes_do_not_validate_existing_level_or_timer_conflicts(cli):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    # Existing ConfigDB conflicts do not belong to a hostname or MTU mutation.
+    db.set_entry('ISIS_GLOBALS', ('default', 'A'),
+                 {'level': 'level-1', 'lsp_refresh_interval_level_2': '1000'})
+    db.set_entry('ISIS_INTERFACE', ('default', 'Ethernet0'),
+                 {'instance_name': 'A', 'ipv4_enabled': 'true', 'level': 'level-2'})
+    db.set_entry('ISIS_REDISTRIBUTE', ('default', 'A', 'ipv4', 'table', 'level-2', '10'),
+                 {'metric': '20'})
+    invoke(['dynamic-hostname', 'A', 'disable'])
+    invoke(['lsp-mtu', 'A', '1400'])
+    invoke(['reset', 'A', 'lsp-mtu'])
+    row = db.get_entry('ISIS_GLOBALS', ('default', 'A'))
+    assert row['dynamic_hostname'] == 'false'
+    assert 'lsp_mtu' not in row
+    invoke(['level', 'A', 'level-1'], ok=False)
 
 
-def test_explicit_binding_vrf_and_interface_validation(isis_db):
-    db = isis_db
-    assert invoke(db, 'enable', 'Ethernet0', interface=True).exit_code != 0
-    assert invoke(db, 'bind', 'Ethernet0', 'MISSING', interface=True).exit_code != 0
-    assert invoke(db, 'bind', 'Ethernet0', 'CORE', '--vrf', 'VrfA', interface=True).exit_code != 0
-    for table in ('PORTCHANNEL_MEMBER', 'VLAN_MEMBER'):
-        db.cfgdb.set_entry(table, ('group', 'Ethernet0'), {'NULL': 'NULL'})
-        assert invoke(db, 'bind', 'Ethernet0', 'CORE', interface=True).exit_code != 0
-        db.cfgdb.set_entry(table, ('group', 'Ethernet0'), None)
-    with mock.patch('utilities_common.cli.get_interface_naming_mode', return_value='alias'):
-        ok(db, 'bind', 'etp1', 'CORE', interface=True)
-    db.cfgdb.set_entry('VRF', 'VrfA', {'NULL': 'NULL'})
-    ok(db, 'instance', 'add', 'CORE', '--vrf', 'VrfA')
-    db.cfgdb.set_entry('INTERFACE', 'Ethernet0', {'vrf_name': 'VrfA'})
-    assert invoke(db, 'enable', 'Ethernet0', interface=True).exit_code != 0
-    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['vrf'] == 'default'
-    ok(db, 'bind', 'Ethernet0', 'CORE', interface=True)
-    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Ethernet0')['vrf'] == 'VrfA'
-    # Removal remains possible after the routed interface disappears.
-    db.cfgdb.set_entry('INTERFACE', 'Ethernet0', None)
-    db.cfgdb.set_entry('PORT', 'Ethernet0', None)
-    ok(db, 'unbind', 'Ethernet0', interface=True)
+def test_lsp_validation_only_checks_mutated_levels(cli):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    db.set_entry('ISIS_GLOBALS', ('default', 'A'), {'lsp_refresh_interval_level_2': '1000'})
+    invoke(['lsp-gen-interval', 'A', '40', '--level', 'level-1'])
+    invoke(['reset', 'A', 'lsp-gen-interval', '--level', 'level-1'])
+    before = db.get_entry('ISIS_GLOBALS', ('default', 'A'))
+    invoke(['lsp-gen-interval', 'A', '40'], ok=False)
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'A')) == before
 
 
-def test_vlan_binding_accepts_empty_routed_base_row(isis_db, monkeypatch):
-    db = isis_db
-    db.cfgdb.set_entry('VLAN_INTERFACE', 'Vlan3999', {'NULL': 'NULL'})
-    original_get_entry = db.cfgdb.get_entry
+def test_backoff_all_or_none_and_reserved_instance_name(cli):
+    db, invoke = cli
+    invoke(['add', 'del'])
+    invoke(['spf-backoff', 'del', '--init-delay', '0'], ok=False)
+    args = ['spf-backoff', 'del', '--init-delay', '0', '--short-delay', '50',
+            '--long-delay', '100', '--hold-down', '1000', '--time-to-learn', '500']
+    invoke(args)
+    row = db.get_entry('ISIS_GLOBALS', ('default', 'del'))
+    assert all(field in row for field in config_isis.BACKOFF_FIELDS)
+    invoke(args[:-1] + ['1000'], ok=False)
+    invoke(['spf-backoff', 'del', 'del', '--init-delay', '1'], ok=False)
+    invoke(['spf-backoff', 'del', 'del'])
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'del')) == {'NULL': 'NULL'}
 
-    def sdk_get_entry(table, key):
-        if table == 'VLAN_INTERFACE' and key == 'Vlan3999':
-            return {}
-        return original_get_entry(table, key)
 
-    # Native SDK hides the NULL placeholder even when the base key exists.
-    monkeypatch.setattr(db.cfgdb, 'get_entry', sdk_get_entry)
-    ok(db, 'bind', 'Vlan3999', 'CORE', interface=True)
-    assert db.cfgdb.get_entry('ISIS_INTERFACE', 'Vlan3999')['vrf'] == 'default'
+def test_af_lifecycle_binding_and_per_level_parameters(cli):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    invoke(['add', 'B'])
+    invoke(['metric', 'Ethernet0', '0'], interface=True, ok=False)
+    invoke(['ipv4', 'Ethernet0', 'enable'], interface=True, ok=False)
+    invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+    invoke(['ipv6', 'Ethernet0', 'enable', '--instance', 'B'], interface=True, ok=False)
+    invoke(['ipv6', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+    invoke(['metric', 'Ethernet0', '0', '--level', 'level-1'], interface=True)
+    invoke(['hello-interval', 'Ethernet0', '10', '--level', 'level-2'], interface=True)
+    invoke(['network-type', 'Ethernet0', 'p2p'], interface=True)
+    key = ('default', 'Ethernet0')
+    assert db.get_entry('ISIS_INTERFACE', key)['hello_interval_level_2'] == '10'
+    before = db.get_entry('ISIS_INTERFACE', key)
+    invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+    assert db.get_entry('ISIS_INTERFACE', key) == before
+    invoke(['ipv4', 'Ethernet0', 'disable'], interface=True)
+    assert db.get_entry('ISIS_INTERFACE', key)['metric_level_1'] == '0'
+    invoke(['del', 'A'], ok=False)
+    invoke(['ipv6', 'Ethernet0', 'disable'], interface=True)
+    assert key not in db.get_table('ISIS_INTERFACE')
+    invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'B'], interface=True)
+    assert db.get_entry('ISIS_INTERFACE', key) == {'instance_name': 'B', 'ipv4_enabled': 'true'}
+    invoke(['reset', 'Ethernet0', 'ipv4'], interface=True, ok=False)
+    invoke(['del', 'Ethernet0'], interface=True)
 
 
-def test_vlan_binding_requires_routed_base_row(isis_db):
-    db = isis_db
-    db.cfgdb.set_entry('VLAN_INTERFACE', ('Vlan3999', '198.18.100.1/24'), {'NULL': 'NULL'})
-    result = invoke(db, 'bind', 'Vlan3999', 'CORE', interface=True)
+def test_vrf_members_and_level_intersection(cli):
+    db, invoke = cli
+    invoke(['add', 'A', '--vrf', 'VrfBlue'])
+    invoke(['ipv4', 'Ethernet4', 'enable', '--instance', 'A'], interface=True, ok=False)
+    invoke(['ipv4', 'Ethernet4', 'enable', '--instance', 'A', '--vrf', 'VrfBlue'], interface=True)
+    invoke(['level', 'A', 'level-1', '--vrf', 'VrfBlue'])
+    invoke(['level', 'Ethernet4', 'level-2', '--vrf', 'VrfBlue'], interface=True, ok=False)
+    invoke(['level', 'Ethernet4', 'level-1', '--vrf', 'VrfBlue'], interface=True)
+    invoke(['level', 'A', 'level-2', '--vrf', 'VrfBlue'], ok=False)
+    assert db.get_entry('ISIS_INTERFACE', ('VrfBlue', 'Ethernet4'))['level'] == 'level-1'
+    db.set_entry('PORTCHANNEL_MEMBER', ('PortChannel1', 'Ethernet0'), {'NULL': 'NULL'})
+    invoke(['add', 'B'])
+    invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'B'], interface=True, ok=False)
+
+
+def test_redistribution_complete_replacement_and_cascade(cli):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    prefix = ['redistribute', 'add', 'A', 'ipv4', 'table', 'level-2']
+    invoke(prefix, ok=False)
+    invoke(prefix + ['--table-id', '10', '--metric', '20', '--route-map', 'FILTER'])
+    invoke(prefix + ['--table-id', '11', '--metric', '30'])
+    invoke(prefix + ['--table-id', '10'])
+    key = ('default', 'A', 'ipv4', 'table', 'level-2', '10')
+    assert db.get_entry('ISIS_REDISTRIBUTE', key) == {'metric': '0'}
+    assert len(db.get_table('ISIS_REDISTRIBUTE')) == 2
+    invoke(['redistribute', 'add', 'A', 'ipv4', 'bgp', 'level-1', '--table-id', '5'], ok=False)
+    invoke(['redistribute', 'add', 'A', 'ipv6', 'ospf', 'level-1'], ok=False)
+    invoke(['redistribute', 'add', 'A', 'ipv4', 'bgp', 'level-1', '--route-map', 'missing'], ok=False)
+    invoke(['level', 'A', 'level-1'], ok=False)
+    invoke(['del', 'A'])
+    assert not db.get_table('ISIS_REDISTRIBUTE')
+
+
+@pytest.mark.parametrize('args,expected', [
+    (['summary'], 'show isis summary'),
+    (['interface', 'Ethernet0', '--json'], 'show isis interface Ethernet0 json'),
+    (['neighbor', '--detail', '--vrf', 'all'], 'show isis vrf all neighbor detail'),
+    (['database', '0000.0000.0001.00-00', '--detail', '--json'],
+     'show isis database detail 0000.0000.0001.00-00 json'),
+    (['route', '--level', 'level-2', '--prefix-sid', '--backup', '--algorithm', '128',
+      '--vrf', 'VrfBlue', '--json'],
+     'show isis vrf VrfBlue route level-2 prefix-sid backup algorithm 128 json'),
+    (['topology', '--algorithm', 'all'], 'show isis topology algorithm'),
+    (['hostname'], 'show isis hostname'),
+    (['spf-delay-ietf'], 'show isis spf-delay-ietf'),
+    (['flex-algo', '255'], 'show isis flex-algo 255'),
+    (['fast-reroute', 'summary', '--level', 'level-1'], 'show isis fast-reroute summary level-1'),
+    (['segment-routing', 'node', '--algorithm', 'all'], 'show isis segment-routing node algorithm'),
+    (['mpls-te', 'router', '--vrf', 'VrfBlue'], 'show isis vrf VrfBlue mpls-te router'),
+    (['mpls-te', 'interface', 'Ethernet0'], 'show isis mpls-te interface Ethernet0'),
+    (['mpls-te', 'database', 'edge', '2001:db8::1', '--json'],
+     'show isis mpls-te database edge 2001:db8::1 json'),
+    (['mpls-te', 'database', 'subnet', '192.0.2.0/24', '--detail'],
+     'show isis mpls-te database subnet 192.0.2.0/24 detail'),
+    (['mpls', 'ldp-sync', 'interface', 'all'], 'show isis mpls ldp-sync interface all'),
+])
+def test_show_mapping(args, expected):
+    with patch.object(show_isis, 'run_vtysh_command', return_value='state\n') as run:
+        result = CliRunner().invoke(show_isis.isis, args)
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    run.assert_called_once_with(expected, None)
+
+
+@pytest.mark.parametrize('args', [
+    ['interface', 'Ethernet0', '--detail'], ['neighbor', '0000.0000.0001', '--detail'],
+    ['mpls-te', 'database', '--detail', '--json'], ['route', '--algorithm', '127'],
+    ['flex-algo', '256'], ['segment-routing', 'node', '--vrf', 'all'],
+    ['hostname', '--json'], ['mpls', 'ldp-sync', 'interface'],
+    ['mpls-te', 'database', 'edge', 'invalid'], ['summary', '--instance', 'A'],
+])
+def test_show_rejects_invalid_options(args):
+    with patch.object(show_isis, 'run_vtysh_command') as run:
+        result = CliRunner().invoke(show_isis.isis, args)
     assert result.exit_code != 0
-    assert not db.cfgdb.get_entry('ISIS_INTERFACE', 'Vlan3999')
+    run.assert_not_called()
 
 
-def test_net_and_instance_identity(isis_db):
-    db = isis_db
-    ok(db, 'instance', 'add', 'EDGE')
-    assert invoke(db, 'instance', 'enable', 'EDGE').exit_code != 0
-    assert invoke(db, 'net', 'add', 'EDGE', '49.0001.00').exit_code != 0
-    ok(db, 'net', 'add', 'EDGE', NET)
-    ok(db, 'instance', 'enable', 'EDGE')
-    assert invoke(db, 'net', 'del', 'EDGE', NET).exit_code != 0
-    assert invoke(db, 'net', 'add', 'EDGE', '49.0001.0000.0000.0002.00').exit_code != 0
-    ok(db, 'net', 'add', 'EDGE', '49.0002.0000.0000.0001.00')
-    ok(db, 'instance', 'disable', 'EDGE')
-    ok(db, 'net', 'del', 'EDGE', NET)
-    assert db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))['net_titles'] == [NET]
-
-
-def test_level_values_both_and_single_reset(isis_db):
-    db = isis_db
-    ok(db, 'level', 'set', 'CORE', 'both', 'lsp-maximum-lifetime', '1500')
-    ok(db, 'level', 'set', 'CORE', 'both', 'lsp-refresh-interval', '1000')
-    original = copy.deepcopy(db.cfgdb.get_table('ISIS_INSTANCE_LEVEL'))
-    assert invoke(db, 'level', 'reset', 'CORE', 'both', 'lsp-maximum-lifetime').exit_code != 0
-    assert db.cfgdb.get_table('ISIS_INSTANCE_LEVEL') == original
-    ok(db, 'level', 'reset', 'CORE', 'level-1', 'lsp-refresh-interval')
-    assert 'lsp_refresh_interval' not in db.cfgdb.get_entry('ISIS_INSTANCE_LEVEL', ('default', 'CORE', 'level-1'))
-    assert db.cfgdb.get_entry('ISIS_INSTANCE_LEVEL', ('default', 'CORE', 'level-2'))['lsp_refresh_interval'] == '1000'
-    ok(db, 'instance', 'del', 'CORE')
-    assert not db.cfgdb.get_table('ISIS_INSTANCE_LEVEL')
-
-
-def test_overload_spf_redistribution_and_reset(isis_db):
-    db = isis_db
-    ok(db, 'set', 'CORE', 'overload', 'true')
-    ok(db, 'set', 'CORE', 'overload-on-startup', '30')
-    assert invoke(db, 'set', 'CORE', 'overload-on-startup', '86401').exit_code != 0
-    assert invoke(db, 'spf-backoff', 'set', 'CORE', '1', '10', '100', '100', '100').exit_code != 0
-    ok(db, 'spf-backoff', 'set', 'CORE', '1', '10', '100', '1000', '500')
-    ok(db, 'spf-backoff', 'reset', 'CORE')
-    assert not any(field.startswith('spf_') for field in db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE')))
-    assert invoke(db, 'redistribute', 'add', 'CORE', 'ipv6', 'ospf', 'level-1').exit_code != 0
-    assert invoke(db, 'redistribute', 'add', 'CORE', 'ipv4', 'static', 'level-1',
-                  '--route-map', 'MISSING').exit_code != 0
-    db.cfgdb.set_entry('ROUTE_MAP_SET', 'EXPORT', {'NULL': 'NULL'})
-    ok(db, 'redistribute', 'add', 'CORE', 'ipv4', 'static', 'level-1', '--route-map', 'EXPORT', '--metric', '20')
-    assert invoke(db, 'set', 'CORE', 'level-type', 'level-2-only').exit_code != 0
-    ok(db, 'redistribute', 'del', 'CORE', 'ipv4', 'static', 'level-1')
-    ok(db, 'set', 'CORE', 'level-type', 'level-2-only')
-
-
-def test_namespace_selects_connector(isis_db):
-    group = config.config.commands['isis']
-    option = next(p for p in group.params if p.name == 'namespace')
-    with mock.patch.object(option.type, 'choices', ['asic0']), \
-            mock.patch('config.isis.ConfigDBConnector', return_value=isis_db.cfgdb) as connector:
-        ok(isis_db, '-n', 'asic0', 'set', 'CORE', 'overload', 'true')
-        connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
-
-
-def test_database_failure_does_not_report_success(isis_db):
-    original = isis_db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE'))
-    with mock.patch('config.isis.commit', side_effect=RuntimeError('write failed')):
-        result = invoke(isis_db, 'set', 'CORE', 'overload', 'true')
-    assert result.exit_code != 0 and 'write failed' in result.output
-    assert isis_db.cfgdb.get_entry('ISIS_INSTANCE', ('default', 'CORE')) == original
-
-
-@pytest.mark.skipif(not os.environ.get('ISIS_TEST_REDIS'), reason='requires native Redis Lua evaluation')
-def test_native_redis_transaction_rejects_concurrent_insert(isis_db):
-    db = isis_db.cfgdb
-    before = capture(db)
-    db.set_entry('ISIS_INTERFACE', 'Ethernet0', {'vrf': 'default', 'instance': 'CORE', 'enabled': 'false'})
-    with pytest.raises(Exception, match='changed; retry'):
-        commit(db, before, [('ISIS_INSTANCE', ('default', 'CORE'), None)])
-    assert db.get_entry('ISIS_INSTANCE', ('default', 'CORE'))
-
-
-@mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='vtysh')
-@mock.patch('utilities_common.cli.run_command')
-def test_show_failure_is_not_empty_success(run, shell):
-    run.return_value = ('', 1)
-    result = CliRunner().invoke(show.cli.commands['isis'].commands['database'], [])
-    assert result.exit_code == 1
-
-
-@pytest.mark.parametrize('command', ['summary', 'neighbor', 'database', 'interface', 'route', 'topology', 'hostname'])
-@mock.patch('utilities_common.bgp_util.get_vtysh_shell_cmd', return_value='rvtysh')
-@mock.patch('utilities_common.bgp_util.run_bgp_command', return_value='native state\n')
-def test_show_vrf_and_namespace(run, shell, command):
-    result = CliRunner().invoke(show.cli.commands['isis'].commands[command], ['--vrf', 'VrfA'])
+def test_configuration_defaults_and_instance_filter(cli):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    invoke(['add', 'B'])
+    invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+    with patch.object(show_isis, 'ConfigDBConnector', return_value=db):
+        result = CliRunner().invoke(show_isis.isis, ['configuration', '--instance', 'A'])
     assert result.exit_code == 0, result.output
-    run.assert_called_once_with('show isis vrf VrfA ' + command, '', 'rvtysh')
+    output = json.loads(result.output)
+    assert list(output['ISIS_GLOBALS']) == ['default|A']
+    assert output['ISIS_GLOBALS']['default|A']['explicit'] == {}
+    assert output['ISIS_GLOBALS']['default|A']['effective']['lsp_mtu'] == '1497'
+    assert output['ISIS_INTERFACE']['default|Ethernet0']['effective']['ipv6_enabled'] == 'false'
 
 
-@mock.patch('utilities_common.bgp_util.run_bgp_command')
-def test_show_instance_filters_only_scoped_areas(run):
-    run.return_value = '{"areas":[{"area":"CORE","circuits":[]},{"area":"EDGE","circuits":[]}]}'
-    group = show.cli.commands['isis'].commands['interface']
-    result = CliRunner().invoke(group, ['--json', '--instance', 'CORE'])
+def test_group_namespace_routes_config_and_show(cli):
+    db, invoke = cli
+    with patch.object(config_isis, 'ConfigDBConnector', return_value=db) as connector:
+        # Multi-ASIC namespace enumeration is resolved when the module loads.
+        namespace_option = next(p for p in config_isis.ISIS.params if p.name == 'namespace')
+        with patch.object(namespace_option.type, 'choices', ['asic0']):
+            invoke(['--namespace', 'asic0', 'add', 'A'])
+    connector.assert_called_once_with(use_unix_socket_path=True, namespace='asic0')
+    option = next(p for p in show_isis.isis.params if p.name == 'namespace')
+    with patch.object(option, 'callback', None), patch.object(
+            show_isis, 'run_vtysh_command', return_value='state') as run:
+        result = CliRunner().invoke(show_isis.isis, ['--namespace', 'asic0', 'summary'])
     assert result.exit_code == 0
-    assert 'EDGE' not in result.output and 'CORE' in result.output
-    assert CliRunner().invoke(group, ['--instance', 'CORE']).exit_code != 0
-    assert CliRunner().invoke(group, ['--json', '--vrf', 'all']).exit_code != 0
-    run.return_value = '{"unknown":[]}'
-    assert CliRunner().invoke(group, ['--json', '--instance', 'CORE']).exit_code != 0
+    run.assert_called_once_with('show isis summary', 'asic0')
 
 
-@mock.patch('utilities_common.bgp_util.run_bgp_command')
-def test_show_route_rejects_lossy_native_json(run):
-    run.return_value = '{"vrfs":[{"vrf":"default","areas":[{"area":"CORE"},{"area":"EDGE"}]}]}'
-    result = CliRunner().invoke(show.cli.commands['isis'].commands['route'], ['--json'])
-    assert result.exit_code != 0 and 'loses multiple areas' in result.output
-    assert run.call_count == 1
+@pytest.mark.parametrize('interface,command,field,first,second', [
+    (False, 'level', 'level', 'level-1', 'level-2'),
+    (False, 'dynamic-hostname', 'dynamic_hostname', 'disable', 'enable'),
+    (False, 'lsp-mtu', 'lsp_mtu', '1400', '1497'),
+    (False, 'ipv6-multi-topology', 'ipv6_multi_topology', 'enable', 'disable'),
+    (False, 'overload', 'overload', 'enable', 'disable'),
+    (False, 'overload-on-startup', 'overload_on_startup', '60', '120'),
+    (True, 'level', 'level', 'level-1', 'level-2'),
+    (True, 'network-type', 'network_type', 'p2p', 'lan'),
+    (True, 'passive', 'passive', 'enable', 'disable'),
+])
+def test_scalar_attribute_set_update_reset(cli, interface, command, field, first, second):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    invoke(['net', 'A', '49.0001.0000.0000.0001.00'])
+    if interface:
+        invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+    target = 'Ethernet0' if interface else 'A'
+    table = 'ISIS_INTERFACE' if interface else 'ISIS_GLOBALS'
+    key = ('default', target)
+    baseline = db.get_entry(table, key)
+    for value in (first, second):
+        invoke([command, target, value], interface=interface)
+        stored = {'enable': 'true', 'disable': 'false'}.get(value, value)
+        assert db.get_entry(table, key) == dict(baseline, **{field: stored})
+    invoke(['reset', target, command], interface=interface)
+    assert db.get_entry(table, key) == baseline
 
 
-def test_cleanup_is_idempotent_and_does_not_require_stale_parent(isis_db):
-    db = isis_db
-    ok(db, 'unbind', 'Ethernet0', interface=True)
-    ok(db, 'instance', 'del', 'MISSING')
-    db.cfgdb.set_entry('ISIS_INTERFACE', 'Ethernet0', {'vrf': 'default', 'instance': 'MISSING'})
-    db.cfgdb.set_entry('ISIS_INTERFACE_LEVEL', ('Ethernet0', 'level-1'), {'metric': '20'})
-    ok(db, 'unbind', 'Ethernet0', interface=True)
-    assert not db.cfgdb.get_table('ISIS_INTERFACE_LEVEL')
-    ok(db, 'unbind', 'Ethernet0', interface=True)
+@pytest.mark.parametrize('interface,command,field,l1,l2,updated,level', [
+    values + (level,)
+    for values in [
+        (False, 'lsp-gen-interval', 'lsp_generation_interval', '40', '50', '60'),
+        (False, 'lsp-refresh-interval', 'lsp_refresh_interval', '500', '600', '700'),
+        (False, 'max-lsp-lifetime', 'lsp_lifetime', '1500', '1600', '1700'),
+        (False, 'spf-interval', 'spf_minimum_interval', '5', '6', '7'),
+        (True, 'metric', 'metric', '20', '30', '40'),
+        (True, 'hello-interval', 'hello_interval', '5', '6', '7'),
+        (True, 'hello-multiplier', 'hello_multiplier', '4', '5', '6'),
+    ]
+    for level in ('level-1', 'level-2', 'both')
+])
+def test_per_level_attribute_update_reset_preserves_siblings(
+        cli, interface, command, field, l1, l2, updated, level):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    if interface:
+        invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+    else:
+        invoke(['net', 'A', '49.0001.0000.0000.0001.00'])
+    target = 'Ethernet0' if interface else 'A'
+    table = 'ISIS_INTERFACE' if interface else 'ISIS_GLOBALS'
+    key = ('default', target)
+    baseline = db.get_entry(table, key)
+    fields = [field + '_level_1', field + '_level_2']
+    for n, value in ((1, l1), (2, l2)):
+        invoke([command, target, value, '--level', 'level-' + str(n)], interface=interface)
+    expected = dict(baseline, **dict(zip(fields, (l1, l2))))
+    assert db.get_entry(table, key) == expected
+    selected = fields if level == 'both' else [fields[int(level[-1]) - 1]]
+    invoke([command, target, updated, '--level', level], interface=interface)
+    expected.update({name: updated for name in selected})
+    assert db.get_entry(table, key) == expected
+    invoke(['reset', target, command, '--level', level], interface=interface)
+    for name in selected:
+        expected.pop(name)
+    assert db.get_entry(table, key) == expected
 
 
-@mock.patch('utilities_common.bgp_util.run_bgp_command')
-def test_show_rejects_invalid_json_and_missing_area_identity(run):
-    group = show.cli.commands['isis'].commands['interface']
-    for output in ('ISIS is not running', '{"areas":[{}]}'):
-        run.return_value = output
-        result = CliRunner().invoke(group, ['--json', '--instance', 'CORE'])
-        assert result.exit_code != 0
-    run.return_value = 'ISIS is not running'
-    assert CliRunner().invoke(group, ['--json']).exit_code != 0
+@pytest.mark.parametrize('interface,command,low,high', [
+    (False, 'lsp-mtu', '127', '4353'),
+    (False, 'overload-on-startup', '-1', '86401'),
+    (False, 'lsp-gen-interval', '0', '121'),
+    (False, 'lsp-refresh-interval', '0', '65236'),
+    (False, 'max-lsp-lifetime', '349', '65536'),
+    (False, 'spf-interval', '0', '121'),
+    (True, 'metric', '-1', '16777216'),
+    (True, 'hello-interval', '0', '601'),
+    (True, 'hello-multiplier', '1', '101'),
+])
+def test_numeric_attribute_rejects_out_of_range_without_writes(cli, interface, command, low, high):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    if interface:
+        invoke(['ipv4', 'Ethernet0', 'enable', '--instance', 'A'], interface=True)
+    before = copy.deepcopy(db.tables)
+    for value in (low, high):
+        with patch.object(db, 'set_entry', wraps=db.set_entry) as write:
+            invoke([command, 'Ethernet0' if interface else 'A', value], interface=interface, ok=False)
+        write.assert_not_called()
+        assert db.tables == before
 
 
-@pytest.mark.parametrize('action', ['disable', 'del'])
-def test_multi_area_retirement_is_refused_without_configdb_change(isis_db, action):
-    ok(isis_db, 'instance', 'enable', 'CORE')
-    ok(isis_db, 'instance', 'add', 'EDGE')
-    ok(isis_db, 'net', 'add', 'EDGE', '49.0002.0000.0000.0001.00')
-    ok(isis_db, 'instance', 'enable', 'EDGE')
-    before = copy.deepcopy(isis_db.cfgdb.get_table('ISIS_INSTANCE'))
-    result = invoke(isis_db, 'instance', action, 'EDGE')
-    assert result.exit_code != 0 and 'operation refused until FRR is fixed' in result.output
-    assert isis_db.cfgdb.get_table('ISIS_INSTANCE') == before
+@pytest.mark.parametrize('af,source', [('ipv4', 'ospf'), ('ipv6', 'ospf6')])
+def test_ordinary_redistribution_af_update_and_delete(cli, af, source):
+    db, invoke = cli
+    invoke(['add', 'A'])
+    prefix = ['redistribute', 'add', 'A', af, source, 'level-1']
+    key = ('default', 'A', af, source, 'level-1', '0')
+    invoke(prefix + ['--metric', '16777215', '--route-map', 'FILTER'])
+    assert db.get_entry('ISIS_REDISTRIBUTE', key) == {'metric': '16777215', 'route_map': ['FILTER']}
+    invoke(prefix)
+    assert db.get_entry('ISIS_REDISTRIBUTE', key) == {'metric': '0'}
+    invoke(['redistribute', 'del', 'A', af, source, 'level-1'])
+    assert not db.get_table('ISIS_REDISTRIBUTE')
+    assert db.get_entry('ISIS_GLOBALS', ('default', 'A')) == {'NULL': 'NULL'}
+
+
+def test_show_propagates_daemon_failure():
+    with patch.object(show_isis.bgp_util, 'get_vtysh_shell_cmd', return_value='vtysh', create=True), \
+            patch.object(show_isis.bgp_util, 'run_bgp_command', side_effect=SystemExit(1), create=True) as run:
+        result = CliRunner().invoke(show_isis.isis, ['neighbor', '--json'])
+    assert result.exit_code == 1
+    run.assert_called_once_with('show isis neighbor json', None, 'vtysh')
