@@ -1,55 +1,77 @@
-load("//bazel:wheel_install_contract.bzl", "utilities_wheel")
 load("@rules_python//python:py_test.bzl", "py_test")
+load("@sonic_build_infra//python:site_packages.bzl", "site_packages")
 load("@utilities_test_pip//:requirements.bzl", "requirement")
-load("//bazel:packaging.bzl", "PACKAGES", "PACKAGE_DATA", "SCRIPTS", "ENTRY_POINTS", "REQUIRES", "EXTRA_REQUIRES", "CLASSIFIERS")
+load("//bazel:packaging.bzl", "CLASSIFIERS", "ENTRY_POINTS", "EXTRA_REQUIRES", "PACKAGES", "PACKAGE_DATA", "REQUIRES", "SCRIPTS")
+load("//bazel:wheel_install_contract.bzl", "utilities_wheel")
+
 package(default_visibility = ["//visibility:public"])
+
 filegroup(
     name = "wheel_payload",
     srcs = glob([p.replace(".", "/") + "/*.py" for p in PACKAGES] + [p.replace(".", "/") + "/" + pattern for p, patterns in PACKAGE_DATA.items() for pattern in patterns]),
 )
+
 # No setup.py execution: its host-installed SONiC dependency check is replaced
 # by wheel Requires-Dist metadata, not ignored or replaced with mock packages.
 utilities_wheel(
     name = "sonic_utilities_wheel",
+    author = "SONiC Team",
+    author_email = "linuxnetdev@microsoft.com",
+    classifiers = CLASSIFIERS,
+    data_files = {s: "scripts/" + s.split("/")[-1] for s in SCRIPTS} | {"ssd-dump/vtFA_RTK_5766_v2": "data/bin/vtFA_RTK_5766_v2"},
     distribution = "sonic-utilities",
-    version = "1.2",
-    python_tag = "py3",
+    entry_points = ENTRY_POINTS,
+    extra_distinfo_files = {"LICENSE": "licenses/LICENSE"},
+    extra_requires = EXTRA_REQUIRES,
+    homepage = "https://github.com/Azure/sonic-utilities",
+    keywords = "sonic SONiC utilities command line cli CLI",
+    license = "Apache 2.0",
+    license_files = ["LICENSE"],
+    maintainer = "Joe LeVeque",
+    maintainer_email = "jolevequ@microsoft.com",
     # setup.py ships an existing AMD64 SSD diagnostic ELF. This is not a
     # source-built native tool and makes an 'any' platform tag dishonest.
     platform = "linux_x86_64",
-    deps = [":wheel_payload"],
-    data_files = {s: "scripts/" + s.split("/")[-1] for s in SCRIPTS} | {"ssd-dump/vtFA_RTK_5766_v2": "data/bin/vtFA_RTK_5766_v2"},
-    entry_points = ENTRY_POINTS,
+    python_tag = "py3",
     requires = REQUIRES,
-    extra_requires = EXTRA_REQUIRES,
     summary = "Command-line utilities for SONiC",
-    author = "SONiC Team",
-    author_email = "linuxnetdev@microsoft.com",
-    maintainer = "Joe LeVeque",
-    maintainer_email = "jolevequ@microsoft.com",
-    keywords = "sonic SONiC utilities command line cli CLI",
-    license_files = ["LICENSE"],
-    homepage = "https://github.com/Azure/sonic-utilities",
-    license = "Apache 2.0",
-    classifiers = CLASSIFIERS,
-    extra_distinfo_files = {"LICENSE": "licenses/LICENSE"},
+    version = "1.2",
+    deps = [":wheel_payload"],
 )
+
 py_test(
     name = "wheel_contract_test",
     size = "small",
     srcs = ["//bazel:wheel_contract_test.py"],
+    args = [
+        "$(location :sonic_utilities_wheel)",
+        "$(location setup.py)",
+        "$(location //bazel:packaging.json)",
+    ],
+    data = [
+        "setup.py",
+        "ssd-dump/vtFA_RTK_5766_v2",
+        ":repository_inventory",
+        ":sonic_utilities_wheel",
+        "//bazel:packaging.json",
+    ] + SCRIPTS,
     main = "//bazel:wheel_contract_test.py",
-    data = [":sonic_utilities_wheel", ":repository_inventory", "setup.py", "//bazel:packaging.json", "ssd-dump/vtFA_RTK_5766_v2"] + SCRIPTS,
-    args = ["$(location :sonic_utilities_wheel)", "$(location setup.py)", "$(location //bazel:packaging.json)"],
 )
+
 py_test(
     name = "wheel_installed_test",
     size = "small",
     srcs = ["//bazel:wheel_installed_test.py"],
+    args = [
+        "$(location :sonic_utilities_wheel)",
+        "$(location @utilities_test_pip//click:whl)",
+    ],
+    data = [
+        ":sonic_utilities_wheel",
+        "@utilities_test_pip//click:whl",
+    ],
     main = "//bazel:wheel_installed_test.py",
-    data = [":sonic_utilities_wheel", "@utilities_test_pip//click:whl"],
     deps = [requirement("installer")],
-    args = ["$(location :sonic_utilities_wheel)", "$(location @utilities_test_pip//click:whl)"],
 )
 
 # Separate legacy sonic-utilities-data package, not part of setup.py wheel.
@@ -63,19 +85,115 @@ filegroup(
 # SONiC wheels. Both variants apply the same documented install transforms.
 filegroup(
     name = "runtime_wheel_payload",
-    srcs = glob([p.replace(".", "/") + "/*.py" for p in PACKAGES] + [p.replace(".", "/") + "/" + pattern for p, patterns in PACKAGE_DATA.items() for pattern in patterns], exclude = ["tests/**"]),
+    srcs = glob(
+        [p.replace(".", "/") + "/*.py" for p in PACKAGES] + [p.replace(".", "/") + "/" + pattern for p, patterns in PACKAGE_DATA.items() for pattern in patterns],
+        exclude = ["tests/**"],
+    ),
 )
+
 py_test(
     name = "runtime_wheel_contract_test",
     srcs = ["//bazel/runtime:contract_test.py"],
+    args = [
+        "$(location :sonic_utilities_wheel)",
+        "$(location //bazel/runtime:sonic_utilities_wheel)",
+    ],
+    data = [
+        ":sonic_utilities_wheel",
+        "//bazel/runtime:sonic_utilities_wheel",
+    ],
     main = "//bazel/runtime:contract_test.py",
-    data = [":sonic_utilities_wheel", "//bazel/runtime:sonic_utilities_wheel"],
-    args = ["$(location :sonic_utilities_wheel)", "$(location //bazel/runtime:sonic_utilities_wheel)"],
 )
 
 # Independent of PACKAGES/PACKAGE_DATA and wheel_payload selection. Enumerate
 # repository files so an accidentally omitted producer glob cannot hide itself.
 filegroup(
     name = "repository_inventory",
-    srcs = glob(["**"], exclude = ["bazel/**", "bazel-*/**", "**/__pycache__/**", "BUILD.bazel", "MODULE.bazel*", "README.bazel.md"]),
+    srcs = glob(
+        ["**"],
+        exclude = [
+            "bazel/**",
+            "bazel-*/**",
+            "**/__pycache__/**",
+            "BUILD.bazel",
+            "MODULE.bazel*",
+            "README.bazel.md",
+        ],
+    ),
+)
+
+# Direct source installation follows the original Make package selection,
+# including the tests package. The existing separate runtime wheel is unchanged.
+site_packages(
+    name = "sonic-utilities.runtime",
+    author = "SONiC Team",
+    author_email = "linuxnetdev@microsoft.com",
+    classifiers = CLASSIFIERS,
+    data_prefix = "/usr/local",
+    distribution = "sonic-utilities",
+    entry_points = ENTRY_POINTS,
+    executable_files = ["sonic_utilities-1.2.data/scripts/" + p.split("/")[-1] for p in SCRIPTS] + ["sonic_utilities-1.2.data/data/bin/vtFA_RTK_5766_v2"],
+    extra_distinfo_files = {"LICENSE": "licenses/LICENSE"},
+    extra_requires = EXTRA_REQUIRES,
+    files = {p: p for p in glob([p.replace(".", "/") + "/*.py" for p in PACKAGES] + [p.replace(".", "/") + "/" + pattern for p, patterns in PACKAGE_DATA.items() for pattern in patterns])} |
+            {p: "sonic_utilities-1.2.data/scripts/" + p.split("/")[-1] for p in SCRIPTS} |
+            {"ssd-dump/vtFA_RTK_5766_v2": "sonic_utilities-1.2.data/data/bin/vtFA_RTK_5766_v2"},
+    headers = "/usr/local/include",
+    homepage = "https://github.com/Azure/sonic-utilities",
+    interpreter = "/usr/bin/python3",
+    keywords = "sonic SONiC utilities command line cli CLI",
+    license = "Apache 2.0",
+    license_files = ["LICENSE"],
+    maintainer = "Joe LeVeque",
+    maintainer_email = "jolevequ@microsoft.com",
+    normalize_scripts = True,
+    platform = "linux_x86_64",
+    python_tag = "py3",
+    regular_file_mode = "0644",
+    requires = REQUIRES,
+    scripts = "/usr/local/bin",
+    site_packages = "/usr/local/lib/python3.13/dist-packages",
+    summary = "Command-line utilities for SONiC",
+    version = "1.2",
+)
+
+filegroup(
+    name = "sonic-utilities.runtime_metadata",
+    srcs = [":sonic-utilities.runtime"],
+    output_group = "metadata",
+)
+
+# Image owners supply the complete host Python environment and target paths.
+# The original completion generator and Debian installation inputs stay here.
+exports_files([
+    "sonic-utilities-data/generate_completions.py",
+    "sonic-utilities-data/debian/control",
+    "sonic-utilities-data/debian/changelog",
+    "sonic-utilities-data/debian/copyright",
+    "sonic-utilities-data/debian/install",
+    "sonic-utilities-data/debian/rules",
+    "sonic-utilities-data/templates/sonic.service.j2",
+    "sonic-utilities-data/templates/service_mgmt.sh.j2",
+    "sonic-utilities-data/templates/dump.sh.j2",
+])
+
+py_test(
+    name = "source_install_test",
+    srcs = ["//bazel:source_install_contract.py"],
+    args = [
+        "$(location :sonic-utilities.runtime)",
+        "$(location setup.py)",
+        "$(location @utilities_test_pip//click:whl)",
+        "$(location :sonic-utilities.runtime_metadata)",
+    ],
+    data = [
+        "setup.py",
+        ":repository_inventory",
+        ":sonic-utilities.runtime",
+        ":sonic-utilities.runtime_metadata",
+        "@utilities_test_pip//click:whl",
+    ],
+    legacy_create_init = False,
+    main = "//bazel:source_install_contract.py",
+    deps = [requirement("installer")],
 )
