@@ -160,6 +160,31 @@ def naming_mode(verbose):
     click.echo(clicommon.get_interface_naming_mode())
 
 
+@interfaces.command('l1-summary')
+@click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def l1_summary(interfacename, namespace, display, verbose):
+    """Show Interface l1 summary"""
+
+    ctx = click.get_current_context()
+
+    cmd = ['intfutil', '-c', 'l1_summary']
+
+    if interfacename is not None:
+        interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+        cmd += ['-i', str(interfacename)]
+
+    else:
+        cmd += ['-d', str(display)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    clicommon.run_command(cmd, display_cmd=verbose)
+
+
 @interfaces.command()
 @click.argument('interfacename', required=False)
 @multi_asic_util.multi_asic_click_options
