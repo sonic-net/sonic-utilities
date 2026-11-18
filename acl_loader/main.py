@@ -1041,9 +1041,11 @@ class AclLoader(object):
         :return:
         """
         erspan_header = ("Name", "Status", "SRC IP", "DST IP", "GRE", "DSCP",
-                         "TTL", "Queue", "Policer", "Monitor Port",
-                         "SRC Port", "Direction")
-        span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction", "Queue", "Policer")
+                         "TTL", "Queue", "Monitor Port",
+                         "SRC Port", "Direction",
+                         "Label", "Policer")
+        span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction",
+                       "Queue", "Label", "Policer")
 
         erspan_data = []
         span_data = []
@@ -1053,13 +1055,15 @@ class AclLoader(object):
 
             if val.get("type") == "SPAN":
                 span_data.append([key, val.get("status", ""), val.get("dst_port", ""),
-                                       val.get("src_port", ""), val.get("direction", "").lower(),
-                                       val.get("queue", ""), val.get("policer", "")])
+                                  val.get("src_port", ""), val.get("direction", "").lower(),
+                                  val.get("queue", ""), val.get("label", ""),
+                                  val.get("policer", "")])
             else:
                 erspan_data.append([key, val.get("status", ""), val.get("src_ip", ""),
-                                         val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
-                                         val.get("ttl", ""), val.get("queue", ""), val.get("policer", ""),
-                                         val.get("monitor_port", ""), val.get("src_port", ""), val.get("direction", "").lower()])  # noqa: E127, E501
+                                    val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
+                                    val.get("ttl", ""), val.get("queue", ""), val.get("monitor_port", ""),
+                                    val.get("src_port", ""), val.get("direction", "").lower(),
+                                    val.get("label", ""), val.get("policer", "")])
 
         print("ERSPAN Sessions")
         erspan_data = natsorted(erspan_data)

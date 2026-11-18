@@ -18,6 +18,7 @@ import click
 import sonic_platform
 import sonic_platform_base.sonic_sfp.sfputilhelper
 from sfputil.debug import debug
+from sfputil.port import filter_cpo_ports, is_cpo_port, reject_cpo_ports
 from sonic_platform_base.sfp_base import SfpBase
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from natsort import natsorted
@@ -112,18 +113,6 @@ QSFP_DD_DATA_MAP = {
     'supported_min_tx_power': 'Supported Min TX Power',
     'supported_max_laser_freq': 'Supported Max Laser Frequency',
     'supported_min_laser_freq': 'Supported Min Laser Frequency',
-    'els_identifier': 'ELS Identifier',
-    'els_revision': 'ELS Revision',
-    'els_laser_count': 'ELS Laser Count',
-    'els_vendor_name': 'ELS Vendor Name',
-    'els_vendor_oui': 'ELS Vendor OUI',
-    'els_vendor_pn': 'ELS Vendor PN',
-    'els_vendor_rev': 'ELS Vendor Rev',
-    'els_vendor_sn': 'ELS Vendor SN',
-    'els_date_code': 'ELS Vendor Date Code(YYYY-MM-DD Lot)',
-    'els_max_power': 'ELS Maximum Power Consumption',
-    'rlm_laser_lpmode_control': 'RLM Laser Lpower Mode Control',
-    'rlm_laser_wavelength_grid': 'RLM Laser Wavelength Grid',
 }
 
 SFP_DOM_CHANNEL_MONITOR_MAP = {
@@ -216,28 +205,6 @@ DOM_MODULE_MONITOR_MAP = {
     'voltage': 'Vcc'
 }
 
-ELS_DOM_MONITOR_MAP = {
-    'els_temperature': 'ELS Temperature',
-    'els_voltage': 'ELS Vcc',
-}
-
-ELS_THRESHOLD_MAP = {
-    'els_temphighalarm': 'ELS TempHighAlarm',
-    'els_templowalarm': 'ELS TempLowAlarm',
-    'els_temphighwarning': 'ELS TempHighWarning',
-    'els_templowwarning': 'ELS TempLowWarning',
-    'els_vcchighalarm': 'ELS VccHighAlarm',
-    'els_vcclowalarm': 'ELS VccLowAlarm',
-    'els_vcchighwarning': 'ELS VccHighWarning',
-    'els_vcclowwarning': 'ELS VccLowWarning',
-    'els_txpowerhighalarm': 'ELS TxPowerHighAlarm',
-    'els_txpowerlowalarm': 'ELS TxPowerLowAlarm',
-    'els_txpowerhighwarning': 'ELS TxPowerHighWarning',
-    'els_txpowerlowwarning': 'ELS TxPowerLowWarning',
-    'els_txbiashighalarm': 'ELS TxBiasHighAlarm',
-    'els_txbiashighwarning': 'ELS TxBiasHighWarning'
-}
-
 DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
     'txpowerhighalarm':   'dBm',
     'txpowerlowalarm':    'dBm',
@@ -262,28 +229,6 @@ DOM_MODULE_THRESHOLD_UNIT_MAP = {
     'vcclowalarm':     'Volts',
     'vcchighwarning':  'Volts',
     'vcclowwarning':   'Volts'
-}
-
-ELS_DOM_MONITOR_UNIT_MAP = {
-    'els_temperature': 'C',
-    'els_voltage': 'Volts',
-}
-
-ELS_THRESHOLD_UNIT_MAP = {
-    'els_temphighalarm': 'C',
-    'els_templowalarm': 'C',
-    'els_temphighwarning': 'C',
-    'els_templowwarning': 'C',
-    'els_vcchighalarm': 'Volts',
-    'els_vcclowalarm': 'Volts',
-    'els_vcchighwarning': 'Volts',
-    'els_vcclowwarning': 'Volts',
-    'els_txpowerhighalarm': 'mW',
-    'els_txpowerlowalarm': 'mW',
-    'els_txpowerhighwarning': 'mW',
-    'els_txpowerlowwarning': 'mW',
-    'els_txbiashighalarm': 'mA',
-    'els_txbiashighwarning': 'mA'
 }
 
 DOM_VALUE_UNIT_MAP = {
@@ -509,30 +454,6 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
             module_threshold_align)
         output_dom += output_module_threshold
 
-        # This is specific for CPO DOM value parsing.
-        is_cpo = sfp_type.startswith('CPO')
-        if is_cpo:
-            laser_keys = [key for key in dom_info_dict if key.startswith('RLM') and 'Laser' in key]
-            dom_monitor_map = ELS_DOM_MONITOR_MAP.copy()
-            dom_monitor_map.update({key: key for key in laser_keys})
-            dom_monitor_unit_map = ELS_DOM_MONITOR_UNIT_MAP.copy()
-            dom_monitor_unit_map.update({key: '' for key in laser_keys})  # laser monitor values include units
-            output_dom += (indent + 'ELSMonitorValues:\n')
-            sorted_key_table = natsorted(dom_monitor_map)
-            output_els_monitor = format_dict_value_to_string(
-                sorted_key_table, dom_info_dict,
-                dom_monitor_map,
-                dom_monitor_unit_map)
-            output_dom += output_els_monitor
-
-            # Threshold
-            output_dom += (indent + 'ELSThresholdValues:\n')
-            sorted_key_table = natsorted(ELS_THRESHOLD_MAP)
-            output_els_threshold = format_dict_value_to_string(
-                sorted_key_table, dom_info_dict,
-                ELS_THRESHOLD_MAP,
-                ELS_THRESHOLD_UNIT_MAP)
-            output_dom += output_els_threshold
     else:
         output_dom += (indent + 'MonitorData:\n')
         sorted_key_table = natsorted(SFP_DOM_CHANNEL_MONITOR_MAP)
@@ -577,29 +498,23 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
 
 #
 def get_physical_port_name(logical_port, physical_port, ganged):
-    """
-        Returns:
-          port_num if physical
-          logical_port:port_num if logical port and is a ganged port
-          logical_port if logical and not ganged
-    """
-    if logical_port == physical_port:
-        return str(logical_port)
-    elif ganged:
-        return "{}:{} (ganged)".format(logical_port, physical_port)
-    else:
-        return logical_port
+    """Preserve the sfputil entry point while sharing port-label formatting."""
+    return platform_sfputil_helper.get_physical_port_name(logical_port, physical_port, ganged)
 
 
 def logical_port_name_to_physical_port_list(port_name):
     if port_name.startswith("Ethernet"):
         if platform_sfputil.is_logical_port(port_name):
-            return platform_sfputil.get_logical_to_physical(port_name)
+            physical_ports = platform_sfputil.get_logical_to_physical(port_name)
+            reject_cpo_ports(port_name, physical_ports, platform_chassis)
+            return physical_ports
         else:
             click.echo("Error: Invalid port '{}'".format(port_name))
             return None
     else:
-        return [int(port_name)]
+        physical_ports = [int(port_name)]
+        reject_cpo_ports(port_name, physical_ports, platform_chassis)
+        return physical_ports
 
 def logical_port_to_physical_port_index(port_name):
     if not platform_sfputil.is_logical_port(port_name):
@@ -726,6 +641,9 @@ def eeprom(port, dump_dom, namespace):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
@@ -833,6 +751,9 @@ def eeprom_hexdump(port, page):
         if page is not None:
             page = validate_eeprom_page(page)
         logical_port_list = natsorted(platform_sfputil.logical)
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
         lines = []
         for logical_port_name in logical_port_list:
             return_code, output = eeprom_hexdump_single_port(logical_port_name, page)
@@ -1089,6 +1010,9 @@ def presence(port):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))
@@ -1138,6 +1062,9 @@ def fetch_error_status_from_platform_api(port):
     """
     if port is None:
         logical_port_list = natsort.natsorted(platform_sfputil.logical)
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         logical_port_list = [port]
 
@@ -1176,6 +1103,9 @@ def fetch_error_status_from_state_db(port, state_db):
     sorted_ports = natsort.natsorted(status)
     output = []
     for port in sorted_ports:
+        physical_ports = platform_sfputil.get_logical_to_physical(port)
+        if port and any(is_cpo_port(index, platform_chassis) for index in physical_ports):
+            continue
         if is_port_type_rj45(port):
             description = "N/A"
         else:
@@ -1207,6 +1137,11 @@ def error_status(port, fetch_from_hardware):
         click.echo("Valid values for port: {}\n".format(str(platform_sfputil.logical)))
         sys.exit(ERROR_INVALID_PORT)
 
+    if port:
+        # Resolve only to reject CPO ports; this command does not need the
+        # physical-port list returned by the resolver.
+        logical_port_name_to_physical_port_list(port)
+
     if fetch_from_hardware:
         output_table = fetch_error_status_from_platform_api(port)
     else:
@@ -1236,6 +1171,9 @@ def lpmode(port, use_lpmode_pin):
     # Create a list containing the logical port names of all ports we're interested in
     if port is None:
         logical_port_list = platform_sfputil.logical
+        logical_port_list = filter_cpo_ports(
+            logical_port_list, platform_sfputil.get_logical_to_physical, platform_chassis
+        )
     else:
         if platform_sfputil.is_logical_port(port) == 0:
             click.echo("Error: invalid port '{}'\n".format(port))

@@ -21,24 +21,25 @@ class TestShowMirror(object):
     def test_mirror_show(self):
         runner = CliRunner()
         aclloader = AclLoader()
-        aclloader.configdb.set_entry("MIRROR_SESSION", "session1", {"direction": "BOTH", "dst_port": "Ethernet30", "src_port": "Ethernet40", "type": "SPAN"})
+        aclloader.configdb.set_entry("MIRROR_SESSION", "session1", {"direction": "BOTH", "dst_port": "Ethernet30", "src_port": "Ethernet40", "type": "SPAN", "label": "span_label"})
         aclloader.configdb.set_entry("MIRROR_SESSION", "session2", {"direction": "BOTH", "dst_port": "Ethernet7", "src_port": "Ethernet8", "type": "SPAN"})
         aclloader.configdb.set_entry("MIRROR_SESSION", "session11", {"direction": "RX", "dst_port": "Ethernet9", "src_port": "Ethernet10", "type": "SPAN"})
         aclloader.configdb.set_entry("MIRROR_SESSION", "session15", {"direction": "TX", "dst_port": "Ethernet2", "src_port": "Ethernet3", "type": "SPAN"})
         aclloader.read_sessions_info()
+        aclloader.sessions_db_info["test_session_db1"]["label"] = "erspan_label"
         context = {
             "acl_loader": aclloader
         }
         expected_output = """\
 ERSPAN Sessions
-Name              Status    SRC IP    DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port               Direction
-----------------  --------  --------  --------  -----  ------  -----  -------  ---------  --------------  ---------------------  -----------
-test_session_db1  active                                                                                   Ethernet40,Ethernet48  rx
+Name              Status    SRC IP    DST IP    GRE    DSCP    TTL    Queue    Monitor Port    SRC Port               Direction    Label         Policer
+----------------  --------  --------  --------  -----  ------  -----  -------  --------------  ---------------------  -----------  ------------  ---------
+test_session_db1  active                                                                        Ethernet40,Ethernet48  rx           erspan_label
 
 SPAN Sessions
-Name       Status    DST Port    SRC Port    Direction    Queue    Policer
----------  --------  ----------  ----------  -----------  -------  ---------
-session1   active     Ethernet30  Ethernet40  both
+Name       Status    DST Port    SRC Port    Direction    Queue    Label       Policer
+---------  --------  ----------  ----------  -----------  -------  ----------  ---------
+session1   active     Ethernet30  Ethernet40  both                  span_label
 session2   active     Ethernet7   Ethernet8   both
 session11  active     Ethernet9   Ethernet10  rx
 session15  active     Ethernet2   Ethernet3   tx
@@ -50,6 +51,7 @@ session15  active     Ethernet2   Ethernet3   tx
         result_output = result.output.replace('error', 'active')
         result_output = result_output.replace('inactive', 'active')
         assert result_output == expected_output
+
 
 @pytest.fixture
 def sampled_show_db(monkeypatch, tmp_path):
@@ -156,4 +158,3 @@ def test_show_rejects_two_session_selectors(monkeypatch):
     assert result.exit_code != 0
     assert 'not both' in result.output
     run.assert_not_called()
-
