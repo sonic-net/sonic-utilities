@@ -206,6 +206,23 @@ def print_model(use_db=False):
     print(model)
 
 
+def print_vendor(use_db=False):
+    vendor = None
+    if use_db:
+        vendor = get_tlv_value_from_db(TlvInfoDecoder._TLV_CODE_VENDOR_NAME)
+    else:
+        eeprom = instantiate_eeprom_object()
+        if not eeprom:
+            print('Failed to read system EEPROM info')
+            return
+
+        try:
+            vendor = eeprom.vendorstr()
+        except TypeError:
+            vendor = eeprom.vendorstr(eeprom.read_eeprom())
+
+    print(vendor)
+
 #-------------------------------------------------------------------------------
 #
 # sets global variable "optcfg"
@@ -220,6 +237,9 @@ def get_cmdline_opts():
                       help='print the device product name')
     optcfg.add_option('-m', dest='mgmtmac', action='store_true', default=False,
                       help='print the base mac address for management interfaces')
+    optcfg.add_option('-v', dest='vendorstr', action='store_true', default=False,
+                      help='print the vendor string for the platform')
+    
     return optcfg.parse_args()
 
 
@@ -253,6 +273,8 @@ def main():
         print_serial(use_db)
     elif opts.modelstr:
         print_model(use_db)
+    elif opts.vendorstr:
+        print_vendor(use_db)
     else:
         if use_db:
             tlv_dict = read_eeprom_from_db()
