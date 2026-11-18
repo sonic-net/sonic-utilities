@@ -41,6 +41,14 @@ class TestConfigAcl(object):
         assert len(port_set) == 4
         assert set(port_set) == {"Ethernet4", "Ethernet8", "Ethernet12", "Ethernet16"}
 
+    def test_parse_table_with_redirect_mode(self):
+        table_info = parse_acl_table_info("TEST", "L3", None, "Ethernet4", "ingress", redirect_mode="abf")
+        assert table_info["redirect_mode"] == "ABF"
+
+    def test_parse_table_with_invalid_redirect_mode(self):
+        with pytest.raises(ValueError):
+            parse_acl_table_info("TEST", "L3", None, "Ethernet4", "ingress", redirect_mode="invalid")
+
     def test_parse_table_with_empty_vlan(self):
         with pytest.raises(ValueError):
             parse_acl_table_info("TEST", "L3", None, "Ethernet4,Vlan3000", "egress")
@@ -139,3 +147,13 @@ class TestConfigAcl(object):
 
         mock_cfg_connector.assert_called_once_with(namespace="asic0")
         mock_instance.set_entry.assert_called_once_with("ACL_TABLE", "DATAACL", None)
+
+    def test_acl_add_table_invalid_redirect_mode(self):
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["acl"].commands["add"].commands["table"],
+            ["TEST", "L3", "-p", "Ethernet4", "-r", "INVALID"])
+
+        assert result.exit_code != 0
+        assert "Invalid value for '-r' / '--redirect-mode'" in result.output
