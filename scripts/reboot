@@ -28,7 +28,7 @@ if [ -e $VMCORE_FILE -a -s $VMCORE_FILE ]; then
         sync
         PLATFORM=$(grep -oP 'sonic_platform=\K\S+' /proc/cmdline)
         if [ ! -z "${PLATFORM}" -a -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
-            exec ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT}
+            ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT}
         fi
         # If no platform-specific reboot tool, just run /sbin/reboot
         /sbin/reboot
