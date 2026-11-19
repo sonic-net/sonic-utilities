@@ -11,7 +11,7 @@ pfcwd_show_start_config_output_pass = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0   forward               102                 101    disable
+Ethernet0   forward               702                 701    disable
 Ethernet4      drop               600                 600    disable
 Ethernet8      drop               600                 600    disable
 """
@@ -29,8 +29,8 @@ pfcwd_show_start_action_forward_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0   forward               302                 301    disable
-Ethernet4   forward               302                 301    disable
+Ethernet0   forward               702                 701    disable
+Ethernet4   forward               702                 701    disable
 Ethernet8      drop               600                 600    disable
 """
 
@@ -38,8 +38,8 @@ pfcwd_show_start_action_alert_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0     alert               502                 501    disable
-Ethernet4     alert               502                 501    disable
+Ethernet0     alert               802                 801    disable
+Ethernet4     alert               802                 801    disable
 Ethernet8      drop               600                 600    disable
 """
 
@@ -54,6 +54,16 @@ Ethernet8      drop               600                 600    disable
 
 pfcwd_show_start_default = """\
 Changed polling interval to 200ms
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               200                 200    disable
+Ethernet4      drop               200                 200    disable
+Ethernet8      drop               600                 600    disable
+"""
+
+# HW mode: unscaled 200 ms on every port; PFC_WD|GLOBAL is not written or shown
+pfcwd_show_start_default_hw_mode = """\
+Recovery mode: hardware
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
 Ethernet0      drop               200                 200    disable
@@ -101,6 +111,21 @@ pfcwd_show_stats_output="""\
 Ethernet0:3      stormed                        1/0       100/300       100/300              0/200              0/200
 Ethernet4:3  operational                        2/2       100/100       100/100                0/0                0/0
 Ethernet8:4      stormed                        3/2       100/300       100/300              0/200              0/200
+"""
+
+pfcwd_show_stats_hw_mode_output = """\
+      QUEUE       STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
+-----------  -----------  -------------------------  ------------  ------------  -----------------  -----------------
+Ethernet0:3      stormed                        1/0       100/300           N/A              0/200                N/A
+Ethernet4:3  operational                        2/2       100/100           N/A                0/0                N/A
+Ethernet8:4      stormed                        3/2       100/300           N/A              0/200                N/A
+"""
+
+pfcwd_show_stats_hw_mode_rx_only_output = """\
+      QUEUE    STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
+-----------  --------  -------------------------  ------------  ------------  -----------------  -----------------
+Ethernet0:3   stormed                        1/0       100/300           N/A              0/200                N/A
+Ethernet8:4   stormed                        3/2       100/300           N/A              0/200                N/A
 """
 
 pfcwd_show_stats_single_queue_output="""\
@@ -300,10 +325,10 @@ Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
           PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 --------------  --------  ----------------  ------------------  ---------
-     Ethernet0   forward               102                 101    disable
+     Ethernet0   forward               202                 201    disable
      Ethernet4      drop               200                 200    disable
   Ethernet-BP0      drop               200                 200    disable
-  Ethernet-BP4   forward               102                 101    disable
+  Ethernet-BP4   forward               202                 201    disable
 Ethernet-BP256      drop               200                 200    disable
 Ethernet-BP260      drop               200                 200    disable
 """
@@ -407,4 +432,17 @@ BIG_RED_SWITCH status is enable on asic1
      Ethernet0      drop               200                 200    disable
   Ethernet-BP0      drop               200                 200    disable
 Ethernet-BP256      drop               200                 200    disable
+"""
+
+# Test vectors for show pfcwd config in hardware recovery mode
+pfcwd_show_config_hw_mode = """\
+Recovery mode: hardware
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               200                 200    disable
+     Ethernet4      drop               200                 200    disable
+  Ethernet-BP0      drop               200                 200    disable
+  Ethernet-BP4      drop               200                 200    disable
+Ethernet-BP256      drop               200                 200    disable
+Ethernet-BP260      drop               200                 200    disable
 """

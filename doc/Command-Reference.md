@@ -180,7 +180,6 @@
   * [Platform Component Firmware vendor specific behaviour](#platform-component-firmware-vendor-specific-behaviour)
 * [Platform Specific Commands](#platform-specific-commands)
   * [Mellanox Platform Specific Commands](#mellanox-platform-specific-commands)
-  * [Barefoot Platform Specific Commands](#barefoot-platform-specific-commands)
 * [PINS](#pins-show commands)
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
@@ -1189,9 +1188,28 @@ This command displays the status of the device's thermal sensors
      xSFP module 32 Temp           39.5       70.0       N/A            90.0            N/A      False  20200302 06:59:58
   ```
 
+**show platform bmc os**
+
+This command displays the BMC operating system (`openbmc` or `sonic`), as defined in
+`bmc_os.json` in the HwSKU directory.
+
+- Usage:
+  ```
+  show platform bmc os
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show platform bmc os
+  sonic
+  ```
+
 **show platform bmc summary**
 
-This command displays BMC summary information including manufacturer, model, part number, serial number, power state, and firmware version
+This command displays BMC summary information including manufacturer, model, part number,
+serial number, power state, and firmware version. Supported for both BMC OS types; when
+BMC OS is `sonic`, `FirmwareVersion` is shown as `N/A` since it cannot be retrieved without
+Redfish.
 
 - Usage:
   ```
@@ -1201,7 +1219,7 @@ This command displays BMC summary information including manufacturer, model, par
 - Options:
   - `--json`: Output information in JSON format
 
-- Example:
+- Example (OpenBMC):
   ```
   admin@sonic:~$ show platform bmc summary
   Manufacturer: ASPEED
@@ -1210,6 +1228,17 @@ This command displays BMC summary information including manufacturer, model, par
   SerialNumber: 123456789
   PowerState: On
   FirmwareVersion: 1.0.0
+  ```
+
+- Example (SONiC BMC):
+  ```
+  admin@sonic:~$ show platform bmc summary
+  Manufacturer: NVIDIA
+  Model: P4102-A01
+  PartNumber: 699-24102-0100-EB1
+  SerialNumber: MT260560000K
+  PowerState: On
+  FirmwareVersion: N/A
   ```
 
 - Example (JSON format):
@@ -1227,7 +1256,10 @@ This command displays BMC summary information including manufacturer, model, par
 
 **show platform bmc eeprom**
 
-This command displays BMC EEPROM information
+This command displays BMC EEPROM information. When BMC OS is `openbmc`, fields come from
+Redfish. When BMC OS is `sonic`, Manufacturer, Model, PartNumber, and SerialNumber are read
+from the BMC remote STATE_DB; PowerState reflects the reachability of the BMC (`On` if it
+responds to ping, `Off` otherwise).
 
 - Usage:
   ```
@@ -1237,7 +1269,7 @@ This command displays BMC EEPROM information
 - Options:
   - `--json`: Output information in JSON format
 
-- Example:
+- Example (OpenBMC):
   ```
   admin@sonic:~$ show platform bmc eeprom
   Manufacturer: ASPEED
@@ -1245,6 +1277,16 @@ This command displays BMC EEPROM information
   PartNumber: 123-12345-1234-AB1
   PowerState: On
   SerialNumber: 123456789
+  ```
+
+- Example (SONiC BMC):
+  ```
+  admin@sonic:~$ show platform bmc eeprom
+  Manufacturer: NVIDIA
+  Model: P4102-A01
+  PartNumber: 699-24102-0100-EB1
+  PowerState: On
+  SerialNumber: MT260560000K
   ```
 
 - Example (JSON format):
@@ -2637,11 +2679,27 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#arp--n
 
 ## BMC
 
+On Switch-Host platforms, the BMC peer on the USB/BMC link may run OpenBMC (Redfish) or
+SONiC-on-BMC (Redis). The type is defined per HwSKU by the `os` field (`openbmc` or
+`sonic`) in `bmc_os.json` in the HwSKU directory
+(`/usr/share/sonic/device/<platform>/<hwsku>/bmc_os.json`). When the file is missing or
+invalid, the default is `sonic`. To change the BMC OS, edit this file. Use
+`show platform bmc os` to display the current value.
+
+All BMC commands are supported only when run on the Switch-Host (not on the BMC
+itself). OpenBMC-only commands (Redfish session management: `reset-root-password`,
+`open-session`, `close-session`) additionally require `os` to be `openbmc`.
+`show platform bmc eeprom` and `show platform bmc summary` work for both: OpenBMC returns full Redfish
+EEPROM fields and firmware version; SONiC BMC returns Manufacturer, Model, PartNumber, and
+SerialNumber from remote STATE_DB, with PowerState derived from BMC reachability (ping) and
+FirmwareVersion shown as `N/A`.
+
 ### BMC config commands
 
 **config bmc open-session**
 
-This command opens a session with the BMC and returns session credentials
+This command opens a session with the BMC and returns session credentials. Supported only
+when BMC OS is `openbmc`.
 
 - Usage:
   ```
@@ -2657,7 +2715,8 @@ This command opens a session with the BMC and returns session credentials
 
 **config bmc close-session**
 
-This command closes a BMC session using the provided session ID
+This command closes a BMC session using the provided session ID. Supported only when BMC
+OS is `openbmc`.
 
 - Usage:
   ```
@@ -2675,7 +2734,8 @@ This command closes a BMC session using the provided session ID
 
 **config bmc reset-root-password**
 
-This command resets the BMC root password to default
+This command resets the BMC root password to default. Supported only when BMC OS is
+`openbmc`.
 
 - Usage:
   ```
@@ -2799,7 +2859,7 @@ This command displays the summary of all configured IPv4 BGP neighbors and their
 
 This command displays IPv4 BGP neighbor details when no optional argument is specified.
 
-When the optional argument IPv4_address is specified, it displays the detailed neighbor information about that specific IPv4 neighbor.
+When an optional IPv4 address or configured interface name is specified, it displays detailed information about that neighbor. Interface names identify unnumbered neighbors and must preserve the case of the configured key, for example `Ethernet16`.
 
 Command has got additional optional arguments to display only the advertised routes, or the received routes, or all routes.
 
@@ -2809,8 +2869,16 @@ Use `show ipv6 bgp neighbors <ipv6-address>` to display details for an IPv6 neig
 - Usage:
 
   ```
-  show ip bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
+  show ip bgp neighbors [(<ipv4-address> | <interface-name>) [advertised-routes | received-routes | routes]]
   ```
+
+Interface-based examples:
+
+```
+show ip bgp neighbors Ethernet16
+show ip bgp neighbors Ethernet16 advertised-routes
+show ip bgp vrf Vrf-red neighbors Ethernet16 routes
+```
 
 - Example:
   ```
@@ -2868,7 +2936,7 @@ Use `show ipv6 bgp neighbors <ipv6-address>` to display details for an IPv6 neig
    Read thread: on  Write thread: on
   ```
 
-Optionally, you can specify an IP address in order to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
+Optionally, you can specify an IPv4 address or configured interface name to display only that particular neighbor. In this mode, you can optionally specify whether you want to display all routes advertised to the specified neighbor, all routes received from the specified neighbor or all routes (received and accepted) from the specified neighbor.
 
 - Example:
   ```
@@ -2943,13 +3011,13 @@ This command displays the summary of all IPv6 bgp neighbors that are configured 
   ```
 **show ipv6 bgp neighbors**
 
-This command displays all the details of one particular IPv6 Border Gateway Protocol (BGP) neighbor. Option is also available to display only the advertised routes, or the received routes, or all routes.
+This command displays IPv6 BGP neighbor information. A neighbor can be selected by IPv6 address or by the case-sensitive configured interface name of an unnumbered neighbor. Options are available to display advertised routes, received routes, or routes. The interface must be a configured BGP neighbor; arbitrary interface names are not accepted.
 
 
 - Usage:
 
   ```
-  show ipv6 bgp neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
+  show ipv6 bgp neighbors [(<ipv6-address> | <interface-name>) [advertised-routes | received-routes | routes]]
   ```
 
 - Example:
@@ -2960,6 +3028,15 @@ This command displays all the details of one particular IPv6 Border Gateway Prot
 
   admin@sonic:~$ show ipv6 bgp neighbors fc00::72 routes
   ```
+
+Interface-based examples:
+
+```
+show ipv6 bgp neighbors Ethernet16
+show ipv6 bgp neighbors Ethernet16 advertised-routes
+show ipv6 bgp vrf Vrf-red neighbors Ethernet16 routes
+```
+
 **show ipv6 bgp network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
 
 This command displays all the details of IPv6 Border Gateway Protocol (BGP) prefixes.
@@ -3151,11 +3228,11 @@ When the session is shutdown using this command, BGP state in "show ip bgp summa
 
 **config bgp shutdown neighbor**
 
-This command is to shut down a BGP session with a neighbor by that neighbor's IP address or hostname
+This command shuts down a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. The dedicated interface lookup is case-sensitive and checks both the neighbor key and the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` table. If it does not match, the existing lowercase neighbor-key and hostname lookups are retained. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```
-  sudo config bgp shutdown neighbor (<ip_address> | <hostname>)
+  sudo config bgp shutdown neighbor (<ip_address> | <interface_name> | <hostname>)
   ```
 
 - Examples:
@@ -3164,6 +3241,9 @@ This command is to shut down a BGP session with a neighbor by that neighbor's IP
   ```
   ```
   admin@sonic:~$ sudo config bgp shutdown neighbor SONIC02SPINE
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp shutdown neighbor Ethernet16
   ```
 
 
@@ -3184,11 +3264,11 @@ This command is used to start up all the IPv4 & IPv6 BGP neighbors
 
 **config bgp startup neighbor**
 
-This command is used to start up the particular IPv4 or IPv6 BGP neighbor using either the IP address or hostname.
+This command starts up a BGP session by the neighbor's IP address, interface name (for an unnumbered neighbor), or hostname. The dedicated interface lookup is case-sensitive and checks both the neighbor key and the corresponding `INTERFACE`, `PORTCHANNEL_INTERFACE`, `VLAN_INTERFACE`, or `VLAN_SUB_INTERFACE` table. If it does not match, the existing lowercase neighbor-key and hostname lookups are retained. Hostname lookup still applies to all neighbors with that name.
 
 - Usage:
   ```
-  config bgp startup neighbor (<ip-address> | <hostname>)
+  config bgp startup neighbor (<ip-address> | <interface_name> | <hostname>)
   ```
 
 - Examples:
@@ -3197,6 +3277,9 @@ This command is used to start up the particular IPv4 or IPv6 BGP neighbor using 
   ```
   ```
   admin@sonic:~$ sudo config bgp startup neighbor SONIC02SPINE
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp startup neighbor Ethernet16
   ```
 
 
@@ -6661,7 +6744,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters errors
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
-  show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-histogram <interface_name>
   show interfaces counters fec-stats
   show interfaces counters detailed <interface_name>
   show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
@@ -6845,26 +6928,28 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
 
 - Example:
   ```
-  admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
-  Symbol Errors Per Codeword  Codewords
-  --------------------------  ---------
-  BIN0:                       1000000
-  BIN1:                       900000
-  BIN2:                       800000
-  BIN3:                       700000
-  BIN4:                       600000
-  BIN5:                       500000
-  BIN6:                       400000
-  BIN7:                       300000
-  BIN8:                       0
-  BIN9:                       0
-  BIN10:                      0
-  BIN11:                      0
-  BIN12:                      0
-  BIN13:                      0
-  BIN14:                      0
-  BIN15:                      0
+  admin@str-s6000-acs-11:/usr/bin$ show interfaces counters fec-histogram Ethernet0
+  Symbol Errors Per Codeword      Codewords
+  ----------------------------  -----------
+  BIN0                              1000000
+  BIN1                               900000
+  BIN2                               800000
+  BIN3                               700000
+  BIN4                               600000
+  BIN5                               500000
+  BIN6                               400000
+  BIN7                               300000
+  BIN8                                    0
+  BIN9                                    0
+  BIN10                                   0
+  BIN11                                   0
+  BIN12                                   0
+  BIN13                                   0
+  BIN14                                   0
+  BIN15                                   0
   ```
+
+  After `sonic-clear counters`, the codewords are shown relative to the time of the clear, and the output is preceded by a `Last cached time was ...` line.
 
 The "fec-stats" subcommand is used to disply the interface fec related statistic.
 
@@ -6879,6 +6964,12 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   ```
 
   FEC_MAX_T - Is the maximum NON-ZERO FEC histogram BIN (starting from Bin0). -1 indicates the value is invalid (For eg during link down)
+
+- NOTE: `sonic-clear counters` affects the FEC statistics as follows:
+  - FEC_CORR, FEC_UNCORR and FEC_SYMBOL_ERR are shown relative to the time of the clear, like the other interface counters.
+  - FEC_MAX_T is computed from the FEC histogram BINs that counted codewords since the clear (-1 if none did). With `-p <period>` it is computed over the period instead.
+  - FEC_PRE_BER_MAX is a running maximum, so it is reset in COUNTERS_DB and starts tracking again from the next polling interval. Like `sonic-clear ... watermark`, this reset is global and is seen by all users. It is not reset when counters are saved under a tag (`portstat -c -t <tag>`).
+  - FEC_PRE_BER, FEC_POST_BER, FLR(O) and FLR(P) are computed over the most recent polling interval and are not affected.
 
 For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
 
@@ -6900,13 +6991,27 @@ For debugging link related issues where you need to clear the FEC histogram and 
   ```
   root@sonic:~# portstat -fh -i Ethernet504
   Last cached time was 2025-10-02T16:43:57.934081
-        IFACE         BIN0    BIN1    BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
-  -----------  -----------  ------  ------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
-  Ethernet504  624,891,017  13,331     172       0       0       0       0       0       0       0        0        0        0        0        0        0
-  root@str-7060x6-c09-u25:~#
-  ``` 
+  Symbol Errors Per Codeword      Codewords
+  ----------------------------  -----------
+  BIN0                            624891017
+  BIN1                                13331
+  BIN2                                  172
+  BIN3                                    0
+  BIN4                                    0
+  BIN5                                    0
+  BIN6                                    0
+  BIN7                                    0
+  BIN8                                    0
+  BIN9                                    0
+  BIN10                                   0
+  BIN11                                   0
+  BIN12                                   0
+  BIN13                                   0
+  BIN14                                   0
+  BIN15                                   0
+  ```
 
-  To clear the FEC histogram use `portstat -c`. NOTE: This will clear all counters. 
+  To clear the FEC histogram use `sonic-clear counters` (or `portstat -c`). NOTE: This will clear all interface counters.
 
 The "trim" subcommand is used to display the interface packet trimming related statistic.
 
@@ -7372,8 +7477,19 @@ This command displays some more fields such as Lanes, Speed, MTU, Type, Asymmetr
 
 - Usage:
   ```
-  show interfaces status [<interface_name>]
+  show interfaces status [<interface_name>] [-l <location>]
   ```
+
+On a chassis-packet supervisor, the default frontend view displays line-card
+interfaces using the normal display filtering. Use `-d all` to include the
+supervisor's internal interfaces. Use `-l SUPERVISOR` or the matching
+`-l SUPERVISOR<n>` name to select the local supervisor, `-l LINE-CARD<n>` for
+one line card, or `-l all` for all chassis locations. A numbered supervisor
+location that does not match the local supervisor is rejected.
+Aggregate output labels each section with its chassis location. When internal
+interfaces are filtered from a supervisor view, the command prints a reminder
+to use `-d all`. Other supervisor and non-supervisor platforms retain their
+existing behavior.
 
 - Example (show interface status of all interfaces):
   ```
@@ -10176,13 +10292,13 @@ This command displays all the mirror sessions that are configured.
   ```
   admin@sonic:~$ show mirror_session
   ERSPAN Sessions
-  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ------     --------  --------   --------  -----  ------  -----  -------  ---------  --------------  ----------  -----------
+  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  ---------  --------  ---------  --------  -----  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
   everflow0  active    10.1.0.32  10.0.0.7
 
   SPAN Sessions
-  Name    Status    DST Port    SRC Port       Direction
-  ------  --------  ----------  -------------  -----------
+  Name    Status    DST Port    SRC Port       Direction    Queue    Label    Policer
+  ------  --------  ----------  -------------  -----------  -------  -------  ---------
   port0   active    Ethernet0   PortChannel10  rx
   ```
 
@@ -10209,39 +10325,40 @@ While adding a new ERSPAN session, users need to configure the following fields 
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
 10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
 11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
+12) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>] [--label <label>]
   ```
 
   The following command is also supported to be backward compatible.
   This command will be deprecated in future releases.
   ```
-  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue]
+  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [--label <label>]
   ```
 
 - Example:
   ```
   root@T1-2:~# config mirror_session add mrr_legacy 1.2.3.4 20.21.22.23 8 100 0x6558 0
   root@T1-2:~# show mirror_session
-  Name         Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------    --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_legacy   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0
+  Name        Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  ----------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  mrr_legacy  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0
 
 
-  root@T1-2:~# config mirror_session erspan add mrr_abcd 1.2.3.4 20.21.22.23 8 100 0x6558 0
+  root@T1-2:~# config mirror_session erspan add mrr_abcd 1.2.3.4 20.21.22.23 8 100 0x6558 0 --label erspan_label
   root@T1-2:~# show mirror_session
-  Name       Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------  --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_abcd   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label         Policer    Sample Rate    Truncate Size
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  ------------  ---------  -------------  ---------------
+  mrr_abcd  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                                           erspan_label
   root@T1-2:~#
 
   root@T1-2:~# config mirror_session erspan add mrr_port 1.2.3.4 20.21.22.23 8 100 0x6558 0 Ethernet0
   root@T1-2:~# show mirror_session
-  Name       Status    SRC IP     DST IP       GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port    Direction
-  ---------  --------  --------   -----------  ------  ------  -----  -------  ---------  --------------  ----------  -----------
-  mrr_port   inactive  1.2.3.4    20.21.22.23  0x6558  8       100    0                                   Ethernet0   both
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  mrr_port  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                  Ethernet0   both
   root@T1-2:~#
   ```
 
@@ -10251,19 +10368,20 @@ While adding a new SPAN session, users need to configure the following fields th
 3) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
 4) optional - Queue in which packets shall be sent out of the device. Valid values 0 to 7 for most of the devices. Users need to know their device and the number of queues supported in that device.
 5) optional - Policer which will be used to control the rate at which frames are mirrored.
+6) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
 
 - Usage:
   ```
-  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [policer <policer_name>]
+  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [policer <policer_name>] [--label <label>]
   ```
 
 - Example:
   ```
-  root@T1-2:~# config mirror_session span add port0 Ethernet0 Ethernet4,PortChannel001,Ethernet8
+  root@T1-2:~# config mirror_session span add port0 Ethernet0 Ethernet4,PortChannel001,Ethernet8 --label span_label
   root@T1-2:~# show mirror_session
-  Name    Status    DST Port    SRC Port                           Direction
-  ------  --------  ----------  ---------------------------------  -----------
-  port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both
+  Name    Status    DST Port    SRC Port                           Direction    Queue    Label       Policer
+  ------  --------  ----------  ---------------------------------  -----------  -------  ----------  ---------
+  port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both                  span_label
   root@T1-2:~#
   ```
 
@@ -10922,6 +11040,12 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#orchag
 # PFC Watchdog Commands
 Detailed description of the PFC Watchdog can be found on [this wiki page](https://github.com/sonic-net/SONiC/wiki/PFC-Watchdog)
 
+When the platform runs the PFC watchdog in hardware (`RECOVERY_MECHANISM` is `HARDWARE` in STATE_DB `PFC_WD_STATE_TABLE|PFC_WD`):
+- `config pfcwd start` rejects detection and restoration times outside the range the hardware reports, narrowed to the 100-5000 ms and 100-60000 ms the configuration allows. Without `--restoration-time`, the default of twice the detection time is capped at the hardware maximum. It also rejects an action that differs from the hardware's (`drop` when `--action` is not given) unless no port is configured or the only configured port is being reconfigured, since the hardware uses one action for all ports.
+- `config pfcwd stop` is refused while any of the selected queues is stormed.
+- `config pfcwd interval` and `config pfcwd big_red_switch` are not supported.
+- `config pfcwd start_default` uses 200 ms detection and restoration times on every port, without scaling by port count, and removes a polling interval left by the software watchdog. Like `config pfcwd start`, it is refused when the hardware uses an action other than `drop` and ports are configured.
+
 **config pfcwd start \<arguments\>**
 
 This command starts PFC Watchdog
@@ -11003,16 +11127,16 @@ Additionally if the number of ports the watchdog is enabled on exceeds 32, all t
 
 **show pfcwd config**
 
-This command shows current PFC Watchdog configuration
+This command shows current PFC Watchdog configuration. In hardware mode it prints `Recovery mode: hardware` above the table. `--json` prints the configuration in JSON format, with the recovery mode (on multi-ASIC systems the polling interval and BIG_RED_SWITCH are given per ASIC namespace), and in hardware mode the supported timer ranges and the per-port values and status programmed in hardware.
 
 - Usage:
   ```
-  show pfcwd config
+  show pfcwd config [--json]
   ```
 
 **show pfcwd stats**
 
-This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc)
+This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc). In hardware mode the RX columns show `N/A`, since the hardware watchdog does not count RX.
 
 - Usage:
   ```
@@ -11311,41 +11435,6 @@ config platform mlnx
 This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
 The platform mellanox command currently includes no sub command.
-
-### Barefoot Platform Specific Commands
-
-**show platform barefoot profile**
-
-This command displays active P4 profile and lists available ones.
-
-- Usage:
-  ```
-  show platform barefoot profile
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform barefoot profile
-  Current profile: x1
-  Available profile(s):
-  x1
-  x2
-  ```
-
-**config platform barefoot profile**
-
-This command sets P4 profile.
-
-- Usage:
-  ```
-  config platform barefoot profile <p4_profile> [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config platform barefoot profile x1
-  Swss service will be restarted, continue? [y/N]: y
-  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#platform-specific-commands)
 
