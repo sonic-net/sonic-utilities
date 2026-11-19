@@ -1194,7 +1194,7 @@ class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
         self.check(dbmgtr.configDB)
         # Only the field was in these rows, so the rows are gone.
         assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.10') == {}
-        assert dbmgtr.configDB.get_entry('PORTCHANNEL_INTERFACE', 'PortChannel0001.100') == {}
+        assert dbmgtr.configDB.get_entry('PORTCHANNEL_INTERFACE', 'PortChannel1.10') == {}
         # Another field was there, so the row stays without the moved one.
         assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.20') == {'vrf_name': 'Vrf1'}
         # VLAN_SUB_INTERFACE already set it: its value is kept.
@@ -1209,6 +1209,15 @@ class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
         assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.60') == {}
         # The old table has an address row for it, so the old row stays.
         assert dbmgtr.configDB.get_keys('INTERFACE').count('Ethernet0.70') == 1
+        # No row, but address rows: the row is created with all the old row's fields.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.80') == {
+            'ipv6_use_link_local_only': 'enable', 'vrf_name': 'Vrf1'}
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.90') == {'ipv6_use_link_local_only': 'enable'}
+        # A value the model refuses is dropped.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.91') == {'admin_status': 'up'}
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.91') == {}
+        # The value moved from INTERFACE wins over a second copy in PORTCHANNEL_INTERFACE.
+        assert dbmgtr.configDB.get_entry('PORTCHANNEL_INTERFACE', 'Ethernet0.10') == {}
         # A short name moves the same way.
         assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Eth4.60')['ipv6_use_link_local_only'] == 'enable'
 
