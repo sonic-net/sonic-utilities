@@ -283,6 +283,7 @@ setup(
         'wheel'
     ],
     tests_require = [
+        'scapy',
         'pyfakefs',
         'responses',
         'pytest',
@@ -291,6 +292,7 @@ setup(
     ],
     extras_require = {
         'testing': [
+            'scapy',
             'pyfakefs',
             'responses',
             'pytest',
