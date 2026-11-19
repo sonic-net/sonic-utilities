@@ -1830,6 +1830,28 @@ def delete_transceiver_tables():
         state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
 
 
+def clear_logger_state():
+    """Clear STATE_DB LOGGER_TABLE in every namespace while services are down.
+
+    Each daemon publishes its row when it registers, so the restart rebuilds
+    the table and rows of daemons that no longer run are gone. A failure is
+    logged; it does not stop the reload.
+    """
+    namespaces = [DEFAULT_NAMESPACE]
+    try:
+        if multi_asic.is_multi_asic():
+            namespaces += multi_asic.get_namespace_list()
+    except Exception as e:
+        log.log_warning("Failed to list namespaces, clearing LOGGER_TABLE in the host only: {}".format(e))
+    for namespace in namespaces:
+        try:
+            state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+            state_db.connect(state_db.STATE_DB, False)
+            state_db.delete_all_by_pattern(state_db.STATE_DB, "LOGGER_TABLE|*")
+        except Exception as e:
+            log.log_warning("Failed to clear LOGGER_TABLE in namespace '{}': {}".format(namespace, e))
+
+
 def delete_bgp_peer_table():
     # Delete all entries in BGP_PEER_CONFIGURED_TABLE in state db.
     state_db = SonicV2Connector(use_unix_socket_path=True)
@@ -2469,6 +2491,9 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     if not no_service_restart:
         log.log_notice("'reload' stopping services...")
         _stop_services()
+        # Only here: with -n the daemons keep running and would not
+        # publish their rows again.
+        clear_logger_state()
 
     if multiasic_single_file_mode:
         multiasic_write_to_db(cfg_files[0], load_sysinfo)

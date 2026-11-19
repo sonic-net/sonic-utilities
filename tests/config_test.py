@@ -899,6 +899,70 @@ class TestConfigReload(object):
             mock_swsscommon.RestartWaiter.isFastBootInProgress.assert_called_once()
             mock_swsscommon.RestartWaiter.isWarmBootInProgress.assert_called_once()
 
+    def _reload_with_services_mocked(self, config, args):
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = False
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = False
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch.object(config, 'config_file_yang_validation'), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch('config.main._stop_services'), \
+                mock.patch('config.main._restart_services'), \
+                mock.patch('config.main._reset_failed_services'), \
+                mock.patch('config.main.clear_logger_state') as mock_clear, \
+                mock.patch("utilities_common.cli.run_command",
+                           mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            result = CliRunner().invoke(config.config.commands["reload"], args)
+        assert result.exit_code == 0, result.output
+        return mock_clear
+
+    def test_config_reload_clears_logger_state(self, get_cmd_module, setup_single_broadcom_asic):
+        """Services restart, so every daemon publishes its LOGGER_TABLE row again."""
+        (config, show) = get_cmd_module
+        self._reload_with_services_mocked(config, ["-y"]).assert_called_once_with()
+
+    def test_config_reload_no_service_restart_keeps_logger_state(self, get_cmd_module, setup_single_broadcom_asic):
+        """With -n the daemons keep running and would not publish their rows again."""
+        (config, show) = get_cmd_module
+        self._reload_with_services_mocked(config, ["-y", "-n"]).assert_not_called()
+
+    def test_clear_logger_state_removes_only_logger_table(self, get_cmd_module, setup_single_broadcom_asic):
+        (config, show) = get_cmd_module
+        state_db = config.SonicV2Connector(use_unix_socket_path=True)
+        state_db.connect(state_db.STATE_DB, False)
+        state_db.set(state_db.STATE_DB, "LOGGER_TABLE|orchagent", "LOGLEVEL", "NOTICE")
+        state_db.set(state_db.STATE_DB, "LOGGER_TABLE|xcvrd", "LOGLEVEL", "INFO")
+        state_db.set(state_db.STATE_DB, "NOT_LOGGER_TABLE|x", "f", "v")
+        try:
+            # The mock gives each connector its own data, so share this one.
+            with mock.patch("config.main.SonicV2Connector", return_value=state_db):
+                config.clear_logger_state()
+            assert state_db.keys(state_db.STATE_DB, "LOGGER_TABLE|*") in (None, [])
+            assert state_db.get(state_db.STATE_DB, "NOT_LOGGER_TABLE|x", "f") == "v"
+        finally:
+            state_db.delete(state_db.STATE_DB, "NOT_LOGGER_TABLE|x")
+            state_db.delete_all_by_pattern(state_db.STATE_DB, "LOGGER_TABLE|*")
+
+    def test_clear_logger_state_survives_namespace_lookup_failure(self, get_cmd_module, setup_single_broadcom_asic):
+        """A failure to list namespaces still clears the host and never stops the reload."""
+        (config, show) = get_cmd_module
+        connectors = []
+
+        def connector(**kwargs):
+            db = mock.MagicMock()
+            db.STATE_DB = "STATE_DB"
+            connectors.append(kwargs.get("namespace"))
+            return db
+
+        with mock.patch("config.main.SonicV2Connector", side_effect=connector), \
+                mock.patch("config.main.multi_asic.is_multi_asic", side_effect=RuntimeError("no namespaces")):
+            config.clear_logger_state()
+
+        assert connectors == [""]
+
     def test_config_reload_no_service_restart_skips_guard(self, get_cmd_module, setup_single_broadcom_asic):
         """With -n (no_service_restart), guard is skipped — no syncd teardown, no risk."""
         (config, show) = get_cmd_module
@@ -1124,6 +1188,22 @@ class TestConfigReloadMasic(object):
         """Helper method to create a dummy config file with JSON content."""
         with open(path, 'w') as f:
             f.write(json.dumps(content))
+
+    def test_clear_logger_state_clears_every_namespace(self):
+        connectors = []
+
+        def connector(**kwargs):
+            db = mock.MagicMock()
+            db.STATE_DB = "STATE_DB"
+            connectors.append((kwargs.get("namespace"), db))
+            return db
+
+        with mock.patch("config.main.SonicV2Connector", side_effect=connector):
+            config.clear_logger_state()
+
+        assert [ns for ns, _ in connectors] == ["", "asic0", "asic1"]
+        for _, db in connectors:
+            db.delete_all_by_pattern.assert_called_once_with("STATE_DB", "LOGGER_TABLE|*")
 
     def test_config_reload_onefile_masic(self):
         def read_json_file_side_effect(filename):
