@@ -109,3 +109,35 @@ file except regenerated RECORD is byte-identical (including metadata/scripts).
 The full development payload/tests remain available; both variants use the
 same documented shebang/permission/metadata transforms. The prebuilt SSD
 ELF exception is retained honestly; no production feature is silently removed.
+
+
+## Direct source installation for the Make host contract
+
+`//:sonic-utilities.runtime` creates an uncompressed installation TAR directly
+from the original setup.py selection, including its tests package and resources.
+`//:sonic-utilities.runtime_metadata` exports the associated PythonRuntimeInfo
+metadata. These source interfaces retain all original dependency constraints,
+entry points, scripts and the byte-identical pre-existing AMD64 SSD executable.
+The configured target interpreter is `/usr/bin/python3`; executable scripts and
+the SSD diagnostic retain mode 0755. No wheel is an input to the source install.
+The existing separate runtime wheel and its tests-exclusion contract remain
+unchanged; it serves its original DHCP wheel consumer.
+
+Run `bazel test //:source_install_test` to check every installed payload against
+setup.py, the target scripts, metadata, RECORD and a real installed CLI/resource
+consumer. Existing wheel tests remain part of the same CI workflow.
+
+The separate sonic-utilities-data package exports its original
+`sonic-utilities-data/generate_completions.py`, Debian control/changelog/install
+inputs, and the existing `//:utilities_templates` collection. Image owners supply
+the complete host Python closure, native libraries, cfggen and product paths;
+then they run the unchanged generator and install its output according to the
+original Debian recipe. This source module has no reverse dependency on the
+buildimage workspace.
+
+The new source API requires infrastructure executable file modes and script
+normalization. The module selects published sonic-build-infra
+`0.0.38-0baa4acc9eac9ccc793b81104b1580d530271cbe`, which provides these
+interfaces. Source component verification and formal registry consumption are
+distinct acceptance steps. Local reproduction keeps
+the user's ordinary cache and output configuration.

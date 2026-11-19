@@ -28,12 +28,13 @@ jobs:
           test "$(dpkg --print-architecture)" = amd64
           test ! -e MODULE.bazel.lock
           git check-ignore --quiet MODULE.bazel.lock
-          bazel build --lockfile_mode=update //:sonic_utilities_wheel //bazel/runtime:sonic_utilities_wheel
+          bazel build --lockfile_mode=update //:sonic_utilities_wheel //bazel/runtime:sonic_utilities_wheel \
+            //:sonic-utilities.runtime //:sonic-utilities.runtime_metadata
 
       - name: Check wheel contents and run the installed CLI smoke test
         run: |
           bazel test --lockfile_mode=update --test_output=errors \
-            //:wheel_contract_test //:wheel_installed_test //:runtime_wheel_contract_test
+            //:wheel_contract_test //:wheel_installed_test //:runtime_wheel_contract_test //:source_install_test
 
       - name: Collect wheels and build evidence
         env:
@@ -49,6 +50,11 @@ jobs:
             [[ $wheel == *.whl && -f "$wheel" ]]
             cp "$wheel" "$out/$variant/"
           done
+          for target in //:sonic-utilities.runtime //:sonic-utilities.runtime_metadata; do
+            artifact=$(bazel cquery --lockfile_mode=update --output=files "$target")
+            test -f "$artifact"
+            cp "$artifact" "$out/"
+          done
           bazel mod graph --lockfile_mode=update > "$out/module-graph.txt"
           cp MODULE.bazel.lock "$out/"
           printf 'source=%s\ncheckout=%s\nrunner=%s\nuserspace=%s\n' \
@@ -56,7 +62,7 @@ jobs:
           bazel --version >> "$out/build.txt"
           git diff --exit-code HEAD --
           cd "$out"
-          sha256sum full/*.whl runtime/*.whl MODULE.bazel.lock module-graph.txt build.txt > SHA256SUMS
+          sha256sum full/*.whl runtime/*.whl *.tar *.runtime.json MODULE.bazel.lock module-graph.txt build.txt > SHA256SUMS
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

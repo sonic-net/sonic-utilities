@@ -34,3 +34,7 @@ sonic-utilities-data_*.changes
 # Local Bazel outputs / generated resolution evidence
 /bazel-*
 /MODULE.bazel.lock
+
+# Private development composition; never published.
+/.bazelrc.user
+/ci-artifacts/
