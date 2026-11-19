@@ -1454,6 +1454,48 @@ class DBMigrator():
         entry = { self.TABLE_FIELD : version }
         self.configDB.set_entry(self.TABLE_NAME, self.TABLE_KEY, entry)
 
+    def migrate_orphaned_stp_rows(self):
+        """
+        Drop spanning-tree rows for interfaces that no longer exist. Breakout
+        and PortChannel deletion on older images left STP_PORT, STP_VLAN_PORT
+        and STP_MST_PORT rows behind, and the model now requires the interface
+        to exist, so one leftover row fails every validation on the switch.
+        """
+        try:
+            interfaces = set(self.configDB.get_table("PORT")) | set(self.configDB.get_table("PORTCHANNEL"))
+        except Exception as e:
+            log.log_error(f"Failed to read PORT or PORTCHANNEL: {str(e)}")
+            return
+        if not interfaces:
+            # A switch always has ports; an empty read is a broken database,
+            # not a reason to drop every spanning-tree row.
+            log.log_warning("No PORT or PORTCHANNEL rows; leaving the spanning-tree tables alone")
+            return
+
+        # STP_PORT|<ifname>, STP_VLAN_PORT|<vlan>|<ifname>, STP_MST_PORT|<instance>|<ifname>
+        for table, position in (("STP_PORT", None), ("STP_VLAN_PORT", 1), ("STP_MST_PORT", 1)):
+            try:
+                rows = self.configDB.get_table(table)
+            except Exception as e:
+                log.log_error(f"Failed to read {table} table: {str(e)}")
+                continue
+
+            for key in rows:
+                if position is None:
+                    ifname = key
+                elif isinstance(key, tuple) and len(key) > position:
+                    ifname = key[position]
+                else:
+                    continue
+                if ifname in interfaces:
+                    continue
+                name = '|'.join(key) if isinstance(key, tuple) else key
+                try:
+                    self.configDB.set_entry(table, key, None)
+                    log.log_warning(f"Removed {table}|{name}: {ifname} is neither a port nor a port channel")
+                except Exception as e:
+                    log.log_error(f"Failed to remove {table}|{name}: {str(e)}")
+
     def common_migration_ops(self):
         try:
             with open(INIT_CFG_FILE) as f:
@@ -1491,6 +1533,7 @@ class DBMigrator():
 
         self.migrate_tacplus()
         self.migrate_aaa()
+        self.migrate_orphaned_stp_rows()
 
     def migrate(self):
         version = self.get_version()

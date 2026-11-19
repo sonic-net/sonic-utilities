@@ -1149,3 +1149,109 @@ class TestIPinIPTunnelEcnModeMigrator(object):
         expected_state_db = SonicV2Connector(host='127.0.0.1')
         expected_state_db.connect(expected_state_db.STATE_DB)
         self.compare_keys(expected_state_db, dbmgtr.stateDB, 'STATE_DB')
+
+
+class TestOrphanedStpRowMigrator(object):
+    """
+    Spanning-tree rows whose interface no longer exists are dropped.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(
+            mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.configDB.set_entry("PORT", "Ethernet0", {"lanes": "0"})
+        dbmgtr.configDB.set_entry("PORTCHANNEL", "PortChannel0001", {"mtu": "9100"})
+        return dbmgtr
+
+    def test_rows_of_a_missing_interface_are_removed(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("STP_PORT", "Ethernet8", {"enabled": "true"})
+        dbmgtr.configDB.set_entry("STP_VLAN_PORT", ("Vlan100", "Ethernet8"), {"path_cost": "200"})
+        dbmgtr.configDB.set_entry("STP_MST_PORT", ("0", "PortChannel0002"), {"priority": "128"})
+
+        dbmgtr.migrate_orphaned_stp_rows()
+
+        assert dbmgtr.configDB.get_entry("STP_PORT", "Ethernet8") == {}
+        assert dbmgtr.configDB.get_entry("STP_VLAN_PORT", ("Vlan100", "Ethernet8")) == {}
+        assert dbmgtr.configDB.get_entry("STP_MST_PORT", ("0", "PortChannel0002")) == {}
+
+    def test_rows_of_existing_interfaces_are_left_alone(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("STP_PORT", "Ethernet0", {"enabled": "true"})
+        dbmgtr.configDB.set_entry("STP_PORT", "PortChannel0001", {"enabled": "true", "bpdu_guard": "true"})
+        dbmgtr.configDB.set_entry("STP_VLAN_PORT", ("Vlan100", "Ethernet0"), {"path_cost": "200"})
+        dbmgtr.configDB.set_entry("STP_MST_PORT", ("0", "PortChannel0001"), {"priority": "128"})
+        before = {table: dbmgtr.configDB.get_table(table)
+                  for table in ("STP_PORT", "STP_VLAN_PORT", "STP_MST_PORT")}
+
+        dbmgtr.migrate_orphaned_stp_rows()
+
+        assert {table: dbmgtr.configDB.get_table(table) for table in before} == before
+
+    def test_no_interfaces_at_all_is_a_noop(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("PORT", "Ethernet0", None)
+        dbmgtr.configDB.set_entry("PORTCHANNEL", "PortChannel0001", None)
+        for name in dbmgtr.configDB.get_table("PORT"):
+            dbmgtr.configDB.set_entry("PORT", name, None)
+        for name in dbmgtr.configDB.get_table("PORTCHANNEL"):
+            dbmgtr.configDB.set_entry("PORTCHANNEL", name, None)
+        dbmgtr.configDB.set_entry("STP_PORT", "Ethernet8", {"enabled": "true"})
+
+        dbmgtr.migrate_orphaned_stp_rows()
+
+        assert dbmgtr.configDB.get_entry("STP_PORT", "Ethernet8") == {"enabled": "true"}
+
+    def test_is_idempotent(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("STP_PORT", "Ethernet8", {"enabled": "true"})
+        dbmgtr.configDB.set_entry("STP_PORT", "Ethernet0", {"enabled": "true"})
+
+        dbmgtr.migrate_orphaned_stp_rows()
+        after_first = dbmgtr.configDB.get_table("STP_PORT")
+        dbmgtr.migrate_orphaned_stp_rows()
+
+        assert dbmgtr.configDB.get_table("STP_PORT") == after_first == {"Ethernet0": {"enabled": "true"}}
+
+    def test_unwritable_row_does_not_stop_the_others(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("STP_PORT", "Ethernet8", {"enabled": "true"})
+        dbmgtr.configDB.set_entry("STP_PORT", "Ethernet12", {"enabled": "true"})
+        set_entry = dbmgtr.configDB.set_entry
+
+        def failing_set_entry(table, key, data):
+            if key == "Ethernet8":
+                raise RuntimeError("write failed")
+            return set_entry(table, key, data)
+
+        with mock.patch.object(dbmgtr.configDB, 'set_entry', side_effect=failing_set_entry):
+            dbmgtr.migrate_orphaned_stp_rows()
+
+        assert dbmgtr.configDB.get_entry("STP_PORT", "Ethernet8") == {"enabled": "true"}
+        assert dbmgtr.configDB.get_entry("STP_PORT", "Ethernet12") == {}
+
+    def test_runs_in_common_migration_ops(self):
+        dbmgtr = self.migrator()
+        import db_migrator
+
+        with mock.patch.object(db_migrator.DBMigrator, 'migrate_orphaned_stp_rows') as mock_migrate, \
+                mock.patch('builtins.open', mock.mock_open(read_data='{}')), \
+                mock.patch.object(db_migrator.DBMigrator, 'migrate_copp_table'), \
+                mock.patch.object(db_migrator.DBMigrator, 'migrate_mgmt_ports_on_s6100'), \
+                mock.patch.object(db_migrator.DBMigrator, 'update_edgezone_aggregator_config'), \
+                mock.patch.object(db_migrator.DBMigrator, 'migrate_routing_config_mode'), \
+                mock.patch.object(db_migrator.DBMigrator, 'migrate_tacplus'), \
+                mock.patch.object(db_migrator.DBMigrator, 'migrate_aaa'):
+            dbmgtr.common_migration_ops()
+        mock_migrate.assert_called_once()
