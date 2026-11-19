@@ -37,6 +37,8 @@ DETACH=no
 LOG_PATH="/var/log/${REBOOT_TYPE}.txt"
 UIMAGE_HDR_SIZE=64
 REQUIRE_TEAMD_RETRY_COUNT=no
+SHUTDOWN_IN_PROGRESS_DIR="/run/sonic"
+SHUTDOWN_IN_PROGRESS_FILE="${SHUTDOWN_IN_PROGRESS_DIR}/shutdown-in-progress"
 
 EXIT_SUCCESS=0
 EXIT_FAILURE=1
@@ -255,6 +257,12 @@ function start_lag_keepalive()
 
     # give the lag_keepalive script a chance to send some LACPDUs
     sleep 5
+}
+
+function mark_shutdown_in_progress()
+{
+    mkdir -p "${SHUTDOWN_IN_PROGRESS_DIR}" && touch "${SHUTDOWN_IN_PROGRESS_FILE}" || \
+        debug "Failed to mark shutdown in progress"
 }
 
 function showHelpAndExit()
@@ -1258,6 +1266,7 @@ fi
 # We are fully committed to reboot from this point on because critical
 # service will go down and we cannot recover from it.
 set +e
+mark_shutdown_in_progress
 
 
 function filter_routes()

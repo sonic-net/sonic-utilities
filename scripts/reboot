@@ -55,6 +55,8 @@ SMART_SWITCH="no"
 DPU_MODULE_NAME=""
 REBOOT_DPU="no"
 PRE_SHUTDOWN="no"
+SHUTDOWN_IN_PROGRESS_DIR="/run/sonic"
+SHUTDOWN_IN_PROGRESS_FILE="${SHUTDOWN_IN_PROGRESS_DIR}/shutdown-in-progress"
 BLOCKING_MODE="no"
 BLOCKING_MODE_TIMEOUT_IN_SECOND=180
 SHOW_TIMER="no"
@@ -117,6 +119,12 @@ function stop_sonic_services()
         sleep 3
     fi
     stop_pmon_service
+}
+
+function mark_shutdown_in_progress()
+{
+    mkdir -p "${SHUTDOWN_IN_PROGRESS_DIR}" && touch "${SHUTDOWN_IN_PROGRESS_FILE}" || \
+        debug "Failed to mark shutdown in progress"
 }
 
 function stop_services_asan()
@@ -349,6 +357,7 @@ tag_images
 linecard_reboot_notify_supervisor
 
 # Stop SONiC services gracefully.
+mark_shutdown_in_progress
 stop_sonic_services
 
 # Stop ASAN-enabled services so the report can be generated
