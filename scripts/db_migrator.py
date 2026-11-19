@@ -978,14 +978,18 @@ class DBMigrator():
         VLAN_SUB_INTERFACE|<subintf>.
 
         The field goes to the sub-interface's VLAN_SUB_INTERFACE row unless that
-        row already sets it, and is then removed from the old row. The old row is
-        deleted only when the field was all it held; other fields stay, since
-        intfmgrd applies them to the sub-interface. When the sub-interface is not
-        configured, nothing is written to VLAN_SUB_INTERFACE: a new row there
-        would create it. Such an old row is left over from a deleted
-        sub-interface, which intfmgrd would otherwise create again from it, so
-        it is deleted too when the field was all it held. IP address rows are
-        not touched.
+        row already sets it, and is then removed from the old row. The
+        sub-interface counts as configured when VLAN_SUB_INTERFACE has its row or
+        one of its address rows; in the latter case the moved field creates the
+        missing row, which keeps the sub-interface the old row was creating. When
+        it is not configured, nothing is written to VLAN_SUB_INTERFACE: a new row
+        there would create it. Such an old row is left over from a deleted
+        sub-interface, which intfmgrd would otherwise create again from it.
+
+        The old row is deleted only when the field was all it held and its table
+        has no address rows for the sub-interface, as the CLI does on disable;
+        otherwise it stays without the field, since intfmgrd applies the rest to
+        the sub-interface. IP address rows are not touched.
 
         intfmgrd removes a sub-interface's netdev when one of its rows is deleted,
         so this must run before swss starts, as db_migrator does at boot and on
@@ -994,13 +998,17 @@ class DBMigrator():
         field = 'ipv6_use_link_local_only'
         sub_intf_table = 'VLAN_SUB_INTERFACE'
         sub_intfs = self.configDB.get_table(sub_intf_table)
+        # A sub-interface with only address rows is configured too
+        addressed = {key[0] for key in sub_intfs if isinstance(key, tuple)}
         for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE'):
-            for key, entry in self.configDB.get_table(table).items():
+            rows = self.configDB.get_table(table)
+            table_addressed = {key[0] for key in rows if isinstance(key, tuple)}
+            for key, entry in rows.items():
                 if isinstance(key, tuple) or '.' not in key or field not in entry:
                     continue
                 try:
                     # A row without fields still configures the sub-interface
-                    sub_intf = sub_intfs.get(key)
+                    sub_intf = sub_intfs.get(key, {} if key in addressed else None)
                     if sub_intf is None:
                         log.log_warning("{}|{}: dropped {} '{}', the sub-interface is not configured "
                                         "in {}".format(table, key, field, entry[field], sub_intf_table))
@@ -1012,7 +1020,10 @@ class DBMigrator():
                         log.log_notice("Moved {} '{}' from {}|{} to {}|{}".format(
                             field, entry[field], table, key, sub_intf_table, key))
                     rest = {f: v for f, v in entry.items() if f != field}
-                    self.configDB.set_entry(table, key, rest or None)
+                    if rest or key in table_addressed:
+                        self.configDB.set_entry(table, key, rest)
+                    else:
+                        self.configDB.set_entry(table, key, None)
                 except Exception as e:
                     log.log_error("Failed to migrate {} of {}|{}: {}".format(field, table, key, str(e)))
 

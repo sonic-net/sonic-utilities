@@ -1182,7 +1182,8 @@ class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
 
     def check(self, result):
         expected = self.expected()
-        for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_SUB_INTERFACE', 'PORT', 'PORTCHANNEL'):
+        for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_SUB_INTERFACE', 'VLAN_INTERFACE', 'PORT',
+                      'PORTCHANNEL'):
             diff = DeepDiff(result.get_table(table), expected.get_table(table), ignore_order=True)
             assert not diff, table
 
@@ -1203,6 +1204,13 @@ class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
         # The sub-interface is not configured: nothing creates it.
         assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.40') == {}
         assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.40') == {}
+        # Only address rows configure it: the moved field creates its row.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.60') == {'ipv6_use_link_local_only': 'enable'}
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.60') == {}
+        # The old table has an address row for it, so the old row stays.
+        assert dbmgtr.configDB.get_keys('INTERFACE').count('Ethernet0.70') == 1
+        # A short name moves the same way.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Eth4.60')['ipv6_use_link_local_only'] == 'enable'
 
     def test_running_again_changes_nothing(self):
         dbmgtr = self.migrator()

@@ -51,9 +51,29 @@
     },
     "VLAN_SUB_INTERFACE|Eth4.60": {
         "admin_status": "up",
-        "vlan": "60"
+        "vlan": "60",
+        "ipv6_use_link_local_only": "enable"
     },
     "VLAN_SUB_INTERFACE|Ethernet0.50": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "VLAN_INTERFACE|Vlan100": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.60": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.60|2001:db8:60::1/64": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet0.70": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet0.70|10.0.70.0/31": {
+        "NULL": "NULL"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.70": {
+        "admin_status": "up",
         "ipv6_use_link_local_only": "enable"
     }
 }
