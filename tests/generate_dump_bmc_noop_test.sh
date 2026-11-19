@@ -143,7 +143,7 @@ echo "Case 3: noop mode on a platform without a BMC stays a no-op"
 setup true no-bmc
 OUT="$(run_bmc_steps)"
 assert_eq "" "$(cat "${CALLS}")" "bmc_techsupport.py is never run"
-assert_has_line "INFO: BMC is not found on this platform. Skipping..." "${OUT}" \
+assert_has_line "INFO: BMC (OpenBMC) is not found on this platform. Skipping..." "${OUT}" \
     "missing BMC is reported"
 
 # ---------------------------------------------------------------------------
