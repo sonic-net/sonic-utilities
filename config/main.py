@@ -72,6 +72,7 @@ from . import syslog
 from . import switchport
 from . import dns
 from . import bgp_cli
+from . import ptp
 from . import stp
 from . import evpn_mh
 from . import llr
@@ -2020,6 +2021,9 @@ config.add_command(dns.dns)
 
 # Switchport module
 config.add_command(switchport.switchport)
+
+# PTP module
+config.add_command(ptp.ptp)
 
 @config.command()
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false,

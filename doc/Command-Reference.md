@@ -183,6 +183,9 @@
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
   * [PortChannel Config commands](#portchannel-config-commands)
+* [PTP](#ptp)
+  * [PTP show commands](#ptp-show-commands)
+  * [PTP config commands](#ptp-config-commands)
 * [Packet Trimming](#packet-trimming)
   * [Packet Trimming Show commands](#packet-trimming-show-commands)
   * [Packet Trimming Config commands](#packet-trimming-config-commands)
@@ -296,6 +299,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v13 | Nov-17-2026 | Add PTP show and config commands |
 | v12 | Jul-16-2026 | Add console mirror commands |
 | v11 | May-13-2026 | Add multi-ASIC namespace support for `config vrf` and `sonic-clear flowcnt-trap` |
 | v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
@@ -11483,6 +11487,333 @@ This command adds or deletes a member port to/from the already created portchann
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#portchannels)
+
+## PTP
+
+This section explains the Precision Time Protocol (IEEE 1588) show and configuration commands. Configuration is stored in CONFIG_DB. Runtime clock status is read from STATE_DB, and message counters are read from COUNTERS_DB.
+
+`show ptp` and `config ptp` are command groups. A subcommand is required.
+
+When the interface naming mode is `alias`, interface arguments and the Interface column accept and display the alias instead of the SONiC port name.
+
+### PTP show commands
+
+**show ptp port status**
+
+This command displays the PTP enable state and timestamp mode for each port in the PORT table. Pass an interface name to display one port.
+
+A port is `enabled` when it has a `PTP_PORT` entry, or when `ptp_mode` is set to a value other than `none`. The Mode column is the `ptp_mode` value from the PORT table (`none`, `one-step`, or `two-step`).
+
+- Usage:
+  ```
+  show ptp port status [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show ptp port status
+  Interface    PTP       Mode
+  -----------  --------  --------
+  Ethernet0    disabled  none
+  Ethernet4    disabled  none
+  Ethernet8    enabled   one-step
+  ```
+
+**show ptp protocol status**
+
+This command displays the configured PTP domain and message intervals, the unicast master tables and their IP addresses, and the configured role of each PTP port.
+
+Unset global parameters are shown as `not set`. A unicast master table with no addresses shows `not set` in the Address column. The Role column is derived from the port configuration:
+
+- `slave` when a unicast master table is bound and unicast listen is off
+- `master` when unicast listen is on and no unicast master table is bound
+- `slave/master` when both are set
+- `auto` when neither is set
+
+- Usage:
+  ```
+  show ptp protocol status
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show ptp protocol status
+  PTP Protocol
+
+  Parameter            Value
+  -----------------  -------
+  domain-number           24
+  sync-interval           -3
+  announce-interval        1
+
+  Unicast Master Table
+    Table ID  Address
+  ----------  ----------
+           1  192.0.2.10
+           1  192.0.2.11
+           2  not set
+
+  PTP Ports
+  Interface    Role          Unicast Table    Unicast Listen
+  -----------  ------------  ---------------  ----------------
+  Ethernet0    slave         1                false
+  Ethernet4    master        -                true
+  Ethernet8    slave/master  1                true
+  ```
+
+**show ptp status**
+
+This command displays operational PTP clock status from STATE_DB (`PTP_CONFIG` and `PTP_TIME_STATUS`). Each PTP instance is printed separately. When STATE_DB has no PTP instance, the command prints `No PTP operational status in STATE_DB`.
+
+Local Clock includes the clock type, domain, clock identity, clock quality, priorities, and steps removed. Clock type is `Ordinary Clock` for one port, `Boundary Clock` for more than one port, and `Unknown` when the port count is not reported.
+
+Parent Clock includes the parent and grandmaster identities and grandmaster clock quality. Grandmaster clock variance is the IEEE 1588 `offsetScaledLogVariance` value decoded to variance in ns^2.
+
+Time Properties includes time traceable, frequency traceable, time source, and PTP timescale. UTC offset is included when `current-utc-offset-valid` is true.
+
+Time Status prints only the fields present for that instance: master offset, ingress time, cumulative rate offset in parts per billion, last grandmaster phase change, GM time base indicator, nanoseconds, and fractional nanoseconds. When none of those fields are present, the command prints `No time status available`.
+
+- Usage:
+  ```
+  show ptp status
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show ptp status
+  PTP Instance: ptp|0
+
+  Local Clock
+  Parameter        Value
+  ---------------  -----------------------
+  clock type       Ordinary Clock
+  domain           24
+  clock id         00:11:22:ff:fe:33:44:55
+  clock class      6
+  clock accuracy   33
+  clock priority1  128
+  clock priority2  128
+  steps removed    1
+
+  Parent Clock
+  Parameter           Value
+  ------------------  -----------------------
+  parent clock id     00:aa:bb:ff:fe:cc:dd:ee
+  gm clock id         00:aa:bb:ff:fe:cc:dd:ee
+  gm clock class      6
+  gm clock accuracy   33
+  gm clock variance   1.000000
+  gm clock priority1  128
+  gm clock priority2  128
+
+  Time Properties
+  Parameter              Value
+  -------------------  -------
+  time traceable          True
+  frequency traceable     True
+  time source               32
+  ptp timescale           True
+
+  Time Status
+  Parameter                    Value
+  ----------------------  ----------
+  master offset           -42
+  ingress time            999
+  cumulative offset(ppb)    0.004547
+  ```
+
+**show ptp counters**
+
+This command displays linuxptp `PORT_STATS_NP` message counters and `PORT_SERVICE_STATS_NP` service counters from COUNTERS_DB. Pass an interface name to display one port. Without an interface, every port that has PTP counters is displayed.
+
+Message counters are Sync, Delay_Req, Pdelay_Req, Pdelay_Resp, Follow_Up, Delay_Resp, Pdelay_Resp_Follow_Up, Announce, Signaling, and Management, each with RX and TX columns. Missing counter fields are shown as `0`.
+
+When COUNTERS_DB has no PTP counters, the command prints `No PTP counters in COUNTERS_DB`. When a named port exists but has no counters, it prints `No PTP counters for interface '<interface_name>'`.
+
+- Usage:
+  ```
+  show ptp counters [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show ptp counters Ethernet0
+  Interface: Ethernet0
+  portIdentity: aa:bb:cc.fffe.001122-1
+
+  Message                  RX    TX
+  ---------------------  ----  ----
+  Sync                     10     1
+  Delay_Req                 4     4
+  Pdelay_Req                0     0
+  Pdelay_Resp               0     0
+  Follow_Up                 0     0
+  Delay_Resp                0     0
+  Pdelay_Resp_Follow_Up     0     0
+  Announce                  7     0
+  Signaling                 0     0
+  Management                0     0
+
+  Service
+  Event                      Count
+  -----------------------  -------
+  announce_timeout               0
+  sync_timeout                   0
+  delay_timeout              33017
+  unicast_service_timeout        0
+  unicast_request_timeout     2069
+  master_announce_timeout        0
+  master_sync_timeout            0
+  qualification_timeout          0
+  sync_mismatch                  0
+  followup_mismatch              0
+  ```
+
+### PTP config commands
+
+These commands update CONFIG_DB. Domain number and both intervals are stored on `PTP|global`. Unicast master tables, their IP addresses, and per-port PTP entries are stored in their own tables.
+
+**config ptp domain-number**
+
+This command sets the PTP domain number. The value must be an integer from 0 to 127.
+
+- Usage:
+  ```
+  config ptp domain-number <domain>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp domain-number 24
+  PTP domain number set to 24
+  ```
+
+**config ptp sync-interval**
+
+This command sets the PTP sync interval as a log2 of seconds. The value must be an integer from -7 to 7. For example, `-3` is 125 milliseconds and `0` is 1 second.
+
+- Usage:
+  ```
+  config ptp sync-interval <interval>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp sync-interval -3
+  PTP sync interval set to -3
+  ```
+
+**config ptp announce-interval**
+
+This command sets the PTP announce interval as a log2 of seconds. The value must be an integer from -3 to 4.
+
+- Usage:
+  ```
+  config ptp announce-interval <interval>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp announce-interval 1
+  PTP announce interval set to 1
+  ```
+
+**config ptp unicast-master-table add**
+
+This command creates a PTP unicast master table. The table id must be a non-negative integer and must not already exist.
+
+- Usage:
+  ```
+  config ptp unicast-master-table add <id>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp unicast-master-table add 1
+  PTP unicast master table 1 added
+  ```
+
+**config ptp unicast-master-table remove**
+
+This command deletes a PTP unicast master table and every IP address configured in that table.
+
+- Usage:
+  ```
+  config ptp unicast-master-table remove <id>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp unicast-master-table remove 1
+  PTP unicast master table 1 removed
+  ```
+
+**config ptp unicast-master-table ip add**
+
+This command adds an IPv4 or IPv6 address to an existing unicast master table. The table must already exist, and the address must not already be in that table.
+
+- Usage:
+  ```
+  config ptp unicast-master-table ip add <id> <ip_address>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp unicast-master-table ip add 1 192.0.2.10
+  IP 192.0.2.10 added to PTP unicast master table 1
+  ```
+
+**config ptp unicast-master-table ip remove**
+
+This command removes an IPv4 or IPv6 address from a unicast master table. The address must already be in that table.
+
+- Usage:
+  ```
+  config ptp unicast-master-table ip remove <id> <ip_address>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp unicast-master-table ip remove 1 192.0.2.10
+  IP 192.0.2.10 removed from PTP unicast master table 1
+  ```
+
+**config ptp interface add**
+
+This command creates a PTP port entry for an interface that exists in the PORT table and sets that port's `ptp_mode` to `one-step`.
+
+The table id is optional. When it is given, that unicast master table must already exist, and the port uses it as its unicast master list. `--unicast-listen` allows the port to accept unicast Delay_Req messages. A port that already has a PTP entry must be removed before it can be added again.
+
+- Usage:
+  ```
+  config ptp interface add <interface_name> [<id>] [--unicast-listen]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp interface add Ethernet0 1
+  PTP port entry added for interface 'Ethernet0'
+
+  admin@sonic:~$ sudo config ptp interface add Ethernet4 --unicast-listen
+  PTP port entry added for interface 'Ethernet4'
+  ```
+
+**config ptp interface remove**
+
+This command deletes the PTP port entry for an interface and sets that port's `ptp_mode` to `none`. The interface must already have a PTP port entry.
+
+- Usage:
+  ```
+  config ptp interface remove <interface_name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config ptp interface remove Ethernet0
+  PTP port entry removed for interface 'Ethernet0'
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#ptp)
 
 # Packet Trimming
 
