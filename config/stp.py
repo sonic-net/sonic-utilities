@@ -276,6 +276,13 @@ def get_stp_enabled_vlan_count(db):
 
 
 def vlan_enable_stp(db, vlan_name):
+    # STP_VLAN is a PVST-only table. In MST mode the STP|GLOBAL entry carries
+    # only `mode` (no forward_delay/hello_time/max_age/priority), so seeding a
+    # STP_VLAN row here would write None for those fields -> stored as the string
+    # "None", which stpmgrd cannot parse.
+    # Only seed under PVST, where the global timers are populated.
+    if get_global_stp_mode(db) != "pvst":
+        return
     fvs = {'enabled': 'true',
            'forward_delay': get_global_stp_forward_delay(db),
            'hello_time': get_global_stp_hello_time(db),
@@ -435,7 +442,8 @@ def enable_mst_instance0(db):
         'bridge_priority': MST_DEFAULT_BRIDGE_PRIORITY
     }
     instance_id = 0
-    db.set_entry('STP_MST_INST', f"MST_INSTANCE:INSTANCE{instance_id}", mst_inst_fvs)
+    # Key maps to YANG STP_MST_INST_LIST key "instance": STP_MST_INST|<id>.
+    db.set_entry('STP_MST_INST', f"{instance_id}", mst_inst_fvs)
 
 
 def enable_mst_for_interfaces(db):
@@ -444,7 +452,7 @@ def enable_mst_for_interfaces(db):
         'link_type': MST_AUTO_LINK_TYPE,
         'enabled': 'true',
         'bpdu_guard': 'false',
-        'bpdu_guard_do': 'false',
+        'bpdu_guard_do_disable': 'false',
         'root_guard': 'false',
         'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
@@ -460,13 +468,14 @@ def enable_mst_for_interfaces(db):
 
     for port_key in port_dict:
         if port_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{port_key}", fvs_mst_port)
+            # Key maps to YANG STP_MST_PORT_LIST key "inst_id ifname": STP_MST_PORT|<id>|<intf>.
+            db.set_entry('STP_MST_PORT', f"0|{port_key}", fvs_mst_port)
             db.set_entry('STP_PORT', port_key, fvs_port)
 
     po_ch_dict = natsorted(db.get_table('PORTCHANNEL'))
     for po_ch_key in po_ch_dict:
         if po_ch_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{po_ch_key}", fvs_mst_port)
+            db.set_entry('STP_MST_PORT', f"0|{po_ch_key}", fvs_mst_port)
             db.set_entry('STP_PORT', po_ch_key, fvs_port)
 
 
@@ -1717,7 +1726,7 @@ def mst_instance_interface_priority(_db, instance_id, interface_name, priority):
     check_if_interface_is_valid(ctx, db, interface_name)
 
     # Construct the key and field-value dictionary
-    mst_instance_interface_key = f"MST_INSTANCE|{instance_id}|{interface_name}"
+    mst_instance_interface_key = f"{instance_id}|{interface_name}"
     fvs = {'priority': str(priority)}
 
     # Update the database entry
@@ -1758,7 +1767,7 @@ def mst_instance_interface_cost(_db, instance_id, interface_name, cost):
     check_if_interface_is_valid(ctx, db, interface_name)
 
     # Prepare key and value for database update
-    mst_instance_interface_key = f"MST_INSTANCE|{instance_id}|{interface_name}"
+    mst_instance_interface_key = f"{instance_id}|{interface_name}"
     fvs = {'path_cost': str(cost)}
 
     # Update database entry
@@ -1783,7 +1792,7 @@ def mst_instance_priority(_db, instance_id, priority_value):
         ctx.fail(f"Instance ID must be in range 0-{MST_MAX_INSTANCES - 1}")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = f"{instance_id}"
     if not db.get_entry('STP_MST_INST', instance_key):
         ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
 
@@ -1824,7 +1833,7 @@ def mst_instance_vlan_add(_db, instance_id, vlan_id):
         ctx.fail("VLAN configuration for MST instance 0 is not allowed.")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = f"{instance_id}"
     if not db.get_entry('STP_MST_INST', instance_key):
         ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
 
@@ -1876,7 +1885,7 @@ def mst_instance_vlan_del(_db, instance_id, vlan_id):
         ctx.fail("VLAN delete from MST instance 0 is not allowed.")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = f"{instance_id}"
     instance_entry = db.get_entry('STP_MST_INST', instance_key)
     if not instance_entry:
         ctx.fail(f"MST instance {instance_id} does not exist.")
