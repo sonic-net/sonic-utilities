@@ -1046,9 +1046,13 @@ class AclLoader(object):
                          "Label", "Policer", "Sample Rate", "Truncate Size")
         span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction",
                        "Queue", "Label", "Policer")
+        sflow_header = ("Name", "Status", "SRC IP", "DST IP", "UDP DST Port",
+                        "DSCP", "TTL", "Queue", "Policer", "Monitor Port",
+                        "SRC Port", "Direction", "Sample Rate", "Truncate Size")
 
         erspan_data = []
         span_data = []
+        sflow_data = []
         for key, val in self.get_sessions_db_info().items():
             if session_name and key != session_name:
                 continue
@@ -1058,6 +1062,14 @@ class AclLoader(object):
                                   val.get("src_port", ""), val.get("direction", "").lower(),
                                   val.get("queue", ""), val.get("label", ""),
                                   val.get("policer", "")])
+            elif val.get("type") == "SFLOW":
+                sflow_data.append([key, val.get("status", ""), val.get("src_ip", ""),
+                                   val.get("dst_ip", ""), val.get("udp_dst_port", ""),
+                                   val.get("dscp", ""),
+                                   val.get("ttl", ""), val.get("queue", ""), val.get("policer", ""),
+                                   val.get("monitor_port", ""), val.get("src_port", ""),
+                                   val.get("direction", "").lower(),
+                                   val.get("sample_rate", ""), val.get("truncate_size", "")])
             else:
                 erspan_data.append([key, val.get("status", ""), val.get("src_ip", ""),
                                     val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
@@ -1072,6 +1084,9 @@ class AclLoader(object):
         print("\nSPAN Sessions")
         span_data = natsorted(span_data)
         print(tabulate.tabulate(span_data, headers=span_header, tablefmt="simple", missingval=""))
+        print("\nSFLOW Sessions")
+        sflow_data = natsorted(sflow_data)
+        print(tabulate.tabulate(sflow_data, headers=sflow_header, tablefmt="simple", missingval=""))
 
     def show_policer(self, policer_name):
         """

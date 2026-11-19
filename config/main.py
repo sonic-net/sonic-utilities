@@ -20,7 +20,7 @@ from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
-from generic_config_updater.gu_common import HOST_NAMESPACE
+from generic_config_updater.gu_common import HOST_NAMESPACE, EmptyTableError, genericUpdaterLogging
 from generic_config_updater.main import (
     apply_patch_from_file as _gcu_apply_patch_from_file
 )
@@ -154,6 +154,7 @@ DSCP_RANGE = click.IntRange(min=0, max=63)
 TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
 GRE_TYPE_RANGE = click.IntRange(min=0, max=65535)
+UDP_PORT_RANGE = click.IntRange(min=0, max=65535)
 ADHOC_VALIDATION = True
 
 if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
@@ -1494,6 +1495,40 @@ def is_port_mirror_capability_supported(direction, namespace=None):
             return False
 
     return True
+
+
+class NamespaceValidatedConfigDBConnector(ValidatedConfigDBConnector):
+    """ ValidatedConfigDBConnector that applies its GCU patches to the connector's namespace """
+
+    def generic_updater(self):
+        return GenericUpdater(scope=self.connector.namespace or multi_asic.DEFAULT_NAMESPACE)
+
+    def apply_patch(self, gcu_patch, table):
+        try:
+            self.generic_updater().apply_patch(patch=gcu_patch, config_format=ConfigFormat.CONFIGDB, verbose=False,
+                                               dry_run=False, ignore_non_yang_tables=False, ignore_paths=None,
+                                               sort=False)
+        except EmptyTableError:
+            self.validated_delete_table(table)
+
+    def validated_delete_table(self, table):
+        gcu_patch = self.create_gcu_patch("remove", table)
+        try:
+            self.generic_updater().apply_patch(patch=gcu_patch, config_format=ConfigFormat.CONFIGDB, verbose=False,
+                                               dry_run=False, ignore_non_yang_tables=False, ignore_paths=None,
+                                               sort=False)
+        except ValueError as e:
+            logger = genericUpdaterLogging.get_logger(title="Patch Applier", print_all_to_console=True)
+            logger.log_notice("Unable to remove entry, as doing so will result in invalid config. Error: {}".format(e))
+
+
+def write_mirror_session_to_namespaces(ctx, per_npu_configdb, session_name, ns_session_infos):
+    """ Write a mirror session to each namespace in ns_session_infos """
+    for namespace, session_info in ns_session_infos.items():
+        try:
+            per_npu_configdb[namespace].set_entry("MIRROR_SESSION", session_name, session_info)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
 def mirror_session_exists(config_db, session_name):
@@ -3546,6 +3581,20 @@ def gather_session_info(session_info, queue=None, src_port=None, direction=None,
     return session_info
 
 
+def group_mirror_src_ports_by_namespace(ctx, src_port, front_ns):
+    """ Map each front asic namespace to the source ports it owns """
+    ns_src_ports = {}
+    front_ns_set = set(front_ns)
+    for orig in split_mirror_ports(src_port):
+        if not interface_name_is_valid(None, orig):
+            ctx.fail("Source Interface {} is invalid".format(orig))
+        port_ns = get_port_namespace(orig)
+        if port_ns not in front_ns_set:
+            ctx.fail("Source Interface {} is not a front-panel port".format(orig))
+        ns_src_ports.setdefault(port_ns, []).append(orig)
+    return ns_src_ports
+
+
 def add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
                gre_type=None, queue=None, src_port=None, direction=None,
                label=None, policer=None, sample_rate=0, truncate_size=0):
@@ -3595,16 +3644,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
     else:
         # Validate and write src_port only in the matching namespace
         # so ERSPAN is still available for ACL-based mirroring everywhere.
-        ns_src_ports = {}
-        if raw_src_port:
-            front_ns_set = set(namespaces['front_ns'])
-            for orig in split_mirror_ports(raw_src_port):
-                if not interface_name_is_valid(None, orig):
-                    ctx.fail("Source Interface {} is invalid".format(orig))
-                port_ns = get_port_namespace(orig)
-                if port_ns not in front_ns_set:
-                    ctx.fail("Source Interface {} is not a front-panel port".format(orig))
-                ns_src_ports.setdefault(port_ns, []).append(orig)
+        ns_src_ports = group_mirror_src_ports_by_namespace(ctx, raw_src_port, namespaces['front_ns'])
 
         base_session_info = {k: v for k, v in session_info.items()
                              if k not in ('src_port', 'direction')}
@@ -3663,16 +3703,116 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
             validate_mirror_session_label_uniqueness(ctx, per_npu_configdb[front_asic_namespaces], label)
             ns_session_infos[front_asic_namespaces] = ns_session_info
 
-        for front_asic_namespaces in namespaces['front_ns']:
-            try:
-                per_npu_configdb[front_asic_namespaces].set_entry(
-                    "MIRROR_SESSION",
-                    session_name,
-                    ns_session_infos[front_asic_namespaces]
-                )
-            except ValueError as e:
-                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        write_mirror_session_to_namespaces(ctx, per_npu_configdb, session_name, ns_session_infos)
         log_mirror_session_created(session_name, session_info)
+
+
+@mirror_session.group(cls=clicommon.AbbreviationGroup, name='sflow')
+@click.pass_context
+def sflow(ctx):
+    """ SFLOW mirror_session """
+    pass
+
+
+@sflow.command('add')
+@click.argument('session_name', metavar='<session_name>', required=True)
+@click.argument('src_ip', metavar='<src_ip>', callback=validate_ipv4_address, required=True)
+@click.argument('dst_ip', metavar='<dst_ip>', callback=validate_ipv4_address, required=True)
+@click.argument('dscp', metavar='<dscp>', type=DSCP_RANGE, required=True)
+@click.argument('ttl', metavar='<ttl>', type=TTL_RANGE, required=True)
+@click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
+@click.argument('src_port', metavar='[src_port]', required=False)
+@click.argument('direction', metavar='[direction]', required=False)
+@click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
+              help="Sampling rate (1-in-N), 2..4294967295. Required")
+@click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
+              help="Truncation size in bytes, 64..9216. 0 disables truncation")
+@click.option('--udp_dst_port', type=UDP_PORT_RANGE,
+              help="UDP destination port of the sFlow datagram. Default: 6343")
+def sflow_add(session_name, src_ip, dst_ip, dscp, ttl, queue, src_port, direction,
+              sample_rate, truncate_size, udp_dst_port):
+    """ Add SFLOW mirror session """
+    add_sflow(session_name, src_ip, dst_ip, dscp, ttl, queue, src_port, direction,
+              sample_rate, truncate_size, udp_dst_port)
+
+
+def add_sflow(session_name, src_ip, dst_ip, dscp, ttl, queue,
+              src_port=None, direction=None, sample_rate=0, truncate_size=0,
+              udp_dst_port=None):
+    ctx = click.get_current_context()
+
+    # MirrorOrch refuses an SFLOW session without a source port or a sample rate,
+    # so catch those here rather than leave the session in the error state.
+    if not src_port:
+        ctx.fail("src_port is required for an SFLOW session")
+    if not sample_rate:
+        ctx.fail("--sample_rate is required for an SFLOW session")
+
+    session_info = {
+            "type": "SFLOW",
+            "src_ip": src_ip,
+            "dst_ip": dst_ip,
+            "dscp": dscp,
+            "ttl": ttl
+            }
+
+    if udp_dst_port is not None:
+        session_info['udp_dst_port'] = udp_dst_port
+
+    session_info = gather_session_info(session_info, queue=queue, src_port=src_port, direction=direction,
+                                       sample_rate=sample_rate, truncate_size=truncate_size)
+    raw_src_port = session_info.get('src_port')
+
+    namespaces = multi_asic.get_all_namespaces()
+    if not namespaces['front_ns']:
+        config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+        config_db.connect()
+        if ADHOC_VALIDATION:
+            if validate_mirror_session_config(config_db, session_name, None, raw_src_port, direction) is False:
+                return
+        session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
+        try:
+            config_db.set_entry("MIRROR_SESSION", session_name, session_info)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        return
+
+    # Unlike ERSPAN, the session is written only to the namespaces owning a
+    # source port: MirrorOrch rejects an SFLOW session without src_port.
+    ns_src_ports = group_mirror_src_ports_by_namespace(ctx, raw_src_port, namespaces['front_ns'])
+
+    per_npu_configdb = {}
+    for front_asic_namespace in namespaces['front_ns']:
+        per_npu_configdb[front_asic_namespace] = NamespaceValidatedConfigDBConnector(
+            ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespace)
+        )
+        per_npu_configdb[front_asic_namespace].connect()
+
+    ns_session_infos = {}
+    for front_asic_namespace in namespaces['front_ns']:
+        ns_ports = ns_src_ports.get(front_asic_namespace)
+        if not ns_ports:
+            continue
+        ns_src_port = ",".join(ns_ports)
+        if ADHOC_VALIDATION:
+            if validate_mirror_session_config(
+                per_npu_configdb[front_asic_namespace],
+                session_name,
+                None,
+                ns_src_port,
+                direction,
+                front_asic_namespace,
+                front_asic_configdbs=per_npu_configdb
+            ) is False:
+                return
+        ns_session_info = dict(session_info)
+        ns_session_info['src_port'] = normalize_mirror_src_port(
+            per_npu_configdb[front_asic_namespace], ns_src_port
+        )
+        ns_session_infos[front_asic_namespace] = ns_session_info
+
+    write_mirror_session_to_namespaces(ctx, per_npu_configdb, session_name, ns_session_infos)
+
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='span')
 @click.pass_context
@@ -3824,11 +3964,16 @@ def remove(session_name):
         per_npu_configdb = {}
         session_removed = False
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))  # noqa: E501
+            ns_connector = ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ns_connector)
             per_npu_configdb[front_asic_namespaces].connect()
-            if per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name):
+            entry = per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name)
+            if entry:
+                config_db = per_npu_configdb[front_asic_namespaces]
+                if entry.get('type') == 'SFLOW':
+                    config_db = NamespaceValidatedConfigDBConnector(ns_connector)
                 try:
-                    per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, None)
+                    config_db.set_entry("MIRROR_SESSION", session_name, None)
                     session_removed = True
                 except JsonPatchConflict as e:
                     ctx.fail("Invalid ConfigDB. Error: {}".format(e))
