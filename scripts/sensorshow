@@ -74,7 +74,7 @@ class SensorShow(object):
                           ))
         
         if table:
-            print(tabulate(table, header, tablefmt='simple', stralign='right'))
+            print(tabulate(table, header, tablefmt='simple', stralign='right', disable_numparse=True))
         else:
             print('No sensor data available')
 
