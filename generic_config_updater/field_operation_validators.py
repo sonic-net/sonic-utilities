@@ -3,9 +3,11 @@ import re
 import json
 import jsonpointer
 import subprocess
-from sonic_py_common import device_info
-from .gu_common import GenericConfigUpdaterError
+from sonic_py_common import device_info, multi_asic
+from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
 from swsscommon import swsscommon
+
+logger = genericUpdaterLogging.get_logger(title="Field Operation Validator")
 
 # Default FEC modes when STATE_DB does not advertise supported_fecs for a port.
 # Kept local to avoid pulling utilities_common into the GCU wheel.
@@ -14,6 +16,8 @@ from swsscommon import swsscommon
 DEFAULT_SUPPORTED_FECS_LIST = ['rs', 'fc', 'none', 'auto']
 
 STATE_DB_NAME = 'STATE_DB'
+CONFIG_DB_NAME = 'CONFIG_DB'
+PG_PROFILE_LOOKUP_FILE = 'pg_profile_lookup.ini'
 REDIS_TIMEOUT_MSECS = 0
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_TABLE_MOD_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
@@ -213,7 +217,44 @@ def read_statedb_entry(scope, table, key, field):
     return tbl.hget(key, field)[1]
 
 
-def port_config_update_validator(scope, patch_element):
+def read_configdb_field(scope, table, key, field):
+    """A field of the running config, or None when the entry or the field is absent"""
+    config_db = swsscommon.DBConnector(CONFIG_DB_NAME, REDIS_TIMEOUT_MSECS, True, scope)
+    tbl = swsscommon.Table(config_db, table)
+    found, value = tbl.hget(key, field)
+    return value if found else None
+
+
+def get_pg_profile_lookup(scope=None):
+    """Lossless PG profile rows of the HWSKU's pg_profile_lookup.ini as
+    ``{speed: {cable length, ...}}``, parsed the way buffermgrd does (whitespace
+    separated, '#' comments). On a multi-ASIC SKU the file lives in the ASIC's
+    subdirectory, named after its namespace (``scope``); the HWSKU root is the
+    fallback. None when no file is found (dynamic-buffer SKUs, VS) or the HWSKU
+    directory can't be resolved."""
+    try:
+        _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
+    except Exception as e:
+        logger.log_warning("cannot resolve the HWSKU directory: {}".format(e))
+        return None
+    candidate_dirs = [hwsku_path]
+    if scope and scope != multi_asic.DEFAULT_NAMESPACE:
+        candidate_dirs.insert(0, os.path.join(hwsku_path, scope))
+    lookup_file = next((f for f in (os.path.join(d, PG_PROFILE_LOOKUP_FILE) for d in candidate_dirs)
+                        if os.path.isfile(f)), None)
+    if lookup_file is None:
+        return None
+    lookup = {}
+    with open(lookup_file) as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) < 2 or parts[0].startswith('#'):
+                continue
+            lookup.setdefault(parts[0], set()).add(parts[1])
+    return lookup
+
+
+def port_config_update_validator(scope, patch_element, target_config=None):
 
     def _validate_field(field, port, value):
         if field == "fec":
@@ -242,6 +283,14 @@ def port_config_update_validator(scope, patch_element):
                     return False
             except ValueError:
                 return False
+            # buffermgrd rebuilds the port's lossless PG profile at the new speed from
+            # pg_profile_lookup.ini; with no row for the port's cable length it drops the
+            # update and keeps the old profile (see cable_length_config_update_validator).
+            lookup = _pg_profile_lookup_to_check(scope, target_config)
+            if lookup is not None:
+                cable_length = _port_cable_length(scope, target_config, port)
+                if not _has_pg_profile(lookup, port, str(value), cable_length):
+                    return False
             return True
         return False
     
@@ -283,3 +332,102 @@ def port_config_update_validator(scope, patch_element):
                             else:
                                 continue
     return True
+
+
+def cable_length_config_update_validator(scope, patch_element, target_config=None):
+    """
+    Refuses a CABLE_LENGTH value the traditional buffer model can't act on.
+
+    buffermgrd derives a port's lossless PG profile from the (speed, cable length)
+    row of the HWSKU's pg_profile_lookup.ini. For a length with no row at the
+    port's speed it logs an error, drops the update and leaves BUFFER_PG on the
+    previous profile, while CONFIG_DB claims the new length: the headroom silently
+    stays sized for the old cable. The YANG model only checks the ``<num>m`` shape.
+
+    The port's speed and the buffer model come from ``target_config`` (the
+    simulated post-patch config, so a speed changed by the same patch counts) and
+    from CONFIG_DB when no target config is given. Permissive wherever the check
+    can't be made: dynamic buffer model, no lookup file, port speed unknown.
+
+    A port with no lossless PGs is checked too, although buffermgrd would not
+    consult the lookup for it yet: enabling PFC on it later would hit the same
+    silent failure, and that PORT_QOS_MAP change is not validated.
+    """
+    if patch_element["op"] not in ("add", "replace"):
+        return True
+
+    lengths = _cable_lengths_in_patch(patch_element)
+    if not lengths:
+        return True
+
+    lookup = _pg_profile_lookup_to_check(scope, target_config)
+    if lookup is None:
+        return True
+
+    return all(_has_pg_profile(lookup, port, _config_field(scope, target_config, "PORT", port, "speed"), length)
+               for port, length in lengths)
+
+
+def _cable_lengths_in_patch(patch_element):
+    """(port, length) pairs a CABLE_LENGTH patch element sets, whether it targets
+    the table, one group, or one port. Values of an unexpected shape are left to
+    YANG validation."""
+    parts = jsonpointer.JsonPointer(patch_element["path"]).parts
+    value = patch_element.get("value")
+    depth = len(parts)  # 1: /CABLE_LENGTH, 2: /CABLE_LENGTH/<group>, 3: /CABLE_LENGTH/<group>/<port>
+    if depth == 3 and isinstance(value, str):
+        return [(parts[2], value)]
+    groups = []
+    if depth == 2 and isinstance(value, dict):
+        groups = [value]
+    elif depth == 1 and isinstance(value, dict):
+        groups = [g for g in value.values() if isinstance(g, dict)]
+    return [(port, length) for g in groups for port, length in g.items() if isinstance(length, str)]
+
+
+def _config_field(scope, target_config, table, key, field):
+    if target_config is not None:
+        return target_config.get(table, {}).get(key, {}).get(field)
+    return read_configdb_field(scope, table, key, field)
+
+
+def _port_cable_length(scope, target_config, port):
+    """``port``'s cable length from whichever CABLE_LENGTH group lists it, or None."""
+    if target_config is not None:
+        groups = target_config.get("CABLE_LENGTH", {}).values()
+        return next((g[port] for g in groups if isinstance(g, dict) and port in g), None)
+    config_db = swsscommon.DBConnector(CONFIG_DB_NAME, REDIS_TIMEOUT_MSECS, True, scope)
+    tbl = swsscommon.Table(config_db, "CABLE_LENGTH")
+    for group in tbl.getKeys():
+        found, length = tbl.hget(group, port)
+        if found:
+            return length
+    return None
+
+
+def _pg_profile_lookup_to_check(scope, target_config):
+    """The pg_profile_lookup.ini table a (speed, cable length) pair must have a row
+    in, or None when buffermgrd would not consult one: no lookup file, or the
+    dynamic buffer model. The file is probed before CONFIG_DB so hosts without
+    one never need a database connection."""
+    lookup = get_pg_profile_lookup(scope)
+    if lookup is None:
+        return None
+    if _config_field(scope, target_config, "DEVICE_METADATA", "localhost", "buffer_model") == "dynamic":
+        return None
+    return lookup
+
+
+def _has_pg_profile(lookup, port, speed, cable_length):
+    """Whether buffermgrd can build ``port``'s lossless PG profile from ``lookup``
+    at ``speed`` and ``cable_length``. Missing speed or length can't be checked;
+    0m means "no lossless profile" to buffermgrd. A miss is logged."""
+    if not speed or not cable_length or cable_length == "0m":
+        return True
+    if cable_length in lookup.get(speed, ()):
+        return True
+    logger.log_error(
+        "port {}: no PG profile for speed {} and cable length {} in {}; lengths listed at that speed: {}"
+        .format(port, speed, cable_length, PG_PROFILE_LOOKUP_FILE,
+                ", ".join(sorted(lookup.get(speed, ()))) or "none"))
+    return False

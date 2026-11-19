@@ -1,3 +1,4 @@
+import copy
 import pytest
 import mock
 import unittest
@@ -976,3 +977,236 @@ class TestGetAsicName(unittest.TestCase):
         mock_get_sonic_version_info.return_value = {'asic_type': 'marvell-teralynx'}
         for scope in ["localhost", "asic0"]:
             self.assertEqual(fov.get_asic_name(), "marvell-teralynx")
+
+
+PG_PROFILE_LOOKUP_INI = """# PG lossless profiles.
+# speed cable      size    xon  xoff     threshold  xon_offset
+400000  30m        0       0    514553     -6         1454025
+400000  100m       0       0    550094     -6         1454025
+800000  30m        0       0    244000     -6         1454025
+"""
+
+
+class TestCableLengthConfigUpdateValidator:
+    """CABLE_LENGTH values are checked against the HWSKU's pg_profile_lookup.ini at the
+    port's speed, since buffermgrd silently keeps the old PG profile for an unlisted one."""
+
+    @pytest.fixture
+    def hwsku_dir(self, tmp_path):
+        (tmp_path / "pg_profile_lookup.ini").write_text(PG_PROFILE_LOOKUP_INI)
+        with patch("sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs",
+                   return_value=(str(tmp_path), str(tmp_path))):
+            yield tmp_path
+
+    TARGET_CONFIG = {
+        "DEVICE_METADATA": {"localhost": {"buffer_model": "traditional"}},
+        "PORT": {"Ethernet4": {"speed": "400000"}, "Ethernet8": {"speed": "800000"}},
+        "CABLE_LENGTH": {"AZURE": {"Ethernet4": "30m", "Ethernet8": "30m"}},
+    }
+
+    def _validate(self, patch_element, target_config=TARGET_CONFIG):
+        return fov.cable_length_config_update_validator("localhost", patch_element, target_config=target_config)
+
+    def test_unlisted_length_for_port_speed_is_refused(self, hwsku_dir):
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "150m"}
+        assert self._validate(patch_element) is False
+
+    def test_listed_length_for_port_speed_is_allowed(self, hwsku_dir):
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "100m"}
+        assert self._validate(patch_element) is True
+
+    def test_length_listed_only_at_another_speed_is_refused(self, hwsku_dir):
+        """100m exists for 400G but not for the port's 800G"""
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet8", "op": "replace", "value": "100m"}
+        assert self._validate(patch_element) is False
+
+    def test_speed_changed_by_the_same_patch_is_used(self, hwsku_dir):
+        """The target config carries the post-patch speed, so a patch that moves Ethernet4 to
+        800G and sets 100m is refused even though 100m is fine at its current 400G"""
+        target_config = {
+            "DEVICE_METADATA": {"localhost": {"buffer_model": "traditional"}},
+            "PORT": {"Ethernet4": {"speed": "800000"}},
+        }
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "100m"}
+        assert self._validate(patch_element, target_config) is False
+
+    def test_zero_length_is_allowed(self, hwsku_dir):
+        """buffermgrd takes 0m as 'no lossless profile', not as a lookup key"""
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "0m"}
+        assert self._validate(patch_element) is True
+
+    def test_remove_is_allowed(self, hwsku_dir):
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "remove"}
+        assert self._validate(patch_element) is True
+
+    def test_group_level_add_checks_every_port(self, hwsku_dir):
+        patch_element = {"path": "/CABLE_LENGTH/AZURE", "op": "add",
+                         "value": {"Ethernet4": "100m", "Ethernet8": "100m"}}
+        assert self._validate(patch_element) is False
+        patch_element["value"]["Ethernet8"] = "30m"
+        assert self._validate(patch_element) is True
+
+    def test_table_level_add_checks_every_group(self, hwsku_dir):
+        patch_element = {"path": "/CABLE_LENGTH", "op": "add",
+                         "value": {"AZURE": {"Ethernet4": "30m"}, "OTHER": {"Ethernet4": "150m"}}}
+        assert self._validate(patch_element) is False
+        patch_element["value"]["OTHER"]["Ethernet4"] = "100m"
+        assert self._validate(patch_element) is True
+
+    def test_dynamic_buffer_model_is_not_checked(self, hwsku_dir):
+        target_config = {
+            "DEVICE_METADATA": {"localhost": {"buffer_model": "dynamic"}},
+            "PORT": {"Ethernet4": {"speed": "400000"}},
+        }
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "150m"}
+        assert self._validate(patch_element, target_config) is True
+
+    def test_no_lookup_file_is_permissive(self, tmp_path):
+        with patch("sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs",
+                   return_value=(str(tmp_path), str(tmp_path))):
+            patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "150m"}
+            assert self._validate(patch_element) is True
+
+    def test_multi_asic_scope_uses_the_asic_subdirectory(self, tmp_path):
+        """On a multi-ASIC SKU the lookup file sits in <hwsku>/<namespace>/; a file at
+        the HWSKU root is only the fallback"""
+        asic_dir = tmp_path / "asic1"
+        asic_dir.mkdir()
+        (asic_dir / "pg_profile_lookup.ini").write_text("400000 30m 0 0 1 -6 1\n")
+        (tmp_path / "pg_profile_lookup.ini").write_text(PG_PROFILE_LOOKUP_INI)
+        with patch("sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs",
+                   return_value=(str(tmp_path), str(tmp_path))):
+            patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "100m"}
+            # 100m is in the root file but not in asic1's
+            assert fov.cable_length_config_update_validator("asic1", patch_element, self.TARGET_CONFIG) is False
+            assert fov.cable_length_config_update_validator("localhost", patch_element, self.TARGET_CONFIG) is True
+            # asic0 has no subdirectory: the root file applies
+            assert fov.cable_length_config_update_validator("asic0", patch_element, self.TARGET_CONFIG) is True
+
+    def test_unresolvable_hwsku_dir_is_permissive(self):
+        with patch("sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs",
+                   side_effect=RuntimeError("no platform")):
+            patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "150m"}
+            assert self._validate(patch_element) is True
+
+    def test_port_without_speed_is_permissive(self, hwsku_dir):
+        target_config = {"DEVICE_METADATA": {"localhost": {"buffer_model": "traditional"}}, "PORT": {}}
+        patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "150m"}
+        assert self._validate(patch_element, target_config) is True
+
+    def test_without_target_config_reads_config_db(self, hwsku_dir):
+        def config_db(scope, table, key, field):
+            return {("DEVICE_METADATA", "localhost", "buffer_model"): "traditional",
+                    ("PORT", "Ethernet4", "speed"): "400000"}.get((table, key, field))
+        with patch("generic_config_updater.field_operation_validators.read_configdb_field",
+                   side_effect=config_db):
+            patch_element = {"path": "/CABLE_LENGTH/AZURE/Ethernet4", "op": "replace", "value": "150m"}
+            assert fov.cable_length_config_update_validator("localhost", patch_element) is False
+            patch_element["value"] = "100m"
+            assert fov.cable_length_config_update_validator("localhost", patch_element) is True
+
+    def test_validate_field_operation_passes_target_config(self, hwsku_dir):
+        """End to end through ConfigWrapper: the CABLE_LENGTH entry in the validators config
+        wires the validator in, and the dispatcher hands it the target config"""
+        old_config = {
+            "DEVICE_METADATA": {"localhost": {"buffer_model": "traditional"}},
+            "PORT": {"Ethernet4": {"speed": "400000"}},
+            "CABLE_LENGTH": {"AZURE": {"Ethernet4": "30m"}},
+        }
+        target_config = copy.deepcopy(old_config)
+        target_config["CABLE_LENGTH"]["AZURE"]["Ethernet4"] = "150m"
+        config_wrapper = gu_common.ConfigWrapper()
+        with pytest.raises(gu_common.IllegalPatchOperationError, match="CABLE_LENGTH"):
+            config_wrapper.validate_field_operation(old_config, target_config)
+        target_config["CABLE_LENGTH"]["AZURE"]["Ethernet4"] = "100m"
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+
+@patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+@patch("generic_config_updater.field_operation_validators.read_statedb_entry", mock.Mock(return_value="400000,800000"))
+class TestPortSpeedPgProfileCheck:
+    """A PORT speed change is checked against the port's cable length the same way a
+    CABLE_LENGTH change is checked against its speed: buffermgrd rebuilds the lossless
+    PG profile at the new speed and silently keeps the old one without a lookup row."""
+
+    @pytest.fixture
+    def hwsku_dir(self, tmp_path):
+        (tmp_path / "pg_profile_lookup.ini").write_text(PG_PROFILE_LOOKUP_INI)
+        with patch("sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs",
+                   return_value=(str(tmp_path), str(tmp_path))):
+            yield tmp_path
+
+    def _target_config(self, length, buffer_model="traditional"):
+        return {
+            "DEVICE_METADATA": {"localhost": {"buffer_model": buffer_model}},
+            "PORT": {"Ethernet4": {"speed": "400000"}},
+            "CABLE_LENGTH": {"AZURE": {"Ethernet4": length}},
+        }
+
+    def _validate(self, patch_element, target_config):
+        return fov.port_config_update_validator("localhost", patch_element, target_config=target_config)
+
+    def test_speed_without_row_at_cable_length_is_refused(self, hwsku_dir):
+        """100m exists at 400G but not at 800G"""
+        patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+        assert self._validate(patch_element, self._target_config("100m")) is False
+
+    def test_speed_with_row_at_cable_length_is_allowed(self, hwsku_dir):
+        patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+        assert self._validate(patch_element, self._target_config("30m")) is True
+
+    def test_cable_length_changed_by_the_same_patch_is_used(self, hwsku_dir):
+        """The target config carries the post-patch length (30m), not CONFIG_DB's"""
+        with patch("generic_config_updater.field_operation_validators.read_configdb_field",
+                   side_effect=AssertionError("CONFIG_DB must not be read when a target config is given")):
+            patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+            assert self._validate(patch_element, self._target_config("30m")) is True
+
+    def test_object_level_port_patch_is_checked(self, hwsku_dir):
+        patch_element = {"path": "/PORT/Ethernet4", "op": "add", "value": {"speed": "800000", "admin_status": "up"}}
+        assert self._validate(patch_element, self._target_config("100m")) is False
+        patch_element["value"]["speed"] = "400000"
+        assert self._validate(patch_element, self._target_config("100m")) is True
+
+    def test_zero_cable_length_is_allowed(self, hwsku_dir):
+        patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+        assert self._validate(patch_element, self._target_config("0m")) is True
+
+    def test_port_without_cable_length_is_allowed(self, hwsku_dir):
+        target_config = self._target_config("100m")
+        del target_config["CABLE_LENGTH"]
+        patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+        assert self._validate(patch_element, target_config) is True
+
+    def test_dynamic_buffer_model_is_not_checked(self, hwsku_dir):
+        patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+        assert self._validate(patch_element, self._target_config("100m", buffer_model="dynamic")) is True
+
+    def test_no_lookup_file_is_permissive(self, tmp_path):
+        with patch("sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs",
+                   return_value=(str(tmp_path), str(tmp_path))):
+            patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+            assert self._validate(patch_element, self._target_config("100m")) is True
+
+    def test_without_target_config_reads_config_db(self, hwsku_dir):
+        with (
+            patch("generic_config_updater.field_operation_validators.read_configdb_field",
+                  return_value="traditional"),
+            patch("generic_config_updater.field_operation_validators._port_cable_length",
+                  return_value="100m")
+        ):
+            patch_element = {"path": "/PORT/Ethernet4/speed", "op": "replace", "value": "800000"}
+            assert fov.port_config_update_validator("localhost", patch_element) is False
+            patch_element["value"] = "400000"
+            assert fov.port_config_update_validator("localhost", patch_element) is True
+
+    def test_validate_field_operation_passes_target_config(self, hwsku_dir):
+        """End to end through ConfigWrapper: the PORT validator now receives the target config"""
+        old_config = self._target_config("100m")
+        target_config = copy.deepcopy(old_config)
+        target_config["PORT"]["Ethernet4"]["speed"] = "800000"
+        config_wrapper = gu_common.ConfigWrapper()
+        with pytest.raises(gu_common.IllegalPatchOperationError, match="PORT"):
+            config_wrapper.validate_field_operation(old_config, target_config)
+        target_config["CABLE_LENGTH"]["AZURE"]["Ethernet4"] = "30m"
+        config_wrapper.validate_field_operation(old_config, target_config)
