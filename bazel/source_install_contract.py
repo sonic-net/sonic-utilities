@@ -112,7 +112,8 @@ class SourceInstallation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             with tarfile.open(RUNTIME, 'r:') as archive:
-                archive.extractall(prefix, filter='data')
+                for member in archive:
+                    archive.extract(member, prefix, filter='data')
             site = prefix/SITE
             scheme = {name: str(site if name in ('purelib', 'platlib') else prefix/name) for name in ('purelib', 'platlib', 'headers', 'scripts', 'data')}
             with WheelFile.open(CLICK) as wheel:
