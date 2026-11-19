@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
+from sonic_py_common import multi_asic
 
 import config.isis as config_isis
 import show.isis as show_isis
@@ -298,7 +299,7 @@ def test_show_mapping(args, expected):
     with patch.object(show_isis, 'run_vtysh_command', return_value='state\n') as run:
         result = CliRunner().invoke(show_isis.isis, args)
     assert result.exit_code == 0, result.output + repr(result.exception)
-    run.assert_called_once_with(expected, None)
+    run.assert_called_once_with(expected, multi_asic.DEFAULT_NAMESPACE)
 
 
 @pytest.mark.parametrize('args', [
@@ -459,4 +460,4 @@ def test_show_propagates_daemon_failure():
             patch.object(show_isis.bgp_util, 'run_bgp_command', side_effect=SystemExit(1), create=True) as run:
         result = CliRunner().invoke(show_isis.isis, ['neighbor', '--json'])
     assert result.exit_code == 1
-    run.assert_called_once_with('show isis neighbor json', None, 'vtysh')
+    run.assert_called_once_with('show isis neighbor json', multi_asic.DEFAULT_NAMESPACE, 'vtysh')
