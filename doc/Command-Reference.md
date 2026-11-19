@@ -8669,6 +8669,7 @@ This command enables user to enable an interface to forward L3 traffic with out 
   admin@sonic:~$ sudo config interface ipv6 enable use-link-local-only Vlan206
   admin@sonic:~$ sudo config interface ipv6 enable use-link-local-only PortChannel007
   admin@sonic:~$ sudo config interface ipv6 enable use-link-local-only Ethernet52
+  admin@sonic:~$ sudo config interface ipv6 enable use-link-local-only Ethernet0.10
   ```
 
 **config interface ipv6 disable use-link-local-only <interface_name>**
@@ -8685,6 +8686,7 @@ This command enables user to disable use-link-local-only configuration on an int
   admin@sonic:~$ sudo config interface ipv6 disable use-link-local-only Vlan206
   admin@sonic:~$ sudo config interface ipv6 disable use-link-local-only PortChannel007
   admin@sonic:~$ sudo config interface ipv6 disable use-link-local-only Ethernet52
+  admin@sonic:~$ sudo config interface ipv6 disable use-link-local-only Ethernet0.10
   ```
 
 **config ipv6 enable link-local**

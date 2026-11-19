@@ -7412,14 +7412,10 @@ def disable():
     """Disable IPv6 processing on interface"""
     pass
 
-#
-# 'config interface ipv6 enable use-link-local-only <interface-name>'
-#
 
+# Shared helper functions for the use-link-local-only commands.
 def _get_ipv6_ll_intf_type(interface_name):
-    """Map an interface name (full or shortname) to the CONFIG_DB table used
-    for ipv6_use_link_local_only.
-    """
+    """Map an interface name (full or shortname) to its CONFIG_DB table."""
     table_name = get_interface_table_name(interface_name)
     if table_name in ("INTERFACE", "PORTCHANNEL_INTERFACE",
                       "VLAN_INTERFACE", "VLAN_SUB_INTERFACE"):
@@ -7428,10 +7424,11 @@ def _get_ipv6_ll_intf_type(interface_name):
 
 
 def _validate_ipv6_ll_interface(ctx, db, interface_name, interface_type):
-    """Shared validation for ipv6 link-local enable/disable commands."""
+    """Shared validation for IPv6 link-local enable/disable commands."""
     if not interface_type:
         ctx.fail("'interface_name' is not valid. Valid names "
-                 "[Ethernet/Eth/PortChannel/Po/Vlan/Sub-interface]")
+                 "[Ethernet/PortChannel/Vlan or subinterfaces in "
+                 "<parent>.<vlan-id> format]")
 
     if interface_type == "VLAN_INTERFACE":
         if not clicommon.is_valid_vlan_interface(db, interface_name):
@@ -7458,6 +7455,10 @@ def _validate_ipv6_ll_interface(ctx, db, interface_name, interface_type):
             ctx.fail("{} is configured as a member of vlan."
                      " Cannot configure the IPv6 link local mode!"
                      .format(interface_name))
+
+#
+# 'config interface ipv6 enable use-link-local-only <interface-name>'
+#
 
 
 @enable.command('use-link-local-only')
@@ -10234,6 +10235,10 @@ def set_ipv6_link_local_only_on_interface(config_db, interface_dict, interface_t
             return
 
     if mode == "enable":
+        config_db.mod_entry(interface_type, interface_name, {"ipv6_use_link_local_only": mode})
+        return
+
+    if interface_type == "VLAN_SUB_INTERFACE":
         config_db.mod_entry(interface_type, interface_name, {"ipv6_use_link_local_only": mode})
         return
 

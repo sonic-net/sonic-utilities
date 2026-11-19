@@ -92,8 +92,6 @@ show_ipv6_link_local_mode_output="""\
 +------------------+----------+
 | Vlan4000         | Disabled |
 +------------------+----------+
-| Vlan1111         | Disabled |
-+------------------+----------+
 | Ethernet0.10     | Disabled |
 +------------------+----------+
 | Eth36.10         | Disabled |
@@ -249,6 +247,18 @@ class TestIPv6LinkLocal(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == ''
+
+        db.cfgdb.set_entry('VLAN_SUB_INTERFACE', 'Ethernet0.20',
+                           {'admin_status': 'up'})
+        result = runner.invoke(enable_cmd, ['Ethernet0.20'], obj=obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.20').get(
+            'ipv6_use_link_local_only') == 'enable'
+
+        result = runner.invoke(disable_cmd, ['Ethernet0.20'], obj=obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.20').get(
+            'admin_status') == 'up'
 
         result = runner.invoke(disable_cmd, ["Ethernet0.10"], obj=obj)
         print(result.exit_code)
