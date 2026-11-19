@@ -121,22 +121,11 @@ SFP_DOM_CHANNEL_MONITOR_MAP = {
     'tx1power': 'TXPower'
 }
 
-SFP_DOM_CHANNEL_THRESHOLD_MAP = {
+DOM_CHANNEL_THRESHOLD_MAP = {
     'txpowerhighalarm':   'TxPowerHighAlarm',
     'txpowerlowalarm':    'TxPowerLowAlarm',
     'txpowerhighwarning': 'TxPowerHighWarning',
     'txpowerlowwarning':  'TxPowerLowWarning',
-    'rxpowerhighalarm':   'RxPowerHighAlarm',
-    'rxpowerlowalarm':    'RxPowerLowAlarm',
-    'rxpowerhighwarning': 'RxPowerHighWarning',
-    'rxpowerlowwarning':  'RxPowerLowWarning',
-    'txbiashighalarm':    'TxBiasHighAlarm',
-    'txbiaslowalarm':     'TxBiasLowAlarm',
-    'txbiashighwarning':  'TxBiasHighWarning',
-    'txbiaslowwarning':   'TxBiasLowWarning'
-}
-
-QSFP_DOM_CHANNEL_THRESHOLD_MAP = {
     'rxpowerhighalarm':   'RxPowerHighAlarm',
     'rxpowerlowalarm':    'RxPowerLowAlarm',
     'rxpowerhighwarning': 'RxPowerHighWarning',
@@ -421,16 +410,11 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
             output_dom += output_channel
 
         # Channel Threshold
-        if is_sfp_cmis:
-            dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP
-        else:
-            dom_map = QSFP_DOM_CHANNEL_THRESHOLD_MAP
-
         output_dom += (indent + 'ChannelThresholdValues:\n')
-        sorted_key_table = natsorted(dom_map)
+        sorted_key_table = natsorted(DOM_CHANNEL_THRESHOLD_MAP)
         output_channel_threshold = format_dict_value_to_string(
             sorted_key_table, dom_info_dict,
-            dom_map,
+            DOM_CHANNEL_THRESHOLD_MAP,
             DOM_CHANNEL_THRESHOLD_UNIT_MAP,
             channel_threshold_align)
         output_dom += output_channel_threshold
@@ -482,10 +466,10 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
         output_dom += output_module_threshold
 
         # Channel Threshold
-        sorted_key_table = natsorted(SFP_DOM_CHANNEL_THRESHOLD_MAP)
+        sorted_key_table = natsorted(DOM_CHANNEL_THRESHOLD_MAP)
         output_channel_threshold = format_dict_value_to_string(
             sorted_key_table, dom_info_dict,
-            SFP_DOM_CHANNEL_THRESHOLD_MAP,
+            DOM_CHANNEL_THRESHOLD_MAP,
             DOM_CHANNEL_THRESHOLD_UNIT_MAP,
             channel_threshold_align)
         output_dom += output_channel_threshold
