@@ -1,5 +1,6 @@
 import re
 import click
+from natsort import natsorted
 # import subprocess
 import utilities_common.cli as clicommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
@@ -15,6 +16,10 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 #   show spanning_tree bpdu_guard
 #   show spanning_tree statistics
 #   show spanning_tree statistics vlan <vlanid>
+#   show spanning_tree mst
+#   show spanning_tree mst region
+#   show spanning_tree mst instance <instance-id>
+#   show spanning_tree mst interface <ifname>
 #
 ###############################################################################
 g_stp_vlanid = 0
@@ -42,6 +47,29 @@ def connect_to_appl_db():
     appl_db = SonicV2Connector(host="127.0.0.1")
     appl_db.connect(appl_db.APPL_DB)
     return appl_db
+
+
+def connect_to_state_db():
+    state_db = SonicV2Connector(host="127.0.0.1")
+    state_db.connect(state_db.STATE_DB)
+    return state_db
+
+
+def echo_held_instances(table, what):
+    """VLANs or MST instances spanning tree is configured for but the hardware
+    has no instance left for; stpmgrd records them in STATE_DB."""
+    state_db = connect_to_state_db()
+    keys = state_db.keys(state_db.STATE_DB, table + "|*") or []
+    held = []
+    for key in keys:
+        entry = state_db.get_all(state_db.STATE_DB, key) or {}
+        if entry.get('instance_state') == 'unavailable':
+            held.append((key.split('|', 1)[1], entry.get('reason', '')))
+    if not held:
+        return
+    click.echo("")
+    for name, reason in natsorted(held):
+        click.echo("{} {} - no STP instance: {}".format(what, name.replace('Vlan', ''), reason))
 
 
 # Redis DB only supports limiter pattern search wildcards.
@@ -144,6 +172,183 @@ def stp_get_entry_from_vlan_intf_tb(db, vlanid, ifname):
     return entry
 
 
+def _summarize_vlans(vlan_str):
+    """Compress a comma-separated VLAN list into ranges (e.g. '1-100,200')."""
+    nums = sorted(int(v) for v in vlan_str.split(',') if v.strip().isdigit())
+    if not nums:
+        return "none"
+    ranges = []
+    start = prev = nums[0]
+    for n in nums[1:]:
+        if n == prev + 1:
+            prev = n
+        else:
+            ranges.append((start, prev))
+            start = prev = n
+    ranges.append((start, prev))
+    return ",".join("{}-{}".format(a, b) if a != b else str(a) for a, b in ranges)
+
+
+MST_REGION_FIELDS = (
+    ("name", "Region Name"),
+    ("revision", "Revision"),
+    ("max_hops", "Max Hops"),
+    ("max_age", "Max Age"),
+    ("hello_time", "Hello Time"),
+    ("forward_delay", "Forward Delay"),
+    ("hold_count", "Hold Count"),
+)
+
+
+def mst_instance_ids():
+    """Every MST instance the daemon has published, lowest first."""
+    inst_ids = set()
+    for key in (g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_MST_INST_TABLE:*") or []):
+        m = re.search(r'STP_MST_INST_TABLE:(\d+)$', key)
+        if m:
+            inst_ids.add(int(m.group(1)))
+    return sorted(inst_ids)
+
+
+def mst_instance_entry(inst):
+    return stp_get_all_from_pattern(
+        g_stp_appl_db, g_stp_appl_db.APPL_DB, "*STP_MST_INST_TABLE:{}".format(inst))
+
+
+def mst_instance_ports(inst):
+    """Interfaces enrolled in one instance, by name."""
+    ports = []
+    pattern = "*STP_MST_PORT_TABLE:{}:*".format(inst)
+    for key in (g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, pattern) or []):
+        m = re.search(r'STP_MST_PORT_TABLE:{}:(.*)$'.format(inst), key)
+        if m:
+            ports.append(m.group(1))
+    return sorted(ports)
+
+
+def mst_port_entry(inst, ifname):
+    return stp_get_all_from_pattern(
+        g_stp_appl_db, g_stp_appl_db.APPL_DB,
+        "*STP_MST_PORT_TABLE:{}:{}".format(inst, ifname))
+
+
+def mst_boundary_state(ifname):
+    """Boundary state, which the daemon writes to the port table, not the
+    per-instance one. Returns None when the daemon has not published it."""
+    entry = stp_get_all_from_pattern(
+        g_stp_appl_db, g_stp_appl_db.APPL_DB, "*STP_PORT_TABLE:{}".format(ifname))
+    if not entry or 'mst_boundary' not in entry:
+        return None
+    if entry.get('mst_boundary') != 'yes':
+        return "no"
+    proto = entry.get('mst_boundary_proto', '')
+    return "yes ({})".format(proto) if proto else "yes"
+
+
+def require_mst_mode(ctx):
+    if g_stp_mode != 'MSTP':
+        ctx.fail("Spanning-tree is not running in MST mode")
+
+
+def echo_instance_summary(inst, entry):
+    """The instance header, including the fields that only MST has."""
+    click.echo("MST Instance {} ({})".format(inst, "CIST" if inst == 0 else "MSTI"))
+    click.echo("--------------------------------------------------------------------")
+    if not entry:
+        click.echo("  No state published for this instance")
+        return
+    vlan_str = entry.get('vlan@', entry.get('vlan', ''))
+    vlan_cnt = len([v for v in vlan_str.split(',') if v.strip()])
+    click.echo("  Bridge Address : {}   Bridge Priority: {}".format(
+        entry.get('bridge_address', ''), entry.get('bridge_priority', '')))
+    click.echo("  Root Address   : {}   Root Cost: {}   Root Port: {}".format(
+        entry.get('root_address', ''), entry.get('root_path_cost', ''),
+        entry.get('root_port', '')))
+    click.echo("  Regional Root  : {}   Regional Root Cost: {}".format(
+        entry.get('regional_root_address', ''), entry.get('regional_root_cost', '')))
+    click.echo("  MaxAge: {}  Hello: {}  FwdDelay: {}  RemainingHops: {}  HoldTime: {}".format(
+        entry.get('root_max_age', ''), entry.get('root_hello_time', ''),
+        entry.get('root_forward_delay', ''), entry.get('remaining_hops', ''),
+        entry.get('hold_time', '')))
+    click.echo("  VLANs mapped   : {} ({} vlan(s))".format(
+        _summarize_vlans(vlan_str), vlan_cnt))
+
+
+def echo_instance_ports(inst, detail=False):
+    """The per-instance port table. detail adds the designated-bridge columns
+    and the counters, which are what you need when a role looks wrong."""
+    ports = mst_instance_ports(inst)
+    click.echo("")
+    click.echo("  {:17}{:12}{:13}{:8}{:6}{}".format(
+        "Port", "Role", "State", "Cost", "Prio", "Designated Bridge"))
+    if not ports:
+        click.echo("  No interfaces are enrolled in this instance")
+        return
+    for ifname in ports:
+        pe = mst_port_entry(inst, ifname)
+        if not pe:
+            continue
+        click.echo("  {:17}{:12}{:13}{:8}{:6}{}".format(
+            ifname, pe.get('role', ''), pe.get('port_state', ''),
+            pe.get('path_cost', ''), pe.get('priority', ''), pe.get('desig_bridge', '')))
+        if not detail:
+            continue
+        click.echo("    {:15}{}".format("Desig Root:", pe.get('desig_root', '')))
+        click.echo("    {:15}{}".format("Desig RegRoot:", pe.get('desig_reg_root', '')))
+        click.echo("    {:15}{:14}{:17}{}".format(
+            "Desig Cost:", pe.get('desig_cost', ''),
+            "Desig Port:", pe.get('desig_port', '')))
+        click.echo("    {:15}{:14}{:17}{}".format(
+            "External Cost:", pe.get('external_cost', ''),
+            "Fwd Transitions:", pe.get('fwd_transitions', '')))
+        click.echo("    {:15}{:14}{:17}{}".format(
+            "BPDUs Sent:", pe.get('bpdu_sent', ''),
+            "BPDUs Recvd:", pe.get('bpdu_received', '')))
+        boundary = mst_boundary_state(ifname)
+        if boundary is not None:
+            click.echo("    {:15}{}".format("Boundary:", boundary))
+        click.echo("")
+
+
+def echo_mst_region():
+    """Region identity, which lives only in CONFIG_DB: the daemon publishes
+    no region table, so there is nothing operational to read it from."""
+    cfg = g_stp_cfg_db.get_entry("STP_MST", "GLOBAL") or {}
+    click.echo("MST Region")
+    click.echo("--------------------------------------------------------------------")
+    if not cfg:
+        click.echo("  No MST region is configured")
+    else:
+        for field, label in MST_REGION_FIELDS:
+            if field in cfg:
+                click.echo("  {:16}{}".format(label + ":", cfg[field]))
+    click.echo("")
+    click.echo("  {:12}{}".format("Instance", "VLANs mapped"))
+    inst_ids = mst_instance_ids()
+    if not inst_ids:
+        click.echo("  No MST instances are operational")
+        return
+    for inst in inst_ids:
+        entry = mst_instance_entry(inst) or {}
+        vlan_str = entry.get('vlan@', entry.get('vlan', ''))
+        click.echo("  {:12}{}".format(
+            "{} ({})".format(inst, "CIST" if inst == 0 else "MSTI"),
+            _summarize_vlans(vlan_str)))
+
+
+def show_mst_instances():
+    """Render MSTP instances and their ports from APPL_DB."""
+    click.echo("Spanning-tree Mode: MSTP")
+    inst_ids = mst_instance_ids()
+    if not inst_ids:
+        click.echo("No MST instances are operational")
+    for inst in inst_ids:
+        click.echo("")
+        echo_instance_summary(inst, mst_instance_entry(inst))
+        echo_instance_ports(inst)
+    echo_held_instances("STP_MST_INST_TABLE", "MST Instance")
+
+
 #
 # This group houses Spanning_tree commands and subgroups
 @click.group(cls=clicommon.AliasedGroup, invoke_without_command=True)
@@ -167,11 +372,15 @@ def spanning_tree(ctx):
     global g_stp_mode
     if 'pvst' == global_cfg['mode']:
         g_stp_mode = 'PVST'
+    elif 'mst' == global_cfg['mode']:
+        g_stp_mode = 'MSTP'
+
+    if ctx.invoked_subcommand is None and g_stp_mode == 'MSTP':
+        show_mst_instances()
+        return
 
     if ctx.invoked_subcommand is None:
-        keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_VLAN_TABLE:Vlan*")
-        if not keys:
-            return
+        keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_VLAN_TABLE:Vlan*") or []
         vlan_list = []
         for key in keys:
             result = re.search('.STP_VLAN_TABLE:Vlan(.*)', key)
@@ -180,6 +389,63 @@ def spanning_tree(ctx):
         vlan_list.sort()
         for vlanid in vlan_list:
             ctx.invoke(show_stp_vlan, vlanid=vlanid)
+        echo_held_instances("STP_VLAN_TABLE", "VLAN")
+
+
+@spanning_tree.group('mst', cls=clicommon.AliasedGroup, invoke_without_command=True)
+@click.pass_context
+def show_stp_mst(ctx):
+    """Show spanning_tree mst region and instance information"""
+    require_mst_mode(ctx)
+    if ctx.invoked_subcommand is not None:
+        return
+    echo_mst_region()
+    click.echo("")
+    show_mst_instances()
+
+
+@show_stp_mst.command('region')
+@click.pass_context
+def show_stp_mst_region(ctx):
+    """Show spanning_tree mst region information"""
+    require_mst_mode(ctx)
+    echo_mst_region()
+
+
+@show_stp_mst.command('instance')
+@click.argument('instance_id', metavar='<instance-id>', required=True, type=int)
+@click.pass_context
+def show_stp_mst_instance(ctx, instance_id):
+    """Show spanning_tree mst instance <instance-id> information"""
+    require_mst_mode(ctx)
+    if instance_id not in mst_instance_ids():
+        ctx.fail("MST instance {} is not operational".format(instance_id))
+    echo_instance_summary(instance_id, mst_instance_entry(instance_id))
+    echo_instance_ports(instance_id, detail=True)
+
+
+@show_stp_mst.command('interface')
+@click.argument('ifname', metavar='<ifname>', required=True)
+@click.pass_context
+def show_stp_mst_interface(ctx, ifname):
+    """Show spanning_tree mst interface <ifname> across every instance"""
+    require_mst_mode(ctx)
+    found = [inst for inst in mst_instance_ids() if mst_port_entry(inst, ifname)]
+    if not found:
+        ctx.fail("{} is not enrolled in any MST instance".format(ifname))
+    click.echo("{:10}{:12}{:13}{:8}{:6}{}".format(
+        "Instance", "Role", "State", "Cost", "Prio", "Designated Bridge"))
+    for inst in found:
+        pe = mst_port_entry(inst, ifname)
+        click.echo("{:10}{:12}{:13}{:8}{:6}{}".format(
+            "{} ({})".format(inst, "CIST" if inst == 0 else "MSTI"),
+            pe.get('role', ''), pe.get('port_state', ''),
+            pe.get('path_cost', ''), pe.get('priority', ''),
+            pe.get('desig_bridge', '')))
+    boundary = mst_boundary_state(ifname)
+    if boundary is not None:
+        click.echo("")
+        click.echo("{:10}{}".format("Boundary:", boundary))
 
 
 @spanning_tree.group('vlan', cls=clicommon.AliasedGroup, invoke_without_command=True)

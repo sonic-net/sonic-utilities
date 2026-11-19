@@ -3,6 +3,7 @@ import utilities_common.cli as clicommon
 import utilities_common.dhcp_relay_util as dhcp_relay_util
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic
+from utilities_common.db import Db
 
 from jsonpatch import JsonPatchConflict
 from time import sleep
@@ -59,6 +60,14 @@ def get_config_db_from_context(ctx):
     return multi_asic.connect_config_db_for_ns(namespace)
 
 
+def get_state_db_from_context(ctx):
+    """The STATE_DB connector of the Db the config group opened, or None."""
+    db = ctx.find_object(Db)
+    if db is None:
+        return None
+    return db.db_clients.get(get_namespace_from_context(ctx))
+
+
 def get_namespace_from_context(ctx):
     """Extract namespace from context object."""
     if isinstance(ctx.obj, dict):
@@ -100,6 +109,7 @@ def add_vlan(ctx, vid, multiple):
     """Add VLAN"""
 
     config_db = get_config_db_from_context(ctx)
+    state_db = get_state_db_from_context(ctx)
 
     vid_list = []
 
@@ -135,7 +145,7 @@ def add_vlan(ctx, vid, multiple):
                 ctx.fail("DHCPv6 relay config for {} already exists".format(vlan))
 
             # Enable STP on VLAN if PVST is enabled globally
-            stp.vlan_enable_stp(config_db, vlan)
+            stp.vlan_enable_stp(config_db, vlan, state_db)
 
             # set dhcpv4_relay table
             set_dhcp_relay_table('VLAN', config_db, vlan, {'vlanid': str(vid)})
