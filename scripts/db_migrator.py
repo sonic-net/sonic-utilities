@@ -981,19 +981,19 @@ class DBMigrator():
         - the sub-interface's row there already sets it: that value is kept;
         - the row exists: the field is added to it;
         - there is no row, but the sub-interface has address rows in either
-          table, so it is live: the row is created with every field of the old
-          row, so that the two rows agree;
+          table, so it is live: the row is created with the old row's fields
+          that VLAN_SUB_INTERFACE models, so that the two rows agree;
         - the sub-interface has no row and no address rows: nothing is written.
           The old row is left over from a deleted sub-interface, which intfmgrd
           would otherwise create again from it, and a new VLAN_SUB_INTERFACE row
           would do the same.
         A value other than enable or disable is dropped, since the model refuses
-        it.
+        it; a missing row is still created.
 
         The old row is deleted only when the field was all it held and its table
-        has no address rows for the sub-interface, as the CLI does on disable;
-        otherwise it stays without the field, since intfmgrd applies the rest to
-        the sub-interface. IP address rows are not touched.
+        has no address rows for the sub-interface; otherwise it stays without the
+        field, since intfmgrd applies the rest to the sub-interface. IP address
+        rows are not touched.
 
         intfmgrd removes a sub-interface's netdev when one of its rows is deleted,
         so this must run before swss starts, as db_migrator does at boot and on
@@ -1001,6 +1001,7 @@ class DBMigrator():
         """
         field = 'ipv6_use_link_local_only'
         sub_intf_table = 'VLAN_SUB_INTERFACE'
+        modelled = {field, 'admin_status', 'vrf_name', 'vnet_name', 'loopback_action', 'vlan'}
         sub_intfs = self.configDB.get_table(sub_intf_table)
         addressed = {key[0] for key in sub_intfs if isinstance(key, tuple)}
         for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE'):
@@ -1012,27 +1013,30 @@ class DBMigrator():
                 value = entry[field]
                 rest = {f: v for f, v in entry.items() if f != field}
                 try:
-                    # A row without fields still configures the sub-interface
-                    sub_intf = sub_intfs.get(key)
-                    if value not in ('enable', 'disable'):
+                    valid = value in ('enable', 'disable')
+                    if not valid:
                         log.log_warning("{}|{}: dropped {} '{}', not enable or disable".format(
                             table, key, field, value))
-                    elif sub_intf is not None and field in sub_intf:
+                    # A row without fields still configures the sub-interface
+                    sub_intf = sub_intfs.get(key)
+                    if sub_intf is None and (key in addressed or key in table_addressed):
+                        row = {f: v for f, v in entry.items() if f in modelled and (valid or f != field)}
+                        self.configDB.set_entry(sub_intf_table, key, row)
+                        sub_intfs[key] = row
+                        log.log_notice("Created {}|{} {} from {}|{}".format(sub_intf_table, key, row, table, key))
+                    elif not valid:
+                        pass
+                    elif sub_intf is None:
+                        log.log_warning("{}|{}: dropped {} '{}', the sub-interface is not configured".format(
+                            table, key, field, value))
+                    elif field in sub_intf:
                         log.log_notice("{}|{}: dropped {} '{}', {}|{} sets it to '{}'".format(
                             table, key, field, value, sub_intf_table, key, sub_intf[field]))
-                    elif sub_intf is not None:
+                    else:
                         self.configDB.mod_entry(sub_intf_table, key, {field: value})
                         sub_intf[field] = value
                         log.log_notice("Moved {} '{}' from {}|{} to {}|{}".format(
                             field, value, table, key, sub_intf_table, key))
-                    elif key in addressed or key in table_addressed:
-                        self.configDB.set_entry(sub_intf_table, key, entry)
-                        sub_intfs[key] = dict(entry)
-                        log.log_notice("Created {}|{} from {}|{} {}".format(
-                            sub_intf_table, key, table, key, entry))
-                    else:
-                        log.log_warning("{}|{}: dropped {} '{}', the sub-interface is not configured".format(
-                            table, key, field, value))
                     self.configDB.set_entry(table, key, rest if rest or key in table_addressed else None)
                 except Exception as e:
                     log.log_error("Failed to migrate {} of {}|{}: {}".format(field, table, key, str(e)))
