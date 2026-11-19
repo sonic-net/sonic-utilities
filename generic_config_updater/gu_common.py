@@ -17,6 +17,8 @@ YANG_DIR = "/usr/local/yang-models"
 SYSLOG_IDENTIFIER = "GenericConfigUpdater"
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_FIELD_OP_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
+# get_asic_name() names of the Broadcom DNX ASICs that map only one received PFC priority to each egress queue
+DNX_ASICS = ("q3d", "q4d")
 HOST_NAMESPACE = "localhost"
 
 
@@ -83,6 +85,9 @@ class ConfigWrapper:
         self.sonic_yang_with_loaded_models = None
         self._validate_config_cache = {}
         self._currently_loaded_hash = None
+        self._asic_name = None
+        self._running_config_db = None
+        self._running_pfc_queue_conflicts = None
 
     def get_config_db_as_json(self):
         return get_config_db_as_json(self.scope)
@@ -154,7 +159,8 @@ class ConfigWrapper:
 
         # TODO: Move these validators to YANG models
         supplemental_yang_validators = [self.validate_bgp_peer_group,
-                                        self.validate_lanes]
+                                        self.validate_lanes,
+                                        self.validate_pfc_to_queue_map]
 
         try:
             # Loading data automatically does full validation.
@@ -316,6 +322,72 @@ class ConfigWrapper:
                     if lane in existing:
                         return False, f"'{lane}' lane is used multiple times in PORT: {set([port, existing[lane]])}"
                     existing[lane] = port
+        return True, None
+
+    def _get_asic_name(self):
+        if self._asic_name is None:
+            from . import field_operation_validators
+            self._asic_name = field_operation_validators.get_asic_name()
+        return self._asic_name
+
+    def _get_pfc_queue_conflicts(self, config_db, running_config_db=None):
+        """Return {(port, map name, queue): [PFC priorities]} for each queue that two or more
+        of a port's enabled PFC priorities map to."""
+        conflicts = {}
+        maps = config_db.get("MAP_PFC_PRIORITY_TO_QUEUE", {})
+        ports = config_db.get("PORT", {})
+        running_qos_maps = (running_config_db or {}).get("PORT_QOS_MAP", {})
+        for port, qos_map in config_db.get("PORT_QOS_MAP", {}).items():
+            map_name = qos_map.get("pfc_to_queue_map")
+            pfc_map = maps.get(map_name)
+            if not pfc_map:
+                continue
+
+            # Asymmetric PFC receives on every priority. Without pfc_enable, orchagent applies the port's maps
+            # before it turns PFC off, so SAI checks the map against the priorities the port already has: the
+            # running pfc_enable if there is one. Otherwise SAI is on all eight if PFC was never set, or on none
+            # if it was cleared; GCU cannot tell which, so assume all eight.
+            pfc_enable = qos_map.get("pfc_enable") or running_qos_maps.get(port, {}).get("pfc_enable")
+            if not pfc_enable or ports.get(port, {}).get("pfc_asym") == "on":
+                priorities = [str(prio) for prio in range(8)]
+            else:
+                priorities = sorted(set(p for p in pfc_enable.split(",") if p))
+
+            queue_to_priorities = {}
+            for priority in priorities:
+                queue = pfc_map.get(priority)
+                if queue is not None:
+                    queue_to_priorities.setdefault(queue, []).append(priority)
+            for queue, queue_priorities in queue_to_priorities.items():
+                if len(queue_priorities) > 1:
+                    conflicts[(port, map_name, queue)] = queue_priorities
+        return conflicts
+
+    def validate_pfc_to_queue_map(self, config_db):
+        # DNX can map only one received PFC priority to each egress queue of a port; syncd rejects
+        # a pfc_to_queue_map in which two of the port's enabled priorities share a queue.
+        # The ASIC is looked up only for a config with a shared queue, which most configs do not have.
+        if not self._get_pfc_queue_conflicts(config_db):
+            return True, None
+
+        if self._get_asic_name() not in DNX_ASICS:
+            return True, None
+
+        # A conflict already in the running config (from config reload, say) is not rejected, nor is one
+        # the patch reduces: the moves of every patch, including the one that removes it, pass through
+        # configs that still contain it. The running config is read once, so a ConfigWrapper must not
+        # outlive the GCU operation it was created for.
+        if self._running_config_db is None:
+            self._running_config_db = self.get_config_db_as_json()
+            self._running_pfc_queue_conflicts = self._get_pfc_queue_conflicts(self._running_config_db)
+        conflicts = self._get_pfc_queue_conflicts(config_db, self._running_config_db)
+        for (port, map_name, queue), priorities in sorted(conflicts.items()):
+            running = self._running_pfc_queue_conflicts.get((port, map_name, queue))
+            if running is not None and set(priorities) <= set(running):
+                continue
+            return False, (f"PORT_QOS_MAP '{port}': PFC priorities {' and '.join(priorities)} map to the same "
+                           f"queue {queue} in MAP_PFC_PRIORITY_TO_QUEUE '{map_name}', but this ASIC allows only one "
+                           "PFC priority per queue")
         return True, None
 
     def validate_bgp_peer_group(self, config_db):
