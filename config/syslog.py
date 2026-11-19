@@ -655,6 +655,23 @@ def disable_rate_limit_feature(db, service_name, namespace):
             click.echo(f'Disabled syslog rate limit feature for {feature_name}')
 
 
+def require_manual_refresh(cfg_db, state_db, identifier):
+    """Whether a log level change applies only once the process gets SIGHUP.
+
+    A process publishes require_manual_refresh with its effective log setting
+    in STATE_DB LOGGER_TABLE. A process that predates that publishes nothing
+    there and wrote the field into its CONFIG_DB LOGGER row instead.
+    """
+    try:
+        state = state_db.get_all(state_db.STATE_DB, f'LOGGER_TABLE|{identifier}') or {}
+    except Exception:
+        # The level is already written; decide from CONFIG_DB alone.
+        state = {}
+    if 'require_manual_refresh' in state:
+        return state['require_manual_refresh'].lower() == 'true'
+    return cfg_db.get_entry('LOGGER', identifier).get('require_manual_refresh', '').lower() == 'true'
+
+
 @syslog.command('level')
 @click.option("-i", "--identifier",
               required=True,
@@ -683,18 +700,18 @@ def level(db, identifier, level, container, program, pid, namespace):
 
     if not namespace:
         cfg_db = db.cfgdb
+        state_db = db.db
     else:
         asic_id = multi_asic.get_asic_id_from_name(namespace)
         container = f'{container}{asic_id}'
         cfg_db = db.cfgdb_clients[namespace]
+        state_db = db.db_clients[namespace]
 
     cfg_db.mod_entry('LOGGER', identifier, {'LOGLEVEL': level})
     if not container and not program and not pid:
         return
 
-    log_config = cfg_db.get_entry('LOGGER', identifier)
-    require_manual_refresh = log_config.get('require_manual_refresh')
-    if not require_manual_refresh:
+    if not require_manual_refresh(cfg_db, state_db, identifier):
         return
 
     if container:
