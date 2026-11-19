@@ -3468,7 +3468,7 @@ def validate_truncate_size(ctx, param, value):
 
 
 def mirror_sample_source_database(ctx, databases, port, removing=False):
-    """Resolve a physical port or logical PortChannel in front-end namespaces."""
+    """Resolve a sampled source; require a front-panel port or PortChannel on add/enable."""
     candidates = []
     front = {ns: db for ns, db in databases.items() if ns} or databases
     for namespace, database in front.items():
@@ -3478,14 +3478,19 @@ def mirror_sample_source_database(ctx, databases, port, removing=False):
             port_mirror.binding_key(key)[0] == port
             for key in database.get_keys(port_mirror.SAMPLE_TABLE))
         if port in ports or port in channels or stored_source:
-            candidates.append((namespace, database, port))
+            candidates.append((namespace, database, port, ports.get(port)))
         elif clicommon.get_interface_naming_mode() == 'alias':
-            candidates.extend((namespace, database, name) for name, entry in ports.items()
+            candidates.extend((namespace, database, name, entry) for name, entry in ports.items()
                               if entry.get('alias') == port)
     if len(candidates) != 1:
         ctx.fail(f'Source interface {port} must identify one physical port or PortChannel '
                  'in a front-end ASIC namespace.')
-    return candidates[0]
+    namespace, database, name, port_entry = candidates[0]
+    # Disable/remove must still be able to clean up existing bindings on internal ports.
+    if not removing and port_entry is not None:
+        if not multi_asic.is_front_panel_port(name, port_entry.get(multi_asic.PORT_ROLE)):
+            ctx.fail(f'Source interface {name} is not a front-panel port.')
+    return namespace, database, name
 
 
 def validate_mirror_sample_capabilities(ctx, namespace, directions, truncate_size):

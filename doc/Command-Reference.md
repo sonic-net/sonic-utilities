@@ -10289,8 +10289,8 @@ While adding a new SPAN session, users need to configure the following fields th
 
 **config mirror_session sample**
 
-Create a destination-only ERSPAN export (no source port), then add a physical
-port or PortChannel binding:
+Create a destination-only ERSPAN export (no source port), then bind a front-panel
+Ethernet port or a PortChannel:
 
 ```text
 config mirror_session erspan add export1 10.0.0.1 10.0.0.2 8 64
@@ -10305,7 +10305,7 @@ config mirror_session sample remove export1 Ethernet0 both
 While adding sampled ERSPAN bindings, users need to configure the following fields:
 
 1) Session name - An existing ERSPAN export session without source port configuration.
-2) Source port list - A physical port or PortChannel, or a comma-separated list of source interfaces.
+2) Source port list - One or more front-panel Ethernet ports or PortChannels, separated by commas.
 3) Direction - Mirror session direction for the specified source ports. (Supported rx/tx/both)
 4) Sample rate - Required sampling rate shared by the specified sources. Valid range: 2..4294967295.
 5) optional - Truncate size in bytes. Valid range: 64..9216. When omitted, no truncation is requested.
@@ -10320,11 +10320,13 @@ While adding sampled ERSPAN bindings, users need to configure the following fiel
   ```
 
 - `--sample_rate` is required, in range 2..4294967295. Zero and one are invalid.
-- `<source-port-list>` accepts one source or a comma-separated list of physical ports and
-  PortChannels, such as `Ethernet0,Ethernet4`. All sources receive the same policy.
+- All sources in `<source-port-list>` (for example, `Ethernet0,Ethernet4`) receive the same policy.
   Each source/direction is stored as a separate entry; a list is never stored in a key.
   Empty list elements, duplicate sources after alias resolution, and overlapping
   PortChannel/member sources within the request are rejected.
+- `add` (including `--disabled`) and `enable` reject internal ports such as `Ethernet-IB0`
+  and `Ethernet-Rec0`, even when specified by alias. Existing bindings on these ports
+  can still be disabled or removed.
 - `--truncate_size` is optional, in range 64..9216. Omit it for no truncation.
 - Bindings default to `admin_state=up`; `--disabled` stores `down`.
 - `enable` and `disable` update only `admin_state` on existing bindings, preserving

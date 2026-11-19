@@ -119,6 +119,42 @@ def test_invalid_references(database, session, port, expected):
     assert not database.writes
 
 
+@pytest.mark.parametrize('name,entry,source', [
+    ('Ethernet-IB0', {}, 'Ethernet-IB0'),
+    ('Ethernet-Rec0', {'role': 'Rec'}, 'Ethernet-Rec0'),
+    ('Ethernet8', {'role': 'Int', 'alias': 'Eth8'}, 'Eth8'),
+])
+def test_add_rejects_internal_source_before_any_writes(database, monkeypatch, name, entry, source):
+    database.tables['PORT'][name] = entry
+    monkeypatch.setattr(config.clicommon, 'get_interface_naming_mode', lambda: 'alias')
+    result = invoke(['sample', 'add', 'export1', f'Ethernet4,{source}', 'both',
+                     '--sample_rate', '1000', '--disabled'])
+    assert result.exit_code != 0
+    assert f'Source interface {name} is not a front-panel port' in result.output
+    assert not database.writes
+
+
+def test_existing_internal_source_can_be_disabled_and_removed_but_not_enabled(database):
+    port = 'Ethernet-Rec0'
+    database.tables['PORT'][port] = {'role': 'Rec'}
+    database.tables['PORT_MIRROR_SAMPLE'] = {
+        (port, 'rx'): {'mirror_session': 'export1', 'sample_rate': '1000', 'admin_state': 'up'}}
+
+    result = invoke(['sample', 'disable', 'export1', port, 'rx'])
+    assert result.exit_code == 0, result.output
+    assert database.get_entry('PORT_MIRROR_SAMPLE', (port, 'rx'))['admin_state'] == 'down'
+
+    database.writes.clear()
+    result = invoke(['sample', 'enable', 'export1', port, 'rx'])
+    assert result.exit_code != 0
+    assert f'Source interface {port} is not a front-panel port' in result.output
+    assert not database.writes
+
+    result = invoke(['sample', 'remove', 'export1', port, 'rx'])
+    assert result.exit_code == 0, result.output
+    assert not database.get_keys('PORT_MIRROR_SAMPLE')
+
+
 def test_both_duplicate_prevents_partial_write(database):
     database.tables['PORT_MIRROR_SAMPLE'] = {('Ethernet4', 'tx'): {'mirror_session': 'export2'}}
     result = invoke(['sample', 'add', 'export1', 'Ethernet4', 'both', '--sample_rate', '2'])
