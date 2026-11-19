@@ -1,0 +1,72 @@
+{
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_202605_01"
+    },
+    "PORT|Ethernet0": {
+        "lanes": "0"
+    },
+    "PORT|Ethernet4": {
+        "lanes": "4"
+    },
+    "PORTCHANNEL|PortChannel0001": {
+        "mtu": "9100"
+    },
+    "INTERFACE|Ethernet0": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "INTERFACE|Ethernet0|10.0.0.0/31": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet0.10": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "INTERFACE|Ethernet0.20": {
+        "ipv6_use_link_local_only": "enable",
+        "vrf_name": "Vrf1"
+    },
+    "INTERFACE|Ethernet0.30": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "INTERFACE|Ethernet0.40": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "INTERFACE|Ethernet4.50": {
+        "vrf_name": "Vrf1"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel0001": {
+        "ipv6_use_link_local_only": "disable"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel0001.100": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.10": {
+        "admin_status": "up"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.10|2001:db8::1/64": {
+        "NULL": "NULL"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.20": {
+        "admin_status": "up",
+        "vrf_name": "Vrf1"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.30": {
+        "admin_status": "up",
+        "ipv6_use_link_local_only": "disable"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet4.50": {
+        "admin_status": "up"
+    },
+    "VLAN_SUB_INTERFACE|PortChannel0001.100": {
+        "admin_status": "up"
+    },
+    "VLAN_SUB_INTERFACE|Eth4.60": {
+        "admin_status": "up",
+        "vlan": "60"
+    },
+    "INTERFACE|Ethernet0.50": {
+        "ipv6_use_link_local_only": "enable"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.50": {
+        "NULL": "NULL"
+    }
+}

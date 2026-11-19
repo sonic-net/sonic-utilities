@@ -1,4 +1,5 @@
 import os
+import contextlib
 import pytest
 import sys
 import argparse
@@ -1149,3 +1150,76 @@ class TestIPinIPTunnelEcnModeMigrator(object):
         expected_state_db = SonicV2Connector(host='127.0.0.1')
         expected_state_db.connect(expected_state_db.STATE_DB)
         self.compare_keys(expected_state_db, dbmgtr.stateDB, 'STATE_DB')
+
+
+class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
+    """
+    ipv6_use_link_local_only of a VLAN sub-interface moves from INTERFACE /
+    PORTCHANNEL_INTERFACE to VLAN_SUB_INTERFACE.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(
+            mock_db_path, 'config_db', 'sub_interface_ipv6_use_link_local_only_input')
+        import db_migrator
+        with mock.patch.object(device_info, 'get_sonic_version_info', return_value={'asic_type': 'vs'}):
+            return db_migrator.DBMigrator(None)
+
+    def expected(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(
+            mock_db_path, 'config_db', 'sub_interface_ipv6_use_link_local_only_expected')
+        expected_db = Db()
+        return expected_db.cfgdb
+
+    def check(self, result):
+        expected = self.expected()
+        for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_SUB_INTERFACE', 'PORT', 'PORTCHANNEL'):
+            diff = DeepDiff(result.get_table(table), expected.get_table(table), ignore_order=True)
+            assert not diff, table
+
+    def test_field_moves_to_vlan_sub_interface(self):
+        dbmgtr = self.migrator()
+        dbmgtr.migrate_sub_interface_ipv6_use_link_local_only()
+
+        self.check(dbmgtr.configDB)
+        # Only the field was in these rows, so the rows are gone.
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.10') == {}
+        assert dbmgtr.configDB.get_entry('PORTCHANNEL_INTERFACE', 'PortChannel0001.100') == {}
+        # Another field was there, so the row stays without the moved one.
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.20') == {'vrf_name': 'Vrf1'}
+        # VLAN_SUB_INTERFACE already set it: its value is kept.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.30')['ipv6_use_link_local_only'] == 'disable'
+        # A sub-interface row without fields still counts as configured.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.50') == {'ipv6_use_link_local_only': 'enable'}
+        # The sub-interface is not configured: nothing creates it.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.40') == {}
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.40') == {}
+
+    def test_running_again_changes_nothing(self):
+        dbmgtr = self.migrator()
+        dbmgtr.migrate_sub_interface_ipv6_use_link_local_only()
+        with mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set, \
+                mock.patch.object(dbmgtr.configDB, 'mod_entry') as mock_mod:
+            dbmgtr.migrate_sub_interface_ipv6_use_link_local_only()
+
+        mock_set.assert_not_called()
+        mock_mod.assert_not_called()
+        self.check(dbmgtr.configDB)
+
+    def test_wired_into_version_202605_01(self):
+        dbmgtr = self.migrator()
+        # Stub every migration, so ones added to the handler later cannot fail this test.
+        with contextlib.ExitStack() as stack:
+            stubs = {name: stack.enter_context(mock.patch.object(dbmgtr, name))
+                     for name in dir(dbmgtr) if name.startswith('migrate_')}
+            assert dbmgtr.version_202605_01() is None
+        stubs['migrate_sub_interface_ipv6_use_link_local_only'].assert_called_once_with()
