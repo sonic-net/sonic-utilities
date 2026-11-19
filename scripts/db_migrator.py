@@ -824,6 +824,19 @@ class DBMigrator():
             self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
 
 
+    def migrate_logger_require_manual_refresh(self):
+        """
+        Drop require_manual_refresh from LOGGER rows. A process wrote it to say
+        it reloads its log level on SIGHUP; that is process state, which now
+        lives in STATE_DB LOGGER_TABLE. An entry left without fields is removed.
+        """
+        for key, entry in self.configDB.get_table('LOGGER').items():
+            if 'require_manual_refresh' not in entry:
+                continue
+            fields = {f: v for f, v in entry.items() if f != 'require_manual_refresh'}
+            self.configDB.set_entry('LOGGER', key, fields or None)
+            log.log_info(f"Dropped require_manual_refresh from LOGGER|{key}")
+
     def migrate_sflow_table(self):
         """
         Migrate "SFLOW_TABLE" and "SFLOW_SESSION_TABLE" to update default sample_direction
@@ -1436,8 +1449,12 @@ class DBMigrator():
     def version_202605_01(self):
         """
         Version 202605_01
+
+        Terminal handler, so this runs on every boot and
+        migrate_logger_require_manual_refresh has to stay idempotent.
         """
         log.log_info('Handling version_202605_01')
+        self.migrate_logger_require_manual_refresh()
         return None
 
     def get_version(self):

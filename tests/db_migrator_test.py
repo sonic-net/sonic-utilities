@@ -1149,3 +1149,47 @@ class TestIPinIPTunnelEcnModeMigrator(object):
         expected_state_db = SonicV2Connector(host='127.0.0.1')
         expected_state_db.connect(expected_state_db.STATE_DB)
         self.compare_keys(expected_state_db, dbmgtr.stateDB, 'STATE_DB')
+
+
+class TestLoggerRequireManualRefreshMigrator(object):
+    """
+    require_manual_refresh is process state and is dropped from LOGGER rows.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(
+            mock_db_path, 'config_db', 'logger_require_manual_refresh_input')
+        import db_migrator
+        with mock.patch.object(device_info, 'get_sonic_version_info', return_value={'asic_type': 'vs'}):
+            return db_migrator.DBMigrator(None)
+
+    def test_field_is_dropped_and_other_fields_are_kept(self):
+        dbmgtr = self.migrator()
+        dbmgtr.migrate_logger_require_manual_refresh()
+
+        logger = dbmgtr.configDB.get_table('LOGGER')
+        assert logger['xcvrd'] == {'LOGLEVEL': 'NOTICE'}
+        assert logger['orchagent'] == {'LOGLEVEL': 'INFO', 'LOGOUTPUT': 'SYSLOG'}
+        assert 'only_refresh' not in logger
+
+    def test_running_again_changes_nothing(self):
+        dbmgtr = self.migrator()
+        dbmgtr.migrate_logger_require_manual_refresh()
+        with mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set:
+            dbmgtr.migrate_logger_require_manual_refresh()
+        mock_set.assert_not_called()
+
+    def test_wired_into_version_202605_01(self):
+        dbmgtr = self.migrator()
+        with mock.patch.object(dbmgtr, 'migrate_logger_require_manual_refresh') as migrate:
+            assert dbmgtr.version_202605_01() is None
+        migrate.assert_called_once_with()
