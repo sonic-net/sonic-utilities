@@ -14,18 +14,22 @@ from .pfcwd_input import pfcwd_test_vectors as test_vectors
 _orig_sonic_get_all = swsscommon.SonicV2Connector.get_all
 
 
-def _sw_get_all(self, db_id, key):
-    """Software mode, as PfcWdSwOrch writes it."""
-    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
-        return {'RECOVERY_MECHANISM': 'SOFTWARE'}
-    return _orig_sonic_get_all(self, db_id, key)
+def _stamped_get_all(stamps, current='HARDWARE'):
+    """get_all with storm_<N>_mechanism stamped on the mock history rows.
 
-
-def _hw_get_all(self, db_id, key):
-    """Hardware mode, as the hardware PFC watchdog orchagent writes it."""
-    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
-        return {'RECOVERY_MECHANISM': 'HARDWARE'}
-    return _orig_sonic_get_all(self, db_id, key)
+    stamps maps a history key to {ordinal: mechanism}; the ASIC's current
+    recovery mechanism is reported as `current`, which history must not use.
+    """
+    def get_all(self, db_id, key):
+        if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+            return {'RECOVERY_MECHANISM': current}
+        entry = _orig_sonic_get_all(self, db_id, key)
+        if key in stamps:
+            entry = dict(entry or {})
+            for ordinal, mechanism in stamps[key].items():
+                entry['storm_{}_mechanism'.format(ordinal)] = mechanism
+        return entry
+    return get_all
 
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -177,7 +181,7 @@ class TestPfcwd(object):
 
     def test_pfcwd_show_history_json(self):
         data = self._invoke_history_json()
-        # No PFC_WD_STATE_TABLE|PFC_WD in the mock: the mode is not known
+        # No storm in the mock records its mechanism
         assert data['recovery_mechanism'] == 'unknown'
         storms = data['storms']
         assert len(storms) == 5
@@ -241,17 +245,31 @@ class TestPfcwd(object):
             storms = self._invoke_history_json()['storms']
         assert {x['queue'] for x in storms} == {'Ethernet0:3', 'Ethernet4:3', 'Ethernet8:4'}
 
-    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_sw_get_all)
-    def test_pfcwd_show_history_json_sw_mode(self):
-        data = self._invoke_history_json()
+    def test_pfcwd_show_history_json_stamped_mechanism(self):
+        # Every listed storm was handled in software; the ASIC now runs the
+        # hardware watchdog, which must not relabel them
+        stamps = {
+            'PFC_WD_STORM_HISTORY|Ethernet0|3': {1: 'SOFTWARE'},
+            'PFC_WD_STORM_HISTORY|Ethernet4|3': {1: 'SOFTWARE', 2: 'SOFTWARE'},
+            'PFC_WD_STORM_HISTORY|Ethernet8|4': {3: 'SOFTWARE', 4: 'SOFTWARE'},
+        }
+        with patch.object(swsscommon.SonicV2Connector, 'get_all',
+                          new=_stamped_get_all(stamps, current='HARDWARE')):
+            data = self._invoke_history_json()
         assert data['recovery_mechanism'] == 'software'
         assert {s['recovery_mechanism'] for s in data['storms']} == {'software'}
 
-    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
-    def test_pfcwd_show_history_json_hw_mode(self):
-        data = self._invoke_history_json()
-        assert data['recovery_mechanism'] == 'hardware'
-        assert {s['recovery_mechanism'] for s in data['storms']} == {'hardware'}
+    def test_pfcwd_show_history_json_mode_change(self):
+        # Storm 1 was handled in software, storm 2 in hardware after a mode change
+        stamps = {'PFC_WD_STORM_HISTORY|Ethernet4|3': {1: 'SOFTWARE', 2: 'HARDWARE'}}
+        with patch.object(swsscommon.SonicV2Connector, 'get_all',
+                          new=_stamped_get_all(stamps, current='HARDWARE')):
+            data = self._invoke_history_json()
+        by_key = {(s['queue'], s['ordinal']): s['recovery_mechanism'] for s in data['storms']}
+        assert by_key[('Ethernet4:3', 1)] == 'software'
+        assert by_key[('Ethernet4:3', 2)] == 'hardware'
+        assert by_key[('Ethernet0:3', 1)] == 'unknown'
+        assert data['recovery_mechanism'] == 'mixed'
 
     def test_pfcwd_show_config(self):
         self.executor(test_vectors.testData['pfcwd_show_config'])
@@ -1021,8 +1039,9 @@ class TestMultiAsicPfcwdShow(object):
         assert rows == [('Ethernet-BP0:3', '1')]
 
     def test_pfcwd_show_history_masic_json_mixed_modes(self):
-        # Each storm reports the mechanism of the ASIC it came from; asic0 runs
-        # the hardware watchdog, asic1 the software one
+        # Each storm reports the mechanism stamped on its own record: asic0's
+        # storms were handled in hardware, asic1's in software. Each ASIC's
+        # current mode is the opposite one, which must not be used.
         import pfcwd.main as pfcwd
         real_get_all = swsscommon.SonicV2Connector.get_all
         real_keys = swsscommon.SonicV2Connector.keys
@@ -1032,8 +1051,14 @@ class TestMultiAsicPfcwdShow(object):
             ns = getattr(self, 'namespace', None)
             if key == 'PFC_WD_STATE_TABLE|PFC_WD':
                 if ns == 'asic0':
-                    return {'RECOVERY_MECHANISM': 'HARDWARE'}
-                return {'RECOVERY_MECHANISM': 'SOFTWARE'}
+                    return {'RECOVERY_MECHANISM': 'SOFTWARE'}
+                return {'RECOVERY_MECHANISM': 'HARDWARE'}
+            if ns == 'asic0' and key.startswith('PFC_WD_STORM_HISTORY|'):
+                entry = dict(real_get_all(self, db_id, key) or {})
+                for field in list(entry):
+                    if field.endswith('_detected'):
+                        entry[field[:-len('detected')] + 'mechanism'] = 'HARDWARE'
+                return entry
             if key == asic1_storm:
                 return {
                     'last_storm': '1',
@@ -1044,6 +1069,7 @@ class TestMultiAsicPfcwdShow(object):
                     'storm_1_tx_dropped': '40',
                     'storm_1_rx_packets': '20',
                     'storm_1_rx_dropped': '20',
+                    'storm_1_mechanism': 'SOFTWARE',
                 }
             return real_get_all(self, db_id, key)
 

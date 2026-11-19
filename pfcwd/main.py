@@ -69,7 +69,6 @@ HISTORY_TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
 EPOCH = datetime.datetime(1970, 1, 1)
 
 CONFIG_DB_PFC_WD_TABLE_NAME = 'PFC_WD'
-STATE_DB_PFC_WD_STATE_TABLE = 'PFC_WD_STATE_TABLE'
 STATE_DB_PFC_WD_STORM_HISTORY_TABLE = 'PFC_WD_STORM_HISTORY'
 PORT_QOS_MAP =  "PORT_QOS_MAP"
 
@@ -204,13 +203,6 @@ class PfcwdCli(object):
 
     @multi_asic_util.run_on_multi_asic
     def collect_history(self, queues):
-        # Per ASIC; here self.db is bound to the namespace the entries come from
-        hw_global = self.db.get_all(
-            self.db.STATE_DB, STATE_DB_PFC_WD_STATE_TABLE + '|PFC_WD'
-        ) or {}
-        mechanism = (hw_global.get('RECOVERY_MECHANISM') or 'unknown').lower()
-        self.history_mechanisms.append(mechanism)
-
         # Ports come from CONFIG_DB rather than COUNTERS_QUEUE_NAME_MAP, which stays
         # empty after a cold start until queue counters are registered
         ports = list(self.config_db.get_keys('PORT'))
@@ -258,12 +250,12 @@ class PfcwdCli(object):
                     'tx_dropped': entry.get(storm + 'tx_dropped'),
                     'rx_packets': entry.get(storm + 'rx_packets'),
                     'rx_dropped': entry.get(storm + 'rx_dropped'),
-                    'recovery_mechanism': mechanism,
+                    # Stamped by orchagent when the storm was detected
+                    'recovery_mechanism': (entry.get(storm + 'mechanism') or 'unknown').lower(),
                 })
 
     def show_history(self, queues=(), count=None, json_output=False):
         self.history = []
-        self.history_mechanisms = []
         self.collect_history(queues)
 
         # Newest first by detection time; queue name then ordinal break ties.
@@ -304,10 +296,8 @@ class PfcwdCli(object):
         ))
 
     def show_history_json(self):
-        # The storms' common mechanism, or 'mixed' when the ASICs differ
+        # The listed storms' common mechanism, or 'mixed' when they differ
         mechanisms = {e['recovery_mechanism'] for e in self.history}
-        if not mechanisms:
-            mechanisms = set(self.history_mechanisms)
         if len(mechanisms) == 1:
             mechanism = mechanisms.pop()
         else:
