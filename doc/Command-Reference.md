@@ -10371,6 +10371,8 @@ While adding a new SFLOW session, users need to configure the following fields:
 9) optional - Truncate size in bytes. Valid values: 64..9216
 10) optional - UDP destination port. Default: 6343
 
+On multi-ASIC platforms the SFLOW session is written only to the front ASIC namespaces that own one of the source ports, each with its own subset of the source port list.
+
 - Usage:
   ```
   config mirror_session sflow add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [queue] <source-port-list> [direction] --sample_rate <value> [--truncate_size <value>] [--udp_dst_port <port>]

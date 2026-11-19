@@ -580,6 +580,35 @@ def test_mirror_session_remove_multi_asic_skips_syslog_when_missing():
     mock_notice.assert_not_called()
 
 
+def test_mirror_session_remove_multi_asic_sflow_uses_namespace_scoped_connector():
+    config.ADHOC_VALIDATION = False
+    entries = {"asic0": {"type": "SFLOW", "src_port": "Ethernet0"}, "asic1": {}}
+    dbs = {ns: mock.MagicMock() for ns in entries}
+    for ns, db in dbs.items():
+        db.get_entry.return_value = entries[ns]
+    scoped_dbs = {ns: mock.MagicMock() for ns in entries}
+
+    runner = CliRunner()
+    with mock.patch('config.main.multi_asic.get_all_namespaces', return_value={'front_ns': ['asic0', 'asic1']}), \
+         mock.patch('config.main.ConfigDBConnector',
+                    side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get('namespace'))), \
+         mock.patch('config.main.ValidatedConfigDBConnector', side_effect=lambda conn: dbs[conn.namespace]), \
+         mock.patch('config.main.NamespaceValidatedConfigDBConnector',
+                    side_effect=lambda conn: scoped_dbs[conn.namespace]), \
+         mock.patch('config.main.log.log_notice') as mock_notice:
+        result = runner.invoke(
+            config.config.commands["mirror_session"].commands["remove"],
+            ["sflow0"]
+        )
+        assert result.exit_code == 0, result.output
+
+    scoped_dbs["asic0"].set_entry.assert_called_once_with("MIRROR_SESSION", "sflow0", None)
+    scoped_dbs["asic1"].set_entry.assert_not_called()
+    for db in dbs.values():
+        db.set_entry.assert_not_called()
+    mock_notice.assert_called_once_with("Removed mirror session sflow0")
+
+
 def test_split_mirror_ports():
     assert config.split_mirror_ports("Ethernet0,Ethernet4") == ["Ethernet0", "Ethernet4"]
     assert config.split_mirror_ports("Ethernet0 , Ethernet4") == ["Ethernet0", "Ethernet4"]
@@ -1320,7 +1349,8 @@ def test_add_sflow_writes_config_db():
     db = mock.MagicMock()
 
     with click.Context(click.Command("test")):
-        with mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
+        with mock.patch("config.main.multi_asic.get_all_namespaces", return_value={"front_ns": []}), \
+             mock.patch("config.main.ConfigDBConnector", return_value=mock.Mock()), \
              mock.patch("config.main.ValidatedConfigDBConnector", return_value=db), \
              mock.patch("config.main.validate_mirror_session_config", return_value=True), \
              mock.patch("config.main.normalize_mirror_src_port", side_effect=lambda _db, p: p):
@@ -1341,3 +1371,145 @@ def test_add_sflow_writes_config_db():
     assert session_info["truncate_size"] == "128"
     assert "gre_type" not in session_info
     assert "policer" not in session_info
+
+
+def test_add_sflow_multi_asic_writes_only_source_port_namespaces():
+    config.ADHOC_VALIDATION = True
+    dbs = {"asic0": mock.MagicMock(), "asic1": mock.MagicMock(), "asic2": mock.MagicMock()}
+    ns_map = {"Ethernet0": "asic0", "Ethernet4": "asic0", "Ethernet8": "asic1"}
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces",
+                        return_value={"front_ns": ["asic0", "asic1", "asic2"]}), \
+             mock.patch("config.main.get_port_namespace", side_effect=lambda p: ns_map[p]), \
+             mock.patch("config.main.ConfigDBConnector",
+                        side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get("namespace"))), \
+             mock.patch("config.main.NamespaceValidatedConfigDBConnector",
+                        side_effect=lambda conn: dbs[conn.namespace]), \
+             mock.patch("config.main.validate_mirror_session_config", return_value=True) as validate, \
+             mock.patch("config.main.normalize_mirror_src_port", side_effect=lambda _db, p: p), \
+             mock.patch("config.main.interface_name_is_valid", return_value=True):
+            config.add_sflow("sflow0", "10.1.1.1", "10.2.2.2", 8, 64,
+                             0, "Ethernet0,Ethernet8,Ethernet4", "rx", 1000, 128, 9999)
+
+    asic0_value = dbs["asic0"].set_entry.call_args[0][2]
+    asic1_value = dbs["asic1"].set_entry.call_args[0][2]
+    assert asic0_value["src_port"] == "Ethernet0,Ethernet4"
+    assert asic1_value["src_port"] == "Ethernet8"
+    for value in (asic0_value, asic1_value):
+        assert value["type"] == "SFLOW"
+        assert value["direction"] == "RX"
+        assert value["sample_rate"] == "1000"
+        assert value["truncate_size"] == "128"
+        assert value["udp_dst_port"] == 9999
+    # MirrorOrch rejects SFLOW without src_port, so asic2 gets nothing
+    dbs["asic2"].set_entry.assert_not_called()
+    # Duplicate session names are checked across all front ASICs
+    for call in validate.call_args_list:
+        assert call.kwargs["front_asic_configdbs"] == dbs
+
+
+def test_add_sflow_multi_asic_validation_failure_prevents_all_writes():
+    config.ADHOC_VALIDATION = True
+    dbs = {"asic0": mock.MagicMock(), "asic1": mock.MagicMock()}
+    ns_map = {"Ethernet0": "asic0", "Ethernet8": "asic1"}
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces",
+                        return_value={"front_ns": ["asic0", "asic1"]}), \
+             mock.patch("config.main.get_port_namespace", side_effect=lambda p: ns_map[p]), \
+             mock.patch("config.main.ConfigDBConnector",
+                        side_effect=lambda **kwargs: mock.MagicMock(namespace=kwargs.get("namespace"))), \
+             mock.patch("config.main.NamespaceValidatedConfigDBConnector",
+                        side_effect=lambda conn: dbs[conn.namespace]), \
+             mock.patch("config.main.validate_mirror_session_config", side_effect=[True, False]), \
+             mock.patch("config.main.interface_name_is_valid", return_value=True):
+            config.add_sflow("sflow0", "10.1.1.1", "10.2.2.2", 8, 64,
+                             0, "Ethernet0,Ethernet8", "rx", 1000)
+
+    dbs["asic0"].set_entry.assert_not_called()
+    dbs["asic1"].set_entry.assert_not_called()
+
+
+def test_add_sflow_multi_asic_rejects_non_front_panel_source_port():
+    config.ADHOC_VALIDATION = True
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces",
+                        return_value={"front_ns": ["asic0"]}), \
+             mock.patch("config.main.get_port_namespace", return_value="asic1"), \
+             mock.patch("config.main.interface_name_is_valid", return_value=True):
+            with pytest.raises(click.UsageError, match="not a front-panel port"):
+                config.add_sflow("sflow0", "10.1.1.1", "10.2.2.2", 8, 64,
+                                 0, "Ethernet128", "rx", 1000)
+
+
+def test_add_sflow_multi_asic_rejects_invalid_source_port():
+    config.ADHOC_VALIDATION = True
+
+    with click.Context(click.Command("test")):
+        with mock.patch("config.main.multi_asic.get_all_namespaces",
+                        return_value={"front_ns": ["asic0"]}), \
+             mock.patch("config.main.interface_name_is_valid", return_value=False):
+            with pytest.raises(click.UsageError, match="Source Interface.*invalid"):
+                config.add_sflow("sflow0", "10.1.1.1", "10.2.2.2", 8, 64,
+                                 0, "BadPort", "rx", 1000)
+
+
+@patch("config.main.ConfigDBConnector", spec=True, connect=mock.Mock())
+@patch("config.main.multi_asic.get_all_namespaces", mock.Mock(return_value={'front_ns': ['sample_ns']}))
+@patch("config.main.get_port_namespace", mock.Mock(return_value='sample_ns'))
+@patch("config.main.interface_name_is_valid", mock.Mock(return_value=True))
+@patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+@patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
+       mock.Mock(side_effect=ValueError))
+def test_mirror_session_sflow_add_multi_asic_invalid_yang_validation(mock_db_connector):
+    config.ADHOC_VALIDATION = False
+    runner = CliRunner()
+    result = runner.invoke(
+        config.config.commands["mirror_session"].commands["sflow"].commands["add"],
+        ["sflow0", "10.1.1.1", "10.2.2.2", "8", "64", "0", "Ethernet0", "rx", "--sample_rate", "1000"])
+    print(result.output)
+    assert "Invalid ConfigDB. Error" in result.output
+
+
+def test_write_mirror_session_to_namespaces_stops_on_failure():
+    dbs = {"asic0": mock.MagicMock(), "asic1": mock.MagicMock(), "asic2": mock.MagicMock()}
+    dbs["asic1"].set_entry.side_effect = ValueError("yang")
+    infos = {ns: {"type": "SFLOW", "src_port": port}
+             for ns, port in (("asic0", "Ethernet0"), ("asic1", "Ethernet4"), ("asic2", "Ethernet12"))}
+
+    with click.Context(click.Command("test")):
+        with pytest.raises(click.UsageError, match="Invalid ConfigDB. Error: yang"):
+            config.write_mirror_session_to_namespaces(click.get_current_context(), dbs, "sflow0", infos)
+
+    dbs["asic0"].set_entry.assert_called_once_with("MIRROR_SESSION", "sflow0", infos["asic0"])
+    dbs["asic2"].set_entry.assert_not_called()
+
+
+@pytest.mark.parametrize("namespace, expected_scope", [("asic1", "asic1"), ("", multi_asic.DEFAULT_NAMESPACE)])
+def test_namespace_validated_connector_scopes_patches(namespace, expected_scope):
+    with mock.patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+                    return_value=True):
+        db = config.NamespaceValidatedConfigDBConnector(mock.Mock(namespace=namespace))
+    patch_obj = jsonpatch.JsonPatch([])
+
+    with mock.patch("config.main.GenericUpdater") as updater:
+        db.apply_patch(patch_obj, "MIRROR_SESSION")
+        db.validated_delete_table("MIRROR_SESSION")
+
+    assert updater.call_args_list == [mock.call(scope=expected_scope)] * 2
+
+
+def test_namespace_validated_connector_deletes_table_on_empty_table_error():
+    with mock.patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+                    return_value=True):
+        db = config.NamespaceValidatedConfigDBConnector(mock.Mock(namespace="asic0"))
+
+    with mock.patch("config.main.GenericUpdater") as updater, \
+         mock.patch.object(db, "validated_delete_table") as delete_table:
+        updater.return_value.apply_patch.side_effect = config.EmptyTableError("empty")
+        db.apply_patch(jsonpatch.JsonPatch([]), "MIRROR_SESSION")
+
+    updater.assert_called_once_with(scope="asic0")
+    delete_table.assert_called_once_with("MIRROR_SESSION")
