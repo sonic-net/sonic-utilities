@@ -1,4 +1,16 @@
 import click
+from sonic_py_common import device_info
+
+
+def _reject_non_switch_host():
+    if not device_info.is_switch_host():
+        raise click.ClickException('Operation only supported on Switch-Host')
+
+
+def _reject_unless_switch_host_openbmc():
+    _reject_non_switch_host()
+    if device_info.get_bmc_os() == device_info.BMC_OS_SONIC:
+        raise click.ClickException('Operation not supported when BMC OS is sonic')
 
 
 # 'bmc' group ('config bmc ...')
@@ -8,10 +20,37 @@ def bmc():
     pass
 
 
+@bmc.command('reset')
+def reset():
+    """Reset the BMC through the local hardware platform API."""
+    try:
+        import sonic_platform
+        chassis = sonic_platform.platform.Platform().get_chassis()
+        bmc_device = chassis.get_bmc()
+    except Exception as err:
+        raise click.ClickException('Unable to access BMC platform API: {}'.format(err))
+
+    if bmc_device is None:
+        raise click.ClickException('BMC reset control is not supported on this platform')
+
+    try:
+        result = bmc_device.reset()
+    except NotImplementedError:
+        raise click.ClickException('BMC reset control is not supported on this platform')
+    except Exception as err:
+        raise click.ClickException('BMC reset failed: {}'.format(err))
+
+    if not result:
+        raise click.ClickException('BMC reset failed')
+
+    click.echo('BMC reset completed')
+
+
 # config bmc reset-root-password
 @bmc.command('reset-root-password')
 def reset_root_password():
     """Reset BMC root password to default"""
+    _reject_unless_switch_host_openbmc()
     try:
         import sonic_platform
         chassis = sonic_platform.platform.Platform().get_chassis()
@@ -32,6 +71,7 @@ def reset_root_password():
 @bmc.command('open-session')
 def open_session():
     """Open a session with the BMC"""
+    _reject_unless_switch_host_openbmc()
     try:
         import sonic_platform
         chassis = sonic_platform.platform.Platform().get_chassis()
@@ -54,6 +94,7 @@ def open_session():
 @click.option('-s', '--session-id', required=True, help='Session ID to close')
 def close_session(session_id):
     """Close a session with the BMC"""
+    _reject_unless_switch_host_openbmc()
     try:
         import sonic_platform
         chassis = sonic_platform.platform.Platform().get_chassis()

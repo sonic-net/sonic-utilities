@@ -179,6 +179,11 @@ class FdbShow(object):
             except KeyError:
                 endpoint_ip = None
 
+            # SAI has no attribute unset: when a remote VTEP MAC becomes local, orchagent
+            # resets ENDPOINT_IP to its default (0.0.0.0 or ::). Treat that as no endpoint.
+            if endpoint_ip in ("0.0.0.0", "::"):
+                endpoint_ip = None
+
             #If endpoint_ip exists then use that as if_name
             #Otherwise try to check if it's from multi-home first
             if not endpoint_ip:

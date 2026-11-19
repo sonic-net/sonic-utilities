@@ -456,6 +456,25 @@ class TestValidateFieldOperation:
             assert generic_config_updater.field_operation_validators.\
                 rdma_config_update_validator(scope, patch_element) is True
 
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "SONiC.20220530"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="spc1"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"PFC_WD": {"validator_data": {
+        "rdma_config_update_validator": {"PFCWD enable/disable": {"fields": [
+            "restoration_time", "detection_time", "action", "global/poll_interval", "pfc_stat_history"
+        ], "operations": ["remove", "replace", "add"], "platforms": {"spc1": "20181100"}}}}}}}'''))
+    def test_rdma_config_update_validator_spc_asic_add_pfcwd_global_poll_interval(self):
+        patch_element = {
+            "path": "/PFC_WD/GLOBAL",
+            "op": "add",
+            "value": {"POLL_INTERVAL": "200"}
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                rdma_config_update_validator(scope, patch_element) is True
+
     def test_validate_field_operation_illegal__pfcwd(self):
         old_config = {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "60"}}}
         target_config = {"PFC_WD": {"GLOBAL": {}}}
@@ -863,8 +882,9 @@ class TestGetAsicName(unittest.TestCase):
     def test_get_asic_th5(self, mock_popen, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
         mock_popen.return_value = mock.Mock()
-        mock_popen.return_value.communicate.return_value = ["Nokia-IXR7220-H5-64D", 0]
-        for scope in ["localhost", "asic0"]:
+        for hwsku in ["Nokia-IXR7220-H5-64D", "NH-4010", "NH-4010-128x400G-2x25G", "NH-4010-256x200G-2x25G",
+                      "NH-4020", "NH-4020-128x400G-2x25G", "NH-4020-256x200G-2x25G"]:
+            mock_popen.return_value.communicate.return_value = [hwsku, 0]
             self.assertEqual(fov.get_asic_name(), "th5")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
@@ -945,6 +965,11 @@ class TestGetAsicName(unittest.TestCase):
         mock_get_sonic_version_info.return_value = {'asic_type': 'cisco-8000'}
         for scope in ["localhost", "asic0"]:
             self.assertEqual(fov.get_asic_name(), "cisco-8000")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    def test_get_asic_cisco_short_name(self, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'cisco'}
+        self.assertEqual(fov.get_asic_name(), "cisco")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     def test_get_asic_marvell_teralynx(self, mock_get_sonic_version_info):

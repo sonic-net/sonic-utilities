@@ -81,11 +81,25 @@ def bmc():
     pass
 
 
+def _reject_non_switch_host():
+    if not device_info.is_switch_host():
+        raise click.ClickException('Operation only supported on Switch-Host')
+
+
+# 'os' subcommand ("show platform bmc os")
+@bmc.command(name='os')
+def bmc_os():
+    """Show BMC operating system (openbmc or sonic)"""
+    _reject_non_switch_host()
+    click.echo(device_info.get_bmc_os())
+
+
 # 'summary' subcommand ("show platform bmc summary")
 @bmc.command(name='summary')
 @click.option('--json', is_flag=True, help="Output in JSON format")
 def bmc_summary(json):
     """Show BMC summary information"""
+    _reject_non_switch_host()
     try:
         import sonic_platform
         chassis = sonic_platform.platform.Platform().get_chassis()
@@ -106,7 +120,7 @@ def bmc_summary(json):
         part_number = eeprom_info.get('PartNumber', 'N/A')
         power_state = eeprom_info.get('PowerState', 'N/A')
         serial_number = eeprom_info.get('SerialNumber', 'N/A')
-        bmc_version = bmc.get_version()
+        bmc_version = 'N/A' if device_info.get_bmc_os() == device_info.BMC_OS_SONIC else bmc.get_version()
 
         if json:
             bmc_summary = {
@@ -135,6 +149,7 @@ def bmc_summary(json):
 @click.option('--json', is_flag=True, help="Output in JSON format")
 def eeprom(json):
     """Show BMC EEPROM information"""
+    _reject_non_switch_host()
     try:
         import sonic_platform
         chassis = sonic_platform.platform.Platform().get_chassis()
@@ -329,6 +344,17 @@ def leak():
     pass
 
 
+def _get_platform_major_leak_min_sensors():
+    """Return the platform's default MIN-N, or None if it cannot be retrieved."""
+    try:
+        import sonic_platform
+        chassis = sonic_platform.platform.Platform().get_chassis()
+        liquid_cooling = chassis.get_liquid_cooling()
+        return int(liquid_cooling.get_major_leak_num_min_sensors())
+    except Exception:
+        return None
+
+
 @leak.command('control-policy')
 def leak_control_policy():
     """Show leak control policy configuration"""
@@ -336,15 +362,27 @@ def leak_control_policy():
         from utilities_common.db import Db
         db = Db()
         entry = db.cfgdb.get_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY)
-        click.echo(" system_leak_policy              : {}".format(entry.get('system_leak_policy', 'enabled')))
+        click.echo(" system_leak_policy               : {}".format(entry.get('system_leak_policy', 'enabled')))
         critical_action = entry.get('system_critical_leak_action', 'power_off')
-        click.echo(" system_critical_leak_action     : {}".format(critical_action))
-        click.echo(" system_minor_leak_action        : {}".format(entry.get('system_minor_leak_action', 'syslog_only')))
-        click.echo(" rack_mgr_leak_policy            : {}".format(entry.get('rack_mgr_leak_policy', 'enabled')))
+        click.echo(" system_critical_leak_action      : {}".format(critical_action))
+        major_action = entry.get('system_major_leak_action', 'syslog_only')
+        click.echo(" system_major_leak_action         : {}".format(major_action))
+        minor_action = entry.get('system_minor_leak_action', 'syslog_only')
+        click.echo(" system_minor_leak_action         : {}".format(minor_action))
+        # MIN-N: the CONFIG_DB value if configured, else the platform default (0 = none).
+        major_min_sensors = entry.get('system_major_leak_num_min_sensors')
+        if major_min_sensors is None:
+            major_min_sensors = _get_platform_major_leak_min_sensors()
+        if not major_min_sensors or int(major_min_sensors) == 0:
+            major_min_sensors = 'none'
+        click.echo(" system_major_leak_num_min_sensors: {}".format(major_min_sensors))
+        click.echo(" rack_mgr_leak_policy             : {}".format(entry.get('rack_mgr_leak_policy', 'enabled')))
         rack_critical_action = entry.get('rack_mgr_critical_alert_action', 'syslog_only')
-        click.echo(" rack_mgr_critical_alert_action  : {}".format(rack_critical_action))
+        click.echo(" rack_mgr_critical_alert_action   : {}".format(rack_critical_action))
+        rack_major_action = entry.get('rack_mgr_major_alert_action', 'syslog_only')
+        click.echo(" rack_mgr_major_alert_action      : {}".format(rack_major_action))
         rack_minor_action = entry.get('rack_mgr_minor_alert_action', 'syslog_only')
-        click.echo(" rack_mgr_minor_alert_action     : {}".format(rack_minor_action))
+        click.echo(" rack_mgr_minor_alert_action      : {}".format(rack_minor_action))
     except Exception as e:
         click.echo(f"Error: Failed to retrieve leak control policy: {e}", err=True)
 

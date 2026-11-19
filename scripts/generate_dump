@@ -46,6 +46,7 @@ NUM_ASICS=1
 HOME=${HOME:-/root}
 USER=${USER:-root}
 TIMEOUT_MIN="5"
+BMC_NOOP_TASK_ID="<task-id>"
 SKIP_BCMCMD=0
 SAVE_STDERR=true
 RETURN_CODE=$EXT_SUCCESS
@@ -2083,31 +2084,6 @@ collect_broadcom() {
 }
 
 ###############################################################################
-# Collect Barefoot specific information
-# Globals:
-#  None
-# Arguments:
-#  None
-# Returns:
-#  None
-###############################################################################
-collect_barefoot() {
-    local bf_logs="/tmp/bf_logs"
-    $( rm -rf ${bf_logs} )
-    $( mkdir  ${bf_logs} )
-    unset array
-    array=( $(docker exec -ti syncd ls -1 | grep bf_drivers.log) )
-    for y in "${array[@]}"; do
-        itstr=`echo ${y} | tr -d "\r\n"`
-        copy_from_masic_docker "syncd" "/${itstr}" "${bf_logs}"
-    done
-
-    for file in $(find /tmp/bf_logs -type f); do
-        save_file "${file}" log true
-    done
-} 
-
-###############################################################################
 # Collect Cisco-8000 specific information
 # Globals:
 #  None
@@ -2451,7 +2427,7 @@ save_log_files() {
 #  0 if BMC is supported, 1 otherwise
 ###############################################################################
 is_bmc_supported() {
-    python3 -I -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
+    python3 -I -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data() and device_info.get_bmc_os() == device_info.BMC_OS_OPENBMC) else 1)"
 }
 
 ###############################################################################
@@ -2464,7 +2440,11 @@ is_bmc_supported() {
 trigger_bmc_debug_log_dump() {
     trap 'handle_error $? $LINENO' ERR
     if ! is_bmc_supported; then
-        echo "INFO: BMC is not found on this platform. Skipping..."
+        echo "INFO: BMC (OpenBMC) is not found on this platform. Skipping..."
+        return
+    fi
+    if $NOOP; then
+        echo "python3 /usr/local/bin/bmc_techsupport.py -m trigger"
         return
     fi
     # Trigger BMC redfish API to start BMC debug log dump task
@@ -2491,6 +2471,12 @@ collect_bmc_files() {
 
     local bmc_debug_log_dump_task_id=$1
     local TARBALL_XZ="/tmp/bmc_debug_log_dump.tar.xz"
+
+    if $NOOP; then
+        echo "python3 /usr/local/bin/bmc_techsupport.py -m collect -p $TARBALL_XZ -t $bmc_debug_log_dump_task_id"
+        return
+    fi
+
     # Remove existing tarball files if they exist
     [ -f "$TARBALL_XZ" ] && rm -f "$TARBALL_XZ"
 
@@ -2894,9 +2880,15 @@ main() {
     start_t=$(date +%s%3N)
 
     # Trigger BMC debug log dump task - Must be the first task to run
-    bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
-    if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
-        echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+    if $NOOP; then
+        # stdout is command-substituted below, so the noop line is printed here
+        trigger_bmc_debug_log_dump
+        bmc_debug_log_dump_task_id="$BMC_NOOP_TASK_ID"
+    else
+        bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
+        if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
+            echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+        fi
     fi
 
     # Capture /proc state early
@@ -3082,10 +3074,6 @@ main() {
     # SAI dump (vtysh route-size probe + syncd) self-skips on a Switch-BMC.
     save_saidump_by_route_size
 
-    if [ "$asic" = "barefoot" ]; then
-        collect_barefoot
-    fi
-
     if [[ "$asic" = "mellanox" ]]; then
         collect_mellanox
     fi
@@ -3094,7 +3082,7 @@ main() {
         collect_broadcom
     fi
 
-    if [ "$asic" = "cisco-8000" ]; then
+    if [ "$asic" = "cisco-8000" ] || [ "$asic" = "cisco" ]; then
         collect_cisco_8000
     fi
 

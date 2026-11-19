@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import subprocess
 import sys
 import re
@@ -91,33 +90,6 @@ VLAN_SUB_INTERFACE_SEPARATOR = '.'
 GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 
 COMMAND_TIMEOUT = 300
-
-# To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continuous execution of this
-# bash oneliner. To be revisited once routing-stack info is tracked somewhere.
-def get_routing_stack():
-    result = 'frr'
-
-    # The bash one-liner below relies on a nested "bgp" docker container, which
-    # only exists on a real SONiC device. On single-container images such as
-    # docker-sonic-vs (used as cSONiC neighbors in the KVM testbed) there is no
-    # nested docker, so only run the probe when docker is available.
-    if shutil.which('docker') is not None:
-        command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
-
-        try:
-            stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
-            detected_stack = stdout.rstrip('\n')
-            if detected_stack:
-                result = detected_stack
-        except Exception as err:
-            click.echo('Failed to get routing stack: {}'.format(err), err=True)
-
-    return result
-
-
-# Global Routing-Stack variable
-routing_stack = get_routing_stack()
 
 # Read given JSON file
 def readJsonFile(fileName):
@@ -757,15 +729,19 @@ def pfcwd():
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def config(namespace, display, verbose):
+def config(namespace, display, json_output, verbose):
     """Show pfc watchdog config"""
 
     cmd = ['pfcwd', 'show', 'config', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if json_output:
+        cmd += ['--json']
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
@@ -1610,23 +1586,11 @@ def protocol(verbose):
 
 #
 # Inserting BGP functionality into cli's show parse-chain.
-# BGP commands are determined by the routing-stack being elected.
 #
-if routing_stack == "quagga":
-    from .bgp_quagga_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_quagga_v6 import bgp
-    ipv6.add_command(bgp)
-elif routing_stack == "frr":
-    from .bgp_frr_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_frr_v6 import bgp
-    ipv6.add_command(bgp)
-elif device_info.is_supervisor():
-    from .bgp_frr_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_frr_v6 import bgp
-    ipv6.add_command(bgp)
+from .bgp_frr_v4 import bgp as bgp_v4  # noqa: E305,E402
+ip.add_command(bgp_v4)
+from .bgp_frr_v6 import bgp as bgp_v6  # noqa: E402
+ipv6.add_command(bgp_v6)
 #
 # 'link-local-mode' subcommand ("show ipv6 link-local-mode")
 #
@@ -2251,22 +2215,8 @@ def startupconfiguration():
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def bgp(verbose):
     """Show BGP startup configuration"""
-    cmd0 = ['sudo', 'docker', 'ps']
-    cmd1 = ['grep', 'bgp']
-    cmd2 = ['awk', '{print$2}']
-    cmd3 = ['cut', '-d-', '-f3']
-    cmd4 = ['cut', '-d:', "-f1"]
-    _, stdout = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-    result = stdout.rstrip()
-    click.echo("Routing-Stack is: {}".format(result))
-    if result == "quagga":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/quagga/bgpd.conf'], display_cmd=verbose)
-    elif result == "frr":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=verbose)
-    elif result == "gobgp":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/gpbgp/bgpd.conf'], display_cmd=verbose)
-    else:
-        click.echo("Unidentified routing-stack")
+    click.echo("Routing-Stack is: frr")
+    run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=verbose)
 
 #
 # 'ntp' command ("show ntp")
@@ -2383,10 +2333,10 @@ def aaa(db):
 
 
 @cli.command()
-def tacacs():
+@clicommon.pass_db
+def tacacs(db):
     """Show TACACS+ configuration"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = db.cfgdb
     output = ''
     data = config_db.get_table('TACPLUS')
 
@@ -2394,7 +2344,8 @@ def tacacs():
         'global': {
             'auth_type': 'pap (default)',
             'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'passkey': '<EMPTY_STRING> (default)',
+            'traceid_authorization': 'False (default)'
         }
     }
     if 'global' in data:
