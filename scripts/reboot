@@ -166,6 +166,13 @@ function show_help_and_exit()
     exit ${EXIT_SUCCESS}
 }
 
+function show_usage_error_and_exit()
+{
+    echo "Error: $1" >&2
+    echo "No reboot was initiated. Run '${SCRIPT} -h' for usage." >&2
+    exit ${EXIT_ERROR}
+}
+
 function setup_reboot_variables()
 {
     NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
@@ -231,9 +238,9 @@ function check_conflict_boot_in_fw_update()
 
 function parse_options()
 {
-    while getopts "h?vfpd:b" opt; do
+    while getopts ":h?vfpd:b" opt; do
         case ${opt} in
-            h|\? )
+            h )
                 show_help_and_exit
                 ;;
             v )
@@ -256,8 +263,23 @@ function parse_options()
             b )
                 BLOCKING_MODE="yes"
                 ;;
+            : )
+                show_usage_error_and_exit "option -${OPTARG} requires an argument"
+                ;;
+            \? )
+                # -? is a help alias; any other letter is an unknown option
+                [[ "${OPTARG}" == "?" ]] && show_help_and_exit
+                show_usage_error_and_exit "invalid option -${OPTARG}"
+                ;;
         esac
     done
+    shift $((OPTIND - 1))
+
+    # getopts stops at the first operand. Reject the remaining arguments
+    # so that a typo such as "reboot cause history" does not reboot the device.
+    if [[ $# -gt 0 ]]; then
+        show_usage_error_and_exit "unexpected argument(s): $*"
+    fi
 }
 
 function linecard_reboot_notify_supervisor()
@@ -303,7 +325,7 @@ function parse_config_file
     fi
 }
 
-parse_options $@
+parse_options "$@"
 parse_config_file
 
 # Exit if not superuser
