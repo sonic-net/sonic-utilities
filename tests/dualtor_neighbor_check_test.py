@@ -38,6 +38,65 @@ class TestDualtorNeighborCheck(object):
         with patch("dualtor_neighbor_check.syslog.syslog") as mock_syslog_log:
             yield mock_syslog_log
 
+    # linkmgrd publishes admin_active/admin_standby in APP_DB MUX_CABLE_TABLE for
+    # admin-initiated switchovers, while HW_MUX_CABLE_TABLE only carries the forwarding
+    # side, so the neighbor check must compare the two on the forwarding side.
+    def test_get_mux_forwarding_state(self):
+        assert dualtor_neighbor_check.get_mux_forwarding_state("admin_active") == "active"
+        assert dualtor_neighbor_check.get_mux_forwarding_state("admin_standby") == "standby"
+        assert dualtor_neighbor_check.get_mux_forwarding_state("active") == "active"
+        assert dualtor_neighbor_check.get_mux_forwarding_state("standby") == "standby"
+        assert dualtor_neighbor_check.get_mux_forwarding_state("unknown") == "unknown"
+        assert dualtor_neighbor_check.get_mux_forwarding_state(None) is None
+
+    @pytest.mark.parametrize("mux_state", ["admin_active", "admin_standby"])
+    def test_check_neighbor_consistency_admin_mux_state(self, mock_log_functions, mux_state):
+        mock_log_error, _, _, _ = mock_log_functions
+        hw_mux_state = dualtor_neighbor_check.get_mux_forwarding_state(mux_state)
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        asic_route_table = [
+            {
+                "route_details": "{\"dest\":\"192.168.0.2/32\",\"switch_id\":\"oid:0x21000000000000\"," +
+                                 "\"vr\":\"oid:0x3000000000024\"}",
+                "nexthop_id": "oid:0x40000000005c0"
+            }
+        ]
+        if hw_mux_state == "active":
+            port_neighbor_modes = {"Ethernet4": "prefix-route"}
+            asic_neigh_table = [
+                                "{\"ip\":\"192.168.0.2\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":" +
+                                "\"oid:0x21000000000000\" }"
+                               ]
+            asic_nexthop_table = \
+                {'oid:0x40000000005c0': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP', 'nexthop_id': 'oid:0x40000000005c0'}}
+        else:
+            # standby forwards over the tunnel, so there is no asic neighbor and no ip nexthop
+            port_neighbor_modes = {"Ethernet4": "host-route"}
+            asic_neigh_table = []
+            asic_nexthop_table = {}
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            {"Ethernet4": mux_state},
+            {"Ethernet4": hw_mux_state},
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            asic_nexthop_table,
+            mux_server_to_port_map,
+            port_neighbor_modes
+        )
+        res, _ = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert len(check_results) == 1
+        # the admin_ qualifier is reported as-is, but it must not look like a toggle in flight
+        assert check_results[0]["MUX_STATE"] == mux_state
+        assert check_results[0]["IN_MUX_TOGGLE"] == "no"
+        assert res is True
+        mock_log_error.assert_not_called()
+
     def test_run_command(self, mock_log_functions):
         with patch("dualtor_neighbor_check.subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
