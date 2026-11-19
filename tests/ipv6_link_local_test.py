@@ -266,6 +266,26 @@ class TestIPv6LinkLocal(object):
         assert result.exit_code == 0
         assert result.output == ''
 
+    def test_config_disable_link_local_on_all_interfaces_keeps_sub_interface(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        db.cfgdb.set_entry('VLAN_SUB_INTERFACE', 'Ethernet0.20', {
+            'admin_status': 'up',
+            'ipv6_use_link_local_only': 'enable'
+        })
+
+        result = runner.invoke(
+            config.config.commands['ipv6'].commands['disable'].commands['link-local'],
+            obj=obj)
+        assert result.exit_code == 0
+        assert result.output == ''
+
+        sub_interface = db.cfgdb.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.20')
+        assert sub_interface['ipv6_use_link_local_only'] == 'disable'
+        assert sub_interface['admin_status'] == 'up'
+
     def test_config_enable_disable_ipv6_link_local_on_shortname_sub_interface(self):
         runner = CliRunner()
         db = Db()

@@ -10339,7 +10339,7 @@ def disable_link_local(ctx):
 
     mode = "disable"
 
-    tables = ['INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE']
+    tables = ['INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_SUB_INTERFACE']
 
     for table_type in tables:
         table_dict = config_db.get_table(table_type)
