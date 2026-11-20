@@ -78,6 +78,7 @@ from . import bgp_cli
 from . import stp
 from . import evpn_mh
 from . import llr
+from . import bridge_port_protection
 
 # mock masic APIs for unit test
 try:
@@ -3131,9 +3132,13 @@ def portchannel(db, ctx, namespace):
     config_db.connect()
     ctx.obj = {'db': config_db, 'namespace': str(namespace), 'db_wrap': db}
 
+
+portchannel.add_command(bridge_port_protection.protection)
+
+
 @portchannel.command('add')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
-@click.option('--min-links', default=1, type=click.IntRange(1,1024))
+@click.option('--min-links', default=1, type=click.IntRange(1, 1024))
 @click.option('--fallback', default='false')
 @click.option('--fast-rate', default='false',
               type=click.Choice(['true', 'false'],
@@ -3175,10 +3180,16 @@ def remove_portchannel(ctx, portchannel_name):
     """Remove port channel"""
 
     db = ValidatedConfigDBConnector(ctx.obj['db'])
+    # Test key presence: a defaults-only protection row decodes to {}.
+    # Enforce this dependency with both ad-hoc and YANG validation modes.
+    if portchannel_name in db.get_table(bridge_port_protection.TABLE):
+        ctx.fail("{} has bridge-port protection configured. Remove protection "
+                 "configuration before deleting the PortChannel."
+                 .format(portchannel_name))
     if ADHOC_VALIDATION:
-        if is_portchannel_name_valid(portchannel_name) != True:
+        if not is_portchannel_name_valid(portchannel_name):
             ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
-                    .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+                     .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
 
         # Don't proceed if the port channel does not exist
         if is_portchannel_present_in_db(db, portchannel_name) is False:
