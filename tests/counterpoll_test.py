@@ -595,24 +595,46 @@ class TestCounterpoll(object):
         )
 
         assert result.exit_code == 0
-        assert "resulting polling window" in result.output
-        assert "secondary poll factor" in result.output
+        help_text = " ".join(result.output.split())
+        assert "resulting polling window" in help_text
+        assert "secondary poll factor" in help_text
 
-    def test_port_secondary_poll_factor(self):
+    @pytest.mark.parametrize("factor", [1, 4, 2147483647])
+    def test_port_secondary_poll_factor(self, factor):
+        runner = CliRunner()
+        db = Db()
+        port_before = db.cfgdb.get_entry("FLEX_COUNTER_TABLE", "PORT")
+
+        result = runner.invoke(
+            counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
+            [str(factor)], obj=db.cfgdb
+        )
+
+        assert result.exit_code == 0
+        port_after = db.cfgdb.get_entry("FLEX_COUNTER_TABLE", "PORT")
+        assert port_after == dict(port_before, SECONDARY_POLL_FACTOR=str(factor))
+
+    @pytest.mark.parametrize("namespace", ["", "asic0", "asic1"])
+    def test_port_secondary_poll_factor_namespace(self, namespace):
         runner = CliRunner()
         configdb = mock.Mock()
+        port = counterpoll.cli.commands["port"]
+        namespace_option = next(param for param in port.params if param.name == "namespace")
 
-        with mock.patch.object(counterpoll, "ConfigDBConnector", return_value=configdb):
+        with mock.patch.object(namespace_option.type, "choices", ["", "asic0", "asic1"]), \
+                mock.patch.object(counterpoll, "connect_to_db", return_value=configdb) as connect, \
+                mock.patch.object(counterpoll, "ConfigDBConnector") as configdb_cls:
             result = runner.invoke(
-                counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
-                ["4"]
+                counterpoll.cli,
+                ["port", "-n", namespace, "secondary-poll-factor", "4"]
             )
 
         assert result.exit_code == 0
-        configdb.connect.assert_called_once_with()
+        connect.assert_called_once_with(namespace)
         configdb.mod_entry.assert_called_once_with(
             "FLEX_COUNTER_TABLE", "PORT", {"SECONDARY_POLL_FACTOR": 4}
         )
+        configdb_cls.assert_not_called()
 
     def test_port_secondary_poll_factor_help_describes_default_window(self):
         runner = CliRunner()
@@ -626,18 +648,20 @@ class TestCounterpoll(object):
         assert "default factor of 120" in result.output
         assert "default 1000-ms" in result.output
 
-    def test_port_secondary_poll_factor_must_be_positive(self):
+    @pytest.mark.parametrize("factor", ["-1", "0", "2147483648", "18446744073709551616"])
+    def test_port_secondary_poll_factor_range(self, factor):
         runner = CliRunner()
-        configdb_cls = mock.Mock()
+        configdb = mock.Mock()
 
-        with mock.patch.object(counterpoll, "ConfigDBConnector", configdb_cls):
+        with mock.patch.object(counterpoll, "ConfigDBConnector") as configdb_cls:
             result = runner.invoke(
                 counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
-                ["0"]
+                ["--", factor], obj=configdb
             )
 
         assert result.exit_code == 2
-        assert "0 is not in the range x>=1" in result.output
+        assert "{} is not in the range 1<=x<=2147483647".format(factor) in result.output
+        configdb.mod_entry.assert_not_called()
         configdb_cls.assert_not_called()
 
     @pytest.mark.parametrize("status", ["disable", "enable"])

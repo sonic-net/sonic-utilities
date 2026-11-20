@@ -3754,8 +3754,8 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#consol
 **counterpoll port secondary-poll-factor**
 
 This command sets the secondary poll factor used to determine the resulting
-polling window for port counters. The factor must be a positive integer greater
-than or equal to 1.
+polling window for port counters. The factor must be an integer between 1 and
+2147483647, inclusive.
 
 The values are related as follows:
 
@@ -3769,7 +3769,7 @@ changes the resulting polling window proportionally.
 
 - Usage:
   ```
-  counterpoll port secondary-poll-factor <factor>
+  counterpoll port [-n <namespace>] secondary-poll-factor <factor>
   ```
 
 - Example:
@@ -3778,7 +3778,8 @@ changes the resulting polling window proportionally.
   ```
 
 The configured factor is displayed in the `Secondary Poll Factor` column of
-`counterpoll show`.
+`counterpoll show`. On multi-ASIC devices, use `-n <namespace>` to select the
+ASIC namespace when configuring or displaying the factor.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#counter-polling)
 

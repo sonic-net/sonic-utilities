@@ -127,21 +127,21 @@ def port_interval(ctx, poll_interval):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
 
 
+# syncd parses this field with stoi(), which accepts a signed 32-bit integer.
 @port.command('secondary-poll-factor')
-@click.argument('factor', type=click.IntRange(min=1))
-def secondary_poll_factor(factor):
+@click.argument('factor', type=click.IntRange(1, 2147483647))
+@click.pass_context
+def secondary_poll_factor(ctx, factor):
     """ Set port counter secondary poll factor.
+
+    FACTOR must be between 1 and 2147483647.
 
     The resulting polling window is the port polling interval multiplied by
     this factor. The default factor of 120 gives a 120-second polling window
     at the default 1000-ms port polling interval.
     """
-    configdb = ConfigDBConnector()
-    configdb.connect()
-    port_info = {}
-    if factor is not None:
-        port_info['SECONDARY_POLL_FACTOR'] = factor
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", {"SECONDARY_POLL_FACTOR": factor})
+
 
 @port.command(name='enable')
 @click.pass_context
