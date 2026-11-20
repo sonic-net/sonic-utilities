@@ -1831,11 +1831,11 @@ def delete_transceiver_tables():
 
 
 def clear_logger_state():
-    """Clear STATE_DB LOGGER_TABLE in every namespace while services are down.
+    """Delete LOGGER_TABLE|* from STATE_DB in the host and every ASIC namespace.
 
-    Each daemon publishes its row when it registers, so the restart rebuilds
-    the table and rows of daemons that no longer run are gone. A failure is
-    logged; it does not stop the reload.
+    Called by reload and load_minigraph once services are stopped, so the
+    table is empty when they restart. A failure in one namespace is logged and
+    the others are still cleared; nothing is raised.
     """
     namespaces = [DEFAULT_NAMESPACE]
     try:
@@ -2491,8 +2491,6 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     if not no_service_restart:
         log.log_notice("'reload' stopping services...")
         _stop_services()
-        # Only here: with -n the daemons keep running and would not
-        # publish their rows again.
         clear_logger_state()
 
     if multiasic_single_file_mode:
@@ -2698,6 +2696,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
         delete_transceiver_tables()
         delete_bgp_peer_table()
         _stop_services()
+        clear_logger_state()
 
     # For Single Asic platform the namespace list has the empty string
     # for mulit Asic platform the empty string to generate the config

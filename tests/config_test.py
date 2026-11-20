@@ -920,12 +920,36 @@ class TestConfigReload(object):
         return mock_clear
 
     def test_config_reload_clears_logger_state(self, get_cmd_module, setup_single_broadcom_asic):
-        """Services restart, so every daemon publishes its LOGGER_TABLE row again."""
+        """A reload that stops services clears LOGGER_TABLE."""
         (config, show) = get_cmd_module
         self._reload_with_services_mocked(config, ["-y"]).assert_called_once_with()
 
+    def test_config_reload_clears_logger_state_between_stop_and_restart(
+        self, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_db_path, "config_db.json")
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = False
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = False
+        calls = []
+        with mock.patch.object(config, "DEFAULT_CONFIG_DB_FILE", jsonfile_config), \
+                mock.patch('config.main.swsscommon', mock_swsscommon), \
+                mock.patch.object(config, 'config_file_yang_validation'), \
+                mock.patch('config.main._is_system_starting', return_value=False), \
+                mock.patch('config.main._swss_ready', return_value=True), \
+                mock.patch('config.main._stop_services', side_effect=lambda: calls.append("stop")), \
+                mock.patch('config.main.clear_logger_state', side_effect=lambda: calls.append("clear")), \
+                mock.patch('config.main._restart_services', side_effect=lambda: calls.append("restart")), \
+                mock.patch('config.main._reset_failed_services'), \
+                mock.patch("utilities_common.cli.run_command",
+                           mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            result = CliRunner().invoke(config.config.commands["reload"], ["-y"])
+        assert result.exit_code == 0, result.output
+        assert calls == ["stop", "clear", "restart"]
+
     def test_config_reload_no_service_restart_keeps_logger_state(self, get_cmd_module, setup_single_broadcom_asic):
-        """With -n the daemons keep running and would not publish their rows again."""
+        """With -n services keep running, so LOGGER_TABLE is left alone."""
         (config, show) = get_cmd_module
         self._reload_with_services_mocked(config, ["-y", "-n"]).assert_not_called()
 
@@ -1204,6 +1228,29 @@ class TestConfigReloadMasic(object):
         assert [ns for ns, _ in connectors] == ["", "asic0", "asic1"]
         for _, db in connectors:
             db.delete_all_by_pattern.assert_called_once_with("STATE_DB", "LOGGER_TABLE|*")
+
+    @pytest.mark.parametrize("failing_call", ["connect", "delete_all_by_pattern"])
+    def test_clear_logger_state_continues_past_failing_namespace(self, failing_call):
+        connectors = []
+
+        def connector(**kwargs):
+            db = mock.MagicMock()
+            db.STATE_DB = "STATE_DB"
+            if kwargs.get("namespace") == "asic0":
+                getattr(db, failing_call).side_effect = RuntimeError("asic0 DB unreachable")
+            connectors.append((kwargs.get("namespace"), db))
+            return db
+
+        with mock.patch("config.main.SonicV2Connector", side_effect=connector), \
+                mock.patch("config.main.log") as mock_log:
+            config.clear_logger_state()
+
+        assert [ns for ns, _ in connectors] == ["", "asic0", "asic1"]
+        for ns, db in connectors:
+            if ns != "asic0":
+                db.delete_all_by_pattern.assert_called_once_with("STATE_DB", "LOGGER_TABLE|*")
+        mock_log.log_warning.assert_called_once()
+        assert "asic0 DB unreachable" in mock_log.log_warning.call_args[0][0]
 
     def test_config_reload_onefile_masic(self):
         def read_json_file_side_effect(filename):
@@ -1539,6 +1586,22 @@ class TestLoadMinigraph(object):
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
             assert mock_run_command.call_count == 23
+
+    @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+                mock.MagicMock(return_value=("dummy_path", None)))
+    @mock.patch('config.main.subprocess.check_call')
+    def test_load_minigraph_clears_logger_state_between_stop_and_restart(
+        self, mock_check_call, get_cmd_module, setup_single_broadcom_asic
+    ):
+        (config, show) = get_cmd_module
+        calls = []
+        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch('config.main._stop_services', side_effect=lambda: calls.append("stop")), \
+                mock.patch('config.main.clear_logger_state', side_effect=lambda: calls.append("clear")), \
+                mock.patch('config.main._restart_services', side_effect=lambda: calls.append("restart")):
+            result = CliRunner().invoke(config.config.commands["load_minigraph"], ["-y"])
+        assert result.exit_code == 0, result.output
+        assert calls == ["stop", "clear", "restart"]
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
