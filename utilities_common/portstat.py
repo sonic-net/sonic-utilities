@@ -1,6 +1,7 @@
 import datetime
 import time
 import re
+import sys
 from collections import OrderedDict, namedtuple
 from natsort import natsorted
 from tabulate import tabulate
@@ -45,6 +46,7 @@ header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR',
                    'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FLR(O)', 'FLR(P) (Accuracy)', 'FEC_MAX_T']
 header_fec_hist_only = ['IFACE', 'BIN0', 'BIN1', 'BIN2', 'BIN3', 'BIN4', 'BIN5', 'BIN6', 'BIN7',
                         'BIN8', 'BIN9', 'BIN10', 'BIN11', 'BIN12', 'BIN13', 'BIN14', 'BIN15']
+header_fec_hist_vertical = ['Symbol Errors Per Codeword', 'Codewords']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
 header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS', 'TRIM_TX_PKTS', 'TRIM_DRP_PKTS']
 
@@ -170,6 +172,32 @@ def intfsorted(intf_list):
         return [int(i) for i in re.findall(r'\d+', intf)]
 
     return sorted(intf_list, key=sort_key)
+
+
+def get_fec_max_t_since_snapshot(cntr, old_cntr, fallback):
+    """
+        Return the highest FEC histogram bin that counted codewords since the
+        baseline, or -1 if none did. Like find_maxT() in port_rates.lua, but
+        on the diffed bins so it follows 'sonic-clear counters'.
+        Returns a float like the RATES value, or `fallback` if the bins are
+        not available.
+    """
+    max_t = -1
+    for i in range(16):
+        field = 'fec_bin{}'.format(i)
+        new = cntr.get(field, STATUS_NA)
+        old = old_cntr.get(field, STATUS_NA)
+        if new == STATUS_NA:
+            return fallback
+        if old == STATUS_NA:
+            old = 0
+        try:
+            delta = int(new) - int(old)
+        except (TypeError, ValueError):
+            return fallback
+        if delta > 0:
+            max_t = i
+    return float(max_t)
 
 
 def is_non_zero(value):
@@ -412,6 +440,35 @@ class Portstat(object):
             self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns)
         return self.db_clients[ns]
 
+    def print_fec_hist_vertical(self, cnstat_new_dict, cnstat_old_dict, intf):
+        """
+            Render the FEC histogram for a single interface as one row per BIN.
+            Codewords are the difference against the cached snapshot (if any),
+            so 'sonic-clear counters' resets the displayed values.
+        """
+        if not any(key != 'time' for key in cnstat_new_dict):
+            print("FEC histogram counters are not available, COUNTERS_PORT_NAME_MAP is empty",
+                  file=sys.stderr)
+            sys.exit(1)
+
+        if intf not in cnstat_new_dict:
+            print("Port {} not found in COUNTERS_PORT_NAME_MAP".format(intf), file=sys.stderr)
+            sys.exit(1)
+
+        cntr = cnstat_new_dict[intf]
+        old_cntr = cnstat_old_dict.get(intf) or \
+            NStats._make([0] * len(counter_bucket_dict))._asdict()
+
+        table = []
+        for i in range(16):
+            field = 'fec_bin{}'.format(i)
+            # Keep plain integers (no thousands separator) to stay compatible
+            # with existing parsers of this command's output.
+            codewords = ns_diff(cntr[field], old_cntr[field]).replace(',', '')
+            table.append(('BIN{}'.format(i), codewords))
+
+        print(tabulate(table, header_fec_hist_vertical))
+
     def get_port_state(self, port_name):
         """
             Get the port state
@@ -593,6 +650,10 @@ class Portstat(object):
             self.cnstat_intf_diff_print(cnstat_new_dict, cnstat_old_dict, intf_list)
             return None
 
+        if fec_hist_only and not use_json and intf_list and len(intf_list) == 1:
+            self.print_fec_hist_vertical(cnstat_new_dict, cnstat_old_dict, intf_list[0])
+            return None
+
         table = []
         header = None
 
@@ -662,6 +723,12 @@ class Portstat(object):
             elif fec_stats_only:
                 header = header_fec_only
 
+                # With a baseline (saved snapshot or -p sample), report the
+                # highest bin hit since then rather than the lifetime value.
+                fec_max_t = rates.fec_max_t
+                if key in cnstat_old_dict:
+                    fec_max_t = get_fec_max_t_since_snapshot(cntr, old_cntr, rates.fec_max_t)
+
                 if not nonzero or is_non_zero(ns_diff(cntr['fec_corr'], old_cntr['fec_corr'])) or \
                    is_non_zero(ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr'])) or \
                    is_non_zero(ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err'])):
@@ -675,7 +742,7 @@ class Portstat(object):
                                   format_fec_flr(rates.fec_flr),
                                   format_fec_flr_predicted(rates.fec_flr_predicted,
                                                            rates.fec_flr_r_squared),
-                                  rates.fec_max_t))
+                                  fec_max_t))
             elif fec_hist_only:
                 header = header_fec_hist_only
 

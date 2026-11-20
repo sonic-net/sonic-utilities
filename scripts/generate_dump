@@ -2088,31 +2088,6 @@ collect_broadcom() {
 }
 
 ###############################################################################
-# Collect Barefoot specific information
-# Globals:
-#  None
-# Arguments:
-#  None
-# Returns:
-#  None
-###############################################################################
-collect_barefoot() {
-    local bf_logs="/tmp/bf_logs"
-    $( rm -rf ${bf_logs} )
-    $( mkdir  ${bf_logs} )
-    unset array
-    array=( $(docker exec -ti syncd ls -1 | grep bf_drivers.log) )
-    for y in "${array[@]}"; do
-        itstr=`echo ${y} | tr -d "\r\n"`
-        copy_from_masic_docker "syncd" "/${itstr}" "${bf_logs}"
-    done
-
-    for file in $(find /tmp/bf_logs -type f); do
-        save_file "${file}" log true
-    done
-} 
-
-###############################################################################
 # Collect Cisco-8000 specific information
 # Globals:
 #  None
@@ -2456,7 +2431,7 @@ save_log_files() {
 #  0 if BMC is supported, 1 otherwise
 ###############################################################################
 is_bmc_supported() {
-    python3 -I -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data()) else 1)"
+    python3 -I -c "from sonic_py_common import device_info; import sys; sys.exit(0 if (device_info.is_switch_host() and device_info.get_bmc_data() and device_info.get_bmc_os() == device_info.BMC_OS_OPENBMC) else 1)"
 }
 
 ###############################################################################
@@ -2469,7 +2444,7 @@ is_bmc_supported() {
 trigger_bmc_debug_log_dump() {
     trap 'handle_error $? $LINENO' ERR
     if ! is_bmc_supported; then
-        echo "INFO: BMC is not found on this platform. Skipping..."
+        echo "INFO: BMC (OpenBMC) is not found on this platform. Skipping..."
         return
     fi
     if $NOOP; then
@@ -3102,10 +3077,6 @@ main() {
 
     # SAI dump (vtysh route-size probe + syncd) self-skips on a Switch-BMC.
     save_saidump_by_route_size
-
-    if [ "$asic" = "barefoot" ]; then
-        collect_barefoot
-    fi
 
     if [[ "$asic" = "mellanox" ]]; then
         collect_mellanox
