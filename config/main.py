@@ -76,6 +76,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import watchdog
 from . import evpn_mh
 from . import llr
 
@@ -1988,6 +1989,7 @@ config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
+config.add_command(watchdog.watchdog)
 config.add_command(vxlan.vxlan)
 config.add_command(evpn_mh.evpn_mh)
 
