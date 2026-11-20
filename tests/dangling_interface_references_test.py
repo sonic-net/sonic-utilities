@@ -43,6 +43,8 @@ def union_member_types():
     def members(leaf_type):
         if isinstance(leaf_type, mock.Mock):
             return list(leaf_type.union_types(with_typedefs=True))
+        if real is None:
+            pytest.skip('this sonic_yang has no SonicYang.union_member_types')
         return real(leaf_type)
     with mock.patch.object(sonic_yang.SonicYang, 'union_member_types', staticmethod(members), create=True):
         yield
