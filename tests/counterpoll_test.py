@@ -19,10 +19,10 @@ from .mock_tables import dbconnector
 
 import counterpoll.main as counterpoll
 
-expected_counterpoll_show = """Type                  Interval (in ms)    Status
---------------------  ------------------  --------
+expected_counterpoll_show = """Type                  Interval (in ms)    Status    Secondary Poll Factor
+--------------------  ------------------  --------  -----------------------
 QUEUE_STAT            10000               enable
-PORT_STAT             1000                enable
+PORT_STAT             1000                enable    default (120)
 PORT_BUFFER_DROP      60000               enable
 PHY                   10000               enable
 QUEUE_WATERMARK_STAT  default (60000)     enable
@@ -40,10 +40,10 @@ SWITCH_STAT           60000               enable
 LLR_STAT              10000               enable
 """
 
-expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status
---------------------  ------------------  --------
+expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status    Secondary Poll Factor
+--------------------  ------------------  --------  -----------------------
 QUEUE_STAT            10000               enable
-PORT_STAT             1000                enable
+PORT_STAT             1000                enable    default (120)
 PORT_BUFFER_DROP      60000               enable
 PHY                   10000               enable
 QUEUE_WATERMARK_STAT  default (60000)     enable
@@ -82,6 +82,27 @@ class TestCounterpoll(object):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli.commands["show"], [])
         assert result.output == expected_counterpoll_show_dpu
+
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_show_port_secondary_poll_factor(self, mock_get_platform_info):
+        mock_get_platform_info.return_value = {}
+        configdb = mock.Mock()
+        configdb.get_entry.side_effect = lambda table, key: {
+            "PORT": {
+                "POLL_INTERVAL": "1000",
+                "SECONDARY_POLL_FACTOR": "4",
+                "FLEX_COUNTER_STATUS": "enable",
+            }
+        }.get(key, {})
+
+        runner = CliRunner()
+        with mock.patch("counterpoll.main.connect_to_db", return_value=configdb):
+            result = runner.invoke(counterpoll.cli.commands["show"], [])
+
+        assert result.exit_code == 0
+        port_line = next(line for line in result.output.splitlines()
+                         if line.startswith("PORT_STAT"))
+        assert port_line.split() == ["PORT_STAT", "1000", "enable", "4"]
 
     def test_port_buffer_drop_interval(self):
         runner = CliRunner()
@@ -567,6 +588,83 @@ class TestCounterpoll(object):
         assert result.exit_code == 0
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["PORT"]["POLL_INTERVAL"]
+
+    def test_port_interval_help_describes_resulting_window(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            counterpoll.cli.commands["port"].commands["interval"],
+            ["--help"]
+        )
+
+        assert result.exit_code == 0
+        help_text = " ".join(result.output.split())
+        assert "resulting polling window" in help_text
+        assert "secondary poll factor" in help_text
+
+    @pytest.mark.parametrize("factor", [1, 4, 2147483647])
+    def test_port_secondary_poll_factor(self, factor):
+        runner = CliRunner()
+        db = Db()
+        port_before = db.cfgdb.get_entry("FLEX_COUNTER_TABLE", "PORT")
+
+        result = runner.invoke(
+            counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
+            [str(factor)], obj=db.cfgdb
+        )
+
+        assert result.exit_code == 0
+        port_after = db.cfgdb.get_entry("FLEX_COUNTER_TABLE", "PORT")
+        assert port_after == dict(port_before, SECONDARY_POLL_FACTOR=str(factor))
+
+    @pytest.mark.parametrize("namespace", ["", "asic0", "asic1"])
+    def test_port_secondary_poll_factor_namespace(self, namespace):
+        runner = CliRunner()
+        configdb = mock.Mock()
+        port = counterpoll.cli.commands["port"]
+        namespace_option = next(param for param in port.params if param.name == "namespace")
+
+        with mock.patch.object(namespace_option.type, "choices", ["", "asic0", "asic1"]), \
+                mock.patch.object(counterpoll, "connect_to_db", return_value=configdb) as connect, \
+                mock.patch.object(counterpoll, "ConfigDBConnector") as configdb_cls:
+            result = runner.invoke(
+                counterpoll.cli,
+                ["port", "-n", namespace, "secondary-poll-factor", "4"]
+            )
+
+        assert result.exit_code == 0
+        connect.assert_called_once_with(namespace)
+        configdb.mod_entry.assert_called_once_with(
+            "FLEX_COUNTER_TABLE", "PORT", {"SECONDARY_POLL_FACTOR": 4}
+        )
+        configdb_cls.assert_not_called()
+
+    def test_port_secondary_poll_factor_help_describes_default_window(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
+            ["--help"]
+        )
+
+        assert result.exit_code == 0
+        assert "resulting polling window" in result.output
+        assert "default factor of 120" in result.output
+        assert "default 1000-ms" in result.output
+
+    @pytest.mark.parametrize("factor", ["-1", "0", "2147483648", "18446744073709551616"])
+    def test_port_secondary_poll_factor_range(self, factor):
+        runner = CliRunner()
+        configdb = mock.Mock()
+
+        with mock.patch.object(counterpoll, "ConfigDBConnector") as configdb_cls:
+            result = runner.invoke(
+                counterpoll.cli.commands["port"].commands["secondary-poll-factor"],
+                ["--", factor], obj=configdb
+            )
+
+        assert result.exit_code == 2
+        assert "{} is not in the range 1<=x<=2147483647".format(factor) in result.output
+        configdb.mod_entry.assert_not_called()
+        configdb_cls.assert_not_called()
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_watermark_status(self, status):
