@@ -823,7 +823,6 @@ class DBMigrator():
             flex_counter.pop('FLEX_COUNTER_DELAY_STATUS', None)
             self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
 
-
     def migrate_logger_require_manual_refresh(self):
         """
         Drop require_manual_refresh from LOGGER rows. A process wrote it to say
