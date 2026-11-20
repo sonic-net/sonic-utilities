@@ -966,6 +966,81 @@ class DBMigrator():
                 log.log_info(f"Migrating STATE_DB {state_db_key}, ecn mode: {ecn_mode} -> copy_from_outer")
                 self.stateDB.set(self.stateDB.STATE_DB, state_db_key, 'ecn_mode', 'copy_from_outer')
 
+    def migrate_sub_interface_ipv6_use_link_local_only(self):
+        """
+        Move ipv6_use_link_local_only of a VLAN sub-interface to VLAN_SUB_INTERFACE.
+
+        Before VLAN_SUB_INTERFACE modelled the field, "config interface ipv6
+        enable use-link-local-only" wrote it for a sub-interface to
+        INTERFACE|<subintf> (Ethernet parent) or PORTCHANNEL_INTERFACE|<subintf>
+        (PortChannel parent). The models refuse those rows (their key must name a
+        port or PortChannel), and neighsyncd now reads the field only from
+        VLAN_SUB_INTERFACE|<subintf>.
+
+        The field is removed from the old row and goes to VLAN_SUB_INTERFACE:
+        - the sub-interface's row there already sets it: that value is kept;
+        - the row exists: the field is added to it;
+        - there is no row, but the sub-interface has address rows in either
+          table, so it is live: the row is created with the old row's fields
+          that VLAN_SUB_INTERFACE models, so that the two rows agree;
+        - the sub-interface has no row and no address rows: nothing is written.
+          The old row is left over from a deleted sub-interface, which intfmgrd
+          would otherwise create again from it, and a new VLAN_SUB_INTERFACE row
+          would do the same.
+        A value other than enable or disable is dropped, since the model refuses
+        it; a missing row is still created.
+
+        The old row is deleted only when the field was all it held and its table
+        has no address rows for the sub-interface; otherwise it stays without the
+        field, since intfmgrd applies the rest to the sub-interface. IP address
+        rows are not touched.
+
+        intfmgrd removes a sub-interface's netdev when one of its rows is deleted,
+        so this must run before swss starts, as db_migrator does at boot and on
+        config reload, which stops swss first.
+        """
+        field = 'ipv6_use_link_local_only'
+        sub_intf_table = 'VLAN_SUB_INTERFACE'
+        modelled = {field, 'admin_status', 'vrf_name', 'vnet_name', 'loopback_action', 'vlan'}
+        sub_intfs = self.configDB.get_table(sub_intf_table)
+        addressed = {key[0] for key in sub_intfs if isinstance(key, tuple)}
+        for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE'):
+            rows = self.configDB.get_table(table)
+            table_addressed = {key[0] for key in rows if isinstance(key, tuple)}
+            for key, entry in rows.items():
+                if isinstance(key, tuple) or '.' not in key or field not in entry:
+                    continue
+                value = entry[field]
+                rest = {f: v for f, v in entry.items() if f != field}
+                try:
+                    valid = value in ('enable', 'disable')
+                    if not valid:
+                        log.log_warning("{}|{}: dropped {} '{}', not enable or disable".format(
+                            table, key, field, value))
+                    # A row without fields still configures the sub-interface
+                    sub_intf = sub_intfs.get(key)
+                    if sub_intf is None and (key in addressed or key in table_addressed):
+                        row = {f: v for f, v in entry.items() if f in modelled and (valid or f != field)}
+                        self.configDB.set_entry(sub_intf_table, key, row)
+                        sub_intfs[key] = row
+                        log.log_notice("Created {}|{} {} from {}|{}".format(sub_intf_table, key, row, table, key))
+                    elif not valid:
+                        pass
+                    elif sub_intf is None:
+                        log.log_warning("{}|{}: dropped {} '{}', the sub-interface is not configured".format(
+                            table, key, field, value))
+                    elif field in sub_intf:
+                        log.log_notice("{}|{}: dropped {} '{}', {}|{} sets it to '{}'".format(
+                            table, key, field, value, sub_intf_table, key, sub_intf[field]))
+                    else:
+                        self.configDB.mod_entry(sub_intf_table, key, {field: value})
+                        sub_intf[field] = value
+                        log.log_notice("Moved {} '{}' from {}|{} to {}|{}".format(
+                            field, value, table, key, sub_intf_table, key))
+                    self.configDB.set_entry(table, key, rest if rest or key in table_addressed else None)
+                except Exception as e:
+                    log.log_error("Failed to migrate {} of {}|{}: {}".format(field, table, key, str(e)))
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1436,8 +1511,12 @@ class DBMigrator():
     def version_202605_01(self):
         """
         Version 202605_01
+
+        Terminal handler, so this runs on every migration and
+        migrate_sub_interface_ipv6_use_link_local_only has to stay idempotent.
         """
         log.log_info('Handling version_202605_01')
+        self.migrate_sub_interface_ipv6_use_link_local_only()
         return None
 
     def get_version(self):
