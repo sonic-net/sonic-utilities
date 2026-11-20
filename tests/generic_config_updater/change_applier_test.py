@@ -223,6 +223,27 @@ def vlan_validate(old_cfg, new_cfg, keys):
 
 class TestChangeApplier(unittest.TestCase):
 
+    @patch("generic_config_updater.change_applier.get_config_db")
+    def test_remove_backend_tables_from_config(self, mock_db):
+        # Tables owned/written by daemons at runtime must not take part in
+        # the "is the patch reflected in ConfigDB" comparison.  LOGGER rows
+        # in particular are created by every swss process at start-up, so a
+        # daemon starting while a patch is applied must not fail it.
+        mock_db.return_value = DB_HANDLE
+
+        applier = generic_config_updater.change_applier.ChangeApplier()
+        config = {
+            "BUFFER_PG": {"Ethernet0|3-4": {"profile": "pg_lossless"}},
+            "BUFFER_PROFILE": {"pg_lossless": {"size": "9216"}},
+            "FLEX_COUNTER_TABLE": {"PORT": {"FLEX_COUNTER_STATUS": "enable"}},
+            "LOGGER": {"orchagent": {"LOGLEVEL": "SAI_LOG_LEVEL_NOTICE"}},
+            "PORT": {"Ethernet0": {"admin_status": "up"}},
+        }
+
+        applier.remove_backend_tables_from_config(config)
+
+        assert config == {"PORT": {"Ethernet0": {"admin_status": "up"}}}
+
     @patch("generic_config_updater.gu_common.subprocess.Popen")
     @patch("generic_config_updater.change_applier.get_config_db")
     @patch("generic_config_updater.change_applier.set_config")
