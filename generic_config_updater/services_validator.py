@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import os
 import re
 import shlex
@@ -193,6 +194,32 @@ def telemetry_validator(old_config, upd_config, keys):
     return True
 
 
+def _flush_vlan_neighbors(iface, iface_ip):
+    """`ip neigh flush dev <iface> <iface_ip>`, except for extern_learn entries: their owner (zebra, for EVPN remote
+    hosts) installs one again as soon as it is deleted, so flushing them only churns the neighbor, and the flush can
+    give up after its 10 rounds. Returns the first failed delete's result (every entry is tried), else the listing's."""
+    show_cmd = ["ip", "-j", "neigh", "show", "dev", iface, "to", iface_ip, "nud", "all"]
+    show = subprocess.run(show_cmd, capture_output=True, check=False, text=True)
+    if show.returncode != 0:
+        return show
+    try:
+        entries = json.loads(show.stdout or "[]")
+    except ValueError:
+        entries = None
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        return subprocess.CompletedProcess(show_cmd, 1, show.stdout, "unparsable 'ip -j neigh show' output")
+    failed = None
+    for entry in entries:
+        # permanent and noarp entries are the ones `ip neigh flush` leaves alone as well
+        if "extern_learn" in entry or {"PERMANENT", "NOARP"} & set(entry.get("state", [])) or not entry.get("dst"):
+            continue
+        result = subprocess.run(["ip", "neigh", "del", entry["dst"], "dev", iface],
+                                capture_output=True, check=False, text=True)
+        if result.returncode != 0 and "RTNETLINK answers: No such file or directory" not in result.stderr:
+            failed = failed or result
+    return failed or show
+
+
 def vlanintf_validator(old_config, upd_config, keys):
     old_vlan_intf = old_config.get("VLAN_INTERFACE", {})
     upd_vlan_intf = upd_config.get("VLAN_INTERFACE", {})
@@ -221,10 +248,7 @@ def vlanintf_validator(old_config, upd_config, keys):
                        "vlanintf_validator: Invalid VLAN interface address",
                        print_to_console)
             continue
-        cmd = f"ip neigh flush dev {iface} {iface_ip}"
-        result = subprocess.run(
-            shlex.split(cmd), capture_output=True, check=False, text=True
-        )
+        result = _flush_vlan_neighbors(iface, iface_ip)
         if result.returncode != 0:
             if "RTNETLINK answers: No such file or directory" in result.stderr:
                 continue
