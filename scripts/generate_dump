@@ -460,6 +460,33 @@ get_vtysh_namespace() {
 }
 
 ###############################################################################
+# Records a skipped or degraded collection: writes the message to
+# $LOGDIR/<section>.status and logs it to syslog.
+# Globals:
+#  LOGDIR, MKDIR, V, NOOP
+# Arguments:
+#  section: name of the status file
+#  msg: text to record
+# Returns:
+#  None
+###############################################################################
+save_status_marker() {
+    trap 'handle_error $? $LINENO' ERR
+    local section=$1
+    local msg=$2
+
+    if $NOOP; then
+        echo "echo '$msg' > '$LOGDIR/${section}.status'"
+        return
+    fi
+    if [ ! -d "$LOGDIR" ]; then
+        $MKDIR $V -p "$LOGDIR"
+    fi
+    echo "$msg" > "$LOGDIR/${section}.status"
+    logger -t generate_dump -p user.warning "$msg"
+}
+
+###############################################################################
 # Runs a vtysh command in all namespaces for a multi ASIC platform, and in
 # default (host) namespace in single ASIC platforms. Saves its output to the
 # file.
@@ -2645,17 +2672,40 @@ save_sai_failure_dump(){
 # Arguments:
 #  None
 # Returns:
-#  ASIC Count
+#  ASIC Count on stdout; non-zero when the probe did not yield a positive integer
 ###############################################################################
 get_asic_count() {
+    # Only stdout is captured; stderr can carry unrelated trace text that
+    # must never reach NUM_ASICS.
+    local out count
+    out=$(python3 -I -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())') || return 1
+    # The count is the last stdout line; anything printed ahead of it is not
+    # part of the probe's result.
+    count=${out##*$'\n'}
+    [[ "$count" =~ ^[1-9][0-9]*$ ]] || return 1
+    echo "$count"
+}
+
+###############################################################################
+# Records that the ASIC count could not be determined. The dump is collected
+# as single-ASIC, which is partial on a multi-ASIC device. The status file and
+# the syslog line are the signal; RETURN_CODE is set as handle_error does, so
+# the run exits non-zero under -r like any other collector error, and the
+# tarball is still produced.
+# Globals:
+#  RETURN_CODE, EXT_GENERAL
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_asic_count_unknown() {
     trap 'handle_error $? $LINENO' ERR
-    local redirect_eval="2>&1"
-    if ! $SAVE_STDERR
-    then
-         redirect_eval=""
-    fi
-    local cmd="python3 -I -c 'from sonic_py_common.multi_asic import get_num_asics; print(get_num_asics())'"
-    echo `eval ${cmd} ${redirect_eval}`
+    local msg="unable to determine the ASIC count, collecting as single-ASIC; per-ASIC data may be missing"
+
+    save_status_marker asic_count "$msg"
+    echo "WARNING: $msg" >&2
+    RETURN_CODE=$EXT_GENERAL
 }
 
 ###############################################################################
@@ -2857,7 +2907,11 @@ main() {
     trap 'handle_error $? $LINENO' ERR
     local start_t=0
     local end_t=0
-    NUM_ASICS=$(get_asic_count)
+    local asic_count_known=true
+    if ! NUM_ASICS=$(get_asic_count); then
+        asic_count_known=false
+        NUM_ASICS=1
+    fi
     if [[ ( "$NUM_ASICS" > 1 ) ]]; then
         ASIC_SUFFIXES=( $(seq 0 $((NUM_ASICS - 1))) )
     else
@@ -2874,6 +2928,9 @@ main() {
     $LN $V -s /usr/local/bin/generate_dump $TARDIR
     $TAR $V -chf $TARFILE -C $DUMPDIR $BASE
     $RM $V -f $TARDIR/generate_dump
+
+    # After the initial tar, so save_to_tar archives the marker only once.
+    $asic_count_known || save_asic_count_unknown
 
     # Start populating timing data
     echo $BASE > $TECHSUPPORT_TIME_INFO
