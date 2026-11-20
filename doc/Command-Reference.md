@@ -6943,6 +6943,7 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   - FEC_MAX_T is computed from the FEC histogram BINs that counted codewords since the clear (-1 if none did). With `-p <period>` it is computed over the period instead.
   - FEC_PRE_BER_MAX is a running maximum, so it is reset in COUNTERS_DB and starts tracking again from the next polling interval. Like `sonic-clear ... watermark`, this reset is global and is seen by all users. It is not reset when counters are saved under a tag (`portstat -c -t <tag>`).
   - FEC_PRE_BER, FEC_POST_BER, FLR(O) and FLR(P) are computed over the most recent polling interval and are not affected.
+  - The gearbox FEC counters (`show gearbox interfaces fec-stats` / `fec-histogram`) are cleared the same way.
 
 For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
 
