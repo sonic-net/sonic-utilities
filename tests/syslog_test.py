@@ -600,6 +600,8 @@ class TestSyslog:
         ({'LOGLEVEL': 'NOTICE', 'require_manual_refresh': 'false'}, {'require_manual_refresh': 'true'}, False),
         # A process without the field (a swss-common daemon) reloads on its own
         ({'LOGLEVEL': 'NOTICE', 'LOGOUTPUT': 'SYSLOG'}, {}, False),
+        # A STATE_DB row without the field still falls back to CONFIG_DB
+        ({'LOGLEVEL': 'NOTICE', 'LOGOUTPUT': 'SYSLOG'}, {'require_manual_refresh': 'true'}, True),
         # An older process published nothing and wrote the field into CONFIG_DB
         (None, {'require_manual_refresh': 'true'}, True),
         (None, {'require_manual_refresh': 'false'}, False),
