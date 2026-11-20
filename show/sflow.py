@@ -1,6 +1,7 @@
 import click
 import utilities_common.cli as clicommon
 from natsort import natsorted
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector
 from tabulate import tabulate
 
@@ -28,7 +29,7 @@ def sflow_interface(db):
 
 
 def sflow_appDB_connect():
-    db = SonicV2Connector(host='127.0.0.1')
+    db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB'), host='127.0.0.1')
     db.connect(db.APPL_DB, False)
     return db
 

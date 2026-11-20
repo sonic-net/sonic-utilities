@@ -38,7 +38,7 @@ def log_error(m):
 
 
 def get_config_db(scope=multi_asic.DEFAULT_NAMESPACE):
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=scope)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=scope, authenticate=True)
     config_db.connect()
     return config_db
 

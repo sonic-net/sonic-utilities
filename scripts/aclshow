@@ -22,6 +22,7 @@ import json
 import os
 import sys
 
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from utilities_common.cli import UserCache
 
@@ -63,10 +64,10 @@ class AclStat(object):
             self.table_list = tables.split(",")
 
         # Set up db connections
-        self.db = SonicV2Connector(use_unix_socket_path=False)
+        self.db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'))
         self.db.connect(self.db.COUNTERS_DB)
 
-        self.configdb = ConfigDBConnector()
+        self.configdb = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
         self.configdb.connect()
 
     def previous_counters(self):

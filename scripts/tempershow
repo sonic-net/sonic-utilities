@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 
 from tabulate import tabulate
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicDBConfig, SonicV2Connector
 from natsort import natsorted
 
@@ -74,7 +75,7 @@ class TemperShow(object):
         else:
             if not SonicDBConfig.isInit():
                 SonicDBConfig.load_sonic_db_config()
-        self.db = SonicV2Connector(host="127.0.0.1")
+        self.db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
         self._port_index_map = self._build_port_index_map()
 
@@ -165,7 +166,7 @@ class TemperShow(object):
                 except Exception:
                     continue
         if not connections:
-            db = SonicV2Connector(host="127.0.0.1")
+            db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host="127.0.0.1")
             db.connect(db.STATE_DB)
             connections.append(db)
         return connections

@@ -3,6 +3,7 @@ import json
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from natsort import natsorted
 from tabulate import tabulate
@@ -18,7 +19,10 @@ def srv6():
 
 
 def get_locators(namespace, locator):
-    config_db = ConfigDBConnector(namespace=namespace)
+    config_db = ConfigDBConnector(
+        use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespace),
+        namespace=namespace,
+    )
     config_db.connect()
     data = config_db.get_table(CONFIG_DB_MY_LOCATORS_TABLE)
 
@@ -67,7 +71,10 @@ def locators(locator, namespace, display):
 
 
 def get_static_sids(namespace, sid):
-    config_db = ConfigDBConnector(namespace=namespace)
+    config_db = ConfigDBConnector(
+        use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespace),
+        namespace=namespace,
+    )
     config_db.connect()
     data = config_db.get_table(CONFIG_DB_MY_SID_TABLE)
 
@@ -88,7 +95,7 @@ def get_static_sids(namespace, sid):
         sid_dict[sid_prefix] = v
 
     # query ASIC_DB to check whether the SID is offloaded to the ASIC
-    db = SonicV2Connector(namespace=namespace)
+    db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('ASIC_DB', namespace), namespace=namespace)
     db.connect(db.ASIC_DB)
     asic_data = db.keys(db.ASIC_DB, "*SID*")
     asic_sids = set()

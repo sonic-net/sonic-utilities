@@ -6,6 +6,7 @@ import click
 from tabulate import tabulate
 
 import utilities_common.cli as clicommon
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import ConfigDBConnector
 
 #
@@ -28,7 +29,7 @@ def get_kdump_config(field_name):
                    Otherwise, returns "Unknown".
     """
     field_value = "Unknown"
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
     config_db.connect()
     kdump_table = config_db.get_table("KDUMP")
     if kdump_table and "config" in kdump_table and field_name in kdump_table["config"]:

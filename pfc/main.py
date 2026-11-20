@@ -6,6 +6,7 @@ from sonic_py_common import multi_asic
 from tabulate import tabulate
 from natsort import natsorted
 from utilities_common import multi_asic as multi_asic_util
+from utilities_common.db import Db
 
 # Constants
 ALL_PRIORITIES = [str(x) for x in range(8)]
@@ -15,8 +16,8 @@ PORT_QOS_MAP_TABLE_NAME = "PORT_QOS_MAP"
 
 
 class Pfc(object):
-    def __init__(self, namespace=None):
-        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+    def __init__(self, namespace=None, db=None):
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace, db=db)
         self.config_db = None
 
         # For unit testing
@@ -164,7 +165,7 @@ def show():
 @multi_asic_util.multi_asic_click_option_namespace
 def configAsym(status, interface, namespace):
     """Configure asymmetric PFC on a given port."""
-    Pfc(namespace).configPfcAsym(interface, status)
+    Pfc(namespace, db=Db(authenticate=True)).configPfcAsym(interface, status)
 
 
 @click.command()
@@ -174,7 +175,7 @@ def configAsym(status, interface, namespace):
 @multi_asic_util.multi_asic_click_option_namespace
 def configPrio(status, interface, priority, namespace):
     """Configure PFC on a given priority."""
-    Pfc(namespace).configPfcPrio(status, interface, priority)
+    Pfc(namespace, db=Db(authenticate=True)).configPfcPrio(status, interface, priority)
 
 
 @click.command()

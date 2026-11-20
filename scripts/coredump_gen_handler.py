@@ -66,7 +66,7 @@ def main():
     parser.add_argument('container', type=str, help='Container Name')
     args = parser.parse_args()
     syslog.openlog(logoption=syslog.LOG_PID)
-    db = SonicV2Connector(use_unix_socket_path=True)
+    db = SonicV2Connector(use_unix_socket_path=True, authenticate=True)
     db.connect(CFG_DB)
     db.connect(STATE_DB)
     file_path = os.path.join(CORE_DUMP_DIR, args.name)

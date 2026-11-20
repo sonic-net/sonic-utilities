@@ -312,7 +312,7 @@ def _get_state_db(namespace=None):
     to the localhost/default DB.
     """
     from swsscommon.swsscommon import SonicV2Connector
-    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace, authenticate=True)
     state_db.connect(state_db.STATE_DB, False)
     return state_db
 

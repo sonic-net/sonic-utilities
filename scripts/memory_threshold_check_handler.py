@@ -13,7 +13,7 @@ EXIT_FAILURE = 1  # General failure occurred, no techsupport is invoked
 def main():
     output = os.environ.get("MONIT_DESCRIPTION")
     syslog.openlog(logoption=syslog.LOG_PID)
-    db = SonicV2Connector(use_unix_socket_path=True)
+    db = SonicV2Connector(use_unix_socket_path=True, authenticate=True)
     db.connect(CFG_DB)
     db.connect(STATE_DB)
     if not output:

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import click
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import ConfigDBConnector
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from utilities_common.general import load_db_config
+from utilities_common.db import Db
 from utilities_common import multi_asic as multi_asic_util
 
 from sonic_py_common import device_info
@@ -49,11 +51,16 @@ class Crm:
     def get_resources_list(self):
         return list(self.resources)
 
-    @multi_asic_util.run_on_multi_asic
     def config(self, attr, val):
         """
         CRM handler for 'config' CLI commands.
         """
+        if self.cfgdb is None:
+            self.multi_asic.db = Db(authenticate=True)
+        self._config(attr, val)
+
+    @multi_asic_util.run_on_multi_asic
+    def _config(self, attr, val):
         if self.cfgdb:
             self.config_db = self.cfgdb
         self.config_db.mod_entry("CRM", 'Config', {attr: val})
@@ -68,7 +75,10 @@ class Crm:
             # Get the namespace list
             namespaces = multi_asic.get_namespace_list()
 
-            configdb = ConfigDBConnector(namespace=namespaces[0])
+            configdb = ConfigDBConnector(
+                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespaces[0]),
+                namespace=namespaces[0],
+            )
             configdb.connect()
 
         crm_info = configdb.get_entry('CRM', 'Config')
@@ -91,7 +101,10 @@ class Crm:
             # Get the namespace list
             namespaces = multi_asic.get_namespace_list()
 
-            configdb = ConfigDBConnector(namespace=namespaces[0])
+            configdb = ConfigDBConnector(
+                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespaces[0]),
+                namespace=namespaces[0],
+            )
             configdb.connect()
 
         crm_info = configdb.get_entry('CRM', 'Config')

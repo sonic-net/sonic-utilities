@@ -29,6 +29,7 @@ from natsort import natsorted
 from tabulate import tabulate
 from utilities_common.netstat import ns_diff, table_as_json, STATUS_NA, format_brate, format_prate, format_number_with_comma
 from utilities_common.cli import json_serial, UserCache
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector
 
 nstat_fields = (
@@ -78,7 +79,7 @@ COUNTERS_RIF_NAME_MAP = "COUNTERS_RIF_NAME_MAP"
 
 class Intfstat(object):
     def __init__(self):
-        self.db = SonicV2Connector(use_unix_socket_path=False)
+        self.db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'))
         self.db.connect(self.db.COUNTERS_DB)
         self.db.connect(self.db.APPL_DB)
 

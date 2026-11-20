@@ -2,6 +2,8 @@ import importlib
 import os
 import sys
 
+import pytest
+
 from click.testing import CliRunner
 from unittest import mock
 
@@ -927,21 +929,26 @@ class TestRouteStatsMultiAsic:
 class TestGetRouteFlowCounterCapability:
     """Pin the two STATE_DB connector branches introduced for multi-ASIC support.
 
-    namespace=None / ''  → legacy SonicV2Connector(host='127.0.0.1')
+    namespace=None / ''  → local transport selection with host='127.0.0.1'
     namespace='asic0'    → SonicV2Connector(use_unix_socket_path=True, namespace='asic0')
                            + SonicDBConfig.initializeGlobalConfig() when not yet initialised
     """
 
+    @pytest.mark.parametrize('use_unix_socket_path', [False, True])
+    @mock.patch('flow_counter_util.route.use_local_redis_socket')
     @mock.patch('flow_counter_util.route.SonicV2Connector')
-    def test_no_namespace_uses_host_connector(self, mock_connector):
+    def test_no_namespace_uses_host_connector(self, mock_connector, select_transport, use_unix_socket_path):
+        select_transport.return_value = use_unix_socket_path
         mock_db = mock.MagicMock()
         mock_connector.return_value = mock_db
         mock_db.get_all.return_value = {FLOW_COUNTER_CAPABILITY_SUPPORT_FIELD: 'true'}
 
         for ns in (None, ''):
             mock_connector.reset_mock()
+            select_transport.reset_mock()
             get_route_flow_counter_capability(ns)
-            mock_connector.assert_called_once_with(host='127.0.0.1')
+            select_transport.assert_called_once_with('STATE_DB')
+            mock_connector.assert_called_once_with(use_unix_socket_path=use_unix_socket_path, host='127.0.0.1')
             mock_db.connect.assert_called_with(mock_db.STATE_DB)
 
     @mock.patch('flow_counter_util.route.SonicDBConfig')

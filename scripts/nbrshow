@@ -38,6 +38,7 @@ import re
 
 from natsort import natsorted
 from sonic_py_common import port_util, multi_asic
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from tabulate import tabulate
 from utilities_common import multi_asic as multi_asic_util
@@ -68,7 +69,7 @@ class NbrBase(object):
 
             self.db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
         else:
-            self.db = SonicV2Connector(host="127.0.0.1")
+            self.db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('ASIC_DB'), host="127.0.0.1")
 
         self.if_name_map, self.if_oid_map = port_util.get_interface_oid_map(self.db)
         self.if_br_oid_map = port_util.get_bridge_port_map(self.db)

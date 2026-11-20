@@ -208,7 +208,7 @@ def buffer_profile_config_update_validator(scope, patch_element):
 
 
 def read_statedb_entry(scope, table, key, field):
-    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, True, scope)
+    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, False, scope)
     tbl = swsscommon.Table(state_db, table)
     return tbl.hget(key, field)[1]
 

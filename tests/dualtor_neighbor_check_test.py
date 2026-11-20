@@ -245,9 +245,54 @@ class TestDualtorNeighborCheck(object):
                 "APPL_DB",
                 dualtor_neighbor_check.REDIS_TIMEOUT_MSECS,
                 False,
-                dualtor_neighbor_check.DEFAULT_NAMESPACE
+                dualtor_neighbor_check.DEFAULT_NAMESPACE,
+                True
             )
             mock_run_neighbor_check.assert_not_called()
+
+    @pytest.mark.parametrize("cached_sha", [None, "previous-script-sha"])
+    def test_main_refreshes_script_cache_using_writer_connection(self, cached_sha, mock_log_functions):
+        args = MagicMock()
+        config_db = MagicMock()
+        appl_db = MagicMock()
+        key = dualtor_neighbor_check.DB_READ_SCRIPT_CONFIG_DB_KEY
+        cache = {} if cached_sha is None else {key: cached_sha}
+        authenticated = False
+        appl_db.get.side_effect = cache.get
+
+        def connect(db_name, timeout, is_tcp, namespace, authenticate=False):
+            nonlocal authenticated
+            authenticated = authenticate
+            return appl_db
+
+        def set_cache(name, value):
+            if not authenticated:
+                raise RuntimeError("NOPERM User default has no permissions to run SET")
+            cache[name] = value
+
+        appl_db.set.side_effect = set_cache
+        tables = {"neighbors": {}, "mux_states": {}, "hw_mux_states": {},
+                  "port_neighbor_modes": {}, "asic_fdb": {}, "asic_route_table": [],
+                  "asic_neigh_table": [], "asic_nexthop_table": {},
+                  "asic_no_host_route_neigh_table": []}
+        with patch("dualtor_neighbor_check.parse_args", return_value=args), \
+                patch("dualtor_neighbor_check.config_logging"), \
+                patch("dualtor_neighbor_check.swsscommon.ConfigDBConnector", return_value=config_db), \
+                patch("dualtor_neighbor_check.swsscommon.DBConnector", side_effect=connect), \
+                patch("dualtor_neighbor_check.get_mux_cable_config",
+                      return_value={"Ethernet4": {"server_ipv4": "192.0.2.2/32"}}), \
+                patch("dualtor_neighbor_check.is_dualtor", return_value=True), \
+                patch("dualtor_neighbor_check.get_if_br_oid_to_port_name_map", return_value={}), \
+                patch("dualtor_neighbor_check.redis_cli",
+                      side_effect=[dualtor_neighbor_check.DB_READ_SCRIPT_SHA1, json.dumps(tables)]) as cli:
+            assert dualtor_neighbor_check.main() == 0
+
+        assert cache == {key: dualtor_neighbor_check.DB_READ_SCRIPT_SHA1}
+        appl_db.set.assert_called_once_with(key, dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
+        assert cli.call_args_list == [
+            call('SCRIPT LOAD "%s"' % dualtor_neighbor_check.DB_READ_SCRIPT),
+            call("EVALSHA %s 0" % dualtor_neighbor_check.DB_READ_SCRIPT_SHA1)
+        ]
 
     def test_main_flushes_and_reruns_inconsistent_neighbors(self, mock_log_functions):
         args = MagicMock()

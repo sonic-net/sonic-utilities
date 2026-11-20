@@ -11,6 +11,27 @@ from mock import patch
 
 class TestValidateFieldOperation:
 
+    @pytest.mark.parametrize("scope", ["", "asic0"])
+    def test_read_statedb_entry_uses_local_socket(self, scope):
+        state_db = mock.Mock()
+        table = mock.Mock()
+        table.hget.return_value = (True, "40000,100000")
+
+        with patch.object(fov.swsscommon.SonicDBConfig, "getDbPort",
+                          side_effect=RuntimeError("transport must be explicit")) as get_port, \
+                patch.object(fov.swsscommon, "DBConnector",
+                             return_value=state_db) as connector, \
+                patch.object(fov.swsscommon, "Table",
+                             return_value=table) as table_factory:
+            value = fov.read_statedb_entry(
+                scope, "PORT_TABLE", "Ethernet0", "supported_speeds")
+
+        assert value == "40000,100000"
+        get_port.assert_not_called()
+        connector.assert_called_once_with("STATE_DB", 0, False, scope)
+        table_factory.assert_called_once_with(state_db, "PORT_TABLE")
+        table.hget.assert_called_once_with("Ethernet0", "supported_speeds")
+
     @patch("generic_config_updater.field_operation_validators.read_statedb_entry", mock.Mock(return_value=""))
     def test_port_config_update_validator_valid_speed_no_state_db(self):
         patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"speed": "234"}}

@@ -56,7 +56,7 @@ def get_config_db_from_context(ctx):
         return ctx.obj.cfgdb
 
     # Fallback: connect to database for namespace
-    return multi_asic.connect_config_db_for_ns(namespace)
+    return multi_asic.connect_config_db_for_ns(namespace, authenticate=True)
 
 
 def get_namespace_from_context(ctx):

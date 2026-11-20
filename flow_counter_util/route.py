@@ -1,5 +1,6 @@
 import os
 import sys
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 
 try:
@@ -60,7 +61,7 @@ def get_route_flow_counter_capability(namespace=None):
             SonicDBConfig.initializeGlobalConfig()
         state_db = SonicV2Connector(use_unix_socket_path=True, namespace=str(namespace))
     else:
-        state_db = SonicV2Connector(host="127.0.0.1")
+        state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host="127.0.0.1")
     state_db.connect(state_db.STATE_DB)
 
     return state_db.get_all(state_db.STATE_DB, '{}|{}'.format(FLOW_COUNTER_CAPABILITY_TABLE, FLOW_COUNTER_CAPABILITY_KEY))

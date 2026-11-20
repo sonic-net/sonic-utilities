@@ -70,10 +70,12 @@ try:
 except KeyError:
     pass
 
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 from sonic_py_common import multi_asic
 from utilities_common import multi_asic as multi_asic_util
+from utilities_common.db import Db
 from utilities_common.general import load_db_config
 
 WRED_PROFILE_TABLE_NAME = "WRED_PROFILE"
@@ -102,12 +104,12 @@ class EcnConfig(object):
     """
     Process ecnconfig
     """
-    def __init__(self, test_filename, verbose, namespace):
+    def __init__(self, test_filename, verbose, namespace, db=None):
         self.ports = []
         self.queues = []
         self.verbose = verbose
         self.namespace = namespace
-        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace, db=db)
         self.config_db = None
         self.num_wred_profiles = 0
 
@@ -137,7 +139,10 @@ class EcnConfig(object):
         Get parameters of a WRED profile
         """
         if self.namespace or not multi_asic.is_multi_asic():
-            db = ConfigDBConnector(namespace=self.namespace)
+            db = ConfigDBConnector(
+                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', self.namespace),
+                namespace=self.namespace,
+            )
             db.connect()
             wred_profiles = db.get_table(WRED_PROFILE_TABLE_NAME)
         else:
@@ -248,12 +253,12 @@ class EcnQ(object):
     """
     Process ecn on/off on queues
     """
-    def __init__(self, queues, test_filename, verbose, namespace):
+    def __init__(self, queues, test_filename, verbose, namespace, db=None):
         self.ports_key = []
         self.queues = queues.split(',')
         self.verbose = verbose
         self.namespace = namespace
-        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace, db=db)
         self.config_db = None
         self.db = None
 
@@ -401,11 +406,11 @@ def main(command, show_config, profile, green_min,
             setOption = (green_min or green_max or yellow_min or yellow_max or red_min or red_max
                          or green_drop_prob or yellow_drop_prob or red_drop_prob)
 
-            prof_cfg = EcnConfig(test_filename, verbose, namespace)
             if show_config:
                 if setOption:
                     raise Exception("Input arguments error. No set options allowed when -l[ist] specified")
 
+                prof_cfg = EcnConfig(test_filename, verbose, namespace)
                 prof_cfg.list()
                 if verbose:
                     print("Total profiles: %d" % prof_cfg.num_wred_profiles)
@@ -413,6 +418,8 @@ def main(command, show_config, profile, green_min,
             elif profile:
                 if not setOption:
                     raise Exception("Input arguments error. Specify at least one threshold parameter to set")
+
+                prof_cfg = EcnConfig(test_filename, verbose, namespace, db=Db(authenticate=True))
 
                 # get current configuration data
                 wred_profile_data = prof_cfg.get_profile_data(profile)
@@ -471,7 +478,8 @@ def main(command, show_config, profile, green_min,
         elif queue:
             if queue.split(',') == ['']:
                 raise Exception("Input arguments error. Specify at least one queue by index")
-            q_ecn = EcnQ(queue, test_filename, verbose, namespace)
+            db = Db(authenticate=True) if command is not None else None
+            q_ecn = EcnQ(queue, test_filename, verbose, namespace, db=db)
             if command is None:
                 q_ecn.get()
             else:

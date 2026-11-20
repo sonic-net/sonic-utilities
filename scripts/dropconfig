@@ -17,6 +17,7 @@ from datetime import datetime
 from utilities_common import constants
 from sonic_py_common import multi_asic
 from utilities_common import multi_asic as multi_asic_util
+from utilities_common.db import Db
 
 from tabulate import tabulate
 
@@ -466,7 +467,7 @@ class DropConfig(object):
 
 class DropConfigWrapper(object):
     """A wrapper to execute dropconfig cmd over the correct namespaces"""
-    def __init__(self, namespace):
+    def __init__(self, namespace, db=None):
         self.namespace = namespace
         if namespace is not None and namespace not in multi_asic.get_namespace_list():
             print('Encountered error, namespace not recognized: {}. Valid namespaces {}'.format(namespace,
@@ -474,7 +475,7 @@ class DropConfigWrapper(object):
             sys.exit(1)
 
         # Initialize the multi-asic namespace
-        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace_option=namespace)
+        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace_option=namespace, db=db)
         self.db = None
         self.config_db = None
 
@@ -613,7 +614,13 @@ Examples:
 
     reasons = deserialize_reason_list(drop_reasons)
 
-    dropconfig_wrapper = DropConfigWrapper(namespace)
+    db = None
+    if command in (
+        'install', 'uninstall', 'add', 'remove',
+        'enable_drop_monitor', 'disable_drop_monitor'
+    ):
+        db = Db(authenticate=True)
+    dropconfig_wrapper = DropConfigWrapper(namespace, db=db)
     dropconfig_wrapper.run(command,
                            name,
                            alias,

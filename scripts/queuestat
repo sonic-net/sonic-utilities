@@ -17,6 +17,7 @@ from natsort import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic, device_info
 from redis import Redis, exceptions
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon import swsscommon
 
 # mock the redis for unit test purposes #
@@ -227,7 +228,7 @@ class Queuestat(object):
         self.voq_stats = {}
         self.namespace = namespace
         if namespace is None:
-            self.db = SonicV2Connector(use_unix_socket_path=False)
+            self.db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'))
             self.db.connect(self.db.COUNTERS_DB)
         self.namespace_str = f" for {namespace}" if namespace else ''
 

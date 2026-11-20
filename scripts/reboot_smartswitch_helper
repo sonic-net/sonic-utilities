@@ -44,7 +44,7 @@ function get_num_dpus()
 function get_dpu_ip()
 {
     local DPU_NAME=$1
-    sonic-db-cli CONFIG_DB HGET "DHCP_SERVER_IPV4_PORT|bridge-midplane|${DPU_NAME}" "ips@"
+    sonic-db-cli -s CONFIG_DB HGET "DHCP_SERVER_IPV4_PORT|bridge-midplane|${DPU_NAME}" "ips@"
 }
 
 # Function to retrieve configured and common GNMI ports in preference order
@@ -52,8 +52,8 @@ function get_gnmi_ports()
 {
     local DPU_NAME=${1:-dpu0}
     local configured_port
-    for k in $(sonic-db-cli CONFIG_DB keys "DPU|*$DPU_NAME"); do
-        configured_port=$(sonic-db-cli CONFIG_DB hget "$k" 'gnmi_port')
+    for k in $(sonic-db-cli -s CONFIG_DB keys "DPU|*$DPU_NAME"); do
+        configured_port=$(sonic-db-cli -s CONFIG_DB hget "$k" 'gnmi_port')
         if [ -n "$configured_port" ]; then
             break
         fi

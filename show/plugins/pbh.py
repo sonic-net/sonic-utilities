@@ -12,6 +12,7 @@ import tabulate
 import natsort
 import json
 import utilities_common.cli as clicommon
+from sonic_py_common._redis_transport import use_local_redis_socket
 from swsscommon.swsscommon import SonicV2Connector
 
 COUNTER_PACKETS_ATTR = "SAI_ACL_COUNTER_ATTR_PACKETS"
@@ -456,7 +457,7 @@ def read_acl_rule_counter_map(db_connector):
 def read_pbh_counters(pbh_rules) -> dict:
     pbh_counters = {}
 
-    db_connector = SonicV2Connector(use_unix_socket_path=False)
+    db_connector = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'))
     db_connector.connect(db_connector.COUNTERS_DB)
     counters_db_separator = db_connector.get_db_separator(db_connector.COUNTERS_DB)
     rule_to_counter_map = read_acl_rule_counter_map(db_connector)
