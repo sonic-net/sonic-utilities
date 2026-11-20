@@ -1188,6 +1188,32 @@ class TestLoggerRequireManualRefreshMigrator(object):
             dbmgtr.migrate_logger_require_manual_refresh()
         mock_set.assert_not_called()
 
+    def test_read_failure_is_logged_and_does_not_raise(self):
+        dbmgtr = self.migrator()
+        with mock.patch.object(dbmgtr.configDB, 'get_table', side_effect=RuntimeError('boom')), \
+                mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set, \
+                mock.patch('db_migrator.log') as mock_log:
+            dbmgtr.migrate_logger_require_manual_refresh()
+        mock_set.assert_not_called()
+        mock_log.log_error.assert_called_once()
+
+    def test_row_write_failure_does_not_stop_other_rows(self):
+        dbmgtr = self.migrator()
+        real_set = dbmgtr.configDB.set_entry
+
+        def set_entry(table, key, value):
+            if key == 'xcvrd':
+                raise RuntimeError('boom')
+            return real_set(table, key, value)
+
+        with mock.patch.object(dbmgtr.configDB, 'set_entry', side_effect=set_entry), \
+                mock.patch('db_migrator.log') as mock_log:
+            dbmgtr.migrate_logger_require_manual_refresh()
+        mock_log.log_error.assert_called_once()
+        logger = dbmgtr.configDB.get_table('LOGGER')
+        assert logger['xcvrd'] == {'LOGLEVEL': 'NOTICE', 'require_manual_refresh': 'true'}
+        assert 'only_refresh' not in logger
+
     def test_wired_into_version_202605_01(self):
         dbmgtr = self.migrator()
         with mock.patch.object(dbmgtr, 'migrate_logger_require_manual_refresh') as migrate:

@@ -825,16 +825,23 @@ class DBMigrator():
 
     def migrate_logger_require_manual_refresh(self):
         """
-        Drop require_manual_refresh from LOGGER rows. A process wrote it to say
-        it reloads its log level on SIGHUP; that is process state, which now
-        lives in STATE_DB LOGGER_TABLE. An entry left without fields is removed.
+        Drop require_manual_refresh from LOGGER rows; it is process state, not
+        operator intent. A row left with no fields is removed.
         """
-        for key, entry in self.configDB.get_table('LOGGER').items():
+        try:
+            table = self.configDB.get_table('LOGGER')
+        except Exception as e:
+            log.log_error(f"Failed to read LOGGER table: {str(e)}")
+            return
+        for key, entry in table.items():
             if 'require_manual_refresh' not in entry:
                 continue
             fields = {f: v for f, v in entry.items() if f != 'require_manual_refresh'}
-            self.configDB.set_entry('LOGGER', key, fields or None)
-            log.log_info(f"Dropped require_manual_refresh from LOGGER|{key}")
+            try:
+                self.configDB.set_entry('LOGGER', key, fields or None)
+                log.log_info(f"Dropped require_manual_refresh from LOGGER|{key}")
+            except Exception as e:
+                log.log_error(f"Failed to drop require_manual_refresh from LOGGER|{key}: {str(e)}")
 
     def migrate_sflow_table(self):
         """
