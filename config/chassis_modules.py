@@ -35,6 +35,7 @@ class StateDBHelper:
         client = self.db.get_redis_client("STATE_DB")
         return client.hdel(redis_key, field)
 
+
 #
 # 'chassis_modules' group ('config chassis_modules ...')
 #
@@ -42,6 +43,7 @@ class StateDBHelper:
 def chassis():
     """Configure chassis commands group"""
     pass
+
 
 @chassis.group()
 def modules():
@@ -55,6 +57,7 @@ def ensure_statedb_connected(db):
         chassisdb.connect("STATE_DB")
         db.statedb = StateDBHelper(chassisdb)
 
+
 def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb
     fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name)
@@ -67,6 +70,7 @@ def get_config_module_state(db, chassis_module_name):
         # On BMC, SWITCH-HOST default is 'down' to keep it powered off on boot
         return 'down'
     return 'up'
+
 
 #
 # Name: check_config_module_state_with_timeout
@@ -92,6 +96,23 @@ def get_asic_list_from_db(chassisdb, chassis_module_name):
             asic_id = int(re.search(r"(\d+)$", asic_key).group())
             asic_list.append(asic_id)
     return asic_list
+
+
+# chassisd ModuleUpdater._get_module_info publishes this field name.
+CHASSIS_MODULE_SHUTDOWN_ALLOWED_FIELD = 'shutdown_allowed'
+
+
+def get_shutdown_allowed_from_db(db, chassis_module_name):
+    """Read shutdown_allowed before shutdown starts.
+
+    module_db_update stores _get_module_info in STATE_DB CHASSIS_MODULE_TABLE.
+    This check runs before fabric_module_set_admin_status, so it opens that
+    database itself.
+    """
+    statedb = db.db
+    statedb.connect("STATE_DB")
+    key = "CHASSIS_MODULE_TABLE|" + chassis_module_name
+    return statedb.get("STATE_DB", key, CHASSIS_MODULE_SHUTDOWN_ALLOWED_FIELD)
 
 
 def wait_for_service_inactive(service, timeout_secs=SERVICE_STOP_TIMEOUT_SECS):
@@ -176,6 +197,7 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
             click.echo("Start swss@{} and peer services".format(asic))
             clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
 
+
 #
 # 'shutdown' subcommand ('config chassis_modules shutdown ...')
 #
@@ -197,6 +219,11 @@ def shutdown_chassis_module(db, chassis_module_name):
     if not chassis_module_name.startswith(allowed_prefixes):
         allowed_prefixes_str = "', '".join(allowed_prefixes)
         ctx.fail(f"'module_name' has to begin with '{allowed_prefixes_str}'")
+
+    shutdown_allowed = get_shutdown_allowed_from_db(db, chassis_module_name)
+    if shutdown_allowed is None or str(shutdown_allowed).lower() != 'true':
+        click.echo(f"Shutdown is not allowed for module {chassis_module_name}")
+        return
 
     if get_config_module_state(db, chassis_module_name) == 'down':
         click.echo(f"Module {chassis_module_name} is already in down state")
@@ -232,6 +259,7 @@ def shutdown_chassis_module(db, chassis_module_name):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'down'):
             fabric_module_set_admin_status(db, chassis_module_name, 'down')
 
+
 #
 # 'startup' subcommand ('config chassis_modules startup ...')
 #
@@ -253,6 +281,11 @@ def startup_chassis_module(db, chassis_module_name):
     if not chassis_module_name.startswith(allowed_prefixes):
         allowed_prefixes_str = "', '".join(allowed_prefixes)
         ctx.fail(f"'module_name' has to begin with '{allowed_prefixes_str}'")
+        return
+
+    shutdown_allowed = get_shutdown_allowed_from_db(db, chassis_module_name)
+    if shutdown_allowed is None or str(shutdown_allowed).lower() != 'true':
+        click.echo(f"Startup is not allowed for module {chassis_module_name}")
         return
 
     if get_config_module_state(db, chassis_module_name) == 'up':
