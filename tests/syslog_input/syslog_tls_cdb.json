@@ -1,0 +1,41 @@
+{
+    "SYSLOG_SERVER|2.2.2.2": {
+        "source": "1.1.1.1",
+        "port": "514",
+        "vrf": "default"
+    },
+    "SYSLOG_SERVER|10.0.0.5": {
+        "port": "6514",
+        "protocol": "tls",
+        "transport_security": "true",
+        "tls_profile_id": "siem-east",
+        "tls_permitted_peers": "syslog-east.example.com"
+    },
+    "SYSLOG_SERVER|10.0.0.6": {
+        "port": "6514",
+        "protocol": "tls",
+        "transport_security": "true",
+        "tls_profile_id": "siem-west",
+        "tls_permitted_peers": "syslog-west.example.com,*.west.example.com"
+    },
+    "SYSLOG_SERVER|10.0.0.7": {
+        "port": "6514",
+        "protocol": "tls",
+        "transport_security": "true",
+        "tls_profile_id": "siem-new",
+        "tls_permitted_peers": "syslog-new.example.com"
+    },
+    "SYSLOG_SERVER|10.0.0.8": {
+        "port": "6514",
+        "protocol": "tls",
+        "transport_security": "true",
+        "tls_profile_id": "no-certs",
+        "tls_permitted_peers": "syslog-nocerts.example.com"
+    },
+    "SYSLOG_SERVER|10.0.0.9": {
+        "port": "6514",
+        "protocol": "tls",
+        "transport_security": "true",
+        "tls_profile_id": "no-peers"
+    }
+}
