@@ -54,9 +54,6 @@
         },
         "GNMI": {
             "services_to_validate": [ "gnmi-service" ]
-        },
-        "TELEMETRY": {
-            "services_to_validate": [ "telemetry-service" ]
         }
     },
     "services": {
@@ -86,9 +83,6 @@
         },
         "gnmi-service": {
             "validate_commands": [ "generic_config_updater.services_validator.gnmi_validator" ]
-        },
-        "telemetry-service": {
-            "validate_commands": [ "generic_config_updater.services_validator.telemetry_validator" ]
         }
     }
 }
