@@ -45,15 +45,27 @@ def display_system_health_summary(stat, led):
     click.echo("System status summary\n\n  System status LED  " + led)
     services_list = []
     fs_list = []
-    device_list =[]
+    device_list = []
+    bmc_list = []
+    bmc_last_updated = None
+    bmc_refresh_interval = None
     for category, elements in stat.items():
         for element in elements:
+            if category == 'BMC' and element in ('BMC-LastUpdate', 'BMC-RefreshInterval'):
+                msg = elements[element].get('message', '')
+                if msg.startswith('Last updated: '):
+                    bmc_last_updated = msg[len('Last updated: '):]
+                elif msg.startswith('BMC Refresh Interval: '):
+                    bmc_refresh_interval = msg[len('BMC Refresh Interval: '):]
+                continue
             if elements[element]['status'] != "OK":
                 if category == 'Services':
                     if 'Accessible' in elements[element]['message']:
                         fs_list.append(element)
                     else:
                         services_list.append(element)
+                elif category == 'BMC':
+                    bmc_list.append('{}: {}'.format(element, elements[element]['message']))
                 else:
                     device_list.append(elements[element]['message'])
     if services_list or fs_list:
@@ -72,6 +84,19 @@ def display_system_health_summary(stat, led):
             click.echo('\n'.join(("\t     " + x) for x in device_list[1:]))
     else:
         click.echo("  Hardware:\n    Status: OK")
+    if 'BMC' in stat:
+        if bmc_list:
+            click.echo("  BMC:\n    Status: Not OK")
+        else:
+            click.echo("  BMC:\n    Status: OK")
+        if bmc_last_updated:
+            click.echo("    Last Updated: " + bmc_last_updated)
+        if bmc_refresh_interval:
+            click.echo("    BMC Refresh Interval: " + bmc_refresh_interval)
+        if bmc_list:
+            click.echo("    Reasons: " + bmc_list[0])
+            if len(bmc_list) > 1:
+                click.echo('\n'.join(("\t     " + x) for x in bmc_list[1:]))
 
 def display_monitor_list(stat):
     click.echo('\nSystem services and devices monitor list\n')
