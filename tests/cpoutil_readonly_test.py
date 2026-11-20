@@ -357,14 +357,63 @@ class TestDirectPlatformApiCommands(object):
         table = invoke(["show", "els", "lpmode", "0"])
         assert "Off" in table.output
 
-    def test_els_lpmode_rejects_platform_hook_strings(self):
-        with mock.patch.object(
-                self.cpo,
-                "get_lpmode",
-                return_value="Low Power Mode"):
-            result = invoke(["show", "els", "lpmode", "0", "--json"])
-        assert result.exit_code != 0
-        assert "ELS get_lpmode returned invalid data" in result.output
+    @pytest.mark.parametrize("json_output", [False, True])
+    @pytest.mark.parametrize("invalid", [None, "Low Power Mode"])
+    def test_els_lpmode_keeps_results_after_unavailable_state(self, json_output, invalid):
+        resources = []
+        for resource_id, lpmode in [("els0", invalid), ("els1", False), ("els2", True)]:
+            endpoint = mock.Mock(get_lpmode=mock.Mock(return_value=lpmode))
+            cpo = mock.Mock(elsfp=endpoint, get_presence=mock.Mock(return_value=True))
+            resources.append((resource_id, cpo))
+        args = ["show", "els", "lpmode"] + (["--json"] if json_output else [])
+        with mock.patch.object(cpoutil, "get_resource_cpo_objects", return_value=resources):
+            result = invoke(args)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            assert json.loads(result.output) == {"els0": None, "els1": False, "els2": True}
+        else:
+            assert [line.split() for line in result.output.splitlines()[-3:]] == [
+                ["ELS0", "N/A"], ["ELS1", "Off"], ["ELS2", "On"],
+            ]
+
+    @pytest.mark.parametrize("command, value, displayed", [
+        ("lpmode", False, "Off"),
+        ("status", "High power mode", "High power mode"),
+        ("temperature", 32.5, "32.5"),
+    ])
+    @pytest.mark.parametrize("json_output", [False, True])
+    @pytest.mark.parametrize("presence_supported", [True, False])
+    def test_els_queries_use_cpo_presence(self, command, value, displayed, json_output, presence_supported):
+        absent = mock.Mock(spec=["get_lpmode", "get_api"])
+        absent.get_lpmode.side_effect = AssertionError("lpmode read on absent ELS")
+        absent.get_api.side_effect = AssertionError("API access on absent ELS")
+        absent_cpo = mock.Mock(elsfp=absent, get_presence=mock.Mock(return_value=False))
+        present = mock.Mock(spec=["get_lpmode", "get_api"])
+        present.get_lpmode.return_value = value
+        present.get_api.return_value.get_module_state.return_value = value
+        present.get_api.return_value.get_module_temperature.return_value = value
+        present_cpo = mock.Mock(elsfp=present, get_presence=mock.Mock(return_value=True))
+        if not presence_supported:
+            present_cpo.get_presence.side_effect = NotImplementedError
+        resources = [
+            ("els0", absent_cpo),
+            ("els1", present_cpo),
+        ]
+        arguments = ["show", "els", command]
+        if json_output:
+            arguments.append("--json")
+        with mock.patch.object(cpoutil, "get_resource_cpo_objects", return_value=resources):
+            result = invoke(arguments)
+        assert result.exit_code == 0, result.output
+        absent_cpo.get_presence.assert_called_once_with()
+        present_cpo.get_presence.assert_called_once_with()
+        absent.get_lpmode.assert_not_called()
+        absent.get_api.assert_not_called()
+        if json_output:
+            assert json.loads(result.output) == {"els0": None, "els1": value}
+        else:
+            assert any("ELS0" in line and "Not Present" in line for line in result.output.splitlines())
+            assert any("ELS1" in line and displayed in line for line in result.output.splitlines())
 
     def test_interface_dom_calls_public_oe_and_els_apis(self):
         result = invoke([
@@ -622,34 +671,128 @@ class TestDirectPlatformApiCommands(object):
         values = json.loads(result.output)["Ethernet0"]
         assert values["Data Path State Indicator"]["lane00"] == \
             "DataPathActivated"
-        assert values["ELS Status"] == {
-            "module_low_power_state": False,
-            "interrupt_status": True,
-        }
+        assert "ELS Status" not in values
         assert values["ELS Lane State"] == {
             "lane00": "Active",
             "lane01": "Inactive",
         }
 
-    def test_els_status_preserves_api_strings(self):
+    @pytest.mark.parametrize("resource", ["oe", "els"])
+    @pytest.mark.parametrize("failure", ["missing", "unimplemented", "factory"])
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_lane_status_keeps_the_other_endpoint(self, resource, failure, json_output):
+        oe_api, els_api = FakeApi(), FakeApi()
+        endpoints = {
+            "oe": mock.Mock(get_api=mock.Mock(return_value=oe_api)),
+            "els": mock.Mock(get_api=mock.Mock(return_value=els_api)),
+        }
+        api = oe_api if resource == "oe" else els_api
+        method = "get_datapath_state" if resource == "oe" else "get_per_lane_state"
+        if failure == "factory":
+            endpoints[resource].get_api.side_effect = NotImplementedError()
+        elif failure == "unimplemented":
+            setattr(api, method, mock.Mock(side_effect=NotImplementedError()))
+        else:
+            names = ["get_per_lane_state", "xcvr_eeprom"] if resource == "oe" else [
+                "get_datapath_state", "xcvr_eeprom"]
+            partial = mock.Mock(spec=names)
+            partial.xcvr_eeprom = api.xcvr_eeprom
+            for name in names:
+                if name != "xcvr_eeprom":
+                    getattr(partial, name).side_effect = getattr(api, name)
+            endpoints[resource].get_api.return_value = partial
+        self.cpo.oe = endpoints["oe"]
+        self.cpo.elsfp = endpoints["els"]
+        self.cpo.elsfp.get_presence.return_value = True
+        arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+        if json_output:
+            arguments.append("--json")
+        result = invoke(arguments)
+        assert result.exit_code == 0, result.output
+        error = "OE Datapath State Error" if resource == "oe" else "ELS Lane State Error"
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert record[error] == "Not supported"
+            assert "ELS Status" not in record
+            if resource == "oe":
+                assert record["Data Path State Indicator"] == {}
+                assert record["ELS Lane State"] == {"lane00": "Active", "lane01": "Inactive"}
+            else:
+                assert record["ELS Lane State"] == {}
+                assert record["Data Path State Indicator"]["lane00"] == "DataPathActivated"
+        else:
+            assert result.output.count("OE datapath state:") == 1
+            assert result.output.count("ELS lane state:") == 1
+            assert "Not supported" in result.output
+            assert ("Active" if resource == "oe" else "DataPathActivated") in result.output
+
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_lane_status_marks_both_unsupported_readers(self, json_output):
+        with mock.patch.object(self.cpo.api, "get_datapath_state", side_effect=NotImplementedError()), \
+                mock.patch.object(self.cpo.api, "get_per_lane_state", side_effect=NotImplementedError()):
+            arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+            if json_output:
+                arguments.append("--json")
+            result = invoke(arguments)
+        assert result.exit_code == 0, result.output
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert record["OE Datapath State Error"] == "Not supported"
+            assert record["ELS Lane State Error"] == "Not supported"
+            assert record["Data Path State Indicator"] == record["ELS Lane State"] == {}
+        else:
+            assert result.output.count("Not supported") == 2
+
+    @pytest.mark.parametrize("json_output", [False, True])
+    def test_lane_status_keeps_oe_when_els_is_absent(self, json_output):
+        absent = mock.Mock(spec=["get_api"])
+        absent.get_api.side_effect = AssertionError("API access on absent ELS")
+        self.cpo.elsfp = absent
+        self.cpo.get_presence = mock.Mock(return_value=False)
+        args = ["show", "interface", "lane-status", "-p", "Ethernet0"]
+        if json_output:
+            args.append("--json")
+        result = invoke(args)
+        assert result.exit_code == 0, result.output
+        self.cpo.get_presence.assert_called_once_with()
+        absent.get_api.assert_not_called()
+        if json_output:
+            record = json.loads(result.output)["Ethernet0"]
+            assert record["Data Path State Indicator"]["lane00"] == "DataPathActivated"
+            assert record["ELS Lane State"] == {}
+            assert record["ELS Lane State Error"] == "Not Present"
+        else:
+            assert "DataPathActivated" in result.output
+            assert "Not Present" in result.output
+
+    def test_lane_status_reads_els_when_cpo_presence_is_unsupported(self):
+        self.cpo.get_presence = mock.Mock(side_effect=NotImplementedError)
+        result = invoke(["show", "interface", "lane-status", "-p", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        record = json.loads(result.output)["Ethernet0"]
+        assert record["ELS Lane State"]
+        assert "ELS Lane State Error" not in record
+
+    def test_els_lane_state_preserves_api_strings(self):
         with mock.patch.object(
                 self.cpo.api,
-                "get_elsfp_status",
+                "get_per_lane_state",
                 return_value={
-                    "module_low_power_state": "High power mode",
-                    "interrupt_status": "Interrupt event cleared",
+                    "LaneState1": "Output on",
+                    "LaneState2": "Output off",
                 }):
             result = invoke([
                 "show", "interface", "lane-status", "-p", "Ethernet0", "--json"
             ])
-        status = json.loads(result.output)["Ethernet0"]["ELS Status"]
+        assert result.exit_code == 0, result.output
+        status = json.loads(result.output)["Ethernet0"]["ELS Lane State"]
         assert status == {
-            "module_low_power_state": "High power mode",
-            "interrupt_status": "Interrupt event cleared",
+            "lane00": "Output on",
+            "lane01": "Output off",
         }
 
     @pytest.mark.parametrize("json_output", [True, False])
-    def test_els_status_preserves_fields_and_only_maps_text_labels(self, json_output):
+    def test_els_module_fields_are_not_read_or_displayed(self, json_output):
         api_status = {
             "module_state": "ModuleReady",
             "module_fault_cause": "No Fault",
@@ -661,33 +804,34 @@ class TestDirectPlatformApiCommands(object):
         arguments = ["show", "interface", "lane-status", "-p", "Ethernet0"]
         if json_output:
             arguments.append("--json")
-        with mock.patch.object(self.cpo.api, "get_elsfp_status", return_value=api_status):
+        with mock.patch.object(self.cpo.api, "get_elsfp_status", return_value=api_status) as aggregate:
             result = invoke(arguments)
         assert result.exit_code == 0, result.output
+        aggregate.assert_not_called()
         if json_output:
-            assert json.loads(result.output)["Ethernet0"]["ELS Status"] == api_status
+            assert "ELS Status" not in json.loads(result.output)["Ethernet0"]
         else:
             for label in ("Module State", "Module Fault Cause", "Module Low Power State",
                           "Interrupt Status", "enable_lane1", "vendor_status"):
-                assert label in result.output
-            assert "High power mode" in result.output
-            assert "Interrupt event cleared" in result.output
+                assert label not in result.output
+            assert "ELS lane state:" in result.output
         assert api_status["module_low_power_state"] == "High power mode"
         assert api_status["vendor_status"] == {"code": 3}
 
     @pytest.mark.parametrize("status", [None, {}, False, "ModuleReady"])
-    def test_els_status_rejects_missing_or_invalid_result(self, status):
-        with mock.patch.object(self.cpo.api, "get_elsfp_status", return_value=status):
+    def test_els_lane_state_rejects_missing_or_invalid_result(self, status):
+        with mock.patch.object(self.cpo.api, "get_per_lane_state", return_value=status):
             result = invoke(["show", "interface", "lane-status", "-p", "Ethernet0", "--json"])
         assert result.exit_code != 0
-        assert "ELSFP status API returned no usable data" in result.output
-        assert "Ethernet0" in result.output
+        assert ("Expected per-lane data" in result.output
+                or "did not return data for ELS laser" in result.output)
 
     def test_els_status_requires_independent_module_state(self):
         els_api = mock.Mock(spec=["get_module_state"])
         els_api.get_module_state.side_effect = NotImplementedError(
             "Independent ELS module state is not implemented")
-        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api))
+        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api),
+                                  get_presence=mock.Mock(return_value=True))
         missing = invoke(["show", "els", "status", "0", "--json"])
         assert missing.exit_code != 0
         assert (
@@ -726,6 +870,9 @@ class TestDirectPlatformApiCommands(object):
 
 
 class DomOptoeEndpoint(cpoutil.OptoeEepromReadWriteMixin):
+    def get_presence(self):
+        return True
+
     def __init__(self, path):
         self.path = str(path)
 
@@ -962,7 +1109,7 @@ class TestLaneStatusEepromSnapshot:
 
     @pytest.mark.parametrize("port", [None, "Ethernet0"])
     @pytest.mark.parametrize("json_output", [False, True])
-    def test_preserves_status_and_reduces_shared_oe_els_reads(self, tmp_path, port, json_output):
+    def test_preserves_lane_states_and_reuses_shared_oe_els_reads(self, tmp_path, port, json_output):
         from sonic_platform_base.sonic_xcvr.api.public.cmis import CmisApi
         from sonic_platform_base.sonic_xcvr.api.public.elsfp import ElsfpApi
         from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
@@ -1002,13 +1149,18 @@ class TestLaneStatusEepromSnapshot:
             after_reads = opened.call_count
         assert baseline.exit_code == optimized.exit_code == 0, (baseline.output, optimized.output)
         assert baseline.output == optimized.output
-        assert after_reads < before_reads
+        if port is None:
+            assert after_reads < before_reads
+        else:
+            # Without the module aggregate, a single port has no repeated reads.
+            assert after_reads == before_reads
         for endpoint in (oe, els):
             assert endpoint.api.xcvr_eeprom.reader == endpoint.read_eeprom
         if json_output:
             records = json.loads(optimized.output)
             assert set(records) == ({"Ethernet0"} if port else {"Ethernet0", "Ethernet1"})
-            assert records["Ethernet0"]["ELS Status"]["module_state"] == "ModuleLowPwr"
+            assert "ELS Status" not in records["Ethernet0"]
+            assert set(records["Ethernet0"]["ELS Lane State"]) == {"lane00", "lane01"}
 
 
 class TestReadOptimizations:
@@ -1036,8 +1188,8 @@ class TestReadOptimizations:
     def test_els_lpmode_does_not_treat_unavailable_state_as_full_power(self, state):
         with mock.patch.object(self.cpo, "get_lpmode", return_value=state):
             result = invoke(["show", "els", "lpmode", "0", "--json"])
-        assert result.exit_code != 0
-        assert "Traceback" not in result.output
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {"els0": None}
 
     @pytest.mark.parametrize("port", [None, "Ethernet0"])
     @pytest.mark.parametrize("json_output", [False, True])

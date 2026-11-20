@@ -17196,7 +17196,9 @@ These commands display per-interface CPO information. When `-p/--port` is omitte
 
 `show interface speed application` displays four columns: Interface, Lane, Configured Application, and Active Application. Each application is displayed as `AppSel: Host interface / Media interface`, using the complete descriptions returned by the public API. It does not infer a numeric link speed. JSON preserves the complete `Application Advertisement` and the per-lane AppSel IDs under `Application Select Controls` and `Active Application Control Set`. Breakout subports display only their own lanes.
 
-For a breakout subport, `map` and `lane-status` identify its ELS lasers only when `cpo.json` provides `laser_to_asic_lane_mapping`; otherwise the lasers are shown as `N/A (needs laser_to_asic_lane_mapping)`. `lane-status` shows a lane's laser and laser state only when the topology associates that lane with a laser.
+`show interface lane-status` displays two tables: OE datapath state per interface lane, and ELS lane state per interface laser. It does not query or display ELS module status. JSON retains `Data Path State Indicator`, `ELS Lane State`, and topology metadata, without an `ELS Status` section. A laser shared by multiple OE lanes appears once per interface in the ELS table; the two tables do not imply a one-to-one lane-to-laser association. OE and ELS are queried independently. An unsupported reader is marked `Not supported` in its table, while the other reader's results are retained. JSON leaves the unsupported result map empty and adds `OE Datapath State Error` or `ELS Lane State Error`. Unsupported readers do not make the command fail; invalid returned data and topology errors still fail.
+
+For a breakout subport, `map` and `lane-status` identify its ELS lasers only when `cpo.json` provides `laser_to_asic_lane_mapping`; otherwise the lasers are shown as `N/A (needs laser_to_asic_lane_mapping)`. OE datapath rows are still shown when the interface's laser selection is unresolved; ELS lane states are not guessed.
 
 - Usage:
   ```
@@ -17214,6 +17216,22 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
   -----------  ------  -------------------
   Ethernet0    Lane 1  false
   Ethernet0    Lane 2  true
+  ```
+
+- Lane-status example:
+  ```
+  admin@sonic:~$ sudo cpoutil show interface lane-status -p Ethernet0
+  OE datapath state:
+  Interface    Lane    Data Path State
+  -----------  ------  -----------------
+  Ethernet0    Lane 1  DataPathActivated
+  Ethernet0    Lane 2  DataPathActivated
+
+  ELS lane state:
+  Interface    ELS    Laser  ELS Lane State    Shared
+  -----------  -----  -----  ----------------  --------
+  Ethernet0    ELS0       0  Output on         No
+  Ethernet0    ELS0       1  Output on         No
   ```
 
 **cpoutil show oe lpmode|status|temperature**
@@ -17296,7 +17314,11 @@ These commands read or write raw EEPROM data of an OE, an ELS, or the OE/ELS map
 
 The `-i, --index` option requires an integer OE or ELS index, for example `-i 0`. Device names such as `oe0` and `els0` are not accepted.
 
-Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages accept offsets 0x80-0xFF. ELS access is limited to the ELS's own pages.
+Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages accept offsets 0x80-0xFF. Each operation must stay within the CMIS page boundary.
+
+OE and ELS raw EEPROM access is limited to the pages and memory ranges declared in their respective memory maps. Where both endpoints address the same hardware page, any range allowed by these checks can be accessed through either endpoint, including fields used by the other endpoint.
+
+`write-eeprom` prints `OK` when the platform's EEPROM write method returns a successful result. The command does not read the data back, so `OK` does not confirm that the device stored the new value. A write to a read-only address can report `OK` if the platform reports success even though the device ignores the write.
 
 - Usage:
   ```

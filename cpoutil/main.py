@@ -36,7 +36,6 @@ from cpoutil.helper import (
     CPO_DOM_VALUE_UNIT_MAP,
     CPO_DOM_MODULE_THRESHOLD_UNIT_MAP,
     ELS_DOM_MONITOR_MAP,
-    ELS_STATUS_FIELD_MAP,
     ELS_THRESHOLD_MAP,
     ELS_DOM_MONITOR_UNIT_MAP,
     ELS_THRESHOLD_UNIT_MAP,
@@ -48,6 +47,7 @@ from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
 
 ERROR_PERMISSIONS = 1
 ERROR_INVALID_RESOURCE = 3
+ELS_NOT_PRESENT = "Not Present"
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Keep one process-wide chassis, active port configuration, topology, and CPO
@@ -306,11 +306,13 @@ def get_els_api(cpo, label):
     return api
 
 
-def get_cpo_presence(cpo, label):
-    """Read virtual-module presence without inferring it from an endpoint."""
+def get_cpo_presence(cpo, label, *, allow_unsupported=False):
+    """Read associated ELSFP presence through the CPO port object."""
     try:
         present = cpo.get_presence()
     except (NotImplementedError, AttributeError) as exc:
+        if allow_unsupported:
+            return None
         raise CpoCommandError(
             "CPO presence is not implemented for '{}'".format(label)
         ) from exc
@@ -935,77 +937,50 @@ def print_lane_status_records(records, json_output):
         return
 
     lane_rows = []
-    status_rows = []
+    laser_rows = []
     for interface, values in records.items():
         lane_states = values.get("Data Path State Indicator", {})
-        lanes = sorted(lane_states, key=_natural_sort_key)
         lasers = values.get("ELS Lasers", [])
-        lane_lasers = values.get("Lane Lasers", {})
         els_lane_states = values.get("ELS Lane State", {})
         shared = set(values.get("Shared ELS Lasers", []))
         els_id = values.get("ELS", "N/A")
-        for lane in lanes:
-            # Use only the topology's lane-to-laser association; never infer
-            # it from row positions.
-            laser = lane_lasers.get(lane)
-            if laser is None:
-                laser_display, laser_state, shared_display = "N/A", "N/A", "N/A"
-            else:
-                laser_display = laser
-                laser_state = els_lane_states.get("lane{:02d}".format(laser), "N/A")
-                shared_display = "Yes" if laser in shared else "No"
+        oe_error = values.get("OE Datapath State Error")
+        els_error = values.get("ELS Lane State Error")
+        if oe_error:
+            lane_rows.append((interface, "N/A", oe_error))
+        for lane in sorted(lane_states, key=_natural_sort_key):
             lane_rows.append((
                 interface,
                 _display_field(lane),
                 lane_states[lane],
-                els_id,
-                laser_display,
-                laser_state,
-                shared_display,
-            ))
-        if lasers is None:
-            status_rows.append((interface, els_id, "Lasers", UNRESOLVED_LASERS))
-        elif lasers and any(lane_lasers.get(lane) is None for lane in lanes):
-            status_rows.append((
-                interface, els_id, "Lasers (per-lane association unavailable)",
-                ", ".join(
-                    "{}: {}".format(laser, els_lane_states.get("lane{:02d}".format(laser), "N/A"))
-                    for laser in lasers
-                ),
             ))
 
-        status = values.get("ELS Status")
-        if isinstance(status, dict):
-            for field in sorted(status, key=_natural_sort_key):
-                status_rows.append((
-                    interface,
-                    els_id,
-                    ELS_STATUS_FIELD_MAP.get(field, field),
-                    _display_value(status[field]),
+        # ELS lasers and OE lanes are separate resources. Display each selected
+        # laser once per interface, without guessing a lane-to-laser pairing.
+        if els_error:
+            laser_rows.append((interface, els_id, "N/A", els_error, "N/A"))
+        elif lasers is None:
+            laser_rows.append((interface, els_id, UNRESOLVED_LASERS, "N/A", "N/A"))
+        else:
+            for laser in sorted(lasers):
+                laser_rows.append((
+                    interface, els_id, laser,
+                    els_lane_states.get("lane{:02d}".format(laser), "N/A"),
+                    "Yes" if laser in shared else "No",
                 ))
-        elif status is not None:
-            status_rows.append((interface, els_id, "Status", status))
 
+    click.echo("OE datapath state:")
     click.echo(tabulate(
         lane_rows,
-        (
-            "Interface",
-            "Lane",
-            "Data Path State",
-            "ELS",
-            "Laser",
-            "ELS Lane State",
-            "Shared",
-        ),
+        ("Interface", "Lane", "Data Path State"),
         tablefmt="simple",
     ))
-    if status_rows:
-        click.echo("\nELS status:")
-        click.echo(tabulate(
-            status_rows,
-            ("Interface", "ELS", "Status field", "Value"),
-            tablefmt="simple",
-        ))
+    click.echo("\nELS lane state:")
+    click.echo(tabulate(
+        laser_rows,
+        ("Interface", "ELS", "Laser", "ELS Lane State", "Shared"),
+        tablefmt="simple",
+    ))
 
 
 def output_option(function):
@@ -1282,39 +1257,47 @@ def show_interface_speed_application(port, json_output):
               help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_lane_status(port, json_output):
-    """Display OE datapath and ELS status."""
+    """Display OE datapath state and ELS lane state."""
     records = {}
     try:
         with _eeprom_read_snapshot() as attach_snapshot:
             for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-                oe_api = get_oe_api(cpo, port_name)
-                els_api = get_els_api(cpo, port_name)
-                attach_snapshot(cpo.oe, oe_api)
-                attach_snapshot(cpo.elsfp, els_api)
                 context = cpo_mapping.interface_context(logical_port, current_port_config, require_lasers=False)
                 laser_ids = context["laser_ids"]
-                els_status = els_api.get_elsfp_status()
-                if not isinstance(els_status, dict) or not els_status:
-                    raise CpoCommandError(
-                        "ELSFP status API returned no usable data for '{}'".format(port_name)
-                    )
-                records[port_name] = {
-                    "Data Path State Indicator": _select_lane_values(
-                        oe_api.get_datapath_state(), context["lane_positions"]
-                    ),
+                record = {
+                    "Data Path State Indicator": {},
                     "ELS": context["mapping"].els_name.upper(),
-                    "ELS Status": els_status,
-                    "ELS Lane State": _select_els_laser_values(
-                        els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
-                    ) if laser_ids is not None else {},
+                    "ELS Lane State": {},
                     "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
                     "Lane Lasers": _lane_lasers(context),
                     "Shared ELS Lasers": list(context["shared_laser_ids"]),
                 }
-    except (NotImplementedError, AttributeError) as exc:
-        raise click.ClickException(
-            "This functionality is not implemented: {}".format(exc)
-        )
+                try:
+                    oe_api = get_oe_api(cpo, port_name)
+                    attach_snapshot(cpo.oe, oe_api)
+                    record["Data Path State Indicator"] = _select_lane_values(
+                        oe_api.get_datapath_state(), context["lane_positions"]
+                    )
+                except (NotImplementedError, AttributeError, CpoCommandError) as exc:
+                    if isinstance(exc, CpoCommandError) and not isinstance(
+                            exc.__cause__, (NotImplementedError, AttributeError)):
+                        raise
+                    record["OE Datapath State Error"] = "Not supported"
+                try:
+                    if get_cpo_presence(cpo, record["ELS"], allow_unsupported=True) is False:
+                        record["ELS Lane State Error"] = ELS_NOT_PRESENT
+                    elif laser_ids is not None:
+                        els_api = get_els_api(cpo, port_name)
+                        attach_snapshot(cpo.elsfp, els_api)
+                        record["ELS Lane State"] = _select_els_laser_values(
+                            els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
+                        )
+                except (NotImplementedError, AttributeError, CpoCommandError) as exc:
+                    if isinstance(exc, CpoCommandError) and not isinstance(
+                            exc.__cause__, (NotImplementedError, AttributeError)):
+                        raise
+                    record["ELS Lane State Error"] = "Not supported"
+                records[port_name] = record
     except (CpoMappingError, CpoCommandError) as exc:
         raise click.ClickException(str(exc))
     print_lane_status_records(records, json_output)
@@ -1400,12 +1383,11 @@ def show_els_lpmode(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
+            if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
+                records[resource_id] = None if json_output else ELS_NOT_PRESENT
+                continue
             lpmode = cpo.elsfp.get_lpmode()
-            if not isinstance(lpmode, bool):
-                raise CpoCommandError(
-                    "ELS get_lpmode returned invalid data for '{}'".format(resource_id)
-                )
-            records[resource_id] = lpmode
+            records[resource_id] = lpmode if isinstance(lpmode, bool) else None
     except (AttributeError, NotImplementedError) as exc:
         raise click.ClickException(
             "ELS get_lpmode is not implemented for this platform"
@@ -1427,10 +1409,10 @@ def show_els_status(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
-            state = get_els_api(cpo, resource_id).get_module_state()
-            if state is None:
-                raise CpoCommandError("The ELSFP module state API returned no data")
-            records[resource_id] = state
+            if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
+                records[resource_id] = None if json_output else ELS_NOT_PRESENT
+                continue
+            records[resource_id] = get_els_api(cpo, resource_id).get_module_state()
     except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(
@@ -1449,6 +1431,9 @@ def show_els_temperature(els_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 EXTERNAL_LASER_SOURCE, els_index):
+            if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
+                records[resource_id] = None if json_output else ELS_NOT_PRESENT
+                continue
             api = get_els_api(cpo, resource_id)
             temperature = api.get_module_temperature()
             if temperature is None:
@@ -1701,10 +1686,18 @@ def _validate_eeprom_range(bank, page, offset, size):
         )
 
 
-def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
-    """Restrict raw access to pages and memory halves declared by the endpoint."""
+def _eeprom_page_start(page):
+    """Return the physical start offset of a memory-map page."""
     from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import CmisAdministrativeLowerPage
 
+    # A lower-memory layout mirrored to a nonzero page occupies upper memory.
+    if page.page == 0 and isinstance(page, CmisAdministrativeLowerPage):
+        return 0
+    return EEPROM_PAGE_OFFSET
+
+
+def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
+    """Restrict raw access to pages and memory halves declared by the endpoint."""
     label = str(resource_id).upper()
     api = get_oe_api(cpo, label) if resource_type == OPTICAL_ENGINE else get_els_api(cpo, label)
     mem_map = getattr(getattr(api, "xcvr_eeprom", None), "mem_map", None)
@@ -1717,10 +1710,9 @@ def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
         raise CpoCommandError(
             "Page 0x{:02x} is not declared for '{}'; valid pages: {}".format(page, label, valid_pages)
         )
-    has_lower = any(isinstance(item, CmisAdministrativeLowerPage) for item in selected)
-    has_upper = any(not isinstance(item, CmisAdministrativeLowerPage) for item in selected)
-    if (offset < EEPROM_PAGE_OFFSET and not has_lower
-            or offset + size > EEPROM_PAGE_OFFSET and not has_upper):
+    starts = {_eeprom_page_start(item) for item in selected}
+    if (offset < EEPROM_PAGE_OFFSET and 0 not in starts
+            or offset + size > EEPROM_PAGE_OFFSET and EEPROM_PAGE_OFFSET not in starts):
         raise CpoCommandError(
             "Page 0x{:02x} does not cover offsets 0x{:02x}-0x{:02x} for '{}'".format(
                 page, offset, offset + size - 1, label)
@@ -1964,9 +1956,7 @@ def _full_eeprom_sections(banks):
 
 def _els_eeprom_sections(eeprom, resource_id):
     """Read physical pages already resolved by the selected ELS API map."""
-    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import (
-        CmisAdministrativeLowerPage,
-    )
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
 
     mem_map = getattr(eeprom, "mem_map", None)
     if mem_map is None or not getattr(mem_map, "pages", None):
@@ -1978,14 +1968,15 @@ def _els_eeprom_sections(eeprom, resource_id):
 
     sections = []
     for page in mem_map.pages:
-        lower = isinstance(page, CmisAdministrativeLowerPage)
-        offset = 0 if lower else EEPROM_PAGE_OFFSET
+        offset = _eeprom_page_start(page)
         title = "{} page {:x}h".format(
-            "Lower" if lower else "Upper", page.page
+            "Lower" if offset == 0 else "Upper", page.page
         )
         if page.bank:
             title += " bank {:x}h".format(page.bank)
-        sections.append((title, page.getaddr(offset), offset))
+        # Raw dumps already use physical offsets. Mirrored pages' getaddr()
+        # accepts a logical lower-memory offset and can add the shift itself.
+        sections.append((title, CmisPage.linear_offset(page.page, page.bank, offset), offset))
     return sections
 
 

@@ -3,10 +3,11 @@ from types import SimpleNamespace
 import pytest
 
 from .cpoutil_test import coverage_environment as _coverage_environment
-from .cpoutil_test import invoke_coverage, shared_port_mapping  # noqa: F401
+from .cpoutil_test import cpoutil, invoke_coverage, shared_port_mapping  # noqa: F401
 
 
 coverage_environment = _coverage_environment
+real_eeprom_linear_offset = cpoutil._eeprom_linear_offset
 
 
 @pytest.fixture
@@ -48,6 +49,30 @@ def test_declared_page_is_accessible(endpoints, operation, interface, target, pa
     assert result.exit_code == 0, result.output
     accesses = cpo.reads if operation == 'read-eeprom' else cpo.writes
     assert len(accesses) == 1
+
+
+@pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
+@pytest.mark.parametrize('interface', [False, True])
+@pytest.mark.parametrize('offset', [0x00, 0x80, 0xFF])
+def test_els_lower_memory_mirror_uses_physical_upper_offsets(endpoints, monkeypatch, operation, interface, offset):
+    from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import CmisAdministrativeLowerPage
+
+    cpo, maps = endpoints
+    monkeypatch.setattr(cpoutil, '_eeprom_linear_offset', real_eeprom_linear_offset)
+    maps['els'].pages = [CmisAdministrativeLowerPage(CmisCodes, page=0xB0)]
+    result = invoke_coverage(command(operation, 'els', interface, 0xB0, offset=offset))
+    if offset < 0x80:
+        assert result.exit_code == 1, result.output
+        assert "valid range: 80h-FFh" in result.output
+        assert cpo.reads == [] and cpo.writes == []
+    else:
+        assert result.exit_code == 0, result.output
+        address = 0x5800 + offset
+        if operation == 'read-eeprom':
+            assert cpo.reads == [(address, 1)]
+        else:
+            assert cpo.writes == [(address, 1, bytearray([1]))]
 
 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
