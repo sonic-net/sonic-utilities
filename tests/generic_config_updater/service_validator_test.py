@@ -622,8 +622,11 @@ class TestServiceValidator(unittest.TestCase):
             '[{"dst":"fc00:210::20","lladdr":"02:4c:52:00:00:20","state":["REACHABLE"]},'
             '{"dst":"fc00:210::50","lladdr":"02:4c:52:0a:00:50","extern_learn":null,'
             '"protocol":"zebra","state":["NOARP"]},'
+            # extern_learn without NOARP: only the extern_learn check keeps this one
+            '{"dst":"fc00:210::51","lladdr":"02:4c:52:0a:00:51","extern_learn":null,"state":["REACHABLE"]},'
             '{"dst":"fc00:210::60","lladdr":"02:4c:52:0a:00:60","state":["PERMANENT"]},'
             '{"dst":"fc00:210::70","state":["NOARP"]},'
+            '{"state":["REACHABLE"]},'
             '{"dst":"fc00:210::22","lladdr":"02:4c:52:00:00:22","state":["STALE"]}]')
         show = {"cmd": "ip -j neigh show dev Vlan2010 to fc00:210::1/64 nud all", "rc": 0, "stdout": neighbors}
         cases = [
