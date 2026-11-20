@@ -1696,7 +1696,7 @@ class TestGangedPorts:
         cpoutil.cpo_object_map[PORT][2] = coverage_environment
         return coverage_environment
 
-    @pytest.mark.parametrize("command", ["tx-disable", "speed", "lane-status"])
+    @pytest.mark.parametrize("command", ["tx-disable", "speed", "lane-status", "dom"])
     def test_all_port_commands_use_the_logical_port(self, ganged, command):
         arguments = ["show", "interface", command]
         if command == "speed":
