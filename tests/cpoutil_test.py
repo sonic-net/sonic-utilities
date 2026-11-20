@@ -1651,7 +1651,8 @@ class TestEepromPageOffset:
         assert coverage_environment.writes == []
 
     def test_page_11_offset_2_never_reaches_tx_disable(self, coverage_environment, monkeypatch):
-        # With real CMIS addressing, page 0x11 offset 2 equals page 0x10 offset 130.
+        # cpoutil must reject offsets under 128 on upper memory pages. The plain
+        # CMIS formula maps those to the prior page.
         from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.page import CmisPage
         monkeypatch.setattr(
             cpoutil, "_eeprom_linear_offset",
