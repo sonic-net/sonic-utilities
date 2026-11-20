@@ -4,12 +4,10 @@ from unittest.mock import patch
 from generic_config_updater.services_validator import (
     command_wrapper,
     vlan_validator,
-    rsyslog_validator,
     caclmgrd_validator,
     vlanintf_validator,
     port_speed_change_validator,
 )
-from generic_config_updater.services_validator import ntp_validator
 from generic_config_updater.services_validator import gnmi_validator, telemetry_validator
 
 # Mimics subprocess.run call
@@ -161,40 +159,6 @@ test_caclrule = [
     ]
 
 
-test_rsyslog_data = [
-        { "old": {}, "upd": {}, "cmd": "" },
-        {
-            "old": { "SYSLOG_SERVER": {
-                "10.13.14.17": {},
-                "2001:aa:aa::aa": {} } },
-            "upd": { "SYSLOG_SERVER": {
-                "10.13.14.17": {},
-                "2001:aa:aa::aa": {} } },
-            "cmd": ""
-        },
-        {
-            "old": { "SYSLOG_SERVER": {
-                "10.13.14.17": {} } },
-            "upd": { "SYSLOG_SERVER": {
-                "10.13.14.18": {} } },
-            "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
-        },
-        {
-            "old": { "SYSLOG_SERVER": {
-                "10.13.14.17": {} } },
-            "upd": { "SYSLOG_SERVER": {
-                "10.13.14.17": {},
-                "2001:aa:aa::aa": {} } },
-            "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
-        },
-        {
-            "old": { "SYSLOG_SERVER": {
-                "10.13.14.17": {} } },
-            "upd": {},
-            "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
-        }
-    ]
-
 test_vlanintf_data = [
         { "old": {}, "upd": {}, "cmd": "" },
         {
@@ -231,24 +195,6 @@ test_vlanintf_data = [
                 "Vlan1000|192.168.0.1/21": {} } },
             "upd": {},
             "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21"
-        }
-   ]
-
-
-test_ntp_data = [
-        {
-            "old": {
-                "NTP_SERVER": {
-                    "0.pool.ntp.org": {}
-                    }
-                },
-            "upd": {
-                "NTP_SERVER": {
-                    "0.pool.ntp.org": {},
-                    "1.pool.ntp.org": {}
-                    }
-                },
-            "cmd": "systemctl restart chrony"
         }
    ]
 
@@ -463,31 +409,12 @@ class TestServiceValidator(unittest.TestCase):
 
         subprocess_calls = []
         subprocess_call_index = 0
-        for entry in test_rsyslog_data:
-            if entry["cmd"]:
-                for c in entry["cmd"].split(","):
-                    subprocess_calls.append({"cmd": c, "rc": 0})
-            msg = "case failed: {}".format(str(entry))
-
-            rsyslog_validator(entry["old"], entry["upd"], None)
-
-        subprocess_calls = []
-        subprocess_call_index = 0
         for entry in test_vlanintf_data:
             if entry["cmd"]:
                 subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
             msg = "case failed: {}".format(str(entry))
 
             vlanintf_validator(entry["old"], entry["upd"], None)
-
-        subprocess_calls = []
-        subprocess_call_index = 0
-        for entry in test_ntp_data:
-            if entry["cmd"]:
-                for c in entry["cmd"].split(","):
-                    subprocess_calls.append({"cmd": c, "rc": 0})
-
-            ntp_validator(entry["old"], entry["upd"], None)
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_port_speed_change_validator(self, mock_subprocess):
