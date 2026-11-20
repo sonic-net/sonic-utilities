@@ -91,52 +91,6 @@ def _service_restart(svc_name):
     return rc == 0
 
 
-def rsyslog_validator(old_config, upd_config, keys):
-    old_syslog = old_config.get("SYSLOG_SERVER", {})
-    upd_syslog = upd_config.get("SYSLOG_SERVER", {})
-
-    if old_syslog != upd_syslog:
-        command_wrapper(["systemctl", "reset-failed", "rsyslog-config", "rsyslog"])
-        rc = command_wrapper(["systemctl", "restart", "rsyslog-config"])
-        if rc != 0:
-            return False
-    return True
-
-
-def port_speed_change_validator(old_config, upd_config, keys):
-    old_ports = old_config.get("PORT", {})
-    upd_ports = upd_config.get("PORT", {})
-    for key in set(old_ports.keys()).union(set(upd_ports.keys())):
-        old_speed = old_ports.get(key, {}).get("speed", "")
-        upd_speed = upd_ports.get(key, {}).get("speed", "")
-        if old_speed != "" and upd_speed != "" and old_speed != upd_speed:
-            logger.log(
-                logger.LOG_PRIORITY_NOTICE,
-                (
-                    f"port_speed_change_validator: port speed changed for {key} "
-                    f"from {old_speed} to {upd_speed}, restart telemetry service"
-                ),
-                print_to_console
-            )
-            return _service_restart("telemetry")
-    return True
-
-
-def dhcp_validator(old_config, upd_config, keys):
-    return _service_restart("dhcp_relay")
-
-
-def vlan_validator(old_config, upd_config, keys):
-    old_vlan = old_config.get("VLAN", {})
-    upd_vlan = upd_config.get("VLAN", {})
-
-    for key in set(old_vlan.keys()).union(set(upd_vlan.keys())):
-        if (old_vlan.get(key, {}).get("dhcp_servers", []) != 
-                upd_vlan.get(key, {}).get("dhcp_servers", [])):
-            return _service_restart("dhcp_relay")
-    # No update to DHCP servers.
-    return True
-
 def caclmgrd_validator(old_config, upd_config, keys):
     old_acltable = old_config.get("ACL_TABLE", {})
     upd_acltable = upd_config.get("ACL_TABLE", {})
@@ -162,34 +116,6 @@ def caclmgrd_validator(old_config, upd_config, keys):
             time.sleep(1)
             return True
     # No update to ACL_RULE.
-    return True
-
-
-def ntp_validator(old_config, upd_config, keys):
-    return _service_restart("chrony")
-
-
-def gnmi_validator(old_config, upd_config, keys):
-    old_gnmi = old_config.get("GNMI", {})
-    upd_gnmi = upd_config.get("GNMI", {})
-
-    old_vrf = old_gnmi.get("gnmi", {}).get("vrf", "")
-    upd_vrf = upd_gnmi.get("gnmi", {}).get("vrf", "")
-
-    if old_vrf != upd_vrf:
-        return _service_restart("gnmi")
-    return True
-
-
-def telemetry_validator(old_config, upd_config, keys):
-    old_telemetry = old_config.get("TELEMETRY", {})
-    upd_telemetry = upd_config.get("TELEMETRY", {})
-
-    old_vrf = old_telemetry.get("gnmi", {}).get("vrf", "")
-    upd_vrf = upd_telemetry.get("gnmi", {}).get("vrf", "")
-
-    if old_vrf != upd_vrf:
-        return _service_restart("telemetry")
     return True
 
 

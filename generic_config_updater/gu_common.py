@@ -203,6 +203,7 @@ class ConfigWrapper:
                     raise IllegalPatchOperationError("Given patch operation is invalid. Operation: {} is illegal on field: {}".format(operation, field))
 
         self.illegal_dataacl_check(old_config, target_config)
+        self.illegal_device_metadata_check(old_config, target_config)
 
         def _invoke_validating_function(cmd, jsonpatch_element):
             # cmd is in the format as <package/module name>.<method name>
@@ -277,6 +278,33 @@ class ConfigWrapper:
                         acl table type changed in {}".format(
                             key, modified_common_dacl_table
                     ))
+
+    def illegal_device_metadata_check(self, old_config, target_config):
+        '''
+        Block DEVICE_METADATA|localhost fields that a service restart cannot apply: they pick the
+        hwsku files, the switch_type or the ASIC a namespace is bound to.
+        A chassis supervisor's swss writes asic_id at start, so it is only checked when set on both sides.
+        An ASIC's sub_role picks front-end or back-end namespaces, which host daemons read at start.
+        '''
+        reload = "a config reload"
+        fields = {
+            "hwsku": (None, reload),
+            "switch_type": ("switch", reload),
+            "asic_id": (None, reload),
+        }
+        if self.scope not in (None, multi_asic.DEFAULT_NAMESPACE, HOST_NAMESPACE):
+            fields["sub_role"] = (None, reload)
+        old_meta = old_config.get("DEVICE_METADATA", {}).get("localhost", {})
+        target_meta = target_config.get("DEVICE_METADATA", {}).get("localhost", {})
+        for field, (default, action) in fields.items():
+            old_value = old_meta.get(field) or default
+            target_value = target_meta.get(field) or default
+            if field == "asic_id" and not (old_value and target_value):
+                continue
+            if old_value != target_value:
+                raise IllegalPatchOperationError(
+                    "DEVICE_METADATA|localhost {} cannot be changed from {} to {} by a patch; "
+                    "it needs {}".format(field, old_value, target_value, action))
 
     def validate_lanes(self, config_db):
         if "PORT" not in config_db:
