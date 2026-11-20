@@ -85,7 +85,8 @@ def run_save_asic_count_unknown(logdir, noop=False):
 
 def run_main_asic_count(logdir, py_stdout="", py_stderr="", py_rc=0):
     """Run main's NUM_ASICS block with the real helpers and a fake `python3`."""
-    script = "{}\n{}\n{}\nmain_block() {{\n{}}}\nmain_block\necho \"NUM_ASICS=$NUM_ASICS RETURN_CODE=$RETURN_CODE\"\n".format(
+    script = ("{}\n{}\n{}\nmain_block() {{\n{}}}\nmain_block\n"
+              "echo \"NUM_ASICS=$NUM_ASICS RETURN_CODE=$RETURN_CODE\"\n").format(
         recorder_prelude(logdir),
         FAKE_PYTHON,
         extract_function("get_asic_count"),
