@@ -255,7 +255,7 @@ Result:
 {%- for attr in attrs %}
 @click.option(
     "--{{ cli_name(attr.name) }}",
-    help="{{ attr.description }}{% if attr['is-mandatory'] %}[mandatory]{% endif %}",
+    help="""{{ attr.description }}{% if attr['is-mandatory'] %}[mandatory]{% endif %}""",
 )
 {%- endfor %}
 {%- endmacro %}
