@@ -138,7 +138,7 @@ def get_cmd_output(cmd):
     return proc.communicate()[0], proc.returncode
 
 def get_config_json_by_namespace(namespace):
-    cmd = ['sonic-cfggen', '-d', '--print-data']
+    cmd = ['sonic-cfggen-lite-rs', '-d', '--print-data']
     if namespace is not None and namespace != multi_asic.DEFAULT_NAMESPACE:
         cmd += ['-n', namespace]
 
@@ -473,7 +473,7 @@ def ndp(ip6address, iface, namespace, display, verbose):
 def is_mgmt_vrf_enabled(ctx):
     """Check if management VRF is enabled"""
     if ctx.invoked_subcommand is None:
-        cmd = ['sonic-cfggen', '-d', '--var-json', "MGMT_VRF_CONFIG"]
+        cmd = ['sonic-cfggen-lite-rs', '-d', '--var-json', "MGMT_VRF_CONFIG"]
 
         p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try :

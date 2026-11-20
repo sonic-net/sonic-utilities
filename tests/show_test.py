@@ -70,7 +70,7 @@ class TestShowRunAllCommands(object):
         assert result.exit_code == 0
         assert mock_get_cmd_output.call_count == 1
         assert mock_get_cmd_output.call_args_list == [
-            call(['sonic-cfggen', '-d', '--print-data'])]
+            call(['sonic-cfggen-lite-rs', '-d', '--print-data'])]
 
     @classmethod
     def teardown_class(cls):
@@ -106,9 +106,9 @@ class TestShowRunAllCommandsMasic(object):
         assert result.exit_code == 0
         assert mock_get_cmd_output.call_count == 3
         assert mock_get_cmd_output.call_args_list == [
-            call(['sonic-cfggen', '-d', '--print-data']),
-            call(['sonic-cfggen', '-d', '--print-data', '-n', 'asic0']),
-            call(['sonic-cfggen', '-d', '--print-data', '-n', 'asic1'])]
+            call(['sonic-cfggen-lite-rs', '-d', '--print-data']),
+            call(['sonic-cfggen-lite-rs', '-d', '--print-data', '-n', 'asic0']),
+            call(['sonic-cfggen-lite-rs', '-d', '--print-data', '-n', 'asic1'])]
 
     @classmethod
     def teardown_class(cls):
@@ -1624,6 +1624,7 @@ class TestShow(object):
         result = runner.invoke(show.cli.commands['banner'])
         assert result.exit_code == 0
 
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=False))
     @patch('show.main.run_command')
     def test_show_ntp(self, mock_run_command):
         runner = CliRunner()
@@ -1642,6 +1643,34 @@ class TestShow(object):
         expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
                           call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
+
+    @patch('show.main.subprocess.Popen')
+    def test_is_mgmt_vrf_enabled(self, mock_popen):
+        process = MagicMock()
+        process.stdout.read.return_value = '{"vrf_global": {"mgmtVrfEnabled": "true"}}'
+        mock_popen.return_value = process
+        ctx = MagicMock(invoked_subcommand=None)
+
+        assert show.is_mgmt_vrf_enabled(ctx) is True
+        mock_popen.assert_called_once_with(
+            ['sonic-cfggen-lite-rs', '-d', '--var-json', 'MGMT_VRF_CONFIG'],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+    @patch('show.main.subprocess.Popen')
+    def test_is_mgmt_vrf_disabled(self, mock_popen):
+        process = MagicMock()
+        process.stdout.read.return_value = '{"vrf_global": {"mgmtVrfEnabled": "false"}}'
+        mock_popen.return_value = process
+        ctx = MagicMock(invoked_subcommand=None)
+
+        assert show.is_mgmt_vrf_enabled(ctx) is False
+        mock_popen.assert_called_once_with(
+            ['sonic-cfggen-lite-rs', '-d', '--var-json', 'MGMT_VRF_CONFIG'],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
 
     def teardown_method(self):
         print('TEAR DOWN')
