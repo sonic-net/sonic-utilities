@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+
+"""
+pfcwdstat - PFC Watchdog statistics tool
+
+Usage:
+    pfcwdstat -c      Clear PFCWD stats
+"""
+
+import argparse
+import sys
+from swsscommon.swsscommon import SonicV2Connector
+
+PFC_WD_STATS_FIELDS = [
+    'PFC_WD_QUEUE_STATS_DEADLOCK_DETECTED',
+    'PFC_WD_QUEUE_STATS_DEADLOCK_RESTORED',
+    'PFC_WD_QUEUE_STATS_TX_PACKETS',
+    'PFC_WD_QUEUE_STATS_TX_DROPPED_PACKETS',
+    'PFC_WD_QUEUE_STATS_RX_PACKETS',
+    'PFC_WD_QUEUE_STATS_RX_DROPPED_PACKETS',
+    'PFC_WD_QUEUE_STATS_TX_PACKETS_LAST',
+    'PFC_WD_QUEUE_STATS_TX_DROPPED_PACKETS_LAST',
+    'PFC_WD_QUEUE_STATS_RX_PACKETS_LAST',
+    'PFC_WD_QUEUE_STATS_RX_DROPPED_PACKETS_LAST',
+]
+
+def clear_stats():
+    """Zero out PFCWD stats in COUNTERS_DB.
+
+    Enumerates all queues via COUNTERS_QUEUE_NAME_MAP — the same source
+    'show pfcwd stats' uses — so stale stats from queues that are no longer
+    actively monitored (PFC_WD_TABLE entries gone, STATUS=N/A) are also cleared.
+
+    Queues with an active storm (PFC_WD_STATUS == 'stormed') are skipped.
+    """
+    db = SonicV2Connector()
+    db.connect(db.COUNTERS_DB)
+
+    queue_name_map = db.get_all(db.COUNTERS_DB, 'COUNTERS_QUEUE_NAME_MAP')
+    if not queue_name_map:
+        print("No PFC Watchdog stats found.")
+        return
+
+    cleared = False
+    skipped = []
+    for queue_name, queue_oid in queue_name_map.items():
+        counter_key = 'COUNTERS:' + queue_oid
+        stats = db.get_all(db.COUNTERS_DB, counter_key)
+        if not stats:
+            continue
+        if not any(f in stats for f in PFC_WD_STATS_FIELDS):
+            continue
+        if stats.get('PFC_WD_STATUS') == 'stormed':
+            skipped.append(queue_name)
+            continue
+        for field in PFC_WD_STATS_FIELDS:
+            db.set(db.COUNTERS_DB, counter_key, field, '0')
+        cleared = True
+
+    if cleared:
+        print("PFC Watchdog counters cleared.")
+    elif not skipped:
+        print("No PFC Watchdog stats found.")
+
+    if skipped:
+        print("Skipped queue(s) with an active storm (not cleared): {}".format(
+            ', '.join(sorted(skipped))))
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='PFC Watchdog statistics tool'
+    )
+    parser.add_argument('-c', '--clear', action='store_true',
+                        help='Clear PFCWD stats')
+    args = parser.parse_args()
+
+    if args.clear:
+        clear_stats()
+    else:
+        parser.print_help()
+
+if __name__ == '__main__':
+    main()
