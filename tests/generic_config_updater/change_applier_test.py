@@ -1,5 +1,6 @@
 import copy
 import json
+import jsonpatch
 import jsondiff
 import os
 import unittest
@@ -9,6 +10,7 @@ from unittest.mock import patch, Mock, call
 import generic_config_updater.change_applier
 import generic_config_updater.services_validator
 import generic_config_updater.gu_common
+from generic_config_updater.gu_common import JsonChange
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_FILE =  os.path.join(SCRIPT_DIR, "files", "change_applier_test.data.json")
@@ -298,3 +300,36 @@ class TestDryRunChangeApplier(unittest.TestCase):
 
         # Assert
         applier.config_wrapper.apply_change_to_config_db.assert_called()
+
+
+class TestChangeApplierTableKeySnapshot(unittest.TestCase):
+    @patch("generic_config_updater.change_applier.get_config_db_as_json")
+    @patch("generic_config_updater.change_applier.get_config_db")
+    @patch("generic_config_updater.change_applier.set_config")
+    def test_apply__snapshot_mismatch__raises_before_write(
+            self, mock_set, mock_db, mock_get_json):
+        mock_db.return_value = DB_HANDLE
+        mock_get_json.return_value = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan30": {"vlanid": "30"},
+            }
+        }
+        generic_config_updater.change_applier.ChangeApplier.updater_conf = {
+            "tables": {}, "services": {}}
+        applier = generic_config_updater.change_applier.ChangeApplier()
+        current = {
+            "VLAN": {
+                "Vlan10": {"vlanid": "10"},
+                "Vlan20": {"vlanid": "20"},
+            }
+        }
+        change = JsonChange(jsonpatch.JsonPatch([{"op": "remove", "path": "/VLAN"}]))
+
+        with self.assertRaises(
+                generic_config_updater.gu_common.GenericConfigUpdaterError) as ctx:
+            applier.apply(
+                current, change, table_key_snapshot={"VLAN": ["Vlan10", "Vlan20"]})
+
+        self.assertIn("Vlan30", str(ctx.exception))
+        mock_set.assert_not_called()
