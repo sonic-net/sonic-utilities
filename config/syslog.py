@@ -658,14 +658,16 @@ def disable_rate_limit_feature(db, service_name, namespace):
 def require_manual_refresh(cfg_db, state_db, identifier):
     """Whether a log level change applies only once the process gets SIGHUP.
 
-    A process publishes require_manual_refresh with its effective log setting
-    in STATE_DB LOGGER_TABLE. A process that predates that publishes nothing
-    there and wrote the field into its CONFIG_DB LOGGER row instead.
+    Reads the require_manual_refresh field ('true'/'false') of STATE_DB
+    LOGGER_TABLE|<identifier> first, and falls back to the CONFIG_DB LOGGER
+    row when it carries no such field.
     """
     try:
         state = state_db.get_all(state_db.STATE_DB, f'LOGGER_TABLE|{identifier}') or {}
-    except Exception:
+    except Exception as e:
         # The level is already written; decide from CONFIG_DB alone.
+        log.log_warning(f'Failed to read STATE_DB LOGGER_TABLE|{identifier}, '
+                        f'using CONFIG_DB require_manual_refresh: {e}')
         state = {}
     if 'require_manual_refresh' in state:
         return state['require_manual_refresh'].lower() == 'true'

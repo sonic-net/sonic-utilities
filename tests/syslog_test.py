@@ -582,13 +582,16 @@ class TestSyslog:
         ({'require_manual_refresh': 'true'}, True),
         ({}, False),
     ])
-    def test_refresh_falls_back_when_state_db_unreachable(self, config_fields, expected):
+    @mock.patch('config.syslog.log')
+    def test_refresh_falls_back_when_state_db_unreachable(self, mock_log, config_fields, expected):
         state_db = mock.MagicMock()
         state_db.get_all.side_effect = RuntimeError("STATE_DB unreachable")
         cfg_db = mock.MagicMock()
         cfg_db.get_entry.return_value = config_fields
         assert config_syslog.require_manual_refresh(cfg_db, state_db, 'xcvrd') is expected
         cfg_db.get_entry.assert_called_once_with('LOGGER', 'xcvrd')
+        mock_log.log_warning.assert_called_once()
+        assert 'STATE_DB unreachable' in mock_log.log_warning.call_args[0][0]
 
     @pytest.mark.parametrize('state_fields, config_fields, signalled', [
         # The process publishes require_manual_refresh in STATE_DB
@@ -599,6 +602,7 @@ class TestSyslog:
         ({'LOGLEVEL': 'NOTICE', 'LOGOUTPUT': 'SYSLOG'}, {}, False),
         # An older process published nothing and wrote the field into CONFIG_DB
         (None, {'require_manual_refresh': 'true'}, True),
+        (None, {'require_manual_refresh': 'false'}, False),
         (None, {}, False),
     ])
     @mock.patch('config.syslog.clicommon.run_command')
