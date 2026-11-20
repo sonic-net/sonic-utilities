@@ -578,6 +578,64 @@ class TestSyslog:
         )
         assert result.exit_code == SUCCESS
 
+    @pytest.mark.parametrize('config_fields, expected', [
+        ({'require_manual_refresh': 'true'}, True),
+        ({}, False),
+    ])
+    @mock.patch('config.syslog.log')
+    def test_refresh_falls_back_when_state_db_unreachable(self, mock_log, config_fields, expected):
+        state_db = mock.MagicMock()
+        state_db.get_all.side_effect = RuntimeError("STATE_DB unreachable")
+        cfg_db = mock.MagicMock()
+        cfg_db.get_entry.return_value = config_fields
+        assert config_syslog.require_manual_refresh(cfg_db, state_db, 'xcvrd') is expected
+        cfg_db.get_entry.assert_called_once_with('LOGGER', 'xcvrd')
+        mock_log.log_warning.assert_called_once()
+        assert 'STATE_DB unreachable' in mock_log.log_warning.call_args[0][0]
+
+    @pytest.mark.parametrize('state_fields, config_fields, signalled', [
+        # The process publishes require_manual_refresh in STATE_DB
+        ({'LOGLEVEL': 'NOTICE', 'require_manual_refresh': 'true'}, {}, True),
+        # STATE_DB wins over a field left in CONFIG_DB by an older process
+        ({'LOGLEVEL': 'NOTICE', 'require_manual_refresh': 'false'}, {'require_manual_refresh': 'true'}, False),
+        # A process without the field (a swss-common daemon) reloads on its own
+        ({'LOGLEVEL': 'NOTICE', 'LOGOUTPUT': 'SYSLOG'}, {}, False),
+        # A STATE_DB row without the field still falls back to CONFIG_DB
+        ({'LOGLEVEL': 'NOTICE', 'LOGOUTPUT': 'SYSLOG'}, {'require_manual_refresh': 'true'}, True),
+        # An older process published nothing and wrote the field into CONFIG_DB
+        (None, {'require_manual_refresh': 'true'}, True),
+        (None, {'require_manual_refresh': 'false'}, False),
+        (None, {}, False),
+    ])
+    @mock.patch('config.syslog.clicommon.run_command')
+    def test_config_log_level_refresh_source(self, mock_run, state_fields, config_fields, signalled):
+        db = Db()
+        db.cfgdb.delete_table('LOGGER')
+        if config_fields:
+            db.cfgdb.set_entry('LOGGER', 'refresh1', config_fields)
+        state_key = 'LOGGER_TABLE|refresh1'
+        db.db.delete(db.db.STATE_DB, state_key)
+        if state_fields:
+            for field, value in state_fields.items():
+                db.db.set(db.db.STATE_DB, state_key, field, value)
+
+        mock_run.return_value = ('something', 0)
+        runner = CliRunner()
+        try:
+            result = runner.invoke(
+                config.config.commands["syslog"].commands["level"],
+                ['-i', 'refresh1', '-l', 'DEBUG', '--container', 'pmon', '--program', 'xcvrd'], obj=db
+            )
+            assert result.exit_code == SUCCESS, result.output
+            assert db.cfgdb.get_entry('LOGGER', 'refresh1').get('LOGLEVEL') == 'DEBUG'
+            assert mock_run.called == signalled
+            if signalled:
+                mock_run.assert_called_once_with(
+                    ['docker', 'exec', '-i', 'pmon', 'supervisorctl', 'signal', 'HUP', 'xcvrd'], return_cmd=True)
+        finally:
+            db.db.delete(db.db.STATE_DB, state_key)
+            db.cfgdb.delete_table('LOGGER')
+
     @mock.patch('config.syslog.clicommon.run_command')
     def test_config_log_level_negative(self, mock_run):
         db = Db()

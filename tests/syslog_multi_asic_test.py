@@ -287,6 +287,26 @@ class TestSyslogRateLimitMultiAsic:
         assert result.exit_code == 0
 
     @mock.patch('config.syslog.clicommon.run_command')
+    def test_config_log_level_refresh_from_namespace_state_db(self, mock_run, setup_cmd_module):
+        _, config = setup_cmd_module
+        db = Db()
+        runner = CliRunner()
+        state_db = db.db_clients['asic0']
+        state_db.set(state_db.STATE_DB, 'LOGGER_TABLE|refresh1', 'require_manual_refresh', 'true')
+
+        mock_run.return_value = ('something', 0)
+        try:
+            result = runner.invoke(
+                config.config.commands["syslog"].commands["level"],
+                ['-i', 'refresh1', '-l', 'DEBUG', '-n', 'asic0', '--container', 'pmon', '--program', 'xcvrd'], obj=db
+            )
+            assert result.exit_code == 0, result.output
+            mock_run.assert_called_once_with(
+                ['docker', 'exec', '-i', 'pmon0', 'supervisorctl', 'signal', 'HUP', 'xcvrd'], return_cmd=True)
+        finally:
+            state_db.delete(state_db.STATE_DB, 'LOGGER_TABLE|refresh1')
+
+    @mock.patch('config.syslog.clicommon.run_command')
     def test_config_log_level(self, mock_run, setup_cmd_module):
         _, config = setup_cmd_module
         db = Db()
