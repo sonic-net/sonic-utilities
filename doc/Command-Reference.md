@@ -14701,6 +14701,8 @@ This sub-section explains how to configure the vlan and its member ports. On mul
 
 This command is used to add or delete the vlan.
 
+A VLAN is deleted only when no other configuration references it. `del` refuses while a member, an IP address, a VXLAN map, a DHCPv4 relay, or another row such as a BGP neighbor, a static neighbor or a route map still names the VLAN, and lists each referencing row. STP rows for the VLAN are removed with it.
+
 - Usage:
   ```
   config vlan [-n <namespace>] (add | del) <vlan_id>

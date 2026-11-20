@@ -902,6 +902,39 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: vlan: 1027 can not be removed. First remove vxlan mapping" in result.output
 
+    def test_config_vlan_del_vlan_refused_while_referenced(self, mock_restart_dhcp_relay_service):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001"], obj=db)
+        assert result.exit_code == 0
+        references = [
+            ("BGP_NEIGHBOR", ("default", "Vlan1001"), {"asn": "65001"}),
+            ("BGP_PEER_GROUP", ("default", "pg"), {"local_addr": "Vlan1001"}),
+            ("NEIGH", ("Vlan1001", "10.0.0.2"), {"neigh": "00:11:22:33:44:55"}),
+            ("ROUTE_MAP", ("rm", "10"), {"route_operation": "permit", "match_neighbor": ["Vlan1001"]}),
+            ("DASH_HA_GLOBAL_CONFIG", "global", {"dpu_vlan": "Vlan1001"}),
+        ]
+        for table, key, entry in references:
+            db.cfgdb.set_entry(table, key, entry)
+        # Rows the deletion itself removes don't stop it.
+        db.cfgdb.set_entry("STP_VLAN", "Vlan1001", {"enabled": "true"})
+
+        result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert "Vlan1001 can not be removed. First remove the configuration that references it: " \
+            "BGP_NEIGHBOR|default|Vlan1001 neighbor, BGP_PEER_GROUP|default|pg local_addr, " \
+            "ROUTE_MAP|rm|10 match_neighbor, NEIGH|Vlan1001|10.0.0.2 port, " \
+            "DASH_HA_GLOBAL_CONFIG|global dpu_vlan" in result.output
+        assert "Vlan1001" in db.cfgdb.get_keys("VLAN")
+
+        for table, key, _ in references:
+            db.cfgdb.set_entry(table, key, None)
+        result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert "Vlan1001" not in db.cfgdb.get_keys("VLAN")
+
     def test_config_vlan_del_vlan(self, mock_restart_dhcp_relay_service):
         runner = CliRunner()
         db = Db()
