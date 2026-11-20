@@ -4,6 +4,7 @@ from unittest import mock
 import pytest
 
 from utilities_common.dangling_interface_references import (INTERFACE_REFERENCES, Dangling, InterfaceRule,
+                                                            ScopedTarget, _is_ip_address,
                                                             find_dangling_interface_references,
                                                             interface_reference_rules, may_dangle,
                                                             plan_dangling_interface_repairs)
@@ -28,6 +29,23 @@ TACACS = spec('TACPLUS', 'src_intf')
 SFLOW = spec('SFLOW', 'agent_id')
 NTP = spec('NTP', 'src_intf')
 RADIUS = spec('RADIUS_SERVER', 'src_intf')
+
+
+@pytest.fixture(autouse=True)
+def union_member_types():
+    """
+    SonicYang.union_member_types for the stand-in union types below; a real
+    libyang type goes to the real method.
+    """
+    import sonic_yang
+    real = getattr(sonic_yang.SonicYang, 'union_member_types', None)
+
+    def members(leaf_type):
+        if isinstance(leaf_type, mock.Mock):
+            return list(leaf_type.union_types(with_typedefs=True))
+        return real(leaf_type)
+    with mock.patch.object(sonic_yang.SonicYang, 'union_member_types', staticmethod(members), create=True):
+        yield
 
 
 def pattern(expression, inverted=False):
@@ -520,3 +538,264 @@ class TestInterfaceReferenceRulesWithLibyang(object):
         assert split(config, rules) == (config, {}, [])
         config['TACPLUS'] = {'global': {'src_intf': 'Ethernet8'}}
         assert split(config, rules)[1] == {'TACPLUS': {'global': {'src_intf': 'Ethernet8'}}}
+
+
+BGP_NEIGHBOR = spec('BGP_NEIGHBOR', 'neighbor')
+BGP_NEIGHBOR_AF = spec('BGP_NEIGHBOR_AF', 'neighbor')
+BGP_LOCAL_ADDR = spec('BGP_NEIGHBOR', 'local_addr')
+DHCP_SERVER = spec('DHCP_SERVER_IPV4', 'name')
+DHCP_SERVER_PORT = spec('DHCP_SERVER_IPV4_PORT', 'name')
+DHCP_RELAY = spec('DHCPV4_RELAY', 'name')
+MATCH_NEIGHBOR = spec('ROUTE_MAP', 'match_neighbor')
+DPU_VLAN = spec('DASH_HA_GLOBAL_CONFIG', 'dpu_vlan')
+IPV4_OCTET = r'([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])'
+IPV4_PATTERN = r'({0}\.){{3}}{0}'.format(IPV4_OCTET)
+IPV6_PATTERN = r'[0-9a-fA-F:.]*:[0-9a-fA-F:.]*(%[\w]+)?'
+NEIGHBOR_TARGETS = ('PORT', 'PORTCHANNEL', 'VLAN', 'VLAN_SUB_INTERFACE')
+MIDPLANE = ('MID_PLANE_BRIDGE', 'GLOBAL', 'bridge')
+SAME_VRF_NEIGHBOR = ScopedTarget('BGP_NEIGHBOR', 2, 0, 1, 0, 'vrf_name')
+STP_VLAN_PORT = spec('STP_VLAN_PORT', 'vlan-name')
+VLAN_MEMBER = spec('VLAN_MEMBER', 'name')
+VLAN_INTERFACE = spec('VLAN_INTERFACE', 'name')
+
+VLAN_RULES = {
+    BGP_NEIGHBOR: rule(NEIGHBOR_TARGETS, [[IPV4_PATTERN], [IPV6_PATTERN]], 1),
+    BGP_NEIGHBOR_AF: rule((SAME_VRF_NEIGHBOR,), required=1),
+    BGP_LOCAL_ADDR: rule(('PORT', 'PORTCHANNEL', 'LOOPBACK_INTERFACE', 'VLAN'), [[IPV4_PATTERN], [IPV6_PATTERN]]),
+    DHCP_SERVER: rule((MIDPLANE, 'VLAN'), required=1),
+    DHCP_SERVER_PORT: rule(('DHCP_SERVER_IPV4',), required=1),
+    DHCP_RELAY: rule(('PORT', 'VLAN'), required=1),
+    MATCH_NEIGHBOR: rule(('PORT', 'PORTCHANNEL', 'VLAN'), [[IPV4_PATTERN], [IPV6_PATTERN]]),
+    DPU_VLAN: rule(('VLAN',)),
+    STP_VLAN_PORT: rule(('VLAN',), required=1),
+    VLAN_MEMBER: rule(('VLAN',), required=1),
+    VLAN_INTERFACE: rule(('VLAN',), required=1),
+}
+
+
+class TestVlanReferences(object):
+    """References the VLAN models make leafrefs: BGP, DHCP, route maps and the DPU VLAN."""
+
+    def test_a_bgp_neighbor_on_a_missing_vlan_drops_with_its_address_families(self):
+        config = config_file(
+            BGP_NEIGHBOR={'default|Vlan200': {'asn': '65001'}, 'default|Vlan100': {'asn': '65002'},
+                          '10.0.0.1': {'asn': '65003'}, 'default|fe80::1%Vlan100': {'asn': '65004'},
+                          'default|Ethernet0.10': {'asn': '65005'}, 'default|Ethernet0.20': {'asn': '65006'}},
+            BGP_NEIGHBOR_AF={'default|Vlan200|ipv4_unicast': {'admin_status': 'up'},
+                             'default|Vlan100|ipv4_unicast': {'admin_status': 'up'},
+                             'default|Ethernet0.20|ipv6_unicast': {'admin_status': 'up'}})
+        kept, removed, reasons = split(config, VLAN_RULES)
+        assert set(kept['BGP_NEIGHBOR']) == {'default|Vlan100', '10.0.0.1', 'default|fe80::1%Vlan100',
+                                             'default|Ethernet0.10'}
+        assert set(kept['BGP_NEIGHBOR_AF']) == {'default|Vlan100|ipv4_unicast'}
+        assert removed['BGP_NEIGHBOR_AF'] == {'default|Vlan200|ipv4_unicast': {'admin_status': 'up'},
+                                              'default|Ethernet0.20|ipv6_unicast': {'admin_status': 'up'}}
+        assert "BGP_NEIGHBOR|default|Vlan200 dropped: neighbor Vlan200 is in none of PORT, PORTCHANNEL, VLAN, " \
+               "VLAN_SUB_INTERFACE" in reasons
+        assert "BGP_NEIGHBOR_AF|default|Vlan200|ipv4_unicast dropped: neighbor Vlan200 is in none of " \
+               "BGP_NEIGHBOR of the same vrf_name" in reasons
+
+    def test_an_address_family_names_a_neighbor_of_its_own_vrf(self):
+        config = config_file(BGP_NEIGHBOR={'default|10.0.0.1': {}, 'Vrf1|10.0.0.2': {}},
+                             BGP_NEIGHBOR_AF={'Vrf1|10.0.0.1|ipv4_unicast': {}, 'default|10.0.0.1|ipv4_unicast': {},
+                                              'Vrf1|10.0.0.2|ipv4_unicast': {}})
+        kept, _, _ = split(config, VLAN_RULES)
+        assert set(kept['BGP_NEIGHBOR_AF']) == {'default|10.0.0.1|ipv4_unicast', 'Vrf1|10.0.0.2|ipv4_unicast'}
+
+    def test_a_vlan_drops_its_stp_ports_members_and_interface_rows(self):
+        config = config_file(STP_VLAN_PORT={'Vlan200|Ethernet0': {}, 'Vlan100|Ethernet0': {}},
+                             VLAN_MEMBER={'Vlan200|Ethernet4': {}, 'Vlan100|Ethernet4': {}},
+                             VLAN_INTERFACE={'Vlan200': {}, 'Vlan200|10.0.0.1/24': {}, 'Vlan100': {},
+                                             'Vlan100|10.0.1.1/24': {}})
+        kept, _, _ = split(config, VLAN_RULES)
+        assert set(kept['STP_VLAN_PORT']) == {'Vlan100|Ethernet0'}
+        assert set(kept['VLAN_MEMBER']) == {'Vlan100|Ethernet4'}
+        assert set(kept['VLAN_INTERFACE']) == {'Vlan100', 'Vlan100|10.0.1.1/24'}
+
+    def test_rows_under_an_unwritable_row_stay(self):
+        config = config_file(BGP_NEIGHBOR={'default|Vlan200': {}},
+                             BGP_NEIGHBOR_AF={'default|Vlan200|ipv4_unicast': {}})
+        assert plan_dangling_interface_repairs(config, VLAN_RULES, {('BGP_NEIGHBOR', 'default|Vlan200')}) == []
+
+    def test_an_address_family_of_a_kept_neighbor_stays(self):
+        config = config_file(BGP_NEIGHBOR={'default|10.0.0.1': {}},
+                             BGP_NEIGHBOR_AF={'default|10.0.0.1|ipv4_unicast': {}})
+        assert split(config, VLAN_RULES) == (config, {}, [])
+
+    def test_address_families_are_left_alone_when_no_bgp_neighbor_was_read(self):
+        config = config_file(BGP_NEIGHBOR_AF={'default|10.0.0.1|ipv4_unicast': {}})
+        assert split(config, VLAN_RULES) == (config, {}, [])
+
+    def test_a_local_addr_on_a_missing_vlan_is_deleted(self):
+        config = config_file(BGP_NEIGHBOR={'10.0.0.1': {'asn': '65001', 'local_addr': 'Vlan200'},
+                                           '10.0.0.2': {'asn': '65002', 'local_addr': '10.1.0.1'}})
+        kept, removed, _ = split(config, VLAN_RULES)
+        assert kept['BGP_NEIGHBOR'] == {'10.0.0.1': {'asn': '65001'},
+                                        '10.0.0.2': {'asn': '65002', 'local_addr': '10.1.0.1'}}
+        assert removed == {'BGP_NEIGHBOR': {'10.0.0.1': {'local_addr': 'Vlan200'}}}
+
+    def test_a_dhcp_server_on_a_missing_vlan_drops_with_its_ports(self):
+        config = config_file(
+            MID_PLANE_BRIDGE={'GLOBAL': {'bridge': 'bridge-midplane'}},
+            DHCP_SERVER_IPV4={'Vlan200': {'mode': 'PORT'}, 'Vlan100': {'mode': 'PORT'},
+                              'bridge-midplane': {'mode': 'PORT'}},
+            DHCP_SERVER_IPV4_PORT={'Vlan200|Ethernet4': {'ips@': '10.0.0.2'},
+                                   'Vlan100|Ethernet0': {'ips@': '10.0.0.3'}})
+        kept, _, reasons = split(config, VLAN_RULES)
+        assert set(kept['DHCP_SERVER_IPV4']) == {'Vlan100', 'bridge-midplane'}
+        assert set(kept['DHCP_SERVER_IPV4_PORT']) == {'Vlan100|Ethernet0'}
+        assert "DHCP_SERVER_IPV4|Vlan200 dropped: name Vlan200 is in none of MID_PLANE_BRIDGE|GLOBAL bridge, " \
+               "VLAN" in reasons
+
+    def test_a_dhcp_relay_on_a_missing_vlan_drops(self):
+        config = config_file(DHCPV4_RELAY={'Vlan200': {'dhcpv4_servers': ['10.0.0.1']},
+                                           'Vlan100': {'dhcpv4_servers': ['10.0.0.1']}})
+        kept, _, _ = split(config, VLAN_RULES)
+        assert set(kept['DHCPV4_RELAY']) == {'Vlan100'}
+
+    def test_a_route_map_neighbor_on_a_missing_vlan_is_deleted(self):
+        config = config_file(ROUTE_MAP={'rm|10': {'route_operation': 'permit', 'match_neighbor': ['Vlan200']},
+                                        'rm|20': {'route_operation': 'permit', 'match_neighbor': ['10.0.0.1']}})
+        kept, _, _ = split(config, VLAN_RULES)
+        assert kept['ROUTE_MAP'] == {'rm|10': {'route_operation': 'permit'},
+                                     'rm|20': {'route_operation': 'permit', 'match_neighbor': ['10.0.0.1']}}
+
+    def test_the_dpu_vlan_of_a_missing_vlan_is_deleted(self):
+        config = config_file(DASH_HA_GLOBAL_CONFIG={'global': {'dpu_vlan': 'Vlan200', 'cp_data_channel_port': '1'}})
+        kept, _, _ = split(config, VLAN_RULES)
+        assert kept['DASH_HA_GLOBAL_CONFIG'] == {'global': {'cp_data_channel_port': '1'}}
+
+    def test_current_bgp_neighbor_keeps_a_vlan_its_pattern_accepts(self):
+        # The current neighbor: an address, leafrefs to PORT and PORTCHANNEL, and a Vlan pattern.
+        rules = {BGP_NEIGHBOR: rule(LAG_TARGETS, [[IPV4_PATTERN], [IPV6_PATTERN], [VLAN_PATTERN]], 1)}
+        config = config_file(BGP_NEIGHBOR={'default|Vlan200': {}, 'default|10.0.0.1': {}})
+        assert split(config, rules) == (config, {}, [])
+
+    @pytest.mark.parametrize("neighbor,expected", [
+        ("10.0.0.1", False), ("fe80::1%Vlan100", False), ("Vlan100", False), ("Ethernet0.10", False),
+        ("Vlan200", True), ("Ethernet0.20", True)])
+    def test_may_dangle_bgp_neighbor(self, neighbor, expected):
+        assert may_dangle(config_file(BGP_NEIGHBOR={('default', neighbor): {}})) is expected
+
+    def test_may_dangle_bgp_neighbor_af(self):
+        config = config_file(BGP_NEIGHBOR={('default', '10.0.0.1'): {}})
+        assert not may_dangle(dict(config, BGP_NEIGHBOR_AF={('default', '10.0.0.1', 'ipv4_unicast'): {}}))
+        assert may_dangle(dict(config, BGP_NEIGHBOR_AF={('default', '10.0.0.2', 'ipv4_unicast'): {}}))
+        assert may_dangle(dict(config, BGP_NEIGHBOR_AF={('Vrf1', '10.0.0.1', 'ipv4_unicast'): {}}))
+
+    def test_may_dangle_dhcp_server_on_the_midplane_bridge(self):
+        config = config_file(MID_PLANE_BRIDGE={'GLOBAL': {'bridge': 'bridge-midplane'}})
+        assert not may_dangle(dict(config, DHCP_SERVER_IPV4={'bridge-midplane': {}, 'Vlan100': {}}))
+        assert may_dangle(dict(config, DHCP_SERVER_IPV4={'Vlan200': {}}))
+
+    @pytest.mark.parametrize("value,expected", [
+        ("10.0.0.1", True), ("fe80::1", True), ("fe80::1%Vlan100", True), ("::", True),
+        ("999.1.1.1", False), ("a:", False), (":", False), ("010.0.0.1", False), ("fe80::1%Ethernet0.10", False),
+        ("fe80::1%", False), ("Vlan100", False)])
+    def test_is_ip_address(self, value, expected):
+        assert _is_ip_address(value) is expected
+
+
+# A neighbor union holding inet:ip-address, itself a union, ahead of its leafrefs;
+# an address family list keyed off it; and a DHCP server name that may name the
+# bridge of a singleton container.
+VLAN_MODELS_YANG = '''
+module test-dangling-vlan-references {
+  namespace "http://example.com/test-dangling-vlan-references";
+  prefix tdvr;
+
+  typedef ip-address {
+    type union {
+      type string { pattern "''' + IPV4_PATTERN.replace('\\', '\\\\') + '''"; }
+      type string { pattern "[0-9a-fA-F:.]*:[0-9a-fA-F:.]*(%[\\\\p{N}\\\\p{L}]+)?"; }
+    }
+  }
+
+  container sonic-test {
+    container PORT { list PORT_LIST { key "name"; leaf name { type string; } } }
+    container PORTCHANNEL { list PORTCHANNEL_LIST { key "name"; leaf name { type string; } } }
+    container VLAN { list VLAN_LIST { key "name"; leaf name { type string; } } }
+    container VLAN_SUB_INTERFACE { list VLAN_SUB_INTERFACE_LIST { key "name"; leaf name { type string; } } }
+    container MID_PLANE_BRIDGE { container GLOBAL { leaf bridge { type string; } } }
+    container BGP_NEIGHBOR {
+      list BGP_NEIGHBOR_LIST {
+        key "vrf_name neighbor";
+        leaf vrf_name { type string; }
+        leaf neighbor {
+          type union {
+            type ip-address;
+            type leafref { path "/tdvr:sonic-test/tdvr:PORT/tdvr:PORT_LIST/tdvr:name"; }
+            type leafref { path "/tdvr:sonic-test/tdvr:PORTCHANNEL/tdvr:PORTCHANNEL_LIST/tdvr:name"; }
+            type leafref { path "/tdvr:sonic-test/tdvr:VLAN/tdvr:VLAN_LIST/tdvr:name"; }
+            type leafref { path "/tdvr:sonic-test/tdvr:VLAN_SUB_INTERFACE/tdvr:VLAN_SUB_INTERFACE_LIST/tdvr:name"; }
+          }
+        }
+      }
+    }
+    container BGP_NEIGHBOR_AF {
+      list BGP_NEIGHBOR_AF_LIST {
+        key "vrf_name neighbor afi_safi";
+        leaf vrf_name { type string; }
+        leaf neighbor {
+          type leafref { path "../../../BGP_NEIGHBOR/BGP_NEIGHBOR_LIST[vrf_name=current()/../vrf_name]/neighbor"; }
+        }
+        leaf afi_safi { type string; }
+      }
+    }
+    container VLAN_INTERFACE {
+      list VLAN_INTERFACE_LIST {
+        key "name";
+        leaf name { type leafref { path "/tdvr:sonic-test/tdvr:VLAN/tdvr:VLAN_LIST/tdvr:name"; } }
+      }
+      list VLAN_INTERFACE_IPPREFIX_LIST {
+        key "name ip-prefix";
+        leaf name { type leafref { path "../../VLAN_INTERFACE_LIST/name"; } }
+        leaf ip-prefix { type string; }
+      }
+    }
+    container DHCP_SERVER_IPV4 {
+      list DHCP_SERVER_IPV4_LIST {
+        key "name";
+        leaf name {
+          type union {
+            type leafref { path "/tdvr:sonic-test/tdvr:MID_PLANE_BRIDGE/tdvr:GLOBAL/tdvr:bridge"; }
+            type leafref { path "/tdvr:sonic-test/tdvr:VLAN/tdvr:VLAN_LIST/tdvr:name"; }
+          }
+        }
+      }
+    }
+  }
+}
+'''
+
+
+def test_vlan_reference_rules_with_libyang():
+    libyang = pytest.importorskip('libyang')
+    ctx = libyang.Context()
+    try:
+        module = ctx.parse_module_str(VLAN_MODELS_YANG)
+        sy = mock.Mock()
+        sy.confDbYangMap = {table.name(): {'container': table}
+                            for top in module.children() for table in top.children()}
+        rules = interface_reference_rules(sy)
+        assert {s: (r.targets, r.required) for s, r in rules.items()} == {
+            BGP_NEIGHBOR: (NEIGHBOR_TARGETS, 1),
+            BGP_NEIGHBOR_AF: ((SAME_VRF_NEIGHBOR,), 1),
+            DHCP_SERVER: ((MIDPLANE, 'VLAN'), 1),
+            VLAN_INTERFACE: (('VLAN',), 1),
+        }
+        assert rules[VLAN_INTERFACE].patterns == (), "the prefix rows' leafref to their own table accepts nothing"
+        config = config_file(
+            BGP_NEIGHBOR={'default|10.0.0.1': {}, 'default|fe80::1%Vlan100': {}, 'default|Vlan200': {}},
+            BGP_NEIGHBOR_AF={'default|Vlan200|ipv4_unicast': {}, 'default|10.0.0.1|ipv4_unicast': {},
+                             'Vrf1|10.0.0.1|ipv4_unicast': {}},
+            VLAN_INTERFACE={'Vlan200': {}, 'Vlan200|10.0.0.1/24': {}, 'Vlan100|10.0.1.1/24': {}},
+            MID_PLANE_BRIDGE={'GLOBAL': {'bridge': 'bridge-midplane'}},
+            DHCP_SERVER_IPV4={'bridge-midplane': {}, 'Vlan200': {}})
+        kept, _, _ = split(config, rules)
+        assert set(kept['BGP_NEIGHBOR']) == {'default|10.0.0.1', 'default|fe80::1%Vlan100'}
+        assert set(kept['BGP_NEIGHBOR_AF']) == {'default|10.0.0.1|ipv4_unicast'}
+        assert set(kept['DHCP_SERVER_IPV4']) == {'bridge-midplane'}
+        assert set(kept['VLAN_INTERFACE']) == {'Vlan100|10.0.1.1/24'}
+    finally:
+        ctx.destroy()

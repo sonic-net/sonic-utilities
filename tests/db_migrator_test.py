@@ -1247,6 +1247,59 @@ class TestDanglingInterfaceReferencesMigrator(object):
         assert "global" in dbmgtr.configDB.get_keys("TACPLUS")
         assert "src_intf" not in dbmgtr.configDB.get_entry("TACPLUS", "global")
 
+    def bgp_rules(self):
+        import re
+        from utilities_common.dangling_interface_references import INTERFACE_REFERENCES, InterfaceRule, ScopedTarget
+        specs = {(spec.table, spec.leaf): spec for spec in INTERFACE_REFERENCES}
+        return {specs["BGP_NEIGHBOR", "neighbor"]: InterfaceRule(
+                    (((re.compile(r"[0-9.]+"), False),),), ("PORT", "PORTCHANNEL", "VLAN"), 1),
+                specs["BGP_NEIGHBOR_AF", "neighbor"]: InterfaceRule(
+                    (), (ScopedTarget("BGP_NEIGHBOR", 2, 0, 1, 0, "vrf_name"),), 1)}
+
+    def bgp_migrator(self):
+        dbmgtr = self.migrator()
+        for key in (("default", "Vlan100"), ("default", "Vlan200")):
+            dbmgtr.configDB.set_entry("BGP_NEIGHBOR", key, {"asn": "65001"})
+            dbmgtr.configDB.set_entry("BGP_NEIGHBOR_AF", key + ("ipv4_unicast",), {"admin_status": "up"})
+        return dbmgtr
+
+    def test_a_bgp_neighbor_drops_with_its_address_families(self):
+        dbmgtr = self.bgp_migrator()
+        # get_table gives the one-part key as a str beside the tuples.
+        dbmgtr.configDB.set_entry("BGP_NEIGHBOR", "10.0.0.1", {"asn": "65002"})
+        with mock.patch('db_migrator.log.log_warning') as log_warning:
+            self.migrate(dbmgtr, rules=self.bgp_rules())
+
+        assert set(dbmgtr.configDB.get_table("BGP_NEIGHBOR")) == {("default", "Vlan100"), "10.0.0.1"}
+        assert set(dbmgtr.configDB.get_table("BGP_NEIGHBOR_AF")) == {("default", "Vlan100", "ipv4_unicast")}
+        log_warning.assert_any_call("BGP_NEIGHBOR|default|Vlan200 dropped: neighbor Vlan200 is in none of PORT, "
+                                    "PORTCHANNEL, VLAN")
+        log_warning.assert_any_call("BGP_NEIGHBOR_AF|default|Vlan200|ipv4_unicast dropped: neighbor Vlan200 is in "
+                                    "none of BGP_NEIGHBOR of the same vrf_name")
+
+    def test_an_address_family_of_another_vrfs_neighbor_drops(self):
+        dbmgtr = self.bgp_migrator()
+        dbmgtr.configDB.set_entry("BGP_NEIGHBOR_AF", ("Vrf1", "Vlan100", "ipv4_unicast"), {"admin_status": "up"})
+        self.migrate(dbmgtr, rules=self.bgp_rules())
+
+        assert ("Vrf1", "Vlan100", "ipv4_unicast") not in dbmgtr.configDB.get_table("BGP_NEIGHBOR_AF")
+        assert ("default", "Vlan100", "ipv4_unicast") in dbmgtr.configDB.get_table("BGP_NEIGHBOR_AF")
+
+    def test_the_address_families_of_a_neighbor_that_cannot_be_dropped_stay(self):
+        dbmgtr = self.bgp_migrator()
+        set_entry = dbmgtr.configDB.set_entry
+
+        def failing_set_entry(table, key, data):
+            if (table, key) == ("BGP_NEIGHBOR", ("default", "Vlan200")):
+                raise RuntimeError("write failed")
+            return set_entry(table, key, data)
+
+        with mock.patch.object(dbmgtr.configDB, 'set_entry', side_effect=failing_set_entry):
+            self.migrate(dbmgtr, rules=self.bgp_rules())
+
+        assert ("default", "Vlan200") in dbmgtr.configDB.get_table("BGP_NEIGHBOR")
+        assert ("default", "Vlan200", "ipv4_unicast") in dbmgtr.configDB.get_table("BGP_NEIGHBOR_AF")
+
     def test_an_empty_port_table_keeps_port_references(self):
         dbmgtr = self.migrator()
         dbmgtr.configDB.set_entry("PORT", "Ethernet0", None)

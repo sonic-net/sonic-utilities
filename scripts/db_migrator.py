@@ -13,7 +13,7 @@ from minigraph import parse_xml
 from utilities_common.helper import update_config
 from utilities_common.dangling_interface_references import (KNOWN_TARGETS, REFERENCE_TABLES,
                                                             interface_reference_rules, may_dangle, ports_missing,
-                                                            plan_dangling_interface_repairs)
+                                                            plan_dangling_interface_repairs, target_tables)
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
@@ -990,7 +990,9 @@ class DBMigrator():
         Repair each reference to an interface that this image's models refuse
         because the row it names does not exist (see INTERFACE_REFERENCES and
         plan_dangling_interface_repairs): the field or the leaf-list element
-        goes, or the row when the model needs the field. Interface and VLAN
+        goes, or the row when the reference is in its key or the model needs
+        the field, and a row keyed off a dropped row (BGP_NEIGHBOR_AF under its
+        BGP_NEIGHBOR) goes with it. Interface and VLAN
         removals on older images left such references behind, and one of them
         fails every validation of the config, which blocks every GCU patch on
         the switch.
@@ -1020,7 +1022,7 @@ class DBMigrator():
             log.log_error(f"Could not derive interface reference rules from the YANG models: {str(e)}. "
                           "References left unchanged")
             return
-        targets = sorted({target for rule in rules.values() for target in rule.targets})
+        targets = target_tables(rules)
         if not read(targets):
             return
         if targets and not any(config[table] for table in targets):
@@ -1032,18 +1034,32 @@ class DBMigrator():
             # plan_dangling_interface_repairs skips each spec that targets PORT.
             log.log_warning("No rows in PORT, so the references that may name a port are left alone")
 
-        for repair in plan_dangling_interface_repairs(config, rules):
-            name = "|".join(repair.key) if isinstance(repair.key, tuple) else repair.key
-            try:
-                if repair.entry is None:
-                    self.configDB.set_entry(repair.table, repair.key, None)
-                else:
-                    self.configDB.set_entry(repair.table, repair.key, repair.entry or {"NULL": "NULL"})
-            except Exception as e:
-                log.log_error(f"Failed to repair {repair.table}|{name}: {str(e)}")
-                continue
-            for reason in repair.reasons:
-                log.log_warning(reason)
+        written = set()
+        unwritable = set()
+        replan = True
+        while replan:
+            # A row whose repair cannot be written stays, so the plan is made
+            # again keeping it, and the rows under it (BGP_NEIGHBOR_AF under
+            # its BGP_NEIGHBOR) stay too.
+            replan = False
+            for repair in plan_dangling_interface_repairs(config, rules, unwritable):
+                row = (repair.table, repair.key)
+                if row in written:
+                    continue
+                name = "|".join(repair.key) if isinstance(repair.key, tuple) else repair.key
+                try:
+                    if repair.entry is None:
+                        self.configDB.set_entry(repair.table, repair.key, None)
+                    else:
+                        self.configDB.set_entry(repair.table, repair.key, repair.entry or {"NULL": "NULL"})
+                except Exception as e:
+                    log.log_error(f"Failed to repair {repair.table}|{name}: {str(e)}")
+                    unwritable.add(row)
+                    replan = True
+                    break
+                written.add(row)
+                for reason in repair.reasons:
+                    log.log_warning(reason)
 
     def version_unknown(self):
         """
