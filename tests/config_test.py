@@ -3302,6 +3302,62 @@ class TestConfigLoadMgmtConfig(object):
         import config.main
         importlib.reload(config.main)
 
+    @pytest.mark.parametrize(
+        "failing_module,module_source,expected_error",
+        (
+            (
+                "config_encoder",
+                "import management_bootstrap_missing_dependency\n",
+                "management_bootstrap_missing_dependency"
+            ),
+            (
+                "device_desc",
+                "import management_bootstrap_missing_dependency\n",
+                "management_bootstrap_missing_dependency"
+            ),
+            (
+                "config_encoder",
+                "from config_encoder import missing_export\n",
+                "missing_export"
+            ),
+            (
+                "device_desc",
+                "from device_desc import missing_export\n",
+                "missing_export"
+            ),
+            ("config_encoder", "", "minigraph_encoder"),
+            ("device_desc", "", "parse_device_desc_xml"),
+        )
+    )
+    def test_neutral_module_errors_are_not_masked(
+            self, tmp_path, failing_module, module_source, expected_error):
+        module_sources = {
+            "config_encoder": "minigraph_encoder = object()\n",
+            "device_desc": "parse_device_desc_xml = object()\n",
+        }
+        module_sources[failing_module] = module_source
+
+        for module_name, module_source in module_sources.items():
+            module_path = tmp_path / "{0}.py".format(module_name)
+            module_path.write_text(module_source)
+
+        env = os.environ.copy()
+        python_path = [str(tmp_path), modules_path]
+        if env.get("PYTHONPATH"):
+            python_path.append(env["PYTHONPATH"])
+        env["PYTHONPATH"] = os.pathsep.join(python_path)
+
+        result = subprocess.run(
+            [sys.executable, "-c", "import config.main"],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+
+        assert result.returncode != 0
+        assert expected_error in result.stderr
+
     def test_config_load_mgmt_config_ipv4_only(self, get_cmd_module, setup_single_broadcom_asic):
         device_desc_result = {
             'DEVICE_METADATA': {
