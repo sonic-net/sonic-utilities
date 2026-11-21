@@ -76,8 +76,18 @@ stages:
         runVersion: 'latestFromBranch'
         runBranch: 'refs/heads/$(sourceBranch)'
         patterns: |
-          **/*.deb
-          **/*.whl
+          target/debs/bookworm/libnl-3-200_*.deb
+          target/debs/bookworm/libnl-genl-3-200_*.deb
+          target/debs/bookworm/libnl-route-3-200_*.deb
+          target/debs/bookworm/libnl-nf-3-200_*.deb
+          target/debs/bookworm/libyang3_*.deb
+          target/debs/bookworm/python3-libyang_*.deb
+          target/python-wheels/bookworm/swsssdk-2.0.1-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_py_common-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_yang_mgmt-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_yang_models-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_config_engine-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_platform_common-1.0-py3-none-any.whl
       displayName: "Download artifacts from latest sonic-buildimage build"
 
     - script: |
@@ -239,8 +249,18 @@ stages:
         runVersion: 'latestFromBranch'
         runBranch: 'refs/heads/$(sourceBranch)'
         patterns: |
-          **/*.deb
-          **/*.whl
+          target/debs/bookworm/libnl-3-200_*.deb
+          target/debs/bookworm/libnl-genl-3-200_*.deb
+          target/debs/bookworm/libnl-route-3-200_*.deb
+          target/debs/bookworm/libnl-nf-3-200_*.deb
+          target/debs/bookworm/libyang3_*.deb
+          target/debs/bookworm/python3-libyang_*.deb
+          target/python-wheels/bookworm/swsssdk-2.0.1-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_py_common-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_yang_mgmt-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_yang_models-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_config_engine-1.0-py3-none-any.whl
+          target/python-wheels/bookworm/sonic_platform_common-1.0-py3-none-any.whl
       displayName: "Download artifacts from latest sonic-buildimage build"
 
     - script: |
