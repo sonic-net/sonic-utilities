@@ -5,6 +5,7 @@ from unittest import mock
 from click.testing import CliRunner
 
 import config.main as config
+import config.vlan as vlan_config
 
 import show.main as show
 from utilities_common.db import Db
@@ -995,6 +996,24 @@ class TestVlan(object):
                 mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'update'], return_cmd=True)
             ])
             assert result.exit_code == 0
+
+    def test_get_swss_container_name(self):
+        assert vlan_config.get_swss_container_name('') == 'swss'
+        assert vlan_config.get_swss_container_name('asic0') == 'swss0'
+        assert vlan_config.get_swss_container_name('asic1') == 'swss1'
+
+    def test_restart_ndppd_uses_namespace_swss_container(self):
+        # On multi-ASIC the ndppd container must be the per-namespace swss<N>, never a bare 'swss'
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.Mock(return_value=("running", 0))) as mock_run_command, \
+                mock.patch("config.vlan.sleep"):
+            vlan_config.restart_ndppd("asic1")
+        docker_cmds = [c.args[0] for c in mock_run_command.call_args_list
+                       if c.args and c.args[0][0] == "docker"]
+        assert docker_cmds
+        for cmd in docker_cmds:
+            assert "swss1" in cmd
+            assert "swss" not in cmd
 
     def test_config_vlan_del_nonexist_vlan_member(self):
         runner = CliRunner()
