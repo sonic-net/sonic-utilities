@@ -216,6 +216,31 @@ class TestShowLlrCounters(object):
         print(result.output)
         assert "not found" in result.output
 
+    def test_show_llr_counters_hw_status(self):
+        """HW Status column shows the actual SAI enum (prefix stripped)."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["llr"].commands["counters"],
+            ["--interface", "Ethernet0"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "HW Status" in result.output
+        assert "ADVANCE" in result.output       # TX status, prefix stripped
+        assert "SEND_ACKS" in result.output     # RX status, prefix stripped
+
+    def test_show_llr_counters_hw_status_na(self):
+        """A port without status fields in COUNTERS_DB shows N/A for HW Status."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["llr"].commands["counters"],
+            ["--interface", "Ethernet4"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "HW Status" in result.output
+        assert "N/A" in result.output
+
 
 ###############################################################################
 # show llr counters detailed
