@@ -937,6 +937,64 @@ class TestPathAddressing(unittest.TestCase):
         # Assert
         self.assertEqual(expected, actual)
 
+    def _sub_interface_config(self):
+        return {
+            "PORT": {
+                "Ethernet4": {"lanes": "4", "speed": "100000"},
+                "Ethernet40": {"lanes": "40", "speed": "100000"},
+            },
+            "PORTCHANNEL": {"PortChannel1": {"admin_status": "up"}, "PortChannel10": {"admin_status": "up"}},
+            "VLAN_SUB_INTERFACE": {
+                "Eth4.10": {"vlan": "10", "admin_status": "up"},
+                "Eth4.10|10.0.0.1/24": {},
+                "Ethernet4.20": {"admin_status": "up"},
+                "Eth40.30": {"vlan": "30", "admin_status": "up"},
+                "Po1.40": {"vlan": "40", "admin_status": "up"},
+                "PortChannel1.50": {"admin_status": "up"},
+                "Po10.60": {"vlan": "60", "admin_status": "up"},
+            },
+        }
+
+    def test_find_ref_paths__port_with_sub_interfaces__returns_short_and_full_name_sub_interfaces(self):
+        # The sub-interface's tie to its parent is a YANG must, not a leafref. Eth40.30 belongs to
+        # Ethernet40, not Ethernet4, and the address row references Eth4.10, not the port.
+        actual = self.path_addressing.find_ref_paths("/PORT/Ethernet4", self._sub_interface_config())
+
+        self.assertEqual(["/VLAN_SUB_INTERFACE/Eth4.10", "/VLAN_SUB_INTERFACE/Ethernet4.20"], actual)
+
+    def test_find_ref_paths__port_channel_with_sub_interfaces__returns_its_sub_interfaces(self):
+        actual = self.path_addressing.find_ref_paths("/PORTCHANNEL/PortChannel1", self._sub_interface_config())
+
+        self.assertEqual(["/VLAN_SUB_INTERFACE/Po1.40", "/VLAN_SUB_INTERFACE/PortChannel1.50"], actual)
+
+    def test_find_ref_paths__port_table_or_whole_config__returns_sub_interfaces(self):
+        config = self._sub_interface_config()
+
+        self.assertEqual(["/VLAN_SUB_INTERFACE/Eth4.10", "/VLAN_SUB_INTERFACE/Eth40.30",
+                          "/VLAN_SUB_INTERFACE/Ethernet4.20"],
+                         self.path_addressing.find_ref_paths("/PORT", config))
+        # The whole config also yields the address row's leafref; which leafrefs sonic-yang reports
+        # for the root path is not what this test is about.
+        self.assertEqual(["/VLAN_SUB_INTERFACE/Eth4.10", "/VLAN_SUB_INTERFACE/Eth40.30",
+                          "/VLAN_SUB_INTERFACE/Ethernet4.20", "/VLAN_SUB_INTERFACE/Po1.40",
+                          "/VLAN_SUB_INTERFACE/Po10.60", "/VLAN_SUB_INTERFACE/PortChannel1.50"],
+                         [path for path in self.path_addressing.find_ref_paths("", config) if "|" not in path])
+
+    def test_find_ref_paths__several_paths__returns_sub_interfaces_of_each(self):
+        config = self._sub_interface_config()
+
+        self.assertEqual(["/VLAN_SUB_INTERFACE/Eth40.30", "/VLAN_SUB_INTERFACE/Po10.60"],
+                         self.path_addressing.find_ref_paths(["/PORT/Ethernet40", "/PORTCHANNEL/PortChannel10"],
+                                                             config))
+        self.assertEqual(["/VLAN_SUB_INTERFACE/Po1.40", "/VLAN_SUB_INTERFACE/Po10.60",
+                          "/VLAN_SUB_INTERFACE/PortChannel1.50"],
+                         self.path_addressing.find_ref_paths("/PORTCHANNEL", config))
+
+    def test_find_ref_paths__port_field__returns_no_sub_interfaces(self):
+        # A sub-interface references the port's name, not its fields.
+        self.assertEqual([], self.path_addressing.find_ref_paths("/PORT/Ethernet4/speed",
+                                                                 self._sub_interface_config()))
+
     def test_find_ref_paths__path_is_table__returns_ref_paths(self):
         # Arrange
         path = "/PORT"

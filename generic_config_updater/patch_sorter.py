@@ -1755,21 +1755,32 @@ class RemoveCreateOnlyDependencyMoveGenerator:
         reload_config: bool,
         remove_parent: bool,
         recursion_depth: int = 0,
+        expanding: Tuple[Tuple[str, ...], ...] = (),
     ):
         if recursion_depth >= 10:
             return
+        expanding += (tuple(tokens),)
 
         config = diff.current_config
         path = self.path_addressing.create_path(tokens)
         ref_paths = self.path_addressing.find_ref_paths(path, config, reload_config)
         for ref in ref_paths:
             ref_tokens = self.path_addressing.get_path_tokens(ref)
-            if remove_parent:
+            # Keep a VLAN_SUB_INTERFACE entry or address row as is: its parent is the whole
+            # table, and removing that would also remove other ports' sub-interfaces.
+            if remove_parent and not (len(ref_tokens) == 2 and
+                                      ref_tokens[0] == self.path_addressing.SUB_INTERFACE_TABLE):
                 ref_tokens.pop()
+
+            # A path that is being expanded further up the chain is a cycle: expanding it again
+            # yields the same moves, branching once per reference at every level.
+            if tuple(ref_tokens) in expanding:
+                continue
 
             # Recurse since there could be a dependency chain
             for move in self.__remove_dependents(diff, ref_tokens, reload_config=False,
-                                                 remove_parent=remove_parent, recursion_depth=recursion_depth+1):
+                                                 remove_parent=remove_parent, recursion_depth=recursion_depth+1,
+                                                 expanding=expanding):
                 yield move
 
             yield self.__remove_nonempty(diff, ref_tokens)

@@ -10,6 +10,7 @@ import re
 import os
 import hashlib
 from sonic_py_common import logger, multi_asic
+from sonic_py_common.interface import front_panel_prefix, get_intf_longname, portchannel_prefix
 from enum import Enum
 from functools import cmp_to_key
 
@@ -529,6 +530,14 @@ class PathAddressing:
     PATH_SEPARATOR = "/"
     XPATH_SEPARATOR = "/"
 
+    # sonic-vlan-sub-interface.yang ties a VLAN_SUB_INTERFACE entry to its parent PORT or
+    # PORTCHANNEL with a must statement on the key ("<parent>.<vlan id>", the parent named in full
+    # or shortened, e.g. Eth440.300 for Ethernet440), not with a leafref, so
+    # find_data_dependencies() does not see it.
+    SUB_INTERFACE_TABLE = "VLAN_SUB_INTERFACE"
+    # Each parent table, with the prefix of the full parent name its short name stands for.
+    SUB_INTERFACE_PARENT_TABLES = {"PORT": front_panel_prefix(), "PORTCHANNEL": portchannel_prefix()}
+
     def __init__(self, config_wrapper=None):
         self.config_wrapper = config_wrapper
 
@@ -593,7 +602,8 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/0
             /ACL_TABLE/EVERFLOW6/ports/1
         """
-        # TODO: Also fetch references by must statement (check similar statements)
+        # TODO: Also fetch references by must statement (check similar statements). Only the
+        # VLAN_SUB_INTERFACE one is covered, see _find_sub_interface_ref_paths().
         sy = self._create_sonic_yang_with_loaded_models()
 
         if reload_config:
@@ -630,7 +640,54 @@ class PathAddressing:
                 ref_paths.append(ref_path)
                 ref_paths_set.add(ref_path)
 
+        for ref_path in self._find_sub_interface_ref_paths(paths, config):
+            if ref_path not in ref_paths_set:
+                ref_paths.append(ref_path)
+                ref_paths_set.add(ref_path)
+
         ref_paths.sort()
+        return ref_paths
+
+    def _find_sub_interface_ref_paths(self, paths, config):
+        """
+        The VLAN_SUB_INTERFACE entries in 'config' whose parent port or port channel is under any of
+        'paths'. The parent is named in the entry's key and checked by a YANG must, not a leafref, so
+        the leafref lookup in find_ref_paths() does not return these entries.
+        """
+        sub_interfaces = config.get(self.SUB_INTERFACE_TABLE)
+        if not isinstance(sub_interfaces, dict) or not sub_interfaces:
+            return []
+
+        parents = {}
+        for path in paths:
+            tokens = self.get_path_tokens(path)
+            if not tokens:
+                tables = list(self.SUB_INTERFACE_PARENT_TABLES)
+            elif tokens[0] in self.SUB_INTERFACE_PARENT_TABLES and len(tokens) <= 2:
+                tables = [tokens[0]]
+            else:
+                continue
+            for table in tables:
+                names = [tokens[1]] if len(tokens) == 2 else list(config.get(table) or {})
+                parents.setdefault(table, set()).update(names)
+        if not parents:
+            return []
+
+        ref_paths = []
+        for key in sub_interfaces:
+            # A "name|ip-prefix" key is an address of the sub-interface, and references the
+            # sub-interface by a leafref, not its parent.
+            if "|" in key or "." not in key:
+                continue
+            # The must matches the full name in either table, Eth<N> in PORT only and Po<N> in
+            # PORTCHANNEL only.
+            parent = key.split(".", 1)[0]
+            longname = get_intf_longname(parent)
+            for table, names in parents.items():
+                if parent in names or \
+                        (longname.startswith(self.SUB_INTERFACE_PARENT_TABLES[table]) and longname in names):
+                    ref_paths.append(self.create_path([self.SUB_INTERFACE_TABLE, key]))
+                    break
         return ref_paths
 
     def convert_path_to_xpath(self, path, config=None, sy=None):
