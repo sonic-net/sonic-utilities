@@ -104,6 +104,78 @@ def test_upgrade_docker_basic(mock_hget, mock_popen, container):
     assert result.exit_code == SUCCESS
 
 
+@pytest.mark.parametrize("failed_command, expected_exit_code", [
+    (['docker', 'load'], 1),
+    (None, SUCCESS),
+])
+@patch('sonic_installer.main.get_container_image_name', MagicMock(return_value='docker-fpm-frr'))
+@patch('sonic_installer.main.get_container_image_id', MagicMock(return_value='1'))
+@patch('sonic_installer.main.validate_url_or_abort', MagicMock())
+@patch('sonic_installer.main.urlretrieve', MagicMock())
+@patch('os.path.isfile', MagicMock(return_value=True))
+@patch('sonic_installer.main.get_docker_tag_name', MagicMock(return_value='some_tag'))
+@patch('sonic_installer.main.hdel_warm_restart_table', MagicMock())
+@patch('sonic_installer.main.time.sleep', MagicMock())
+@patch('sonic_installer.main.run_command')
+@patch('sonic_installer.main.hget_warm_restart_table')
+def test_upgrade_docker_warm_restores_cold_restart_setting(mock_hget, mock_run_cmd, failed_command, expected_exit_code):
+    def mock_hget_impl(db_name, table_name, warm_app_name, key):
+        if table_name == 'WARM_RESTART_ENABLE_TABLE':
+            return "false"
+        return 'reconciled'
+
+    def mock_run_cmd_impl(command, **kwargs):
+        if failed_command and command[:len(failed_command)] == failed_command:
+            sys.exit(1)
+
+    mock_hget.side_effect = mock_hget_impl
+    mock_run_cmd.side_effect = mock_run_cmd_impl
+
+    runner = CliRunner()
+    result = runner.invoke(
+            sonic_installer.sonic_installer.commands['upgrade-docker'],
+            ['-y', '--warm', 'bgp', 'http://']
+        )
+
+    assert result.exit_code == expected_exit_code
+    commands = [c.args[0] for c in mock_run_cmd.call_args_list]
+    assert commands[0] == ['config', 'warm_restart', 'enable', 'bgp']
+    assert commands.count(['config', 'warm_restart', 'disable', 'bgp']) == 1
+
+
+@pytest.mark.parametrize("args", [['-y'], ['-y', '--warm']])
+@patch('sonic_installer.main.get_container_image_name', MagicMock(return_value='docker-fpm-frr'))
+@patch('sonic_installer.main.get_container_image_id', MagicMock(return_value='1'))
+@patch('sonic_installer.main.validate_url_or_abort', MagicMock())
+@patch('sonic_installer.main.urlretrieve', MagicMock())
+@patch('os.path.isfile', MagicMock(return_value=True))
+@patch('sonic_installer.main.get_docker_tag_name', MagicMock(return_value='some_tag'))
+@patch('sonic_installer.main.hdel_warm_restart_table', MagicMock())
+@patch('sonic_installer.main.time.sleep', MagicMock())
+@patch('sonic_installer.main.run_command')
+@patch('sonic_installer.main.hget_warm_restart_table')
+def test_upgrade_docker_system_warm_restart_enabled(mock_hget, mock_run_cmd, args):
+    def mock_hget_impl(db_name, table_name, warm_app_name, key):
+        if table_name == 'WARM_RESTART_ENABLE_TABLE':
+            return "true" if warm_app_name == 'system' else "false"
+        return 'reconciled'
+
+    mock_hget.side_effect = mock_hget_impl
+
+    runner = CliRunner()
+    result = runner.invoke(
+            sonic_installer.sonic_installer.commands['upgrade-docker'],
+            args + ['bgp', 'http://']
+        )
+
+    assert result.exit_code == SUCCESS
+    assert 'System warm restart is enabled' in result.output
+    commands = [c.args[0] for c in mock_run_cmd.call_args_list]
+    assert ['docker', 'exec', '-i', 'bgp', 'pkill', '-9', 'bgpd'] in commands
+    assert not any(command[:2] == ['config', 'warm_restart'] for command in commands)
+    mock_hget.assert_any_call('STATE_DB', 'WARM_RESTART_TABLE', 'bgp', 'state')
+
+
 @patch('sonic_installer.main.get_container_image_name', MagicMock(return_value='docker-fpm-frr'))
 @patch('sonic_installer.main.get_container_image_id', MagicMock(return_value=['1']))
 @patch('sonic_installer.main.validate_url_or_abort', MagicMock())
