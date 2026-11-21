@@ -80,6 +80,24 @@ sudo pip install YOUR_WHEEL_PACKAGE
 ```
 Note: Don't use "--force-reinstall".
 
+#### Route consistency checks during churn
+
+`route_check.py` reconciles APPL_DB/ASIC_DB snapshots with ASIC_DB notifications
+over a one-second observation window. On all device types, a remaining database
+mismatch receives one fresh comparison after a two-second delay. Only the same
+prefix and mismatch category in the same namespace in both comparisons are
+reported as persistent. A mismatch first seen in the confirmation sample is
+deferred to subsequent monitoring, not treated as persistence of a different
+prefix. Clean first comparisons incur no confirmation delay. This applies to
+both single-ASIC and multi-ASIC devices.
+
+The confirmation does not repeat FRR checks or mitigation actions, change
+Monit thresholds, or reset the invocation timeout. Selector/database errors
+remain failures. FRR mitigation is gated on the latest database comparison,
+not the reporting intersection: a newly observed route mismatch still blocks
+an offload-success notification. The two-second delay is a bounded confirmation
+policy, not a guarantee that route programming has converged.
+
 ### sonic-utilities-data
 
 A Debian package, containing data files needed by the utilities (bash_completion files, Jinja2 templates, etc.)
