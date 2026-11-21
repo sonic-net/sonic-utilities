@@ -123,6 +123,7 @@ setup(
         'scripts/coredump-compress',
         'scripts/coppstat',
         'scripts/configlet',
+        'scripts/cposhow',
         'scripts/db_migrator.py',
         'scripts/decode-syseeprom',
         'scripts/dropcheck',
