@@ -17,7 +17,8 @@ How:
         4.1) Collect subscribe messages for a second
         4.2) check diff against the subscribe messages
     5) Rule out local interfaces & default routes
-    6) If still outstanding diffs, report failure.
+    6) Confirm outstanding diffs against fresh snapshots after two seconds.
+       Report only the same prefix/category in both comparisons.
 
 To verify:
     Run this tool in SONiC switch and watch the result. In case of failure
@@ -38,6 +39,7 @@ import argparse
 from enum import Enum
 import ipaddress
 import json
+import math
 import os
 import re
 import sys
@@ -61,6 +63,7 @@ ASIC_TABLE_NAME = 'ASIC_STATE'
 ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
 
 SUBSCRIBE_WAIT_SECS = 1
+ROUTE_CONFIRM_WAIT_SECS = 2
 
 # Max of 2 minutes on normal devices and 5 minutes on virtual chassis
 TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
@@ -274,13 +277,14 @@ def get_subscribe_updates(selector, subs):
     """
     adds = []
     deletes = []
-    t_end = time.time() + SUBSCRIBE_WAIT_SECS
-    t_wait = SUBSCRIBE_WAIT_SECS
+    deadline = time.monotonic() + SUBSCRIBE_WAIT_SECS
 
-    while t_wait > 0:
-        selector.select(t_wait)
-        t_wait = int(t_end - time.time())
-        while True:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        selector.select(math.ceil(remaining * 1000))
+        while time.monotonic() < deadline:
             key, op, val = subs.pop()
             if not key:
                 break
@@ -942,7 +946,7 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
     return rt_appl_miss, rt_asic_miss
 
 
-def check_routes_for_namespace(namespace):
+def get_route_db_mismatches(namespace):
     """
     Process a Single Namespace:
     The heart of this script which runs the checks.
@@ -956,11 +960,7 @@ def check_routes_for_namespace(namespace):
     If there are still some unjustifiable diffs, between APPL & ASIC DB,
     related to routes report failure, else all good.
 
-    If there are FRR routes that aren't marked offloaded but all APPL & ASIC DB
-    routes are in sync report failure and perform a mitigation action.
-
-    :return (0, None) on success, else (-1, results) where results holds
-    the unjustifiable entries.
+    :return Mismatches, subscriber additions/deletions, and APPL-DB routes.
     """
 
     results = {}
@@ -969,11 +969,6 @@ def check_routes_for_namespace(namespace):
     intf_appl_miss = []
     rt_appl_miss = []
     rt_asic_miss = []
-    rt_frr_miss = []
-    rt_frr_failed = []
-
-    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
-
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
     rt_appl = get_appdb_routes(namespace)
@@ -1031,6 +1026,30 @@ def check_routes_for_namespace(namespace):
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
+    return results, adds, deletes, rt_appl
+
+
+def check_routes_for_namespace(namespace):
+    """Confirm database mismatches without repeating FRR actions."""
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
+    results, adds, deletes, rt_appl = get_route_db_mismatches(namespace)
+
+    if results:
+        print_message(syslog.LOG_INFO,
+                      "Confirming route database mismatches for namespace {}".format(namespace))
+        time.sleep(ROUTE_CONFIRM_WAIT_SECS)
+        confirmed, adds, deletes, rt_appl = get_route_db_mismatches(namespace)
+        results = {
+            category: sorted(set(prefixes).intersection(confirmed.get(category, [])))
+            for category, prefixes in results.items()
+        }
+        results = {category: prefixes for category, prefixes in results.items() if prefixes}
+
+    has_route_mismatch = (
+        "missed_ROUTE_TABLE_routes" in results or
+        "Unaccounted_ROUTE_ENTRY_TABLE_entries" in results
+    )
+
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
 
@@ -1038,7 +1057,7 @@ def check_routes_for_namespace(namespace):
         results["failed_FRR_routes"] = rt_frr_failed
 
     if results:
-        if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
+        if rt_frr_miss and not has_route_mismatch:
             print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} \
                           but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
             if is_suppress_fib_pending_enabled(namespace):
