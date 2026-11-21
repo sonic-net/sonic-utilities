@@ -352,6 +352,31 @@ class TestRouteCheck(object):
         assert result == {"failed_FRR_routes": ["198.51.100.0/24"]}
         frr.assert_called_once_with("asic1")
 
+    @pytest.mark.parametrize("latest, should_mitigate", [
+        ({"missed_ROUTE_TABLE_routes": ["198.51.100.0/24"]}, False),
+        ({"Unaccounted_ROUTE_ENTRY_TABLE_entries": ["198.51.100.0/24"]}, False),
+        ({}, True),
+    ])
+    def test_confirmation_mitigation_uses_latest_database_state(self, latest, should_mitigate):
+        first = {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}
+        frr_missing = [{"prefix": "198.51.100.0/24", "protocol": "bgp"}]
+        with patch("route_check.get_route_db_mismatches", side_effect=[
+                (first, [], [], ["192.0.2.0/24"]),
+                (latest, [], [], ["198.51.100.0/24"]),
+             ]), \
+                patch("route_check.check_frr_pending_routes", return_value=(frr_missing, [])) as frr, \
+                patch("route_check.is_suppress_fib_pending_enabled", return_value=True), \
+                patch("route_check.mitigate_installed_not_offloaded_frr_routes") as mitigate, \
+                patch("route_check.time.sleep"):
+            result, _, _ = route_check.check_routes_for_namespace("asic1")
+
+        assert result == {"missed_FRR_routes": frr_missing}
+        frr.assert_called_once_with("asic1")
+        if should_mitigate:
+            mitigate.assert_called_once_with("asic1", frr_missing, ["198.51.100.0/24"])
+        else:
+            mitigate.assert_not_called()
+
     def test_confirmation_keeps_namespaces_separate(self):
         mismatch = {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}
         samples = {

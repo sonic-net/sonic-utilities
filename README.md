@@ -93,8 +93,10 @@ both single-ASIC and multi-ASIC devices.
 
 The confirmation does not repeat FRR checks or mitigation actions, change
 Monit thresholds, or reset the invocation timeout. Selector/database errors
-remain failures. The two-second delay is a bounded confirmation policy, not a
-guarantee that route programming has converged.
+remain failures. FRR mitigation is gated on the latest database comparison,
+not the reporting intersection: a newly observed route mismatch still blocks
+an offload-success notification. The two-second delay is a bounded confirmation
+policy, not a guarantee that route programming has converged.
 
 ### sonic-utilities-data
 

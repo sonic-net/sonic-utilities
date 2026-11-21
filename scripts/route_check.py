@@ -1033,12 +1033,14 @@ def check_routes_for_namespace(namespace):
     """Confirm database mismatches without repeating FRR actions."""
     rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
     results, adds, deletes, rt_appl = get_route_db_mismatches(namespace)
+    latest_db_results = results
 
     if results:
         print_message(syslog.LOG_INFO,
                       "Confirming route database mismatches for namespace {}".format(namespace))
         time.sleep(ROUTE_CONFIRM_WAIT_SECS)
         confirmed, adds, deletes, rt_appl = get_route_db_mismatches(namespace)
+        latest_db_results = confirmed
         results = {
             category: sorted(set(prefixes).intersection(confirmed.get(category, [])))
             for category, prefixes in results.items()
@@ -1046,8 +1048,8 @@ def check_routes_for_namespace(namespace):
         results = {category: prefixes for category, prefixes in results.items() if prefixes}
 
     has_route_mismatch = (
-        "missed_ROUTE_TABLE_routes" in results or
-        "Unaccounted_ROUTE_ENTRY_TABLE_entries" in results
+        "missed_ROUTE_TABLE_routes" in latest_db_results or
+        "Unaccounted_ROUTE_ENTRY_TABLE_entries" in latest_db_results
     )
 
     if rt_frr_miss:
