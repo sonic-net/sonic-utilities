@@ -597,8 +597,11 @@ def main():
             sys.exit(1)
 
     if operation_mode == 'reset':
-        reset_mirror_tunnel()
-        reset_vxlan_tunnel()
+        if not config_db.get_entry('MIRROR_SESSION', MIRROR_SESSION_NAME):
+            log.log_info('Mirror session {} does not exist, skipping reset'.format(MIRROR_SESSION_NAME))
+        else:
+            reset_mirror_tunnel()
+            reset_vxlan_tunnel()
 
     sys.exit(0)
 
