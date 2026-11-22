@@ -25,6 +25,9 @@ except KeyError:
 from swsscommon.swsscommon import SonicV2Connector
 from sonic_py_common import multi_asic
 from utilities_common.general import load_db_config
+from utilities_common.gearbox_stats import (
+    get_gearbox_fec_max_t, load_gearbox_baseline, subtract_gearbox_baseline,
+)
 
 
 # ========================== Common gearbox-utils logic ==========================
@@ -261,6 +264,7 @@ class InterfaceFecStats(object):
         self.port_name = port_name
         self.display_type = display_type
         self.namespace = namespace
+        self.baseline = load_gearbox_baseline(namespace)
         self.gb_db = SonicV2Connector(
             namespace=namespace, use_unix_socket_path=False)
         self.appl_db = SonicV2Connector(
@@ -291,7 +295,7 @@ class InterfaceFecStats(object):
         """
         full_table_id = COUNTER_TABLE_PREFIX + oid
         counters = self.gb_db.get_all('GB_COUNTERS_DB', full_table_id)
-        return counters if counters else {}
+        return subtract_gearbox_baseline(counters or {}, self.baseline.get(oid, {}))
 
     def get_rates_for_oid(self, oid):
         """
@@ -444,6 +448,8 @@ class InterfaceFecStats(object):
                 fec_post_ber = format_ber(rates.get('FEC_POST_BER', '0'))
                 fec_pre_ber_max = format_ber(rates.get('FEC_PRE_BER_MAX', 'N/A'))
                 fec_max_t = rates.get('FEC_MAX_T', '-1')
+                if self.baseline.get(oid):
+                    fec_max_t = get_gearbox_fec_max_t(counters, fec_max_t)
 
                 table_data.append([
                     iface,

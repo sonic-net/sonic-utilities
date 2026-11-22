@@ -13,6 +13,7 @@ import show.main as show
 
 from click.testing import CliRunner
 from utilities_common.cli import UserCache
+from utilities_common.gearbox_stats import GEARBOX_CACHE_KEY
 
 from .mock_tables import dbconnector
 from .utils import get_result_and_return_code
@@ -1009,7 +1010,8 @@ class TestPortStat(object):
         with open(cache_file, 'r') as f:
             cnstat_cached = json.load(f)
 
-        port_entries = [v for k, v in cnstat_cached.items() if k != 'time']
+        port_entries = [v for k, v in cnstat_cached.items()
+                        if k not in ('time', GEARBOX_CACHE_KEY)]
         assert port_entries, "cache contains no port entries"
         for entry in port_entries:
             for i in range(16):
@@ -1648,7 +1650,10 @@ class TestPortstatNamespaceClear(object):
         expected.update(snapshot)
         assert json.loads(cache_file.read_text()) == expected
         expected_ns = namespaces if tag_name is None else []
-        assert portstat.get_db_client.call_args_list == [mock.call(ns) for ns in expected_ns]
+        # Snapshot reads also visit the selected ASICs, including tagged clears.
+        assert portstat.get_db_client.call_args_list == [
+            mock.call(ns) for ns in namespaces + expected_ns
+        ]
         for ns, db in databases.items():
             redis = db.get_redis_client.return_value
             if ns in expected_ns:

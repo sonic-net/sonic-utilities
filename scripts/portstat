@@ -45,6 +45,9 @@ from utilities_common.intf_filter import parse_interface_in_filter
 
 from utilities_common.cli import json_serial, UserCache
 from utilities_common.portstat import Portstat, COUNTERS_PORT_NAME_MAP, RATES_TABLE_PREFIX
+from utilities_common.gearbox_stats import (
+    GB_COUNTERS_DB, GEARBOX_CACHE_KEY, snapshot_gearbox_counters,
+)
 
 # FEC_PRE_BER_MAX is a running maximum kept by port_rates.lua, so the
 # saved counter snapshot can't reset it. Delete it on clear instead.
@@ -54,7 +57,7 @@ FEC_RATE_RESET_FIELDS = (
 
 
 def _reset_fec_rate_fields(portstat):
-    """Delete FEC_RATE_RESET_FIELDS from RATES for all ports (affects all users)."""
+    """Reset ASIC and gearbox RATES maxima in the selected namespaces (all users)."""
     try:
         ns_list = portstat.multi_asic.get_ns_list_based_on_options()
     except Exception as e:
@@ -63,16 +66,24 @@ def _reset_fec_rate_fields(portstat):
     for ns in ns_list:
         try:
             db = portstat.get_db_client(ns)
-            counter_port_name_map = db.get_all(db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
-            if not counter_port_name_map:
-                continue
-            redis_client = db.get_redis_client(db.COUNTERS_DB)
-            for oid in counter_port_name_map.values():
-                redis_client.hdel(RATES_TABLE_PREFIX + oid, FEC_RATE_RESET_FIELDS)
+            db_names = [db.COUNTERS_DB]
+            if GB_COUNTERS_DB in db.get_db_list():
+                db_names.append(GB_COUNTERS_DB)
         except Exception as e:
             print("Warning: failed to reset FEC rate fields for namespace '{}': {}".format(ns, e),
                   file=sys.stderr)
             continue
+        for db_name in db_names:
+            try:
+                counter_port_name_map = db.get_all(db_name, COUNTERS_PORT_NAME_MAP) or {}
+                if not counter_port_name_map:
+                    continue
+                redis_client = db.get_redis_client(db_name)
+                for oid in dict.fromkeys(counter_port_name_map.values()):
+                    redis_client.hdel(RATES_TABLE_PREFIX + oid, FEC_RATE_RESET_FIELDS)
+            except Exception as e:
+                print("Warning: failed to reset FEC rate fields in {} for namespace '{}': {}".format(
+                    db_name, ns, e), file=sys.stderr)
 
 
 def main():
@@ -178,12 +189,26 @@ Examples:
                     raise ValueError("Expected a JSON object in counter cache")
                 cnstat_cached_dict.update(cnstat_dict)
                 cnstat_dict = cnstat_cached_dict
+            # Store raw per-side counters separately from the combined interface
+            # baseline. OIDs are scoped by namespace and also identify recreated ports.
+            gearbox_baselines = dict(cnstat_dict.get(GEARBOX_CACHE_KEY, {}))
+            for ns in portstat.multi_asic.get_ns_list_based_on_options():
+                try:
+                    gearbox_baselines[ns or ''] = snapshot_gearbox_counters(portstat.get_db_client(ns))
+                except Exception as e:
+                    raise RuntimeError("namespace '{}': {}".format(ns, e)) from e
+            if any(gearbox_baselines.values()):
+                cnstat_dict[GEARBOX_CACHE_KEY] = gearbox_baselines
+            else:
+                cnstat_dict.pop(GEARBOX_CACHE_KEY, None)
             with open(cnstat_fqn_file, 'w') as cache_file:
                 json.dump(cnstat_dict, cache_file, default=json_serial)
         except IOError as e:
             sys.exit(e.errno)
         except ValueError as e:
             sys.exit("Failed to read counter cache: {}".format(e))
+        except RuntimeError as e:
+            sys.exit("Failed to read gearbox counters: {}".format(e))
         else:
             # A tagged snapshot belongs to one consumer; don't reset global
             # state on its behalf.
