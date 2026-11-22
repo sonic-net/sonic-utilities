@@ -179,9 +179,13 @@ from .bgp_frr_v6 import bgp as bgp_v6  # noqa: E402
 ipv6.add_command(bgp_v6)
 
 @cli.command()
-def counters():
+@multi_asic_util.multi_asic_click_option_namespace(
+    help='ASIC namespace to clear; omit to clear all ASICs')
+def counters(namespace):
     """Clear counters"""
     command = ["portstat", "-c"]
+    if namespace is not None:
+        command += ['-n', namespace]
     run_command(command)
 
 @cli.command()

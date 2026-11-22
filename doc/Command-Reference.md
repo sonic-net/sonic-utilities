@@ -6916,6 +6916,18 @@ The "detailed" subcommand is used to display more detailed interface counters. A
   admin@sonic:~$ sonic-clear counters
   ```
 
+  On multi-ASIC platforms, this clears interface counters, FEC histogram
+  baselines, and FEC_PRE_BER_MAX on all ASICs, including internal ports.
+  Use `-n` or `--namespace` to clear only one ASIC:
+
+  ```
+  admin@sonic:~$ sonic-clear counters --namespace asic0
+  ```
+
+  A namespace-specific clear preserves the counter baselines and FEC_PRE_BER_MAX
+  for other ASICs. The displayed last cached time records the most
+  recent clear operation in the shared cache.
+
 - NOTE: Layer 3 interface counters can be cleared by the user with the following command:
 
   ```
