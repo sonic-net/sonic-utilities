@@ -214,6 +214,17 @@ stages:
       image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
 
     steps:
+    # Microsoft-hosted images leave too little free disk for the build in the
+    # sonic-slave container. Delete unused preinstalled SDKs on the agent host;
+    # target: host is needed, as script steps otherwise run in the container.
+    - script: |
+        set -ex
+        df -h /
+        sudo rm -rf /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+        df -h /
+      target: host
+      displayName: 'Free disk space on the agent'
+
     - script: |
         set -ex
         sudo apt-get update
