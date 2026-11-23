@@ -36,6 +36,11 @@ jobs:
           bazel test --lockfile_mode=update --test_output=errors \
             //:wheel_contract_test //:wheel_installed_test //:runtime_wheel_contract_test //:source_install_test
 
+      - name: Build and check the native data package
+        run: |
+          bazel test --lockfile_mode=update --test_output=errors \
+            --extra_toolchains=//bazel/data:ci_toolchain //bazel/data:contract_test
+
       - name: Collect wheels and build evidence
         env:
           SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
