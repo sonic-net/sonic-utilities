@@ -133,5 +133,15 @@
     },
     "VLAN_SUB_INTERFACE|Ethernet0.95|2001:db8:95::1/64": {
         "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet0.81": {
+        "admin_status": "up",
+        "vnet_name": "Vnet1",
+        "loopback_action": "drop",
+        "vlan": "81",
+        "ipv6_use_link_local_only": "enable"
+    },
+    "INTERFACE|Ethernet0.81|10.0.81.0/31": {
+        "NULL": "NULL"
     }
 }

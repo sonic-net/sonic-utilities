@@ -970,12 +970,9 @@ class DBMigrator():
         """
         Move ipv6_use_link_local_only of a VLAN sub-interface to VLAN_SUB_INTERFACE.
 
-        Before VLAN_SUB_INTERFACE modelled the field, "config interface ipv6
-        enable use-link-local-only" wrote it for a sub-interface to
-        INTERFACE|<subintf> (Ethernet parent) or PORTCHANNEL_INTERFACE|<subintf>
-        (PortChannel parent). The models refuse those rows (their key must name a
-        port or PortChannel), and neighsyncd now reads the field only from
-        VLAN_SUB_INTERFACE|<subintf>.
+        Older CLIs wrote it for a sub-interface to INTERFACE|<subintf> (Ethernet
+        parent) or PORTCHANNEL_INTERFACE|<subintf> (PortChannel parent). It
+        belongs on VLAN_SUB_INTERFACE|<subintf>.
 
         The field is removed from the old row and goes to VLAN_SUB_INTERFACE:
         - the sub-interface's row there already sets it: that value is kept;
@@ -987,8 +984,8 @@ class DBMigrator():
           The old row is left over from a deleted sub-interface, which intfmgrd
           would otherwise create again from it, and a new VLAN_SUB_INTERFACE row
           would do the same.
-        A value other than enable or disable is dropped, since the model refuses
-        it; a missing row is still created.
+        A value other than enable or disable is dropped, as the VLAN_SUB_INTERFACE
+        row does not take it; a missing row is still created.
 
         The old row is deleted only when the field was all it held and its table
         has no address rows for the sub-interface; otherwise it stays without the
@@ -996,16 +993,26 @@ class DBMigrator():
         rows are not touched.
 
         intfmgrd removes a sub-interface's netdev when one of its rows is deleted,
-        so this must run before swss starts, as db_migrator does at boot and on
-        config reload, which stops swss first.
+        so this is meant to run before swss starts: at boot, and on config reload,
+        which stops swss first. config reload -n leaves swss running, so there a
+        sub-interface whose old row is deleted loses its netdev until swss restarts.
         """
         field = 'ipv6_use_link_local_only'
         sub_intf_table = 'VLAN_SUB_INTERFACE'
+        old_tables = ('INTERFACE', 'PORTCHANNEL_INTERFACE')
         modelled = {field, 'admin_status', 'vrf_name', 'vnet_name', 'loopback_action', 'vlan'}
-        sub_intfs = self.configDB.get_table(sub_intf_table)
+        tables = {}
+        for table in (sub_intf_table,) + old_tables:
+            try:
+                tables[table] = self.configDB.get_table(table)
+            except Exception as e:
+                log.log_error(f"Failed to read {table} table: {str(e)}")
+                return
+
+        sub_intfs = tables[sub_intf_table]
         addressed = {key[0] for key in sub_intfs if isinstance(key, tuple)}
-        for table in ('INTERFACE', 'PORTCHANNEL_INTERFACE'):
-            rows = self.configDB.get_table(table)
+        for table in old_tables:
+            rows = tables[table]
             table_addressed = {key[0] for key in rows if isinstance(key, tuple)}
             for key, entry in rows.items():
                 if isinstance(key, tuple) or '.' not in key or field not in entry:

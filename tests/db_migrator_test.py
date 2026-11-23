@@ -1212,6 +1212,11 @@ class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
         # No row, but address rows: the row is created with the old row's modelled fields.
         assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.80') == {
             'ipv6_use_link_local_only': 'enable', 'vrf_name': 'Vrf1'}
+        # ... each of them, and the old row keeps them all.
+        modelled = {'admin_status': 'up', 'vnet_name': 'Vnet1', 'loopback_action': 'drop', 'vlan': '81'}
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.81') == dict(
+            modelled, ipv6_use_link_local_only='enable')
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.81') == modelled
         assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.90') == {'ipv6_use_link_local_only': 'enable'}
         # A value the model refuses is dropped.
         assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.91') == {'admin_status': 'up'}
@@ -1237,6 +1242,43 @@ class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
         mock_set.assert_not_called()
         mock_mod.assert_not_called()
         self.check(dbmgtr.configDB)
+
+    def test_read_error_is_logged_not_raised(self):
+        dbmgtr = self.migrator()
+        import db_migrator
+        with mock.patch.object(dbmgtr.configDB, 'get_table', side_effect=RuntimeError('redis down')), \
+                mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set, \
+                mock.patch.object(db_migrator.log, 'log_error') as log_error:
+            dbmgtr.migrate_sub_interface_ipv6_use_link_local_only()
+
+        log_error.assert_called_once()
+        mock_set.assert_not_called()
+
+    def test_write_error_is_logged_and_other_rows_still_move(self):
+        dbmgtr = self.migrator()
+        import db_migrator
+        set_entry = dbmgtr.configDB.set_entry
+
+        def failing_set_entry(table, key, data):
+            if (table, key) == ('INTERFACE', 'Ethernet0.20'):
+                raise RuntimeError('redis down')
+            return set_entry(table, key, data)
+
+        with mock.patch.object(dbmgtr.configDB, 'set_entry', side_effect=failing_set_entry), \
+                mock.patch.object(db_migrator.log, 'log_error') as log_error:
+            dbmgtr.migrate_sub_interface_ipv6_use_link_local_only()
+
+        log_error.assert_called_once()
+        # The failed row keeps the field, which the next boot drops as VLAN_SUB_INTERFACE now sets it.
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.20') == {
+            'ipv6_use_link_local_only': 'enable', 'vrf_name': 'Vrf1'}
+        # The other rows still moved.
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.30') == {}
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.81') == {
+            'admin_status': 'up', 'vnet_name': 'Vnet1', 'loopback_action': 'drop', 'vlan': '81'}
+        moved = dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'PortChannel1.10')
+        assert moved['ipv6_use_link_local_only'] == 'enable'
+        assert dbmgtr.configDB.get_entry('PORTCHANNEL_INTERFACE', 'PortChannel1.10') == {}
 
     def test_wired_into_version_202605_01(self):
         dbmgtr = self.migrator()
