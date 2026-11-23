@@ -134,7 +134,8 @@
         "laser_temperature": "47.7265625",
         "laser_config_freq": "193100",
         "laser_curr_freq": "193100.0",
-        "tx_config_power": "-8.5"
+        "tx_config_power": "-8.5",
+        "prefec_ber_curr_media_input1": "0.00015099999999999998"
     },
     "TRANSCEIVER_DOM_THRESHOLD|Ethernet8": {
         "rxpowerhighalarm": "6.9999",
