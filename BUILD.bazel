@@ -163,8 +163,8 @@ filegroup(
     output_group = "metadata",
 )
 
-# Image owners supply the complete host Python environment and target paths.
-# The original completion generator and Debian installation inputs stay here.
+# Completion generation and installation packaging are owned by Utilities.
+# The image registers the declared CLI execution environment as a toolchain.
 exports_files([
     "sonic-utilities-data/generate_completions.py",
     "sonic-utilities-data/debian/control",
@@ -197,3 +197,15 @@ py_test(
     main = "//bazel:source_install_contract.py",
     deps = [requirement("installer")],
 )
+
+# Follow sonic-utilities-data/debian/install, including sonic-cli-gen templates.
+filegroup(
+    name = "utilities_data_templates",
+    srcs = glob([
+        "sonic-utilities-data/templates/*.j2",
+        "sonic-utilities-data/templates/sonic-cli-gen/*.j2",
+    ]),
+)
+
+alias(name = "sonic-utilities-data.runtime", actual = "//bazel/data:runtime")
+alias(name = "sonic-utilities-data.runtime_metadata", actual = "//bazel/data:runtime_packages.json")
