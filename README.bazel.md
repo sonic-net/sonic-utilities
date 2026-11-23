@@ -4,7 +4,7 @@ Pinned owner source: `627858630348effec301290da9054313ec54c2ef`. Public target:
 `@sonic-utilities//:sonic_utilities_wheel`, module `sonic-utilities@1.2`.
 Root source target is `//:sonic_utilities_wheel`.
 
-Uses maintained rules_python `py_wheel` (1.9.0.sonic.1 from the canonical SONiC
+Uses maintained rules_python `py_wheel` (1.9.0.sonic.2 from the canonical SONiC
 registry), not a bespoke wheel producer and
 not `setup.py` with fake installed SONiC packages. Real owner Python files,
 legacy scripts, package data and console entry points are retained. The small
@@ -155,7 +155,7 @@ bazel build @sonic_utilities//:sonic-utilities-data.runtime \
 
 The new source API requires infrastructure executable file modes and script
 normalization. The module selects published sonic-build-infra
-`0.0.38-0baa4acc9eac9ccc793b81104b1580d530271cbe`, which provides these
+`0.0.44-35726399908a3beb947174e9359f902077928289`, which provides these
 interfaces. Source component verification and formal registry consumption are
 distinct acceptance steps. Local reproduction keeps
 the user's ordinary cache and output configuration.

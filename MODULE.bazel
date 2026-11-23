@@ -7,7 +7,7 @@ module(
     ],
 )
 
-bazel_dep(name = "rules_python", version = "1.9.0.sonic.1")
+bazel_dep(name = "rules_python", version = "1.9.0.sonic.2")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
@@ -24,7 +24,7 @@ pip.parse(
 use_repo(pip, "utilities_test_pip")
 
 # Published source installation API, including executable modes and script normalization.
-bazel_dep(name = "sonic-build-infra", version = "0.0.38-0baa4acc9eac9ccc793b81104b1580d530271cbe", repo_name = "sonic_build_infra")
+bazel_dep(name = "sonic-build-infra", version = "0.0.44-35726399908a3beb947174e9359f902077928289", repo_name = "sonic_build_infra")
 
 # Uncompressed installation TAR for the Debian data package.
 bazel_dep(name = "tar.bzl", version = "0.10.5.sonic.2")
