@@ -2641,6 +2641,7 @@ class TestBulkLowLevelMoveGeneratorRegression(unittest.TestCase):
             second_group = next(first_run)
             self.assertIs(second_group.patches[0].diff, diff_a)
 
+
 class TestBulkLowLevelMoveGenerator(unittest.TestCase):
     """Bulk low-level moves for entries that contain a leaf-list.
 
