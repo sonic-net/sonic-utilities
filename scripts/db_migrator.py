@@ -1472,7 +1472,9 @@ class DBMigrator():
                 new_cfg = {**init_cfg, **curr_cfg}
                 self.configDB.set_entry(init_cfg_table, key, new_cfg)
 
-        self.migrate_telemetry_to_gnmi()
+        # init_cfg.json lists FEATURE|telemetry only on images that still ship the telemetry container
+        if 'telemetry' not in init_db.get('FEATURE', {}):
+            self.migrate_telemetry_to_gnmi()
 
         # Avoiding copp table migration is platform specific at the moment as I understood this might cause issues for some
         # vendors, probably Broadcom. This change can be checked with any specific vendor and if this works fine the platform

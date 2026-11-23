@@ -894,6 +894,21 @@ class TestGNMIMigrator(object):
         assert not dbmgtr.configDB.get_table("TELEMETRY")
         assert not dbmgtr.configDB.get_entry("FEATURE", "telemetry")
 
+    def test_telemetry_kept_when_image_has_telemetry(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-input')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.config_src_data = {}
+        telemetry_before = dbmgtr.configDB.get_table("TELEMETRY")
+        init_cfg = os.path.join(mock_db_path, 'init_cfg_telemetry.json')
+        with mock.patch.object(db_migrator, 'INIT_CFG_FILE', init_cfg):
+            dbmgtr.migrate()
+
+        assert telemetry_before
+        assert dbmgtr.configDB.get_table("TELEMETRY") == telemetry_before
+        assert dbmgtr.configDB.get_entry("FEATURE", "telemetry").get("state") == "enabled"
+        assert not dbmgtr.configDB.get_table("GNMI")
+
 class TestAAAMigrator(object):
 
 
