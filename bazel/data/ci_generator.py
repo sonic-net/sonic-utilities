@@ -22,7 +22,10 @@ output = Path(args.output).absolute()
 output.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory() as directory:
     with tarfile.open(args.archive) as archive:
-        archive.extractall(directory, filter="data")
+        # Match the existing source_install_contract.py extraction: apply the
+        # Python data filter to each member, rejecting paths outside the prefix.
+        for member in archive:
+            archive.extract(member, directory, filter="data")
     site = Path(directory) / "usr/local/lib/python3.13/dist-packages"
     program = (
         "import sys,runpy; sys.path[:0]=sys.argv[1:3]; "
