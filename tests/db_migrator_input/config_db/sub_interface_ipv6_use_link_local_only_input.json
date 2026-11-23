@@ -30,6 +30,14 @@
     "INTERFACE|Ethernet0.40": {
         "ipv6_use_link_local_only": "enable"
     },
+    "INTERFACE|Ethernet0.41": {
+        "ipv6_use_link_local_only": "enable",
+        "vrf_name": "Vrf1"
+    },
+    "INTERFACE|Ethernet0.42": {
+        "ipv6_use_link_local_only": "enable",
+        "mpls": "enable"
+    },
     "INTERFACE|Ethernet4.50": {
         "vrf_name": "Vrf1"
     },

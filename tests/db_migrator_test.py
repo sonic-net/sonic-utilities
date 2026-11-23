@@ -1204,6 +1204,13 @@ class TestSubInterfaceIpv6UseLinkLocalOnlyMigrator(object):
         # The sub-interface is not configured: nothing creates it.
         assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.40') == {}
         assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.40') == {}
+        # The old row holds other fields, so it configures the sub-interface: the row is created.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.41') == {
+            'ipv6_use_link_local_only': 'enable', 'vrf_name': 'Vrf1'}
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.41') == {'vrf_name': 'Vrf1'}
+        # ... even when none of them is modelled there.
+        assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.42') == {'ipv6_use_link_local_only': 'enable'}
+        assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.42') == {'mpls': 'enable'}
         # Only address rows configure it: the moved field creates its row.
         assert dbmgtr.configDB.get_entry('VLAN_SUB_INTERFACE', 'Ethernet0.60') == {'ipv6_use_link_local_only': 'enable'}
         assert dbmgtr.configDB.get_entry('INTERFACE', 'Ethernet0.60') == {}

@@ -20,6 +20,19 @@
     "INTERFACE|Ethernet0.20": {
         "vrf_name": "Vrf1"
     },
+    "INTERFACE|Ethernet0.41": {
+        "vrf_name": "Vrf1"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.41": {
+        "ipv6_use_link_local_only": "enable",
+        "vrf_name": "Vrf1"
+    },
+    "INTERFACE|Ethernet0.42": {
+        "mpls": "enable"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.42": {
+        "ipv6_use_link_local_only": "enable"
+    },
     "INTERFACE|Ethernet4.50": {
         "vrf_name": "Vrf1"
     },
