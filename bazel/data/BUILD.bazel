@@ -1,0 +1,101 @@
+load("@utilities_test_pip//:requirements.bzl", "requirement")
+load(":defs.bzl", "completion_ci_generator", "completion_toolchain", "utilities_data")
+load("@rules_python//python:defs.bzl", "py_binary", "py_test")
+load("@sonic_build_infra//oci:runtime_packages.bzl", "runtime_packages")
+load("@tar.bzl", "tar")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["generate.py"])
+
+toolchain_type(name = "toolchain_type")
+
+py_binary(
+    name = "mtree_tool",
+    srcs = ["mtree.py"],
+    main = "mtree.py",
+    python_version = "3.13",
+)
+
+genrule(
+    name = "changelog.gzip",
+    srcs = ["//:sonic-utilities-data/debian/changelog"],
+    outs = ["changelog.Debian.gz"],
+    tools = ["@sonic_build_infra//tools/build_tools:pigz"],
+    cmd = "$(execpath @sonic_build_infra//tools/build_tools:pigz) -n -9 -c $< > $@",
+)
+
+utilities_data(
+    name = "generated",
+    source_generator = "//:sonic-utilities-data/generate_completions.py",
+    templates = ["//:utilities_data_templates"],
+    docs = {
+        "copyright": "//:sonic-utilities-data/debian/copyright",
+        "changelog.Debian.gz": ":changelog.gzip",
+    },
+)
+
+filegroup(name = "mtree", srcs = [":generated"], output_group = "mtree")
+
+tar(
+    name = "runtime",
+    srcs = [
+        ":generated",
+        "//:utilities_data_templates",
+        "//:sonic-utilities-data/debian/copyright",
+        ":changelog.gzip",
+    ],
+    mtree = ":mtree",
+)
+
+runtime_packages(
+    name = "runtime_packages.json",
+    control_file_helpers = [["dh_installdeb"]],
+    packages = {"sonic-utilities-data": ":runtime"},
+    control = "//:sonic-utilities-data/debian/control",
+    changelog = "//:sonic-utilities-data/debian/changelog",
+    required_paths = {"sonic-utilities-data": [
+        "etc/bash_completion.d/config",
+        "etc/bash_completion.d/show",
+        "usr/share/sonic/templates/sonic.service.j2",
+    ]},
+)
+
+# Explicit CI-only toolchain: real Utilities installation and Click, without
+# pretending to provide the image's native SONiC import closure.
+completion_ci_generator(
+    name = "ci_generator",
+    src = "ci_generator.py",
+    deps = [requirement("click")],
+)
+
+completion_toolchain(
+    name = "ci_environment",
+    generator = ":ci_generator",
+    args = [
+        "--archive=$(location //:sonic-utilities.runtime)",
+        "--generator=$(location //:sonic-utilities-data/generate_completions.py)",
+    ],
+    data = ["//:sonic-utilities.runtime", "//:sonic-utilities-data/generate_completions.py"],
+)
+toolchain(
+    name = "ci_toolchain",
+    toolchain = ":ci_environment",
+    toolchain_type = ":toolchain_type",
+)
+
+py_test(
+    name = "contract_test",
+    srcs = ["contract_test.py"],
+    main = "contract_test.py",
+    args = ["$(rootpath :runtime)", "$(rootpath //:sonic-utilities-data/debian/install)"],
+    data = [
+        ":runtime",
+        "//:repository_inventory",
+        "//:sonic-utilities-data/debian/install",
+        "//:sonic-utilities-data/debian/copyright",
+        "//:sonic-utilities-data/debian/changelog",
+    ],
+    deps = [requirement("click")],
+    python_version = "3.13",
+)
