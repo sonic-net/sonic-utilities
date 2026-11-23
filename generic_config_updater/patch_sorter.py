@@ -1567,9 +1567,10 @@ class BulkRequiredValueMoveGenerator:
     extender are used, so it only ever offers a value the validator would demand anyway. Restoring the value
     afterwards (the admin up) is already grouped by BulkKeyGroupLowLevelMoveGenerator.
 
-    Only bindings being added are covered, which is what restoring a configuration onto a fresh box consists
-    of. Replacing or removing bindings that exist is left to the extender, so a live box keeps taking those
-    ports down one at a time rather than all at once.
+    Only bindings being added are covered, on ports the patch creates and on ports that exist alike: every
+    affected port goes down in this one group, so a patch adding bindings to admin-up ports of a live box takes
+    them all down together. Replacing or removing bindings that exist is left to the extender, which still
+    takes those ports down one per step.
     """
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
