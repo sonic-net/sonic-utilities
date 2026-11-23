@@ -5,6 +5,7 @@ ASIC_CONFIG_UNCHANGED=0
 ASIC_CONFIG_CHANGED=1
 CURR_ASIC_CONFIG_NOT_FOUND=2
 DST_ASIC_CONFIG_NOT_FOUND=3
+CHECKSUM_FILE="asic_config_checksum"
 
 # Logging utilities
 function error()
@@ -21,7 +22,8 @@ function debug()
 # Returns CURR_ASIC_CONFIG_NOT_FOUND if the checksum is not found, ASIC_CONFIG_UNCHANGED otherwise
 function GetCurrentASICConfigChecksum()
 {
-    if [[ ! -f "/etc/sonic/asic_config_checksum" ]]; then
+    if [[ ! -f "/etc/sonic/asic_config_checksum" &&
+          ! -f "/etc/sonic/asic_config_checksum.sha256" ]]; then
             debug "ASIC config not found in curr image, pre-check not supported"
             return "${CURR_ASIC_CONFIG_NOT_FOUND}"
     fi
@@ -46,14 +48,20 @@ function GetDestinationASICConfigChecksum()
     mkdir "${FS_MOUNTPOINT}"
     mount -t squashfs "${FS_PATH}" "${FS_MOUNTPOINT}"
 
-    if [[ ! -f "${FS_MOUNTPOINT}/etc/sonic/asic_config_checksum" ]]; then
-        error "ASIC config not found in dst image, can't verify changes"
+    if [[ -f "/etc/sonic/asic_config_checksum.sha256" &&
+          -f "${FS_MOUNTPOINT}/etc/sonic/asic_config_checksum.sha256" ]]; then
+        CHECKSUM_FILE="asic_config_checksum.sha256"
+    fi
+
+    if [[ ! -f "/etc/sonic/${CHECKSUM_FILE}" ||
+          ! -f "${FS_MOUNTPOINT}/etc/sonic/${CHECKSUM_FILE}" ]]; then
+        error "Compatible ASIC config checksum not found, can't verify changes"
         umount "${FS_MOUNTPOINT}"
         rm -rf "${FS_MOUNTPOINT}"
         exit "${DST_ASIC_CONFIG_NOT_FOUND}"
     fi
 
-    cp "${FS_MOUNTPOINT}/etc/sonic/asic_config_checksum" /tmp/dst_asic_config_checksum
+    cp "${FS_MOUNTPOINT}/etc/sonic/${CHECKSUM_FILE}" /tmp/dst_asic_config_checksum
     umount "${FS_MOUNTPOINT}"
     rm -rf "${FS_MOUNTPOINT}"
 }
@@ -62,8 +70,17 @@ function GetDestinationASICConfigChecksum()
 # Exits with ASIC_CONFIG_CHANGED if the checksums differ
 function ConfirmASICConfigChecksumsMatch()
 {
-    CURR_CONFIG_CHECKSUM=$(cat /etc/sonic/asic_config_checksum)
+    CURR_CONFIG_CHECKSUM=$(cat "/etc/sonic/${CHECKSUM_FILE}")
     DST_CONFIG_CHECKSUM=$(cat /tmp/dst_asic_config_checksum)
+    if [[ "${CHECKSUM_FILE}" == "asic_config_checksum.sha256" ]]; then
+        if [[ ! "${CURR_CONFIG_CHECKSUM}" =~ ^[[:xdigit:]]{64}$ ||
+              ! "${DST_CONFIG_CHECKSUM}" =~ ^[[:xdigit:]]{64}$ ]]; then
+            error "Invalid SHA-256 ASIC config checksum"
+            exit "${ASIC_CONFIG_CHANGED}"
+        fi
+        CURR_CONFIG_CHECKSUM=${CURR_CONFIG_CHECKSUM,,}
+        DST_CONFIG_CHECKSUM=${DST_CONFIG_CHECKSUM,,}
+    fi
     if [[ "${CURR_CONFIG_CHECKSUM}" != "${DST_CONFIG_CHECKSUM}" ]]; then
         error "ASIC config may have changed, checksum failed"
         exit "${ASIC_CONFIG_CHANGED}"
