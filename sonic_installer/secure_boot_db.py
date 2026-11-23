@@ -11,12 +11,12 @@ Strategy
      reinstall .auth. Every .auth is first verified against the enrolled KEK, but firmware
      writes can still fail; reset and restoration are not atomic.
 
-The standalone command is a dry run unless --commit is given. The SONiC binary scan cannot
-establish ownership of unused enrolled trust, which may serve recovery or other firmware
-paths. Automatic mode (including "sonic-installer remove" and "cleanup") preserves db and
-skips destructive resets. Explicit --commit requires the operator to review that trust.
+The standalone command is a dry run unless --commit is given. Commit mode skips unsafe plans
+and plans with no stale certificates. The SONiC scan cannot establish ownership of unused
+enrolled trust. "sonic-installer remove" and "cleanup" only analyze the plan, preserving db.
+Explicit --commit requires the operator to review trust for other firmware boot paths.
 
-Exit status: 0 on success (or a clean plan/skip), 2 on any error or refused safety gate.
+Exit status: 0 on success (or a clean plan/skip), 2 on any error.
 """
 
 import argparse
@@ -637,12 +637,8 @@ def defer_cancellation():
 
 
 def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, auto=False, verbose=False):
-    """Analyze or explicitly reset db; automatic mode preserves unknown enrolled trust."""
-    if auto and plan_only:
-        raise ScriptError("--auto cannot be combined with --plan")
-    # Automatic callers cannot establish ownership of global db entries. Even
-    # --auto --commit must preserve db rather than select an unsafe reset.
-    commit = commit and not auto
+    """Analyze or explicitly reset db. The installer's automatic analysis is read-only."""
+    commit = commit and not (auto or plan_only)
 
     if os.geteuid() != 0:
         raise ScriptError(f"must be run as root (needs to read/write {config.efivars_dir} and {config.host_path})")
@@ -660,17 +656,19 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
             print("Plan only - no changes made.")
             return 0
 
-        if auto:
+        if commit or auto:
             if not plan.used or plan.missing or plan.boot_chain_at_risk:
                 warn(f"Secure Boot db prune skipped (unsafe plan: used={len(plan.used)} "
                      f"missing={len(plan.missing)} essential_missing={plan.boot_critical_binaries_at_risk})")
                 return 0
             if not plan.drop:
-                print("No unused db certificates found in the SONiC scan; db is unchanged.")
+                print("No stale db certificates to prune.")
                 return 0
-            warn("Secure Boot db prune skipped: the SONiC binary scan cannot establish ownership "
-                 "of unused enrolled trust; db is unchanged. Review an explicit --plan before --commit.")
-            return 0
+            if auto:
+                warn("Secure Boot db prune skipped: the SONiC binary scan cannot establish ownership "
+                     "of unused enrolled trust; db is unchanged. Review an explicit --plan before --commit.")
+                return 0
+            print(f"Pruning {len(plan.drop)} stale Secure Boot db certificate(s)...")
 
         if not plan.used:
             raise ScriptError("no db certificate signs any installed image; "
@@ -678,22 +676,18 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
         if not commit:
             if plan.boot_chain_at_risk:
                 warn(f"{plan.boot_critical_binaries_at_risk} boot-chain binaries would lose every db signer "
-                     "(essential db certificate missing); --commit would refuse")
+                     "(essential db certificate missing); --commit would skip pruning")
             print("Dry-run complete. Re-run with --commit to delete all db certs and reinstall the")
             print(f"{len(plan.selected_auths)} image-signing certificate(s) listed above.")
             return 0
 
-        # A boot-chain binary without a db signer may leave the device unbootable: never allowed.
-        if plan.boot_chain_at_risk:
-            raise ScriptError("a boot-chain binary would lose every db signer. "
-                              f"Refusing to touch db. Provide the missing .auth in {config.auth_dir}.")
         validate_updates(config, plan, work)
         completed = False
         updates_attempted = False
         try:
             with defer_cancellation():
                 updates_attempted = True
-                apply_plan(config, plan, work, verbose=not auto or verbose)
+                apply_plan(config, plan, work)
                 completed = True
         except DbUpdateError:
             raise
@@ -714,22 +708,18 @@ def parse_args(argv):
         prog=PROG,
         description="Delete all UEFI 'db' certificates and reinstall only those that sign an installed "
                     "SONiC image, using pre-existing signed .auth files. Other enrolled trust may be lost. "
-                    "Dry run unless --commit; --auto always preserves db.",
+                    "Dry run unless --commit.",
     )
     parser.add_argument("--auth-dir", help="directory of per-certificate reinstall .auth files "
                                            "(default: $SONIC_DB_AUTH_DIR or /host/db-auth)")
     parser.add_argument("--remove-all", help="signed .auth that empties db (default: <auth-dir>/remove-all-db.auth)")
-    parser.add_argument("--commit", action="store_true", help="actually modify the UEFI db")
+    parser.add_argument("--commit", action="store_true",
+                        help="modify UEFI db only if the plan is safe and something is stale; "
+                             "an unsafe or empty plan is skipped with exit status 0")
     parser.add_argument("--plan", action="store_true",
                         help="analyse only and print a PRUNE_PLAN summary; never modifies db or fails on safety")
-    parser.add_argument("--auto", action="store_true",
-                        help="compatibility mode for sonic-installer: analyze and skip resets with exit status 0; "
-                             "the SONiC scan cannot establish ownership of unused global db trust")
     parser.add_argument("-v", "--verbose", action="store_true", help="print the per-binary -> db cert mapping")
-    args = parser.parse_args(argv)
-    if args.auto and args.plan:
-        parser.error("--auto cannot be combined with --plan")
-    return args
+    return parser.parse_args(argv)
 
 
 def main(argv=None):
@@ -738,7 +728,7 @@ def main(argv=None):
     try:
         return prune_db_certificates(
             Config.from_env(args.auth_dir, args.remove_all),
-            commit=args.commit, plan_only=args.plan, auto=args.auto, verbose=args.verbose,
+            commit=args.commit, plan_only=args.plan, verbose=args.verbose,
         )
     except (ScriptError, OSError, subprocess.SubprocessError) as e:
         print(f"{PROG}: error: {e}", file=sys.stderr)

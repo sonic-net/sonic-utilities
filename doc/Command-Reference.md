@@ -37,6 +37,7 @@
   * [ASIC SDK health event clear commands](#asic-sdk-health-event-clear-commands)
 * [BMC](#bmc)
   * [BMC config commands](#bmc-config-commands)
+  * [BMC chassis module commands](#bmc-chassis-module-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
 * [BGP](#bgp)
@@ -182,7 +183,6 @@
   * [Platform Component Firmware vendor specific behaviour](#platform-component-firmware-vendor-specific-behaviour)
 * [Platform Specific Commands](#platform-specific-commands)
   * [Mellanox Platform Specific Commands](#mellanox-platform-specific-commands)
-  * [Barefoot Platform Specific Commands](#barefoot-platform-specific-commands)
 * [PINS](#pins-show commands)
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
@@ -236,6 +236,7 @@
     * [VLAN Config commands](#vlan-config-commands)
   * [FDB](#fdb)
     * [FDB show commands](#fdb-show-commands)
+    * [FDB config commands](#fdb-config-commands)
 * [VxLAN & Vnet](#vxlan--vnet)
   * [VxLAN](#vxlan)
     * [VxLAN show commands](#vxlan-show-commands)
@@ -1191,9 +1192,28 @@ This command displays the status of the device's thermal sensors
      xSFP module 32 Temp           39.5       70.0       N/A            90.0            N/A      False  20200302 06:59:58
   ```
 
+**show platform bmc os**
+
+This command displays the BMC operating system (`openbmc` or `sonic`), as defined in
+`bmc_os.json` in the HwSKU directory.
+
+- Usage:
+  ```
+  show platform bmc os
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show platform bmc os
+  sonic
+  ```
+
 **show platform bmc summary**
 
-This command displays BMC summary information including manufacturer, model, part number, serial number, power state, and firmware version
+This command displays BMC summary information including manufacturer, model, part number,
+serial number, power state, and firmware version. Supported for both BMC OS types; when
+BMC OS is `sonic`, `FirmwareVersion` is shown as `N/A` since it cannot be retrieved without
+Redfish.
 
 - Usage:
   ```
@@ -1203,7 +1223,7 @@ This command displays BMC summary information including manufacturer, model, par
 - Options:
   - `--json`: Output information in JSON format
 
-- Example:
+- Example (OpenBMC):
   ```
   admin@sonic:~$ show platform bmc summary
   Manufacturer: ASPEED
@@ -1212,6 +1232,17 @@ This command displays BMC summary information including manufacturer, model, par
   SerialNumber: 123456789
   PowerState: On
   FirmwareVersion: 1.0.0
+  ```
+
+- Example (SONiC BMC):
+  ```
+  admin@sonic:~$ show platform bmc summary
+  Manufacturer: NVIDIA
+  Model: P4102-A01
+  PartNumber: 699-24102-0100-EB1
+  SerialNumber: MT260560000K
+  PowerState: On
+  FirmwareVersion: N/A
   ```
 
 - Example (JSON format):
@@ -1229,7 +1260,10 @@ This command displays BMC summary information including manufacturer, model, par
 
 **show platform bmc eeprom**
 
-This command displays BMC EEPROM information
+This command displays BMC EEPROM information. When BMC OS is `openbmc`, fields come from
+Redfish. When BMC OS is `sonic`, Manufacturer, Model, PartNumber, and SerialNumber are read
+from the BMC remote STATE_DB; PowerState reflects the reachability of the BMC (`On` if it
+responds to ping, `Off` otherwise).
 
 - Usage:
   ```
@@ -1239,7 +1273,7 @@ This command displays BMC EEPROM information
 - Options:
   - `--json`: Output information in JSON format
 
-- Example:
+- Example (OpenBMC):
   ```
   admin@sonic:~$ show platform bmc eeprom
   Manufacturer: ASPEED
@@ -1247,6 +1281,16 @@ This command displays BMC EEPROM information
   PartNumber: 123-12345-1234-AB1
   PowerState: On
   SerialNumber: 123456789
+  ```
+
+- Example (SONiC BMC):
+  ```
+  admin@sonic:~$ show platform bmc eeprom
+  Manufacturer: NVIDIA
+  Model: P4102-A01
+  PartNumber: 699-24102-0100-EB1
+  PowerState: On
+  SerialNumber: MT260560000K
   ```
 
 - Example (JSON format):
@@ -2639,11 +2683,27 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#arp--n
 
 ## BMC
 
+On Switch-Host platforms, the BMC peer on the USB/BMC link may run OpenBMC (Redfish) or
+SONiC-on-BMC (Redis). The type is defined per HwSKU by the `os` field (`openbmc` or
+`sonic`) in `bmc_os.json` in the HwSKU directory
+(`/usr/share/sonic/device/<platform>/<hwsku>/bmc_os.json`). When the file is missing or
+invalid, the default is `sonic`. To change the BMC OS, edit this file. Use
+`show platform bmc os` to display the current value.
+
+All BMC commands are supported only when run on the Switch-Host (not on the BMC
+itself). OpenBMC-only commands (Redfish session management: `reset-root-password`,
+`open-session`, `close-session`) additionally require `os` to be `openbmc`.
+`show platform bmc eeprom` and `show platform bmc summary` work for both: OpenBMC returns full Redfish
+EEPROM fields and firmware version; SONiC BMC returns Manufacturer, Model, PartNumber, and
+SerialNumber from remote STATE_DB, with PowerState derived from BMC reachability (ping) and
+FirmwareVersion shown as `N/A`.
+
 ### BMC config commands
 
 **config bmc open-session**
 
-This command opens a session with the BMC and returns session credentials
+This command opens a session with the BMC and returns session credentials. Supported only
+when BMC OS is `openbmc`.
 
 - Usage:
   ```
@@ -2659,7 +2719,8 @@ This command opens a session with the BMC and returns session credentials
 
 **config bmc close-session**
 
-This command closes a BMC session using the provided session ID
+This command closes a BMC session using the provided session ID. Supported only when BMC
+OS is `openbmc`.
 
 - Usage:
   ```
@@ -2677,7 +2738,8 @@ This command closes a BMC session using the provided session ID
 
 **config bmc reset-root-password**
 
-This command resets the BMC root password to default
+This command resets the BMC root password to default. Supported only when BMC OS is
+`openbmc`.
 
 - Usage:
   ```
@@ -2689,6 +2751,33 @@ This command resets the BMC root password to default
   admin@sonic:~$ sudo config bmc reset-root-password
   BMC root password reset successful
   ```
+
+### BMC chassis module commands
+
+**config chassis modules shutdown-timeout**
+
+Set the switch-host graceful shutdown timeout in seconds. The default is 120; 0 skips the graceful wait and requests forced power-off. Existing configured values are preserved. The command accepts nonnegative integers without an upper limit and checks nothing against the switch host, so the value has to be qualified against the host's budget by the platform owner:
+
+- Too low, and every shutdown is recorded `SUCCESS_FORCED` with reason `deadline` even when the host finished its teardown. The timeout must cover the request, the host's measured pre-shutdown time and the status polling. To keep a failed host check reported as `check_failed` rather than `deadline`, it must also cover the host's `switch_host_halt_services_timeout`, a switch-host `platform.json` key with no CLI that defaults to 60 seconds.
+- Too high, and the host watchdog armed by `reboot -p` (at least 180 seconds) can fire before the BMC removes power. The timeout plus polling and power-off latency must stay inside the watchdog, and the timeout must stay below the reboot backend's 260-second wait.
+
+Requalify both values whenever either changes. The reason behind a forced result is `op_reason` in STATE_DB `HOST_STATE|switch-host` and in the `OP_DONE` syslog line from `bmcctld`.
+
+- Usage:
+  ```bash
+  config chassis modules shutdown-timeout SWITCH-HOST <seconds>
+  ```
+
+To restart the switch host, shut it down and then start it again:
+
+```bash
+config chassis modules shutdown SWITCH-HOST
+config chassis modules startup SWITCH-HOST
+```
+
+The second command may be written while the shutdown is still in flight: it
+is queued and runs once the shutdown has completed. The `OP_DONE` syslog line
+from `bmcctld` reports each step's result.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bmc)
 
@@ -6753,7 +6842,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters errors
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
-  show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-histogram <interface_name>
   show interfaces counters fec-stats
   show interfaces counters detailed <interface_name>
   show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
@@ -6937,26 +7026,28 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
 
 - Example:
   ```
-  admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
-  Symbol Errors Per Codeword  Codewords
-  --------------------------  ---------
-  BIN0:                       1000000
-  BIN1:                       900000
-  BIN2:                       800000
-  BIN3:                       700000
-  BIN4:                       600000
-  BIN5:                       500000
-  BIN6:                       400000
-  BIN7:                       300000
-  BIN8:                       0
-  BIN9:                       0
-  BIN10:                      0
-  BIN11:                      0
-  BIN12:                      0
-  BIN13:                      0
-  BIN14:                      0
-  BIN15:                      0
+  admin@str-s6000-acs-11:/usr/bin$ show interfaces counters fec-histogram Ethernet0
+  Symbol Errors Per Codeword      Codewords
+  ----------------------------  -----------
+  BIN0                              1000000
+  BIN1                               900000
+  BIN2                               800000
+  BIN3                               700000
+  BIN4                               600000
+  BIN5                               500000
+  BIN6                               400000
+  BIN7                               300000
+  BIN8                                    0
+  BIN9                                    0
+  BIN10                                   0
+  BIN11                                   0
+  BIN12                                   0
+  BIN13                                   0
+  BIN14                                   0
+  BIN15                                   0
   ```
+
+  After `sonic-clear counters`, the codewords are shown relative to the time of the clear, and the output is preceded by a `Last cached time was ...` line.
 
 The "fec-stats" subcommand is used to disply the interface fec related statistic.
 
@@ -6971,6 +7062,12 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   ```
 
   FEC_MAX_T - Is the maximum NON-ZERO FEC histogram BIN (starting from Bin0). -1 indicates the value is invalid (For eg during link down)
+
+- NOTE: `sonic-clear counters` affects the FEC statistics as follows:
+  - FEC_CORR, FEC_UNCORR and FEC_SYMBOL_ERR are shown relative to the time of the clear, like the other interface counters.
+  - FEC_MAX_T is computed from the FEC histogram BINs that counted codewords since the clear (-1 if none did). With `-p <period>` it is computed over the period instead.
+  - FEC_PRE_BER_MAX is a running maximum, so it is reset in COUNTERS_DB and starts tracking again from the next polling interval. Like `sonic-clear ... watermark`, this reset is global and is seen by all users. It is not reset when counters are saved under a tag (`portstat -c -t <tag>`).
+  - FEC_PRE_BER, FEC_POST_BER, FLR(O) and FLR(P) are computed over the most recent polling interval and are not affected.
 
 For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
 
@@ -6992,13 +7089,27 @@ For debugging link related issues where you need to clear the FEC histogram and 
   ```
   root@sonic:~# portstat -fh -i Ethernet504
   Last cached time was 2025-10-02T16:43:57.934081
-        IFACE         BIN0    BIN1    BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
-  -----------  -----------  ------  ------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
-  Ethernet504  624,891,017  13,331     172       0       0       0       0       0       0       0        0        0        0        0        0        0
-  root@str-7060x6-c09-u25:~#
-  ``` 
+  Symbol Errors Per Codeword      Codewords
+  ----------------------------  -----------
+  BIN0                            624891017
+  BIN1                                13331
+  BIN2                                  172
+  BIN3                                    0
+  BIN4                                    0
+  BIN5                                    0
+  BIN6                                    0
+  BIN7                                    0
+  BIN8                                    0
+  BIN9                                    0
+  BIN10                                   0
+  BIN11                                   0
+  BIN12                                   0
+  BIN13                                   0
+  BIN14                                   0
+  BIN15                                   0
+  ```
 
-  To clear the FEC histogram use `portstat -c`. NOTE: This will clear all counters. 
+  To clear the FEC histogram use `sonic-clear counters` (or `portstat -c`). NOTE: This will clear all interface counters.
 
 The "trim" subcommand is used to display the interface packet trimming related statistic.
 
@@ -7464,8 +7575,19 @@ This command displays some more fields such as Lanes, Speed, MTU, Type, Asymmetr
 
 - Usage:
   ```
-  show interfaces status [<interface_name>]
+  show interfaces status [<interface_name>] [-l <location>]
   ```
+
+On a chassis-packet supervisor, the default frontend view displays line-card
+interfaces using the normal display filtering. Use `-d all` to include the
+supervisor's internal interfaces. Use `-l SUPERVISOR` or the matching
+`-l SUPERVISOR<n>` name to select the local supervisor, `-l LINE-CARD<n>` for
+one line card, or `-l all` for all chassis locations. A numbered supervisor
+location that does not match the local supervisor is rejected.
+Aggregate output labels each section with its chassis location. When internal
+interfaces are filtered from a supervisor view, the command prints a reminder
+to use `-d all`. Other supervisor and non-supervisor platforms retain their
+existing behavior.
 
 - Example (show interface status of all interfaces):
   ```
@@ -10268,8 +10390,8 @@ This command displays all the mirror sessions that are configured.
   ```
   admin@sonic:~$ show mirror_session
   ERSPAN Sessions
-  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
-  ---------  --------  ---------  --------  -----  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  Name       Status    SRC IP     DST IP    GRE    DSCP    TTL    Queue    Monitor Port    SRC Port    Direction    Label    Policer
+  ---------  --------  ---------  --------  -----  ------  -----  -------  --------------  ----------  -----------  -------  ---------
   everflow0  active    10.1.0.32  10.0.0.7
 
   SPAN Sessions
@@ -10299,41 +10421,42 @@ While adding a new ERSPAN session, users need to configure the following fields 
 7) optional - Policer which will be used to control the rate at which frames are mirrored.
 8) optional - List of source ports which can have both Ethernet and LAG ports.
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
-10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified (or set to 0), full mirroring is used. Valid values: 0 or 2..4294967295 (uint32 max).
-11) optional - Truncate size in bytes for mirrored packets. When not specified (or set to 0), no truncation is applied. Valid values: 0 or 64..9216.
-12) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
+10) optional - Stable mirror-session label used across warm reboot. Valid values contain 1 to 31 letters, digits, underscores, or hyphens. The option is rejected unless STATE_DB `SWITCH_CAPABILITY|switch` `MIRROR_SESSION_LABEL_CAPABLE` is `true`.
+
+Configure sampling rate and optional truncation using `config mirror_session sample add`.
+These settings are stored in `PORT_MIRROR_SAMPLE`, separately from the ERSPAN export session.
 
 - Usage:
   ```
-  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [policer <policer_name>] [source-port-list] [direction] [--sample_rate <value>] [--truncate_size <value>] [--label <label>]
+  config mirror_session erspan add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [source-port-list] [direction] [--label <label>] [--policer <policer_name>]
   ```
 
   The following command is also supported to be backward compatible.
   This command will be deprecated in future releases.
   ```
-  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [--label <label>]
+  config mirror_session add <session_name> <src_ip> <dst_ip> <dscp> <ttl> [gre_type] [queue] [--label <label>] [--policer <policer_name>]
   ```
 
 - Example:
   ```
   root@T1-2:~# config mirror_session add mrr_legacy 1.2.3.4 20.21.22.23 8 100 0x6558 0
   root@T1-2:~# show mirror_session
-  Name        Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
-  ----------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  Name        Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer
+  ----------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------
   mrr_legacy  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0
 
 
   root@T1-2:~# config mirror_session erspan add mrr_abcd 1.2.3.4 20.21.22.23 8 100 0x6558 0 --label erspan_label
   root@T1-2:~# show mirror_session
-  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label         Policer    Sample Rate    Truncate Size
-  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  ------------  ---------  -------------  ---------------
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label         Policer
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  ------------  ---------
   mrr_abcd  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                                           erspan_label
   root@T1-2:~#
 
   root@T1-2:~# config mirror_session erspan add mrr_port 1.2.3.4 20.21.22.23 8 100 0x6558 0 Ethernet0
   root@T1-2:~# show mirror_session
-  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer    Sample Rate    Truncate Size
-  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------  -------------  ---------------
+  Name      Status    SRC IP    DST IP       GRE       DSCP    TTL    Queue  Monitor Port    SRC Port    Direction    Label    Policer
+  --------  --------  --------  -----------  ------  ------  -----  -------  --------------  ----------  -----------  -------  ---------
   mrr_port  inactive  1.2.3.4   20.21.22.23  0x6558       8    100        0                  Ethernet0   both
   root@T1-2:~#
   ```
@@ -10348,7 +10471,7 @@ While adding a new SPAN session, users need to configure the following fields th
 
 - Usage:
   ```
-  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [policer <policer_name>] [--label <label>]
+  config mirror_session span add <session_name> <dst_port> [source-port-list] [direction] [queue] [--label <label>] [--policer <policer_name>]
   ```
 
 - Example:
@@ -10360,6 +10483,97 @@ While adding a new SPAN session, users need to configure the following fields th
   port0   active    Ethernet0   Ethernet4,PortChannel10,Ethernet8  both                  span_label
   root@T1-2:~#
   ```
+
+**config mirror_session sample**
+
+Create a destination-only ERSPAN export (no source port), then bind a front-panel
+Ethernet port or a PortChannel:
+
+```text
+config mirror_session erspan add export1 10.0.0.1 10.0.0.2 8 64
+config mirror_session sample add export1 Ethernet0 both --sample_rate 5000 --truncate_size 128
+config mirror_session sample add export1 PortChannel1001 rx --sample_rate 1000 --disabled
+config mirror_session sample enable export1 PortChannel1001 rx
+config mirror_session sample disable export1 Ethernet0 both
+show mirror_session sample
+config mirror_session sample remove export1 Ethernet0 both
+```
+
+While adding sampled ERSPAN bindings, users need to configure the following fields:
+
+1) Session name - An existing ERSPAN export session without source port configuration.
+2) Source port list - One or more front-panel Ethernet ports or PortChannels, separated by commas.
+3) Direction - Mirror session direction for the specified source ports. (Supported rx/tx/both)
+4) Sample rate - Required sampling rate shared by the specified sources. Valid range: 2..4294967295.
+5) optional - Truncate size in bytes. Valid range: 64..9216. When omitted, no truncation is requested.
+6) optional - Disabled. Create bindings with admin_state down instead of the CLI default up.
+
+- Usage:
+  ```
+  config mirror_session sample add <session_name> <source-port-list> <direction> --sample_rate <N> [--truncate_size <bytes>] [--disabled]
+  config mirror_session sample remove <session_name> <source-port-list> <direction>
+  config mirror_session sample enable <session_name> <source-port-list> <direction>
+  config mirror_session sample disable <session_name> <source-port-list> <direction>
+  ```
+
+- `--sample_rate` is required, in range 2..4294967295. Zero and one are invalid.
+- All sources in `<source-port-list>` (for example, `Ethernet0,Ethernet4`) receive the same policy.
+  Each source/direction is stored as a separate entry; a list is never stored in a key.
+  Empty list elements, duplicate sources after alias resolution, and overlapping
+  PortChannel/member sources within the request are rejected.
+- `add` (including `--disabled`) and `enable` reject internal ports such as `Ethernet-IB0`
+  and `Ethernet-Rec0`, even when specified by alias. Existing bindings on these ports
+  can still be disabled or removed.
+- `--truncate_size` is optional, in range 64..9216. Omit it for no truncation.
+- Bindings default to `admin_state=up`; `--disabled` stores `down`.
+- `enable` and `disable` update only `admin_state` on existing bindings, preserving
+  their sampling policy and export reference. Repeating the same state is a no-op.
+  Every selected binding must exist and reference the specified session; `both`
+  requires both directional entries. All targets are checked before any writes.
+  Policy changes still require removing and recreating the binding. Disabled
+  bindings remain mutually exclusive with explicit `SFLOW|global` configuration.
+- `both` creates separate `rx` and `tx` entries. Both are checked before writes;
+  duplicate keys and overlapping PortChannel/member ownership are rejected.
+- PortChannels are stored as logical bindings, not expanded into member entries.
+- A binding must reference an existing ERSPAN session without a `src_port` field.
+- Removal checks references before deleting. `both` removes whichever matching
+  directional entries exist, but rejects any mismatched reference without deletion.
+  Every requested source must have at least one matching entry in the selected
+  direction(s), otherwise nothing is deleted.
+- All requested sources are resolved and checked for references, conflicts, and
+  applicable capabilities before writes. With YANG validation enabled, bindings
+  are submitted in one GCU patch per namespace. Cross-namespace writes are sequential,
+  not an atomic transaction.
+- Remove and re-add a binding to change its policy. Removing bindings retains the
+  export; export deletion is rejected while sampled or ACL references remain.
+- Explicit `SFLOW|global` configuration and sampled bindings are mutually exclusive
+  system-wide, even when disabled. Global sFlow commands (including `disable`,
+  polling interval, sample direction, drop monitor limit and agent ID) reject writes
+  while bindings exist. Disabling sFlow does not remove its global configuration;
+  remove that configuration, for example with a valid GCU patch, before adding bindings.
+  SFLOW_SESSION and collector configuration alone do not trigger this exclusion.
+  Sample add/remove/enable/disable and sFlow global writers share `/etc/sonic/sampling.lock`
+  across their conflict checks and writes in all affected namespaces. If another
+  protected command holds the lock, the command fails before changing configuration
+  and can be retried. This lock does not serialize standalone GCU or direct Redis writes.
+
+`show mirror_session sample` reports configuration, one row per source/direction:
+
+```text
+Sampled ERSPAN Bindings
+Source Port      Direction    Mirror Session    Admin State      Sample Rate  Truncate Size
+---------------  -----------  ----------------  -------------  -------------  ---------------
+Ethernet0        rx           export1           up                      5000  128
+Ethernet0        tx           export1           up                      5000  128
+PortChannel1001  rx           export1           down                    1000  Disabled
+```
+
+Multi-ASIC output includes a Namespace column. The `sample` argument selects this
+binding display; use `show mirror_session --session-name sample` to inspect an existing export
+whose name is literally `sample`. Plain `show mirror_session` retains the existing
+session display. Capability checks reject explicit unsupported sampling directions
+or truncation. Absent capability fields are tolerated for older images;
+STATE_DB access failures are reported before writing configuration.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#mirroring)
 
@@ -11016,6 +11230,12 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#orchag
 # PFC Watchdog Commands
 Detailed description of the PFC Watchdog can be found on [this wiki page](https://github.com/sonic-net/SONiC/wiki/PFC-Watchdog)
 
+When the platform runs the PFC watchdog in hardware (`RECOVERY_MECHANISM` is `HARDWARE` in STATE_DB `PFC_WD_STATE_TABLE|PFC_WD`):
+- `config pfcwd start` rejects detection and restoration times outside the range the hardware reports, narrowed to the 100-5000 ms and 100-60000 ms the configuration allows. Without `--restoration-time`, the default of twice the detection time is capped at the hardware maximum. It also rejects an action that differs from the hardware's (`drop` when `--action` is not given) unless no port is configured or the only configured port is being reconfigured, since the hardware uses one action for all ports.
+- `config pfcwd stop` is refused while any of the selected queues is stormed.
+- `config pfcwd interval` and `config pfcwd big_red_switch` are not supported.
+- `config pfcwd start_default` uses 200 ms detection and restoration times on every port, without scaling by port count, and removes a polling interval left by the software watchdog. Like `config pfcwd start`, it is refused when the hardware uses an action other than `drop` and ports are configured.
+
 **config pfcwd start \<arguments\>**
 
 This command starts PFC Watchdog
@@ -11097,16 +11317,16 @@ Additionally if the number of ports the watchdog is enabled on exceeds 32, all t
 
 **show pfcwd config**
 
-This command shows current PFC Watchdog configuration
+This command shows current PFC Watchdog configuration. In hardware mode it prints `Recovery mode: hardware` above the table. `--json` prints the configuration in JSON format, with the recovery mode (on multi-ASIC systems the polling interval and BIG_RED_SWITCH are given per ASIC namespace), and in hardware mode the supported timer ranges and the per-port values and status programmed in hardware.
 
 - Usage:
   ```
-  show pfcwd config
+  show pfcwd config [--json]
   ```
 
 **show pfcwd stats**
 
-This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc)
+This command shows current PFC Watchdog statistics (storms detected, packets dropped, etc). In hardware mode the RX columns show `N/A`, since the hardware watchdog does not count RX.
 
 - Usage:
   ```
@@ -11405,41 +11625,6 @@ config platform mlnx
 This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
 The platform mellanox command currently includes no sub command.
-
-### Barefoot Platform Specific Commands
-
-**show platform barefoot profile**
-
-This command displays active P4 profile and lists available ones.
-
-- Usage:
-  ```
-  show platform barefoot profile
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform barefoot profile
-  Current profile: x1
-  Available profile(s):
-  x1
-  x2
-  ```
-
-**config platform barefoot profile**
-
-This command sets P4 profile.
-
-- Usage:
-  ```
-  config platform barefoot profile <p4_profile> [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config platform barefoot profile x1
-  Swss service will be restarted, continue? [y/N]: y
-  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#platform-specific-commands)
 
@@ -14884,6 +15069,23 @@ This command displays the default mac aging time on the switch
   Aging time for switch is 600 seconds
   ```
 
+**show mac sync-mode**
+
+This command displays how MAC (FDB) state is synchronized with FRR: `kernel` (through the Linux kernel bridge FDB) or `fpm` (over the FPM channel). It displays the configured mode, which is `kernel` when the mode is not configured and always `fpm` on a device with the `L3EvpnMH` subtype, and the running mode that fpmsyncd published in STATE_DB, which is `unknown` until fpmsyncd has published it. The two differ after a mode change until the bgp container restarts, and the command then says so. On a multi-ASIC device each ASIC namespace has its own mode: `-n` selects one, and without it the modes of each namespace are displayed under its name.
+
+- Usage:
+  ```
+  show mac [-n <namespace>] sync-mode
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show mac sync-mode
+  Configured: fpm
+  Running: kernel
+  The configured mode takes effect when the bgp container restarts.
+  ```
+
 **sonic-clear fdb all**
 
 Clear the FDB table. On multi-ASIC platforms, clears FDB entries in all namespaces. The fdbclear script (when run directly) supports -n <namespace> or -n all to clear a specific namespace or all namespaces.
@@ -14896,6 +15098,23 @@ Clear the FDB table. On multi-ASIC platforms, clears FDB entries in all namespac
   ```
   admin@sonic:~$ sonic-clear fdb all
   FDB entries are cleared.
+  ```
+
+#### FDB config commands
+
+**config fdb mac-sync-mode**
+
+This command selects how MAC (FDB) state is synchronized with FRR. `kernel`, the default, synchronizes it through the Linux kernel bridge FDB; `fpm` synchronizes it over the FPM channel. zebra and fpmsyncd pick up the mode when the bgp container restarts. A device with the `L3EvpnMH` subtype always uses `fpm`, so `kernel` is refused there. On a multi-ASIC device the mode is set per ASIC namespace, which `-n` selects.
+
+- Usage:
+  ```
+  config fdb [-n <namespace>] mac-sync-mode <kernel|fpm>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config fdb mac-sync-mode fpm
+  admin@sonic:~$ sudo config save -y
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vlan--FDB)

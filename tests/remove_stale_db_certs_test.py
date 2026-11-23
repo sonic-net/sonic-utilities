@@ -243,8 +243,8 @@ def test_plan_marks_installed_kernel_and_fallback_loader_as_essential(env, capsy
     assert "vmlinuz-test" in err and "BOOTX64.EFI" in err
 
     code, _, err = _run(capsys, "--commit")
-    assert code == 2
-    assert "Refusing to touch db" in err
+    assert code == 0
+    assert "prune skipped (unsafe plan" in err
     assert not env["marker"].exists()
 
 
@@ -272,10 +272,9 @@ def test_update_db_calls_tools_directly(env, monkeypatch, append, chattr_status,
     ]
 
 
-def test_commit_rejects_remove_all_auth_with_nonempty_payload(env, capsys, monkeypatch):
+def test_commit_rejects_remove_all_auth_with_nonempty_payload(env, safe_updates, capsys):
     cert0, _ = env["certs"]
     (env["auth_dir"] / "remove-all-db.auth").write_bytes(_auth(_esl(cert0)))
-    monkeypatch.setattr(prune, "check_boot_chain", lambda *a: 0)
 
     code, _, err = _run(capsys, "--commit")
     assert code == 2
@@ -283,8 +282,9 @@ def test_commit_rejects_remove_all_auth_with_nonempty_payload(env, capsys, monke
     assert not env["marker"].exists()
 
 
-def test_commit_rejects_replace_only_reinstall_auth_before_db_update(env, capsys, monkeypatch):
-    monkeypatch.setattr(prune, "check_boot_chain", lambda *a: 0)
+def test_commit_rejects_replace_only_reinstall_auth_before_db_update(env, safe_updates, capsys):
+    _write_executable(env["fake_bin"] / "openssl", f'#!/bin/sh\n[ "$1" = x509 ] && exec "{REAL_OPENSSL}" "$@"\n'
+                      'case "$*" in *reinstall-*) exit 1;; esac\nexit 0\n')
     code, _, err = _run(capsys, "--commit")
     assert code == 2
     assert "not an authorized db append update" in err
@@ -300,7 +300,7 @@ def test_binary_without_any_db_signer_is_essential_and_blocks_commit(env, capsys
     assert "shimx64.efi" in err
 
     code, _, _ = _run(capsys, "--commit")
-    assert code == 2
+    assert code == 0
     assert not env["marker"].exists()
 
 
@@ -339,13 +339,12 @@ def test_efi_alongside_grub_preserves_its_only_db_certificate(env, safe_updates,
 
 
 @pytest.mark.parametrize("filename", ["mmx64.efi", "grubnetx64.EFI"])
-@pytest.mark.parametrize("mode", ["--commit", "--auto"])
-def test_efi_alongside_grub_without_db_signer_blocks_pruning(env, safe_updates, capsys, filename, mode):
+def test_efi_alongside_grub_without_db_signer_blocks_pruning(env, safe_updates, capsys, filename):
     (safe_updates.sonic_os_dir / filename).write_text("binary")
 
-    code, _, err = _run(capsys, mode)
+    code, _, err = _run(capsys, "--commit")
 
-    assert code == (0 if mode == "--auto" else 2)
+    assert code == 0
     assert f"not signed by any db certificate: {safe_updates.sonic_os_dir / filename}" in err
     assert not env["marker"].exists()
 
@@ -358,7 +357,7 @@ def test_plan_fails_closed_when_no_boot_loader_is_found(env, capsys):
     assert not env["marker"].exists()
 
 
-@pytest.mark.parametrize("mode", ["--plan", "--commit", "--auto"])
+@pytest.mark.parametrize("mode", ["--plan", "--commit"])
 @pytest.mark.parametrize("boot_state", ["missing", "empty", "efi-only"])
 def test_missing_kernel_in_any_installed_image_blocks_pruning(
         env, bootloader, capsys, mode, boot_state):
@@ -400,21 +399,40 @@ def test_uninspectable_kernel_is_reported_distinctly_and_blocks_commit(env, caps
     assert "vmlinuz-test" in err
 
     code, _, _ = _run(capsys, "--commit")
-    assert code == 2
+    assert code == 0
     assert not env["marker"].exists()
 
 
-def test_auto_skips_unsafe_plan_without_touching_db(env, capsys):
-    code, _, err = _run(capsys, "--auto")
+@pytest.mark.parametrize("unsafe_reason", ["no-signers", "missing-auth", "boot-chain-at-risk"])
+def test_commit_skips_unsafe_plan_without_touching_db(env, safe_updates, tmp_path, monkeypatch, capsys, unsafe_reason):
+    plan = prune.analyze(safe_updates, tmp_path, images=["SONiC-OS-test"])
+    if unsafe_reason == "no-signers":
+        plan.used = []
+    elif unsafe_reason == "missing-auth":
+        plan.missing = [plan.used[0]]
+    else:
+        plan.boot_critical_binaries_at_risk = 1
+    monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+    validate = Mock()
+    apply = Mock()
+    monkeypatch.setattr(prune, "validate_updates", validate)
+    monkeypatch.setattr(prune, "apply_plan", apply)
+    before = prune.read_efi_variable(safe_updates, "db")
+
+    code, _, err = _run(capsys, "--commit")
     assert code == 0, err
     assert "prune skipped (unsafe plan" in err
+    validate.assert_not_called()
+    apply.assert_not_called()
     assert not env["marker"].exists()
+    assert prune.read_efi_variable(safe_updates, "db") == before
 
 
-def test_auto_rejects_conflicting_options(env, capsys):
-    code, _, err = _run(capsys, "--auto", "--plan")
+def test_auto_option_is_not_supported(env, capsys):
+    code, _, err = _run(capsys, "--auto")
     assert code == 2
-    assert "--auto cannot be combined" in err
+    assert "unrecognized arguments: --auto" in err
+    assert not env["marker"].exists()
 
 
 def test_allow_essential_missing_option_is_not_supported(env, capsys):
@@ -424,10 +442,10 @@ def test_allow_essential_missing_option_is_not_supported(env, capsys):
     assert not env["marker"].exists()
 
 
-def test_commit_refuses_when_boot_chain_binary_would_lose_its_signer(env, capsys):
+def test_commit_skips_when_boot_chain_binary_would_lose_its_signer(env, capsys):
     code, _, err = _run(capsys, "--commit")
-    assert code == 2
-    assert "a boot-chain binary would lose every db signer" in err
+    assert code == 0
+    assert "prune skipped (unsafe plan" in err
     assert not env["marker"].exists()
 
 
@@ -451,24 +469,31 @@ def test_rejects_invalid_authentication_headers(kwargs, message):
         prune.parse_auth(_auth(**kwargs))
 
 
-@pytest.mark.parametrize("kwargs, message", INVALID_AUTH_HEADERS)
+@pytest.mark.parametrize("kwargs", [pytest.param(kwargs, id=message) for kwargs, message in INVALID_AUTH_HEADERS])
 @pytest.mark.parametrize("filename", ["remove-all-db.auth", "DB-cert0.auth"])
-@pytest.mark.parametrize("mode", ["--auto", "--commit"])
-def test_invalid_auth_header_never_changes_firmware(env, safe_updates, capsys, kwargs, message, filename, mode):
+def test_invalid_auth_header_never_changes_firmware(env, safe_updates, capsys, kwargs, filename):
     before = prune.read_efi_variable(safe_updates, "db")
     payload = b"" if filename == "remove-all-db.auth" else _esl(env["certs"][0])
     (env["auth_dir"] / filename).write_bytes(_auth(payload, **kwargs))
-    code, _, err = _run(capsys, mode)
-    if mode == "--auto":
-        assert code == 0
-        if filename != "remove-all-db.auth":
-            assert "could not parse an ESL" in err
-            assert "prune skipped (unsafe plan" in err
-        else:
-            assert "cannot establish ownership" in err
+
+    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+    auto_err = capsys.readouterr().err
+    if filename == "remove-all-db.auth":
+        assert "cannot establish ownership" in auto_err
     else:
+        assert "could not parse an ESL" in auto_err
+        assert "prune skipped (unsafe plan" in auto_err
+    assert not env["marker"].exists()
+    assert prune.read_efi_variable(safe_updates, "db") == before
+
+    code, _, err = _run(capsys, "--commit")
+    if filename == "remove-all-db.auth":
         assert code == 2
-    assert err
+        assert "remove-all .auth must contain an empty signature-list payload" in err
+    else:
+        assert code == 0
+        assert "could not parse an ESL" in err
+        assert "prune skipped (unsafe plan" in err
     assert not env["marker"].exists()
     assert prune.read_efi_variable(safe_updates, "db") == before
 
@@ -556,18 +581,17 @@ def test_direct_call_uses_supplied_images_without_querying_bootloader(env, monke
 
 def test_direct_call_rejects_empty_image_list(env):
     with pytest.raises(prune.ScriptError, match="returned no installed images"):
-        prune.prune_db_certificates(prune.Config.from_env(), images=[], auto=True)
+        prune.prune_db_certificates(prune.Config.from_env(), images=[], commit=True)
     assert not env["marker"].exists()
 
 
-def test_direct_call_rejects_conflicting_options(env):
-    with pytest.raises(prune.ScriptError, match="--auto cannot be combined with --plan"):
-        prune.prune_db_certificates(prune.Config.from_env(), plan_only=True, auto=True)
+def test_direct_call_plan_only_takes_precedence_over_commit(env):
+    assert prune.prune_db_certificates(prune.Config.from_env(), plan_only=True, commit=True) == 0
     assert not env["marker"].exists()
 
 
 @pytest.mark.parametrize("auth_state", ["missing", "empty", "no-auth-files"])
-@pytest.mark.parametrize("argv", [[], ["--auto"], ["--commit"], ["--plan"]])
+@pytest.mark.parametrize("argv", [[], ["--commit"], ["--plan"]])
 def test_missing_or_empty_auth_directory_skips_analysis(env, monkeypatch, capsys, auth_state, argv):
     for auth in env["auth_dir"].iterdir():
         auth.unlink()
@@ -608,15 +632,29 @@ def test_multi_certificate_auth_plan_identifies_only_unreinstalled_certificates(
     expected_drop = [removable.fingerprint(hashes.SHA256()).hex(":").upper()] if removable is not None else []
     assert [cert.fingerprint for cert in plan.drop] == expected_drop
 
-    code, out, err = _run(capsys, "--auto")
-    assert code == 0
+    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+    auto_output = capsys.readouterr()
     if has_removable_certificate:
-        assert "cannot establish ownership" in err
+        assert "cannot establish ownership" in auto_output.err
     else:
-        assert "No unused db certificates found in the SONiC scan; db is unchanged." in out
-        assert not err
+        assert "No stale db certificates to prune." in auto_output.out
     assert not env["marker"].exists()
     assert prune.read_efi_variable(safe_updates, "db") == _esl(*original_certs)
+    assert auth.read_bytes() == original_auth
+
+    code, out, err = _run(capsys, "--commit")
+    assert code == 0, err
+    if has_removable_certificate:
+        assert "does not establish ownership" in err
+        assert "Pruning 1 stale" in out
+        assert env["marker"].read_text().splitlines() == [
+            "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
+        ]
+        assert prune.read_efi_variable(safe_updates, "db") == _esl(cert0, reinstalled, cert1)
+    else:
+        assert "No stale db certificates to prune." in out
+        assert not env["marker"].exists()
+        assert prune.read_efi_variable(safe_updates, "db") == _esl(*original_certs)
     assert auth.read_bytes() == original_auth
 
 
@@ -640,8 +678,8 @@ def test_auto_preserves_unrelated_enrolled_trust_outside_sonic_scan(
     assert not plan.missing and not plan.boot_chain_at_risk
     update = Mock(side_effect=AssertionError("automatic firmware update forbidden"))
     monkeypatch.setattr(prune, "update_db", update)
-    code, _, err = _run(capsys, "--auto")
-    assert code == 0 and "cannot establish ownership" in err
+    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+    assert "cannot establish ownership" in capsys.readouterr().err
     update.assert_not_called()
     assert prune.read_efi_variable(safe_updates, "db") == original
     assert not env["marker"].exists()
@@ -659,22 +697,39 @@ def test_auto_preserves_non_x509_db_entries(env, safe_updates, monkeypatch, caps
     _write_var(safe_updates.efivars_dir, "db", original)
     update = Mock(side_effect=AssertionError("automatic firmware update forbidden"))
     monkeypatch.setattr(prune, "update_db", update)
-    code, _, err = _run(capsys, "--auto")
-    assert code == 0 and "cannot establish ownership" in err
+    assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+    assert "cannot establish ownership" in capsys.readouterr().err
     update.assert_not_called()
     assert prune.read_efi_variable(safe_updates, "db") == original
     assert not env["marker"].exists()
 
 
-def test_auto_skips_when_no_certificates_are_unused(env, monkeypatch, capsys):
-    plan = Mock(used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[])
-    monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+@pytest.mark.parametrize("auto", [False, True])
+def test_skips_when_no_certificates_are_stale(env, safe_updates, monkeypatch, capsys, auto):
+    _write_var(safe_updates.efivars_dir, "db", _esl(*env["certs"]))
+    before = prune.read_efi_variable(safe_updates, "db")
+    validate = Mock()
+    monkeypatch.setattr(prune, "validate_updates", validate)
     apply = Mock()
     monkeypatch.setattr(prune, "apply_plan", apply)
-    assert prune.prune_db_certificates(prune.Config.from_env(), auto=True) == 0
-    assert "No unused db certificates" in capsys.readouterr().out
+    if auto:
+        assert prune.prune_db_certificates(safe_updates, auto=True) == 0
+    else:
+        assert prune.main(["--commit"]) == 0
+    assert "No stale db certificates to prune." in capsys.readouterr().out
+    validate.assert_not_called()
     apply.assert_not_called()
     assert not env["marker"].exists()
+    assert prune.read_efi_variable(safe_updates, "db") == before
+
+
+@pytest.mark.parametrize("argv", [[], ["--plan"], ["--commit", "--plan"]])
+def test_safe_plan_is_read_only_without_commit(env, safe_updates, capsys, argv):
+    before = prune.read_efi_variable(safe_updates, "db")
+    code, _, err = _run(capsys, *argv)
+    assert code == 0, err
+    assert not env["marker"].exists()
+    assert prune.read_efi_variable(safe_updates, "db") == before
 
 
 @pytest.mark.parametrize("verbose", [False, True])
@@ -698,8 +753,41 @@ def test_auto_skips_reset_without_validating_or_writing(env, monkeypatch, capsys
     assert "Pruning" not in captured.out and "Done:" not in captured.out
     assert print_plan.call_count == int(verbose)
     if verbose:
-        assert print_plan.call_args.args[2] is False
+        print_plan.assert_called_once_with(config, plan, False, verbose)
     assert not env["marker"].exists()
+
+
+@pytest.mark.parametrize("verbose", [False, True])
+def test_commit_validates_before_updates_and_reports_restoration(env, monkeypatch, capsys, verbose):
+    config = prune.Config.from_env()
+    auth = env["auth_dir"] / "DB-cert0.auth"
+    kernel = config.host_path / "image-test" / "boot" / "vmlinuz-test"
+    cert = config.auth_dir / "cert.pem"
+    plan = Mock(
+        used=[Mock()], missing=[], boot_chain_at_risk=False, drop=[Mock()],
+        selected_auths=[auth], boot_critical_binaries=[kernel],
+    )
+    monkeypatch.setattr(prune, "analyze", Mock(return_value=plan))
+    print_plan = Mock()
+    monkeypatch.setattr(prune, "print_plan", print_plan)
+    operations = Mock()
+    operations.update.return_value = True
+    operations.read.return_value = [Mock(pem=cert)]
+    operations.verify.return_value = True
+    monkeypatch.setattr(prune, "validate_updates", operations.validate)
+    monkeypatch.setattr(prune, "update_db", operations.update)
+    monkeypatch.setattr(prune, "read_efi_certificates", operations.read)
+    monkeypatch.setattr(prune, "succeeds", operations.verify)
+    assert prune.prune_db_certificates(config, commit=True, verbose=verbose) == 0
+    assert [item[0] for item in operations.mock_calls] == ["validate", "update", "update", "read", "verify"]
+    assert operations.update.call_args_list == [
+        call(config, config.remove_all_auth, append=False), call(config, auth, append=True),
+    ]
+    out = capsys.readouterr().out
+    assert "Pruning 1 stale" in out and "Done: db reset" in out
+    assert "verifies against the new db" in out
+    assert "Reinstalling" in out
+    print_plan.assert_called_once_with(config, plan, True, verbose)
 
 
 @pytest.mark.parametrize("error", [
@@ -721,7 +809,7 @@ def test_cli_passes_options_to_importable_api(tmp_path, monkeypatch):
     api.assert_called_once()
     assert api.call_args.args[0].auth_dir == auth_dir
     assert api.call_args.args[0].remove_all_auth == remove_all
-    assert api.call_args.kwargs == {"commit": True, "plan_only": False, "auto": False, "verbose": True}
+    assert api.call_args.kwargs == {"commit": True, "plan_only": False, "verbose": True}
 
 
 def test_installed_images_uses_bootloader_without_subprocesses(bootloader, monkeypatch):
@@ -733,7 +821,7 @@ def test_installed_images_uses_bootloader_without_subprocesses(bootloader, monke
     bootloader.return_value.get_installed_images.assert_called_once_with()
 
 
-@pytest.mark.parametrize("mode", ["--plan", "--commit", "--auto"])
+@pytest.mark.parametrize("mode", ["--plan", "--commit"])
 @pytest.mark.parametrize("failure", ["detect", "query", "empty"])
 def test_cli_refuses_pruning_when_bootloader_image_discovery_fails(env, bootloader, capsys, mode, failure):
     if failure == "detect":
@@ -766,7 +854,7 @@ def test_read_commands_are_bounded_but_firmware_writes_are_not(env, monkeypatch)
     run.assert_called_with(["efi-updatevar", "-a", "-f", str(auth), "db"])
 
 
-def test_manual_reset_restores_all_signers_before_success(env, safe_updates, capsys):
+def test_safe_pruning_restores_all_signers_before_success(env, safe_updates, capsys):
     code, out, err = _run(capsys, "--commit")
     assert code == 0, err
     assert env["marker"].read_text().splitlines() == [
@@ -819,10 +907,10 @@ def test_failed_append_restores_other_signers_and_warns_against_reboot(env, safe
     assert "Done:" not in out
 
 
-@pytest.mark.parametrize("mode", ["--commit", "--verbose-commit"])
+@pytest.mark.parametrize("verbose", [False, True])
 @pytest.mark.parametrize("failure", ["write", "flush", "closed"])
 def test_stdout_failure_after_wipe_does_not_interrupt_restoration(
-        env, safe_updates, monkeypatch, mode, failure):
+        env, safe_updates, monkeypatch, verbose, failure):
     stdout = Mock(wraps=sys.stdout)
     if failure == "closed":
         stdout.write.side_effect = ValueError("I/O operation on closed file")
@@ -839,7 +927,7 @@ def test_stdout_failure_after_wipe_does_not_interrupt_restoration(
             return result
 
         output_patch.setattr(prune, "update_db", break_stdout_after_wipe)
-        argv = ["--commit", "-v"] if mode == "--verbose-commit" else [mode]
+        argv = ["--commit", "-v"] if verbose else ["--commit"]
         assert prune.main(argv) == 0
     assert env["marker"].read_text().splitlines() == [
         "remove-all-db.auth", "DB-cert0.auth", "DB-cert1.auth",
