@@ -62,13 +62,7 @@ def hft_add():
 @click.pass_context
 def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
     """Create a profile entry for HFT."""
-    if _has_existing_profile(ctx):
-        click.echo(
-            "A profile already exists; this version supports only one profile. "
-            "Delete the existing profile before adding another."
-        )
-        ctx.exit(1)
-
+    _reject_if_stream_active(profile_name)
     profile_payload = _build_profile_patch(
         op="add",
         profile_name=profile_name,
@@ -295,18 +289,6 @@ def _get_cfgdb(ctx):
     return getattr(db, 'cfgdb', None)
 
 
-def _has_existing_profile(ctx):
-    """Return True when at least one HFT profile already exists."""
-    cfgdb = _get_cfgdb(ctx)
-    if cfgdb is None:
-        return False
-    try:
-        entries = cfgdb.get_table(PROFILE_TABLE_NAME) or {}
-    except Exception:
-        return False
-    return bool(entries)
-
-
 def _get_state_db(namespace=None):
     """Connect to STATE_DB for the given namespace. `namespace=None` maps
     to the localhost/default DB.
@@ -335,14 +317,14 @@ def _active_session_groups(state_db, profile_name):
 
 
 def _reject_if_stream_active(profile_name, namespace=None):
-    """Refuse the group mutation while any of the profile's runtime streams
+    """Refuse profile or group changes while any of the profile's runtime streams
     is still active. CONFIG_DB.stream_state alone is not sufficient - it can
     be 'disabled' while orchagent is still tearing down the runtime stream.
     STATE_DB reflects the operational state written after the SAI transition
     completes.
 
     Fails closed: if STATE_DB cannot be reached or queried, the mutation is
-    refused rather than silently permitted, so we never mutate group config
+    refused rather than silently permitted, so we never mutate profile config
     against a stream whose state we cannot verify.
     """
     try:
@@ -350,7 +332,7 @@ def _reject_if_stream_active(profile_name, namespace=None):
         active = _active_session_groups(state_db, profile_name)
     except Exception as exc:  # noqa: BLE001 - fail-closed on any STATE_DB error
         raise click.ClickException(
-            "Unable to determine HFT runtime stream state; refusing group "
+            "Unable to determine HFT runtime stream state; refusing configuration "
             "mutation. Ensure STATE_DB is reachable, then retry."
         ) from exc
     if not active:
@@ -359,5 +341,5 @@ def _reject_if_stream_active(profile_name, namespace=None):
         f"Profile '{profile_name}' has active runtime streams for group(s): "
         f"{', '.join(active)}. Run `config hft disable {profile_name}` and "
         f"wait until STATE_DB {STATE_SESSION_TABLE_NAME}|{profile_name}|* "
-        f"reports {STREAM_STATUS_FIELD}=disabled before modifying groups."
+        f"reports {STREAM_STATUS_FIELD}=disabled before modifying profile configuration."
     )
