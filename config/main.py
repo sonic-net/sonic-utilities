@@ -24,6 +24,7 @@ from generic_config_updater.gu_common import HOST_NAMESPACE
 from generic_config_updater.main import (
     apply_patch_from_file as _gcu_apply_patch_from_file
 )
+from generic_config_updater import reporting as gcu_reporting
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
 from portconfig import get_child_ports
@@ -2151,6 +2152,9 @@ def print_dry_run_message(dry_run):
 
 @config.command('apply-patch')
 @click.argument('patch-file-path', type=str, required=True)
+@click.option('--report-id', type=click.UUID, help='Publish an EHF report using a fresh UUID for this invocation')
+@click.option('--report-phase', type=click.Choice(['precheck', 'apply']), default='apply',
+              help='Reporting label only; does not change validation or application')
 @click.option('-f', '--format', type=click.Choice([e.name for e in ConfigFormat]),
                default=ConfigFormat.CONFIGDB.name,
                help='format of config of the patch is either ConfigDb(ABNF) or SonicYang',
@@ -2179,6 +2183,8 @@ def apply_patch(
     ignore_path,
     verbose,
     path_trace,
+    report_id=None,
+    report_phase='apply',
 ):
     """Apply given patch of updates to Config. A patch is a JsonPatch which follows rfc6902.
        This command can be used do partial updates to the config with minimum disruption to running processes.
@@ -2193,16 +2199,20 @@ def apply_patch(
     try:
         if path_trace:
             trace_io = open(path_trace, 'w')
-        _gcu_apply_patch_from_file(
-            patch_file_path,
-            config_format_name=format,
-            verbose=verbose,
-            dry_run=dry_run,
-            parallel=parallel,
-            ignore_non_yang_tables=ignore_non_yang_tables,
-            ignore_path=ignore_path,
-            trace_io=trace_io,
-        )
+        with gcu_reporting.report_session(
+            report_id, report_phase, failure_exit_code=2, interrupt_exit_code=1
+        ):
+            with gcu_reporting.stage("dry_run" if dry_run else "apply_patch"):
+                _gcu_apply_patch_from_file(
+                    patch_file_path,
+                    config_format_name=format,
+                    verbose=verbose,
+                    dry_run=dry_run,
+                    parallel=parallel,
+                    ignore_non_yang_tables=ignore_non_yang_tables,
+                    ignore_path=ignore_path,
+                    trace_io=trace_io,
+                )
 
         log.log_notice("Patch applied successfully.")
         click.secho("Patch applied successfully.", fg="cyan", underline=True)

@@ -80,6 +80,40 @@ sudo pip install YOUR_WHEEL_PACKAGE
 ```
 Note: Don't use "--force-reinstall".
 
+#### Opt-in GCU error reports
+
+`config apply-patch` and `gcu-standalone apply-patch` accept `--report-id UUID`
+and `--report-phase precheck|apply`. Use a fresh UUID for each invocation.
+The phase is only a reporting label: it does not make a nonempty patch read-only.
+Reports are disabled unless an ID is supplied; existing validation, ignore-path,
+dry-run, callback and write behavior is unchanged.
+
+A complete report is atomically published as
+`/host/sonic-upgrade-reports/gcu-PHASE.UUID.json`, with private file permissions.
+An exclusive `.pending` reservation prevents reuse of an in-progress ID. Do not
+replay a patch when a report is missing or publication fails: writes may already
+have completed. Abrupt termination can leave only the pending reservation.
+Report retention/cleanup must be managed separately; these commands do not
+delete previous reports.
+
+The report uses the existing `sonic_upgrade_summary`, `sonic_upgrade_actions`
+and `sonic_upgrade_report` envelope. Fault codes are the command's numeric exit
+status encoded as a string (normally 2 for Click errors and 1 for standalone
+errors), not newly allocated fault codes. Retry, isolation, reputation and
+automatic-triage actions are disabled. Consumers must match the phase and UUID,
+retain the actual command exit status, and reject contradictory or missing
+reports when reporting was required.
+
+Stages record the observed flow, including per-ASIC scope, writes and the
+existing final ConfigDB comparison. A zero stage result means normal return,
+not independent proof of daemon readiness; existing callback-return handling
+and backend-table exclusions are unchanged. No health checks, save, rollback
+or service activation are certified. Exceptions that existing code suppresses,
+or validators expose only as a Boolean, cannot become exhaustive diagnostics.
+Configuration scalar values are conservatively redacted from exception text;
+unavailable or over-limit redaction inputs cause diagnostic text to be omitted.
+Stage/error histories are bounded and explicitly identify truncation.
+
 ### sonic-utilities-data
 
 A Debian package, containing data files needed by the utilities (bash_completion files, Jinja2 templates, etc.)

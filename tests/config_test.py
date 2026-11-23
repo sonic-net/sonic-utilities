@@ -12,6 +12,9 @@ import sys
 import unittest
 import ipaddress
 import types
+import tempfile
+import uuid
+from pathlib import Path
 
 from datetime import timezone
 from unittest import mock
@@ -2322,6 +2325,31 @@ class TestConfigQosMasic(object):
         dbconnector.load_namespace_config()
 
 class TestGenericUpdateCommands(unittest.TestCase):
+    def test_apply_patch_reporting_preserves_click_exit_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report_id = str(uuid.uuid4())
+            with mock.patch.object(config.gcu_reporting, "REPORT_DIRECTORY", directory), \
+                    mock.patch.object(
+                        config, "_gcu_apply_patch_from_file", side_effect=ValueError("validation failed")
+                    ):
+                result = self.runner.invoke(
+                    config.config.commands["apply-patch"],
+                    [self.any_path, "--report-id", report_id, "--report-phase", "precheck"],
+                )
+            report = json.loads((Path(directory) / f"gcu-precheck.{report_id}.json").read_text())
+        self.assertEqual(2, result.exit_code)
+        self.assertEqual("2", report["sonic_upgrade_summary"]["fault_code"])
+        self.assertEqual([{"name": "apply_patch", "rc": "2"}], report["sonic_upgrade_report"]["stages"])
+
+    def test_apply_patch_invalid_report_id_never_dispatches(self):
+        with mock.patch.object(config, "_gcu_apply_patch_from_file") as apply:
+            result = self.runner.invoke(
+                config.config.commands["apply-patch"],
+                [self.any_path, "--report-id", "../invalid"],
+            )
+        self.assertEqual(2, result.exit_code)
+        apply.assert_not_called()
+
     def setUp(self):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         self.runner = CliRunner()

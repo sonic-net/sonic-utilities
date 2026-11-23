@@ -3,8 +3,11 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
+import uuid
 from argparse import Namespace
+from pathlib import Path
 from unittest import mock
 
 # Make sure the repo root is on the path
@@ -15,6 +18,7 @@ sys.path.insert(0, _ROOT_DIR)
 from generic_config_updater.generic_updater import ConfigFormat  # noqa: E402
 from generic_config_updater.gu_common import GenericConfigUpdaterError  # noqa: E402
 import generic_config_updater.main as gcu_main  # noqa: E402
+from generic_config_updater import reporting  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -461,6 +465,79 @@ class TestApplyPatchFromFile(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # print_error / print_success
 # ---------------------------------------------------------------------------
+
+class TestApplyPatchReporting(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        patcher = mock.patch.object(reporting, "REPORT_DIRECTORY", directory.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.report_id = str(uuid.uuid4())
+        self.patch_file = self.root / "patch.json"
+        self.patch_file.write_text("[]")
+        self.args = gcu_main.build_parser().parse_args([
+            "apply-patch", str(self.patch_file), "--report-id", self.report_id,
+        ])
+
+    def read_report(self):
+        return json.loads((self.root / f"gcu-apply.{self.report_id}.json").read_text())
+
+    def test_preprocess_rejection_reports_failure_without_calling_updater(self):
+        with mock.patch.object(gcu_main, "get_all_running_config", return_value="{}"), \
+                mock.patch.object(gcu_main, "validate_patch", return_value=False), \
+                mock.patch.object(gcu_main, "GenericUpdater") as updater:
+            with self.assertRaises(SystemExit) as caught:
+                gcu_main.apply_patch(self.args)
+        self.assertEqual(1, caught.exception.code)
+        updater.assert_not_called()
+        report = self.read_report()
+        self.assertEqual("1", report["sonic_upgrade_summary"]["fault_code"])
+        self.assertIn({"name": "preprocess", "rc": "1"}, report["sonic_upgrade_report"]["stages"])
+        self.assertNotIn("configdb_writes", str(report))
+
+    def test_parallel_scope_failure_retains_all_completed_scope_observations(self):
+        self.args.parallel = True
+
+        def updater(scope):
+            instance = mock.Mock()
+            if scope == "asic1":
+                instance.apply_patch.side_effect = ValueError("synthetic application failure")
+            return instance
+
+        with mock.patch.object(gcu_main, "get_all_running_config", return_value="{}"), \
+                mock.patch.object(gcu_main, "validate_patch", return_value=True), \
+                mock.patch.object(gcu_main.multi_asic, "is_multi_asic", return_value=True), \
+                mock.patch.object(gcu_main.multi_asic, "get_namespace_list", return_value=["asic0", "asic1"]), \
+                mock.patch.object(gcu_main, "GenericUpdater", side_effect=updater) as factory:
+            with self.assertRaises(SystemExit) as caught:
+                gcu_main.apply_patch(self.args)
+        self.assertEqual(1, caught.exception.code)
+        self.assertEqual(3, factory.call_count)
+        report = self.read_report()
+        stages = report["sonic_upgrade_report"]["stages"]
+        self.assertIn({"name": "asic0.scope_application", "rc": "0"}, stages)
+        self.assertIn({"name": "asic1.scope_application", "rc": "1"}, stages)
+        self.assertEqual("1", report["sonic_upgrade_summary"]["fault_code"])
+
+    def test_missing_patch_file_reports_failure_before_config_access(self):
+        self.patch_file.unlink()
+        with mock.patch.object(gcu_main, "get_all_running_config") as fetch:
+            with self.assertRaises(SystemExit):
+                gcu_main.apply_patch(self.args)
+        fetch.assert_not_called()
+        self.assertIn({"name": "patch_input", "rc": "1"},
+                      self.read_report()["sonic_upgrade_report"]["stages"])
+
+    def test_duplicate_invocation_id_does_not_execute_patch_again(self):
+        with reporting.report_session(self.report_id), reporting.stage("apply_patch"):
+            pass
+        with mock.patch.object(gcu_main, "apply_patch_from_file") as apply:
+            with self.assertRaises(SystemExit):
+                gcu_main.apply_patch(self.args)
+        apply.assert_not_called()
+
 
 class TestPrintHelpers(unittest.TestCase):
 

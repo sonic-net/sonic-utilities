@@ -11,6 +11,7 @@ from swsscommon.swsscommon import ConfigDBConnector
 from sonic_py_common import multi_asic
 from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
 from .gu_common import JsonChange
+from . import reporting
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 UPDATER_CONF_FILE = f"{SCRIPT_DIR}/gcu_services_validator.conf.json"
@@ -143,10 +144,12 @@ class ChangeApplier:
         upd_data = prune_empty_table(change.apply(run_data, in_place=False))
         upd_keys = defaultdict(dict)
 
-        for tbl in sorted(set(run_data.keys()).union(set(upd_data.keys()))):
-            self._upd_data(tbl, run_data.get(tbl, {}), upd_data.get(tbl, {}), upd_keys)
+        with reporting.stage("configdb_writes"):
+            for tbl in sorted(set(run_data.keys()).union(set(upd_data.keys()))):
+                self._upd_data(tbl, run_data.get(tbl, {}), upd_data.get(tbl, {}), upd_keys)
 
-        ret = self._services_validate(run_data, upd_data, upd_keys)
+        with reporting.stage("callback_dispatch"):
+            ret = self._services_validate(run_data, upd_data, upd_keys)
         # The above function returns 0 on success as it uses shell return codes
         if ret != 0:
             log_error("Failed to apply Json change")
