@@ -2607,6 +2607,7 @@ class TestBulkLowLevelMoveGeneratorRegression(unittest.TestCase):
             second_group = next(first_run)
             self.assertIs(second_group.patches[0].diff, diff_a)
 
+
 class TestBulkKeyLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
         self.generator = ps.BulkKeyLevelMoveGenerator(PathAddressing())
