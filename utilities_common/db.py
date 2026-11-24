@@ -1,4 +1,3 @@
-from sonic_py_common._redis_transport import use_local_redis_socket
 from sonic_py_common import multi_asic, device_info
 from swsscommon.swsscommon import ConfigDBConnector, ConfigDBPipeConnector, SonicV2Connector, SonicDBConfig
 from utilities_common import constants
@@ -6,10 +5,10 @@ from utilities_common.multi_asic import multi_asic_ns_choices
 
 
 class Db(object):
-    def __init__(self, authenticate=False):
+    def __init__(self, authenticate=False, *, use_tcp=True):
         self.cfgdb_clients = {}
         self.db_clients = {}
-        options = {"use_unix_socket_path": authenticate or use_local_redis_socket("CONFIG_DB")}
+        options = {"use_unix_socket_path": not use_tcp}
         if authenticate:
             options["authenticate"] = True
         self.cfgdb = ConfigDBConnector(**options)
@@ -39,9 +38,9 @@ class Db(object):
             self.ns_list = multi_asic_ns_choices()
             for ns in self.ns_list:
                 self.cfgdb_clients[ns] = (
-                    multi_asic.connect_config_db_for_ns(ns, authenticate=authenticate)
+                    multi_asic.connect_config_db_for_ns(ns, use_tcp=use_tcp, authenticate=authenticate)
                 )
-                self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns, authenticate=authenticate)
+                self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns, use_tcp=use_tcp, authenticate=authenticate)
 
     def get_data(self, table, key):
         data = self.cfgdb.get_table(table)

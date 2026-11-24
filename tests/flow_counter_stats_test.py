@@ -935,7 +935,7 @@ class TestGetRouteFlowCounterCapability:
     """
 
     @pytest.mark.parametrize('use_unix_socket_path', [False, True])
-    @mock.patch('flow_counter_util.route.use_local_redis_socket')
+    @mock.patch('flow_counter_util.route.cli_uses_unix_socket')
     @mock.patch('flow_counter_util.route.SonicV2Connector')
     def test_no_namespace_uses_host_connector(self, mock_connector, select_transport, use_unix_socket_path):
         select_transport.return_value = use_unix_socket_path
@@ -947,7 +947,7 @@ class TestGetRouteFlowCounterCapability:
             mock_connector.reset_mock()
             select_transport.reset_mock()
             get_route_flow_counter_capability(ns)
-            select_transport.assert_called_once_with('STATE_DB')
+            select_transport.assert_called_once_with()
             mock_connector.assert_called_once_with(use_unix_socket_path=use_unix_socket_path, host='127.0.0.1')
             mock_db.connect.assert_called_with(mock_db.STATE_DB)
 

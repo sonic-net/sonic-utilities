@@ -38,7 +38,7 @@ def test_only_write_commands_request_writer_credentials(monkeypatch, capsys, nam
 
     monkeypatch.setattr(portconfig, 'ConfigDBConnector', connect)
     monkeypatch.setattr(portconfig, 'SonicV2Connector', lambda **options: state)
-    monkeypatch.setattr(portconfig, 'use_local_redis_socket', lambda *args: reader_socket)
+    monkeypatch.setattr(portconfig, 'cli_uses_unix_socket', lambda *args: reader_socket)
     monkeypatch.setattr(portconfig, 'load_db_config', lambda: None)
     arguments = ['portconfig', '-p', 'Ethernet0', *(['-m', '9100'] if write else ['-l'])]
     if namespace is not None:

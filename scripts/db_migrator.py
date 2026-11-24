@@ -207,7 +207,7 @@ class DBMigrator():
         During warm-reboot, add back two 10G management ports which got removed from 6100
         to ensure no change in bcm.config from older image
         '''
-        if device_info.is_warm_restart_enabled('swss') == False:
+        if device_info.is_warm_restart_enabled('swss', use_tcp=False) == False:
             log.log_notice("Skip migration on {}, warm-reboot flag not set".format(self.hwsku))
             return True
 

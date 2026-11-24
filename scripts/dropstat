@@ -11,6 +11,7 @@
 # - Refactor calls to COUNTERS_DB to reduce redundancy
 # - Cache DB queries to reduce # of expensive queries
 
+from utilities_common.redis_transport import cli_uses_unix_socket
 import click
 import json
 import os
@@ -139,8 +140,8 @@ class DropStat(object):
         counters_switch_drop = {}
         counters_switch_std_drop = {}
         for ns in self.namespaces:
-            self.config_db = multi_asic.connect_config_db_for_ns(ns)
-            self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
+            self.config_db = multi_asic.connect_config_db_for_ns(ns, use_tcp=not cli_uses_unix_socket())
+            self.db = multi_asic.connect_to_all_dbs_for_ns(ns, use_tcp=not cli_uses_unix_socket())
 
             counts = self.get_counts_table(self.gather_counters(std_port_rx_counters + std_port_tx_counters, DEBUG_COUNTER_PORT_STAT_MAP), COUNTERS_PORT_NAME_MAP)
             if counts:

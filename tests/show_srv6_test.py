@@ -651,7 +651,7 @@ class TestShowSRv6MultiAsic(object):
     @pytest.fixture(params=[False, True], ids=['tcp-reader', 'unix-reader'])
     def reader_transport(self, request):
         # Exercise forwarding of either selected transport without relying on host sockets.
-        with patch('show.srv6.use_local_redis_socket', return_value=request.param):
+        with patch('show.srv6.cli_uses_unix_socket', return_value=request.param):
             yield request.param
 
     def setup_method(self):

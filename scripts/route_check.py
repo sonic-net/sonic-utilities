@@ -34,6 +34,7 @@ To verify:
 
 """
 
+from utilities_common.redis_transport import cli_uses_unix_socket
 import argparse
 from enum import Enum
 import ipaddress
@@ -398,7 +399,7 @@ def is_suppress_fib_pending_enabled(namespace):
     """
     Returns True if FIB suppression is enabled, False otherwise
     """
-    cfg_db = multi_asic.connect_config_db_for_ns(namespace)
+    cfg_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
     state = cfg_db.get_entry('DEVICE_METADATA', 'localhost').get('suppress-fib-pending')
 
     return state == 'enabled'
@@ -741,7 +742,7 @@ def is_dualtor(config_db):
 
 def filter_out_standalone_tunnel_routes(namespace, routes):
 
-    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
 
     if not is_dualtor(config_db):
         return routes
@@ -781,7 +782,7 @@ def is_feature_bgp_enabled(namespace):
     Check if bgp feature is enabled or disabled.
     Return True if enabled else False.
     """
-    cfg_db = multi_asic.connect_config_db_for_ns(namespace)
+    cfg_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
     feature_table = cfg_db.get_table("FEATURE")
     bgp_enabled = False
     if 'bgp' in feature_table:
@@ -881,7 +882,7 @@ def filter_out_soc_ip_routes(namespace, routes):
     will use the kernel routing table), but still provide connectivity to any external
     traffic in case of a link issue (since this traffic will be forwarded by the ASIC).
     """
-    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
 
     if not is_dualtor(config_db):
         return routes
@@ -930,7 +931,7 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
                 updated_routes.append(route)
         return updated_routes, ignored_routes
 
-    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
 
     if is_dualtor(config_db):
         vlan_neighs = set(get_vlan_neighbors(namespace))

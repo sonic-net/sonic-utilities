@@ -1,3 +1,4 @@
+from utilities_common.redis_transport import cli_uses_unix_socket
 import argparse
 import functools
 
@@ -194,12 +195,12 @@ def run_on_multi_asic(func):
             if self.multi_asic.db and self.multi_asic.db.cfgdb_clients.get(ns):
                 self.config_db = self.multi_asic.db.cfgdb_clients[ns]
             else:
-                self.config_db = multi_asic.connect_config_db_for_ns(ns)
+                self.config_db = multi_asic.connect_config_db_for_ns(ns, use_tcp=not cli_uses_unix_socket())
 
             if self.multi_asic.db and self.multi_asic.db.db_clients.get(ns):
                 self.db = self.multi_asic.db.db_clients[ns]
             else:
-                self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
+                self.db = multi_asic.connect_to_all_dbs_for_ns(ns, use_tcp=not cli_uses_unix_socket())
 
             func(self,  *args, **kwargs)
     return wrapped_run_on_all_asics

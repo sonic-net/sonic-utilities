@@ -165,7 +165,7 @@ def show():
 @multi_asic_util.multi_asic_click_option_namespace
 def configAsym(status, interface, namespace):
     """Configure asymmetric PFC on a given port."""
-    Pfc(namespace, db=Db(authenticate=True)).configPfcAsym(interface, status)
+    Pfc(namespace, db=Db(authenticate=True, use_tcp=False)).configPfcAsym(interface, status)
 
 
 @click.command()
@@ -175,7 +175,7 @@ def configAsym(status, interface, namespace):
 @multi_asic_util.multi_asic_click_option_namespace
 def configPrio(status, interface, priority, namespace):
     """Configure PFC on a given priority."""
-    Pfc(namespace, db=Db(authenticate=True)).configPfcPrio(status, interface, priority)
+    Pfc(namespace, db=Db(authenticate=True, use_tcp=False)).configPfcPrio(status, interface, priority)
 
 
 @click.command()

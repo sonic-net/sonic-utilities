@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import click
-from sonic_py_common._redis_transport import use_local_redis_socket
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import ConfigDBConnector
 from tabulate import tabulate
 from sonic_py_common import multi_asic
@@ -15,7 +15,7 @@ from .dash_config import config_dash
 from .dash_show import show_dash
 
 
-platform_info = device_info.get_platform_info()
+platform_info = device_info.get_platform_info(use_tcp=not cli_uses_unix_socket())
 
 
 class Crm:
@@ -56,7 +56,7 @@ class Crm:
         CRM handler for 'config' CLI commands.
         """
         if self.cfgdb is None:
-            self.multi_asic.db = Db(authenticate=True)
+            self.multi_asic.db = Db(authenticate=True, use_tcp=False)
         self._config(attr, val)
 
     @multi_asic_util.run_on_multi_asic
@@ -76,7 +76,7 @@ class Crm:
             namespaces = multi_asic.get_namespace_list()
 
             configdb = ConfigDBConnector(
-                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespaces[0]),
+                use_unix_socket_path=cli_uses_unix_socket(),
                 namespace=namespaces[0],
             )
             configdb.connect()
@@ -102,7 +102,7 @@ class Crm:
             namespaces = multi_asic.get_namespace_list()
 
             configdb = ConfigDBConnector(
-                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespaces[0]),
+                use_unix_socket_path=cli_uses_unix_socket(),
                 namespace=namespaces[0],
             )
             configdb.connect()
@@ -334,7 +334,7 @@ def cli(ctx):
     # Load database config files
     load_db_config()
 
-    if device_info.get_platform_info().get('switch_type') == "dpu":
+    if device_info.get_platform_info(use_tcp=not cli_uses_unix_socket()).get('switch_type') == "dpu":
         crm = DashCrm(db)
     else:
         crm = Crm(db)
@@ -605,7 +605,7 @@ srv6_my_sid_entry.add_command(type)
 srv6_my_sid_entry.add_command(low)
 srv6_my_sid_entry.add_command(high)
 
-if device_info.get_platform_info().get('switch_type') == "dpu":
+if device_info.get_platform_info(use_tcp=not cli_uses_unix_socket()).get('switch_type') == "dpu":
     thresholds.add_command(config_dash)
 
 @cli.group()
@@ -823,7 +823,7 @@ thresholds.add_command(dnat)
 thresholds.add_command(srv6_nexthop)
 thresholds.add_command(srv6_my_sid_entry)
 
-if device_info.get_platform_info().get('switch_type') == "dpu":
+if device_info.get_platform_info(use_tcp=not cli_uses_unix_socket()).get('switch_type') == "dpu":
     resources.add_command(show_dash)
     thresholds.add_command(show_dash)
 

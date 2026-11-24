@@ -619,7 +619,7 @@ Examples:
         'install', 'uninstall', 'add', 'remove',
         'enable_drop_monitor', 'disable_drop_monitor'
     ):
-        db = Db(authenticate=True)
+        db = Db(authenticate=True, use_tcp=False)
     dropconfig_wrapper = DropConfigWrapper(namespace, db=db)
     dropconfig_wrapper.run(command,
                            name,

@@ -192,7 +192,7 @@ def main(show_config, profile, alpha, staticth, trim, namespace, verbose):
         load_db_config()
         db = None
         if config and not show_config and profile and (alpha is not None or staticth is not None or trim):
-            db = Db(authenticate=True)
+            db = Db(authenticate=True, use_tcp=False)
         mmu_cfg = MmuConfig(verbose, config, filename, namespace, db=db)
 
         # Both mmuconfig and buffershow have access to show_config option

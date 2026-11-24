@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from utilities_common.redis_transport import cli_uses_unix_socket
 import argparse
 import click
 import json
@@ -352,7 +353,7 @@ class FabricCapacity(FabricStat):
 
     def capacity_print(self):
         # Connect to database
-        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
+        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace, use_tcp=not cli_uses_unix_socket())
         # Get fabric capacity data from STATE_DB table FABRIC_CAPACITY_TABLE
         # and store them in fabric_capacity_data
         fabric_capacity_data = self.db.get_all(self.db.STATE_DB, "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA")
@@ -406,7 +407,7 @@ class FabricCapacity(FabricStat):
 class FabricReachability(FabricStat):
     def reachability_print(self):
         # Connect to database
-        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
+        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace, use_tcp=not cli_uses_unix_socket())
         # Get the set of all fabric port keys
         port_keys = self.db.keys(self.db.STATE_DB, FABRIC_PORT_STATUS_TABLE_PREFIX + '*')
         # Create a new dictionary. The key values are the local port values
@@ -437,7 +438,7 @@ class FabricIsolation(FabricStat):
 
     def isolation_print(self):
         # Connect to database
-        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
+        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace, use_tcp=not cli_uses_unix_socket())
         # Get the set of all fabric ports
         port_keys = self.db.keys(self.db.STATE_DB, FABRIC_PORT_STATUS_TABLE_PREFIX + '*')
         # Create a new dictionary. The keys are the local port values in integer format.
@@ -489,7 +490,7 @@ class FabricRate(FabricStat):
 
     def rate_print(self):
         # Connect to database
-        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
+        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace, use_tcp=not cli_uses_unix_socket())
         # Get the set of all fabric ports
         port_keys = self.db.keys(self.db.STATE_DB, FABRIC_PORT_STATUS_TABLE_PREFIX + '*')
         # Create a new dictionary. The keys are the local port values in integer format.

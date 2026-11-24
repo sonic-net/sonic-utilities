@@ -1967,7 +1967,7 @@ def config(ctx):
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
-    ctx.obj = Db(authenticate=True)
+    ctx.obj = Db(authenticate=True, use_tcp=False)
 
 
 # Add groups from other modules
@@ -5801,7 +5801,7 @@ def fast_linkup(ctx, interface_name, mode, verbose):
         raise click.ClickException('Interface name is invalid. Please enter a valid interface name')
 
     # Read capability from STATE_DB for validation
-    db = Db(authenticate=True)
+    db = Db(authenticate=True, use_tcp=False)
     state_db = db.db_clients.get(namespace, db.db)
     cap_tbl = state_db.get_all(state_db.STATE_DB, 'SWITCH_CAPABILITY|switch') or {}
     if cap_tbl.get('FAST_LINKUP_CAPABLE', 'false') != 'true':
@@ -10537,7 +10537,7 @@ def ipv6(ctx, namespace):
     """IPv6 configuration"""
     if namespace is None:
         namespace = DEFAULT_NAMESPACE
-    config_db = multi_asic.connect_config_db_for_ns(namespace, authenticate=True)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=False, authenticate=True)
     ctx.ensure_object(dict)
     ctx.obj['config_db'] = config_db
     ctx.obj['namespace'] = str(namespace)

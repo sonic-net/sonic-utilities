@@ -14,7 +14,7 @@ from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
 from sonic_py_common import syslogger
-from sonic_py_common._redis_transport import use_local_redis_socket
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from portconfig import get_child_ports
 import sonic_platform_base.sonic_sfp.sfputilhelper
@@ -255,7 +255,7 @@ def _get_local_supervisor_name():
     except Exception:
         pass
 
-    hostname = device_info.get_hostname()
+    hostname = device_info.get_hostname(use_tcp=not cli_uses_unix_socket())
     match = re.search(r'(?:^|[-_])(?:rp|supervisor)(\d*)$', hostname, re.IGNORECASE)
     return f"SUPERVISOR{match.group(1) or '0'}" if match else 'SUPERVISOR0'
 
@@ -356,7 +356,7 @@ def tpid(interfacename, namespace, display, verbose):
 def breakout(ctx):
     """Show Breakout Mode information by interfaces"""
     # Reading data from Redis configDb
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
     ctx.obj = {'db': config_db}
 
@@ -546,7 +546,7 @@ def mpls(ctx, interfacename, namespace, display):
 
     for ns in ns_list:
 
-        appl_db = multi_asic.connect_to_all_dbs_for_ns(namespace=ns)
+        appl_db = multi_asic.connect_to_all_dbs_for_ns(namespace=ns, use_tcp=not cli_uses_unix_socket())
 
         if interfacename is not None:
             interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
@@ -638,7 +638,7 @@ def flap(ctx, interfacename, namespace, display):
 
     for ns in ns_list:
         masic.current_namespace = ns
-        appl_db = multi_asic.connect_to_all_dbs_for_ns(namespace=ns)
+        appl_db = multi_asic.connect_to_all_dbs_for_ns(namespace=ns, use_tcp=not cli_uses_unix_socket())
         port_dict = multi_asic.get_port_table(namespace=ns)
 
         # Loop through all ports or the specified port
@@ -689,7 +689,7 @@ def flap(ctx, interfacename, namespace, display):
 def get_all_port_errors(interfacename):
 
     port_operr_table = {}
-    db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host=REDIS_HOSTIP)
+    db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host=REDIS_HOSTIP)
     db.connect(db.STATE_DB)
 
     # Retrieve the errors data from the PORT_OPERR_TABLE
@@ -1638,7 +1638,7 @@ def get_ports_data():
     ports_dict = {}
     namespaces = multi_asic.get_namespace_list()
     for namespace in namespaces:
-        db = multi_asic.connect_to_all_dbs_for_ns(namespace=namespace)
+        db = multi_asic.connect_to_all_dbs_for_ns(namespace=namespace, use_tcp=not cli_uses_unix_socket())
         port_table = multi_asic.get_port_table(namespace=namespace)
         for port_name, port_info in port_table.items():
             lanes = [lane for lane in port_info.get(LANES, "").split(',') if lane]

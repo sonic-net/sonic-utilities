@@ -7,7 +7,7 @@ import json
 import os
 import socket
 
-from sonic_py_common._redis_transport import use_local_redis_socket
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import SonicV2Connector
 from sonic_py_common import multi_asic
 from tabulate import tabulate
@@ -37,7 +37,7 @@ class IcmpShow:
             asic_id = multi_asic.get_asic_index_from_namespace(namespace)
             self.asic_ids.append(asic_id)
             self.per_npu_statedb[asic_id] = SonicV2Connector(
-                use_unix_socket_path=use_local_redis_socket('STATE_DB', namespace),
+                use_unix_socket_path=cli_uses_unix_socket(),
                 namespace=namespace,
             )
             try:
@@ -56,7 +56,7 @@ class IcmpShow:
             # '|IN'/'|OUT') and native rows (one OID per session, no
             # suffix) depending on what orchagent negotiated per session.
             self.per_npu_countersdb[asic_id] = SonicV2Connector(
-                use_unix_socket_path=use_local_redis_socket('COUNTERS_DB', namespace),
+                use_unix_socket_path=cli_uses_unix_socket(),
                 namespace=namespace,
             )
             try:

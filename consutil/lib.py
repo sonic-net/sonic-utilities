@@ -4,6 +4,7 @@
 # Helper code for CLI for interacting with switches via console device
 #
 
+from utilities_common.redis_transport import cli_uses_unix_socket
 import json
 import os
 import re
@@ -570,7 +571,7 @@ def console_connect(target, use_device=False, db=None):
     """Connect to a console port. Can be called directly without Click context."""
     if db is None:
         from utilities_common.db import Db
-        db = Db(authenticate=True) if os.geteuid() == 0 else Db()
+        db = Db(authenticate=True, use_tcp=False) if os.geteuid() == 0 else Db(use_tcp=not cli_uses_unix_socket())
         initialize_console_runtime(db)
 
     port_provider = ConsolePortProvider(db, configured_only=False)

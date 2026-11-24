@@ -32,7 +32,7 @@ except KeyError:
     pass
 
 from utilities_common.cli import UserCache
-from sonic_py_common._redis_transport import use_local_redis_socket
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 
 STATUS_NA = 'N/A'
@@ -53,7 +53,7 @@ class PgDropStat(object):
         self.namespace = namespace
         self.ns_list = multi_asic.get_namespace_list(namespace)
         self.configdb = ConfigDBConnector(
-            use_unix_socket_path=use_local_redis_socket('CONFIG_DB', namespace),
+            use_unix_socket_path=cli_uses_unix_socket(),
             namespace=namespace,
         )
         self.configdb.connect()
@@ -106,7 +106,7 @@ class PgDropStat(object):
 
     def get_counters_mapdata(self, tablemap, index, namespace):
         counters_db = SonicV2Connector(
-            use_unix_socket_path=use_local_redis_socket('COUNTERS_DB', namespace),
+            use_unix_socket_path=cli_uses_unix_socket(),
             namespace=namespace,
         )
         counters_db.connect(counters_db.COUNTERS_DB)
@@ -117,7 +117,7 @@ class PgDropStat(object):
         mapdata = {}
         for ns in self.ns_list:
             counters_db = SonicV2Connector(
-                use_unix_socket_path=use_local_redis_socket('COUNTERS_DB', ns),
+                use_unix_socket_path=cli_uses_unix_socket(),
                 namespace=ns,
             )
             counters_db.connect(counters_db.COUNTERS_DB)

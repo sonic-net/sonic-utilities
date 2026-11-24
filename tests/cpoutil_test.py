@@ -1307,7 +1307,7 @@ class TestCpoHelpers:
             "Ethernet0": {"index": [1], "lanes": (41, 43)},
             "Ethernet2": {"index": [1], "lanes": (42, 44)},
         }
-        read_ports.assert_called_once_with()
+        read_ports.assert_called_once_with(use_tcp=True)
         cpoutil.load_current_port_config()
         load.assert_called_once_with()
 
@@ -1975,7 +1975,7 @@ class TestPortConfigurationSnapshot:
             database.get_table.return_value = tables[namespace]
         namespace_list = mock.Mock(return_value=namespaces)
         selected_transport = use_unix_socket_path
-        monkeypatch.setattr(cpoutil.multi_asic, "use_local_redis_socket",
+        monkeypatch.setattr(cpoutil, "cli_uses_unix_socket",
                             mock.Mock(return_value=selected_transport))
 
         def make_reader(namespace, *, use_unix_socket_path=False, authenticate=False):
@@ -1992,7 +1992,8 @@ class TestPortConfigurationSnapshot:
         assert cpoutil.current_port_config == expected
         namespace_list.assert_called_once_with(None)
         assert connector.call_args_list == [
-            mock.call(use_unix_socket_path=selected_transport, namespace=ns) for ns in namespaces
+            mock.call(namespace=ns, **({"use_unix_socket_path": True} if selected_transport else {}))
+            for ns in namespaces
         ]
         for database in databases.values():
             database.connect.assert_called_once_with()
@@ -2012,7 +2013,7 @@ class TestPortConfigurationSnapshot:
             "Ethernet0": {"index": [1], "lanes": (41, 43)},
             "Ethernet2": {"index": [1], "lanes": (42, 44)},
         }
-        read.assert_called_once_with()
+        read.assert_called_once_with(use_tcp=True)
 
     @pytest.mark.parametrize("table", [{}, {"Ethernet0": {}}, {"Ethernet0": {"lanes": None}}])
     def test_missing_port_or_lanes_is_reported(self, monkeypatch, shared_port_mapping, table):

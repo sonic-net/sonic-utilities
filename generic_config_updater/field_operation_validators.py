@@ -17,7 +17,7 @@ STATE_DB_NAME = 'STATE_DB'
 REDIS_TIMEOUT_MSECS = 0
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_TABLE_MOD_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
-GET_HWSKU_CMD = "sonic-cfggen -d -v DEVICE_METADATA.localhost.hwsku"
+GET_HWSKU_CMD = "sonic-cfggen -d --redis-unix-socket -v DEVICE_METADATA.localhost.hwsku"
 
 
 def get_asic_name():

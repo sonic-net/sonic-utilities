@@ -12,7 +12,7 @@ import utilities_common.multi_asic as multi_asic_util
 from importlib import reload
 from natsort import natsorted
 from sonic_py_common import device_info
-from sonic_py_common._redis_transport import use_local_redis_socket
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
@@ -139,7 +139,7 @@ def get_cmd_output(cmd):
     return proc.communicate()[0], proc.returncode
 
 def get_config_json_by_namespace(namespace):
-    cmd = ['sonic-cfggen', '-d', '--print-data']
+    cmd = ['sonic-cfggen', '-d', *(['--redis-unix-socket'] if cli_uses_unix_socket() else []), '--print-data']
     if namespace is not None and namespace != multi_asic.DEFAULT_NAMESPACE:
         cmd += ['-n', namespace]
 
@@ -167,7 +167,7 @@ def display_storm_all():
     header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
     body = []
 
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
 
     table = config_db.get_table('PORT_STORM_CONTROL')
@@ -201,10 +201,10 @@ def display_storm_all():
 #
 def connect_storm_control_config_db(namespace=None):
     if namespace is None:
-        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+        config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
         config_db.connect()
     else:
-        config_db = multi_asic.connect_config_db_for_ns(namespace)
+        config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
     return config_db
 
 
@@ -256,7 +256,7 @@ def connect_config_db():
     """
     Connects to config_db
     """
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
     return config_db
 
@@ -264,7 +264,7 @@ def is_gearbox_configured():
     """
     Checks whether Gearbox is configured or not
     """
-    app_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB'))
+    app_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket())
     try:
         app_db.connect(app_db.APPL_DB)
 
@@ -293,7 +293,7 @@ def cli(ctx):
 
     # Load database config files
     load_db_config()
-    ctx.obj = Db()
+    ctx.obj = Db(use_tcp=not cli_uses_unix_socket())
 
 # Add groups from other modules
 cli.add_command(acl.acl)
@@ -364,7 +364,7 @@ def get_interface_bind_to_vrf(config_db, vrf_name):
 @click.pass_context
 def vrf(ctx, vrf_name):
     """Show vrf config"""
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
     header = ['VRF', 'Interfaces']
     body = []
@@ -396,7 +396,7 @@ def vrf(ctx, vrf_name):
 def event_counters():
     """Show events counter"""
     # dump keys as formatted
-    counters_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'), host='127.0.0.1')
+    counters_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host='127.0.0.1')
     counters_db.connect(counters_db.COUNTERS_DB, retry_on=False)
 
     header = ['name', 'count']
@@ -474,7 +474,7 @@ def ndp(ip6address, iface, namespace, display, verbose):
 def is_mgmt_vrf_enabled(ctx):
     """Check if management VRF is enabled"""
     if ctx.invoked_subcommand is None:
-        cmd = ['sonic-cfggen', '-d', '--var-json', "MGMT_VRF_CONFIG"]
+        cmd = ['sonic-cfggen', '-d', *(['--redis-unix-socket'] if cli_uses_unix_socket() else []), '--var-json', "MGMT_VRF_CONFIG"]
 
         p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try :
@@ -576,7 +576,7 @@ def management_interface():
 def address ():
     """Show IP address configured for management interface"""
 
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
 
     # Fetching data from config_db for MGMT_INTERFACE
@@ -593,7 +593,7 @@ def address ():
 @click.pass_context
 def snmpagentaddress (ctx):
     """Show SNMP agent listening IP address configuration"""
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
     agenttable = config_db.get_table('SNMP_AGENT_ADDRESS_CONFIG')
 
@@ -611,7 +611,7 @@ def snmpagentaddress (ctx):
 @click.pass_context
 def snmptrap (ctx):
     """Show SNMP agent Trap server configuration"""
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
     traptable = config_db.get_table('SNMP_TRAP_CONFIG')
 
@@ -1256,7 +1256,7 @@ def mac(ctx, vlan, port, address, type, count, local, verbose, namespace):
 @mac.command('aging-time')
 @click.pass_context
 def aging_time(ctx):
-    app_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('APPL_DB'))
+    app_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket())
     app_db.connect(app_db.APPL_DB)
     table = "SWITCH_TABLE*"
     keys = app_db.keys(app_db.APPL_DB, table)
@@ -1428,7 +1428,7 @@ def interfaces(ctx, namespace, display):
 @interfaces.command()
 def loopback_action():
     """show ip interfaces loopback-action"""
-    config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB'))
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
     header = ['Interface', 'Action']
     body = []
@@ -1596,7 +1596,7 @@ def link_local_mode(namespace, verbose):
     ns_list = masic.get_ns_list_based_on_options()
 
     for ns in ns_list:
-        config_db = ConfigDBConnector(use_unix_socket_path=use_local_redis_socket('CONFIG_DB', ns), namespace=ns)
+        config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket(), namespace=ns)
         config_db.connect()
         interface = ""
 
@@ -1746,7 +1746,7 @@ def logging(process, lines, follow, verbose):
 def version(brief):
     """Show version information"""
     version_info = device_info.get_sonic_version_info()
-    platform_info = device_info.get_platform_info()
+    platform_info = device_info.get_platform_info(use_tcp=not cli_uses_unix_socket())
     chassis_info = platform.get_chassis_info()
 
     sys_uptime_cmd = ["uptime"]
@@ -1890,7 +1890,7 @@ def all(verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def acl(verbose):
     """Show acl running configuration"""
-    cmd = ['sonic-cfggen', '-d', '--var-json', 'ACL_RULE']
+    cmd = ['sonic-cfggen', '-d', *(['--redis-unix-socket'] if cli_uses_unix_socket() else []), '--var-json', 'ACL_RULE']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1900,7 +1900,7 @@ def acl(verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def ports(portname, verbose):
     """Show ports running configuration"""
-    cmd = ['sonic-cfggen', '-d', '--var-json', 'PORT']
+    cmd = ['sonic-cfggen', '-d', *(['--redis-unix-socket'] if cli_uses_unix_socket() else []), '--var-json', 'PORT']
 
     if portname is not None:
         cmd += ["--key", str(portname)]
@@ -1953,7 +1953,7 @@ def bgp(namespace, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def interfaces(interfacename, verbose):
     """Show interfaces running configuration"""
-    cmd = ['sonic-cfggen', '-d', '--var-json', 'INTERFACE']
+    cmd = ['sonic-cfggen', '-d', *(['--redis-unix-socket'] if cli_uses_unix_socket() else []), '--var-json', 'INTERFACE']
 
     if interfacename is not None:
         cmd += ["--key", str(interfacename)]
@@ -2174,7 +2174,7 @@ def spanning_tree(verbose):
     """Show spanning_tree running configuration"""
     stp_list = ["STP", "STP_PORT", "STP_VLAN", "STP_VLAN_PORT"]
     for key in stp_list:
-        cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
+        cmd = ['sudo', 'sonic-cfggen', '-d', *(['--redis-unix-socket'] if cli_uses_unix_socket() else []), '--var-json', key]
         run_command(cmd, display_cmd=verbose)
 
 
@@ -2185,7 +2185,7 @@ def copp(verbose):
     """Show copp running configuration"""
     copp_list = ["COPP_GROUP", "COPP_TRAP"]
     for key in copp_list:
-        cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
+        cmd = ['sudo', 'sonic-cfggen', '-d', *(['--redis-unix-socket'] if cli_uses_unix_socket() else []), '--var-json', key]
         run_command(cmd, display_cmd=verbose)
 
 #
@@ -2379,7 +2379,7 @@ def radius(db):
             for key in entry:
                 output += ('               %s %s\n' % (key, str(entry[key])))
 
-    counters_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('COUNTERS_DB'), host='127.0.0.1')
+    counters_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host='127.0.0.1')
     counters_db.connect(counters_db.COUNTERS_DB, retry_on=False)
 
     if radius['global'].get('statistics', False) and (data != {}):

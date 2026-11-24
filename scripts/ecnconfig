@@ -70,7 +70,7 @@ try:
 except KeyError:
     pass
 
-from sonic_py_common._redis_transport import use_local_redis_socket
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 from sonic_py_common import multi_asic
@@ -140,7 +140,7 @@ class EcnConfig(object):
         """
         if self.namespace or not multi_asic.is_multi_asic():
             db = ConfigDBConnector(
-                use_unix_socket_path=use_local_redis_socket('CONFIG_DB', self.namespace),
+                use_unix_socket_path=cli_uses_unix_socket(),
                 namespace=self.namespace,
             )
             db.connect()
@@ -419,7 +419,7 @@ def main(command, show_config, profile, green_min,
                 if not setOption:
                     raise Exception("Input arguments error. Specify at least one threshold parameter to set")
 
-                prof_cfg = EcnConfig(test_filename, verbose, namespace, db=Db(authenticate=True))
+                prof_cfg = EcnConfig(test_filename, verbose, namespace, db=Db(authenticate=True, use_tcp=False))
 
                 # get current configuration data
                 wred_profile_data = prof_cfg.get_profile_data(profile)
@@ -478,7 +478,7 @@ def main(command, show_config, profile, green_min,
         elif queue:
             if queue.split(',') == ['']:
                 raise Exception("Input arguments error. Specify at least one queue by index")
-            db = Db(authenticate=True) if command is not None else None
+            db = Db(authenticate=True, use_tcp=False) if command is not None else None
             q_ecn = EcnQ(queue, test_filename, verbose, namespace, db=db)
             if command is None:
                 q_ecn.get()

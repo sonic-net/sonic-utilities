@@ -1,4 +1,4 @@
-from sonic_py_common._redis_transport import use_local_redis_socket
+from utilities_common.redis_transport import cli_uses_unix_socket
 import os
 import json
 import subprocess
@@ -33,7 +33,7 @@ def get_chassis_info():
         except Exception:
             return fallback
 
-    chassis_info = device_info.get_chassis_info()
+    chassis_info = device_info.get_chassis_info(use_tcp=not cli_uses_unix_socket())
 
     if all(v is None for k, v in chassis_info.items()):
         platform_cache = {"chassis": None}
@@ -57,7 +57,7 @@ def platform():
 @click.option('--json', is_flag=True, help="Output in JSON format")
 def summary(json):
     """Show hardware platform information"""
-    platform_info = device_info.get_platform_info()
+    platform_info = device_info.get_platform_info(use_tcp=not cli_uses_unix_socket())
     chassis_info = get_chassis_info()
 
     if json:
@@ -333,7 +333,7 @@ LIQUID_COOLING_INFO_TABLE = 'LIQUID_COOLING_INFO'
 
 def _get_state_db():
     from swsscommon.swsscommon import SonicV2Connector
-    state_db = SonicV2Connector(use_unix_socket_path=use_local_redis_socket('STATE_DB'), host="127.0.0.1")
+    state_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host="127.0.0.1")
     state_db.connect(state_db.STATE_DB)
     return state_db
 
@@ -361,7 +361,7 @@ def leak_control_policy():
     """Show leak control policy configuration"""
     try:
         from utilities_common.db import Db
-        db = Db()
+        db = Db(use_tcp=not cli_uses_unix_socket())
         entry = db.cfgdb.get_entry(LEAK_CONTROL_POLICY_TABLE, LEAK_CONTROL_POLICY_KEY)
         click.echo(" system_leak_policy               : {}".format(entry.get('system_leak_policy', 'enabled')))
         critical_action = entry.get('system_critical_leak_action', 'power_off')

@@ -35,7 +35,7 @@ def test_only_write_commands_request_writer_credentials(monkeypatch, command, re
         return connection
 
     monkeypatch.setattr(null_route_helper, 'ConfigDBConnector', connect)
-    monkeypatch.setattr(null_route_helper, 'use_local_redis_socket', lambda name: reader_socket)
+    monkeypatch.setattr(null_route_helper, 'cli_uses_unix_socket', lambda: reader_socket)
     arguments = [command, 'NULL_ROUTE_V4']
     if command == 'block':
         arguments.append('192.0.2.1')
