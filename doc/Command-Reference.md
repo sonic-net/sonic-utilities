@@ -11213,7 +11213,7 @@ Default values are the following:
    - restoration time - 200ms
    - polling interval - 200ms
    - action - 'drop'
-   - pfc stat history - disable
+   - pfc stat history - disable (a port that already has a setting keeps it)
 
 Additionally if the number of ports the watchdog is enabled on exceeds 32, all times will be multiplied by roughly <num_ports\>/32. Only ports that PFC watchdog is actually configured on are counted, i.e. ports that have `pfc_enable` set in `PORT_QOS_MAP`; ports that are skipped because PFC is not enabled on them do not affect these times.
 
