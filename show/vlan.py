@@ -128,9 +128,12 @@ class VlanBrief:
 
 
 @vlan.command()
+@click.argument('vid', metavar='<vid>', required=False, type=int)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @multi_asic_util.multi_asic_click_option_namespace
-def brief(verbose, namespace):
+def brief(vid, verbose, namespace):
+    target_vlan = 'Vlan{}'.format(vid) if vid is not None else None
+
     def _brief_helper(db):
         """Show all bridge information"""
         header = [colname for colname, getter in VlanBrief.COLUMNS]
@@ -142,7 +145,8 @@ def brief(verbose, namespace):
         vlan_ports_data = db.cfgdb.get_table('VLAN_MEMBER')
         vlan_cfg = (vlan_data, vlan_ip_data, vlan_ports_data)
 
-        for vlan in natsorted(vlan_data):
+        vlan_list = [target_vlan] if target_vlan is not None else natsorted(vlan_data)
+        for vlan in vlan_list:
             row = []
             for column in VlanBrief.COLUMNS:
                 column_name, getter = column
@@ -158,10 +162,8 @@ def brief(verbose, namespace):
     else:
         ns_list = [multi_asic.DEFAULT_NAMESPACE]
 
+    found = False
     for ns in ns_list:
-        if multi_asic.is_multi_asic() and len(ns_list) > 1:
-            click.echo("\nNamespace: {}".format(ns))
-
         config_db = multi_asic.connect_config_db_for_ns(ns)
         ns_db = multi_asic.connect_to_all_dbs_for_ns(ns)
 
@@ -172,15 +174,30 @@ def brief(verbose, namespace):
                 self.db = ns_db
 
         db = ConfigDbWrapper(config_db, ns_db)
+
+        # When a single <vid> is requested, only show namespaces that have it
+        if target_vlan is not None and target_vlan not in config_db.get_table('VLAN'):
+            continue
+
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
+
         _brief_helper(db)
+        found = True
+
+    if target_vlan is not None and not found:
+        click.echo("VLAN {} doesn't exist".format(vid))
 
 
 @vlan.command()
+@click.argument('vid', metavar='<vid>', required=False, type=int)
 @multi_asic_util.multi_asic_click_option_namespace
-def config(namespace):
+def config(vid, namespace):
+    target_vlan = 'Vlan{}'.format(vid) if vid is not None else None
+
     def _config_helper(db):
         data = db.cfgdb.get_table('VLAN')
-        keys = list(data.keys())
+        keys = [target_vlan] if target_vlan is not None else list(data.keys())
         member_data = db.cfgdb.get_table('VLAN_MEMBER')
         interface_naming_mode = clicommon.get_interface_naming_mode()
         iface_alias_converter = clicommon.InterfaceAliasConverter(db)
@@ -224,10 +241,8 @@ def config(namespace):
     else:
         ns_list = [multi_asic.DEFAULT_NAMESPACE]
 
+    found = False
     for ns in ns_list:
-        if multi_asic.is_multi_asic() and len(ns_list) > 1:
-            click.echo("\nNamespace: {}".format(ns))
-
         config_db = multi_asic.connect_config_db_for_ns(ns)
         ns_db = multi_asic.connect_to_all_dbs_for_ns(ns)
 
@@ -238,5 +253,17 @@ def config(namespace):
                 self.db = ns_db
 
         db = ConfigDbWrapper(config_db, ns_db)
+
+        # When a single <vid> is requested, only show namespaces that have it
+        if target_vlan is not None and target_vlan not in config_db.get_table('VLAN'):
+            continue
+
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
+
         _config_helper(db)
+        found = True
+
+    if target_vlan is not None and not found:
+        click.echo("VLAN {} doesn't exist".format(vid))
 
