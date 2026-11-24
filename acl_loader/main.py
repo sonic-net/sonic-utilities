@@ -1043,7 +1043,7 @@ class AclLoader(object):
         erspan_header = ("Name", "Status", "SRC IP", "DST IP", "GRE", "DSCP",
                          "TTL", "Queue", "Monitor Port",
                          "SRC Port", "Direction",
-                         "Label", "Policer", "Sample Rate", "Truncate Size")
+                         "Label", "Policer")
         span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction",
                        "Queue", "Label", "Policer")
 
@@ -1063,8 +1063,7 @@ class AclLoader(object):
                                     val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
                                     val.get("ttl", ""), val.get("queue", ""), val.get("monitor_port", ""),
                                     val.get("src_port", ""), val.get("direction", "").lower(),
-                                    val.get("label", ""), val.get("policer", ""),
-                                    val.get("sample_rate", ""), val.get("truncate_size", "")])
+                                    val.get("label", ""), val.get("policer", "")])
 
         print("ERSPAN Sessions")
         erspan_data = natsorted(erspan_data)

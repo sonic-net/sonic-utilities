@@ -152,6 +152,7 @@ Media Assign (0x1)
         ModuleMonitorValues:
                 Requested Laser Frequency: 193100GHz
                 Tx Frequency: 193100.0GHz
+                Pre-FEC BER (Current): 1.51E-04
                 Temperature: 44.9883C
                 Requested Tx Power: -8.5dBm
                 Vcc: 3.2999Volts

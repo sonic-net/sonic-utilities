@@ -1,13 +1,145 @@
 import importlib
+import json
 import os
 import sys
 from unittest.mock import patch, MagicMock
 
 from click.testing import CliRunner
+from swsscommon import swsscommon
 
 from utilities_common.db import Db
 
 from .pfcwd_input import pfcwd_test_vectors as test_vectors
+
+_orig_sonic_get_all = swsscommon.SonicV2Connector.get_all
+
+
+def _stamped_get_all(stamps, current='HARDWARE'):
+    """get_all with storm_<N>_mechanism stamped on the mock history rows.
+
+    stamps maps a history key to {ordinal: mechanism}; the ASIC's current
+    recovery mechanism is reported as `current`, which history must not use.
+    """
+    def get_all(self, db_id, key):
+        if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+            return {'RECOVERY_MECHANISM': current}
+        entry = _orig_sonic_get_all(self, db_id, key)
+        if key in stamps:
+            entry = dict(entry or {})
+            for ordinal, mechanism in stamps[key].items():
+                entry['storm_{}_mechanism'.format(ordinal)] = mechanism
+        return entry
+    return get_all
+
+
+def _hw_get_all(self, db_id, key):
+    """Hardware mode, with every configured port programmed at 200 ms."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '100',
+            'DETECTION_TIME_MAX': '5000',
+            'RESTORATION_TIME_MIN': '100',
+            'RESTORATION_TIME_MAX': '60000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+
+    if db_id == 'STATE_DB' and key.startswith('PFC_WD_HW_STATE|'):
+        return {
+            'status': 'configured',
+            'hw_detection_time': '200',
+            'hw_restoration_time': '200',
+        }
+
+    return _orig_sonic_get_all(self, db_id, key)
+
+
+def _hw_get_all_narrow(self, db_id, key):
+    """Hardware mode with ranges narrower than the CLI's own limits."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '100',
+            'DETECTION_TIME_MAX': '1500',
+            'RESTORATION_TIME_MIN': '100',
+            'RESTORATION_TIME_MAX': '1000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_low_minimum(self, db_id, key):
+    """Hardware mode whose minimums are below the configurable 100 ms."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '1',
+            'DETECTION_TIME_MAX': '1500',
+            'RESTORATION_TIME_MIN': '10',
+            'RESTORATION_TIME_MAX': '1000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_zero_ranges(self, db_id, key):
+    """Hardware mode where SAI reported 0-0 ranges."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '0',
+            'DETECTION_TIME_MAX': '0',
+            'RESTORATION_TIME_MIN': '0',
+            'RESTORATION_TIME_MAX': '0',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_forward(self, db_id, key):
+    """Hardware mode with the switch-level action set to forward."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {'RECOVERY_MECHANISM': 'HARDWARE', 'DLR_PACKET_ACTION': 'forward'}
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_rx_only(self, db_id, key):
+    """Hardware mode where Ethernet4:3 has only RX counts."""
+    oid = self.get('COUNTERS_DB', 'COUNTERS_QUEUE_NAME_MAP', 'Ethernet4:3')
+    if db_id == 'COUNTERS_DB' and key == 'COUNTERS:' + oid:
+        return {
+            'PFC_WD_STATUS': 'operational',
+            'PFC_WD_QUEUE_STATS_RX_PACKETS': '5',
+            'PFC_WD_QUEUE_STATS_RX_DROPPED_PACKETS': '5',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_forward_on_asic1(self, db_id, key):
+    """Hardware mode with drop on asic0 and forward on asic1."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD' and self.namespace == 'asic1':
+        return {'RECOVERY_MECHANISM': 'HARDWARE', 'DLR_PACKET_ACTION': 'forward'}
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_high_minimum(self, db_id, key):
+    """Hardware mode whose minimums are above the 200 ms defaults."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '400',
+            'DETECTION_TIME_MAX': '1500',
+            'RESTORATION_TIME_MIN': '400',
+            'RESTORATION_TIME_MAX': '1000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+    return _hw_get_all(self, db_id, key)
+
+
+def _hw_get_all_no_ranges(self, db_id, key):
+    """Hardware mode without reported ranges."""
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {'RECOVERY_MECHANISM': 'HARDWARE'}
+    return _hw_get_all(self, db_id, key)
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -21,6 +153,232 @@ class TestPfcwd(object):
     def setup_class(cls):
         os.environ["PATH"] += os.pathsep + scripts_path
         print("SETUP")
+
+    def test_pfcwd_show_history(self):
+        self.executor(test_vectors.testData['pfcwd_show_history'])
+
+    def _invoke_history_json(self):
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["stats"], ["--history", "--json"], obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        return json.loads(result.output)
+
+    def _invoke_stats(self, args):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], args, obj=Db()
+        )
+        print(result.output)
+        return result
+
+    def _history_rows(self, args):
+        result = self._invoke_stats(['--history'] + args)
+        assert result.exit_code == 0
+        return [tuple(row.split()[:2]) for row in result.output.splitlines()[2:]]
+
+    def test_pfcwd_show_history_queue_filter_shows_all_storms(self):
+        # A queue filter lifts the default cap of 5: all four Ethernet8:4 storms
+        assert self._history_rows(['Ethernet8:4']) == [
+            ('Ethernet8:4', '4'), ('Ethernet8:4', '3'),
+            ('Ethernet8:4', '2'), ('Ethernet8:4', '1'),
+        ]
+
+    def test_pfcwd_show_history_port_filter(self):
+        assert self._history_rows(['Ethernet4']) == [
+            ('Ethernet4:3', '2'), ('Ethernet4:3', '1'),
+        ]
+
+    def test_pfcwd_show_history_several_queues(self):
+        assert self._history_rows(['Ethernet0:3', 'Ethernet4:3']) == [
+            ('Ethernet0:3', '1'), ('Ethernet4:3', '2'), ('Ethernet4:3', '1'),
+        ]
+
+    def test_pfcwd_show_history_unknown_queue_is_empty(self):
+        assert self._history_rows(['Ethernet999:3']) == []
+
+    def test_pfcwd_show_history_count(self):
+        assert self._history_rows(['--count', '2']) == [
+            ('Ethernet0:3', '1'), ('Ethernet4:3', '2'),
+        ]
+        assert self._history_rows(['--count', '1', 'Ethernet8:4']) == [('Ethernet8:4', '4')]
+        assert len(self._history_rows(['--count', '50'])) == 9
+
+    def test_pfcwd_show_history_interrupted(self):
+        # Storm 2 was open when swss cold-started: no restore, shown as interrupted
+        result = self._invoke_stats(['--history', 'Ethernet8:3'])
+        assert result.exit_code == 0
+        rows = [row.split() for row in result.output.splitlines()[2:]]
+        assert rows == [
+            ['Ethernet8:3', '2', '2025-10-20T22:00:00.000000Z', 'interrupted', '-', '-/-', '-/-'],
+            ['Ethernet8:3', '1', '2025-10-20T21:00:00.000000Z', '2025-10-20T21:00:00.250000Z',
+             '250', '30/30', '15/15'],
+        ]
+
+    def test_pfcwd_show_history_interrupted_json(self):
+        result = self._invoke_stats(['--history', '--json', 'Ethernet8:3'])
+        assert result.exit_code == 0
+        storms = {x['ordinal']: x for x in json.loads(result.output)['storms']}
+        assert storms[2]['restored'] is None
+        assert storms[2]['interrupted'] == '2025-10-20T22:07:12.000000Z'
+        assert storms[2]['duration_ms'] is None
+        assert storms[1]['interrupted'] is None
+
+    def test_pfcwd_show_history_count_must_be_positive(self):
+        result = self._invoke_stats(['--history', '--count', '0'])
+        assert result.exit_code == 2
+
+    def test_pfcwd_show_count_without_history_rejected(self):
+        result = self._invoke_stats(['--count', '3'])
+        assert result.exit_code == 2
+        assert "--count requires --history" in result.output
+
+    def test_pfcwd_show_history_with_empty_rejected(self):
+        result = self._invoke_stats(['--history', '-e'])
+        assert result.exit_code == 2
+        assert "--history and --empty are mutually exclusive" in result.output
+
+    def test_pfcwd_show_history_cap_and_order(self):
+        result = self._invoke_stats(['--history'])
+        assert result.exit_code == 0
+        lines = result.output.splitlines()[2:]
+        assert len(lines) == 5
+        rows = [tuple(row.split()[:3]) for row in lines]
+        # 5 most recent of the 7 valid storms, newest first by detection time
+        assert rows == [
+            ('Ethernet0:3', '1', '2025-10-21T03:33:49.123456Z'),
+            ('Ethernet4:3', '2', '2025-10-21T02:26:40.000000Z'),
+            ('Ethernet8:4', '4', '2025-10-21T02:00:00.000000Z'),
+            ('Ethernet8:4', '3', '2025-10-21T01:43:20.000000Z'),
+            ('Ethernet4:3', '1', '2025-10-21T01:26:40.000000Z'),
+        ]
+        # Ethernet8:4 storms 1 and 2 are the two cut by the cap
+        assert ('Ethernet8:4', '1') not in [r[:2] for r in rows]
+        assert ('Ethernet8:4', '2') not in [r[:2] for r in rows]
+
+    def test_pfcwd_show_history_with_check_storm_rejected(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"],
+            ["--history", "--check-storm"], obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 2
+        assert "--history and --check-storm are mutually exclusive" in result.output
+
+    def test_pfcwd_show_json_without_history_rejected(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], ["--json"], obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 2
+        assert "--json requires --history" in result.output
+
+    def test_pfcwd_show_stats_unchanged_with_history_data(self):
+        # PFC_WD_STORM_HISTORY|* keys exist in the mock STATE_DB; plain stats must ignore them
+        self.executor(test_vectors.testData['pfcwd_show_stats'])
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], [], obj=Db()
+        )
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_stats_output
+
+    def test_pfcwd_show_history_json(self):
+        data = self._invoke_history_json()
+        # No storm in the mock records its mechanism
+        assert data['recovery_mechanism'] == 'unknown'
+        storms = data['storms']
+        assert len(storms) == 5
+        expected_keys = {'queue', 'ordinal', 'detected', 'restored', 'interrupted', 'duration_ms',
+                         'tx_packets', 'tx_dropped_packets', 'rx_packets',
+                         'rx_dropped_packets', 'recovery_mechanism'}
+        for storm in storms:
+            assert set(storm.keys()) == expected_keys
+            assert not [k for k in storm if k.startswith('_')]
+            assert not [k for k in storm if k.endswith('_timestamp_us')]
+        assert (storms[0]['queue'], storms[0]['ordinal']) == ('Ethernet0:3', 1)
+        assert storms[0]['detected'] == '2025-10-21T03:33:49.123456Z'
+        assert storms[0]['restored'] is None
+        by_key = {(x['queue'], x['ordinal']): x for x in storms}
+        assert by_key[('Ethernet4:3', 1)] == {
+            'queue': 'Ethernet4:3', 'ordinal': 1,
+            'detected': '2025-10-21T01:26:40.000000Z',
+            'restored': '2025-10-21T01:26:40.475000Z',
+            'interrupted': None,
+            'duration_ms': 475, 'tx_packets': 1200, 'tx_dropped_packets': 1200,
+            'recovery_mechanism': 'unknown',
+            'rx_packets': 980, 'rx_dropped_packets': 980,
+        }
+        assert ('Ethernet8:4', 2) not in by_key and ('Ethernet8:4', 1) not in by_key
+        partial = by_key[('Ethernet4:3', 2)]
+        assert partial['restored'] == '2025-10-21T02:26:40.100000Z'
+        assert partial['duration_ms'] is None and partial['tx_packets'] is None
+        assert partial['rx_dropped_packets'] is None
+        stamps = [x['detected'] for x in storms]
+        assert stamps == sorted(stamps, reverse=True)
+
+    def test_pfcwd_show_history_skips_bad_timestamps(self):
+        # Ethernet8:4 junk: storm_9 (restored only), storm_10 ("abc"), storm_x
+        storms = self._invoke_history_json()['storms']
+        assert len(storms) == 5
+        assert all(isinstance(x['ordinal'], int) for x in storms)
+        assert not [x for x in storms if x['queue'] == 'Ethernet8:4'
+                    and x['ordinal'] not in (3, 4)]
+
+    def test_pfcwd_show_history_skips_unknown_port_and_bad_key(self):
+        # Ethernet999|3 (unknown port) and PFC_WD_STORM_HISTORY|garbage carry the
+        # newest times, so they would top the list if not skipped
+        result = self._invoke_stats(['--history'])
+        assert result.exit_code == 0
+        assert 'Ethernet999' not in result.output
+        assert 'garbage' not in result.output
+        storms = self._invoke_history_json()['storms']
+        assert {x['queue'] for x in storms} == {'Ethernet0:3', 'Ethernet4:3', 'Ethernet8:4'}
+
+    def test_pfcwd_show_history_before_queue_counters(self):
+        # After a cold start COUNTERS_QUEUE_NAME_MAP stays empty until queue counters
+        # are registered; the storm records in STATE_DB are shown regardless
+        original_get_all = swsscommon.SonicV2Connector.get_all
+
+        def get_all(self, db_name, key, *args, **kwargs):
+            if key == 'COUNTERS_QUEUE_NAME_MAP':
+                return {}
+            return original_get_all(self, db_name, key, *args, **kwargs)
+
+        with patch.object(swsscommon.SonicV2Connector, 'get_all', new=get_all):
+            storms = self._invoke_history_json()['storms']
+        assert {x['queue'] for x in storms} == {'Ethernet0:3', 'Ethernet4:3', 'Ethernet8:4'}
+
+    def test_pfcwd_show_history_json_stamped_mechanism(self):
+        # Every listed storm was handled in software; the ASIC now runs the
+        # hardware watchdog, which must not relabel them
+        stamps = {
+            'PFC_WD_STORM_HISTORY|Ethernet0|3': {1: 'SOFTWARE'},
+            'PFC_WD_STORM_HISTORY|Ethernet4|3': {1: 'SOFTWARE', 2: 'SOFTWARE'},
+            'PFC_WD_STORM_HISTORY|Ethernet8|4': {3: 'SOFTWARE', 4: 'SOFTWARE'},
+        }
+        with patch.object(swsscommon.SonicV2Connector, 'get_all',
+                          new=_stamped_get_all(stamps, current='HARDWARE')):
+            data = self._invoke_history_json()
+        assert data['recovery_mechanism'] == 'software'
+        assert {s['recovery_mechanism'] for s in data['storms']} == {'software'}
+
+    def test_pfcwd_show_history_json_mode_change(self):
+        # Storm 1 was handled in software, storm 2 in hardware after a mode change
+        stamps = {'PFC_WD_STORM_HISTORY|Ethernet4|3': {1: 'SOFTWARE', 2: 'HARDWARE'}}
+        with patch.object(swsscommon.SonicV2Connector, 'get_all',
+                          new=_stamped_get_all(stamps, current='HARDWARE')):
+            data = self._invoke_history_json()
+        by_key = {(s['queue'], s['ordinal']): s['recovery_mechanism'] for s in data['storms']}
+        assert by_key[('Ethernet4:3', 1)] == 'software'
+        assert by_key[('Ethernet4:3', 2)] == 'hardware'
+        assert by_key[('Ethernet0:3', 1)] == 'unknown'
+        assert data['recovery_mechanism'] == 'mixed'
 
     def test_pfcwd_show_config(self):
         self.executor(test_vectors.testData['pfcwd_show_config'])
@@ -36,6 +394,22 @@ class TestPfcwd(object):
 
     def test_pfcwd_show_stats(self):
         self.executor(test_vectors.testData['pfcwd_show_stats'])
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_stats_hw_mode(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["stats"], [], obj=Db())
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_stats_hw_mode_output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_rx_only)
+    def test_pfcwd_show_stats_hw_mode_rx_only_queue_is_empty(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["stats"], [], obj=Db())
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_stats_hw_mode_rx_only_output
 
     def test_pfcwd_show_stats_single_queue(self):
         self.executor(test_vectors.testData['pfcwd_show_stats_single_queue'])
@@ -684,6 +1058,119 @@ class TestPfcwd(object):
             assert len(result.output) > 0
             assert "QUEUE" in result.output  # Should contain table headers
 
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os.geteuid', MagicMock(return_value=0))
+    def test_pfcwd_stop_hardware_mode_stormed_blocked(self):
+        """HW mode: stop is refused while Ethernet0:3 and Ethernet8:4 are stormed."""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["stop"],
+            [],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert "Cannot stop PFC watchdog while queues are in stormed state" in result.output
+        assert "Ethernet0:3" in result.output
+        assert "Ethernet8:4" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os.geteuid', MagicMock(return_value=0))
+    def test_pfcwd_stop_hardware_mode_no_storm(self):
+        """HW mode: stop succeeds for Ethernet4, which has no stormed queue."""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["stop"],
+            ["Ethernet4"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_hardware_mode(self, mock_os):
+        """HW mode: unscaled 200 ms defaults on 512 ports and no PFC_WD|GLOBAL write."""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        original_get_table = db.cfgdb.get_table
+
+        def mock_get_table_512_ports(table):
+            if table == 'PORT':
+                return {'Ethernet%d' % i: {} for i in range(512)}
+            return original_get_table(table)
+
+        mock_os.geteuid.return_value = 0
+        with patch.object(db.cfgdb, 'get_table', side_effect=mock_get_table_512_ports):
+            result = runner.invoke(
+                pfcwd.cli.commands["start_default"],
+                [],
+                obj=db
+            )
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_start_default_hw_mode
+        # the software watchdog's POLL_INTERVAL is removed
+        assert 'POLL_INTERVAL' not in db.cfgdb.get_entry("PFC_WD", "GLOBAL")
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_forward)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_hardware_mode_action_mismatch(self, mock_os):
+        # start_default writes drop; the hardware is on forward with ports configured
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        before = db.cfgdb.get_table("PFC_WD")
+        result = CliRunner().invoke(pfcwd.cli.commands["start_default"], [], obj=db)
+        assert result.exit_code == 1
+        assert "Error: Action mismatch" in result.output
+        assert db.cfgdb.get_table("PFC_WD") == before
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_high_minimum)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_hardware_mode_within_hw_range(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        result = CliRunner().invoke(pfcwd.cli.commands["start_default"], [], obj=db)
+        assert result.exit_code == 0
+        entry = db.cfgdb.get_entry("PFC_WD", "Ethernet0")
+        assert entry['detection_time'] == '400'
+        assert entry['restoration_time'] == '400'
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_hardware_mode_keeps_big_red_switch(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        db.cfgdb.set_entry("PFC_WD", "GLOBAL", {'POLL_INTERVAL': '600', 'BIG_RED_SWITCH': 'enable'})
+        result = CliRunner().invoke(pfcwd.cli.commands["start_default"], [], obj=db)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL") == {'BIG_RED_SWITCH': 'enable'}
+
+    def test_pfcwd_show_config_json_single_asic(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["config"], ["--json"], obj=Db())
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "software"
+        assert data["poll_interval"] == "600"
+        assert data["big_red_switch"] is None
+
     @classmethod
     def teardown_class(cls):
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
@@ -785,6 +1272,103 @@ class TestMultiAsicPfcwdShow(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == test_vectors.show_pfcwd_stats_all
+
+    def test_pfcwd_show_history_masic(self):
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["stats"],
+            ["--history"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        # -d defaults to "all": utilities_common.multi_asic computed the default
+        # before the multi-asic topology was set and is not reloaded here.
+        assert result.output == test_vectors.show_pfcwd_history_masic_all
+
+    def _invoke_history_masic(self, args):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["show"].commands["stats"], args, obj=Db()
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        return result.output
+
+    def test_pfcwd_show_history_masic_frontend(self):
+        output = self._invoke_history_masic(['--history', '-d', 'frontend'])
+        assert output == test_vectors.show_pfcwd_history_masic
+
+    def test_pfcwd_show_history_masic_all(self):
+        output = self._invoke_history_masic(['--history', '-d', 'all'])
+        assert output == test_vectors.show_pfcwd_history_masic_all
+
+    def test_pfcwd_show_history_masic_frontend_explicit_queue(self):
+        # An explicitly named queue overrides -d frontend, as for regular stats
+        output = self._invoke_history_masic(
+            ['--history', '-d', 'frontend', 'Ethernet-BP0:3']
+        )
+        rows = [tuple(row.split()[:2]) for row in output.splitlines()[2:]]
+        assert rows == [('Ethernet-BP0:3', '1')]
+
+    def test_pfcwd_show_history_masic_json_mixed_modes(self):
+        # Each storm reports the mechanism stamped on its own record: asic0's
+        # storms were handled in hardware, asic1's in software. Each ASIC's
+        # current mode is the opposite one, which must not be used.
+        import pfcwd.main as pfcwd
+        real_get_all = swsscommon.SonicV2Connector.get_all
+        real_keys = swsscommon.SonicV2Connector.keys
+        asic1_storm = 'PFC_WD_STORM_HISTORY|Ethernet64|3'
+
+        def get_all(self, db_id, key):
+            ns = getattr(self, 'namespace', None)
+            if key == 'PFC_WD_STATE_TABLE|PFC_WD':
+                if ns == 'asic0':
+                    return {'RECOVERY_MECHANISM': 'SOFTWARE'}
+                return {'RECOVERY_MECHANISM': 'HARDWARE'}
+            if ns == 'asic0' and key.startswith('PFC_WD_STORM_HISTORY|'):
+                entry = dict(real_get_all(self, db_id, key) or {})
+                for field in list(entry):
+                    if field.endswith('_detected'):
+                        entry[field[:-len('detected')] + 'mechanism'] = 'HARDWARE'
+                return entry
+            if key == asic1_storm:
+                return {
+                    'last_storm': '1',
+                    'storm_1_detected': '1761000200000000',
+                    'storm_1_restored': '1761000200200000',
+                    'storm_1_duration_ms': '200',
+                    'storm_1_tx_packets': '40',
+                    'storm_1_tx_dropped': '40',
+                    'storm_1_rx_packets': '20',
+                    'storm_1_rx_dropped': '20',
+                    'storm_1_mechanism': 'SOFTWARE',
+                }
+            return real_get_all(self, db_id, key)
+
+        def keys(self, db_id, pattern=None):
+            found = real_keys(self, db_id, pattern) or []
+            if (getattr(self, 'namespace', None) == 'asic1'
+                    and pattern == 'PFC_WD_STORM_HISTORY|*'):
+                found = list(found) + [asic1_storm]
+            return found
+
+        with patch.object(swsscommon.SonicV2Connector, 'get_all', new=get_all), \
+                patch.object(swsscommon.SonicV2Connector, 'keys', new=keys):
+            result = CliRunner().invoke(
+                pfcwd.cli.commands['show'].commands['stats'],
+                ['--history', '--json', '-d', 'all'], obj=Db()
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data['recovery_mechanism'] == 'mixed'
+        by_queue = {s['queue']: s['recovery_mechanism'] for s in data['storms']}
+        assert by_queue['Ethernet0:3'] == 'hardware'
+        assert by_queue['Ethernet-BP0:3'] == 'hardware'
+        assert by_queue['Ethernet64:3'] == 'software'
 
     def test_pfcwd_stats_with_queues(self):
         import pfcwd.main as pfcwd
@@ -1128,6 +1712,293 @@ class TestMultiAsicPfcwdShow(object):
         assert result.exit_code == 0
         # same as original config
         assert result.output == test_vectors.show_pfc_config_all
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_config_hardware_mode(self):
+        """HW mode: the software-mode table under a recovery mode line."""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_config_hw_mode
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_config_hardware_mode_json(self):
+        """HW mode --json: mode, numeric ranges and per-port hw_* fields."""
+        import pfcwd.main as pfcwd
+        import json
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            ["--json"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "hardware"
+        assert data["hw_detection_time_ms"] == {"min": 100, "max": 5000}
+        assert data["hw_restoration_time_ms"] == {"min": 100, "max": 60000}
+        # PFC_WD|GLOBAL is per ASIC
+        assert data["poll_interval"] == {"asic0": "199", "asic1": "199"}
+        assert data["big_red_switch"] == {"asic0": "enable", "asic1": "enable"}
+        port = data["ports"]["Ethernet0"]
+        assert port["action"] == "drop"
+        assert port["detection_time"] == "200"
+        assert port["restoration_time"] == "200"
+        assert port["hw_detection_time"] == "200"
+        assert port["hw_restoration_time"] == "200"
+        assert port["hw_status"] == "configured"
+
+    def test_pfcwd_show_config_software_mode_json(self):
+        """SW mode --json: mode=software and no hw_* keys anywhere."""
+        import pfcwd.main as pfcwd
+        import json
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            ["--json"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "software"
+        assert "hw_detection_time_ms" not in data
+        assert "hw_restoration_time_ms" not in data
+        assert data["poll_interval"] == {"asic0": "199", "asic1": "199"}
+        for port_cfg in data["ports"].values():
+            assert "hw_status" not in port_cfg
+            assert "hw_detection_time" not in port_cfg
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_hint_points_to_config(self, mock_os):
+        """In HW mode the start hint references show pfcwd config."""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "drop", "--restoration-time", "600", "Ethernet0", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Run 'show pfcwd config' to verify hardware programming" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_action_override_multiple_ports_blocked(self, mock_os):
+        """HW mode: a different action is refused while other ports are configured."""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "drop", "--restoration-time", "600", "Ethernet0", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "drop", "--restoration-time", "600", "Ethernet4", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "forward", "--restoration-time", "600", "Ethernet-BP0", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert "Error: Action mismatch" in result.output
+        assert "Current global action: drop" in result.output
+        assert "Requested action: forward" in result.output
+
+    def _start(self, args):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["start"], args, obj=Db())
+        print(result.output)
+        return result
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_default_restoration(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "Ethernet0", "600"])
+        assert result.exit_code == 0
+        assert "default to 2 times detection time: 1200 ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_default_restoration_capped(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        result = CliRunner().invoke(pfcwd.cli.commands["start"], ["--action", "drop", "Ethernet0", "600"], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "default to the hardware maximum: 1000 ms" in result.output
+        written = [c.get_entry('PFC_WD', 'Ethernet0').get('restoration_time') for c in db.cfgdb_clients.values()]
+        assert '1000' in written
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_zero_ranges)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_default_restoration_zero_ranges(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "Ethernet0", "600"])
+        assert result.exit_code == 0
+        assert "default to 2 times detection time: 1200 ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_low_minimum)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_range_is_configurable_range(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "400", "Ethernet0", "1600"])
+        assert result.exit_code == 1
+        assert "detection_time 1600ms is outside hardware supported range [100-1500]ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_low_minimum)
+    def test_pfcwd_show_config_hw_mode_json_configurable_range(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["config"], ["--json"], obj=Db())
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["hw_detection_time_ms"] == {"min": 100, "max": 1500}
+        assert data["hw_restoration_time_ms"] == {"min": 100, "max": 1000}
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_zero_ranges)
+    def test_pfcwd_show_config_hw_mode_json_zero_ranges(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["config"], ["--json"], obj=Db())
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["hw_detection_time_ms"] == {"min": None, "max": None}
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_detection_out_of_range(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "600", "Ethernet0", "1600"])
+        assert result.exit_code == 1
+        assert "detection_time 1600ms is outside hardware supported range [100-1500]ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_narrow)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_restoration_out_of_range(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "1200", "Ethernet0", "600"])
+        assert result.exit_code == 1
+        assert "restoration_time 1200ms is outside hardware supported range [100-1000]ms" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_no_ranges)
+    def test_pfcwd_show_config_hw_mode_json_without_ranges(self):
+        import pfcwd.main as pfcwd
+        result = CliRunner().invoke(pfcwd.cli.commands["show"].commands["config"], ["--json"], obj=Db())
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "hardware"
+        assert data["hw_detection_time_ms"] == {"min": None, "max": None}
+        assert data["hw_restoration_time_ms"] == {"min": None, "max": None}
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_zero_ranges)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_zero_ranges(self, mock_os):
+        # a zero-bound range is not checked
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "600", "Ethernet0", "600"])
+        assert result.exit_code == 0
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_no_ranges)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_without_ranges(self, mock_os):
+        # orchagent skips the range check when SAI did not report the ranges
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "drop", "--restoration-time", "1200", "Ethernet0", "1600"])
+        assert result.exit_code == 0
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_action_change_on_all_ports(self, mock_os):
+        # orchagent refuses each port while others keep the old action
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "forward", "--restoration-time", "600", "all", "600"])
+        assert result.exit_code == 1
+        assert "Error: Action mismatch" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_forward_on_asic1)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_checks_only_the_ports_asic(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--action", "forward", "--restoration-time", "400", "Ethernet-BP256", "400"])
+        assert result.exit_code == 0
+        assert "Action mismatch" not in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all_forward)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_without_action_is_drop(self, mock_os):
+        mock_os.geteuid.return_value = 0
+        result = self._start(["--restoration-time", "600", "Ethernet-BP0", "600"])
+        assert result.exit_code == 1
+        assert "Current global action: forward" in result.output
+        assert "Requested action: drop" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_hw_mode_action_change_on_only_port(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        for config_db in db.cfgdb_clients.values():
+            for key in config_db.get_table('PFC_WD'):
+                if key not in ('GLOBAL', 'Ethernet0'):
+                    config_db.set_entry('PFC_WD', key, None)
+        result = CliRunner().invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "forward", "--restoration-time", "600", "Ethernet0", "600"], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Action mismatch" not in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_interval_hw_mode_refused(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        result = CliRunner().invoke(pfcwd.cli.commands["interval"], ["200"], obj=Db())
+        assert result.exit_code == 1
+        assert "not supported with hardware based PFC watchdog" in result.output
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_big_red_switch_hw_mode_refused(self, mock_os):
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        result = CliRunner().invoke(pfcwd.cli.commands["big_red_switch"], ["enable"], obj=db)
+        assert result.exit_code == 1
+        assert "not supported with hardware based PFC watchdog" in result.output
 
     @classmethod
     def teardown_class(cls):

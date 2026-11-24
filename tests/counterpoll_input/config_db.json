@@ -796,6 +796,9 @@
         },
         "WRED_ECN_PORT": {
             "FLEX_COUNTER_STATUS": "enable"
+        },
+        "COPP_STATS": {
+            "FLEX_COUNTER_STATUS": "enable"
         }
     }, 
     "PORT": {

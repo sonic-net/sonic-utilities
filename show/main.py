@@ -16,6 +16,7 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
 from utilities_common import hft as hft_common
+from utilities_common import port_mirror
 from utilities_common.db import Db
 from datetime import datetime
 import utilities_common.bgp_util as bgp_util
@@ -729,27 +730,45 @@ def pfcwd():
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def config(namespace, display, verbose):
+def config(namespace, display, json_output, verbose):
     """Show pfc watchdog config"""
 
     cmd = ['pfcwd', 'show', 'config', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if json_output:
+        cmd += ['--json']
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--history', is_flag=True,
+              help='Show recent PFC storms, newest first: the 5 most recent on the switch, '
+                   'or every stored storm of the given queues or ports')
+@click.option('--count', type=click.IntRange(min=1), default=None, help='Number of storms to show (with --history)')
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def stats(namespace, display, verbose):
+@click.argument('queues', nargs=-1)
+def stats(namespace, display, history, count, json_output, verbose, queues):
     """Show pfc watchdog stats"""
 
     cmd = ['pfcwd', 'show', 'stats', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if history:
+        cmd += ['--history']
+    if count is not None:
+        cmd += ['--count', str(count)]
+    if json_output:
+        cmd += ['--json']
+    cmd += list(queues)
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 #
 # 'watermark' group ("show watermark telemetry interval")
@@ -1265,6 +1284,50 @@ def aging_time(ctx):
             click.echo("Aging time for {} is {} seconds".format(key.split(':')[-1], fdb_aging_time))
         else:
             click.echo("Aging time not configured for the {}".format(key.split(':')[-1]))
+
+
+def get_mac_sync_mode(config_db):
+    # An L3EvpnMH device always synchronizes MACs over FPM, whatever FDB_SYNC says.
+    metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
+    if metadata.get('subtype') == 'L3EvpnMH':
+        return 'fpm'
+    # Table name matches CFG_FDB_SYNC_TABLE_NAME in sonic-swss (fpmsyncd/macsync.h).
+    fdb_sync = config_db.get_entry('FDB_SYNC', 'global')
+    return fdb_sync.get('mac_sync_mode', 'kernel')
+
+
+def get_running_mac_sync_mode(state_db):
+    # fpmsyncd publishes the mode it started with, so it lags a config change until the bgp container restarts.
+    # Table name matches STATE_FDB_SYNC_TABLE_NAME in sonic-swss (fpmsyncd/macsync.h).
+    return state_db.get('STATE_DB', 'FDB_SYNC|global', 'mac_sync_mode') or 'unknown'
+
+
+@mac.command('sync-mode')
+@clicommon.pass_db
+@click.pass_context
+def mac_sync_mode(ctx, db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
+    # Each ASIC has its own mode, in the CONFIG_DB of its namespace: the one selected, or all of them.
+    try:
+        ns_list = multi_asic_util.multi_asic_get_ns_list(multi_asic_util.get_namespace_from_ctx())
+    except ValueError as e:
+        ctx.fail(str(e))
+
+    for ns in ns_list:
+        configured = get_mac_sync_mode(db.cfgdb_clients[ns])
+        running = get_running_mac_sync_mode(db.db_clients[ns])
+        indent = ""
+        if len(ns_list) > 1:
+            click.echo("{}:".format(ns))
+            indent = "  "
+        click.echo("{}Configured: {}".format(indent, configured))
+        click.echo("{}Running: {}".format(indent, running))
+        # fpmsyncd runs in fpm mode only for an exact 'fpm' and in kernel mode for anything else.
+        effective = 'fpm' if configured == 'fpm' else 'kernel'
+        if running != 'unknown' and running != effective:
+            click.echo("{}The configured mode takes effect when the bgp container restarts.".format(indent))
+
+
 #
 # 'show route-map' command ("show route-map")
 #
@@ -2401,9 +2464,34 @@ def radius(db):
 #
 @cli.command('mirror_session')
 @click.argument('session_name', required=False)
+@click.option('--session-name', 'explicit_session_name', help='Show an export session, including one named sample.')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def mirror_session(session_name, verbose):
-    """Show existing everflow sessions"""
+def mirror_session(session_name, verbose, explicit_session_name):
+    """Show mirror sessions, or use sample to show sampled source bindings."""
+    if explicit_session_name is not None:
+        if session_name is not None:
+            raise click.UsageError('Specify a positional session name or --session-name, not both.')
+        run_command(['acl-loader', 'show', 'session', explicit_session_name], display_cmd=verbose)
+        return
+    if session_name == 'sample':
+        rows = []
+        databases = port_mirror.config_databases()
+        for namespace, database in databases.items():
+            for key, value in database.get_table(port_mirror.SAMPLE_TABLE).items():
+                source, direction = port_mirror.binding_key(key)
+                row = [source, direction, value.get('mirror_session', ''),
+                       value.get('admin_state', 'down'), value.get('sample_rate', ''),
+                       value.get('truncate_size', 'Disabled')]
+                if len(databases) > 1:
+                    row.insert(0, namespace or 'host')
+                rows.append(row)
+        headers = ['Source Port', 'Direction', 'Mirror Session', 'Admin State',
+                   'Sample Rate', 'Truncate Size']
+        if len(databases) > 1:
+            headers.insert(0, 'Namespace')
+        click.echo('Sampled ERSPAN Bindings')
+        click.echo(tabulate(natsorted(rows), headers=headers))
+        return
     cmd = ['acl-loader', 'show', 'session']
 
     if session_name is not None:
