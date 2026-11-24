@@ -3946,6 +3946,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        assert "10.10.10.4" not in db.cfgdb.get_table("NTP_SERVER")
 
     def test_del_pool_ntp_server(self):
         config.ADHOC_VALIDATION = True
@@ -3959,6 +3960,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        assert "pool.ntp.org" not in db.cfgdb.get_table("NTP_SERVER")
 
     def test_del_ntp_server_not_configured(self):
         config.ADHOC_VALIDATION = True
@@ -3985,6 +3987,21 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
+
+    @pytest.mark.parametrize("operation", ["add", "del"])
+    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry")
+    def test_ntp_server_yang_validation(self, mock_set_entry, operation):
+        config.ADHOC_VALIDATION = False
+        runner = CliRunner()
+        db = Db()
+        if operation == "del":
+            db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
+
+        result = runner.invoke(config.config.commands["ntp"], [operation, "10.10.10.4"], obj={'db': db.cfgdb})
+
+        assert result.exit_code == 0
+        mock_set_entry.assert_called_once_with("NTP_SERVER", "10.10.10.4", {} if operation == "add" else None)
 
     @classmethod
     def teardown_class(cls):
