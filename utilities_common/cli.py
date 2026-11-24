@@ -15,6 +15,7 @@ from natsort import natsorted
 from sonic_py_common import multi_asic
 from utilities_common.db import Db
 from utilities_common.general import load_db_config
+from utilities_common.redis_transport import cli_uses_unix_socket
 VLAN_SUB_INTERFACE_SEPARATOR = '.'
 
 pass_db = click.make_pass_decorator(Db, ensure=True)
@@ -140,7 +141,7 @@ class InterfaceAliasConverter(object):
         # Load database config files
         load_db_config()
         if db is None:
-            self.port_dict = multi_asic.get_port_table()
+            self.port_dict = multi_asic.get_port_table(use_tcp=not cli_uses_unix_socket())
         else:
             self.config_db = db.cfgdb
             self.port_dict = self.config_db.get_table('PORT')

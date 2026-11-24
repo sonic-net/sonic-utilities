@@ -261,7 +261,7 @@ class TestGetSfpDbConnections:
         multi_asic = mock.Mock()
         multi_asic.is_multi_asic.return_value = True
         multi_asic.get_front_end_namespaces.return_value = ['asic0', 'asic1']
-        multi_asic.connect_to_all_dbs_for_ns.side_effect = lambda ns: ns_conn[ns]
+        multi_asic.connect_to_all_dbs_for_ns.side_effect = lambda ns, *, use_tcp: ns_conn[ns]
         with mock.patch.object(tempershow, 'multi_asic', multi_asic):
             conns = tempershow.TemperShow._get_sfp_db_connections()
         assert conns == [ns_conn['asic0'], ns_conn['asic1']]
@@ -282,7 +282,7 @@ class TestGetSfpDbConnections:
         multi_asic.is_multi_asic.return_value = True
         multi_asic.get_front_end_namespaces.return_value = ['asic0', 'asic1']
 
-        def connect(ns):
+        def connect(ns, *, use_tcp):
             if ns == 'asic0':
                 raise RuntimeError('cannot connect')
             return good

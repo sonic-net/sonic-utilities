@@ -1606,7 +1606,7 @@ class TestPortstatGetDbClient(object):
 
             result = portstat.get_db_client('asic0')
 
-            mock_connect.assert_called_once_with('asic0')
+            mock_connect.assert_called_once_with('asic0', use_tcp=True)
 
             assert result == mock_db_client
 
@@ -1625,7 +1625,7 @@ class TestPortstatGetDbClient(object):
             mock_connect.return_value = mock_db_client
             result1 = portstat.get_db_client('asic0')
             result2 = portstat.get_db_client('asic0')
-            mock_connect.assert_called_once_with('asic0')
+            mock_connect.assert_called_once_with('asic0', use_tcp=True)
 
             assert result1 == result2
             assert result1 == mock_db_client
@@ -1642,7 +1642,7 @@ class TestPortstatGetDbClient(object):
             mock_db_client_asic0 = mock.MagicMock()
             mock_db_client_asic1 = mock.MagicMock()
 
-            def side_effect(ns):
+            def side_effect(ns, *, use_tcp):
                 if ns == 'asic0':
                     return mock_db_client_asic0
                 elif ns == 'asic1':
@@ -1652,8 +1652,8 @@ class TestPortstatGetDbClient(object):
             result_asic0 = portstat.get_db_client('asic0')
             result_asic1 = portstat.get_db_client('asic1')
             assert mock_connect.call_count == 2
-            mock_connect.assert_any_call('asic0')
-            mock_connect.assert_any_call('asic1')
+            mock_connect.assert_any_call('asic0', use_tcp=True)
+            mock_connect.assert_any_call('asic1', use_tcp=True)
             assert result_asic0 == mock_db_client_asic0
             assert result_asic1 == mock_db_client_asic1
             assert portstat.db_clients['asic0'] == mock_db_client_asic0

@@ -187,7 +187,7 @@ def select_side_effect():
     return selector_returned
 
 
-def config_db_side_effect(namespace):
+def config_db_side_effect(namespace, *, use_tcp):
     return db_conns[namespace]["CONFIG_DB"]
 
 

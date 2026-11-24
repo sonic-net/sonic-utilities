@@ -99,7 +99,7 @@ class TestLocalWriterAuthentication:
     def test_writer_requests_authentication(self, local_modules, component, arguments, program):
         result, factory, handlers, token = invoke_local(local_modules[component], component, arguments, program)
         assert result.exit_code == 0, result.output
-        factory.assert_called_once_with(authenticate=True)
+        factory.assert_called_once_with(authenticate=True, use_tcp=False)
         used = [handler for handler in handlers.values() if handler.called]
         assert len(used) == 1
         assert used[0].call_args.kwargs['db'] is token
