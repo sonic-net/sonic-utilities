@@ -214,6 +214,8 @@
 * [Startup & Running Configuration](#startup--running-configuration)
   * [Startup Configuration](#startup-configuration)
   * [Running Configuration](#running-configuration)
+* [Spanning Tree](#spanning-tree)
+  * [Spanning Tree show commands](#spanning-tree-show-commands)
 * [Static routing](#static-routing)
 * [Subinterfaces](#subinterfaces)
   * [Subinterfaces Show Commands](#subinterfaces-show-commands)
@@ -13146,6 +13148,230 @@ This command is used to clear switch counters.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#switch)
+
+
+## Spanning Tree
+
+This section explains the show commands for Spanning Tree Protocol (STP). When PVST is enabled, VLAN-scoped bridge and port tables are displayed. When MST is enabled, MST instance tables are displayed instead.
+
+### Spanning Tree show commands
+
+**show spanning-tree**
+
+This command displays STP information for all VLANs (PVST mode) or all MST instances (MST mode). The mode line is printed once at the top of the output.
+
+- Usage:
+  ```
+  show spanning-tree
+  ```
+
+- Example (PVST):
+  ```
+  admin@sonic:~$ show spanning-tree
+  Spanning-tree Mode: PVST
+
+  VLAN 100 - STP instance 0
+  --------------------------------------------------------------------
+  STP Bridge Parameters:
+  Bridge           Bridge Bridge Bridge Hold  LastTopology Topology
+  Identifier       MaxAge Hello  FwdDly Time  Change       Change
+  hex              sec    sec    sec    sec   sec          cnt
+  8064b86a97e24e9c 20     2      15     1     0            1
+
+  RootBridge       RootPath  DesignatedBridge  RootPort           Max Hel Fwd
+  Identifier       Cost      Identifier                           Age lo  Dly
+  hex                        hex                                  sec sec sec
+  0064b86a97e24e9c 600       806480a235f281ec  Root               20  2   15
+
+  STP Port Parameters:
+  Port             Prio Path      Port Uplink State         Designated  Designated       Designated
+  Name             rity Cost      Fast Fast                 Cost        Root             Bridge
+  Ethernet4        128  200       N    N      FORWARDING    400         0064b86a97e24e9c 806480a235f281ec
+  ```
+
+**show spanning-tree vlan**
+
+This command displays STP bridge and port parameters for the specified VLAN (PVST mode).
+
+- Usage:
+  ```
+  show spanning-tree vlan <vlanid>
+  ```
+
+**show spanning-tree vlan interface**
+
+This command displays STP port parameters for the specified VLAN and interface (PVST mode).
+
+- Usage:
+  ```
+  show spanning-tree vlan <vlanid> interface <interface_name>
+  ```
+
+**show spanning-tree bpdu_guard**
+
+This command displays BPDU guard configuration and whether the port was shut down due to BPDU guard.
+
+- Usage:
+  ```
+  show spanning-tree bpdu_guard
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show spanning-tree bpdu_guard
+  PortNum          Shutdown     Port Shut
+                   Configured   due to BPDU guard
+  -------------------------------------------
+  Ethernet4        No           NA
+  ```
+
+**show spanning-tree root_guard**
+
+This command displays root guard state per port. In PVST mode, root guard timeout and VLAN are shown.
+
+- Usage:
+  ```
+  show spanning-tree root_guard
+  ```
+
+- Example (PVST):
+  ```
+  admin@sonic:~$ show spanning-tree root_guard
+  Root guard timeout: 30 secs
+
+  Port             VLAN   Current State
+  -------------------------------------------
+  Ethernet4        100    Consistent state
+  ```
+
+**show spanning-tree statistics**
+
+This command displays STP BPDU and TCN statistics for all VLANs (PVST mode).
+
+- Usage:
+  ```
+  show spanning-tree statistics
+  ```
+
+**show spanning-tree statistics vlan**
+
+This command displays STP statistics for the specified VLAN.
+
+- Usage:
+  ```
+  show spanning-tree statistics vlan <vlanid>
+  ```
+
+**show spanning-tree mst**
+
+This command displays MST instance summary information for all instances (MSTP mode). Output format matches `show spanning-tree` in MSTP mode.
+
+- Usage:
+  ```
+  show spanning-tree mst
+  ```
+
+- Example (MSTP):
+  ```
+  admin@sonic:~$ show spanning-tree
+  Spanning-tree Mode: MSTP
+
+  #######  MST0 (CIST)       Vlans mapped : 1, 4-8, 202-4094
+  Bridge               Address 8000.80a2.3526.0c5e
+  Root                 Address 8000.80a2.3526.0c5e
+                       Port     Root                  Path cost 0
+  Regional Root        Address  8000.80a2.3526.0c5e
+                        Internal cost 0                Rem hops 20
+  Operational          Hello Time  2, Forward Delay 15, Max Age 20, Txholdcount 6
+  Configured           Hello Time  2, Forward Delay 15, Max Age 20, Max Hops 20
+
+  Interface          Role         State          Cost       Prio.Nbr    Type
+  ---------------    --------     ----------     -------    ---------   -----------
+  Ethernet20         DESIGNATED   FORWARDING     2000       128.25      P2P
+  ```
+
+**show spanning-tree mst detail**
+
+This command displays per-port MSTP detail for all instances (MSTP mode).
+
+- Usage:
+  ```
+  show spanning-tree mst detail
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show spanning-tree mst detail
+  #######  MST0 (CIST)     Vlans mapped : 1, 4-8, 202-4094
+  Bridge                Address 8000.80a2.3526.0c5e
+   Root                 Address 8000.80a2.3526.0c5e
+                        Port    Root            Path cost 0    Rem Hops 20
+
+  Ethernet20 is DESIGNATED FORWARDING
+  Port info              port id 86 priority 128          cost 800
+  Designated             Address 8000.80a2.3526.0c5e      cost 0
+  Designated bridge      Address 8000.80a2.3526.0c5e      port id 25
+  Timers:  forward transitions 0
+  Bpdu send 80, received 0
+  ```
+
+**show spanning-tree mst instance**
+
+This command displays MST bridge and port summary for one instance (MSTP mode).
+
+- Usage:
+  ```
+  show spanning-tree mst instance <instance-id>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show spanning-tree mst instance 0
+  #######  MST0 (CIST)  Vlans mapped : 1, 4-8, 202-4094
+  Bridge                Address 8000.80a2.3526.0c5e
+  Root                  Address 8000.80a2.3526.0c5e
+                        Port      Root                    Path cost 0
+  Regional Root         Address   8000.80a2.3526.0c5e
+                        Internal cost 0         Rem hops 20
+  Operational           Hello Time  2, Forward Delay 15, Max Age 20, Txholdcount 6
+  Configured            Hello Time  2, Forward Delay 15, Max Age 20, Max Hops 20
+
+  Interface          Role         State          Cost       Prio.Nbr    Type
+  ---------------    --------     ----------     -------    ---------   -----------
+  Ethernet20         DESIGNATED   FORWARDING     2000       128.25      P2P
+  ```
+
+**show spanning-tree mst instance interface**
+
+This command displays MST port details for one instance and interface (MST mode).
+
+- Usage:
+  ```
+  show spanning-tree mst instance <instance-id> interface <interface_name>
+  ```
+
+**show spanning-tree mst interface**
+
+This command displays MSTP port state for an interface across all instances where the port participates (MSTP mode).
+
+- Usage:
+  ```
+  show spanning-tree mst interface <interface_name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show spanning-tree mst interface Ethernet46
+  Link Type: P2P        Bpdu filter: False
+  Boundary : internal   Bpdu guard:  False
+
+  Instance           Role         State          Cost       Prio.Nbr     Vlans
+  ---------------    --------     ----------     -------    ---------    -----------
+  0                  DESIGNATED   FORWARDING     800        128.86       1, 4-8, 202-4094
+  1                  DESIGNATED   FORWARDING     1000       128.45       2, 300, 400
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#spanning-tree)
 
 
 ## sFlow
