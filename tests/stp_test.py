@@ -155,6 +155,15 @@ class TestStp(object):
             assert result.exit_code == 0
             assert result.output == show_spanning_tree_root_guard
 
+
+class TestStpContinued(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        from mock_tables import dbconnector
+        dbconnector.dedicated_dbs.clear()
+        dbconnector.load_database_config()
+
     def test_disable_enable_global_pvst(self):
         cli_runner = CliRunner()
         db = Db()
@@ -1565,13 +1574,13 @@ class TestMstInstanceVlanDel:
 
         # Set MST mode and create MST instance 2
         self.db.cfgdb.set_entry('STP', 'GLOBAL', {'mode': 'mst'})
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672'
         })
 
     def test_mst_instance_vlan_del_instance_not_exist(self):
         """Should fail because MST instance 2 does not exist."""
-        self.db.cfgdb.mod_entry('STP_MST_INST', 'MST_INSTANCE|2', None)  # Remove it
+        self.db.cfgdb.mod_entry('STP_MST_INST', '2', None)  # Remove it
 
         result = self.runner.invoke(self.vlan_cmd, ['2', '400'], obj=self.db)
         assert result.exit_code != 0  # Should fail
@@ -1631,7 +1640,7 @@ class TestMstInstanceVlanDel:
         self.db.cfgdb.set_entry('VLAN', 'Vlan500', {'vlanid': '500'})
         self.db.cfgdb.set_entry('VLAN_MEMBER', 'Vlan500|Ethernet0', {'tagging_mode': 'untagged'})
 
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672',
             'vlan_list': '400,500,600'
         })
@@ -1640,7 +1649,7 @@ class TestMstInstanceVlanDel:
 
         result = self.runner.invoke(self.vlan_cmd, ['2', '500'], obj=self.db)
 
-        updated_entry = self.db.cfgdb.get_entry('STP_MST_INST', 'MST_INSTANCE|2')
+        updated_entry = self.db.cfgdb.get_entry('STP_MST_INST', '2')
 
         assert result.exit_code == 0
         assert "VLAN 500 removed from MST instance 2." in result.output
@@ -1659,7 +1668,7 @@ class TestMstInstanceVlanAdd:
             .commands["add"]
         )
         self.db.cfgdb.set_entry('STP', 'GLOBAL', {'mode': 'mst'})
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672'
         })
 
@@ -1669,7 +1678,7 @@ class TestMstInstanceVlanAdd:
         assert "Instance ID must be in range" in result.output
 
     def test_instance_does_not_exist(self):
-        self.db.cfgdb.mod_entry('STP_MST_INST', 'MST_INSTANCE|2', None)
+        self.db.cfgdb.mod_entry('STP_MST_INST', '2', None)
         result = self.runner.invoke(self.vlan_cmd, ['2', '100'], obj=self.db)
         assert result.exit_code != 0
         assert "does not exist" in result.output
@@ -1686,7 +1695,7 @@ class TestMstInstanceVlanAdd:
 
     def test_vlan_already_mapped(self):
         self.db.cfgdb.set_entry('VLAN', 'Vlan100', {'vlanid': '100'})
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672',
             'vlan_list': '100'
         })
@@ -1696,12 +1705,12 @@ class TestMstInstanceVlanAdd:
 
     def test_vlan_add_success(self):
         self.db.cfgdb.set_entry('VLAN', 'Vlan200', {'vlanid': '200'})
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672',
             'vlan_list': '100,150'
         })
         result = self.runner.invoke(self.vlan_cmd, ['2', '200'], obj=self.db)
-        updated = self.db.cfgdb.get_entry('STP_MST_INST', 'MST_INSTANCE|2')
+        updated = self.db.cfgdb.get_entry('STP_MST_INST', '2')
         assert result.exit_code == 0
         assert "VLAN 200 added to MST instance 2." in result.output
         assert updated.get("vlan_list") == "100,150,200"
@@ -1718,7 +1727,7 @@ class TestMstInstancePriority:
             .commands["priority"]
         )
         self.db.cfgdb.set_entry('STP', 'GLOBAL', {'mode': 'mst'})
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672'
         })
 
@@ -1728,7 +1737,7 @@ class TestMstInstancePriority:
         assert "Instance ID must be in range" in result.output
 
     def test_instance_does_not_exist(self):
-        self.db.cfgdb.mod_entry('STP_MST_INST', 'MST_INSTANCE|2', None)
+        self.db.cfgdb.mod_entry('STP_MST_INST', '2', None)
         result = self.runner.invoke(self.priority_cmd, ['2', '28672'], obj=self.db)
         assert result.exit_code != 0
         assert "does not exist" in result.output
@@ -1750,7 +1759,7 @@ class TestMstInstancePriority:
 
     def test_priority_set_successfully(self):
         result = self.runner.invoke(self.priority_cmd, ['2', '20480'], obj=self.db)
-        updated = self.db.cfgdb.get_entry('STP_MST_INST', 'MST_INSTANCE|2')
+        updated = self.db.cfgdb.get_entry('STP_MST_INST', '2')
         assert result.exit_code == 0
         assert "Bridge priority set to 20480 for MST instance 2." in result.output
         assert updated['bridge_priority'] == '20480'
@@ -1771,7 +1780,7 @@ class TestMstInstanceInterfaceCost:
         self.db.cfgdb.set_entry('STP', 'GLOBAL', {'mode': 'mst'})
         self.db.cfgdb.set_entry('PORT', 'Ethernet0', {})
         self.db.cfgdb.set_entry('INTERFACE', 'Ethernet0', {})
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672'
         })
 
@@ -1818,7 +1827,7 @@ class TestMstInstanceInterfacePriority:
         self.db.cfgdb.set_entry('STP', 'GLOBAL', {'mode': 'mst'})
         self.db.cfgdb.set_entry('PORT', 'Ethernet0', {})
         self.db.cfgdb.set_entry('INTERFACE', 'Ethernet0', {})
-        self.db.cfgdb.set_entry('STP_MST_INST', 'MST_INSTANCE|2', {
+        self.db.cfgdb.set_entry('STP_MST_INST', '2', {
             'bridge_priority': '28672'
         })
 
@@ -2084,6 +2093,7 @@ class TestStpInterfacePriority:
     @patch('config.stp.check_if_stp_enabled_for_interface')
     @patch('config.stp.check_if_global_stp_enabled')
     def test_priority_valid_mst(self, mock_global, mock_iface_enabled, mock_iface_valid, mock_mode):
+        self.cfgdb.get_keys.return_value = ['0|Ethernet8']
         result = self.runner.invoke(
             config.config.commands["spanning-tree"]
             .commands["interface"]
@@ -2093,7 +2103,12 @@ class TestStpInterfacePriority:
         )
 
         assert result.exit_code == 0
-        self.cfgdb.mod_entry.assert_called_with('STP_PORT', 'Ethernet8', {
+        self.cfgdb.mod_entry.assert_any_call('STP_PORT', 'Ethernet8', {
+            'priority': '240',
+            'edge_port': 'false',
+            'link_type': 'auto'
+        })
+        self.cfgdb.mod_entry.assert_any_call('STP_MST_PORT', '0|Ethernet8', {
             'priority': '240'
         })
 
