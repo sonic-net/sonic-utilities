@@ -1706,7 +1706,7 @@ def update_sonic_environment():
 
     if os.path.isfile(SONIC_ENV_TEMPLATE_FILE) and os.path.isfile(SONIC_VERSION_YML_FILE):
         clicommon.run_command(
-            [SONIC_CFGGEN_PATH, '-d', '-y', SONIC_VERSION_YML_FILE, '-t', '{},{}'.format(SONIC_ENV_TEMPLATE_FILE, SONIC_ENV_FILE)],
+            [SONIC_CFGGEN_PATH, '-d', '--redis-unix-socket', '-y', SONIC_VERSION_YML_FILE, '-t', '{},{}'.format(SONIC_ENV_TEMPLATE_FILE, SONIC_ENV_FILE)],
         display_cmd=True
         )
 
@@ -2063,9 +2063,9 @@ def save(db, filename):
                 file = "/etc/sonic/config_db{}.json".format(inst)
 
         if namespace is None:
-            command = "{} -d --print-data > {}".format(SONIC_CFGGEN_PATH, file)
+            command = "{} -d --redis-unix-socket --print-data > {}".format(SONIC_CFGGEN_PATH, file)
         else:
-            command = "{} -n {} -d --print-data > {}".format(SONIC_CFGGEN_PATH, namespace, file)
+            command = "{} -n {} -d --redis-unix-socket --print-data > {}".format(SONIC_CFGGEN_PATH, namespace, file)
 
         log.log_info("'save' executing...")
         clicommon.run_command(command, display_cmd=True, shell=True)
@@ -4212,7 +4212,7 @@ def reload(ctx, dry_run, json_data):
 
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
-    from_db = ['-d', '--write-to-db']
+    from_db = ['-d', '--redis-unix-socket', '--write-to-db']
     if dry_run:
         from_db = ['--additional-data'] + [str(json_data)] if json_data else []
 
@@ -4308,7 +4308,7 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
-    from_db = ['-d']
+    from_db = ['-d', '--redis-unix-socket']
     if dry_run:
         from_db = ['--additional-data'] + [str(json_data)] if json_data else []
 
@@ -4417,7 +4417,7 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
     if json_data:
         from_db = ['--additional-data'] + [json_data] if json_data else []
     else:
-        from_db = ["-d"]
+        from_db = ["-d", "--redis-unix-socket"]
 
     items_to_update = {}
     config_dbs = {}

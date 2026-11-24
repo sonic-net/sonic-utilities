@@ -296,6 +296,7 @@ def update_sonic_environment(bootloader, binary_image_version):
             sonic_env = run_command_or_raise([
                     "sonic-cfggen",
                     "-d",
+                    "--redis-unix-socket",
                     "-y",
                     next_sonic_version_yml_file,
                     "-t",
