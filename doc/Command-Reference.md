@@ -10788,7 +10788,6 @@ This command is used to add a NTP server IP address to the NTP server list.  Not
   ```
   admin@sonic:~$ sudo config ntp add 9.9.9.9
   NTP server 9.9.9.9 added to configuration
-  Restarting ntp-config service...
   ```
 
 **config ntp delete**
@@ -10804,7 +10803,6 @@ This command is used to delete a configured NTP server IP address.
   ```
   admin@sonic:~$ sudo config ntp del 9.9.9.9
   NTP server 9.9.9.9 removed from configuration
-  Restarting ntp-config service...
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#NTP)
@@ -13905,8 +13903,6 @@ Note that more that one syslog server can be added in the device.
 - Example:
   ```
   admin@sonic:~$ sudo config syslog add 2.2.2.2 --source 1.1.1.1 --port 514 --vrf default
-  Running command: systemctl reset-failed rsyslog-config
-  Running command: systemctl restart rsyslog-config
   ```
 
 **config syslog del**
@@ -13924,8 +13920,6 @@ This command is used to delete the configured syslog server.
 - Example:
   ```
   admin@sonic:~$ sudo config syslog del 2.2.2.2
-  Running command: systemctl reset-failed rsyslog-config
-  Running command: systemctl restart rsyslog-config
   ```
 
 **config syslog rate-limit-host**
