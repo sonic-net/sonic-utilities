@@ -58,8 +58,8 @@ class WheelContract(unittest.TestCase):
                         suffix = re.search(br'python[0-9.]*([ \t].*)?$', first).group(1) or b''
                         payload = b'#!python' + suffix + separator + rest
                 self.assertEqual(z.read(name), payload, name)
-            self.assertEqual(len(expected), 1082)
-            self.assertEqual(len([n for n in expected if n.startswith('tests/')]), 709)
+            self.assertEqual(len(expected), 1125)
+            self.assertEqual(len([n for n in expected if n.startswith('tests/')]), 743)
             self.assertEqual(len(names - set(expected)), 5)
             for info in z.infolist():
                 executable = info.filename.startswith(data + 'scripts/') or info.filename == data + 'data/bin/vtFA_RTK_5766_v2'
