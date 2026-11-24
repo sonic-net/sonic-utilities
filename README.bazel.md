@@ -21,7 +21,7 @@ plugin packages, extra requirements and RECORD hashes. Existing source includes
 `tests` in its published packages: this migration preserves that unusual choice.
 It does not silently remove test data or expand to undeclared subpackages.
 The contract's source runfiles enumerate the repository independently of the
-producer's PACKAGES/PACKAGE_DATA globs; it also asserts 1,082 full payload files.
+producer's PACKAGES/PACKAGE_DATA globs; it also checks that the wheel contains 1,125 payload files.
 
 Maintainer, maintainer email, keywords and License-File are preserved. License
 bytes/text are unchanged; Core Metadata 2.4 places LICENSE at
@@ -103,7 +103,7 @@ deployment, public writes, pushes or repository settings changes are required.
 `//bazel/runtime:sonic_utilities_wheel` removes only the top-level developer tests
 namespace, preventing demonstrated collisions with inherited YANG/containercfgd
 wheels. `//:runtime_wheel_contract_test` verifies that the full original wheel
-minus those709 test files equals the378-file runtime wheel, and every remaining
+contains 743 test files and that the runtime wheel contains the remaining 387 entries. Every retained
 file except regenerated RECORD is byte-identical (including metadata/scripts).
 The full development payload/tests remain available; both variants use the
 same documented shebang/permission/metadata transforms. The prebuilt SSD
