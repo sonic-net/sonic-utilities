@@ -259,7 +259,8 @@ def del_vlan(ctx, vid, multiple, no_restart_dhcp_relay):
 
     vlans = db.cfgdb.get_keys('VLAN')
     if not vlans:
-        docker_exec_cmd = ['docker', 'exec', '-i', 'swss']
+        swss_container = get_swss_container_name(get_namespace_from_context(ctx))
+        docker_exec_cmd = ['docker', 'exec', '-i', swss_container]
         _, rc = clicommon.run_command(
             docker_exec_cmd + ['supervisorctl', 'status', 'ndppd'], ignore_error=True, return_cmd=True)
         if rc == 0:
@@ -271,9 +272,18 @@ def del_vlan(ctx, vid, multiple, no_restart_dhcp_relay):
             clicommon.run_command(docker_exec_cmd + ['supervisorctl', 'update'], return_cmd=True)
 
 
-def restart_ndppd():
-    verify_swss_running_cmd = ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', 'swss']
-    docker_exec_cmd = ['docker', 'exec', '-i', 'swss']
+def get_swss_container_name(namespace):
+    """Return the swss container name for the given namespace
+    ('swss' on single-ASIC, 'swss<asic_id>' on multi-ASIC)."""
+    if namespace and namespace != multi_asic.DEFAULT_NAMESPACE:
+        return 'swss{}'.format(multi_asic.get_asic_id_from_name(namespace))
+    return 'swss'
+
+
+def restart_ndppd(namespace):
+    swss_container = get_swss_container_name(namespace)
+    verify_swss_running_cmd = ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', swss_container]
+    docker_exec_cmd = ['docker', 'exec', '-i', swss_container]
     ndppd_config_gen_cmd = ['sonic-cfggen', '-d', '-t', '/usr/share/sonic/templates/ndppd.conf.j2,/etc/ndppd.conf']
     ndppd_restart_cmd = ['supervisorctl', 'restart', 'ndppd']
     ndppd_status_cmd = ["supervisorctl", "status", "ndppd"]
@@ -317,7 +327,7 @@ def config_proxy_arp(db, ctx, vid, mode):
 
     config_db.mod_entry('VLAN_INTERFACE', vlan, {"proxy_arp": mode})
     click.echo('Proxy ARP setting saved to ConfigDB')
-    restart_ndppd()
+    restart_ndppd(get_namespace_from_context(ctx))
 #
 # 'member' group ('config vlan member ...')
 #
