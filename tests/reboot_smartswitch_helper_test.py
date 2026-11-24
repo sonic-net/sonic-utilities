@@ -6,7 +6,13 @@ from pathlib import Path
 SCRIPT = Path(__file__).parents[1] / "scripts" / "reboot_smartswitch_helper"
 
 
-def run_helper_function(tmp_path, function_call, docker_rc=0, fail_port=""):
+def run_helper_function(
+    tmp_path,
+    function_call,
+    docker_rc=0,
+    fail_port="",
+    docker_output='{"active":false,"status":{"status":1}}',
+):
     command_log = tmp_path / "command.log"
     platform_json = tmp_path / "platform.json"
     platform_json.write_text('{"dpu_halt_services_timeout": 6}')
@@ -26,17 +32,44 @@ docker() {{
     return "$DOCKER_RC"
 }}
 timeout() {{ shift; docker "$@"; }}
+# Keep polling independent of scheduler delays.
+unset SECONDS
+SECONDS=0
+sleep() {{ SECONDS=$((SECONDS + $1)); }}
 get_dpu_ip() {{ printf '169.254.200.1\n'; }}
 get_gnmi_ports() {{ printf '8080\n50052\n'; }}
 {function_call}
 '''
     env["DOCKER_RC"] = str(docker_rc)
     env["FAIL_PORT"] = fail_port
-    env["DOCKER_OUTPUT"] = '{"active":false,"status":{"status":1}}'
+    env["DOCKER_OUTPUT"] = docker_output
     result = subprocess.run(
-        ["bash", "-c", script], env=env, capture_output=True, text=True
+        ["bash", "-c", script], env=env, capture_output=True, text=True, timeout=60
     )
     return result, command_log.read_text()
+
+
+def run_wait_for_status(tmp_path, get_status_body):
+    platform_json = tmp_path / "platform.json"
+    platform_json.write_text('{"dpu_halt_services_timeout": 6}')
+    script = f'''
+EXIT_SUCCESS=0
+EXIT_ERROR=1
+PLATFORM_JSON_PATH="{platform_json}"
+source "{SCRIPT}"
+SECONDS=0
+calls=0
+sleep() {{ SECONDS=$((SECONDS + $1)); }}
+get_reboot_status() {{
+    calls=$((calls + 1))
+    {get_status_body}
+}}
+wait_for_dpu_reboot_status 169.254.200.1 50052 dpu0
+rc=$?
+printf '%s\n' "$calls"
+exit "$rc"
+'''
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
 
 def test_get_reboot_status_uses_tls(tmp_path):
@@ -88,6 +121,18 @@ def test_gnmi_reboot_dpu_falls_back_to_native_port(tmp_path):
     assert sum("-rpc Reboot " in f"{line} " for line in command_lines) == 1
 
 
+def test_gnmi_reboot_dpu_times_out_while_halt_is_active(tmp_path):
+    result, commands = run_helper_function(
+        tmp_path, "gnmi_reboot_dpu dpu0", docker_output='{"active":true}'
+    )
+    assert result.returncode != 0
+    assert "Timeout waiting for dpu0 to finish halting the services" in result.stderr
+    command_lines = commands.splitlines()
+    # The 6 s budget is polled at 0 s and at 5 s, then the deadline ends the wait.
+    assert sum("-rpc RebootStatus" in line for line in command_lines) == 2
+    assert sum("-rpc Reboot " in f"{line} " for line in command_lines) == 1
+
+
 def test_get_reboot_status_rejects_malformed_output(tmp_path):
     script = f'''
 EXIT_SUCCESS=0
@@ -101,43 +146,133 @@ get_reboot_status 169.254.200.1 50052
     assert result.returncode != 0
 
 
+def test_get_reboot_status_rejects_empty_output(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output="",
+    )
+    assert result.returncode != 0
+
+
+def test_get_reboot_status_reports_active_as_incomplete(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output=(
+            '{"active":true,"when":1,"reason":"User initiated reboot",'
+            '"count":1,"method":3,"status":{}}'
+        ),
+    )
+    assert result.returncode == 10
+
+
 def test_get_reboot_status_accepts_inactive_without_status(tmp_path):
-    script = f'''
-EXIT_SUCCESS=0
-EXIT_ERROR=1
-source "{SCRIPT}"
-timeout() {{ shift; docker "$@"; }}
-docker() {{ printf '{{"active":false}}\n'; }}
-get_reboot_status 169.254.200.1 50052
-'''
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"active":false}',
+    )
     assert result.returncode == 0
 
 
+def test_get_reboot_status_accepts_numeric_success_without_active(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output=(
+            '{"reason":"Halt reboot completed","count":1,"method":3,'
+            '"status":{"status":1}}'
+        ),
+    )
+    assert result.returncode == 0
+
+
+def test_get_reboot_status_accepts_named_success_without_active(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"status":{"status":"STATUS_SUCCESS"}}',
+    )
+    assert result.returncode == 0
+
+
+def test_get_reboot_status_rejects_default_status_without_active(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"status":{}}',
+    )
+    assert result.returncode == 11
+
+
 def test_get_reboot_status_rejects_unknown_status(tmp_path):
-    script = f'''
-EXIT_SUCCESS=0
-EXIT_ERROR=1
-source "{SCRIPT}"
-timeout() {{ shift; docker "$@"; }}
-docker() {{ printf '{{"active":false,"status":{{"status":0}}}}\n'; }}
-get_reboot_status 169.254.200.1 50052
-'''
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
-    assert result.returncode != 0
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"active":false,"status":{"status":0}}',
+    )
+    assert result.returncode == 11
+
+
+def test_get_reboot_status_rejects_named_unknown_status(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"status":{"status":"STATUS_UNKNOWN"}}',
+    )
+    assert result.returncode == 11
 
 
 def test_get_reboot_status_rejects_failure_status(tmp_path):
-    script = f'''
-EXIT_SUCCESS=0
-EXIT_ERROR=1
-source "{SCRIPT}"
-timeout() {{ shift; docker "$@"; }}
-docker() {{ printf '{{"active":false,"status":{{"status":3}}}}\n'; }}
-get_reboot_status 169.254.200.1 50052
-'''
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"active":false,"status":{"status":3}}',
+    )
+    assert result.returncode == 12
+
+
+def test_get_reboot_status_rejects_named_failure_status(tmp_path):
+    result, _ = run_helper_function(
+        tmp_path,
+        "get_reboot_status 169.254.200.1 50052",
+        docker_output='{"status":{"status":"STATUS_FAILURE"}}',
+    )
+    assert result.returncode == 12
+    assert "DPU reboot failed with status: STATUS_FAILURE" in result.stderr
+
+
+def test_wait_accepts_default_status_after_observing_active(tmp_path):
+    result = run_wait_for_status(
+        tmp_path,
+        '''
+if [ "$calls" -eq 1 ]; then
+    return "$REBOOT_STATUS_ACTIVE_RC"
+fi
+return "$REBOOT_STATUS_DEFAULT_RC"
+''',
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "2"
+
+
+def test_wait_rejects_default_status_without_observing_active(tmp_path):
+    result = run_wait_for_status(
+        tmp_path,
+        'return "$REBOOT_STATUS_DEFAULT_RC"',
+    )
     assert result.returncode != 0
+    assert result.stdout.strip() == "2"
+
+
+def test_wait_stops_on_explicit_failure(tmp_path):
+    result = run_wait_for_status(
+        tmp_path,
+        'return "$REBOOT_STATUS_FAILURE_RC"',
+    )
+    assert result.returncode != 0
+    assert result.stdout.strip() == "1"
 
 
 def test_get_gnmi_ports_orders_and_deduplicates(tmp_path):
@@ -171,6 +306,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -222,6 +358,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -244,6 +381,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -264,6 +402,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}
@@ -288,6 +427,7 @@ EXIT_SUCCESS=0
 EXIT_ERROR=1
 PLATFORM_JSON_PATH="{platform_json}"
 source "{SCRIPT}"
+check_dpu_reboot_disk_space() {{ return 0; }}
 show() {{ printf '  DPU0 test Online up\n'; }}
 get_module_state_transition_flag() {{ return 1; }}
 set_module_state_transition_flag() {{ return 0; }}

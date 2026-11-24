@@ -32,8 +32,8 @@ def get_asic_name():
     asic_mapping = gcu_field_operation_conf["helper_data"]["rdma_config_update_validator"]
     asic_type = device_info.get_sonic_version_info()['asic_type'] 
 
-    if asic_type == 'cisco-8000':
-        asic = "cisco-8000"
+    if asic_type in ('cisco-8000', 'cisco'):
+        asic = asic_type
     if asic_type == 'marvell-teralynx':
         asic = "marvell-teralynx"
     elif asic_type == 'mellanox' or asic_type == 'vs' or asic_type == 'broadcom':
@@ -128,7 +128,7 @@ def rdma_config_update_validator_common(scope, patch_element, exact_field_match=
         if 'value' in patch_element.keys() and isinstance(patch_element['value'], dict):
             for key in patch_element['value']:
                 if len(cleaned_field) > 0:
-                    cleaned_fields.append(cleaned_field + '/' + key)
+                    cleaned_fields.append(cleaned_field + '/' + key.lower())
                 else:
                     cleaned_fields.append(key)
         else:

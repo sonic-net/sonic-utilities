@@ -3,11 +3,11 @@
 		"auto_restart": "disabled",
 		"high_mem_alert": "disabled"
 	},
-	"CONTAINER_FEATURE|telemetry": {
+	"CONTAINER_FEATURE|lldp": {
 		"auto_restart": "enabled",
 		"high_mem_alert": "disabled"
 	},
-	"FEATURE|telemetry": {
+	"FEATURE|lldp": {
 		"status": "enabled",
 		"has_timer": "True"
 	},

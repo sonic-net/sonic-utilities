@@ -114,11 +114,11 @@ def port_speed_change_validator(old_config, upd_config, keys):
                 logger.LOG_PRIORITY_NOTICE,
                 (
                     f"port_speed_change_validator: port speed changed for {key} "
-                    f"from {old_speed} to {upd_speed}, restart telemetry service"
+                    f"from {old_speed} to {upd_speed}, restart gnmi service"
                 ),
                 print_to_console
             )
-            return _service_restart("telemetry")
+            return _service_restart("gnmi")
     return True
 
 
@@ -181,18 +181,6 @@ def gnmi_validator(old_config, upd_config, keys):
     return True
 
 
-def telemetry_validator(old_config, upd_config, keys):
-    old_telemetry = old_config.get("TELEMETRY", {})
-    upd_telemetry = upd_config.get("TELEMETRY", {})
-
-    old_vrf = old_telemetry.get("gnmi", {}).get("vrf", "")
-    upd_vrf = upd_telemetry.get("gnmi", {}).get("vrf", "")
-
-    if old_vrf != upd_vrf:
-        return _service_restart("telemetry")
-    return True
-
-
 def vlanintf_validator(old_config, upd_config, keys):
     old_vlan_intf = old_config.get("VLAN_INTERFACE", {})
     upd_vlan_intf = upd_config.get("VLAN_INTERFACE", {})
@@ -221,10 +209,20 @@ def vlanintf_validator(old_config, upd_config, keys):
                        "vlanintf_validator: Invalid VLAN interface address",
                        print_to_console)
             continue
-        rc = command_wrapper(["ip", "neigh", "flush", "dev", iface, iface_ip])
-        if rc:
+        cmd = f"ip neigh flush dev {iface} {iface_ip}"
+        result = subprocess.run(
+            shlex.split(cmd), capture_output=True, check=False, text=True
+        )
+        if result.returncode != 0:
+            if "RTNETLINK answers: No such file or directory" in result.stderr:
+                continue
             logger.log(logger.LOG_PRIORITY_ERROR,
-                       f"vlanintf_validator: Failed to flush neighbors for {iface} {iface_ip}, returncode={rc}",
+                       f"vlanintf_validator: Failed to flush neighbors for "
+                       f"{iface} {iface_ip}, returncode={result.returncode}",
                        print_to_console)
+            if result.stderr:
+                logger.log(logger.LOG_PRIORITY_ERROR,
+                           f"stderr: {result.stderr}",
+                           print_to_console)
             return False
     return True

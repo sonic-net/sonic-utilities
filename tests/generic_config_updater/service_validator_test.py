@@ -10,7 +10,7 @@ from generic_config_updater.services_validator import (
     port_speed_change_validator,
 )
 from generic_config_updater.services_validator import ntp_validator
-from generic_config_updater.services_validator import gnmi_validator, telemetry_validator
+from generic_config_updater.services_validator import gnmi_validator
 
 # Mimics subprocess.run call
 #
@@ -289,6 +289,34 @@ test_vlanintf_failure_data = [
             "stderr": "Device \"Vlan9999\" does not exist.\n",
             "expected_result": False,
             "description": "Non-existent VLAN deletion fails with both stdout and stderr"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {}
+                }
+            },
+            "upd": {},
+            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "rc": 2,
+            "stderr": "RTNETLINK answers: No such file or directory\n",
+            "expected_result": True,
+            "description": "Stale-neighbor race: kernel RTNETLINK ENOENT is tolerated"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {}
+                }
+            },
+            "upd": {},
+            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "rc": 127,
+            "stderr": "sh: ip: No such file or directory\n",
+            "expected_result": False,
+            "description": "Generic ENOENT (missing binary) must not be tolerated"
         }
    ]
 
@@ -328,46 +356,6 @@ test_gnmi_data = [
         {
             "old": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
             "upd": {"GNMI": {"gnmi": {"port": "50052", "vrf": "mgmt"}}},
-            "cmd": ""
-        }
-    ]
-
-
-test_telemetry_data = [
-        {"old": {}, "upd": {}, "cmd": ""},
-        {
-            "old": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
-            "upd": {"TELEMETRY": {"gnmi": {"port": "50052"}}},
-            "cmd": ""
-        },
-        {
-            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
-            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
-            "cmd": ""
-        },
-        {
-            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
-            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
-            "cmd": "systemctl restart telemetry"
-        },
-        {
-            "old": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
-            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
-            "cmd": "systemctl restart telemetry"
-        },
-        {
-            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
-            "upd": {"TELEMETRY": {"gnmi": {"port": "50051"}}},
-            "cmd": "systemctl restart telemetry"
-        },
-        {
-            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
-            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "default"}}},
-            "cmd": "systemctl restart telemetry"
-        },
-        {
-            "old": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
-            "upd": {"TELEMETRY": {"gnmi": {"port": "50051", "vrf": "mgmt"}}},
             "cmd": ""
         }
     ]
@@ -480,7 +468,7 @@ class TestServiceValidator(unittest.TestCase):
         old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
         upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}}}
         subprocess_calls = [{
-            "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry",
+            "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart gnmi",
             "rc": 0
         }]
         subprocess_call_index = 0
@@ -492,9 +480,9 @@ class TestServiceValidator(unittest.TestCase):
         old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
         upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}}}
         subprocess_calls = [
-            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry", "rc": 1},
-            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl reset-failed telemetry", "rc": 0},
-            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry", "rc": 0}
+            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart gnmi", "rc": 1},
+            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl reset-failed gnmi", "rc": 0},
+            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart gnmi", "rc": 0}
         ]
         subprocess_call_index = 0
         result = port_speed_change_validator(old_config, upd_config, None)
@@ -521,7 +509,7 @@ class TestServiceValidator(unittest.TestCase):
         old_config = {"PORT": {"Ethernet0": {"speed": "100000"}, "Ethernet1": {"speed": "400000"}}}
         upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}, "Ethernet1": {"speed": "400000"}}}
         subprocess_calls = [{
-            "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry",
+            "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart gnmi",
             "rc": 0
         }]
         subprocess_call_index = 0
@@ -598,20 +586,3 @@ class TestServiceValidator(unittest.TestCase):
 
             result = gnmi_validator(entry["old"], entry["upd"], None)
             assert result, "gnmi_validator failed: {}".format(str(entry))
-
-    @patch("generic_config_updater.services_validator.subprocess.run")
-    def test_telemetry_validator(self, mock_subprocess):
-        """Test telemetry_validator restarts telemetry service on VRF change"""
-        global subprocess_calls, subprocess_call_index
-
-        mock_subprocess.side_effect = mock_subprocess_run
-
-        for entry in test_telemetry_data:
-            subprocess_calls = []
-            subprocess_call_index = 0
-
-            if entry["cmd"]:
-                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
-
-            result = telemetry_validator(entry["old"], entry["upd"], None)
-            assert result, "telemetry_validator failed: {}".format(str(entry))
