@@ -127,7 +127,7 @@ authentication.add_command(trace)
 @clicommon.pass_db
 def login(db, auth_protocol):
     """Switch login authentication [ {ldap, radius, tacacs+, local} | default ]"""
-    if len(auth_protocol) is 0:
+    if len(auth_protocol) == 0:
         click.echo('Argument "auth_protocol" is required')
         return
     elif len(auth_protocol) > 2:
@@ -270,6 +270,24 @@ def passkey(db, ctx, secret, prompt, confirm):
         click.echo('Argument "secret" is required')
 tacacs.add_command(passkey)
 default.add_command(passkey)
+
+
+@click.command()
+@click.argument('option', type=click.Choice(["enable", "disable", "default"]), required=False)
+@click.pass_context
+@clicommon.pass_db
+def traceid_authorization(db, ctx, option):
+    """Send SSH_CLIENT_TRACEID in TACACS+ authorization [enable | disable | default]"""
+    if ctx.obj == 'default' or option == 'default':
+        del_table_key(db, 'TACPLUS', 'global', 'traceid_authorization')
+    elif option:
+        add_table_kv(db, 'TACPLUS', 'global', 'traceid_authorization', option == 'enable')
+    else:
+        ctx.fail('Argument "option" is required')
+
+
+tacacs.add_command(traceid_authorization)
+default.add_command(traceid_authorization)
 
 
 # cmd: tacacs add <ip_address> --timeout SECOND --key SECRET --type TYPE --port PORT --pri PRIORITY

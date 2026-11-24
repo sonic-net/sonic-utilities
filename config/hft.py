@@ -18,6 +18,10 @@ PROFILE_TABLE_PATH = f"/{PROFILE_TABLE_NAME}"
 GROUP_TABLE_PATH = f"/{GROUP_TABLE_NAME}"
 STREAM_STATE_FIELD = "stream_state"
 
+STATE_SESSION_TABLE_NAME = "HIGH_FREQUENCY_TELEMETRY_SESSION_TABLE"
+STREAM_STATUS_FIELD = "stream_status"
+STREAM_STATUS_ENABLED = "enabled"
+
 
 @click.group(name='hft', short_help="Manage high frequency telemetry")
 def hft():
@@ -58,13 +62,7 @@ def hft_add():
 @click.pass_context
 def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
     """Create a profile entry for HFT."""
-    if _has_existing_profile(ctx):
-        click.echo(
-            "A profile already exists; this version supports only one profile. "
-            "Delete the existing profile before adding another."
-        )
-        ctx.exit(1)
-
+    _reject_if_stream_active(profile_name)
     profile_payload = _build_profile_patch(
         op="add",
         profile_name=profile_name,
@@ -87,6 +85,7 @@ def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
 @click.pass_context
 def hft_add_group(ctx, profile_name, group_type, object_names, object_counters):
     """Create a group definition under an HFT profile."""
+    _reject_if_stream_active(profile_name)
     group_payload = _build_group_patch(
         op="add",
         profile_name=profile_name,
@@ -120,6 +119,7 @@ def hft_delete_profile(ctx, profile_name):
 @click.pass_context
 def hft_delete_group(ctx, profile_name, group_type):
     """Remove a group definition from an HFT profile."""
+    _reject_if_stream_active(profile_name)
     remove_entire_table = _is_last_entry(ctx, GROUP_TABLE_NAME)
     group_payload = _build_group_remove_patch(profile_name, group_type, remove_entire_table)
     _process_payload(ctx, group_payload)
@@ -171,20 +171,34 @@ def _split_csv_items(value):
 
 
 def _build_profile_patch(op, profile_name, attributes):
-    """Construct a JSON Patch entry targeting the profile table."""
+    """Construct a JSON Patch entry targeting a single profile row.
+
+    The patch must target the per-key path (e.g. /HIGH_FREQUENCY_TELEMETRY_PROFILE/foo)
+    rather than the table-level path (/HIGH_FREQUENCY_TELEMETRY_PROFILE), because per
+    RFC 6902 an "add" at an existing object member replaces that member's value -
+    which at the table level would wipe every other row.
+    """
     return [
-        _build_patch_entry(op, PROFILE_TABLE_PATH, {
-            profile_name: attributes
-        })
+        _build_patch_entry(
+            op,
+            _join_pointer(PROFILE_TABLE_PATH, profile_name),
+            attributes,
+        )
     ]
 
 
 def _build_group_patch(op, profile_name, group_type, attributes):
-    """Construct a JSON Patch entry targeting the group table."""
+    """Construct a JSON Patch entry targeting a single group row.
+
+    See _build_profile_patch for why this targets the per-key path rather than
+    the table path.
+    """
     return [
-        _build_patch_entry(op, GROUP_TABLE_PATH, {
-            _compose_group_key(profile_name, group_type): attributes
-        })
+        _build_patch_entry(
+            op,
+            _join_pointer(GROUP_TABLE_PATH, _compose_group_key(profile_name, group_type)),
+            attributes,
+        )
     ]
 
 
@@ -275,13 +289,57 @@ def _get_cfgdb(ctx):
     return getattr(db, 'cfgdb', None)
 
 
-def _has_existing_profile(ctx):
-    """Return True when at least one HFT profile already exists."""
-    cfgdb = _get_cfgdb(ctx)
-    if cfgdb is None:
-        return False
+def _get_state_db(namespace=None):
+    """Connect to STATE_DB for the given namespace. `namespace=None` maps
+    to the localhost/default DB.
+    """
+    from swsscommon.swsscommon import SonicV2Connector
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db.connect(state_db.STATE_DB, False)
+    return state_db
+
+
+def _active_session_groups(state_db, profile_name):
+    """Return sorted group names for `profile_name` whose STATE_DB entry
+    reports `stream_status == "enabled"`. Missing entries are treated as
+    inactive. Propagates any underlying STATE_DB error so callers can
+    decide the failure policy.
+    """
+    pattern = f"{STATE_SESSION_TABLE_NAME}|{profile_name}|*"
+    keys = state_db.keys(state_db.STATE_DB, pattern) or []
+    active = []
+    for key in keys:
+        entry = state_db.get_all(state_db.STATE_DB, key) or {}
+        if entry.get(STREAM_STATUS_FIELD) == STREAM_STATUS_ENABLED:
+            # STATE_DB key: HIGH_FREQUENCY_TELEMETRY_SESSION_TABLE|profile|group
+            active.append(key.split("|", 2)[-1])
+    return sorted(active)
+
+
+def _reject_if_stream_active(profile_name, namespace=None):
+    """Refuse profile or group changes while any of the profile's runtime streams
+    is still active. CONFIG_DB.stream_state alone is not sufficient - it can
+    be 'disabled' while orchagent is still tearing down the runtime stream.
+    STATE_DB reflects the operational state written after the SAI transition
+    completes.
+
+    Fails closed: if STATE_DB cannot be reached or queried, the mutation is
+    refused rather than silently permitted, so we never mutate profile config
+    against a stream whose state we cannot verify.
+    """
     try:
-        entries = cfgdb.get_table(PROFILE_TABLE_NAME) or {}
-    except Exception:
-        return False
-    return bool(entries)
+        state_db = _get_state_db(namespace=namespace)
+        active = _active_session_groups(state_db, profile_name)
+    except Exception as exc:  # noqa: BLE001 - fail-closed on any STATE_DB error
+        raise click.ClickException(
+            "Unable to determine HFT runtime stream state; refusing configuration "
+            "mutation. Ensure STATE_DB is reachable, then retry."
+        ) from exc
+    if not active:
+        return
+    raise click.ClickException(
+        f"Profile '{profile_name}' has active runtime streams for group(s): "
+        f"{', '.join(active)}. Run `config hft disable {profile_name}` and "
+        f"wait until STATE_DB {STATE_SESSION_TABLE_NAME}|{profile_name}|* "
+        f"reports {STREAM_STATUS_FIELD}=disabled before modifying profile configuration."
+    )

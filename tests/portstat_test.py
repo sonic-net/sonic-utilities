@@ -1,7 +1,12 @@
 import pytest
+import json
 import logging
 import os
 import shutil
+import importlib.machinery
+import importlib.util
+
+from unittest import mock
 
 import clear.main as clear
 import show.main as show
@@ -83,6 +88,26 @@ BIN13                                   0
 BIN14                                   0
 BIN15                                   0
 """
+
+intf_fec_counters_fec_hist_after_clear = """\
+Symbol Errors Per Codeword      Codewords
+----------------------------  -----------
+BIN0                                    0
+BIN1                                    0
+BIN2                                    0
+BIN3                                    0
+BIN4                                    0
+BIN5                                    0
+BIN6                                    0
+BIN7                                    0
+BIN8                                    0
+BIN9                                    0
+BIN10                                   0
+BIN11                                   0
+BIN12                                   0
+BIN13                                   0
+BIN14                                   0
+BIN15                                   0"""
 
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
@@ -252,6 +277,8 @@ Reminder: Please execute 'show interface counters -d all' to include internal li
 
 intf_invalid_asic_error = """ValueError: Unknown Namespace asic99"""
 
+# Ethernet4 also has SAI_PORT_STAT_IP_IN_RECEIVES (987,654), which must not appear: Overruns Received comes from
+# SAI_PORT_STAT_IN_DROPPED_PKTS (1,234)
 intf_counters_detailed = """\
 Packets Received 64 Octets..................... 0
 Packets Received 65-127 Octets................. 0
@@ -269,10 +296,10 @@ Unicast Packets Received....................... 4
 Multicast Packets Received..................... 0
 Broadcast Packets Received..................... 0
 
-Jabbers Received............................... 0
-Fragments Received............................. 0
-Undersize Received............................. 0
-Overruns Received.............................. 0
+Jabbers Received............................... 11
+Fragments Received............................. 12
+Undersize Received............................. 13
+Overruns Received.............................. 1,234
 
 Packets Transmitted 64 Octets.................. 0
 Packets Transmitted 65-127 Octets.............. 0
@@ -298,6 +325,106 @@ WRED Total Dropped Packets..................... 101
 Trimmed Packets................................ 100
 Trimmed Sent Packets........................... 50
 Trimmed Dropped Packets........................ 50
+
+Time Since Counters Last Cleared............... None
+"""
+
+intf_counters_detailed_after_clear = """\
+Packets Received 64 Octets..................... 0
+Packets Received 65-127 Octets................. 0
+Packets Received 128-255 Octets................ 0
+Packets Received 256-511 Octets................ 0
+Packets Received 512-1023 Octets............... 0
+Packets Received 1024-1518 Octets.............. 0
+Packets Received 1519-2047 Octets.............. 0
+Packets Received 2048-4095 Octets.............. 0
+Packets Received 4096-9216 Octets.............. 0
+Packets Received 9217-16383 Octets............. 0
+
+Total Packets Received Without Errors.......... 0
+Unicast Packets Received....................... 0
+Multicast Packets Received..................... 0
+Broadcast Packets Received..................... 0
+
+Jabbers Received............................... 0
+Fragments Received............................. 0
+Undersize Received............................. 0
+Overruns Received.............................. 1,000
+
+Packets Transmitted 64 Octets.................. 0
+Packets Transmitted 65-127 Octets.............. 0
+Packets Transmitted 128-255 Octets............. 0
+Packets Transmitted 256-511 Octets............. 0
+Packets Transmitted 512-1023 Octets............ 0
+Packets Transmitted 1024-1518 Octets........... 0
+Packets Transmitted 1519-2047 Octets........... 0
+Packets Transmitted 2048-4095 Octets........... 0
+Packets Transmitted 4096-9216 Octets........... 0
+Packets Transmitted 9217-16383 Octets.......... 0
+
+Total Packets Transmitted Successfully......... 0
+Unicast Packets Transmitted.................... 0
+Multicast Packets Transmitted.................. 0
+Broadcast Packets Transmitted.................. 0
+
+WRED Green Dropped Packets..................... 0
+WRED Yellow Dropped Packets.................... 0
+WRED Red Dropped Packets....................... 0
+WRED Total Dropped Packets..................... 0
+
+Trimmed Packets................................ 0
+Trimmed Sent Packets........................... 0
+Trimmed Dropped Packets........................ 0
+
+Time Since Counters Last Cleared............... 2026-01-01T00:00:00
+"""
+
+intf_counters_detailed_overruns_na = """\
+Packets Received 64 Octets..................... 0
+Packets Received 65-127 Octets................. 0
+Packets Received 128-255 Octets................ 0
+Packets Received 256-511 Octets................ 0
+Packets Received 512-1023 Octets............... 0
+Packets Received 1024-1518 Octets.............. 0
+Packets Received 1519-2047 Octets.............. 0
+Packets Received 2048-4095 Octets.............. 0
+Packets Received 4096-9216 Octets.............. 0
+Packets Received 9217-16383 Octets............. 0
+
+Total Packets Received Without Errors.......... 8
+Unicast Packets Received....................... 8
+Multicast Packets Received..................... 0
+Broadcast Packets Received..................... 0
+
+Jabbers Received............................... 0
+Fragments Received............................. 0
+Undersize Received............................. 0
+Overruns Received.............................. N/A
+
+Packets Transmitted 64 Octets.................. 0
+Packets Transmitted 65-127 Octets.............. 0
+Packets Transmitted 128-255 Octets............. 0
+Packets Transmitted 256-511 Octets............. 0
+Packets Transmitted 512-1023 Octets............ 0
+Packets Transmitted 1024-1518 Octets........... 0
+Packets Transmitted 1519-2047 Octets........... 0
+Packets Transmitted 2048-4095 Octets........... 0
+Packets Transmitted 4096-9216 Octets........... 0
+Packets Transmitted 9217-16383 Octets.......... 0
+
+Total Packets Transmitted Successfully......... 10
+Unicast Packets Transmitted.................... 10
+Multicast Packets Transmitted.................. 0
+Broadcast Packets Transmitted.................. 0
+
+WRED Green Dropped Packets..................... N/A
+WRED Yellow Dropped Packets.................... N/A
+WRED Red Dropped Packets....................... N/A
+WRED Total Dropped Packets..................... N/A
+
+Trimmed Packets................................ 0
+Trimmed Sent Packets........................... 0
+Trimmed Dropped Packets........................ 0
 
 Time Since Counters Last Cleared............... None
 """
@@ -510,12 +637,50 @@ class TestPortStat(object):
 
     def test_show_intf_counters_fec_histogram(self):
         runner = CliRunner()
-        result = runner.invoke(
-            show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"], ["Ethernet0"])
+        with mock.patch('show.interfaces.clicommon.run_command') as mock_run:
+            result = runner.invoke(
+                show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"], ["Ethernet0"])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == intf_fec_counters_fec_hist
+        assert mock_run.call_count == 1
+        invoked_cmd = mock_run.call_args[0][0]
+        assert invoked_cmd[:2] == ['portstat', '-fh']
+        assert '-i' in invoked_cmd
+        assert invoked_cmd[invoked_cmd.index('-i') + 1] == 'Ethernet0'
+        assert '--relative-timestamp' not in invoked_cmd
+
+    def test_show_intf_counters_fec_histogram_multi_asic_and_namespace(self):
+        runner = CliRunner()
+        with mock.patch('show.interfaces.clicommon.run_command') as mock_run, \
+                mock.patch('show.interfaces.multi_asic.is_multi_asic', return_value=True), \
+                mock.patch('utilities_common.multi_asic.multi_asic.is_multi_asic', return_value=True), \
+                mock.patch('utilities_common.multi_asic.multi_asic.get_namespace_list',
+                           return_value=['asic0', 'asic1']):
+            result = runner.invoke(
+                show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"],
+                ["Ethernet0", "-n", "asic0", "-d", "all"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert mock_run.call_count == 1
+        invoked_cmd = mock_run.call_args[0][0]
+        assert '-s' in invoked_cmd
+        assert invoked_cmd[invoked_cmd.index('-s') + 1] == 'all'
+        assert '-n' in invoked_cmd
+        assert invoked_cmd[invoked_cmd.index('-n') + 1] == 'asic0'
+
+    def test_show_intf_counters_fec_histogram_invalid_interface(self):
+        runner = CliRunner()
+        with mock.patch('show.interfaces.clicommon.run_command') as mock_run:
+            result = runner.invoke(
+                show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"],
+                ["Ethernet_Bogus"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
+        assert mock_run.call_count == 0
 
     def test_show_intf_fec_counters_period(self):
         runner = CliRunner()
@@ -563,6 +728,60 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_counters_detailed
+
+    def test_show_intf_counters_detailed_after_clear(self):
+        remove_tmp_cnstat_file()
+        runner = CliRunner()
+        try:
+            result = runner.invoke(clear.cli.commands["counters"], [])
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert result.output.rstrip() == clear_counter
+
+            # Other components read rx_ovrrun from the snapshot, so it must keep that key
+            cnstat_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
+            with open(cnstat_file) as f:
+                cnstat = json.load(f)
+            assert cnstat["Ethernet4"]["rx_ovrrun"] == "1234"
+
+            # Pretend 1,000 packets were dropped since the clear
+            cnstat["Ethernet4"]["rx_ovrrun"] = "234"
+            cnstat["time"] = "2026-01-01T00:00:00"
+            with open(cnstat_file, "w") as f:
+                json.dump(cnstat, f)
+
+            result = runner.invoke(
+                show.cli.commands["interfaces"].commands["counters"].commands["detailed"], ["Ethernet4"])
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert result.output == intf_counters_detailed_after_clear
+
+            return_code, result = get_result_and_return_code(['portstat', '-l', '-i', 'Ethernet4'])
+            print("return_code: {}".format(return_code))
+            print("result = {}".format(result))
+            assert return_code == 0
+            assert result == intf_counters_detailed_after_clear
+        finally:
+            remove_tmp_cnstat_file()
+
+    def test_show_intf_counters_detailed_overruns_na(self):
+        # Ethernet0 has no SAI_PORT_STAT_IN_DROPPED_PKTS, as on platforms that don't support it
+        remove_tmp_cnstat_file()
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["detailed"], ["Ethernet0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_counters_detailed_overruns_na
+
+        return_code, result = get_result_and_return_code(['portstat', '-l', '-i', 'Ethernet0'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_counters_detailed_overruns_na
 
     def test_show_intf_rates(self):
         return_code, result = get_result_and_return_code(['portstat', '-R'])
@@ -612,6 +831,233 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         verify_after_clear(result, intf_counter_after_clear)
+
+    @staticmethod
+    def _load_portstat_script():
+        # The portstat script is extensionless; load it directly via
+        # SourceFileLoader so its module-level symbols are reachable.
+        path = os.path.join(scripts_path, 'portstat')
+        loader = importlib.machinery.SourceFileLoader('portstat_script', path)
+        spec = importlib.util.spec_from_loader('portstat_script', loader)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        return module
+
+    def test_reset_fec_rate_fields(self):
+        # Verify _reset_fec_rate_fields issues an HDEL for every port OID
+        # in COUNTERS_PORT_NAME_MAP, targeting exactly the FEC running-max
+        # fields declared in scripts/portstat.
+        portstat_script = self._load_portstat_script()
+        expected_fields = portstat_script.FEC_RATE_RESET_FIELDS
+        assert expected_fields == ('FEC_PRE_BER_MAX',)
+
+        port_name_map = {
+            'Ethernet0': 'oid:0x1000000000001',
+            'Ethernet4': 'oid:0x1000000000002',
+            'Ethernet8': 'oid:0x1000000000003',
+        }
+
+        mock_db = mock.MagicMock()
+        mock_db.COUNTERS_DB = 'COUNTERS_DB'
+        mock_db.get_all.return_value = port_name_map
+        mock_redis = mock.MagicMock()
+        mock_db.get_redis_client.return_value = mock_redis
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['']
+        mock_portstat.get_db_client.return_value = mock_db
+
+        portstat_script._reset_fec_rate_fields(mock_portstat)
+
+        assert mock_redis.hdel.call_count == len(port_name_map)
+        called_keys = set()
+        for call in mock_redis.hdel.call_args_list:
+            key = call[0][0]
+            fields = call[0][1]
+            called_keys.add(key)
+            assert fields == expected_fields
+        assert called_keys == {'RATES:' + oid for oid in port_name_map.values()}
+
+    def test_reset_fec_rate_fields_ns_list_exception(self):
+        # If enumerating namespaces fails, the helper must warn and return
+        # rather than raising out of the clear path.
+        portstat_script = self._load_portstat_script()
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.side_effect = Exception("boom")
+
+        portstat_script._reset_fec_rate_fields(mock_portstat)
+
+        mock_portstat.get_db_client.assert_not_called()
+
+    def test_reset_fec_rate_fields_empty_port_map(self):
+        # A namespace with no COUNTERS_PORT_NAME_MAP entries must be skipped
+        # without issuing any HDEL.
+        portstat_script = self._load_portstat_script()
+
+        mock_db = mock.MagicMock()
+        mock_db.COUNTERS_DB = 'COUNTERS_DB'
+        mock_db.get_all.return_value = None
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['']
+        mock_portstat.get_db_client.return_value = mock_db
+
+        portstat_script._reset_fec_rate_fields(mock_portstat)
+
+        mock_db.get_redis_client.assert_not_called()
+
+    def test_reset_fec_rate_fields_redis_exception(self):
+        # A per-namespace redis failure must be warned about and must not
+        # prevent other namespaces from being processed.
+        portstat_script = self._load_portstat_script()
+
+        mock_db = mock.MagicMock()
+        mock_db.COUNTERS_DB = 'COUNTERS_DB'
+        mock_db.get_all.return_value = {'Ethernet0': 'oid:0x1000000000001'}
+        mock_db.get_redis_client.side_effect = Exception("redis down")
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['asic0']
+        mock_portstat.get_db_client.return_value = mock_db
+
+        # Should not raise despite the redis failure.
+        portstat_script._reset_fec_rate_fields(mock_portstat)
+
+    def _run_portstat_clear_main(self, argv):
+        # Run scripts/portstat main() in-process for a clear, with the DB
+        # access mocked, and report whether the FEC rate reset was invoked.
+        portstat_script = self._load_portstat_script()
+        mock_portstat = mock.MagicMock()
+        mock_portstat.get_cnstat_dict.return_value = ({'time': '2026-01-01T00:00:00'}, {})
+        with mock.patch.object(portstat_script, 'Portstat', return_value=mock_portstat), \
+                mock.patch.object(portstat_script, '_reset_fec_rate_fields') as mock_reset, \
+                mock.patch('sys.argv', argv):
+            with pytest.raises(SystemExit) as exc:
+                portstat_script.main()
+        assert exc.value.code == 0
+        return mock_reset
+
+    def test_clear_untagged_resets_fec_rate_fields(self):
+        remove_tmp_cnstat_file()
+        mock_reset = self._run_portstat_clear_main(['portstat', '-c'])
+        mock_reset.assert_called_once()
+        remove_tmp_cnstat_file()
+
+    def test_clear_tagged_does_not_reset_fec_rate_fields(self):
+        # A tagged snapshot belongs to a single consumer, so it must not
+        # reset the global FEC running-max fields.
+        remove_tmp_cnstat_file()
+        mock_reset = self._run_portstat_clear_main(['portstat', '-c', '-t', 'fec_test_tag'])
+        mock_reset.assert_not_called()
+        remove_tmp_cnstat_file()
+
+    def test_get_fec_max_t_since_snapshot(self):
+        from utilities_common.portstat import get_fec_max_t_since_snapshot
+
+        def bins(values):
+            return {'fec_bin{}'.format(i): v for i, v in enumerate(values)}
+
+        old = bins(['100'] * 16)
+        # No new codewords in any bin since the snapshot.
+        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old, '5') == -1.0
+        # Highest bin that moved wins, regardless of lower bins.
+        new = bins(['200', '150'] + ['100'] * 5 + ['101'] + ['100'] * 8)
+        assert get_fec_max_t_since_snapshot(new, old, '5') == 7.0
+        # Missing snapshot value for a bin counts as 0.
+        old_na = dict(old, fec_bin3='N/A')
+        assert get_fec_max_t_since_snapshot(bins(['100'] * 16), old_na, '5') == 3.0
+        # Histogram not supported: fall back to the RATES value.
+        assert get_fec_max_t_since_snapshot(bins(['N/A'] * 16), old, '5') == '5'
+        assert get_fec_max_t_since_snapshot({}, {}, 'N/A') == 'N/A'
+
+    def test_show_intf_fec_counters_max_t_after_clear(self):
+        # After a clear, FEC_MAX_T is derived from histogram bins that moved
+        # since the snapshot; ports without histogram bins keep the RATES
+        # value.
+        remove_tmp_cnstat_file()
+        return_code, _ = get_result_and_return_code(['portstat', '-c'])
+        assert return_code == 0
+
+        # Simulate 10 codewords with 7 symbol errors arriving after the clear.
+        cache_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
+        with open(cache_file, 'r') as f:
+            cnstat_cached = json.load(f)
+        cnstat_cached['Ethernet0']['fec_bin7'] = str(int(cnstat_cached['Ethernet0']['fec_bin7']) - 10)
+        with open(cache_file, 'w') as f:
+            json.dump(cnstat_cached, f)
+
+        return_code, result = get_result_and_return_code(['portstat', '-f'])
+        assert return_code == 0
+        max_t = {line.split()[0]: line.split()[-1] for line in result.splitlines()
+                 if line.startswith('Ethernet')}
+        assert float(max_t['Ethernet0']) == 7
+        assert float(max_t['Ethernet4']) == 0
+        assert float(max_t['Ethernet8']) == 3
+        remove_tmp_cnstat_file()
+
+    def test_clear_counters_cache_contains_fec_bins(self):
+        # After portstat -c, the per-user snapshot cache must contain all 16
+        # fec_binN fields for every port so that subsequent diffs in
+        # portstat -fh return zero.
+        remove_tmp_cnstat_file()
+        return_code, _ = get_result_and_return_code(['portstat', '-c'])
+        assert return_code == 0
+
+        cache_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
+        assert os.path.isfile(cache_file)
+        with open(cache_file, 'r') as f:
+            cnstat_cached = json.load(f)
+
+        port_entries = [v for k, v in cnstat_cached.items() if k != 'time']
+        assert port_entries, "cache contains no port entries"
+        for entry in port_entries:
+            for i in range(16):
+                assert 'fec_bin{}'.format(i) in entry
+
+    def test_show_intf_counters_fec_histogram_no_cache(self):
+        # With no prior clear (no snapshot cache), portstat -fh must render
+        # the lifetime BIN values in the same format as before.
+        remove_tmp_cnstat_file()
+        return_code, result = get_result_and_return_code(
+            ['portstat', '-fh', '-i', 'Ethernet0'])
+        assert return_code == 0
+        assert result == intf_fec_counters_fec_hist
+
+    def test_show_intf_counters_fec_histogram_after_clear(self):
+        # After portstat -c, portstat -fh must show the histogram relative to
+        # the cached snapshot, i.e. all bins reset to 0.
+        remove_tmp_cnstat_file()
+        return_code, _ = get_result_and_return_code(['portstat', '-c'])
+        assert return_code == 0
+
+        return_code, result = get_result_and_return_code(
+            ['portstat', '-fh', '-i', 'Ethernet0'])
+        assert return_code == 0
+        verify_after_clear(result, intf_fec_counters_fec_hist_after_clear)
+        remove_tmp_cnstat_file()
+
+    def test_print_fec_hist_vertical_counters_not_available(self, capsys):
+        # COUNTERS_PORT_NAME_MAP not populated yet (e.g. early boot or port
+        # counters disabled): only the 'time' key is present.
+        from utilities_common.portstat import Portstat
+        portstat = Portstat.__new__(Portstat)
+        with pytest.raises(SystemExit) as exc:
+            portstat.print_fec_hist_vertical({'time': None}, {}, 'Ethernet0')
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert captured.out == ''
+        assert "FEC histogram counters are not available" in captured.err
+
+    def test_print_fec_hist_vertical_interface_not_found(self, capsys):
+        from utilities_common.portstat import Portstat
+        portstat = Portstat.__new__(Portstat)
+        with pytest.raises(SystemExit) as exc:
+            portstat.print_fec_hist_vertical({'time': None, 'Ethernet4': {}}, {}, 'Ethernet0')
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert captured.out == ''
+        assert "Port Ethernet0 not found in COUNTERS_PORT_NAME_MAP" in captured.err
 
     def test_show_intf_counters_on_sup(self):
         remove_tmp_cnstat_file()

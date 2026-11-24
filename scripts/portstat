@@ -44,7 +44,36 @@ from utilities_common import constants
 from utilities_common.intf_filter import parse_interface_in_filter
 
 from utilities_common.cli import json_serial, UserCache
-from utilities_common.portstat import Portstat
+from utilities_common.portstat import Portstat, COUNTERS_PORT_NAME_MAP, RATES_TABLE_PREFIX
+
+# FEC_PRE_BER_MAX is a running maximum kept by port_rates.lua, so the
+# saved counter snapshot can't reset it. Delete it on clear instead.
+FEC_RATE_RESET_FIELDS = (
+    'FEC_PRE_BER_MAX',
+)
+
+
+def _reset_fec_rate_fields(portstat):
+    """Delete FEC_RATE_RESET_FIELDS from RATES for all ports (affects all users)."""
+    try:
+        ns_list = portstat.multi_asic.get_ns_list_based_on_options()
+    except Exception as e:
+        print("Warning: failed to reset FEC rate fields: {}".format(e), file=sys.stderr)
+        return
+    for ns in ns_list:
+        try:
+            db = portstat.get_db_client(ns)
+            counter_port_name_map = db.get_all(db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
+            if not counter_port_name_map:
+                continue
+            redis_client = db.get_redis_client(db.COUNTERS_DB)
+            for oid in counter_port_name_map.values():
+                redis_client.hdel(RATES_TABLE_PREFIX + oid, FEC_RATE_RESET_FIELDS)
+        except Exception as e:
+            print("Warning: failed to reset FEC rate fields for namespace '{}': {}".format(ns, e),
+                  file=sys.stderr)
+            continue
+
 
 def main():
     parser  = argparse.ArgumentParser(description='Display the ports state and counters',
@@ -145,6 +174,10 @@ Examples:
         except IOError as e:
             sys.exit(e.errno)
         else:
+            # A tagged snapshot belongs to one consumer; don't reset global
+            # state on its behalf.
+            if not tag_name:
+                _reset_fec_rate_fields(portstat)
             print("Cleared counters")
             sys.exit(0)
 

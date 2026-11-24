@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import copy
 import io
 import jsonpatch
 import sys
@@ -2521,10 +2522,101 @@ class TestBulkLeafListMoveGenerator(unittest.TestCase):
         self.assertCountEqual(ex_ops, moves_ops)
 
 
+class TestBulkLowLevelMoveGeneratorRegression(unittest.TestCase):
+    def test_interleaved_generators_keep_original_diff(self):
+        from unittest.mock import patch
+
+        class FakePathAddressing:
+            def create_path(self, tokens):
+                return "/" + "/".join(tokens)
+
+            def configdb_sorted_keys_by_backlinks(self, path, config, **kwargs):
+                return list(config.keys())
+
+        class FakeMove:
+            def __init__(self, diff, *args, **kwargs):
+                self.diff = diff
+
+        generator = ps.BulkLowLevelMoveGenerator(FakePathAddressing())
+
+        diff_a = ps.Diff(
+            {"A": {"x": "old", "y": "old"},
+             "B": {"x": "old", "y": "old"}},
+            {"A": {"x": "new", "y": "new"},
+             "B": {"x": "new", "y": "new"}},
+        )
+
+        diff_b = ps.Diff(
+            {"C": {"x": "old", "y": "old"}},
+            {"C": {"x": "new", "y": "new"}},
+        )
+
+        with patch.object(ps, "JsonMove", FakeMove):
+            first_run = generator.generate_replace(diff_a)
+            first_group = next(first_run)
+            self.assertIs(first_group.patches[0].diff, diff_a)
+
+            list(generator.generate_replace(diff_b))
+
+            second_group = next(first_run)
+            self.assertIs(second_group.patches[0].diff, diff_a)
+
+
 class TestLowLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
         path_addressing = PathAddressing()
         self.generator = ps.LowLevelMoveGenerator(path_addressing)
+
+    def test_generate_interleaved_calls_keep_original_diff(self):
+        from unittest.mock import patch
+
+        diff_a = ps.Diff({}, {"A": {"first": "one", "second": "two"}})
+        diff_b = ps.Diff({}, {"B": {"other": "three"}})
+
+        class FakeMove:
+            def __init__(self, diff, *args, **kwargs):
+                self.diff = diff
+
+        with patch.object(ps, "JsonMove", FakeMove):
+            first_run = self.generator.generate(diff_a)
+            first_move = next(first_run)
+
+            self.assertIs(first_move.patches[0].diff, diff_a)
+
+            list(self.generator.generate(diff_b))
+
+            second_move = next(first_run)
+            self.assertIs(second_move.patches[0].diff, diff_a)
+
+    def test_interleaved_real_add_keeps_original_diff(self):
+        diff_a = ps.Diff(
+            {},
+            {
+                "A": {"first": "one"},
+                "B": {"second": "two"},
+            },
+        )
+        diff_b = ps.Diff(
+            {"B": {"existing": "old"}},
+            {"B": {"existing": "old", "other": "new"}},
+        )
+
+        first_run = self.generator.generate(diff_a)
+        first_move = next(first_run)
+        self.assertEqual(first_move.patches[0].path, "/A")
+
+        # Simulate a recursive DFS call using the same generator.
+        list(self.generator.generate(diff_b))
+
+        second_move = next(first_run)
+        second_patch = second_move.patches[0]
+
+        self.assertEqual(second_patch.path, "/B")
+        self.assertEqual(second_patch.value, {"second": "two"})
+        self.assertEqual(
+            second_patch.patch.apply({}),
+            {"B": {"second": "two"}},
+        )
 
     def test_generate__no_diff__no_moves(self):
         self.verify()
@@ -2873,6 +2965,62 @@ class RemoveCreateOnlyDependencyMoveGenerator(unittest.TestCase):
                            {'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports'},
                            {'op': 'remove', 'path': '/VLAN_MEMBER'}],
                           moves)
+
+    def test_generate__create_only_field_added__removes_dependents_and_parent(self):
+        current_config = self.__mirror_config()
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'add', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL/gre_type', 'value': '0x8949'}
+        ]).apply(current_config)
+
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+
+        # Same teardown a value change of an existing field gets. The last move is the fallback
+        # that removes the parent of the dependent, the DFS only reaches it when the others fail.
+        self.verify_moves([{'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1/MIRROR_INGRESS_ACTION'},
+                           {'op': 'remove', 'path': '/MIRROR_SESSION'},
+                           {'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1'}],
+                          moves)
+
+    def test_generate__create_only_field_added__only_changed_object_is_removed(self):
+        current_config = self.__mirror_config()
+        current_config['MIRROR_SESSION']['OTHER'] = dict(current_config['MIRROR_SESSION']['EVERFLOW_TUNNEL'])
+        current_config['ACL_RULE']['EVERFLOW|RULE_2'] = {'PRIORITY': '999', 'IP_TYPE': 'IP',
+                                                         'MIRROR_INGRESS_ACTION': 'OTHER'}
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'add', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL/gre_type', 'value': '0x8949'}
+        ]).apply(current_config)
+
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+
+        self.verify_moves([{'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1/MIRROR_INGRESS_ACTION'},
+                           {'op': 'remove', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL'},
+                           {'op': 'remove', 'path': '/ACL_RULE/EVERFLOW|RULE_1'}],
+                          moves)
+
+    def test_generate__create_only_field_added_with_its_parent__no_moves(self):
+        current_config = self.__mirror_config()
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'add', 'path': '/MIRROR_SESSION/NEW_SESSION',
+             'value': {'dscp': '8', 'dst_ip': '200.1.1.201', 'src_ip': '100.1.1.1', 'ttl': '255', 'type': 'ERSPAN'}}
+        ]).apply(current_config)
+
+        # The new session is created along with its fields, nothing has to be torn down
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+        self.verify_moves([], moves)
+
+    def test_generate__create_only_field_deleted__no_moves(self):
+        current_config = self.__mirror_config()
+        target_config = jsonpatch.JsonPatch([
+            {'op': 'remove', 'path': '/MIRROR_SESSION/EVERFLOW_TUNNEL/dscp'}
+        ]).apply(current_config)
+
+        # Deleting a create-only field is left to the rest of the sorter
+        moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+        self.verify_moves([], moves)
+
+    def __mirror_config(self):
+        test_case = Files.PATCH_SORTER_TEST_SUCCESS['CREATE_ONLY_PATH_TEST_MIRROR_SESSION__SUCCESS']
+        return copy.deepcopy(test_case['current_config'])
 
     def verify_moves(self, ops, moves):
         moves_ops = []

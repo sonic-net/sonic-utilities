@@ -16,8 +16,10 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
 from utilities_common import hft as hft_common
+from utilities_common import port_mirror
 from utilities_common.db import Db
 from datetime import datetime
+import utilities_common.bgp_util as bgp_util
 import utilities_common.constants as constants
 from utilities_common.general import load_db_config
 from json.decoder import JSONDecodeError
@@ -89,25 +91,6 @@ VLAN_SUB_INTERFACE_SEPARATOR = '.'
 GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 
 COMMAND_TIMEOUT = 300
-
-# To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continuous execution of this
-# bash oneliner. To be revisited once routing-stack info is tracked somewhere.
-def get_routing_stack():
-    result = 'frr'
-    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
-
-    try:
-        stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
-        result = stdout.rstrip('\n')
-    except Exception as err:
-        click.echo('Failed to get routing stack: {}'.format(err), err=True)
-
-    return result
-
-
-# Global Routing-Stack variable
-routing_stack = get_routing_stack()
 
 # Read given JSON file
 def readJsonFile(fileName):
@@ -747,27 +730,45 @@ def pfcwd():
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def config(namespace, display, verbose):
+def config(namespace, display, json_output, verbose):
     """Show pfc watchdog config"""
 
     cmd = ['pfcwd', 'show', 'config', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if json_output:
+        cmd += ['--json']
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--history', is_flag=True,
+              help='Show recent PFC storms, newest first: the 5 most recent on the switch, '
+                   'or every stored storm of the given queues or ports')
+@click.option('--count', type=click.IntRange(min=1), default=None, help='Number of storms to show (with --history)')
+@click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def stats(namespace, display, verbose):
+@click.argument('queues', nargs=-1)
+def stats(namespace, display, history, count, json_output, verbose, queues):
     """Show pfc watchdog stats"""
 
     cmd = ['pfcwd', 'show', 'stats', '-d', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if history:
+        cmd += ['--history']
+    if count is not None:
+        cmd += ['--count', str(count)]
+    if json_output:
+        cmd += ['--json']
+    cmd += list(queues)
 
-    run_command(cmd, display_cmd=verbose)
+    # echoing the command would corrupt the JSON
+    run_command(cmd, display_cmd=verbose and not json_output)
 
 #
 # 'watermark' group ("show watermark telemetry interval")
@@ -1283,6 +1284,50 @@ def aging_time(ctx):
             click.echo("Aging time for {} is {} seconds".format(key.split(':')[-1], fdb_aging_time))
         else:
             click.echo("Aging time not configured for the {}".format(key.split(':')[-1]))
+
+
+def get_mac_sync_mode(config_db):
+    # An L3EvpnMH device always synchronizes MACs over FPM, whatever FDB_SYNC says.
+    metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
+    if metadata.get('subtype') == 'L3EvpnMH':
+        return 'fpm'
+    # Table name matches CFG_FDB_SYNC_TABLE_NAME in sonic-swss (fpmsyncd/macsync.h).
+    fdb_sync = config_db.get_entry('FDB_SYNC', 'global')
+    return fdb_sync.get('mac_sync_mode', 'kernel')
+
+
+def get_running_mac_sync_mode(state_db):
+    # fpmsyncd publishes the mode it started with, so it lags a config change until the bgp container restarts.
+    # Table name matches STATE_FDB_SYNC_TABLE_NAME in sonic-swss (fpmsyncd/macsync.h).
+    return state_db.get('STATE_DB', 'FDB_SYNC|global', 'mac_sync_mode') or 'unknown'
+
+
+@mac.command('sync-mode')
+@clicommon.pass_db
+@click.pass_context
+def mac_sync_mode(ctx, db):
+    """Show how MAC (FDB) state is synchronized with FRR"""
+    # Each ASIC has its own mode, in the CONFIG_DB of its namespace: the one selected, or all of them.
+    try:
+        ns_list = multi_asic_util.multi_asic_get_ns_list(multi_asic_util.get_namespace_from_ctx())
+    except ValueError as e:
+        ctx.fail(str(e))
+
+    for ns in ns_list:
+        configured = get_mac_sync_mode(db.cfgdb_clients[ns])
+        running = get_running_mac_sync_mode(db.db_clients[ns])
+        indent = ""
+        if len(ns_list) > 1:
+            click.echo("{}:".format(ns))
+            indent = "  "
+        click.echo("{}Configured: {}".format(indent, configured))
+        click.echo("{}Running: {}".format(indent, running))
+        # fpmsyncd runs in fpm mode only for an exact 'fpm' and in kernel mode for anything else.
+        effective = 'fpm' if configured == 'fpm' else 'kernel'
+        if running != 'unknown' and running != effective:
+            click.echo("{}The configured mode takes effect when the bgp container restarts.".format(indent))
+
+
 #
 # 'show route-map' command ("show route-map")
 #
@@ -1292,7 +1337,7 @@ def aging_time(ctx):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def route_map(route_map_name, verbose):
     """show route-map"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show route-map']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show route-map']
     if route_map_name is not None:
         cmd[-1] += ' {}'.format(route_map_name)
     run_command(cmd, display_cmd=verbose)
@@ -1309,7 +1354,7 @@ def vrrp(ctx, verbose):
     if ctx.invoked_subcommand is not None:
         return
 
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1321,7 +1366,7 @@ def vrrp(ctx, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_interface(ctx, interface_name, vrid, verbose):
     """show vrrp interface <interface_name> <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp']
     if vrid is not None:
         cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
     else:
@@ -1336,7 +1381,7 @@ def vrrp_interface(ctx, interface_name, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_vrid(ctx, vrid, verbose):
     """show vrrp vrid <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp {}'.format(vrid)]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp {}'.format(vrid)]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1346,7 +1391,7 @@ def vrrp_vrid(ctx, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp_summary(ctx, verbose):
     """show vrrp summary"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp summary']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp summary']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1361,7 +1406,7 @@ def vrrp6(ctx, verbose):
     if ctx.invoked_subcommand is not None:
         return
 
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1373,7 +1418,7 @@ def vrrp6(ctx, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_interface(ctx, interface_name, vrid, verbose):
     """show vrrp6 interface <interface_name> <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6']
     if vrid is not None:
         cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
     else:
@@ -1388,7 +1433,7 @@ def vrrp6_interface(ctx, interface_name, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_vrid(ctx, vrid, verbose):
     """show vrrp6 vrid <vrid>"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 {}'.format(vrid)]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6 {}'.format(vrid)]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1398,7 +1443,7 @@ def vrrp6_vrid(ctx, vrid, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def vrrp6_summary(ctx, verbose):
     """show vrrp6 summary"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 summary']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show vrrp6 summary']
     run_command(cmd, display_cmd=verbose)
 
 
@@ -1488,7 +1533,7 @@ def route(args, namespace, display, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def prefix_list(prefix_list_name, verbose):
     """show ip prefix-list"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show ip prefix-list']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show ip prefix-list']
     if prefix_list_name is not None:
         cmd[-1] += ' {}'.format(prefix_list_name)
     run_command(cmd, display_cmd=verbose)
@@ -1499,7 +1544,7 @@ def prefix_list(prefix_list_name, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def protocol(verbose):
     """Show IPv4 protocol information"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', "show ip protocol"]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', "show ip protocol"]
     run_command(cmd, display_cmd=verbose)
 
 #
@@ -1535,7 +1580,7 @@ def ipv6():
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def prefix_list(prefix_list_name, verbose):
     """show ip prefix-list"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show ipv6 prefix-list']
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', 'show ipv6 prefix-list']
     if prefix_list_name is not None:
         cmd[-1] += ' {}'.format(prefix_list_name)
     run_command(cmd, display_cmd=verbose)
@@ -1581,28 +1626,16 @@ def route(args, namespace, display, verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def protocol(verbose):
     """Show IPv6 protocol information"""
-    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 protocol"]
+    cmd = ['sudo', bgp_util.get_vtysh_shell_cmd(), '-c', "show ipv6 protocol"]
     run_command(cmd, display_cmd=verbose)
 
 #
 # Inserting BGP functionality into cli's show parse-chain.
-# BGP commands are determined by the routing-stack being elected.
 #
-if routing_stack == "quagga":
-    from .bgp_quagga_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_quagga_v6 import bgp
-    ipv6.add_command(bgp)
-elif routing_stack == "frr":
-    from .bgp_frr_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_frr_v6 import bgp
-    ipv6.add_command(bgp)
-elif device_info.is_supervisor():
-    from .bgp_frr_v4 import bgp
-    ip.add_command(bgp)
-    from .bgp_frr_v6 import bgp
-    ipv6.add_command(bgp)
+from .bgp_frr_v4 import bgp as bgp_v4  # noqa: E305,E402
+ip.add_command(bgp_v4)
+from .bgp_frr_v6 import bgp as bgp_v6  # noqa: E402
+ipv6.add_command(bgp_v6)
 #
 # 'link-local-mode' subcommand ("show ipv6 link-local-mode")
 #
@@ -2227,22 +2260,8 @@ def startupconfiguration():
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def bgp(verbose):
     """Show BGP startup configuration"""
-    cmd0 = ['sudo', 'docker', 'ps']
-    cmd1 = ['grep', 'bgp']
-    cmd2 = ['awk', '{print$2}']
-    cmd3 = ['cut', '-d-', '-f3']
-    cmd4 = ['cut', '-d:', "-f1"]
-    _, stdout = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-    result = stdout.rstrip()
-    click.echo("Routing-Stack is: {}".format(result))
-    if result == "quagga":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/quagga/bgpd.conf'], display_cmd=verbose)
-    elif result == "frr":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=verbose)
-    elif result == "gobgp":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/gpbgp/bgpd.conf'], display_cmd=verbose)
-    else:
-        click.echo("Unidentified routing-stack")
+    click.echo("Routing-Stack is: frr")
+    run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=verbose)
 
 #
 # 'ntp' command ("show ntp")
@@ -2359,10 +2378,10 @@ def aaa(db):
 
 
 @cli.command()
-def tacacs():
+@clicommon.pass_db
+def tacacs(db):
     """Show TACACS+ configuration"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = db.cfgdb
     output = ''
     data = config_db.get_table('TACPLUS')
 
@@ -2370,7 +2389,8 @@ def tacacs():
         'global': {
             'auth_type': 'pap (default)',
             'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'passkey': '<EMPTY_STRING> (default)',
+            'traceid_authorization': 'False (default)'
         }
     }
     if 'global' in data:
@@ -2444,9 +2464,34 @@ def radius(db):
 #
 @cli.command('mirror_session')
 @click.argument('session_name', required=False)
+@click.option('--session-name', 'explicit_session_name', help='Show an export session, including one named sample.')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def mirror_session(session_name, verbose):
-    """Show existing everflow sessions"""
+def mirror_session(session_name, verbose, explicit_session_name):
+    """Show mirror sessions, or use sample to show sampled source bindings."""
+    if explicit_session_name is not None:
+        if session_name is not None:
+            raise click.UsageError('Specify a positional session name or --session-name, not both.')
+        run_command(['acl-loader', 'show', 'session', explicit_session_name], display_cmd=verbose)
+        return
+    if session_name == 'sample':
+        rows = []
+        databases = port_mirror.config_databases()
+        for namespace, database in databases.items():
+            for key, value in database.get_table(port_mirror.SAMPLE_TABLE).items():
+                source, direction = port_mirror.binding_key(key)
+                row = [source, direction, value.get('mirror_session', ''),
+                       value.get('admin_state', 'down'), value.get('sample_rate', ''),
+                       value.get('truncate_size', 'Disabled')]
+                if len(databases) > 1:
+                    row.insert(0, namespace or 'host')
+                rows.append(row)
+        headers = ['Source Port', 'Direction', 'Mirror Session', 'Admin State',
+                   'Sample Rate', 'Truncate Size']
+        if len(databases) > 1:
+            headers.insert(0, 'Namespace')
+        click.echo('Sampled ERSPAN Bindings')
+        click.echo(tabulate(natsorted(rows), headers=headers))
+        return
     cmd = ['acl-loader', 'show', 'session']
 
     if session_name is not None:

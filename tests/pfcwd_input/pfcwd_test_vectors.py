@@ -11,7 +11,7 @@ pfcwd_show_start_config_output_pass = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0   forward               102                 101    disable
+Ethernet0   forward               702                 701    disable
 Ethernet4      drop               600                 600    disable
 Ethernet8      drop               600                 600    disable
 """
@@ -29,8 +29,8 @@ pfcwd_show_start_action_forward_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0   forward               302                 301    disable
-Ethernet4   forward               302                 301    disable
+Ethernet0   forward               702                 701    disable
+Ethernet4   forward               702                 701    disable
 Ethernet8      drop               600                 600    disable
 """
 
@@ -38,8 +38,8 @@ pfcwd_show_start_action_alert_output = """\
 Changed polling interval to 600ms
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
-Ethernet0     alert               502                 501    disable
-Ethernet4     alert               502                 501    disable
+Ethernet0     alert               802                 801    disable
+Ethernet4     alert               802                 801    disable
 Ethernet8      drop               600                 600    disable
 """
 
@@ -54,6 +54,16 @@ Ethernet8      drop               600                 600    disable
 
 pfcwd_show_start_default = """\
 Changed polling interval to 200ms
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               200                 200    disable
+Ethernet4      drop               200                 200    disable
+Ethernet8      drop               600                 600    disable
+"""
+
+# HW mode: unscaled 200 ms on every port; PFC_WD|GLOBAL is not written or shown
+pfcwd_show_start_default_hw_mode = """\
+Recovery mode: hardware
      PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 ---------  --------  ----------------  ------------------  ---------
 Ethernet0      drop               200                 200    disable
@@ -103,6 +113,21 @@ Ethernet4:3  operational                        2/2       100/100       100/100 
 Ethernet8:4      stormed                        3/2       100/300       100/300              0/200              0/200
 """
 
+pfcwd_show_stats_hw_mode_output = """\
+      QUEUE       STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
+-----------  -----------  -------------------------  ------------  ------------  -----------------  -----------------
+Ethernet0:3      stormed                        1/0       100/300           N/A              0/200                N/A
+Ethernet4:3  operational                        2/2       100/100           N/A                0/0                N/A
+Ethernet8:4      stormed                        3/2       100/300           N/A              0/200                N/A
+"""
+
+pfcwd_show_stats_hw_mode_rx_only_output = """\
+      QUEUE    STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
+-----------  --------  -------------------------  ------------  ------------  -----------------  -----------------
+Ethernet0:3   stormed                        1/0       100/300           N/A              0/200                N/A
+Ethernet8:4   stormed                        3/2       100/300           N/A              0/200                N/A
+"""
+
 pfcwd_show_stats_single_queue_output="""\
       QUEUE    STATUS    STORM DETECTED/RESTORED    TX OK/DROP    RX OK/DROP    TX LAST OK/DROP    RX LAST OK/DROP
 -----------  --------  -------------------------  ------------  ------------  -----------------  -----------------
@@ -121,10 +146,40 @@ pfcwd_show_stats_invalid_queue_output="""\
 -------  --------  -------------------------  ------------  ------------  -----------------  -----------------
 """
 
+show_pfcwd_history_masic_all = (
+    "         QUEUE    #                     DETECTED                   "
+    "  RESTORED    DURATION(ms)    TX/TX-DROP    RX/RX-DROP\n"
+    "--------------  ---  ---------------------------"
+    "  ---------------------------  --------------  ------------  ------------\n"
+    "Ethernet-BP0:3    1  2025-10-20T22:41:40.000000Z"
+    "  2025-10-20T22:41:40.100000Z             100          10/5         20/15\n"
+    "   Ethernet0:3    1  2025-10-20T22:40:00.000000Z"
+    "  2025-10-20T22:40:00.500000Z             500      1000/900       800/700\n"
+)
+
 pfc_is_not_enabled = "SKIPPED: PFC is not enabled on port: Ethernet8\n"
 pfc_is_not_enabled_masic = "SKIPPED: PFC is not enabled on port: Ethernet-BP260\n"
 
+# "show stats --history": 5 most recent of the 7 valid storms in the mock STATE_DB,
+# newest first. Ethernet0:3 #1 is open, Ethernet4:3 #2 has no duration/packet fields,
+# Ethernet8:4 #1/#2 fall below the cap; junk fields and keys are skipped.
+pfcwd_show_history_output = """\
+      QUEUE    #                     DETECTED                     RESTORED    DURATION(ms)    TX/TX-DROP    RX/RX-DROP
+-----------  ---  ---------------------------  ---------------------------  --------------  ------------  ------------
+Ethernet0:3    1  2025-10-21T03:33:49.123456Z                            -               -           -/-           -/-
+Ethernet4:3    2  2025-10-21T02:26:40.000000Z  2025-10-21T02:26:40.100000Z               -           -/-           -/-
+Ethernet8:4    4  2025-10-21T02:00:00.000000Z  2025-10-21T02:00:00.120000Z             120         80/80         40/40
+Ethernet8:4    3  2025-10-21T01:43:20.000000Z  2025-10-21T01:43:20.150000Z             150       100/100         50/50
+Ethernet4:3    1  2025-10-21T01:26:40.000000Z  2025-10-21T01:26:40.475000Z             475     1200/1200       980/980
+"""
+
 testData = {
+             'pfcwd_show_history': [
+                 {'cmd': ['show', 'stats'],
+                  'args': ['--history'],
+                  'rc': 0,
+                  'rc_output': pfcwd_show_history_output}
+             ],
              'pfcwd_show_config' :  [ {'cmd' : ['show', 'config'],
                                        'args': [],
                                        'rc': 0,
@@ -300,10 +355,10 @@ Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
           PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
 --------------  --------  ----------------  ------------------  ---------
-     Ethernet0   forward               102                 101    disable
+     Ethernet0   forward               202                 201    disable
      Ethernet4      drop               200                 200    disable
   Ethernet-BP0      drop               200                 200    disable
-  Ethernet-BP4   forward               102                 101    disable
+  Ethernet-BP4   forward               202                 201    disable
 Ethernet-BP256      drop               200                 200    disable
 Ethernet-BP260      drop               200                 200    disable
 """
@@ -407,4 +462,23 @@ BIG_RED_SWITCH status is enable on asic1
      Ethernet0      drop               200                 200    disable
   Ethernet-BP0      drop               200                 200    disable
 Ethernet-BP256      drop               200                 200    disable
+"""
+
+# Test vectors for show pfcwd config in hardware recovery mode
+pfcwd_show_config_hw_mode = """\
+Recovery mode: hardware
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               200                 200    disable
+     Ethernet4      drop               200                 200    disable
+  Ethernet-BP0      drop               200                 200    disable
+  Ethernet-BP4      drop               200                 200    disable
+Ethernet-BP256      drop               200                 200    disable
+Ethernet-BP260      drop               200                 200    disable
+"""
+
+show_pfcwd_history_masic = """\
+      QUEUE    #                     DETECTED                     RESTORED    DURATION(ms)    TX/TX-DROP    RX/RX-DROP
+-----------  ---  ---------------------------  ---------------------------  --------------  ------------  ------------
+Ethernet0:3    1  2025-10-20T22:40:00.000000Z  2025-10-20T22:40:00.500000Z             500      1000/900       800/700
 """
