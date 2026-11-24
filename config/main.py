@@ -1,7 +1,7 @@
 #!/usr/sbin/env python
 
 import click
-from contextlib import contextmanager, ExitStack
+from contextlib import contextmanager
 import datetime
 import ipaddress
 import json
@@ -18,16 +18,16 @@ import itertools
 import copy
 import tempfile
 import sonic_yang
-from functools import wraps
 
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
 from generic_config_updater.gu_common import HOST_NAMESPACE
 from generic_config_updater.main import (
     apply_patch_from_file as _gcu_apply_patch_from_file
 )
+from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
 from portconfig import get_child_ports
 from socket import AF_INET, AF_INET6
@@ -44,16 +44,10 @@ from utilities_common import bgp_util
 import utilities_common.cli as clicommon
 from utilities_common.helper import get_port_pbh_binding, get_port_acl_binding, update_config
 from utilities_common.general import load_db_config, load_module_from_source
-from utilities_common.json_utils import load_json_with_duplicate_check
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
 from utilities_common import hft as hft_common
-from utilities_common.generation_transaction import (
-    GenerationCleanupError,
-    GenerationRecoveryError,
-    GenerationTransaction,
-)
 from utilities_common.mirror import connect_mirror_session_state_db, is_mirror_session_label_capable
 
 from .utils import log
@@ -85,53 +79,6 @@ from . import stp
 from . import evpn_mh
 from . import llr
 
-
-def _import_config_encoder():
-    import config_encoder
-    return config_encoder
-
-
-def _import_device_desc():
-    import device_desc
-    return device_desc
-
-
-def _load_config_engine_module(module_name, importer):
-    try:
-        return importer()
-    except ImportError:
-        import pkgutil
-
-        # Discoverability distinguishes an absent module from its own import failures.
-        try:
-            module_exists = pkgutil.find_loader(module_name) is not None
-        except ImportError:
-            module_exists = True
-
-        if not module_exists:
-            return None
-        raise
-
-
-_config_encoder = _load_config_engine_module("config_encoder", _import_config_encoder)
-_device_desc = _load_config_engine_module("device_desc", _import_device_desc)
-_legacy_minigraph = None
-
-if _config_encoder is None or _device_desc is None:
-    # Keep mixed-version images usable until sonic-config-engine is upgraded.
-    import minigraph
-    _legacy_minigraph = minigraph
-
-if _config_encoder is None:
-    minigraph_encoder = _legacy_minigraph.minigraph_encoder
-else:
-    minigraph_encoder = _config_encoder.minigraph_encoder
-
-if _device_desc is None:
-    parse_device_desc_xml = _legacy_minigraph.parse_device_desc_xml
-else:
-    parse_device_desc_xml = _device_desc.parse_device_desc_xml
-
 # mock masic APIs for unit test
 try:
     if os.environ["UTILITIES_UNIT_TESTING"] == "1" or os.environ["UTILITIES_UNIT_TESTING"] == "2":
@@ -147,24 +94,6 @@ except KeyError:
     pass
 
 
-class GoldenNativeCommittedCleanupError(click.ClickException):
-    exit_code = 3
-
-
-def _translate_golden_native_cleanup_error(function):
-    @wraps(function)
-    def wrapper(*args, **kwargs):
-        try:
-            return function(*args, **kwargs)
-        except GenerationCleanupError as error:
-            raise GoldenNativeCommittedCleanupError(
-                "Golden-native configuration committed successfully, but "
-                "transaction-evidence cleanup failed: {}".format(error)
-            ) from error
-
-    return wrapper
-
-
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 
 SONIC_GENERATED_SERVICE_PATH = '/etc/sonic/generated_services.conf'
@@ -176,33 +105,12 @@ DEFAULT_CONFIG_YANG_FILE = '/etc/sonic/config_yang.json'
 NAMESPACE_PREFIX = 'asic'
 INTF_KEY = "interfaces"
 DEFAULT_GOLDEN_CONFIG_DB_FILE = '/etc/sonic/golden_config_db.json'
-SONIC_DEVICE_PATH = '/usr/share/sonic/device'
-CHASSIS_DB_CONFIG_FILE = '/etc/sonic/chassisdb.conf'
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 
 DEFAULT_NAMESPACE = ''
 DB_MIGRATION_SOURCE_AUTO = 'auto'
 DB_MIGRATION_SOURCE_GOLDEN = 'golden'
-GoldenNativeSupport = namedtuple(
-    'GoldenNativeSupport',
-    [
-        'profile',
-        'platform',
-        'hwsku',
-        'hostname',
-        'mac',
-        'trusted_device_type',
-        'num_asics',
-        'namespaces',
-        'switch_type',
-        'is_supervisor',
-        'is_chassis',
-        'is_dpu',
-        'is_smartswitch',
-        'has_chassis_scope'
-    ]
-)
 CFG_LOOPBACK_PREFIX = "Loopback"
 CFG_LOOPBACK_PREFIX_LEN = len(CFG_LOOPBACK_PREFIX)
 CFG_LOOPBACK_NAME_TOTAL_LEN_MAX = 11
@@ -1875,54 +1783,6 @@ def multiasic_save_to_singlefile(db, filename):
         os.fsync(file.fileno())
 
 
-def _validate_multiasic_scope_configs(config, namespaces=None):
-    if not isinstance(config, dict):
-        raise ValueError("top-level value must be a JSON object")
-
-    namespaces = list(
-        multi_asic.get_namespace_list() if namespaces is None else namespaces
-    )
-    expected_namespaces = [
-        "asic{}".format(index) for index in range(len(namespaces))
-    ]
-    if namespaces != expected_namespaces:
-        raise ValueError(
-            "Golden-native multi-ASIC namespaces must be zero-based and "
-            "contiguous: expected {}, discovered {}".format(
-                ", ".join(expected_namespaces),
-                ", ".join(namespaces)
-            )
-        )
-
-    expected_scopes = [HOST_NAMESPACE, *namespaces]
-    missing_scopes = [
-        scope for scope in expected_scopes if scope not in config
-    ]
-    extra_scopes = [
-        scope for scope in config if scope not in expected_scopes
-    ]
-    if missing_scopes or extra_scopes:
-        details = []
-        if missing_scopes:
-            details.append("missing scopes: {}".format(', '.join(missing_scopes)))
-        if extra_scopes:
-            details.append("extra scopes: {}".format(', '.join(extra_scopes)))
-        raise ValueError('; '.join(details))
-
-    scope_configs = []
-    for scope in expected_scopes:
-        scope_config = config[scope]
-        if not isinstance(scope_config, dict):
-            raise ValueError(
-                "scope '{}' must contain a JSON object".format(scope)
-            )
-        if not scope_config:
-            raise ValueError("scope '{}' must not be empty".format(scope))
-
-        namespace = DEFAULT_NAMESPACE if scope == HOST_NAMESPACE else scope
-        scope_configs.append((namespace, scope_config))
-
-    return scope_configs
 
 
 def multiasic_validate_single_file(filename):
@@ -1952,7 +1812,7 @@ def load_sysinfo_if_missing(asic_config):
 
 
 def flush_configdb(namespace=DEFAULT_NAMESPACE):
-    if namespace == DEFAULT_NAMESPACE:
+    if namespace is DEFAULT_NAMESPACE:
         config_db = ConfigDBConnector()
     else:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
@@ -1991,7 +1851,7 @@ def migrate_db_to_lastest(
     db_migrator = '/usr/local/bin/db_migrator.py'
     if os.path.isfile(db_migrator) and os.access(db_migrator, os.X_OK):
         command = [db_migrator, '-o', 'migrate']
-        if namespace == DEFAULT_NAMESPACE:
+        if namespace is DEFAULT_NAMESPACE:
             pass
         else:
             command += ['-n', namespace]
@@ -2006,363 +1866,9 @@ def migrate_db_to_lastest(
         clicommon.run_command(command, display_cmd=True)
 
 
-def _golden_native_persistent_config_files(namespaces):
-    config_root, config_extension = os.path.splitext(DEFAULT_CONFIG_DB_FILE)
-    namespace_files = [
-        "{}{}{}".format(
-            config_root,
-            namespace[len(NAMESPACE_PREFIX):],
-            config_extension
-        )
-        for namespace in namespaces
-    ]
-    return tuple([DEFAULT_CONFIG_DB_FILE, *namespace_files])
-
-
-def _new_golden_native_generation_transaction(support):
-    return GenerationTransaction.for_golden_native_host(
-        support.namespaces,
-        persistent_files=_golden_native_persistent_config_files(
-            support.namespaces
-        )
-    )
-
-
-@contextmanager
-def _generation_transaction_context(
-        generation_transaction,
-        service_quiescence=None,
-        service_recovery=None):
-    if generation_transaction is None:
-        yield service_recovery
-        return
-
-    recovery_cleanup_warnings = \
-        GenerationTransaction.recover_stale_transactions(
-            evidence_parent=generation_transaction.evidence_parent,
-            database_adapter=generation_transaction.database_adapter,
-            service_quiescence=service_quiescence,
-            service_recovery=service_recovery,
-        )
-
-    def recover_generation_services():
-        if service_recovery is None:
-            return
-        service_recovery()
-        generation_transaction.mark_service_recovery_complete()
-
-    transaction_service_recovery = \
-        recover_generation_services if service_recovery is not None else None
-    generation_transaction.begin(
-        service_quiescence=service_quiescence,
-        service_recovery=transaction_service_recovery,
-    )
-
-    try:
-        yield transaction_service_recovery
-    except BaseException as error:
-        generation_transaction.rollback(
-            original_error=error,
-            service_quiescence=service_quiescence,
-            service_recovery=transaction_service_recovery
-        )
-        raise
-    else:
-        try:
-            generation_transaction.commit()
-            if recovery_cleanup_warnings:
-                raise GenerationCleanupError(
-                    "Recovered interrupted generation state, but stale "
-                    "transaction evidence cleanup failed: {}".format(
-                        "; ".join(recovery_cleanup_warnings)
-                    )
-                )
-        except GenerationCleanupError:
-            raise
-        except BaseException as error:
-            generation_transaction.rollback(
-                original_error=error,
-                service_quiescence=service_quiescence,
-                service_recovery=service_recovery
-            )
-            raise
-
-
-def _mark_generation_persistent_files(generation_transaction):
-    if generation_transaction is None:
-        return
-    for path in generation_transaction.persistent_files:
-        generation_transaction.mark_persistent_file_touched(path)
-
-
-def _mark_generation_scope_for_mutation(
-        generation_transaction,
-        namespace):
-    if generation_transaction is None:
-        return
-    generation_transaction.mark_scope_touched(namespace)
-    generation_transaction.mark_shared_databases_touched()
-    _mark_generation_persistent_files(generation_transaction)
-
-
-def _mark_all_generation_targets(generation_transaction):
-    if generation_transaction is None:
-        return
-    for namespace in generation_transaction.namespaces:
-        generation_transaction.mark_scope_touched(namespace)
-    generation_transaction.mark_shared_databases_touched()
-    _mark_generation_persistent_files(generation_transaction)
-
-
-def _new_generation_service_control(pre_restart=None):
-    state = {
-        "quiesced": False,
-        "recovery_required": True,
-    }
-
-    def quiesce_services():
-        if state["quiesced"]:
-            return
-        state["recovery_required"] = True
-        log.log_notice(
-            "'reload' quiescing services for generation transaction..."
-        )
-        _stop_services()
-        state["quiesced"] = True
-
-    def recover_services():
-        if not state["recovery_required"]:
-            return
-
-        failures = []
-        try:
-            _reset_failed_services()
-        except BaseException as error:
-            failures.append(("reset failed services", error))
-
-        if pre_restart is not None:
-            try:
-                pre_restart()
-            except BaseException as error:
-                failures.append(("prepare service environment", error))
-
-        log.log_notice(
-            "'reload' recovering services after generation transaction..."
-        )
-        state["quiesced"] = False
-        try:
-            _restart_services()
-        except BaseException as error:
-            failures.append(("restart services", error))
-        else:
-            state["recovery_required"] = False
-
-        if len(failures) == 1:
-            raise failures[0][1]
-        if failures:
-            raise RuntimeError(
-                "Generation service recovery failed: {}".format(
-                    "; ".join(
-                        "{}: {}: {}".format(
-                            label, type(error).__name__, error
-                        )
-                        for label, error in failures
-                    )
-                )
-            )
-
-    return quiesce_services, recover_services
-
-
-def _prepare_generation_config_files(generation_transaction):
-    prepared_files = []
-    try:
-        for namespace, destination in zip(
-                generation_transaction.namespaces,
-                generation_transaction.persistent_files):
-            parent = os.path.dirname(destination) or "."
-            descriptor, prepared_path = tempfile.mkstemp(
-                prefix=".{}.generation.".format(
-                    os.path.basename(destination)
-                ),
-                dir=parent
-            )
-            os.close(descriptor)
-            prepared_files.append((destination, prepared_path))
-
-            command = [SONIC_CFGGEN_PATH]
-            if namespace != DEFAULT_NAMESPACE:
-                command.extend(["-n", namespace])
-            command.extend(["-d", "--print-data"])
-
-            with open(prepared_path, "w") as output:
-                result = subprocess.run(
-                    command,
-                    stdout=output,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    check=False
-                )
-                output.flush()
-                os.fsync(output.fileno())
-            if result.returncode != 0:
-                raise RuntimeError(
-                    "Failed to prepare persistent CONFIG_DB for {}: {}".format(
-                        namespace or HOST_NAMESPACE,
-                        result.stderr.strip() or "sonic-cfggen failed"
-                    )
-                )
-
-            with open(prepared_path) as source:
-                prepared_config = load_json_with_duplicate_check(source)
-            if not isinstance(prepared_config, dict):
-                raise RuntimeError(
-                    "Prepared CONFIG_DB for {} is not a JSON object".format(
-                        namespace or HOST_NAMESPACE
-                    )
-                )
-            with open(prepared_path, "w") as output:
-                json.dump(sort_dict(prepared_config), output, indent=4)
-                output.flush()
-                os.fsync(output.fileno())
-
-        return prepared_files
-    except BaseException:
-        for _, prepared_path in prepared_files:
-            try:
-                os.remove(prepared_path)
-            except OSError:
-                pass
-        raise
-
-
-def _persist_generation_config_files(generation_transaction):
-    if generation_transaction is None:
-        raise RuntimeError(
-            "Generation persistence requires an active transaction"
-        )
-    if (
-            len(generation_transaction.namespaces) !=
-            len(generation_transaction.persistent_files)):
-        raise RuntimeError(
-            "Generation namespace and persistent-file counts differ"
-        )
-    prepared_files = _prepare_generation_config_files(
-        generation_transaction
-    )
-    generation_transaction.publish_persistent_files(prepared_files)
-
-
-def _run_golden_native_namespace_config(
-        namespace, filename, init_config_filename, write):
-    command = [SONIC_CFGGEN_PATH, "-n", namespace]
-    if os.path.isfile(init_config_filename):
-        command.extend(["-j", init_config_filename])
-    command.extend(["-j", filename])
-    command.append("--write-to-db" if write else "--print-data")
-    result = subprocess.run(
-        command,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            "{} namespace preload failed for {}: {}".format(
-                "Writing" if write else "Validating",
-                namespace,
-                result.stderr.strip() or "sonic-cfggen failed"
-            )
-        )
-
-
-def _validate_golden_native_namespace_preloads(
-        preload_namespace_configs, support):
-    validated = []
-    seen = set()
-    for namespace, filename in preload_namespace_configs:
-        if namespace in seen:
-            raise click.UsageError(
-                "Duplicate --preload-namespace-config for {}".format(
-                    namespace)
-            )
-        if namespace not in support.namespaces:
-            raise click.UsageError(
-                "Unknown preload namespace {!r}; expected one of {}".format(
-                    namespace, ", ".join(support.namespaces)
-                )
-            )
-        if not os.path.isfile(filename) or not os.access(filename, os.R_OK):
-            raise click.UsageError(
-                "Namespace preload file is not readable: {}".format(
-                    filename)
-            )
-        seen.add(namespace)
-        validated.append((namespace, filename))
-    return tuple(validated)
-
-
-@contextmanager
-def _snapshot_golden_native_namespace_preloads(preload_namespace_configs):
-    with ExitStack() as stack:
-        snapshots = []
-        for namespace, filename in preload_namespace_configs:
-            snapshot = stack.enter_context(
-                _snapshot_golden_native_file(
-                    filename,
-                    "{} preload config".format(namespace),
-                    "{}.preload.".format(namespace)
-                )
-            )
-            snapshots.append((namespace, snapshot))
-        yield tuple(snapshots)
-
-
-def _preload_golden_native_namespaces(
-        preload_namespace_configs,
-        init_config_filename,
-        generation_transaction):
-    for namespace, filename in preload_namespace_configs:
-        _run_golden_native_namespace_config(
-            namespace,
-            filename,
-            init_config_filename,
-            write=False
-        )
-    for namespace, filename in preload_namespace_configs:
-        _mark_generation_scope_for_mutation(
-            generation_transaction, namespace
-        )
-        _run_golden_native_namespace_config(
-            namespace,
-            filename,
-            init_config_filename,
-            write=True
-        )
-
-
-def _set_generation_config_db_initialized(generation_transaction):
-    for namespace in generation_transaction.namespaces:
-        _mark_generation_scope_for_mutation(
-            generation_transaction, namespace
-        )
-        command = ["sonic-db-cli"]
-        if namespace != DEFAULT_NAMESPACE:
-            command.extend(["-n", namespace])
-        command.extend([
-            "CONFIG_DB",
-            "SET",
-            "CONFIG_DB_INITIALIZED",
-            "1"
-        ])
-        clicommon.run_command(command, display_cmd=True)
-
-
 def multiasic_write_to_db(filename, load_sysinfo,
                           migration_config_source=DB_MIGRATION_SOURCE_AUTO,
-                          init_config_file=INIT_CFG_FILE,
-                          generation_transaction=None):
+                          init_config_file=INIT_CFG_FILE):
     file_input = read_json_file(filename)
     for ns in [DEFAULT_NAMESPACE, *multi_asic.get_namespace_list()]:
         asic_name = HOST_NAMESPACE if ns == DEFAULT_NAMESPACE else ns
@@ -2379,17 +1885,16 @@ def multiasic_write_to_db(filename, load_sysinfo,
                 click.secho("Could not get the HWSKU from config file,  Exiting!", fg='magenta')
                 sys.exit(1)
 
-        _mark_generation_scope_for_mutation(generation_transaction, ns)
         client, _ = flush_configdb(ns)
 
         if asic_load_sysinfo:
-            if ns == DEFAULT_NAMESPACE:
+            if ns is DEFAULT_NAMESPACE:
                 command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '--write-to-db']
             else:
                 command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(ns), '--write-to-db']
             clicommon.run_command(command, display_cmd=True)
 
-        if ns == DEFAULT_NAMESPACE:
+        if ns is DEFAULT_NAMESPACE:
             config_db = ConfigDBPipeConnector(use_unix_socket_path=True)
         else:
             config_db = ConfigDBPipeConnector(use_unix_socket_path=True, namespace=ns)
@@ -2411,10 +1916,23 @@ def multiasic_write_to_db(filename, load_sysinfo,
         )
 
 
-def _config_scopes_yang_validation(filename, scope_configs):
-    for config_to_check in scope_configs:
-        sy = sonic_yang.SonicYang(YANG_DIR)
-        sy.loadYangModel()
+def config_file_yang_validation(filename):
+    config = read_json_file(filename)
+
+    # Check if the config is not a dictionary
+    if not isinstance(config, dict):
+        return False
+
+    sy = sonic_yang.SonicYang(YANG_DIR)
+    sy.loadYangModel()
+    asic_list = [HOST_NAMESPACE]
+    if multi_asic.is_multi_asic():
+        asic_list.extend(multi_asic.get_namespace_list())
+    for scope in asic_list:
+        if multi_asic.is_multi_asic() and HOST_NAMESPACE in config:
+            config_to_check = config.get(scope)
+        else:
+            config_to_check = config if scope == HOST_NAMESPACE else None
         if config_to_check:
             try:
                 sy.loadData(configdbJson=config_to_check)
@@ -2430,23 +1948,6 @@ def _config_scopes_yang_validation(filename, scope_configs):
                         fg='magenta')
             raise click.Abort()
     return True
-
-
-def config_file_yang_validation(filename):
-    config = read_json_file(filename)
-
-    # Check if the config is not a dictionary
-    if not isinstance(config, dict):
-        return False
-
-    scope_configs = [config]
-    asic_list = [HOST_NAMESPACE]
-    if multi_asic.is_multi_asic():
-        asic_list.extend(multi_asic.get_namespace_list())
-    if multi_asic.is_multi_asic() and HOST_NAMESPACE in config:
-        scope_configs = [config.get(scope) for scope in asic_list]
-
-    return _config_scopes_yang_validation(filename, scope_configs)
 
 
 def check_dhcpv4_relay_dependencies(db, object_name, object_type):
@@ -2879,9 +2380,7 @@ def list_checkpoints(ctx, time, verbose):
 @try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
 def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_format, bypass_lock,
            migration_config_source=DB_MIGRATION_SOURCE_AUTO,
-           init_config_file=INIT_CFG_FILE,
-           generation_transaction=None,
-           persist_generation=False):
+           init_config_file=INIT_CFG_FILE):
     """Clear current configuration and import a previous saved config DB dump file.
        <filename> : Names of configuration file(s) to load, separated by comma with no spaces in between
     """
@@ -2997,171 +2496,138 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
         except Exception:
             pass
 
-    if generation_transaction is not None and no_service_restart:
-        raise click.UsageError(
-            "--no_service_restart is unsafe for generation transactions "
-            "because Redis writers must be quiesced"
+    if not no_service_restart:
+        log.log_notice("'reload' stopping services...")
+        _stop_services()
+
+    if multiasic_single_file_mode:
+        multiasic_write_to_db(
+            cfg_files[0],
+            load_sysinfo,
+            migration_config_source,
+            init_config_file
         )
+    else:
+        # In Single ASIC platforms we have single DB service. In multi-ASIC platforms we have a global DB
+        # service running in the host + DB services running in each ASIC namespace created per ASIC.
+        # In the below logic, we get all namespaces in this platform and add an empty namespace ''
+        # denoting the current namespace which we are in ( the linux host )
+        for inst in range(-1, num_cfg_file-1):
+            # Get the namespace name, for linux host it is DEFAULT_NAMESPACE
+            if inst == -1:
+                namespace = DEFAULT_NAMESPACE
+            else:
+                namespace = "{}{}".format(NAMESPACE_PREFIX, inst)
 
-    service_quiescence = None
-    service_recovery = None
-    if generation_transaction is not None:
-        service_quiescence, service_recovery = \
-            _new_generation_service_control(
-                pre_restart=update_sonic_environment
-            )
-
-    with _generation_transaction_context(
-            generation_transaction,
-            service_quiescence=service_quiescence,
-            service_recovery=service_recovery) as generation_service_recovery:
-        if generation_transaction is None and not no_service_restart:
-            _mark_all_generation_targets(generation_transaction)
-            log.log_notice("'reload' stopping services...")
-            _stop_services()
-        elif generation_transaction is not None:
-            _mark_all_generation_targets(generation_transaction)
-
-        if multiasic_single_file_mode:
-            multiasic_write_to_db(
-                cfg_files[0],
-                load_sysinfo,
-                migration_config_source,
-                init_config_file,
-                generation_transaction
-            )
-        else:
-            # In Single ASIC platforms we have single DB service. In multi-ASIC platforms we have a global DB
-            # service running in the host + DB services running in each ASIC namespace created per ASIC.
-            # In the below logic, we get all namespaces in this platform and add an empty namespace ''
-            # denoting the current namespace which we are in ( the linux host )
-            for inst in range(-1, num_cfg_file-1):
-                # Get the namespace name, for linux host it is DEFAULT_NAMESPACE
-                if inst == -1:
-                    namespace = DEFAULT_NAMESPACE
-                else:
-                    namespace = "{}{}".format(NAMESPACE_PREFIX, inst)
-
-                # Get the file from user input, else take the default file /etc/sonic/config_db{NS_id}.json
-                if cfg_files:
-                    file = cfg_files[inst+1]
-                    # Save to tmpfile in case of stdin input which can only be read once
-                    if file == "/dev/stdin":
-                        file_input = read_json_file(file)
-                        (_, tmpfname) = tempfile.mkstemp(dir="/tmp", suffix="_configReloadStdin")
-                        write_json_file(file_input, tmpfname)
-                        file = tmpfname
-                else:
-                    if file_format == 'config_db':
-                        if namespace is DEFAULT_NAMESPACE:
-                            file = DEFAULT_CONFIG_DB_FILE
-                        else:
-                            file = "/etc/sonic/config_db{}.json".format(inst)
-                    else:
-                        file = DEFAULT_CONFIG_YANG_FILE
-
-                # Check the file exists before proceeding.
-                if not os.path.exists(file):
-                    click.echo("The config file {} doesn't exist".format(file))
-                    continue
-
-                if file_format == 'config_db':
+            # Get the file from user input, else take the default file /etc/sonic/config_db{NS_id}.json
+            if cfg_files:
+                file = cfg_files[inst+1]
+                # Save to tmpfile in case of stdin input which can only be read once
+                if file == "/dev/stdin":
                     file_input = read_json_file(file)
-                    if not load_sysinfo:
-                        load_sysinfo = load_sysinfo_if_missing(file_input)
-
-                if load_sysinfo:
-                    try:
-                        command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost.hwsku"]
-                        proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-                        output, err = proc.communicate()
-
-                    except FileNotFoundError as e:
-                        click.echo("{}".format(str(e)), err=True)
-                        raise click.Abort()
-                    except Exception as e:
-                        click.echo("{}\n{}".format(type(e), str(e)), err=True)
-                        raise click.Abort()
-
-                    if not output:
-                        click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
-                        sys.exit(1)
-
-                    cfg_hwsku = output.strip()
-
-                _mark_generation_scope_for_mutation(
-                    generation_transaction, namespace
-                )
-                client, config_db = flush_configdb(namespace)
-                delete_transceiver_tables()
-                delete_bgp_peer_table()
-
-                if load_sysinfo:
-                    if namespace is DEFAULT_NAMESPACE:
-                        command = [
-                            str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '--write-to-db']
-                    else:
-                        command = [
-                            str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(namespace), '--write-to-db']
-                    clicommon.run_command(command, display_cmd=True)
-
-                # For the database service running in linux host we use the file user gives as input
-                # or by default DEFAULT_CONFIG_DB_FILE. In the case of database service running in namespace,
-                # the default config_db<namespaceID>.json format is used.
-
-                config_gen_opts = []
-
-                if os.path.isfile(init_config_file):
-                    config_gen_opts += ['-j', str(init_config_file)]
-
+                    (_, tmpfname) = tempfile.mkstemp(dir="/tmp", suffix="_configReloadStdin")
+                    write_json_file(file_input, tmpfname)
+                    file = tmpfname
+            else:
                 if file_format == 'config_db':
-                    config_gen_opts += ['-j', str(file)]
+                    if namespace is DEFAULT_NAMESPACE:
+                        file = DEFAULT_CONFIG_DB_FILE
+                    else:
+                        file = "/etc/sonic/config_db{}.json".format(inst)
                 else:
-                    config_gen_opts += ['-Y', str(file)]
+                    file = DEFAULT_CONFIG_YANG_FILE
 
-                if namespace is not DEFAULT_NAMESPACE:
-                    config_gen_opts += ['-n', str(namespace)]
+            # Check the file exists before proceeding.
+            if not os.path.exists(file):
+                click.echo("The config file {} doesn't exist".format(file))
+                continue
 
-                command = [SONIC_CFGGEN_PATH] + config_gen_opts + ['--write-to-db']
+            if file_format == 'config_db':
+                file_input = read_json_file(file)
+                if not load_sysinfo:
+                    load_sysinfo = load_sysinfo_if_missing(file_input)
 
+            if load_sysinfo:
+                try:
+                    command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost.hwsku"]
+                    proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
+                    output, err = proc.communicate()
+
+                except FileNotFoundError as e:
+                    click.echo("{}".format(str(e)), err=True)
+                    raise click.Abort()
+                except Exception as e:
+                    click.echo("{}\n{}".format(type(e), str(e)), err=True)
+                    raise click.Abort()
+
+                if not output:
+                    click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
+                    sys.exit(1)
+
+                cfg_hwsku = output.strip()
+
+            client, config_db = flush_configdb(namespace)
+            delete_transceiver_tables()
+            delete_bgp_peer_table()
+
+            if load_sysinfo:
+                if namespace is DEFAULT_NAMESPACE:
+                    command = [
+                        str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '--write-to-db']
+                else:
+                    command = [
+                        str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(namespace), '--write-to-db']
                 clicommon.run_command(command, display_cmd=True)
-                client.set(config_db.INIT_INDICATOR, 1)
 
-                if os.path.exists(file) and file.endswith("_configReloadStdin"):
-                    # Remove tmpfile
-                    try:
-                        os.remove(file)
-                    except OSError as e:
-                        click.echo("An error occurred while removing the temporary file: {}".format(str(e)), err=True)
+            # For the database service running in linux host we use the file user gives as input
+            # or by default DEFAULT_CONFIG_DB_FILE. In the case of database service running in namespace,
+            # the default config_db<namespaceID>.json format is used.
 
-                # Migrate DB contents to latest version
-                migration_config_source_file = (
-                    file if migration_config_source == DB_MIGRATION_SOURCE_GOLDEN else None
-                )
-                migrate_db_to_lastest(
-                    namespace,
-                    migration_config_source,
-                    migration_config_source_file,
-                    init_config_file
-                )
+            config_gen_opts = []
 
-        # Non-transactional reloads retain the legacy environment update
-        # ordering. Generation transactions update it immediately before
-        # every service restart, including rollback recovery.
-        if generation_transaction is None:
-            update_sonic_environment()
+            if os.path.isfile(init_config_file):
+                config_gen_opts += ['-j', str(init_config_file)]
 
-        if persist_generation:
-            _persist_generation_config_files(generation_transaction)
+            if file_format == 'config_db':
+                config_gen_opts += ['-j', str(file)]
+            else:
+                config_gen_opts += ['-Y', str(file)]
 
-        # We first run "systemctl reset-failed" to remove the "failed"
-        # status from all services before we attempt to restart them
-        if generation_transaction is not None:
-            generation_service_recovery()
-        elif not no_service_restart:
-            _reset_failed_services()
-            log.log_notice("'reload' restarting services...")
-            _restart_services()
+            if namespace is not DEFAULT_NAMESPACE:
+                config_gen_opts += ['-n', str(namespace)]
+
+            command = [SONIC_CFGGEN_PATH] + config_gen_opts + ['--write-to-db']
+
+            clicommon.run_command(command, display_cmd=True)
+            client.set(config_db.INIT_INDICATOR, 1)
+
+            if os.path.exists(file) and file.endswith("_configReloadStdin"):
+                # Remove tmpfile
+                try:
+                    os.remove(file)
+                except OSError as e:
+                    click.echo("An error occurred while removing the temporary file: {}".format(str(e)), err=True)
+
+            # Migrate DB contents to latest version
+            migration_config_source_file = (
+                file if migration_config_source == DB_MIGRATION_SOURCE_GOLDEN else None
+            )
+            migrate_db_to_lastest(
+                namespace,
+                migration_config_source,
+                migration_config_source_file,
+                init_config_file
+            )
+
+    # Re-generate the environment variable in case config_db.json was edited
+    update_sonic_environment()
+
+    # We first run "systemctl reset-failed" to remove the "failed"
+    # status from all services before we attempt to restart them
+    if not no_service_restart:
+        _reset_failed_services()
+        log.log_notice("'reload' restarting services...")
+        _restart_services()
 
 
 def _read_config_dict(filename, description, display_filename=None):
@@ -3174,8 +2640,7 @@ def _read_config_dict(filename, description, display_filename=None):
         raise click.Abort()
 
     try:
-        with open(filename) as config_file:
-            config_data = load_json_with_duplicate_check(config_file)
+        config_data = read_json_file(filename)
     except Exception as e:
         click.secho(
             "Failed to read {} '{}': {}".format(
@@ -3215,11 +2680,8 @@ def _find_missing_config_paths(required_config, candidate_config, path=''):
     return missing_paths
 
 
-def _read_hardware_config(hwsku, namespace=DEFAULT_NAMESPACE):
-    command = [SONIC_CFGGEN_PATH, '-H', '-k', hwsku]
-    if namespace != DEFAULT_NAMESPACE:
-        command.extend(['-n', namespace])
-    command.append('--print-data')
+def _read_hardware_config(hwsku):
+    command = [SONIC_CFGGEN_PATH, '-H', '-k', hwsku, '--print-data']
     try:
         result = subprocess.run(
             command,
@@ -3254,241 +2716,6 @@ def _read_hardware_config(hwsku, namespace=DEFAULT_NAMESPACE):
         raise click.Abort()
 
     return hardware_config
-
-
-def _read_trusted_golden_native_device_metadata():
-    config_db = ConfigDBConnector(use_unix_socket_path=True)
-    config_db.connect()
-    metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
-    if metadata is None:
-        return {}
-    if not isinstance(metadata, dict):
-        raise ValueError("trusted DEVICE_METADATA.localhost must be an object")
-    return metadata
-
-
-def _golden_native_chassis_scope_present(platform):
-    return (
-        os.path.isfile(CHASSIS_DB_CONFIG_FILE) or
-        os.path.isfile(os.path.join(SONIC_DEVICE_PATH, platform, 'chassisdb.conf'))
-    )
-
-
-def _normalize_golden_native_switch_type(switch_type):
-    if switch_type is None:
-        return 'npu'
-    if not isinstance(switch_type, str):
-        raise ValueError("switch_type must be a string")
-    return switch_type.strip().lower() or 'npu'
-
-
-def _resolve_golden_native_profile(
-        switch_type, is_supervisor, is_chassis, is_dpu, is_smartswitch,
-        has_chassis_scope):
-    chassis_scope = is_chassis or has_chassis_scope
-
-    if is_dpu:
-        if switch_type != 'dpu':
-            raise ValueError(
-                "DPU role requires trusted switch_type 'dpu', not '{}'".format(
-                    switch_type
-                )
-            )
-        if is_supervisor or chassis_scope:
-            raise ValueError("DPU role conflicts with chassis role signals")
-        return 'dpu'
-
-    if is_smartswitch:
-        if switch_type != 'npu':
-            raise ValueError(
-                "SmartSwitch host requires trusted switch_type 'npu', not '{}'".format(
-                    switch_type
-                )
-            )
-        if is_supervisor or chassis_scope:
-            raise ValueError(
-                "SmartSwitch host role conflicts with chassis role signals"
-            )
-        return 'smartswitch_host'
-
-    if is_supervisor:
-        if not chassis_scope:
-            raise ValueError(
-                "supervisor role requires trusted chassis scope"
-            )
-        if switch_type not in ('npu', 'fabric'):
-            raise ValueError(
-                "supervisor role conflicts with trusted switch_type '{}'".format(
-                    switch_type
-                )
-            )
-        return 'supervisor'
-
-    if switch_type == 'fabric':
-        if not chassis_scope:
-            raise ValueError(
-                "fabric switch_type requires trusted chassis scope"
-            )
-        return 'fabric_card'
-
-    if switch_type == 'voq':
-        if not chassis_scope:
-            raise ValueError(
-                "voq switch_type requires trusted chassis scope"
-            )
-        return 'voq_linecard'
-
-    if switch_type == 'chassis-packet':
-        if not chassis_scope:
-            raise ValueError(
-                "chassis-packet switch_type requires trusted chassis scope"
-            )
-        return 'packet_linecard'
-
-    if switch_type != 'npu':
-        raise ValueError(
-            "unsupported trusted switch_type '{}'".format(switch_type)
-        )
-
-    if chassis_scope:
-        raise ValueError(
-            "chassis scope with switch_type 'npu' is ambiguous without a "
-            "supervisor role signal"
-        )
-
-    return 'standalone_npu'
-
-
-def _validate_golden_native_platform_support():
-    trusted_identity = _read_trusted_golden_native_identity()
-
-    try:
-        platform = trusted_identity['platform']
-        hwsku = trusted_identity.get('hwsku')
-        num_asics = int(device_info.get_num_npus())
-        device_multi_npu = bool(device_info.is_multi_npu())
-        multi_asic_runtime = bool(multi_asic.is_multi_asic())
-        namespaces = list(multi_asic.get_namespace_list())
-        is_supervisor = bool(device_info.is_supervisor())
-        is_chassis = bool(device_info.is_chassis())
-        is_dpu = bool(device_info.is_dpu())
-        is_smartswitch = bool(device_info.is_smartswitch())
-        has_chassis_scope = _golden_native_chassis_scope_present(platform)
-        trusted_metadata = _read_trusted_golden_native_device_metadata()
-        trusted_device_type = trusted_metadata.get('type')
-        if (
-                not isinstance(trusted_device_type, str) or
-                not trusted_device_type.strip()):
-            raise ValueError(
-                "trusted DEVICE_METADATA.localhost.type must be a "
-                "non-empty string"
-            )
-        normalized_switch_type = _normalize_golden_native_switch_type(
-            trusted_metadata.get('switch_type')
-        )
-        profile = _resolve_golden_native_profile(
-            normalized_switch_type,
-            is_supervisor,
-            is_chassis,
-            is_dpu,
-            is_smartswitch,
-            has_chassis_scope
-        )
-    except Exception as e:
-        click.secho(
-            "Failed to determine whether golden-native configuration is supported: {}".format(e),
-            fg='red'
-        )
-        raise click.Abort()
-
-    if profile != 'standalone_npu':
-        click.secho(
-            "Golden-native configuration supports only standalone or "
-            "single-host namespace NPU systems; trusted profile '{}' is "
-            "unsupported.".format(profile),
-            fg='red'
-        )
-        raise click.Abort()
-
-    if not isinstance(platform, str) or not platform.strip():
-        click.secho("Golden-native configuration requires a trusted local platform.", fg='red')
-        raise click.Abort()
-    if not isinstance(hwsku, str) or not hwsku.strip():
-        click.secho("Golden-native configuration requires a trusted local HWSKU.", fg='red')
-        raise click.Abort()
-    if num_asics < 1:
-        click.secho(
-            "Golden-native configuration requires a positive trusted ASIC count.",
-            fg='red'
-        )
-        raise click.Abort()
-
-    expected_multi_asic = num_asics > 1
-    if device_multi_npu != expected_multi_asic or multi_asic_runtime != expected_multi_asic:
-        click.secho(
-            "Golden-native configuration rejected inconsistent trusted ASIC-count metadata.",
-            fg='red'
-        )
-        raise click.Abort()
-
-    if num_asics == 1:
-        if namespaces != [DEFAULT_NAMESPACE]:
-            click.secho(
-                "Golden-native configuration rejected unexpected single-ASIC namespaces: {}.".format(
-                    namespaces
-                ),
-                fg='red'
-            )
-            raise click.Abort()
-        validated_namespaces = []
-    else:
-        valid_namespaces = (
-            len(namespaces) == num_asics and
-            len(namespaces) == len(set(namespaces)) and
-            not any(
-                not isinstance(namespace, str) or
-                re.fullmatch(r'asic[0-9]+', namespace) is None
-                for namespace in namespaces
-            )
-        )
-        sorted_namespaces = sorted(
-            namespaces,
-            key=lambda namespace: int(namespace[len(NAMESPACE_PREFIX):])
-        ) if valid_namespaces else []
-        expected_namespaces = [
-            "{}{}".format(NAMESPACE_PREFIX, index)
-            for index in range(num_asics)
-        ]
-        if (
-                not valid_namespaces or
-                namespaces != sorted_namespaces or
-                namespaces != expected_namespaces):
-            click.secho(
-                "Golden-native configuration requires zero-based contiguous "
-                "namespaces {} for {} ASICs; discovered {}.".format(
-                    expected_namespaces, num_asics, namespaces
-                ),
-                fg='red'
-            )
-            raise click.Abort()
-        validated_namespaces = namespaces
-
-    return GoldenNativeSupport(
-        profile=profile,
-        platform=platform,
-        hwsku=hwsku,
-        hostname=trusted_identity['hostname'],
-        mac=trusted_identity['mac'],
-        trusted_device_type=trusted_device_type,
-        num_asics=num_asics,
-        namespaces=tuple(validated_namespaces),
-        switch_type=normalized_switch_type,
-        is_supervisor=is_supervisor,
-        is_chassis=is_chassis,
-        is_dpu=is_dpu,
-        is_smartswitch=is_smartswitch,
-        has_chassis_scope=has_chassis_scope
-    )
 
 
 @contextmanager
@@ -3567,7 +2794,6 @@ def _read_trusted_golden_native_identity():
         identity = {
             'platform': device_info.get_platform(config_db=None),
             'hwsku': device_info.get_hwsku(),
-            'hostname': trusted_hostname,
             'mac': device_info.get_system_mac(hostname=trusted_hostname)
         }
     except Exception as e:
@@ -3578,8 +2804,7 @@ def _read_trusted_golden_native_identity():
         raise click.Abort()
 
     missing_identity = [
-        field for field in ('platform', 'hostname', 'mac')
-        if not identity.get(field)
+        field for field in ('platform', 'mac') if not identity.get(field)
     ]
     if missing_identity:
         click.secho(
@@ -3600,252 +2825,9 @@ def _normalize_golden_native_identity(field, value):
     return normalized
 
 
-def _golden_native_metadata_value_is_missing(metadata, field):
-    if field not in metadata or metadata[field] is None:
-        return True
-    return isinstance(metadata[field], str) and not metadata[field].strip()
-
-
-def _golden_native_scope_is_asic_bearing(support, namespace):
-    if namespace != DEFAULT_NAMESPACE:
-        return True
-    if support.num_asics != 1:
-        return False
-    return not (
-        support.profile == 'supervisor' and
-        support.switch_type == 'npu'
-    )
-
-
-def _get_golden_native_scope_configs(
-        golden_config, display_filename, support):
-    is_multi_asic = support.num_asics > 1
-    if is_multi_asic:
-        try:
-            return _validate_multiasic_scope_configs(
-                golden_config,
-                support.namespaces
-            )
-        except ValueError as e:
-            click.secho(
-                "Invalid multi-ASIC golden config '{}': {}".format(
-                    display_filename, str(e)
-                ),
-                fg='magenta'
-            )
-            raise click.Abort()
-
-    return [(DEFAULT_NAMESPACE, golden_config)]
-
-
-def _normalize_golden_native_candidate_switch_type(
-        metadata, scope_name, support, asic_bearing):
-    switch_type_present = 'switch_type' in metadata
-    switch_type = metadata.get('switch_type')
-    if switch_type_present and not isinstance(switch_type, str):
-        click.secho(
-            "Golden config scope '{}' switch_type must be a string.".format(
-                scope_name
-            ),
-            fg='magenta'
-        )
-        raise click.Abort()
-    try:
-        normalized_switch_type = _normalize_golden_native_switch_type(
-            switch_type
-        )
-    except ValueError as e:
-        click.secho(
-            "Golden config scope '{}' {}.".format(scope_name, str(e)),
-            fg='magenta'
-        )
-        raise click.Abort()
-
-    has_explicit_switch_type = (
-        switch_type_present and bool(switch_type.strip())
-    )
-    if not has_explicit_switch_type:
-        metadata.pop('switch_type', None)
-    else:
-        metadata['switch_type'] = normalized_switch_type
-
-    if (
-            (asic_bearing or has_explicit_switch_type) and
-            normalized_switch_type != support.switch_type):
-        click.secho(
-            "Golden config scope '{}' switch_type '{}' does not match trusted "
-            "profile '{}' switch_type '{}'.".format(
-                scope_name,
-                normalized_switch_type,
-                support.profile,
-                support.switch_type
-            ),
-            fg='magenta'
-        )
-        raise click.Abort()
-
-
-def _normalize_golden_native_candidate_asic_name(
-        metadata, scope_name, namespace):
-    if namespace == DEFAULT_NAMESPACE or 'asic_name' not in metadata:
-        return
-
-    asic_name = metadata['asic_name']
-    if not isinstance(asic_name, str):
-        click.secho(
-            "Golden config scope '{}' asic_name must be a string when "
-            "present.".format(scope_name),
-            fg='magenta'
-        )
-        raise click.Abort()
-
-    metadata['asic_name'] = asic_name.strip().lower()
-
-
-def _get_golden_native_scope_metadata(scope_config, scope_name):
-    device_metadata = scope_config.get('DEVICE_METADATA')
-    if device_metadata is None:
-        return {}
-    if not isinstance(device_metadata, dict):
-        click.secho(
-            "Golden config scope '{}' table DEVICE_METADATA must contain a "
-            "JSON object.".format(scope_name),
-            fg='magenta'
-        )
-        raise click.Abort()
-
-    metadata = device_metadata.get('localhost')
-    if metadata is None:
-        return {}
-    if not isinstance(metadata, dict):
-        click.secho(
-            "Golden config scope '{}' DEVICE_METADATA.localhost must contain "
-            "a JSON object.".format(scope_name),
-            fg='magenta'
-        )
-        raise click.Abort()
-    return metadata
-
-
-def _validate_golden_native_candidate_device_type(
-        metadata, scope_name, support):
-    if _golden_native_metadata_value_is_missing(metadata, 'type'):
-        click.secho(
-            "Golden config is missing required metadata: "
-            "{}.DEVICE_METADATA.localhost.type".format(scope_name),
-            fg='magenta'
-        )
-        raise click.Abort()
-
-    candidate_device_type = metadata['type']
-    if candidate_device_type != support.trusted_device_type:
-        click.secho(
-            "Golden config scope '{}' device type {!r} does not match "
-            "trusted local device type {!r}.".format(
-                scope_name,
-                candidate_device_type,
-                support.trusted_device_type
-            ),
-            fg='magenta'
-        )
-        raise click.Abort()
-
-
-@contextmanager
-def _normalized_golden_native_config_snapshot(
-        filename, display_filename, support):
-    snapshot_fd = None
-    snapshot_name = None
-    try:
-        golden_config = _read_config_dict(
-            filename, "golden config", display_filename
-        )
-        scope_configs = _get_golden_native_scope_configs(
-            golden_config, display_filename, support
-        )
-        for namespace, scope_config in scope_configs:
-            scope_name = (
-                HOST_NAMESPACE
-                if namespace == DEFAULT_NAMESPACE
-                else namespace
-            )
-            metadata = _get_golden_native_scope_metadata(
-                scope_config, scope_name
-            )
-            if namespace == DEFAULT_NAMESPACE:
-                _validate_golden_native_candidate_device_type(
-                    metadata, scope_name, support
-                )
-            if metadata:
-                _normalize_golden_native_candidate_switch_type(
-                    metadata,
-                    scope_name,
-                    support,
-                    _golden_native_scope_is_asic_bearing(
-                        support, namespace
-                    )
-                )
-                _normalize_golden_native_candidate_asic_name(
-                    metadata, scope_name, namespace
-                )
-
-        snapshot_fd, snapshot_name = tempfile.mkstemp(
-            dir='/tmp',
-            prefix='golden_config.normalized.',
-            suffix='.json'
-        )
-        os.fchmod(snapshot_fd, 0o600)
-        with os.fdopen(snapshot_fd, 'w') as snapshot:
-            snapshot_fd = None
-            json.dump(golden_config, snapshot)
-            snapshot.flush()
-            os.fsync(snapshot.fileno())
-
-    except click.Abort:
-        if snapshot_fd is not None:
-            os.close(snapshot_fd)
-        if snapshot_name is not None:
-            try:
-                os.remove(snapshot_name)
-            except OSError:
-                pass
-        raise
-    except Exception as e:
-        if snapshot_fd is not None:
-            os.close(snapshot_fd)
-        if snapshot_name is not None:
-            try:
-                os.remove(snapshot_name)
-            except OSError:
-                pass
-        click.secho(
-            "Failed to prepare normalized golden config '{}': {}".format(
-                display_filename, str(e)
-            ),
-            fg='magenta'
-        )
-        raise click.Abort()
-
-    try:
-        yield snapshot_name
-    finally:
-        try:
-            os.remove(snapshot_name)
-        except OSError:
-            pass
-
-
 def _validate_golden_native_config(
         filename, display_filename=None, init_config_filename=INIT_CFG_FILE,
-        init_display_filename=None, support=None):
-    if support is None:
-        click.secho(
-            "Golden-native validation requires resolved trusted platform "
-            "support.",
-            fg='magenta'
-        )
-        raise click.Abort()
-
+        init_display_filename=None):
     display_filename = display_filename or filename
     init_config = _read_config_dict(
         init_config_filename,
@@ -3856,200 +2838,86 @@ def _validate_golden_native_config(
         filename, "golden config", display_filename
     )
 
-    scope_configs = _get_golden_native_scope_configs(
-        golden_config, display_filename, support
-    )
-
-    if not _config_scopes_yang_validation(
-            filename, [scope_config for _, scope_config in scope_configs]):
+    if not config_file_yang_validation(filename):
         click.secho(
             "Invalid golden config file '{}'!".format(display_filename),
             fg='magenta'
         )
         raise click.Abort()
 
-    for namespace, scope_config in scope_configs:
-        scope_name = HOST_NAMESPACE if namespace == DEFAULT_NAMESPACE else namespace
-        table_hard_dependency_check(scope_config)
+    table_hard_dependency_check(golden_config)
 
-        metadata = _get_golden_native_scope_metadata(
-            scope_config, scope_name
+    metadata = golden_config.get('DEVICE_METADATA', {}).get('localhost', {})
+    required_metadata = ('platform', 'mac', 'hwsku', 'hostname', 'type')
+    missing_metadata = [
+        'DEVICE_METADATA.localhost.{}'.format(field)
+        for field in required_metadata
+        if not metadata.get(field)
+    ]
+    if missing_metadata:
+        click.secho(
+            "Golden config is missing required metadata: {}".format(', '.join(missing_metadata)),
+            fg='magenta'
         )
-        asic_bearing = _golden_native_scope_is_asic_bearing(
-            support, namespace
+        raise click.Abort()
+
+    trusted_identity = _read_trusted_golden_native_identity()
+    identity_mismatches = []
+    for field in ('platform', 'mac', 'hwsku'):
+        trusted_value = trusted_identity.get(field)
+        if not trusted_value:
+            continue
+        if (_normalize_golden_native_identity(field, metadata[field])
+                != _normalize_golden_native_identity(field, trusted_value)):
+            identity_mismatches.append(
+                'DEVICE_METADATA.localhost.{} expected {!r}, got {!r}'.format(
+                    field, trusted_value, metadata[field]
+                )
+            )
+    if identity_mismatches:
+        click.secho(
+            "Golden config does not match trusted local device identity: {}".format(
+                '; '.join(identity_mismatches)
+            ),
+            fg='magenta'
         )
-        required_metadata = ['type']
-        if namespace == DEFAULT_NAMESPACE:
-            required_metadata.extend([
-                'platform',
-                'mac',
-                'hostname',
-                'hwsku'
-            ])
-        else:
-            required_metadata.append('asic_name')
-            if asic_bearing:
-                required_metadata.append('hwsku')
-        missing_metadata = [
-            '{}.DEVICE_METADATA.localhost.{}'.format(scope_name, field)
-            for field in required_metadata
-            if _golden_native_metadata_value_is_missing(metadata, field)
-        ]
-        if missing_metadata:
-            click.secho(
-                "Golden config is missing required metadata: {}".format(
-                    ', '.join(missing_metadata)
-                ),
-                fg='magenta'
+        raise click.Abort()
+
+    hardware_config = _read_hardware_config(metadata['hwsku'])
+    missing_hardware_paths = _find_missing_config_paths(
+        hardware_config, golden_config
+    )
+    if missing_hardware_paths:
+        displayed_paths = missing_hardware_paths[:10]
+        if len(missing_hardware_paths) > len(displayed_paths):
+            displayed_paths.append(
+                '... and {} more'.format(
+                    len(missing_hardware_paths) - len(displayed_paths)
+                )
             )
-            raise click.Abort()
-
-        identity_mismatches = []
-        expected_identity = {}
-        if namespace == DEFAULT_NAMESPACE:
-            expected_identity = {
-                'platform': support.platform,
-                'hostname': support.hostname,
-                'mac': support.mac,
-                'hwsku': support.hwsku
-            }
-        for field, trusted_value in expected_identity.items():
-            if (_normalize_golden_native_identity(field, metadata[field])
-                    != _normalize_golden_native_identity(field, trusted_value)):
-                identity_mismatches.append(
-                    '{}.DEVICE_METADATA.localhost.{} expected {!r}, got {!r}'.format(
-                        scope_name, field, trusted_value, metadata[field]
-                    )
-                )
-        if identity_mismatches:
-            click.secho(
-                "Golden config does not match trusted local device identity: {}".format(
-                    '; '.join(identity_mismatches)
-                ),
-                fg='magenta'
-            )
-            raise click.Abort()
-
-        if namespace != DEFAULT_NAMESPACE:
-            if metadata.get('asic_name') != namespace:
-                click.secho(
-                    "Golden config scope '{}' must set "
-                    "DEVICE_METADATA.localhost.asic_name to '{}'.".format(
-                        scope_name, namespace
-                    ),
-                    fg='magenta'
-                )
-                raise click.Abort()
-
-        if support.profile == 'dpu':
-            if (
-                    metadata.get('type') != 'SmartSwitchDPU' or
-                    metadata.get('subtype') != 'SmartSwitch'):
-                click.secho(
-                    "Golden config scope '{}' DPU metadata must set type to "
-                    "'SmartSwitchDPU' and subtype to 'SmartSwitch'.".format(
-                        scope_name
-                    ),
-                    fg='magenta'
-                )
-                raise click.Abort()
-        elif support.profile == 'smartswitch_host':
-            if (
-                    metadata.get('type') == 'SmartSwitchDPU' or
-                    metadata.get('subtype') != 'SmartSwitch'):
-                click.secho(
-                    "Golden config scope '{}' SmartSwitch host metadata must "
-                    "set subtype to 'SmartSwitch' and must not set type to "
-                    "'SmartSwitchDPU'.".format(scope_name),
-                    fg='magenta'
-                )
-                raise click.Abort()
-        elif (
-                metadata.get('type') == 'SmartSwitchDPU' or
-                metadata.get('subtype') == 'SmartSwitch'):
-            click.secho(
-                "Golden config scope '{}' DPU metadata does not match trusted "
-                "profile '{}'.".format(scope_name, support.profile),
-                fg='magenta'
-            )
-            raise click.Abort()
-
-        required_tables = []
-        if support.profile == 'voq_linecard' and asic_bearing:
-            required_tables = ['PORT', 'SYSTEM_PORT']
-        elif (
-                support.profile == 'smartswitch_host' and
-                namespace == DEFAULT_NAMESPACE):
-            required_tables = ['DPUS', 'CHASSIS_MODULE', 'DPU']
-        elif support.profile == 'supervisor':
-            required_tables = ['PORT']
-        elif support.profile == 'dpu' and asic_bearing:
-            required_tables = ['PORT']
-        for table_name in required_tables:
-            if (
-                    not isinstance(scope_config.get(table_name), dict) or
-                    not scope_config[table_name]):
-                click.secho(
-                    "Golden config scope '{}' profile '{}' requires non-empty "
-                    "table '{}'.".format(
-                        scope_name, support.profile, table_name
-                    ),
-                    fg='magenta'
-                )
-                raise click.Abort()
-
-        if asic_bearing:
-            hardware_config = _read_hardware_config(
-                metadata['hwsku'], namespace
-            )
-            missing_hardware_paths = _find_missing_config_paths(
-                hardware_config, scope_config
-            )
-            if missing_hardware_paths:
-                displayed_paths = missing_hardware_paths[:10]
-                if len(missing_hardware_paths) > len(displayed_paths):
-                    displayed_paths.append(
-                        '... and {} more'.format(
-                            len(missing_hardware_paths) - len(displayed_paths)
-                        )
-                    )
-                click.secho(
-                    "Golden config scope '{}' does not completely cover HWSKU "
-                    "config: {}".format(
-                        scope_name, ', '.join(displayed_paths)
-                    ),
-                    fg='magenta'
-                )
-                raise click.Abort()
-
-        missing_init_paths = _find_missing_config_paths(
-            init_config, scope_config
+        click.secho(
+            "Golden config does not completely cover HWSKU config: {}".format(
+                ', '.join(displayed_paths)
+            ),
+            fg='magenta'
         )
-        if missing_init_paths:
-            displayed_paths = missing_init_paths[:10]
-            if len(missing_init_paths) > len(displayed_paths):
-                displayed_paths.append(
-                    '... and {} more'.format(
-                        len(missing_init_paths) - len(displayed_paths)
-                    )
-                )
-            click.secho(
-                "Golden config scope '{}' does not completely cover init "
-                "config: {}".format(
-                    scope_name, ', '.join(displayed_paths)
-                ),
-                fg='magenta'
-            )
-            raise click.Abort()
+        raise click.Abort()
 
-    return scope_configs
+    missing_init_paths = _find_missing_config_paths(init_config, golden_config)
+    if missing_init_paths:
+        displayed_paths = missing_init_paths[:10]
+        if len(missing_init_paths) > len(displayed_paths):
+            displayed_paths.append('... and {} more'.format(len(missing_init_paths) - len(displayed_paths)))
+        click.secho(
+            "Golden config does not completely cover init config: {}".format(', '.join(displayed_paths)),
+            fg='magenta'
+        )
+        raise click.Abort()
 
 
 def _invoke_golden_native_reload(
         ctx, filename, no_service_restart, force,
-        init_config_filename=INIT_CFG_FILE,
-        generation_transaction=None,
-        persist_generation=False):
+        init_config_filename=INIT_CFG_FILE):
     return ctx.invoke(
         config.commands['reload'],
         filename=filename,
@@ -4060,115 +2928,50 @@ def _invoke_golden_native_reload(
         file_format='config_db',
         bypass_lock=True,
         migration_config_source=DB_MIGRATION_SOURCE_GOLDEN,
-        init_config_file=init_config_filename,
-        generation_transaction=generation_transaction,
-        persist_generation=persist_generation
+        init_config_file=init_config_filename
     )
-
-
-@config.command("recover_golden_native_transactions", hidden=True)
-@click.option(
-    "--boot",
-    "boot_mode",
-    is_flag=True,
-    help="Restore interrupted state without starting normal services",
-)
-@_translate_golden_native_cleanup_error
-@try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
-def recover_golden_native_transactions(boot_mode):
-    """Recover interrupted golden-native generation transactions."""
-    service_quiescence = None
-    service_recovery = None
-    if not boot_mode:
-        service_quiescence, service_recovery = \
-            _new_generation_service_control()
-
-    try:
-        cleanup_warnings = \
-            GenerationTransaction.recover_stale_transactions(
-                service_quiescence=service_quiescence,
-                service_recovery=service_recovery,
-            )
-    except GenerationRecoveryError as error:
-        raise click.ClickException(
-            "Golden-native transaction recovery failed: {}".format(error)
-        ) from error
-
-    if cleanup_warnings:
-        raise GenerationCleanupError("; ".join(cleanup_warnings))
-
-    click.echo("Golden-native transaction recovery succeeded.")
 
 
 @config.command("load_golden_config")
 @click.option('-y', '--yes', is_flag=True, help='Confirm golden-native configuration reload')
 @click.option('-n', '--no_service_restart', default=False, is_flag=True,
-              help='Accepted only with --check-only; mutations restart services')
+              help='Do not restart docker services')
 @click.option('-f', '--force', default=False, is_flag=True,
               help='Force config reload without system checks')
 @click.option('--check-only', default=False, is_flag=True,
               help='Validate the complete golden config without changing CONFIG_DB')
 @click.option('--migrate-only', default=False, is_flag=True,
-              help='Validate, migrate, and transactionally persist CONFIG_DB')
-@click.option('--persist', default=False, is_flag=True,
-              help='Transactionally persist every CONFIG_DB file before commit')
-@click.option(
-    '--preload-namespace-config',
-    'preload_namespace_configs',
-    nargs=2,
-    multiple=True,
-    hidden=True
-)
+              help='Validate complete gold and migrate CONFIG_DB without reloading services')
 @click.option('-b', '--bypass-lock', default=False, is_flag=True,
               help='Do golden-native validation/reload without acquiring lock')
 @click.argument('filename', required=False, default=DEFAULT_GOLDEN_CONFIG_DB_FILE)
-@_translate_golden_native_cleanup_error
 @click.pass_context
 @try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
 def load_golden_config(ctx, filename, yes, no_service_restart, force,
-                       check_only, migrate_only, persist,
-                       preload_namespace_configs, bypass_lock):
+                       check_only, migrate_only, bypass_lock):
     """Validate and reload a complete golden CONFIG_DB without minigraph."""
     argv_str = ' '.join(['config', *sys.argv[1:]])
     log.log_notice(f"'load_golden_config' executing with command: {argv_str}")
+
+    if multi_asic.is_multi_asic():
+        click.secho(
+            "Golden-native configuration is not supported on multi-ASIC platforms.",
+            fg='magenta'
+        )
+        raise click.Abort()
 
     if check_only and migrate_only:
         raise click.UsageError(
             "--check-only and --migrate-only cannot be used together"
         )
-    if check_only and persist:
-        raise click.UsageError(
-            "--check-only and --persist cannot be used together"
-        )
-    if preload_namespace_configs and not migrate_only:
-        raise click.UsageError(
-            "--preload-namespace-config requires --migrate-only"
-        )
-    if no_service_restart and not check_only:
-        raise click.UsageError(
-            "--no_service_restart is unsafe for golden-native mutations "
-            "because Redis writers must be quiesced"
-        )
-
-    support = _validate_golden_native_platform_support()
-    validated_preloads = _validate_golden_native_namespace_preloads(
-        preload_namespace_configs, support
-    )
 
     with _snapshot_golden_native_config(filename) as snapshot_name, \
-            _snapshot_golden_native_init_config(INIT_CFG_FILE) as init_snapshot_name, \
-            _normalized_golden_native_config_snapshot(
-                snapshot_name, filename, support
-            ) as normalized_snapshot_name, \
-            _snapshot_golden_native_namespace_preloads(
-                validated_preloads
-            ) as preload_snapshots:
-        scope_configs = _validate_golden_native_config(
-            normalized_snapshot_name,
+            _snapshot_golden_native_init_config(INIT_CFG_FILE) as init_snapshot_name:
+        _validate_golden_native_config(
+            snapshot_name,
             filename,
             init_snapshot_name,
-            INIT_CFG_FILE,
-            support
+            INIT_CFG_FILE
         )
 
         if check_only:
@@ -4187,52 +2990,20 @@ def load_golden_config(ctx, filename, yes, no_service_restart, force,
                     abort=True
                 )
 
-        generation_transaction = \
-            _new_golden_native_generation_transaction(support)
-
         if migrate_only:
-            migration_result = None
-            service_quiescence, service_recovery = \
-                _new_generation_service_control(
-                    pre_restart=update_sonic_environment
-                )
-            with _generation_transaction_context(
-                    generation_transaction,
-                    service_quiescence=service_quiescence,
-                    service_recovery=service_recovery) as \
-                    generation_service_recovery:
-                _preload_golden_native_namespaces(
-                    preload_snapshots,
-                    init_snapshot_name,
-                    generation_transaction
-                )
-                for namespace, _ in scope_configs:
-                    _mark_generation_scope_for_mutation(
-                        generation_transaction, namespace
-                    )
-                    migration_result = migrate_db_to_lastest(
-                        namespace,
-                        DB_MIGRATION_SOURCE_GOLDEN,
-                        normalized_snapshot_name,
-                        init_snapshot_name
-                    )
-                _set_generation_config_db_initialized(
-                    generation_transaction
-                )
-                _persist_generation_config_files(
-                    generation_transaction
-                )
-                generation_service_recovery()
-            return migration_result
+            return migrate_db_to_lastest(
+                DEFAULT_NAMESPACE,
+                DB_MIGRATION_SOURCE_GOLDEN,
+                snapshot_name,
+                init_snapshot_name
+            )
 
         return _invoke_golden_native_reload(
             ctx,
-            normalized_snapshot_name,
+            snapshot_name,
             no_service_restart,
             force,
-            init_snapshot_name,
-            generation_transaction,
-            persist
+            init_snapshot_name
         )
 
 

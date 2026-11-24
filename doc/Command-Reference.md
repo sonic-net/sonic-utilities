@@ -9266,20 +9266,15 @@ platform, system MAC, and locally available HWSKU against local device identity.
 CONFIG_DB loading, and database migration use those same snapshots; migration uses the golden
 snapshot as its only configuration source.
 
-Use `--check-only` to validate the file without changing CONFIG_DB. Use `--migrate-only` for
-the golden-native warm image-migration path: it quiesces Redis writers, preloads any selected
-cold namespaces, migrates every scope, sets the initialization indicators, transactionally persists
-the complete CONFIG_DB generation, and then restarts services before committing.
-
-For a normal reload, `--persist` writes every host and namespace CONFIG_DB file inside the same
-generation transaction before services restart. Golden-native mutation requires service
-quiescence, so `-n` is rejected unless the command is validation-only. The `-f` option bypasses
-normal system-readiness checks.
+Use `--check-only` to validate the file without changing CONFIG_DB. Use `--migrate-only` to
+validate and migrate CONFIG_DB from the same immutable gold and init snapshots without loading
+the gold into CONFIG_DB or restarting services. This is the golden-native warm image-migration
+path. The two options are mutually exclusive. The `-n` option avoids restarting dependent
+services, and `-f` bypasses normal system-readiness checks.
 
 - Usage:
   ```
-  config load_golden_config [-y|--yes] [-n|--no_service_restart] [-f|--force]
-                            [--check-only | --migrate-only] [--persist] [<filename>]
+  config load_golden_config [-y|--yes] [-n|--no_service_restart] [-f|--force] [--check-only | --migrate-only] [<filename>]
   ```
 
 ### Loading configuration from minigraph (XML) file

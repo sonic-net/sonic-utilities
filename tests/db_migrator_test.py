@@ -23,17 +23,6 @@ sys.path.insert(0, modules_path)
 sys.path.insert(0, scripts_path)
 
 
-@pytest.mark.skipif(
-    os.name == "nt",
-    reason="Executable-mode validation requires POSIX file permissions",
-)
-def test_db_migrator_entrypoint_is_executable():
-    assert os.access(
-        os.path.join(scripts_path, "db_migrator.py"),
-        os.X_OK,
-    )
-
-
 
 def get_sonic_version_info_mlnx():
     return {'asic_type': 'mellanox'}
@@ -778,12 +767,6 @@ class TestConfigSourceSelection(object):
         with open(filename, 'w') as config_file:
             json.dump(data, config_file)
 
-    @staticmethod
-    def _load_golden_config(db_migrator, filename, namespace, required=True):
-        migrator = object.__new__(db_migrator.DBMigrator)
-        migrator.config_source_file = str(filename)
-        return migrator._load_golden_config(namespace, required=required)
-
     def test_golden_source_ignores_existing_corrupt_minigraph(self, tmp_path):
         import db_migrator
 
@@ -801,10 +784,11 @@ class TestConfigSourceSelection(object):
 
         with mock.patch.object(db_migrator, 'MINIGRAPH_FILE', str(minigraph_path)), \
                 mock.patch.object(db_migrator, 'parse_xml') as mock_parse_xml:
-            dbmgtr = object.__new__(db_migrator.DBMigrator)
-            dbmgtr.config_source = db_migrator.CONFIG_SOURCE_GOLDEN
-            dbmgtr.config_source_file = str(golden_path)
-            dbmgtr.generate_config_src(None)
+            dbmgtr = db_migrator.DBMigrator(
+                None,
+                config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
+                config_source_file=str(golden_path)
+            )
 
         assert dbmgtr.config_src_data == golden_config
         mock_parse_xml.assert_not_called()
@@ -831,160 +815,6 @@ class TestConfigSourceSelection(object):
                 config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
                 config_source_file=str(malformed_path)
             )
-
-    def test_golden_source_rejects_duplicate_nested_field(self, tmp_path):
-        import db_migrator
-
-        duplicate_path = tmp_path / "duplicate-golden.json"
-        duplicate_path.write_text(
-            '{"DEVICE_METADATA":{"localhost":'
-            '{"hostname":"first","hostname":"second"}}}'
-        )
-
-        with pytest.raises(
-                RuntimeError, match="Duplicate JSON key 'hostname'"):
-            db_migrator.DBMigrator(
-                None,
-                config_source=db_migrator.CONFIG_SOURCE_GOLDEN,
-                config_source_file=str(duplicate_path)
-            )
-
-    def test_flat_golden_source_is_used_for_host(self, tmp_path):
-        import db_migrator
-
-        golden_config = {"DEVICE_METADATA": {"localhost": {"hostname": "host"}}}
-        golden_path = tmp_path / "flat-golden.json"
-        self._write_json(str(golden_path), golden_config)
-
-        assert self._load_golden_config(
-            db_migrator, golden_path, None
-        ) == golden_config
-
-    def test_wrapped_golden_source_selects_host_scope(self, tmp_path):
-        import db_migrator
-
-        host_config = {"DEVICE_METADATA": {"localhost": {"hostname": "host"}}}
-        golden_path = tmp_path / "wrapped-golden.json"
-        self._write_json(
-            str(golden_path),
-            {
-                "localhost": host_config,
-                "asic0": {"DEVICE_METADATA": {"localhost": {"hostname": "asic0"}}}
-            }
-        )
-
-        assert self._load_golden_config(
-            db_migrator, golden_path, db_migrator.DEFAULT_NAMESPACE
-        ) == host_config
-
-    def test_wrapped_golden_source_selects_asic_scope(self, tmp_path):
-        import db_migrator
-
-        asic_config = {"DEVICE_METADATA": {"localhost": {"hostname": "asic0"}}}
-        golden_path = tmp_path / "wrapped-golden.json"
-        self._write_json(
-            str(golden_path),
-            {
-                "localhost": {
-                    "DEVICE_METADATA": {"localhost": {"hostname": "host"}}
-                },
-                "asic0": asic_config
-            }
-        )
-
-        assert self._load_golden_config(
-            db_migrator, golden_path, "asic0"
-        ) == asic_config
-
-    @pytest.mark.parametrize(
-        "golden_data",
-        [
-            {"DEVICE_METADATA": {"localhost": {"hostname": "host"}}},
-            {
-                "localhost": {
-                    "DEVICE_METADATA": {"localhost": {"hostname": "host"}}
-                }
-            },
-            {
-                "localhost": {
-                    "DEVICE_METADATA": {"localhost": {"hostname": "host"}}
-                },
-                "asic0": {}
-            }
-        ]
-    )
-    def test_automatic_source_quietly_ignores_absent_asic_override(
-            self, tmp_path, golden_data):
-        import db_migrator
-
-        golden_path = tmp_path / "optional-golden.json"
-        self._write_json(str(golden_path), golden_data)
-
-        with mock.patch.object(db_migrator.log, "log_error") as mock_log_error:
-            assert self._load_golden_config(
-                db_migrator, golden_path, "asic0", required=False
-            ) is None
-
-        mock_log_error.assert_not_called()
-
-    @pytest.mark.parametrize(
-        "golden_data, namespace, expected_error",
-        [
-            (
-                {"DEVICE_METADATA": {"localhost": {"hostname": "host"}}},
-                "asic0",
-                "flat golden config cannot be used for namespace 'asic0'"
-            ),
-            (
-                {"asic0": {"DEVICE_METADATA": {"localhost": {"hostname": "asic0"}}}},
-                None,
-                "namespace 'localhost' is missing"
-            ),
-            (
-                {
-                    "localhost": {
-                        "DEVICE_METADATA": {"localhost": {"hostname": "host"}}
-                    }
-                },
-                "asic0",
-                "namespace 'asic0' is missing"
-            ),
-            (
-                {
-                    "localhost": {
-                        "DEVICE_METADATA": {"localhost": {"hostname": "host"}}
-                    },
-                    "asic0": {}
-                },
-                "asic0",
-                "namespace 'asic0' must not be empty"
-            ),
-            (
-                {
-                    "localhost": {
-                        "DEVICE_METADATA": {"localhost": {"hostname": "host"}}
-                    },
-                    "asic0": []
-                },
-                "asic0",
-                "namespace 'asic0' must contain a JSON object"
-            ),
-            (
-                [],
-                None,
-                "top-level value must be a JSON object"
-            )
-        ]
-    )
-    def test_golden_source_rejects_invalid_scope_selection(
-            self, tmp_path, golden_data, namespace, expected_error):
-        import db_migrator
-
-        golden_path = tmp_path / "invalid-golden.json"
-        self._write_json(str(golden_path), golden_data)
-
-        with pytest.raises(RuntimeError, match=expected_error):
-            self._load_golden_config(db_migrator, golden_path, namespace)
 
 
 class TestGoldenConfig(object):
