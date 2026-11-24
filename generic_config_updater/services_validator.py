@@ -114,11 +114,11 @@ def port_speed_change_validator(old_config, upd_config, keys):
                 logger.LOG_PRIORITY_NOTICE,
                 (
                     f"port_speed_change_validator: port speed changed for {key} "
-                    f"from {old_speed} to {upd_speed}, restart telemetry service"
+                    f"from {old_speed} to {upd_speed}, restart gnmi service"
                 ),
                 print_to_console
             )
-            return _service_restart("telemetry")
+            return _service_restart("gnmi")
     return True
 
 
@@ -178,18 +178,6 @@ def gnmi_validator(old_config, upd_config, keys):
 
     if old_vrf != upd_vrf:
         return _service_restart("gnmi")
-    return True
-
-
-def telemetry_validator(old_config, upd_config, keys):
-    old_telemetry = old_config.get("TELEMETRY", {})
-    upd_telemetry = upd_config.get("TELEMETRY", {})
-
-    old_vrf = old_telemetry.get("gnmi", {}).get("vrf", "")
-    upd_vrf = upd_telemetry.get("gnmi", {}).get("vrf", "")
-
-    if old_vrf != upd_vrf:
-        return _service_restart("telemetry")
     return True
 
 

@@ -1,0 +1,15 @@
+{
+    "GNMI|gnmi": {
+        "client_auth": "false",
+        "log_level": "2",
+        "port": "50052"
+    },
+    "GNMI|certs": {
+        "server_key": "/etc/sonic/gnmi/server.key",
+        "ca_crt": "/etc/sonic/gnmi/ca.crt",
+        "server_crt": "/etc/sonic/gnmi/server.crt"
+    },
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_202405_01"
+    }
+}

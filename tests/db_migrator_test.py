@@ -575,7 +575,7 @@ class TestWarmUpgrade_to_2_0_2(object):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'cross_branch_upgrade_to_version_2_0_2_expected')
         expected_db = Db()
 
-        new_tables = ["RESTAPI", "TELEMETRY", "CONSOLE_SWITCH"]
+        new_tables = ["RESTAPI", "CONSOLE_SWITCH"]
         for table in new_tables:
             resulting_table = dbmgtr.configDB.get_table(table)
             expected_table = expected_db.cfgdb.get_table(table)
@@ -605,7 +605,7 @@ class TestWarmUpgrade_to_2_0_2(object):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'cross_branch_upgrade_without_mg_2_0_2_expected.json')
         expected_db = Db()
 
-        new_tables = ["RESTAPI", "TELEMETRY", "CONSOLE_SWITCH"]
+        new_tables = ["RESTAPI", "CONSOLE_SWITCH"]
         for table in new_tables:
             resulting_table = dbmgtr.configDB.get_table(table)
             expected_table = expected_db.cfgdb.get_table(table)
@@ -870,21 +870,44 @@ class TestGNMIMigrator(object):
         diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
         assert not diff
 
-    def test_dns_nameserver_migrator_configdb(self):
-        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-input')
+    @pytest.mark.parametrize('input_db, expected_db_name', [
+        ('gnmi-input', 'gnmi-configdb-expected'),
+        ('gnmi-existing-input', 'gnmi-existing-expected'),
+        ('gnmi-empty-input', 'gnmi-empty-expected'),
+        ('gnmi-partial-input', 'gnmi-partial-expected'),
+        ('gnmi-conflict-input', 'gnmi-conflict-expected'),
+        ('gnmi-certs-present-input', 'gnmi-certs-present-expected'),
+    ])
+    def test_telemetry_to_gnmi_migrator(self, input_db, expected_db_name):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', input_db)
         import db_migrator
         dbmgtr = db_migrator.DBMigrator(None)
-        # Set config_src_data
         dbmgtr.config_src_data = {}
         dbmgtr.migrate()
-        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-configdb-expected')
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', expected_db_name)
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_02')
         resulting_table = dbmgtr.configDB.get_table("GNMI")
         expected_table = expected_db.cfgdb.get_table("GNMI")
 
         diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
         assert not diff
+        assert not dbmgtr.configDB.get_table("TELEMETRY")
+        assert not dbmgtr.configDB.get_entry("FEATURE", "telemetry")
+
+    def test_telemetry_kept_when_image_has_telemetry(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-input')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.config_src_data = {}
+        telemetry_before = dbmgtr.configDB.get_table("TELEMETRY")
+        init_cfg = os.path.join(mock_db_path, 'init_cfg_telemetry.json')
+        with mock.patch.object(db_migrator, 'INIT_CFG_FILE', init_cfg):
+            dbmgtr.migrate()
+
+        assert telemetry_before
+        assert dbmgtr.configDB.get_table("TELEMETRY") == telemetry_before
+        assert dbmgtr.configDB.get_entry("FEATURE", "telemetry").get("state") == "enabled"
+        assert not dbmgtr.configDB.get_table("GNMI")
 
 class TestAAAMigrator(object):
 

@@ -5646,6 +5646,7 @@ Shows the config of given feature or all if no feature is given. The "fallback" 
   bgp             enabled   enabled        local
   database        enabled   disabled       local
   dhcp_relay      enabled   enabled        kube
+  gnmi            enabled   enabled        kube
   lldp            enabled   enabled        kube     true
   mgmt-framework  enabled   enabled        local
   nat             disabled  enabled        local
@@ -5656,7 +5657,6 @@ Shows the config of given feature or all if no feature is given. The "fallback" 
   swss            enabled   enabled        local
   syncd           enabled   enabled        local
   teamd           enabled   enabled        local
-  telemetry       enabled   enabled        kube
   ```
 
 **show feature status**
@@ -5677,6 +5677,7 @@ The subset of features are configurable for remote management and only those rep
   bgp             enabled   enabled        up                                                                     local       local           none
   database        enabled   disabled                                                                              local
   dhcp_relay      enabled   enabled        up             2020-11-15 18:21:09  249e70102f55   20201230.100        kube        local
+  gnmi            enabled   enabled        down           2020-11-15 18:24:59                 20201230.100        kube        none
   lldp            enabled   enabled        up             2020-11-15 18:21:09  779c2d55ee12   20201230.100        kube        local
   mgmt-framework  enabled   enabled        up                                                                     local       local           none
   nat             disabled  enabled                                                                               local
@@ -5687,7 +5688,6 @@ The subset of features are configurable for remote management and only those rep
   swss            enabled   enabled        up                                                                     local       local           none
   syncd           enabled   enabled        up                                                                     local       local           none
   teamd           enabled   enabled        up                                                                     local       local           none
-  telemetry       enabled   enabled        down           2020-11-15 18:24:59                 20201230.100        kube        none
   ```
 
 **config feature owner**
@@ -5731,6 +5731,7 @@ This command will display the status of auto-restart for feature container.
   bgp         enabled
   database    always_enabled
   dhcp_relay  enabled
+  gnmi        enabled
   lldp        enabled
   pmon        enabled
   radv        enabled
@@ -5738,7 +5739,6 @@ This command will display the status of auto-restart for feature container.
   swss        enabled
   syncd       enabled
   teamd       enabled
-  telemetry   enabled
   ```
 
 Optionally, you can specify a feature name in order to display
@@ -14039,6 +14039,7 @@ This command displays rate limit configuration for containers.
   --------------  ----------  -------
   bgp             0           0
   database        300         20000
+  gnmi            300         20000
   lldp            300         20000
   mgmt-framework  300         20000
   pmon            300         20000
@@ -14047,7 +14048,6 @@ This command displays rate limit configuration for containers.
   swss            300         20000
   syncd           300         20000
   teamd           300         20000
-  telemetry       300         20000
 
   admin@sonic:~$ show syslog rate-limit-container bgp
   SERVICE         INTERVAL    BURST
@@ -15717,6 +15717,7 @@ SONiC package status can be *Installed*, *Not installed* or *Built-In*. "Built-I
   database        docker-database              SONiC database package        1.0.0      Built-In
   dhcp-relay      azure/docker-dhcp-relay      SONiC dhcp-relay package      1.0.0      Installed
   fpm-frr         docker-fpm-frr               SONiC fpm-frr package         1.0.0      Built-In
+  gnmi            docker-sonic-gnmi            SONiC gnmi package            1.0.0      Built-In
   lldp            docker-lldp                  SONiC lldp package            1.0.0      Built-In
   macsec          docker-macsec                SONiC macsec package          1.0.0      Built-In
   mgmt-framework  docker-sonic-mgmt-framework  SONiC mgmt-framework package  1.0.0      Built-In
@@ -15728,7 +15729,6 @@ SONiC package status can be *Installed*, *Not installed* or *Built-In*. "Built-I
   swss            docker-orchagent             SONiC swss package            1.0.0      Built-In
   syncd           docker-syncd-mlnx            SONiC syncd package           1.0.0      Built-In
   teamd           docker-teamd                 SONiC teamd package           1.0.0      Built-In
-  telemetry       docker-sonic-telemetry       SONiC telemetry package       1.0.0      Built-In
   ```
 
 **sonic-package-manager repository add**
