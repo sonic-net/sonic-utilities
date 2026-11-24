@@ -4,6 +4,7 @@ import io
 import jsonpatch
 import sys
 import unittest
+from unittest import mock
 from unittest.mock import MagicMock, Mock
 import generic_config_updater.patch_sorter as ps
 from .gutest_helpers import Files, create_side_effect_dict, create_side_effect_jsonmovegroup_dict, \
@@ -3022,6 +3023,70 @@ class RemoveCreateOnlyDependencyMoveGenerator(unittest.TestCase):
         test_case = Files.PATCH_SORTER_TEST_SUCCESS['CREATE_ONLY_PATH_TEST_MIRROR_SESSION__SUCCESS']
         return copy.deepcopy(test_case['current_config'])
 
+    def _sub_interface_lanes_diff(self, sub_interfaces):
+        current_config = {
+            "PORT": {"Ethernet0": {"lanes": "1,2,3,4", "speed": "100000"},
+                     "Ethernet440": {"lanes": "697,698,699,700", "speed": "100000"}},
+            "VLAN_SUB_INTERFACE": sub_interfaces,
+        }
+        target_config = jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet440/lanes", "value": "697,698"}
+        ]).apply(current_config)
+        return ps.Diff(current_config, target_config)
+
+    def test_generate__port_with_sub_interface_addresses__rows_removed_not_table(self):
+        # The address rows reference sub-interfaces in the same table. Each row is offered once
+        # for the port and once more when the parents of the port's dependents are removed; the
+        # whole table is never offered.
+        sub_interfaces = {"Ethernet0.10": {"admin_status": "up"}}
+        expected = []
+        for vlan in range(300, 306):
+            sub_interfaces[f"Eth440.{vlan}"] = {"vlan": str(vlan), "admin_status": "up"}
+            sub_interfaces[f"Eth440.{vlan}|10.{vlan - 300}.0.1/24"] = {}
+            sub_interfaces[f"Eth440.{vlan}|fc00:{vlan}::1/64"] = {}
+            expected += 2 * [{"op": "remove", "path": f"/VLAN_SUB_INTERFACE/Eth440.{vlan}|10.{vlan - 300}.0.1~124"},
+                             {"op": "remove", "path": f"/VLAN_SUB_INTERFACE/Eth440.{vlan}|fc00:{vlan}::1~164"},
+                             {"op": "remove", "path": f"/VLAN_SUB_INTERFACE/Eth440.{vlan}"}]
+        expected.append({"op": "remove", "path": "/PORT/Ethernet440"})
+
+        moves = list(self.generator.generate(self._sub_interface_lanes_diff(sub_interfaces)))
+
+        self.verify_moves(expected, moves)
+
+    def test_generate__dependents_parent_refers_to_itself__not_expanded_again(self):
+        # The parent of each of the port's dependents is a table whose own references lead back
+        # to that table. It is offered once per dependent rather than expanded again per
+        # reference at every level.
+        current_config = {
+            "PORT": {"Ethernet0": {"lanes": "1,2,3,4", "speed": "100000"},
+                     "Ethernet440": {"lanes": "697,698,699,700", "speed": "100000"}},
+            "INTERFACE": {"Ethernet440": {}, "Ethernet440|10.0.0.1/24": {}, "Ethernet440|fc00::1/64": {}},
+        }
+        target_config = jsonpatch.JsonPatch([
+            {"op": "replace", "path": "/PORT/Ethernet440/lanes", "value": "697,698"}
+        ]).apply(current_config)
+        rows = ["/INTERFACE/Ethernet440|10.0.0.1~124", "/INTERFACE/Ethernet440|fc00::1~164"]
+        refs = {"/PORT/Ethernet440": rows, "/INTERFACE": rows}
+
+        with mock.patch.object(PathAddressing, "find_ref_paths", side_effect=lambda path, *_: refs.get(path, [])):
+            moves = list(self.generator.generate(ps.Diff(current_config, target_config)))
+
+        self.verify_moves([{"op": "remove", "path": rows[0]}, {"op": "remove", "path": rows[1]},
+                           {"op": "remove", "path": "/PORT/Ethernet440"}] +
+                          2 * [{"op": "remove", "path": "/INTERFACE"}],
+                          moves)
+
+    def test_generate__port_with_bare_sub_interfaces__table_not_removed(self):
+        sub_interfaces = {"Eth440.300": {"vlan": "300", "admin_status": "up"},
+                          "Ethernet440.301": {"admin_status": "up"},
+                          "Ethernet0.10": {"admin_status": "up"}}
+
+        moves = list(self.generator.generate(self._sub_interface_lanes_diff(sub_interfaces)))
+
+        self.verify_moves(2 * [{"op": "remove", "path": "/VLAN_SUB_INTERFACE/Eth440.300"},
+                               {"op": "remove", "path": "/VLAN_SUB_INTERFACE/Ethernet440.301"}] +
+                          [{"op": "remove", "path": "/PORT/Ethernet440"}],
+                          moves)
     def verify_moves(self, ops, moves):
         moves_ops = []
         for move in moves:
@@ -3839,6 +3904,94 @@ class TestPatchSorter(unittest.TestCase):
 
         self.assertEqual(expected_changes, actual_changes)
 
+    def _breakout_config(self, sub_interfaces, port_admin_status="down"):
+        return {
+            "PORT": {
+                "Ethernet0": {"lanes": "1,2,3,4,5,6,7,8", "alias": "etp1", "index": "1",
+                              "speed": "800000", "admin_status": "up"},
+                "Ethernet440": {"lanes": "697,698,699,700,701,702,703,704", "alias": "etp56", "index": "56",
+                                "speed": "800000", "fec": "rs", "subport": "0", "admin_status": port_admin_status},
+            },
+            "BREAKOUT_CFG": {"Ethernet0": {"brkout_mode": "1x800G"}, "Ethernet440": {"brkout_mode": "1x800G"}},
+            "VRF": {"VrfA": {}},
+            "VLAN_SUB_INTERFACE": sub_interfaces,
+        }
+
+    # The patch a breakout CLI generates for a 1x800G to 2x400G breakout of Ethernet440.
+    BREAKOUT_PATCH = [
+        {"op": "replace", "path": "/BREAKOUT_CFG/Ethernet440/brkout_mode", "value": "2x400G"},
+        {"op": "add", "path": "/PORT/Ethernet444",
+         "value": {"alias": "etp56b", "index": "56", "lanes": "701,702,703,704", "speed": "400000",
+                   "subport": "2"}},
+        {"op": "remove", "path": "/PORT/Ethernet440/fec"},
+        {"op": "replace", "path": "/PORT/Ethernet440/lanes", "value": "697,698,699,700"},
+        {"op": "replace", "path": "/PORT/Ethernet440/alias", "value": "etp56a"},
+        {"op": "replace", "path": "/PORT/Ethernet440/subport", "value": "1"},
+        {"op": "replace", "path": "/PORT/Ethernet440/speed", "value": "400000"},
+    ]
+
+    def _ethernet0_sub_interface(self, config):
+        return {key: value for key, value in config.get("VLAN_SUB_INTERFACE", {}).items()
+                if key == "Ethernet0.10" or key.startswith("Ethernet0.10|")}
+
+    def _sort_breakout(self, current_config, patch):
+        """
+        Sorts 'patch' and applies each change, asserting that no change touches Ethernet0.10 or its
+        addresses, or leaves a sub-interface of Ethernet440 in place while the port is removed.
+        Returns whether the port was removed.
+        """
+        actual = self.create_patch_sorter(current_config).sort(patch)
+
+        config = current_config
+        port_removed = False
+        for change in actual:
+            after = change.apply(config)
+            self.assertEqual(self._ethernet0_sub_interface(config), self._ethernet0_sub_interface(after))
+            if "Ethernet440" not in after["PORT"]:
+                port_removed = True
+                self.assertFalse([key for key in after.get("VLAN_SUB_INTERFACE", {})
+                                  if key.startswith(("Eth440.", "Ethernet440."))])
+            config = after
+        self.assertEqual(patch.apply(current_config), config)
+        return port_removed
+
+    def test_sort__breakout_of_port_with_sub_interfaces__sub_interfaces_removed_and_re_added(self):
+        # A breakout re-creates Ethernet440 for its new lanes. Its sub-interfaces, named
+        # Eth440.<vlan> and tied to the port by a YANG must rather than a leafref, have to go
+        # first, and come back once the port is re-created.
+        sub_interfaces = {}
+        for i, vlan in enumerate((300, 1601)):
+            sub_interfaces[f"Eth440.{vlan}"] = {"vlan": str(vlan), "admin_status": "up", "vrf_name": "VrfA"}
+            sub_interfaces[f"Eth440.{vlan}|10.{i}.0.1/24"] = {}
+        sub_interfaces["Ethernet440.20"] = {"admin_status": "up"}
+        sub_interfaces["Ethernet0.10|10.9.0.1/24"] = {}
+        sub_interfaces["Ethernet0.10"] = {"admin_status": "up"}
+
+        for port_admin_status in ("up", "down"):
+            with self.subTest(port_admin_status=port_admin_status):
+                current_config = self._breakout_config(sub_interfaces, port_admin_status)
+
+                self.assertTrue(self._sort_breakout(current_config, jsonpatch.JsonPatch(self.BREAKOUT_PATCH)))
+
+    def test_sort__breakout_of_port_with_bare_sub_interfaces__other_sub_interfaces_untouched(self):
+        # End-to-end sanity check: DFS finds a sorting without reaching the remove-parent
+        # moves, so this passes with the generator fix reverted. The regression guard is
+        # test_generate__port_with_bare_sub_interfaces__table_not_removed.
+        sub_interfaces = {"Eth440.300": {"vlan": "300", "admin_status": "up"},
+                          "Eth440.301": {"vlan": "301", "admin_status": "up"},
+                          "Ethernet0.10": {"admin_status": "up"}}
+
+        self.assertTrue(self._sort_breakout(self._breakout_config(sub_interfaces),
+                                            jsonpatch.JsonPatch(self.BREAKOUT_PATCH)))
+
+    def test_sort__sub_interface_added_with_port_lanes_change__added_after_port_re_created(self):
+        current_config = self._breakout_config({"Ethernet0.10": {"admin_status": "up"}})
+        patch = jsonpatch.JsonPatch(self.BREAKOUT_PATCH + [
+            {"op": "add", "path": "/VLAN_SUB_INTERFACE/Eth440.300",
+             "value": {"vlan": "300", "admin_status": "up"}},
+        ])
+
+        self.assertTrue(self._sort_breakout(current_config, patch))
     def test_patch_sorter_failure(self):
         # Format of the JSON file containing the test-cases:
         #
