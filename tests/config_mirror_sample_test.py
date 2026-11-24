@@ -119,6 +119,112 @@ def test_invalid_references(database, session, port, expected):
     assert not database.writes
 
 
+@pytest.fixture
+def hwsflow_database(database, monkeypatch):
+    """Route the session writes of hwsflow add to the isolated ConfigDB."""
+    monkeypatch.setattr(config.multi_asic, 'get_all_namespaces', lambda: {'front_ns': []})
+    monkeypatch.setattr(config, 'ConfigDBConnector', lambda **kwargs: mock.Mock())
+    monkeypatch.setattr(config, 'ValidatedConfigDBConnector', lambda connector: database)
+    monkeypatch.setattr(config, 'validate_mirror_session_config', lambda *args, **kwargs: True)
+    database.connect = lambda: None
+    return database
+
+
+HWSFLOW_ADD = ['hwsflow', 'add', 'hws1', '10.1.0.32', '10.0.0.3', '8', '64']
+
+
+@pytest.mark.parametrize('options,fields', [
+    (['--sample_rate', '1024'], {}),
+    (['--sample_rate', '1024', '--truncate_size', '128', '--udp_src_port', '6400', '--udp_dst_port', '6344'],
+     {'truncate_size': 128, 'udp_src_port': 6400, 'udp_dst_port': 6344}),
+])
+def test_hwsflow_add_writes_only_configured_fields(hwsflow_database, options, fields):
+    result = invoke(HWSFLOW_ADD + options)
+    assert result.exit_code == 0, result.output
+    assert hwsflow_database.get_entry('MIRROR_SESSION', 'hws1') == dict(
+        {'type': 'HWSFLOW', 'src_ip': '10.1.0.32', 'dst_ip': '10.0.0.3', 'dscp': 8, 'ttl': 64,
+         'sample_rate': 1024}, **fields)
+
+
+@pytest.mark.parametrize('options,expected', [
+    ([], "Missing option '--sample_rate'"),
+    (['--sample_rate', '1'], 'sample_rate'),
+    (['--sample_rate', '1024', '--truncate_size', '63'], 'truncate_size'),
+    (['--sample_rate', '1024', '--udp_dst_port', '0'], 'udp_dst_port'),
+    (['--sample_rate', '1024', '--policer', 'p1'], 'No such option'),
+])
+def test_hwsflow_add_invalid_options_never_write(hwsflow_database, options, expected):
+    result = invoke(HWSFLOW_ADD + options)
+    assert result.exit_code != 0
+    assert expected in result.output
+    assert not hwsflow_database.writes
+
+
+@pytest.mark.parametrize('unsupported,options,expected', [
+    (['MIRROR_SESSION_HWSFLOW_CAPABLE'], [], 'HWSFLOW mirror session is not supported by the ASIC'),
+    (['MIRROR_SESSION_SAMPLE_RATE_CAPABLE'], [], 'HWSFLOW mirror session sample rate is not supported by the ASIC'),
+    (['MIRROR_SESSION_TRUNCATION_CAPABLE'], [], 'HWSFLOW mirror session truncation is not supported by the ASIC'),
+    (['SAMPLEPACKET_TRUNCATION_CAPABLE'], ['--truncate_size', '256'], None),
+])
+def test_hwsflow_add_follows_capabilities(hwsflow_database, monkeypatch, unsupported, options, expected):
+    state = mock.Mock()
+    state.get.side_effect = lambda db, key, field: 'false' if field in unsupported else 'true'
+    monkeypatch.setattr(config, 'SonicV2Connector', lambda **kwargs: state)
+    result = invoke(HWSFLOW_ADD + ['--sample_rate', '1024'] + options)
+    if expected is None:
+        assert result.exit_code == 0, result.output
+        return
+    assert result.exit_code != 0
+    assert expected in result.output
+    assert not hwsflow_database.writes
+
+
+def test_hwsflow_session_and_sflow_global_exclude_each_other(hwsflow_database):
+    hwsflow_database.tables['SFLOW'] = {'global': {'admin_state': 'down'}}
+    result = invoke(HWSFLOW_ADD + ['--sample_rate', '1024'])
+    assert result.exit_code != 0
+    assert 'cannot coexist' in result.output
+    assert not hwsflow_database.writes
+
+    del hwsflow_database.tables['SFLOW']
+    hwsflow_database.tables['MIRROR_SESSION']['hws1'] = {'type': 'HWSFLOW'}
+    result = CliRunner().invoke(config.config.commands['sflow'].commands['enable'], [],
+                                obj={'db': hwsflow_database})
+    assert result.exit_code != 0
+    assert 'cannot coexist' in result.output
+    assert not hwsflow_database.writes
+
+
+def test_hwsflow_binding_takes_its_policy_from_the_session(database):
+    database.tables['MIRROR_SESSION']['hws1'] = {'type': 'HWSFLOW', 'sample_rate': '1024'}
+    for options in (['--sample_rate', '512'], ['--truncate_size', '128']):
+        result = invoke(['sample', 'add', 'hws1', 'Ethernet4', 'rx'] + options)
+        assert result.exit_code != 0
+        assert 'An HWSFLOW session carries the sample rate and truncate size' in result.output
+        assert not database.writes
+    result = invoke(['sample', 'add', 'hws1', 'Ethernet4', 'rx'])
+    assert result.exit_code == 0, result.output
+    assert database.get_table('PORT_MIRROR_SAMPLE') == {
+        ('Ethernet4', 'rx'): {'mirror_session': 'hws1', 'admin_state': 'up'}
+    }
+
+
+@pytest.mark.parametrize('lag_sampled', [True, False])
+def test_hwsflow_binding_rejects_a_member_where_the_portchannel_is_sampled(database, monkeypatch, lag_sampled):
+    database.tables['MIRROR_SESSION']['hws1'] = {'type': 'HWSFLOW', 'sample_rate': '1024'}
+    state = mock.Mock()
+    state.get.side_effect = lambda db, key, field: str(lag_sampled or not field.startswith('LAG_')).lower()
+    monkeypatch.setattr(config, 'SonicV2Connector', lambda **kwargs: state)
+    result = invoke(['sample', 'add', 'hws1', 'Ethernet0', 'rx'])
+    if lag_sampled:
+        assert result.exit_code != 0
+        assert 'Ethernet0 is a member of PortChannel1; bind PortChannel1 instead.' in result.output
+        assert not database.writes
+    else:
+        assert result.exit_code == 0, result.output
+        assert database.get_keys('PORT_MIRROR_SAMPLE') == [('Ethernet0', 'rx')]
+
+
 @pytest.mark.parametrize('name,entry,source', [
     ('Ethernet-IB0', {}, 'Ethernet-IB0'),
     ('Ethernet-Rec0', {'role': 'Rec'}, 'Ethernet-Rec0'),

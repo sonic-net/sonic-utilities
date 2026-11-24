@@ -144,6 +144,7 @@ DSCP_RANGE = click.IntRange(min=0, max=63)
 TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
 GRE_TYPE_RANGE = click.IntRange(min=0, max=65535)
+UDP_PORT_RANGE = click.IntRange(min=1, max=65535)
 ADHOC_VALIDATION = True
 
 if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
@@ -3458,6 +3459,8 @@ def mirror_session():
 
 # Sampled source bindings: config mirror_session sample add/remove/enable/disable
 def validate_sample_rate(ctx, param, value):
+    if value is None:
+        return None
     return click.IntRange(SAMPLE_RATE_MIN, SAMPLE_RATE_MAX).convert(value, param, ctx)
 
 
@@ -3511,6 +3514,24 @@ def validate_mirror_sample_capabilities(ctx, namespace, directions, truncate_siz
         ctx.fail(f"Sampled mirror direction '{unsupported[0]}' is not supported by the ASIC")
     if truncation_unsupported:
         ctx.fail('Sampled mirror truncation is not supported by the ASIC')
+
+
+def validate_hwsflow_sample_source(ctx, namespace, database, port, directions):
+    """Reject a PortChannel member port where the ASIC samples at the PortChannel."""
+    members = [port_mirror.binding_key(key) for key in database.get_keys('PORTCHANNEL_MEMBER')]
+    lag = next((lag for lag, member in members if member == port), None)
+    if lag is None:
+        return
+    try:
+        state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        state_db.connect(state_db.STATE_DB, False)
+        fields = {'rx': 'LAG_INGRESS_SAMPLE_MIRROR_CAPABLE', 'tx': 'LAG_EGRESS_SAMPLE_MIRROR_CAPABLE'}
+        lag_sampled = any(state_db.get(state_db.STATE_DB, 'SWITCH_CAPABILITY|switch', fields[direction]) == 'true'
+                          for direction in directions)
+    except Exception as error:
+        ctx.fail(f'Unable to read sampled mirror capabilities: {error}')
+    if lag_sampled:
+        ctx.fail(f'{port} is a member of {lag}; bind {lag} instead.')
 
 
 def resolve_mirror_sample_sources(ctx, databases, ports, removing=False):
@@ -3586,30 +3607,31 @@ def apply_mirror_sample_bindings(ctx, database, namespace, entries, update=False
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='sample')
 def sample():
-    """Configure per-port sampled ERSPAN bindings."""
+    """Configure per-port sampled ERSPAN or HWSFLOW bindings."""
 
 
 @sample.command('add')
 @click.argument('session_name', metavar='<session_name>')
 @click.argument('port', metavar='<source_ports>')
 @click.argument('direction', type=click.Choice(['rx', 'tx', 'both']))
-@click.option('--sample_rate', required=True, type=int, callback=validate_sample_rate,
-              help='Sample one in every N packets.')
+@click.option('--sample_rate', type=int, callback=validate_sample_rate, default=None,
+              help='Sample one in every N packets. Required for an ERSPAN session.')
 @click.option('--truncate_size', type=int, callback=validate_truncate_size, default=None,
               help='Truncation size in bytes.')
 @click.option('--disabled', is_flag=True, help='Create a disabled binding (admin_state=down).')
 @click.pass_context
 @try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, disabled):
-    """Add sampled ERSPAN bindings for one or more source ports."""
+    """Add sampled ERSPAN or HWSFLOW bindings for one or more source ports."""
     databases = port_mirror.config_databases()
     for database in databases.values():
         if 'global' in database.get_keys('SFLOW'):
             ctx.fail(port_mirror.EXCLUSION_ERROR)
     sources = resolve_mirror_sample_sources(ctx, databases, port)
     directions = ['rx', 'tx'] if direction == 'both' else [direction]
-    value = {'mirror_session': session_name, 'sample_rate': str(sample_rate),
-             'admin_state': 'down' if disabled else 'up'}
+    value = {'mirror_session': session_name, 'admin_state': 'down' if disabled else 'up'}
+    if sample_rate is not None:
+        value['sample_rate'] = str(sample_rate)
     if truncate_size is not None:
         value['truncate_size'] = str(truncate_size)
     grouped = {}
@@ -3618,13 +3640,21 @@ def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, d
             session = database.get_entry('MIRROR_SESSION', session_name)
             if not session:
                 ctx.fail(f'Mirror session {session_name} does not exist in the source namespace.')
-            if session.get('type', 'ERSPAN') != 'ERSPAN':
-                ctx.fail('A sampled binding must reference an ERSPAN session.')
+            session_type = session.get('type', 'ERSPAN')
+            if session_type not in ('ERSPAN', 'HWSFLOW'):
+                ctx.fail('A sampled binding must reference an ERSPAN or HWSFLOW session.')
+            if session_type == 'HWSFLOW' and (sample_rate is not None or truncate_size is not None):
+                ctx.fail('An HWSFLOW session carries the sample rate and truncate size; '
+                         'do not set them on the binding.')
+            if session_type == 'ERSPAN' and sample_rate is None:
+                ctx.fail("Missing option '--sample_rate'.")
             if 'src_port' in session:
                 ctx.fail('A sampled export session must not configure src_port.')
             validate_mirror_sample_capabilities(ctx, namespace, directions, truncate_size)
             grouped[namespace] = []
         entries = grouped[namespace]
+        if database.get_entry('MIRROR_SESSION', session_name).get('type') == 'HWSFLOW':
+            validate_hwsflow_sample_source(ctx, namespace, database, source, directions)
         validate_mirror_sample_source_overlap(ctx, database, source, directions, [key for key, _ in entries])
         entries.extend(((source, d), dict(value)) for d in directions)
     # Validate every source, including cross-namespace requests, before writes.
@@ -3639,7 +3669,7 @@ def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, d
 @click.pass_context
 @try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_remove(ctx, session_name, port, direction):
-    """Remove sampled ERSPAN bindings for one or more source ports."""
+    """Remove sampled ERSPAN or HWSFLOW bindings for one or more source ports."""
     databases = port_mirror.config_databases()
     # Use a stored canonical source name even if the interface was removed.
     sources = resolve_mirror_sample_sources(ctx, databases, port, removing=True)
@@ -3694,7 +3724,7 @@ def set_mirror_sample_admin_state(ctx, session_name, port, direction, admin_stat
 @click.pass_context
 @try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_enable(ctx, session_name, port, direction):
-    """Enable existing sampled ERSPAN bindings without changing their policy."""
+    """Enable existing sampled ERSPAN or HWSFLOW bindings without changing their policy."""
     set_mirror_sample_admin_state(ctx, session_name, port, direction, 'up')
 
 
@@ -3705,7 +3735,7 @@ def sample_enable(ctx, session_name, port, direction):
 @click.pass_context
 @try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
 def sample_disable(ctx, session_name, port, direction):
-    """Disable existing sampled ERSPAN bindings without removing their configuration."""
+    """Disable existing sampled ERSPAN or HWSFLOW bindings without removing their configuration."""
     set_mirror_sample_admin_state(ctx, session_name, port, direction, 'down')
 
 
@@ -3909,6 +3939,110 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl,
             except ValueError as e:
                 ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         log_mirror_session_created(session_name, session_info)
+
+
+@mirror_session.group(cls=clicommon.AbbreviationGroup, name='hwsflow')
+@click.pass_context
+def hwsflow(ctx):
+    """ HWSFLOW mirror session """
+    pass
+
+
+#
+# 'add' subcommand
+#
+
+@hwsflow.command('add')
+@click.argument('session_name', metavar='<session_name>', required=True)
+@click.argument('src_ip', metavar='<src_ip>', callback=validate_ipv4_address, required=True)
+@click.argument('dst_ip', metavar='<dst_ip>', callback=validate_ipv4_address, required=True)
+@click.argument('dscp', metavar='<dscp>', type=DSCP_RANGE, required=True)
+@click.argument('ttl', metavar='<ttl>', type=TTL_RANGE, required=True)
+@click.option('--sample_rate', required=True, type=int, callback=validate_sample_rate,
+              help='Sample one in every N packets.')
+@click.option('--truncate_size', type=int, callback=validate_truncate_size, default=None,
+              help='Truncation size in bytes. Default: 128.')
+@click.option('--udp_src_port', type=UDP_PORT_RANGE,
+              help='UDP source port of the sFlow datagram. Default: 6343')
+@click.option('--udp_dst_port', type=UDP_PORT_RANGE,
+              help='UDP destination port of the sFlow datagram. Default: 6343')
+@click.pass_context
+@try_lock(SAMPLING_CONFIG_LOCK, timeout=0)
+def hwsflow_add(ctx, session_name, src_ip, dst_ip, dscp, ttl, sample_rate, truncate_size,
+                udp_src_port, udp_dst_port):
+    """ Add HWSFLOW mirror session """
+    session_info = {
+            "type": "HWSFLOW",
+            "src_ip": src_ip,
+            "dst_ip": dst_ip,
+            "dscp": dscp,
+            "ttl": ttl,
+            "sample_rate": sample_rate
+            }
+    for field, value in (('truncate_size', truncate_size), ('udp_src_port', udp_src_port),
+                         ('udp_dst_port', udp_dst_port)):
+        if value is not None:
+            session_info[field] = value
+
+    for database in port_mirror.config_databases().values():
+        if 'global' in database.get_keys('SFLOW'):
+            ctx.fail(port_mirror.EXCLUSION_ERROR)
+
+    """
+    For multi-npu platforms we need to program all front asic namespaces
+    """
+    namespaces = multi_asic.get_all_namespaces()
+    if not namespaces['front_ns']:
+        config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+        config_db.connect()
+        if ADHOC_VALIDATION:
+            if validate_mirror_session_config(config_db, session_name, None, None, None) is False:
+                return
+        validate_hwsflow_session_capability(ctx, DEFAULT_NAMESPACE)
+        try:
+            config_db.set_entry("MIRROR_SESSION", session_name, session_info)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+    else:
+        per_npu_configdb = {}
+        for front_asic_namespaces in namespaces['front_ns']:
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(
+                ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            )
+            per_npu_configdb[front_asic_namespaces].connect()
+            if ADHOC_VALIDATION:
+                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name,
+                                                  None, None, None) is False:
+                    return
+            validate_hwsflow_session_capability(ctx, front_asic_namespaces)
+            try:
+                per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
+            except ValueError as e:
+                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+    log_mirror_session_created(session_name, session_info)
+
+
+def validate_hwsflow_session_capability(ctx, namespace):
+    """Allow an absent discovery field, but report STATE_DB access failures."""
+    try:
+        state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        state_db.connect(state_db.STATE_DB, False)
+
+        def unsupported(field):
+            return state_db.get(state_db.STATE_DB, 'SWITCH_CAPABILITY|switch', field) == 'false'
+
+        session_unsupported = unsupported('MIRROR_SESSION_HWSFLOW_CAPABLE')
+        rate_unsupported = unsupported('MIRROR_SESSION_SAMPLE_RATE_CAPABLE')
+        truncation_unsupported = unsupported('MIRROR_SESSION_TRUNCATION_CAPABLE')
+    except Exception as error:
+        ctx.fail(f'Unable to read HWSFLOW mirror capabilities: {error}')
+    if session_unsupported:
+        ctx.fail('HWSFLOW mirror session is not supported by the ASIC')
+    if rate_unsupported:
+        ctx.fail('HWSFLOW mirror session sample rate is not supported by the ASIC')
+    if truncation_unsupported:
+        ctx.fail('HWSFLOW mirror session truncation is not supported by the ASIC')
+
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='span')
 @click.pass_context

@@ -1046,9 +1046,12 @@ class AclLoader(object):
                          "Label", "Policer")
         span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction",
                        "Queue", "Label", "Policer")
+        hwsflow_header = ("Name", "Status", "SRC IP", "DST IP", "DSCP", "TTL", "UDP SRC Port",
+                          "UDP DST Port", "Sample Rate", "Truncate Size", "Monitor Port")
 
         erspan_data = []
         span_data = []
+        hwsflow_data = []
         for key, val in self.get_sessions_db_info().items():
             if session_name and key != session_name:
                 continue
@@ -1058,6 +1061,12 @@ class AclLoader(object):
                                   val.get("src_port", ""), val.get("direction", "").lower(),
                                   val.get("queue", ""), val.get("label", ""),
                                   val.get("policer", "")])
+            elif val.get("type") == "HWSFLOW":
+                hwsflow_data.append([key, val.get("status", ""), val.get("src_ip", ""),
+                                     val.get("dst_ip", ""), val.get("dscp", ""), val.get("ttl", ""),
+                                     val.get("udp_src_port", "6343"), val.get("udp_dst_port", "6343"),
+                                     val.get("sample_rate", ""), val.get("truncate_size", "128"),
+                                     val.get("monitor_port", "")])
             else:
                 erspan_data.append([key, val.get("status", ""), val.get("src_ip", ""),
                                     val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
@@ -1071,6 +1080,10 @@ class AclLoader(object):
         print("\nSPAN Sessions")
         span_data = natsorted(span_data)
         print(tabulate.tabulate(span_data, headers=span_header, tablefmt="simple", missingval=""))
+        if hwsflow_data:
+            print("\nHWSFLOW Sessions")
+            hwsflow_data = natsorted(hwsflow_data)
+            print(tabulate.tabulate(hwsflow_data, headers=hwsflow_header, tablefmt="simple", missingval=""))
 
     def show_policer(self, policer_name):
         """

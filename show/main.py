@@ -2479,9 +2479,12 @@ def mirror_session(session_name, verbose, explicit_session_name):
         for namespace, database in databases.items():
             for key, value in database.get_table(port_mirror.SAMPLE_TABLE).items():
                 source, direction = port_mirror.binding_key(key)
+                # An HWSFLOW binding shows the sample rate and truncate size of its session.
+                session = database.get_entry('MIRROR_SESSION', value.get('mirror_session', ''))
+                policy = session if session.get('type') == 'HWSFLOW' else value
                 row = [source, direction, value.get('mirror_session', ''),
-                       value.get('admin_state', 'down'), value.get('sample_rate', ''),
-                       value.get('truncate_size', 'Disabled')]
+                       value.get('admin_state', 'down'), policy.get('sample_rate', ''),
+                       policy.get('truncate_size', 'Disabled')]
                 if len(databases) > 1:
                     row.insert(0, namespace or 'host')
                 rows.append(row)
@@ -2489,7 +2492,7 @@ def mirror_session(session_name, verbose, explicit_session_name):
                    'Sample Rate', 'Truncate Size']
         if len(databases) > 1:
             headers.insert(0, 'Namespace')
-        click.echo('Sampled ERSPAN Bindings')
+        click.echo('Sampled Mirror Bindings')
         click.echo(tabulate(natsorted(rows), headers=headers))
         return
     cmd = ['acl-loader', 'show', 'session']

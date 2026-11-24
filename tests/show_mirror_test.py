@@ -73,7 +73,7 @@ def sampled_show_db(monkeypatch, tmp_path):
 def assert_sampled_show_output(output, headers, rows):
     """Check every displayed column and row without depending on padding widths."""
     lines = output.strip().splitlines()
-    assert lines[0] == 'Sampled ERSPAN Bindings'
+    assert lines[0] == 'Sampled Mirror Bindings'
     assert re.split(r'\s{2,}', lines[1].strip()) == headers
     assert re.fullmatch(r'[- ]+', lines[2])
     assert [re.split(r'\s{2,}', line.strip()) for line in lines[3:]] == rows
@@ -99,6 +99,33 @@ def test_show_sample_bindings(sampled_show_db, monkeypatch):
                                   ['PortChannel10', 'rx', 'export3', 'down', '5000', '256'],
                               ])
     assert database.get_table('PORT_MIRROR_SAMPLE') == before
+
+
+def test_show_hwsflow_session_and_binding(sampled_show_db, monkeypatch):
+    session = {'type': 'HWSFLOW', 'src_ip': '10.1.0.32', 'dst_ip': '10.0.0.3', 'dscp': '8', 'ttl': '64',
+               'udp_src_port': '6400', 'sample_rate': '1024', 'truncate_size': '128'}
+    database = sampled_show_db({('Ethernet4', 'rx'): {'mirror_session': 'hws1', 'admin_state': 'up'}})
+    database.set_entry('MIRROR_SESSION', 'hws1', session)
+    monkeypatch.setattr(port_mirror, 'config_databases', lambda: {'': database})
+    result = CliRunner().invoke(show_cli.cli.commands['mirror_session'], ['sample'])
+    assert result.exit_code == 0, result.output
+    assert_sampled_show_output(result.output,
+                              ['Source Port', 'Direction', 'Mirror Session', 'Admin State',
+                               'Sample Rate', 'Truncate Size'],
+                              [['Ethernet4', 'rx', 'hws1', 'up', '1024', '128']])
+
+    aclloader = AclLoader()
+    aclloader.sessions_db_info = {'hws1': dict(session, status='active', monitor_port='Ethernet8')}
+    result = CliRunner().invoke(acl_loader_show.cli.commands['show'].commands['session'], [],
+                                obj={'acl_loader': aclloader})
+    assert result.exit_code == 0, result.output
+    lines = result.output.strip().splitlines()
+    start = lines.index('HWSFLOW Sessions')
+    assert re.split(r'\s{2,}', lines[start + 1].strip()) == [
+        'Name', 'Status', 'SRC IP', 'DST IP', 'DSCP', 'TTL', 'UDP SRC Port', 'UDP DST Port',
+        'Sample Rate', 'Truncate Size', 'Monitor Port']
+    assert re.split(r'\s{2,}', lines[start + 3].strip()) == [
+        'hws1', 'active', '10.1.0.32', '10.0.0.3', '8', '64', '6400', '6343', '1024', '128', 'Ethernet8']
 
 
 def test_show_empty_sample_bindings(sampled_show_db, monkeypatch):
