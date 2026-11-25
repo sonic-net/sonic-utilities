@@ -495,6 +495,147 @@ class TestConfigWrapper(unittest.TestCase):
         if expected_error:
             self.assertTrue(expected_error in error)
 
+    def pfc_to_queue_map_config(self, port_qos_map, port=None):
+        identity = {str(prio): str(prio) for prio in range(8)}
+        return {
+            "PORT": {"Ethernet0": port or {}},
+            "PORT_QOS_MAP": {"Ethernet0": port_qos_map},
+            "MAP_PFC_PRIORITY_TO_QUEUE": {
+                "AZURE": identity,
+                "SHARED_1": {**identity, "3": "1"},
+                "SHARED_3": {**identity, "4": "3"},
+            },
+        }
+
+    def validate_pfc_to_queue_map(self, config_db, asic="q3d", expected_error=None, running_config_db=None):
+        # Arrange
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.get_config_db_as_json = MagicMock(return_value=running_config_db or {})
+        expected = expected_error is None
+
+        # Act
+        with patch("generic_config_updater.field_operation_validators.get_asic_name", return_value=asic):
+            actual, error = config_wrapper.validate_pfc_to_queue_map(config_db)
+
+        # Assert
+        self.assertEqual(expected, actual)
+        if expected_error:
+            self.assertIn(expected_error, error)
+
+    def test_validate_pfc_to_queue_map__enabled_priorities_share_queue__failure(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        self.validate_pfc_to_queue_map(
+            config, expected_error="PORT_QOS_MAP 'Ethernet0': PFC priorities 3 and 4 map to the same queue 3")
+
+    def test_validate_pfc_to_queue_map__q4d_enabled_priorities_share_queue__failure(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        self.validate_pfc_to_queue_map(config, asic="q4d", expected_error="map to the same queue 3")
+
+    def test_validate_pfc_to_queue_map__non_dnx_asic__success(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        self.validate_pfc_to_queue_map(config, asic="th5")
+
+    def test_validate_pfc_to_queue_map__shared_queue_with_disabled_priority__success(self):
+        # PFC 1 and 3 share queue 1, but PFC 1 is not enabled
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_1"})
+        self.validate_pfc_to_queue_map(config)
+
+    def test_validate_pfc_to_queue_map__pfc_enable_adds_priority_on_shared_queue__failure(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "1,3,4", "pfc_to_queue_map": "SHARED_1"})
+        self.validate_pfc_to_queue_map(config, expected_error="PFC priorities 1 and 3 map to the same queue 1")
+
+    def test_validate_pfc_to_queue_map__no_pfc_enable_checks_all_priorities__failure(self):
+        config = self.pfc_to_queue_map_config({"pfc_to_queue_map": "SHARED_1"})
+        self.validate_pfc_to_queue_map(config, expected_error="PFC priorities 1 and 3 map to the same queue 1")
+
+    def test_validate_pfc_to_queue_map__pfc_asym_checks_all_priorities__failure(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_1"},
+                                              port={"pfc_asym": "on"})
+        self.validate_pfc_to_queue_map(config, expected_error="PFC priorities 1 and 3 map to the same queue 1")
+
+    def test_validate_pfc_to_queue_map__empty_pfc_enable_checks_all_priorities__failure(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "", "pfc_to_queue_map": "SHARED_3"})
+        self.validate_pfc_to_queue_map(config, expected_error="PFC priorities 3 and 4 map to the same queue 3")
+
+    def test_validate_pfc_to_queue_map__one_to_one_map__success(self):
+        config = self.pfc_to_queue_map_config({"pfc_to_queue_map": "AZURE"})
+        self.validate_pfc_to_queue_map(config)
+
+    def test_validate_pfc_to_queue_map__no_pfc_to_queue_map__success(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4"})
+        self.validate_pfc_to_queue_map(config)
+
+    def test_validate_pfc_to_queue_map__conflict_already_running__success(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        config["PORT"]["Ethernet0"]["admin_status"] = "down"
+        running = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        self.validate_pfc_to_queue_map(config, running_config_db=running)
+
+    def test_validate_pfc_to_queue_map__new_conflict_beside_running_one__failure(self):
+        # The running config already has PFC 3 and 4 on queue 3; the target adds PFC 1 and 2 on queue 1
+        config = self.pfc_to_queue_map_config({"pfc_enable": "1,2,3,4", "pfc_to_queue_map": "SHARED_3"})
+        config["MAP_PFC_PRIORITY_TO_QUEUE"]["SHARED_3"]["2"] = "1"
+        running = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        self.validate_pfc_to_queue_map(config, running_config_db=running,
+                                       expected_error="PFC priorities 1 and 2 map to the same queue 1")
+
+    def test_validate_pfc_to_queue_map__running_conflict_gains_priority__failure(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4,5", "pfc_to_queue_map": "SHARED_3"})
+        config["MAP_PFC_PRIORITY_TO_QUEUE"]["SHARED_3"]["5"] = "3"
+        running = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        self.validate_pfc_to_queue_map(config, running_config_db=running,
+                                       expected_error="PFC priorities 3 and 4 and 5 map to the same queue 3")
+
+    def test_validate_pfc_to_queue_map__running_conflict_loses_priority__success(self):
+        # The running config has PFC 3, 4 and 5 on queue 3; the target leaves only 3 and 4 there
+        config = self.pfc_to_queue_map_config({"pfc_enable": "3,4,5", "pfc_to_queue_map": "SHARED_3"})
+        running = self.pfc_to_queue_map_config({"pfc_enable": "3,4,5", "pfc_to_queue_map": "SHARED_3"})
+        running["MAP_PFC_PRIORITY_TO_QUEUE"]["SHARED_3"]["5"] = "3"
+        self.validate_pfc_to_queue_map(config, running_config_db=running)
+
+    def test_validate_pfc_to_queue_map__pfc_enable_removed__success(self):
+        # PFC 1 and 3 share queue 1, but the port keeps PFC 3,4 until orchagent turns PFC off
+        config = self.pfc_to_queue_map_config({"pfc_to_queue_map": "SHARED_1"})
+        running = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_1"})
+        self.validate_pfc_to_queue_map(config, running_config_db=running)
+
+    def test_validate_pfc_to_queue_map__pfc_enable_emptied__success(self):
+        config = self.pfc_to_queue_map_config({"pfc_enable": "", "pfc_to_queue_map": "SHARED_1"})
+        running = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_1"})
+        self.validate_pfc_to_queue_map(config, running_config_db=running)
+
+    def test_validate_pfc_to_queue_map__pfc_enable_removed_with_shared_bind__failure(self):
+        # Conservative: the port is taken to keep its running PFC 3,4 for the whole patch
+        config = self.pfc_to_queue_map_config({"pfc_to_queue_map": "SHARED_3"})
+        running = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "AZURE"})
+        self.validate_pfc_to_queue_map(config, running_config_db=running,
+                                       expected_error="PFC priorities 3 and 4 map to the same queue 3")
+
+    def test_validate_pfc_to_queue_map__running_config_read_only_on_conflict(self):
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.get_config_db_as_json = MagicMock(return_value={})
+        clean = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "AZURE"})
+        conflict = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        with patch("generic_config_updater.field_operation_validators.get_asic_name", return_value="q3d"):
+            config_wrapper.validate_pfc_to_queue_map(clean)
+            config_wrapper.get_config_db_as_json.assert_not_called()
+            config_wrapper.validate_pfc_to_queue_map(conflict)
+            config_wrapper.validate_pfc_to_queue_map(conflict)
+        config_wrapper.get_config_db_as_json.assert_called_once()
+
+    def test_validate_pfc_to_queue_map__asic_name_read_once_on_conflict(self):
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.get_config_db_as_json = MagicMock(return_value={})
+        clean = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "AZURE"})
+        conflict = self.pfc_to_queue_map_config({"pfc_enable": "3,4", "pfc_to_queue_map": "SHARED_3"})
+        with patch("generic_config_updater.field_operation_validators.get_asic_name",
+                   return_value="th5") as mock_get_asic_name:
+            config_wrapper.validate_pfc_to_queue_map(clean)
+            mock_get_asic_name.assert_not_called()
+            config_wrapper.validate_pfc_to_queue_map(conflict)
+            config_wrapper.validate_pfc_to_queue_map(conflict)
+        mock_get_asic_name.assert_called_once()
+
     def test_crop_tables_without_yang__returns_cropped_config_db_as_json(self):
         # Arrange
         config_wrapper = gu_common.ConfigWrapper()
