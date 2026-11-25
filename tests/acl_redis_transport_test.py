@@ -28,7 +28,9 @@ def acl_commands(monkeypatch):
 @pytest.mark.parametrize('arguments,expected', [
     (['table'], ['table']),
     (['table', 'DATAACL'], ['table', '--', 'DATAACL']),
+    (['table', 'EDGE ACL'], ['table', '--', 'EDGE ACL']),
     (['rule', 'DATAACL', 'RULE_1'], ['rule', '--', 'DATAACL', 'RULE_1']),
+    (['rule', 'EDGE ACL', 'ALLOW SSH'], ['rule', '--', 'EDGE ACL', 'ALLOW SSH']),
     (['table', '--', '--help'], ['table', '--', '--help']),
 ])
 @pytest.mark.parametrize('uid', [0, 1000])

@@ -6,6 +6,7 @@ import acl_loader.main as acl_loader_show
 from acl_loader import *
 from acl_loader.main import AclLoader
 from importlib import reload
+from unittest.mock import Mock
 
 root_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(root_path)
@@ -57,6 +58,28 @@ def setup_teardown_multi_asic():
     os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
     from .mock_tables import mock_single_asic
     reload(mock_single_asic)
+
+
+@pytest.mark.parametrize('display,names', [
+    ('table', ['EDGE ACL']),
+    ('rule', ['EDGE ACL', 'ALLOW SSH']),
+])
+def test_acl_loader_show_accepts_spaces_and_rejects_extra_arguments(display, names):
+    runner = CliRunner()
+    loader = Mock(spec=AclLoader)
+    command = acl_loader_show.cli.commands['show']
+    arguments = [display, '--', *names]
+    context = {'acl_loader': loader}
+    display_acl = getattr(loader, f'show_{display}')
+
+    result = runner.invoke(command, arguments, obj=context)
+    assert result.exit_code == 0, result.output
+    display_acl.assert_called_once_with(*names)
+
+    result = runner.invoke(command, [*arguments, 'extra'], obj=context)
+    assert result.exit_code == 2, result.output
+    assert 'unexpected extra argument' in result.output
+    display_acl.assert_called_once_with(*names)
 
 
 class TestShowACLSingleASIC(object):

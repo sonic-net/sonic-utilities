@@ -55,14 +55,18 @@ QUERIES = [
     (['sta', 'Ethernet0'], ['status', '--', 'Ethernet0']),
     (['status', 'all'], ['status', '--', 'all']),
     (['hwmode', 'muxdirection', 'all', '--json'], ['hwmode', 'muxdirection', '--json', '--', 'all']),
-    (['firmware', 'version', '--active', 'all'], ['firmware', 'version', '--active', '--', 'all']),
-    (['firmware', 'version', '--active', 'Ethernet0'], ['firmware', 'version', '--active', '--', 'Ethernet0']),
+    (['firmware', 'version', '--active', 'all'],
+     ['firmware', 'version', '--preserve-download-state', '--active', '--', 'all']),
+    (['firmware', 'version', '--active', 'Ethernet0'],
+     ['firmware', 'version', '--preserve-download-state', '--active', '--', 'Ethernet0']),
     (['hwmode', 'muxdirection'], ['hwmode', 'muxdirection']),
     (['hw', 'muxd', '--json', 'Ethernet0'], ['hwmode', 'muxdirection', '--json', '--', 'Ethernet0']),
     (['hwmode', 'switchmode'], ['hwmode', 'switchmode']),
     (['hwmode', 'switchmode', 'Ethernet0'], ['hwmode', 'switchmode', '--', 'Ethernet0']),
-    (['firmware', 'version', 'Ethernet0'], ['firmware', 'version', '--', 'Ethernet0']),
-    (['firm', 'ver', 'Ethernet0', '--active'], ['firmware', 'version', '--active', '--', 'Ethernet0']),
+    (['firmware', 'version', 'Ethernet0'],
+     ['firmware', 'version', '--preserve-download-state', '--', 'Ethernet0']),
+    (['firm', 'ver', 'Ethernet0', '--active'],
+     ['firmware', 'version', '--preserve-download-state', '--active', '--', 'Ethernet0']),
     (['queueinfo', 'Ethernet0', 'opaque [1, 2]; $(id)', '--json'], ['queueinfo', '--json', '--', 'Ethernet0']),
 ]
 QUERIES += [([command, 'Ethernet0', target, '--json'], [command, '--json', '--', 'Ethernet0', target])
@@ -113,6 +117,49 @@ def test_root_executes_original_callback_and_preserves_result(mux, monkeypatch):
     assert mux._run_query_as_root(callback)('db', port='Ethernet0') == 7
     callback.assert_called_once_with('db', port='Ethernet0')
     mux.os.execv.assert_not_called()
+
+
+@pytest.mark.parametrize('port', ['Ethernet0', 'all'])
+def test_firmware_version_preserves_download_state(mux, monkeypatch, port):
+    monkeypatch.setattr(mux.os, 'geteuid', lambda: 0)
+    download_request = {'Ethernet4': {'download_firmware': 'firmware.bin'}}
+    download_reply = {'Ethernet8': {'status': '0'}}
+    tables = {
+        ('asic0', 'APPL_DB', 'XCVRD_DOWN_FW_CMD'): download_request.copy(),
+        ('asic1', 'STATE_DB', 'XCVRD_DOWN_FW_RSP'): download_reply.copy(),
+        ('asic0', 'STATE_DB', 'XCVRD_SHOW_FW_RES'): {'Ethernet0': {'version': 'stale'}},
+    }
+
+    def table(connector, name):
+        entries = tables.setdefault((*connector, name), {})
+        return types.SimpleNamespace(getKeys=lambda: list(entries), _del=entries.pop)
+
+    mux.multi_asic.get_front_end_namespaces.return_value = ['asic0', 'asic1']
+    mux.multi_asic.get_asic_index_from_namespace.side_effect = {'asic0': 0, 'asic1': 1}.__getitem__
+    monkeypatch.setattr(mux, 'db_connect', lambda db, namespace: (namespace, db))
+    mux.swsscommon.Table.side_effect = table
+    platform = mux.platform_sfputil_helper
+    platform.get_interface_name.return_value = port
+    platform.get_logical_list.return_value = ['Ethernet0']
+    platform.logical_port_name_to_physical_port_list.return_value = [0]
+    platform.get_physical_to_logical.return_value = {0: ['Ethernet0']}
+    platform.get_interface_alias.return_value = 'Ethernet0'
+    monkeypatch.setattr(mux, 'check_port_in_mux_cable_table', lambda port: True)
+    monkeypatch.setattr(mux, 'update_and_get_response_for_xcvr_cmd', MagicMock(return_value={1: 'True'}))
+    versions = {'version_nic_active': '1.2'}
+    monkeypatch.setattr(mux, 'get_response_for_version', MagicMock(return_value=versions))
+    monkeypatch.setattr(mux, 'get_per_port_firmware', MagicMock(return_value=versions))
+
+    result = CliRunner().invoke(
+        mux.muxcable,
+        ['firmware', 'version', '--preserve-download-state', '--', port],
+        obj=object(),
+    )
+    assert result.exit_code == 0, result.exception
+    assert '"version_nic_active": "1.2"' in result.output
+    assert tables['asic0', 'APPL_DB', 'XCVRD_DOWN_FW_CMD'] == download_request
+    assert tables['asic1', 'STATE_DB', 'XCVRD_DOWN_FW_RSP'] == download_reply
+    assert tables['asic0', 'STATE_DB', 'XCVRD_SHOW_FW_RES'] == {}
 
 
 def test_exec_failure_propagates_without_running_query(mux):

@@ -42,6 +42,7 @@ XCVRD_GET_BER_CMD_TABLE = "XCVRD_GET_BER_CMD"
 XCVRD_GET_BER_RSP_TABLE = "XCVRD_GET_BER_RSP"
 XCVRD_GET_BER_RES_TABLE = "XCVRD_GET_BER_RES"
 XCVRD_GET_BER_CMD_ARG_TABLE = "XCVRD_GET_BER_CMD_ARG"
+FIRMWARE_VERSION_SUDO_OPTION = "--preserve-download-state"
 
 
 def _run_query_as_root(callback):
@@ -55,6 +56,8 @@ def _run_query_as_root(callback):
         while context.command.name != 'muxcable':
             path.insert(0, context.command.name)
             context = context.parent
+        if path == ['firmware', 'version']:
+            path.append(FIRMWARE_VERSION_SUDO_OPTION)
         for key, option in (('json_output', '--json'), ('active', '--active')):
             if parameters.get(key):
                 path.append(option)
@@ -1789,14 +1792,14 @@ def firmware():
 @firmware.command()
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--active', 'active', required=False, is_flag=True, type=click.BOOL, help="display the firmware version of only active bank within MCU's")
+# The sudo policy requires this option so older utilities reject the invocation.
+@click.option(FIRMWARE_VERSION_SUDO_OPTION, is_flag=True, hidden=True, expose_value=False)
 @clicommon.pass_db
 @_run_query_as_root
 def version(db, port, active):
     """Show muxcable firmware version"""
 
     port = platform_sfputil_helper.get_interface_name(port, db)
-    delete_all_keys_in_db_table("APPL_DB", "XCVRD_DOWN_FW_CMD")
-    delete_all_keys_in_db_table("STATE_DB", "XCVRD_DOWN_FW_RSP")
     delete_all_keys_in_db_table("APPL_DB", "XCVRD_SHOW_FW_CMD")
     delete_all_keys_in_db_table("STATE_DB", "XCVRD_SHOW_FW_RSP")
     delete_all_keys_in_db_table("STATE_DB", "XCVRD_SHOW_FW_RES")
