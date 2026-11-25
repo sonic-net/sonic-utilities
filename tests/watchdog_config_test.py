@@ -19,7 +19,10 @@ class TestWatchdogConfig:
         assert result.exit_code == 0
         assert db.cfgdb.get_table("WATCHDOG")["config"]["enabled"] == "true"
         assert run_command.call_args_list == [
-            call(["/usr/local/bin/watchdog-control.sh", "--validate", json.dumps({"enabled": "true"})], display_cmd=False),
+            call(
+                ["/usr/local/bin/watchdog-control.sh", "--validate", json.dumps({"enabled": "true"})],
+                display_cmd=False,
+            ),
             call(["/usr/local/bin/watchdog-control.sh"], display_cmd=False),
         ]
 
@@ -112,7 +115,9 @@ class TestWatchdogConfig:
         config, _ = get_cmd_module
         db = Db()
         db.cfgdb.set_entry("WATCHDOG", "config", {"enabled": "true", "timeout": "600", "pretimeout": "300"})
-        result = CliRunner().invoke(config.config.commands["watchdog"], ["timeout", "180", "--pretimeout", "60"], obj=db)
+        result = CliRunner().invoke(
+            config.config.commands["watchdog"], ["timeout", "180", "--pretimeout", "60"], obj=db
+        )
 
         assert result.exit_code == 0
         expected = {"enabled": "true", "timeout": "180", "pretimeout": "60"}
@@ -142,4 +147,6 @@ class TestWatchdogConfig:
 
         assert result.exit_code != 0
         assert db.cfgdb.get_entry("WATCHDOG", "config") == previous
-        assert run_command.call_args_list[-1] == call(["/usr/local/bin/watchdog-control.sh"], display_cmd=False, ignore_error=True)
+        assert run_command.call_args_list[-1] == call(
+            ["/usr/local/bin/watchdog-control.sh"], display_cmd=False, ignore_error=True
+        )
