@@ -22,10 +22,14 @@ def generate_completions(output_dir):
             function = vars(module).get(function_name)
             if isinstance(function, BaseCommand):
                 comp_cls = get_completion_class("bash")
+                # Click derives the completion variable name at runtime by
+                # replacing '-' and '.' with '_' in the program name before
+                # upper-casing. Derive the name the same way here, otherwise
+                # it never matches for hyphenated programs and bash
+                # completion does not work.
+                complete_var = f"_{prog.replace('-', '_').replace('.', '_')}_COMPLETE".upper()
                 content = (
-                        comp_cls(
-                                 function, {}, prog, f"_{prog.upper()}_COMPLETE"
-                                 )
+                        comp_cls(function, {}, prog, complete_var)
                         .source()
                         .replace("\r\n", "\n")
                         )
