@@ -299,6 +299,76 @@ test_config_add_del_with_switchport_modes_changes_output = """\
 """
 
 
+@pytest.mark.parametrize("platform", [None, "x86_64-kvm_x86_64-r0"])
+@pytest.mark.parametrize("in_container", [False, True])
+def test_ndppd_command_prefix(monkeypatch, platform, in_container):
+    import config.vlan as vlan_module
+
+    if platform:
+        monkeypatch.setenv("PLATFORM", platform)
+    else:
+        monkeypatch.delenv("PLATFORM", raising=False)
+    with mock.patch("config.vlan.os.path.isfile", return_value=in_container) as isfile:
+        prefix = vlan_module.get_ndppd_command_prefix()
+    if platform and in_container:
+        assert prefix == []
+    else:
+        assert prefix == ['docker', 'exec', '-i', 'swss']
+    if platform:
+        isfile.assert_called_once_with('/.dockerenv')
+
+
+@pytest.mark.parametrize("cmd_prefix", [[], ['docker', 'exec', '-i', 'swss']],
+                         ids=["standalone-vs", "sonic-host"])
+@pytest.mark.parametrize("status_rc", [0, 3], ids=["registered", "not-registered"])
+def test_restart_ndppd(cmd_prefix, status_rc):
+    import config.vlan as vlan_module
+
+    results = ([("running", 0)] if cmd_prefix else []) + [("", status_rc)] + [("", 0)] * 4
+    with mock.patch("config.vlan.get_ndppd_command_prefix", return_value=cmd_prefix), \
+            mock.patch("config.vlan.sleep"), \
+            mock.patch("utilities_common.cli.run_command", side_effect=results) as run_command:
+        vlan_module.restart_ndppd()
+
+    expected = []
+    if cmd_prefix:
+        expected.append(mock.call(
+            ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', 'swss'], return_cmd=True))
+    expected.append(mock.call(cmd_prefix + ['supervisorctl', 'status', 'ndppd'],
+                              ignore_error=True, return_cmd=True))
+    if status_rc:
+        expected.extend([
+            mock.call(cmd_prefix + ['cp', '/usr/share/sonic/templates/ndppd.conf',
+                                    '/etc/supervisor/conf.d/']),
+            mock.call(cmd_prefix + ['supervisorctl', 'update'], return_cmd=True)
+        ])
+    expected.extend([
+        mock.call(cmd_prefix + ['sonic-cfggen', '-d', '-t',
+                                '/usr/share/sonic/templates/ndppd.conf.j2,/etc/ndppd.conf']),
+        mock.call(cmd_prefix + ['supervisorctl', 'restart', 'ndppd'], return_cmd=True)
+    ])
+    assert run_command.call_args_list == expected
+
+
+def test_restart_ndppd_swss_not_running():
+    import config.vlan as vlan_module
+
+    with mock.patch("config.vlan.get_ndppd_command_prefix", return_value=['docker', 'exec', '-i', 'swss']), \
+            mock.patch("utilities_common.cli.run_command", return_value=("exited", 0)) as run_command:
+        vlan_module.restart_ndppd()
+    run_command.assert_called_once_with(
+        ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', 'swss'], return_cmd=True)
+
+
+def test_restart_ndppd_local_errors_are_not_ignored():
+    import config.vlan as vlan_module
+
+    with mock.patch("config.vlan.get_ndppd_command_prefix", return_value=[]), \
+            mock.patch("utilities_common.cli.run_command", side_effect=PermissionError("supervisor unavailable")):
+        with pytest.raises(PermissionError, match="supervisor unavailable"):
+            vlan_module.restart_ndppd()
+
+
 def get_intf_switchport_status(self, output: str, interface: str) -> str:
     for line in output.splitlines():
         line = line.strip()
@@ -972,7 +1042,10 @@ class TestVlan(object):
         assert result.exit_code == 0
         assert result.output == show_vlan_brief_empty_output
 
-    def test_config_vlan_del_last_vlan(self):
+    @pytest.mark.parametrize("cmd_prefix", [[], ['docker', 'exec', '-i', 'swss']],
+                             ids=["standalone-vs", "sonic-host"])
+    @pytest.mark.parametrize("status_rc", [0, 3], ids=["running", "not-running-or-absent"])
+    def test_config_vlan_del_last_vlan(self, cmd_prefix, status_rc):
         runner = CliRunner()
         db = Db()
         db.cfgdb.delete_table("VLAN_MEMBER")
@@ -981,20 +1054,26 @@ class TestVlan(object):
         db.cfgdb.set_entry("VLAN", "Vlan3000", None)
         db.cfgdb.set_entry("VLAN", "Vlan4000", None)
 
-        with mock.patch("utilities_common.cli.run_command", mock.Mock(return_value=("", 0))) as mock_run_command:
+        with mock.patch("config.vlan.get_ndppd_command_prefix", return_value=cmd_prefix), \
+                mock.patch("config.vlan.is_dhcp_relay_running", return_value=False), \
+                mock.patch("utilities_common.cli.run_command",
+                           side_effect=[("", status_rc)] + [("", 0)] * 3) as mock_run_command:
             result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1000"], obj=db)
-            print(result.exit_code)
-            print(result.output)
-            mock_run_command.assert_has_calls([
-                mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'status', 'ndppd'],
-                          ignore_error=True, return_cmd=True),
-                mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'stop', 'ndppd'],
-                          ignore_error=True, return_cmd=True),
-                mock.call(['docker', 'exec', '-i', 'swss', 'rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'],
-                          ignore_error=True, return_cmd=True),
-                mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'update'], return_cmd=True)
-            ])
-            assert result.exit_code == 0
+            expected_calls = [
+                mock.call(cmd_prefix + ['supervisorctl', 'status', 'ndppd'],
+                          ignore_error=True, return_cmd=True)
+            ]
+            if status_rc == 0:
+                expected_calls.extend([
+                    mock.call(cmd_prefix + ['supervisorctl', 'stop', 'ndppd'],
+                              ignore_error=True, return_cmd=True),
+                    mock.call(cmd_prefix + ['rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'],
+                              ignore_error=True, return_cmd=True),
+                    mock.call(cmd_prefix + ['supervisorctl', 'update'], return_cmd=True)
+                ])
+            assert mock_run_command.call_args_list == expected_calls
+            assert result.exit_code == 0, result.output
+            assert db.cfgdb.get_keys("VLAN") == []
 
     def test_config_vlan_del_nonexist_vlan_member(self):
         runner = CliRunner()
@@ -1518,7 +1597,8 @@ class TestVlan(object):
             assert result.exit_code == 0
             assert {"proxy_arp": "enabled"}.items() <= db.cfgdb.get_entry("VLAN_INTERFACE", "Vlan1000").items()
 
-    def test_config_vlan_proxy_arp_disable(self):
+    @mock.patch("config.vlan.restart_ndppd")
+    def test_config_vlan_proxy_arp_disable(self, mock_restart_ndppd):
         runner = CliRunner()
         db = Db()
 
@@ -1529,6 +1609,7 @@ class TestVlan(object):
 
         assert result.exit_code == 0
         assert db.cfgdb.get_entry("VLAN_INTERFACE", "Vlan2000") == {"proxy_arp": "disabled"}
+        mock_restart_ndppd.assert_called_once_with()
 
     def test_config_2_untagged_vlan_on_same_interface(self):
         runner = CliRunner()
