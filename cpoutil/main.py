@@ -1134,10 +1134,8 @@ def show_interface_dom(port, json_output):
     records = {}
     output = []
     failed_ports = []
-    # The ports of one OE bank, and of one ELS bank, read the same data: read
-    # each bank once and share its sections and failures among its ports.
-    # The key is the topology device and bank, so each vendor's cpo.json
-    # decides which ports share a read.
+    # Ports on one OE or ELS bank share that bank's read, as set by cpo.json.
+    # Ganged members are separate endpoints, so they are never shared.
     oe_banks = {}
     els_banks = {}
     try:
@@ -1149,9 +1147,22 @@ def show_interface_dom(port, json_output):
                 if not present:
                     output.append(_format_interface_dom(port_name, record))
                     continue
-                mapping = cpo_mapping.resolve_interface(logical_port, current_port_config)
+                physical_ports = platform_sfputil_helper.get_validated_physical_port_list(
+                    logical_port
+                )
+                oe_key = (PORT, port_name)
+                els_key = (PORT, port_name)
+                if len(physical_ports) == 1:
+                    try:
+                        mapping = cpo_mapping.resolve_interface(
+                            logical_port, current_port_config
+                        )
+                    except CpoMappingError:
+                        pass
+                    else:
+                        oe_key = (mapping.oe_name, mapping.oe_bank)
+                        els_key = (mapping.els_name, mapping.els_bank)
 
-                oe_key = (mapping.oe_name, mapping.oe_bank)
                 if oe_key not in oe_banks:
                     oe_api = get_oe_api(cpo, port_name)
                     attach_snapshot(cpo.oe, oe_api)
@@ -1165,7 +1176,6 @@ def show_interface_dom(port, json_output):
                             oe_failures, "OE", "thresholds", oe_api.get_transceiver_threshold_info),
                     }, oe_failures)
 
-                els_key = (mapping.els_name, mapping.els_bank)
                 if els_key not in els_banks:
                     els_api = get_els_api(cpo, port_name)
                     attach_snapshot(cpo.elsfp, els_api)
