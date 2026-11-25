@@ -24,7 +24,7 @@ pip.parse(
 use_repo(pip, "utilities_test_pip")
 
 # Published source installation API, including executable modes and script normalization.
-bazel_dep(name = "sonic-build-infra", version = "0.0.44-35726399908a3beb947174e9359f902077928289", repo_name = "sonic_build_infra")
+bazel_dep(name = "sonic-build-infra", version = "0.0.45-77ef625a4ddafc8cdc15f3cc6aee31eabac8a5de", repo_name = "sonic_build_infra")
 
 # Uncompressed installation TAR for the Debian data package.
 bazel_dep(name = "tar.bzl", version = "0.10.5.sonic.2")
