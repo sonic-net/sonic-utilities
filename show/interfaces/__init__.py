@@ -19,6 +19,7 @@ from portconfig import get_child_ports
 import sonic_platform_base.sonic_sfp.sfputilhelper
 
 from . import portchannel
+from . import prbs
 from collections import OrderedDict
 from datetime import datetime
 
@@ -87,6 +88,9 @@ def try_convert_interfacename_from_alias(ctx, interfacename, ignore_missing=Fals
 def interfaces():
     """Show details of the network interfaces"""
     pass
+
+
+prbs.register(interfaces)
 
 
 # 'alias' subcommand ("show interfaces alias")
