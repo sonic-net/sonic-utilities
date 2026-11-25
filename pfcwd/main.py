@@ -271,6 +271,46 @@ def hw_recovery_limits(entry):
     }
 
 
+def parse_timer(value):
+    """Return a PFC_WD timer as orchagent reads it (swss-common to_uint: stoul with base 0, so a
+    leading 0 is octal and 0x hex, and nothing may follow the number), or None where orchagent
+    would not read a number."""
+    if isinstance(value, bool):
+        return None
+    text = str(value).lstrip(" \t\n\v\f\r")
+    if text.startswith("+"):
+        text = text[1:]
+    if text[:2].lower() == "0x":
+        digits, base = text[2:], 16
+        valid = bool(digits) and all(c in "0123456789abcdefABCDEF" for c in digits)
+    elif len(text) > 1 and text[0] == "0":
+        digits, base = text, 8
+        valid = all(c in "01234567" for c in digits)
+    else:
+        digits, base = text, 10
+        valid = bool(digits) and all(c in "0123456789" for c in digits)
+    return int(digits, base) if valid else None
+
+
+def timers_outside_range(entry, ranges):
+    """Check the hardware timers of one PFC_WD port entry, read as orchagent reads them.
+
+    Return ({field: value} for each timer outside its range in ranges, as configurable_limits
+    returns them, and [field] for each timer orchagent would not read as a number). A timer
+    with no range is only checked for being a number.
+    """
+    outside, unreadable = {}, []
+    for field, _, _ in HW_TIMERS:
+        if field not in entry:
+            continue
+        value = parse_timer(entry[field])
+        if value is None:
+            unreadable.append(field)
+        elif field in ranges and not ranges[field][0] <= value <= ranges[field][1]:
+            outside[field] = value
+    return outside, unreadable
+
+
 def hw_range_updates(table, limits):
     """Return {port: {field: value}} for every port timer of a PFC_WD table outside the
     hardware limits, each set to the nearest value both the hardware and sonic-pfcwd.yang
@@ -284,13 +324,10 @@ def hw_range_updates(table, limits):
     for port, entry in table.items():
         if port == "GLOBAL":
             continue
-        for field, (low, high) in ranges.items():
-            try:
-                value = int(entry[field])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if value < low or value > high:
-                updates.setdefault(port, {})[field] = low if value < low else high
+        outside, _ = timers_outside_range(entry, ranges)
+        for field, value in outside.items():
+            low, high = ranges[field]
+            updates.setdefault(port, {})[field] = low if value < low else high
     return updates
 
 
@@ -768,14 +805,15 @@ class PfcwdCli(object):
             pfcwd_info["pfc_stat_history"] = "enable"
 
         if hw_limits is not None:
-            for field, (low, high) in hw_ranges.items():
-                if not low <= pfcwd_info[field] <= high:
-                    click.echo(
-                        "Error: {} {}ms is outside hardware supported "
-                        "range [{}-{}]ms".format(field, pfcwd_info[field], low, high),
-                        err=True
-                    )
-                    sys.exit(1)
+            outside, _ = timers_outside_range(pfcwd_info, hw_ranges)
+            for field, value in outside.items():
+                low, high = hw_ranges[field]
+                click.echo(
+                    "Error: {} {}ms is outside hardware supported "
+                    "range [{}-{}]ms".format(field, value, low, high),
+                    err=True
+                )
+                sys.exit(1)
 
             # orchagent programs a port without an action as drop
             self.check_hw_action(action or DEFAULT_ACTION, ports)

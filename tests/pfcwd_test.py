@@ -4,6 +4,7 @@ import os
 import sys
 from unittest.mock import patch, MagicMock
 
+import pytest
 from click.testing import CliRunner
 from swsscommon import swsscommon
 
@@ -903,6 +904,42 @@ class TestPfcwd(object):
         assert pfcwd.hw_recovery_limits({
             'RECOVERY_MECHANISM': 'hardware', 'DETECTION_TIME_MIN': 'x', 'DETECTION_TIME_MAX': '1500'}) == {
             'detection_min': None, 'detection_max': 1500, 'restoration_min': None, 'restoration_max': None}
+
+    @pytest.mark.parametrize("value, expected", [
+        ("1500", 1500), (1500, 1500), ("+200", 200), (" 200", 200),
+        # base 0, as orchagent's to_uint reads it: a leading 0 is octal, 0x hex
+        ("0120", 80), ("02000", 1024), ("0x7d0", 2000), ("0X7D0", 2000), ("0", 0),
+        # orchagent refuses anything after the number, an invalid octal digit and a bare 0x
+        ("200 ", None), ("2000ms", None), ("0800", None), ("0x", None), ("", None),
+        ("abc", None), ("-1", None), (None, None), (True, None),
+    ])
+    def test_pfcwd_parse_timer(self, value, expected):
+        import pfcwd.main as pfcwd
+        assert pfcwd.parse_timer(value) == expected
+
+    def test_pfcwd_timers_outside_range(self):
+        import pfcwd.main as pfcwd
+        ranges = pfcwd.configurable_limits(self.HW_LIMITS)
+        assert pfcwd.timers_outside_range(
+            {'detection_time': '0x7d0', 'restoration_time': '0120', 'action': 'drop'}, ranges) == \
+            ({'detection_time': 2000, 'restoration_time': 80}, [])
+        assert pfcwd.timers_outside_range({'detection_time': '02000', 'restoration_time': '1000'}, ranges) == \
+            ({}, [])
+        # a value orchagent cannot read is reported whether or not its timer has a range
+        assert pfcwd.timers_outside_range({'detection_time': '0800', 'restoration_time': 'abc'}, {}) == \
+            ({}, ['detection_time', 'restoration_time'])
+
+    def test_pfcwd_hw_range_updates_reads_timers_as_orchagent(self):
+        """A leading 0 is octal and 0x hex, as orchagent reads the row."""
+        import pfcwd.main as pfcwd
+        table = {
+            'Ethernet0': {'detection_time': '0120', 'restoration_time': '0x7d0', 'action': 'drop'},
+            'Ethernet4': {'detection_time': '02000', 'restoration_time': '0144', 'action': 'drop'},
+            'Ethernet8': {'detection_time': '0800', 'restoration_time': '0x', 'action': 'drop'},
+        }
+        assert pfcwd.hw_range_updates(table, self.HW_LIMITS) == {
+            'Ethernet0': {'detection_time': 100, 'restoration_time': 1000},
+        }
 
     def test_pfcwd_hw_range_updates(self):
         """Out-of-range timers go to the nearest bound; everything else is left alone."""
