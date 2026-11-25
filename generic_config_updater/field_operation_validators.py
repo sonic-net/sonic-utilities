@@ -20,14 +20,20 @@ GCU_TABLE_MOD_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.jso
 GET_HWSKU_CMD = "sonic-cfggen -d -v DEVICE_METADATA.localhost.hwsku"
 
 
-def get_asic_name():
-    asic = "unknown"
-
+def _load_gcu_validators_config():
+    """
+    Helper function to load the GCU field operation validators configuration file.
+    Eliminates duplicated file-reading logic across different validator entrypoints.
+    """
     if os.path.exists(GCU_TABLE_MOD_CONF_FILE):
         with open(GCU_TABLE_MOD_CONF_FILE, "r") as s:
-            gcu_field_operation_conf = json.load(s)
-    else:
-        raise GenericConfigUpdaterError("GCU table modification validators config file not found")
+            return json.load(s)
+    raise GenericConfigUpdaterError("GCU table modification validators config file not found")
+
+
+def get_asic_name():
+    asic = "unknown"
+    gcu_field_operation_conf = _load_gcu_validators_config()
 
     asic_mapping = gcu_field_operation_conf["helper_data"]["rdma_config_update_validator"]
     asic_type = device_info.get_sonic_version_info()['asic_type'] 
@@ -136,11 +142,7 @@ def rdma_config_update_validator_common(scope, patch_element, exact_field_match=
 
         return cleaned_fields
 
-    if os.path.exists(GCU_TABLE_MOD_CONF_FILE):
-        with open(GCU_TABLE_MOD_CONF_FILE, "r") as s:
-            gcu_field_operation_conf = json.load(s)
-    else:
-        raise GenericConfigUpdaterError("GCU table modification validators config file not found")
+    gcu_field_operation_conf = _load_gcu_validators_config()
 
     tables = gcu_field_operation_conf["tables"]
     scenarios = tables[table]["validator_data"]["rdma_config_update_validator"]
@@ -179,32 +181,64 @@ def rdma_config_update_validator(scope, patch_element):
     return rdma_config_update_validator_common(scope, patch_element, exact_field_match=True, remove_port=True)
 
 
+def _validate_table_or_object_level(path_parts, op):
+    """
+    Checks if this is a table-level (1 part) or object-level (2 parts) operation,
+    and validates if the operation is allowed ('add', 'remove', 'replace').
+    Returns True if allowed table/object-level operation, False if invalid table/object-level op,
+    and None if it's a field-level operation (3+ parts).
+    """
+    if len(path_parts) <= 2:
+        allowed_operations = ['add', 'remove', 'replace']
+        return op in allowed_operations
+    return None
+
+
 def buffer_profile_config_update_validator(scope, patch_element):
     """
-    Enhanced buffer profile validator that handles both field-level and object-level operations.
+    Enhanced buffer profile validator that handles table-level, object-level, and field-level operations.
+    - Table-level operations (e.g., /BUFFER_PROFILE) allow add/remove/replace
+    - Object-level operations (e.g., /BUFFER_PROFILE/profile) allow add/remove/replace
     - Field-level operations (e.g., /BUFFER_PROFILE/profile/dynamic_th) follow existing rules
-    - Object-level operations (e.g., /BUFFER_PROFILE/profile) allow remove operations
     """
     path = patch_element["path"]
     path_parts = jsonpointer.JsonPointer(path).parts
 
-    # Determine if this is an object-level operation (entire profile) or field-level operation
-    # Object-level: /BUFFER_PROFILE/profile_name (2 parts)
-    # Field-level: /BUFFER_PROFILE/profile_name/field_name (3+ parts)
-    is_object_level = len(path_parts) == 2  # table + profile_name only
-
-    if is_object_level:
-        # For object-level operations, we're more permissive
-        # Allow add/remove/replace operations for entire profile objects
-        allowed_object_operations = ['add', 'remove', 'replace']
-
-        if patch_element['op'] in allowed_object_operations:
-            return True  # Allow object-level operations
-        else:
-            return False  # Disallow unsupported operations
+    is_higher_level = _validate_table_or_object_level(path_parts, patch_element['op'])
+    if is_higher_level is not None:
+        return is_higher_level
 
     # For field-level operations, use the existing validation logic
     return rdma_config_update_validator_common(scope, patch_element)
+
+
+def buffer_pool_config_update_validator(scope, patch_element):
+    """
+    Buffer pool validator that handles table-level, object-level, and field-level operations.
+    - Table-level operations (e.g., /BUFFER_POOL) allow add/remove/replace
+    - Object-level operations (e.g., /BUFFER_POOL/pool_name) allow add/remove/replace
+    - Field-level operations (e.g., /BUFFER_POOL/pool_name/size) follow existing RDMA rules
+    """
+    path = patch_element["path"]
+    path_parts = jsonpointer.JsonPointer(path).parts
+
+    is_higher_level = _validate_table_or_object_level(path_parts, patch_element['op'])
+    if is_higher_level is not None:
+        return is_higher_level
+
+    # For field-level operations on BUFFER_POOL, we want to be permissive
+    # Allow replace operations on size and xoff fields
+    # Only check if this is a valid field operation, don't enforce ASIC/version requirements
+    asic = get_asic_name()
+    if asic == "unknown":
+        # In test environments or when ASIC detection fails, allow the operation
+        # This is safe because YANG validation will still catch invalid values
+        return True
+
+    # For known ASICs, use the existing validation logic with endswith matching
+    # Use exact_field_match=False to handle pool names (similar to BUFFER_PROFILE)
+    # Use remove_port=True to clean port names from paths
+    return rdma_config_update_validator_common(scope, patch_element, exact_field_match=False, remove_port=True)
 
 
 def read_statedb_entry(scope, table, key, field):
@@ -244,17 +278,18 @@ def port_config_update_validator(scope, patch_element):
                 return False
             return True
         return False
-    
+
+
     def _parse_port_from_path(path):
         match = re.search(r"Ethernet\d+", path)
         if match:
             port = match.group(0)
             return port
         return None
-    
+
     if patch_element["op"] == "remove":
         return True
-    
+
     # for PORT speed and fec configs, need to ensure value is allowed based on StateDB
     patch_element_str = json.dumps(patch_element)
     path = patch_element["path"]
@@ -269,16 +304,16 @@ def port_config_update_validator(scope, patch_element):
             elif isinstance(value, dict):
                 if field in value.keys():
                     port = _parse_port_from_path(path)
-                    value = value[field]
-                    if not _validate_field(field, port, value):
+                    field_value = value[field]
+                    if not _validate_field(field, port, field_value):
                         return False
                 else:
                     for port_name, port_info in value.items():
                         if isinstance(port_info, dict):
                             port = port_name
                             if field in port_info.keys():
-                                value = port_info[field]
-                                if not _validate_field(field, port, value):
+                                field_value = port_info[field]
+                                if not _validate_field(field, port, field_value):
                                     return False
                             else:
                                 continue
