@@ -1,4 +1,5 @@
 """Independent setup.py -> wheel contract test (does not execute setup.py)."""
+
 import ast
 import base64
 import configparser
@@ -18,12 +19,24 @@ wheel, setup, declaration = map(Path, sys.argv[1:4])
 del sys.argv[1:4]
 root = setup.parent
 source = ast.parse(setup.read_text())
-call = next(n for n in ast.walk(source) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'setup')
+call = next(
+    n
+    for n in ast.walk(source)
+    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'setup'
+)
 kw = {k.arg: k.value for k in call.keywords}
-sonic = next(ast.literal_eval(n.value) for n in source.body if isinstance(n, ast.Assign) and any(isinstance(x, ast.Name) and x.id == 'sonic_dependencies' for x in n.targets))
-contract = {k: ast.literal_eval(kw[k]) for k in ['packages', 'package_data', 'scripts', 'data_files', 'entry_points']}
+sonic = next(
+    ast.literal_eval(n.value)
+    for n in source.body
+    if isinstance(n, ast.Assign)
+    and any(isinstance(x, ast.Name) and x.id == 'sonic_dependencies' for x in n.targets)
+)
+contract = {
+    k: ast.literal_eval(kw[k]) for k in ['packages', 'package_data', 'scripts', 'data_files', 'entry_points']
+}
 contract['requires'] = ast.literal_eval(kw['install_requires'].left) + sonic
 contract['extra_requires'] = ast.literal_eval(kw['extras_require'])
+
 
 class WheelContract(unittest.TestCase):
     def test_setup_declaration_matches(self):
@@ -62,11 +75,25 @@ class WheelContract(unittest.TestCase):
             self.assertEqual(len([n for n in expected if n.startswith('tests/')]), 743)
             self.assertEqual(len(names - set(expected)), 5)
             for info in z.infolist():
-                executable = info.filename.startswith(data + 'scripts/') or info.filename == data + 'data/bin/vtFA_RTK_5766_v2'
-                self.assertEqual(stat.S_IMODE(info.external_attr >> 16), 0o755 if executable else 0o644, info.filename)
+                executable = (
+                    info.filename.startswith(data + 'scripts/')
+                    or info.filename == data + 'data/bin/vtFA_RTK_5766_v2'
+                )
+                self.assertEqual(
+                    stat.S_IMODE(info.external_attr >> 16), 0o755 if executable else 0o644, info.filename
+                )
             metadata = email.message_from_bytes(z.read(di + 'METADATA'))
             self.assertEqual(metadata['Version'], '1.2')
-            for field, setup_field in [('Maintainer', 'maintainer'), ('Maintainer-email', 'maintainer_email'), ('Keywords', 'keywords'), ('License', 'license'), ('Summary', 'description'), ('Author', 'author'), ('Author-email', 'author_email'), ('Home-page', 'url')]:
+            for field, setup_field in [
+                ('Maintainer', 'maintainer'),
+                ('Maintainer-email', 'maintainer_email'),
+                ('Keywords', 'keywords'),
+                ('License', 'license'),
+                ('Summary', 'description'),
+                ('Author', 'author'),
+                ('Author-email', 'author_email'),
+                ('Home-page', 'url'),
+            ]:
                 self.assertEqual(metadata[field], ast.literal_eval(kw[setup_field]), field)
             self.assertEqual(metadata['Metadata-Version'], '2.4')
             self.assertEqual(metadata.get_all('License-File'), ['LICENSE'])
@@ -79,7 +106,10 @@ class WheelContract(unittest.TestCase):
                     self.assertIn(f"{req}; extra == '{extra}'", actual)
             parser = configparser.ConfigParser()
             parser.read_string(z.read(di + 'entry_points.txt').decode())
-            self.assertEqual(dict(parser['console_scripts']), dict(x.split(' = ') for x in contract['entry_points']['console_scripts']))
+            self.assertEqual(
+                dict(parser['console_scripts']),
+                dict(x.split(' = ') for x in contract['entry_points']['console_scripts']),
+            )
             self.assertIn('Tag: py3-none-linux_x86_64', z.read(di + 'WHEEL').decode())
             self.assertEqual(z.read(data + 'data/bin/vtFA_RTK_5766_v2')[:4], b'\x7fELF')
             for group in ('config', 'show', 'clear'):
@@ -89,9 +119,17 @@ class WheelContract(unittest.TestCase):
             for name, digest, size in records:
                 if digest:
                     payload = z.read(name)
-                    self.assertEqual(digest, 'sha256=' + base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).rstrip(b'=').decode())
+                    self.assertEqual(
+                        digest,
+                        'sha256='
+                        + base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).rstrip(b'=').decode(),
+                    )
                     self.assertEqual(int(size), len(payload))
-            print(f'Exact payload verified: {len(expected)} files, {len(contract["packages"])} packages, {len(contract["scripts"])} scripts, {len(parser["console_scripts"])} console entries')
+            print(
+                f'Exact payload verified: {len(expected)} files, {len(contract["packages"])} packages, '
+                f'{len(contract["scripts"])} scripts, {len(parser["console_scripts"])} console entries'
+            )
+
 
 if __name__ == '__main__':
     unittest.main()
