@@ -149,11 +149,9 @@ ADHOC_VALIDATION = True
 if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
     temp_system_reload_lockfile = tempfile.NamedTemporaryFile()
     SYSTEM_RELOAD_LOCK = temp_system_reload_lockfile.name
-    temp_sampling_lockfile = tempfile.NamedTemporaryFile()
-    SAMPLING_CONFIG_LOCK = temp_sampling_lockfile.name
 else:
     SYSTEM_RELOAD_LOCK = "/etc/sonic/reload.lock"
-    SAMPLING_CONFIG_LOCK = "/etc/sonic/sampling.lock"
+SAMPLING_CONFIG_LOCK = port_mirror.SAMPLING_CONFIG_LOCK
 
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')

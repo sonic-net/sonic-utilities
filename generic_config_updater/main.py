@@ -303,6 +303,17 @@ def _apply_patch_wrapper(args):
 def apply_patch_from_file(patch_file_path, config_format_name, verbose,
                           dry_run, parallel, ignore_non_yang_tables,
                           ignore_path, preprocess=True, trace_io=None):
+    """Apply a patch while serializing sampling validation and writes."""
+    with port_mirror.sampling_config_lock():
+        return _apply_patch_from_file(
+            patch_file_path, config_format_name, verbose, dry_run, parallel,
+            ignore_non_yang_tables, ignore_path, preprocess, trace_io,
+        )
+
+
+def _apply_patch_from_file(patch_file_path, config_format_name, verbose,
+                           dry_run, parallel, ignore_non_yang_tables,
+                           ignore_path, preprocess=True, trace_io=None):
     """Read a JSON-Patch file and apply it — the single implementation
     used by all entry points.
 

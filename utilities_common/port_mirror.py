@@ -1,13 +1,22 @@
 """Shared configuration checks for sampled port mirroring."""
+from contextlib import contextmanager
+import os
 import re
+import tempfile
 
 from sonic_py_common import multi_asic
 from swsscommon.swsscommon import ConfigDBConnector
+from utilities_common.flock import acquire_flock, release_flock
 
 
 SAMPLE_TABLE = 'PORT_MIRROR_SAMPLE'
 SFLOW_TABLE = 'SFLOW'
 SFLOW_GLOBAL = 'global'
+if os.environ.get('UTILITIES_UNIT_TESTING', '0') in ('1', '2'):
+    _temp_sampling_lockfile = tempfile.NamedTemporaryFile()
+    SAMPLING_CONFIG_LOCK = _temp_sampling_lockfile.name
+else:
+    SAMPLING_CONFIG_LOCK = '/etc/sonic/sampling.lock'
 EXCLUSION_ERROR = (
     'SFLOW global configuration and PORT_MIRROR_SAMPLE entries cannot coexist. '
     'Remove the conflicting configuration first; disabling it is not sufficient.'
@@ -62,6 +71,23 @@ def validate_sampling_config(config):
     )
     if has_sflow and has_sample_bindings:
         raise ValueError(EXCLUSION_ERROR)
+
+
+@contextmanager
+def sampling_config_lock(lock_file=SAMPLING_CONFIG_LOCK):
+    """Serialize sampling validation and configuration writes."""
+    fd = os.open(lock_file, os.O_CREAT | os.O_RDWR)
+    if not acquire_flock(fd, timeout=0):
+        os.close(fd)
+        raise RuntimeError(f'Failed to acquire lock on {lock_file}')
+    try:
+        os.truncate(fd, 0)
+        os.write(fd, f'sampling configuration, pid {os.getpid()}\n'.encode())
+        yield
+    finally:
+        release_flock(fd)
+        os.truncate(fd, 0)
+        os.close(fd)
 
 
 def validate_export_removal(ctx, databases, session_name):

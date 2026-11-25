@@ -402,6 +402,31 @@ class TestApplyPatchFromFile(unittest.TestCase):
                     )
         mock_updater.apply_patch.assert_called_once()
 
+    def test_sampling_lock_covers_patch_application(self):
+        patch_ops = [{"op": "add", "path": "/TABLE/key", "value": "v"}]
+        mock_updater = mock.Mock()
+        sampling_lock = mock.MagicMock()
+        mock_updater.apply_patch.side_effect = lambda *args, **kwargs: (
+            self.assertTrue(sampling_lock.__enter__.called),
+            self.assertFalse(sampling_lock.__exit__.called),
+        )
+
+        with mock.patch('builtins.open', self._make_patch_file(patch_ops)):
+            with mock.patch('generic_config_updater.main.port_mirror.sampling_config_lock',
+                            return_value=sampling_lock):
+                with mock.patch('generic_config_updater.main.GenericUpdater',
+                                return_value=mock_updater):
+                    with mock.patch('generic_config_updater.main.extract_scope',
+                                    return_value=('', '/TABLE/key')):
+                        gcu_main.apply_patch_from_file(
+                            '/fake/patch.json', 'CONFIGDB',
+                            False, False, False, False, (), preprocess=False
+                        )
+
+        sampling_lock.__enter__.assert_called_once()
+        sampling_lock.__exit__.assert_called_once()
+        mock_updater.apply_patch.assert_called_once()
+
     def test_preprocess_path_runs_helpers(self):
         patch_ops = [{"op": "add", "path": "/TABLE/key", "value": "v"}]
         running_cfg = json.dumps({"TABLE": {}})
