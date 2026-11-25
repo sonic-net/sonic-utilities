@@ -154,8 +154,8 @@ bazel build @sonic_utilities//:sonic-utilities-data.runtime \
 ```
 
 The new source API requires infrastructure executable file modes and script
-normalization. The module selects published sonic-build-infra
-`0.0.44-35726399908a3beb947174e9359f902077928289`, which provides these
+normalization. The module selects sonic-build-infra
+`0.0.45-77ef625a4ddafc8cdc15f3cc6aee31eabac8a5de`, which provides these
 interfaces. Source component verification and formal registry consumption are
 distinct acceptance steps. Local reproduction keeps
 the user's ordinary cache and output configuration.
