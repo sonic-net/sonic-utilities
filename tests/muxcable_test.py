@@ -688,6 +688,40 @@ class TestMuxcable(object):
         assert result.exit_code == 0
         assert result.output == tabular_data_status_output_expected
 
+    # linkmgrd publishes admin_active/admin_standby in APP_DB MUX_CABLE_TABLE for
+    # admin-initiated switchovers. They forward like active/standby, so the HWSTATUS
+    # comparison against the cable direction must ignore the admin_ qualifier.
+    def test_get_mux_forwarding_state(self):
+        assert show.muxcable.get_mux_forwarding_state("admin_active") == "active"
+        assert show.muxcable.get_mux_forwarding_state("admin_standby") == "standby"
+        assert show.muxcable.get_mux_forwarding_state("active") == "active"
+        assert show.muxcable.get_mux_forwarding_state("standby") == "standby"
+        assert show.muxcable.get_mux_forwarding_state("unknown") == "unknown"
+        assert show.muxcable.get_mux_forwarding_state(None) is None
+
+    @mock.patch('show.muxcable.get_hwmode_mux_direction_port', mock.MagicMock(return_value=({ 0 :"active",
+                                                                                              1  :"standby",
+                                                                                              2 : "True"})))
+    def test_muxcable_status_admin_state_is_consistent(self):
+        db = Db()
+        port_status_dict = {"MUX_CABLE": {}}
+
+        show.muxcable.create_json_dump_per_port_status(
+            db,
+            port_status_dict,
+            {0: {"state": "admin_standby"}},
+            {0: {"state": "standby"}},
+            {0: {"state": "healthy"}},
+            {0: {}},
+            0,
+            "Ethernet0"
+        )
+
+        port_status = port_status_dict["MUX_CABLE"]["Ethernet0"]
+        # the admin_ value is reported as-is, but it must not look like a toggle in flight
+        assert port_status["STATUS"] == "admin_standby"
+        assert port_status["HWSTATUS"] == "consistent"
+
     @mock.patch('show.muxcable.get_hwmode_mux_direction_port', mock.MagicMock(return_value=({ 0 :"active",
                                                                                               1  :"standby",
                                                                                               2 : "True"})))

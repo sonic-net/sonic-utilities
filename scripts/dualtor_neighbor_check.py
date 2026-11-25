@@ -227,6 +227,8 @@ NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MU
 NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
                                     "PREFIX_ROUTE", "NEXTHOP_TYPE", "HWSTATUS"]
 NOT_AVAILABLE = "N/A"
+# APP_DB MUX_CABLE_TABLE state values for admin-initiated switchovers
+ADMIN_MUX_STATE_PREFIX = "admin_"
 
 
 class LogOutput(enum.Enum):
@@ -498,6 +500,18 @@ def get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map):
     return mac_to_port_name_map
 
 
+def get_mux_forwarding_state(mux_state):
+    """Return the forwarding side of a MUX_CABLE_TABLE state value.
+
+    linkmgrd publishes admin_active/admin_standby for admin-initiated switchovers;
+    both forward exactly like active/standby.
+    """
+    if mux_state and mux_state.startswith(ADMIN_MUX_STATE_PREFIX):
+        return mux_state[len(ADMIN_MUX_STATE_PREFIX):]
+
+    return mux_state
+
+
 def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port_name_map,
                                asic_route_table, asic_neigh_table, asic_nexthop_table,
                                mux_server_to_port_map, port_neighbor_modes,
@@ -615,10 +629,13 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
                 check_result["HWSTATUS"] = check_result["NEIGHBOR_IN_ASIC"] or check_result["TUNNEL_IN_ASIC"]
         else:
             if port_name and port_name in mux_states:
-                mux_state = mux_states[port_name]
+                # MUX_CABLE_TABLE carries admin_active/admin_standby for admin-initiated
+                # switchovers, while HW_MUX_CABLE_TABLE only ever carries the forwarding
+                # side, so compare the two on the forwarding side.
+                mux_state = get_mux_forwarding_state(mux_states[port_name])
                 hw_mux_state = hw_mux_states[port_name]
                 check_result["PORT"] = port_name
-                check_result["MUX_STATE"] = mux_state
+                check_result["MUX_STATE"] = mux_states[port_name]
                 check_result["IN_MUX_TOGGLE"] = mux_state != hw_mux_state
 
                 if neighbor_mode == "prefix-route":
