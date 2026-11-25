@@ -1,4 +1,5 @@
 """Validate data installation against the original Debian install manifest."""
+
 import gzip
 from pathlib import Path
 import sys
@@ -26,7 +27,10 @@ with tarfile.open(archive) as tar:
     assert tar.extractfile(members["etc/bash_completion.d/connect"]).read().decode() == expected
     doc = "usr/share/doc/sonic-utilities-data/"
     assert tar.extractfile(members[doc + "copyright"]).read() == (source / "debian/copyright").read_bytes()
-    assert gzip.decompress(tar.extractfile(members[doc + "changelog.Debian.gz"]).read()) == (source / "debian/changelog").read_bytes()
+    assert (
+        gzip.decompress(tar.extractfile(members[doc + "changelog.Debian.gz"]).read())
+        == (source / "debian/changelog").read_bytes()
+    )
     for name, member in members.items():
         # Debian dh_fixperms installs ordinary package data as root-owned 0644.
         assert (member.uid, member.gid, member.mode) == (0, 0, 0o644), name

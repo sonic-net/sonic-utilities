@@ -3,6 +3,7 @@
 No checkout/runfiles on child sys.path. No SONiC stubs, DB/service execution,
 network, or host installs. This is intentionally a bounded dependency subset.
 """
+
 import os
 import stat
 import zipfile
@@ -29,7 +30,10 @@ from utilities_common.intf_filter import parse_interface_in_filter, interface_in
 
 class InstalledRuntime(unittest.TestCase):
     def test_imports_are_installed(self):
-        for name in ['connect.main', 'utilities_common.intf_filter', 'utilities_common.constants', 'config.plugins', 'show.plugins', 'clear.plugins.auto']:
+        for name in [
+            'connect.main', 'utilities_common.intf_filter', 'utilities_common.constants',
+            'config.plugins', 'show.plugins', 'clear.plugins.auto',
+        ]:
             module = importlib.import_module(name)
             self.assertTrue(pathlib.Path(module.__file__).resolve().is_relative_to(site), module.__file__)
         self.assertEqual(importlib.metadata.version('click'), '8.1.8')
@@ -59,7 +63,10 @@ class InstalledRuntime(unittest.TestCase):
         self.assertTrue((site / 'show/aliases.ini').is_file())
 
     def test_real_interface_filter(self):
-        self.assertEqual(parse_interface_in_filter('Ethernet0-2,PortChannel4,Ethernet-BP0-1'), ['Ethernet0', 'Ethernet1', 'Ethernet2', 'PortChannel4', 'Ethernet-BP0', 'Ethernet-BP1'])
+        self.assertEqual(
+            parse_interface_in_filter('Ethernet0-2,PortChannel4,Ethernet-BP0-1'),
+            ['Ethernet0', 'Ethernet1', 'Ethernet2', 'PortChannel4', 'Ethernet-BP0', 'Ethernet-BP1'],
+        )
         self.assertEqual(parse_interface_in_filter('Ethernet-Rec0'), [])
         self.assertTrue(interface_in_filter('Ethernet1', 'Ethernet0-2'))
         self.assertFalse(interface_in_filter('Ethernet3', 'Ethernet0-2'))
@@ -70,15 +77,27 @@ class InstalledRuntime(unittest.TestCase):
 unittest.main(argv=[sys.argv[0]], verbosity=2)
 '''
 
+
 class WheelInstallation(unittest.TestCase):
     def test_installed_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
-            scheme = {name: str(prefix / path) for name, path in {'purelib':'site', 'platlib':'site', 'headers':'include', 'scripts':'bin', 'data':'.'}.items()}
+            scheme = {
+                name: str(prefix / path)
+                for name, path in {
+                    'purelib': 'site',
+                    'platlib': 'site',
+                    'headers': 'include',
+                    'scripts': 'bin',
+                    'data': '.',
+                }.items()
+            }
             # Short stable path avoids Linux's shebang-length limit in deep Bazel sandboxes.
             interpreter = prefix / 'python-selected'
             interpreter.symlink_to(sys.executable)
-            destination = SchemeDictionaryDestination(scheme, interpreter=str(interpreter), script_kind='posix', bytecode_optimization_levels=())
+            destination = SchemeDictionaryDestination(
+                scheme, interpreter=str(interpreter), script_kind='posix', bytecode_optimization_levels=()
+            )
             for path in WHEELS:
                 with WheelFile.open(path) as source:
                     install(source, destination, additional_metadata={})
@@ -118,14 +137,28 @@ class WheelInstallation(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(Path(result.stdout.strip()).resolve(), Path(sys.executable).resolve())
             (prefix / 'check.py').write_text(CHILD)
-            env = {'PATH':'/usr/bin:/bin', 'HOME':tmp, 'PYTHONDONTWRITEBYTECODE':'1', 'LC_ALL':'C.UTF-8'}
-            result = subprocess.run([sys.executable, '-I', str(prefix / 'check.py'), str(prefix / 'site')], cwd=tmp, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            env = {'PATH': '/usr/bin:/bin', 'HOME': tmp, 'PYTHONDONTWRITEBYTECODE': '1', 'LC_ALL': 'C.UTF-8'}
+            result = subprocess.run(
+                [sys.executable, '-I', str(prefix / 'check.py'), str(prefix / 'site')],
+                cwd=tmp,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
             print(result.stdout)
             self.assertEqual(result.returncode, 0)
             # Execute the actual installer-generated console script, not only
             # an entrypoint object; installed-only PYTHONPATH, never runfiles.
             env['PYTHONPATH'] = str(prefix / 'site')
-            result = subprocess.run([str(prefix / 'bin/connect'), '--help'], cwd=tmp, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            result = subprocess.run(
+                [str(prefix / 'bin/connect'), '--help'],
+                cwd=tmp,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
             print(result.stdout)
             self.assertEqual(result.returncode, 0)
             self.assertIn("SONiC command line", result.stdout)
@@ -134,6 +167,7 @@ class WheelInstallation(unittest.TestCase):
                 self.assertTrue(path.is_file(), str(path))
                 self.assertTrue(os.access(path, os.X_OK), str(path))
             self.assertTrue((prefix / 'bin/vtFA_RTK_5766_v2').is_file())
+
 
 if __name__ == '__main__':
     unittest.main()

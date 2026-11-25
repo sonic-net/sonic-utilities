@@ -1,4 +1,5 @@
 """Run the unchanged installed-path CLI generator in a declared read-only view."""
+
 import argparse
 import json
 import os
@@ -9,7 +10,17 @@ import sys
 import tempfile
 
 parser = argparse.ArgumentParser()
-for name in ['generator', 'output', 'apt-runtime', 'filesystem', 'cfggen', 'database-config', 'ca-bundle', 'hosts', 'hostname']:
+for name in [
+    'generator',
+    'output',
+    'apt-runtime',
+    'filesystem',
+    'cfggen',
+    'database-config',
+    'ca-bundle',
+    'hosts',
+    'hostname',
+]:
     parser.add_argument('--' + name, required=True)
 parser.add_argument('--bwrap')
 parser.add_argument('--source-tree', action='append', default=[])
@@ -32,7 +43,9 @@ def declared_tree(path):
             continue
         checked.add(root)
         try:
-            same_files = all(file.resolve(strict=True) == (root / name).resolve(strict=True) for name, file in files.items())
+            same_files = all(
+                file.resolve(strict=True) == (root / name).resolve(strict=True) for name, file in files.items()
+            )
         except FileNotFoundError:
             continue
         if not same_files:
@@ -50,9 +63,31 @@ def enter_namespace():
     runtime = declared_tree(args.apt_runtime)
     output = Path(args.output).absolute()
     output.mkdir(parents=True, exist_ok=True)
+
     def guest(path):
         return '/runfiles/' + str(Path(path).absolute().relative_to(runfiles))
-    options = ['--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--die-with-parent', '--new-session', '--uid', '0', '--gid', '0', '--cap-drop', 'ALL', '--clearenv', '--dir', '/usr', '--dir', '/usr/local', '--dir', '/usr/local/bin']
+
+    options = [
+        '--unshare-user',
+        '--unshare-pid',
+        '--unshare-ipc',
+        '--unshare-uts',
+        '--die-with-parent',
+        '--new-session',
+        '--uid',
+        '0',
+        '--gid',
+        '0',
+        '--cap-drop',
+        'ALL',
+        '--clearenv',
+        '--dir',
+        '/usr',
+        '--dir',
+        '/usr/local',
+        '--dir',
+        '/usr/local/bin',
+    ]
     for path in sorted((runtime / 'usr').iterdir()):
         if path.name == 'bin':
             options += ['--dir', '/usr/bin']
@@ -76,14 +111,53 @@ def enter_namespace():
             options += ['--dir', destination]
         else:
             options += ['--ro-bind', str(path), destination]
-    options += ['--dir', '/etc/ssl', '--dir', '/etc/ssl/certs', '--ro-bind', str(Path(args.ca_bundle).resolve()), '/etc/ssl/certs/ca-certificates.crt']
+    options += [
+        '--dir',
+        '/etc/ssl',
+        '--dir',
+        '/etc/ssl/certs',
+        '--ro-bind',
+        str(Path(args.ca_bundle).resolve()),
+        '/etc/ssl/certs/ca-certificates.crt',
+    ]
     for name in ['hosts', 'hostname']:
         options += ['--ro-bind', str(Path(getattr(args, name)).resolve()), '/etc/' + name]
-    for destination, target in [('bin', 'usr/bin'), ('sbin', 'usr/sbin'), ('lib', 'usr/lib'), ('lib64', 'usr/lib64')]:
+    for destination, target in [
+        ('bin', 'usr/bin'),
+        ('sbin', 'usr/sbin'),
+        ('lib', 'usr/lib'),
+        ('lib64', 'usr/lib64'),
+    ]:
         options += ['--symlink', target, '/' + destination]
-    options += ['--dir', '/var', '--dir', '/var/run', '--dir', '/var/run/redis', '--dir', '/var/run/redis/sonic-db', '--ro-bind', str(Path(args.database_config).resolve()), '/var/run/redis/sonic-db/database_config.json', '--ro-bind', str(Path(args.cfggen).resolve()), '/usr/local/bin/sonic-cfggen', '--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp', '--dir', '/runfiles']
+    options += [
+        '--dir',
+        '/var',
+        '--dir',
+        '/var/run',
+        '--dir',
+        '/var/run/redis',
+        '--dir',
+        '/var/run/redis/sonic-db',
+        '--ro-bind',
+        str(Path(args.database_config).resolve()),
+        '/var/run/redis/sonic-db/database_config.json',
+        '--ro-bind',
+        str(Path(args.cfggen).resolve()),
+        '/usr/local/bin/sonic-cfggen',
+        '--dev',
+        '/dev',
+        '--proc',
+        '/proc',
+        '--tmpfs',
+        '/tmp',
+        '--dir',
+        '/runfiles',
+    ]
     filesystem = json.loads(Path(args.filesystem).read_text())
-    bindings = {name: declared_tree(runfiles / name) if directory else (runfiles / name).resolve(strict=True) for name, directory in filesystem.items()}
+    bindings = {
+        name: declared_tree(runfiles / name) if directory else (runfiles / name).resolve(strict=True)
+        for name, directory in filesystem.items()
+    }
     # Collapse only complete declared subtrees with identical relative layout.
     # Comparing names (not reading extra payload) prevents exposing undeclared
     # package files or empty directories while staying below bwrap's arg limit.
@@ -92,7 +166,9 @@ def enter_namespace():
         prefix = str(Path(import_path).absolute().relative_to(runfiles))
         for name in filesystem:
             if name.startswith(prefix + '/'):
-                candidates.update(str(parent) for parent in PurePosixPath(name).parents if str(parent).startswith(prefix))
+                candidates.update(
+                    str(parent) for parent in PurePosixPath(name).parents if str(parent).startswith(prefix)
+                )
     for prefix in sorted(candidates, key=lambda value: (len(PurePosixPath(value).parts), value)):
         members = [name for name in bindings if name.startswith(prefix + '/')]
         if not members or any(filesystem[name] for name in members):
@@ -103,18 +179,24 @@ def enter_namespace():
         if not all(bindings[name] == source_root / PurePosixPath(name).relative_to(prefix) for name in members):
             continue
         selected = {str(PurePosixPath(name).relative_to(prefix)) for name in members}
-        selected_dirs = {str(parent) for name in selected for parent in PurePosixPath(name).parents if str(parent) != '.'}
+        selected_dirs = {
+            str(parent) for name in selected for parent in PurePosixPath(name).parents if str(parent) != '.'
+        }
         actual = list(source_root.rglob('*'))
         if any(path.is_symlink() for path in actual):
             continue
-        if {str(path.relative_to(source_root)) for path in actual if path.is_file()} != selected or {str(path.relative_to(source_root)) for path in actual if path.is_dir()} != selected_dirs:
+        if {str(path.relative_to(source_root)) for path in actual if path.is_file()} != selected or {
+            str(path.relative_to(source_root)) for path in actual if path.is_dir()
+        } != selected_dirs:
             continue
         for name in members:
             del bindings[name]
             del filesystem[name]
         bindings[prefix] = source_root
         filesystem[prefix] = True
-    print('Read-only view: %d file/tree mounts after exact declared-subtree grouping' % len(bindings), flush=True)
+    print(
+        'Read-only view: %d file/tree mounts after exact declared-subtree grouping' % len(bindings), flush=True
+    )
     directories = set()
     for name, directory in filesystem.items():
         path = PurePosixPath(name)
@@ -127,8 +209,57 @@ def enter_namespace():
         options += ['--dir', '/runfiles/' + name]
     for name in sorted(filesystem, key=lambda value: (len(PurePosixPath(value).parts), value)):
         options += ['--ro-bind', str(bindings[name]), '/runfiles/' + name]
-    options += ['--bind', str(output), '/output', '--setenv', 'RUNFILES_DIR', '/runfiles', '--setenv', 'PYTHONHOME', '/usr', '--setenv', 'PYTHONDONTWRITEBYTECODE', '1', '--setenv', 'LANG', 'C', '--setenv', 'LC_ALL', 'C', '--setenv', 'PATH', '/usr/bin:/bin', '--chdir', '/output', '--remount-ro', '/']
-    inner = ['/usr/bin/python3.13', '-B', guest(__file__), '--inside', '--generator', guest(args.generator), '--output', '/output', '--apt-runtime', guest(args.apt_runtime), '--filesystem', guest(args.filesystem), '--cfggen', '/usr/local/bin/sonic-cfggen', '--database-config', '/var/run/redis/sonic-db/database_config.json', '--ca-bundle', '/etc/ssl/certs/ca-certificates.crt', '--hosts', '/etc/hosts', '--hostname', '/etc/hostname']
+    options += [
+        '--bind',
+        str(output),
+        '/output',
+        '--setenv',
+        'RUNFILES_DIR',
+        '/runfiles',
+        '--setenv',
+        'PYTHONHOME',
+        '/usr',
+        '--setenv',
+        'PYTHONDONTWRITEBYTECODE',
+        '1',
+        '--setenv',
+        'LANG',
+        'C',
+        '--setenv',
+        'LC_ALL',
+        'C',
+        '--setenv',
+        'PATH',
+        '/usr/bin:/bin',
+        '--chdir',
+        '/output',
+        '--remount-ro',
+        '/',
+    ]
+    inner = [
+        '/usr/bin/python3.13',
+        '-B',
+        guest(__file__),
+        '--inside',
+        '--generator',
+        guest(args.generator),
+        '--output',
+        '/output',
+        '--apt-runtime',
+        guest(args.apt_runtime),
+        '--filesystem',
+        guest(args.filesystem),
+        '--cfggen',
+        '/usr/local/bin/sonic-cfggen',
+        '--database-config',
+        '/var/run/redis/sonic-db/database_config.json',
+        '--ca-bundle',
+        '/etc/ssl/certs/ca-certificates.crt',
+        '--hosts',
+        '/etc/hosts',
+        '--hostname',
+        '/etc/hostname',
+    ]
     for path in args.source_tree:
         inner += ['--source-tree', guest(path)]
     for path in args.python_import:
@@ -139,7 +270,9 @@ def enter_namespace():
         descriptor.write(b'\0'.join(os.fsencode(value) for value in options) + b'\0')
         descriptor.flush()
         descriptor.seek(0)
-        result = subprocess.run([args.bwrap, '--args', str(descriptor.fileno()), '--'] + inner, pass_fds=(descriptor.fileno(),))
+        result = subprocess.run(
+            [args.bwrap, '--args', str(descriptor.fileno()), '--'] + inner, pass_fds=(descriptor.fileno(),)
+        )
     return result.returncode
 
 
