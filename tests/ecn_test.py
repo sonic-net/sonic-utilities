@@ -181,6 +181,15 @@ class TestEcnConfig(TestEcnConfigBase):
     def test_ecn_config_rmax_invalid(self):
         self.executor(testData['ecn_cfg_rmax_invalid'])
 
+    def test_ecn_config_gmax_out_of_range(self):
+        self.executor(testData['ecn_cfg_gmax_out_of_range'])
+
+    def test_ecn_config_rmin_out_of_range(self):
+        self.executor(testData['ecn_cfg_rmin_out_of_range'])
+
+    def test_ecn_config_gmax_upper_bound(self):
+        self.executor(testData['ecn_cfg_gmax_upper_bound'])
+
     def test_ecn_config_rdrop_invalid(self):
         self.executor(testData['ecn_cfg_rdrop_invalid'])
 

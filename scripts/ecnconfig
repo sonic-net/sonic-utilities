@@ -88,6 +88,8 @@ WRED_CONFIG_FIELDS = {
     "ydrop": "yellow_drop_probability",
     "rdrop": "red_drop_probability"
 }
+# Upper bound of the WRED_PROFILE threshold leaves in sonic-wred-profile.yang
+WRED_THRESHOLD_MAX = 2147483647
 
 QUEUE_TABLE_NAME           = "QUEUE"
 DEVICE_NEIGHBOR_TABLE_NAME = "DEVICE_NEIGHBOR"
@@ -155,7 +157,7 @@ class EcnConfig(object):
         """
         result = True
 
-        # check if thresholds are non-negative integers
+        # check if thresholds are non-negative integers no larger than WRED_THRESHOLD_MAX
         # check if probabilities are non-nagative integers in [0, 100]
         for key, field in WRED_CONFIG_FIELDS.items():
             if field in profile_data:
@@ -164,6 +166,10 @@ class EcnConfig(object):
                 if 'threshold' in field:
                     if value.isdigit() == False:
                         print("Invalid %s (%s). %s should be an non-negative integer." % (key, value, key))
+                        result = False
+                    elif int(value) > WRED_THRESHOLD_MAX:
+                        print("Invalid %s (%s). %s should not be larger than %d." %
+                              (key, value, key, WRED_THRESHOLD_MAX))
                         result = False
 
                 elif 'probability' in field:
