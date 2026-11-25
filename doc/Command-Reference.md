@@ -9260,21 +9260,27 @@ This command validates and loads a complete golden CONFIG_DB file without readin
 
 The golden file must contain all persistent desired configuration, including the required
 `DEVICE_METADATA.localhost` fields and complete coverage of `/etc/sonic/init_cfg.json`.
-The current implementation supports single-ASIC devices only and rejects multi-ASIC devices.
+The current implementation supports standalone single-ASIC and single-host namespace multi-ASIC
+NPU systems. Distributed chassis and other device-role profiles are rejected.
 Before changing CONFIG_DB, the command snapshots both input files and verifies the candidate
 platform, system MAC, and locally available HWSKU against local device identity. Validation,
 CONFIG_DB loading, and database migration use those same snapshots; migration uses the golden
 snapshot as its only configuration source.
 
-Use `--check-only` to validate the file without changing CONFIG_DB. Use `--migrate-only` to
-validate and migrate CONFIG_DB from the same immutable gold and init snapshots without loading
-the gold into CONFIG_DB or restarting services. This is the golden-native warm image-migration
-path. The two options are mutually exclusive. The `-n` option avoids restarting dependent
-services, and `-f` bypasses normal system-readiness checks.
+Use `--check-only` to validate the file without changing CONFIG_DB. Use `--migrate-only` for
+the golden-native warm image-migration path: it quiesces Redis writers, preloads any selected
+cold namespaces, migrates every scope, sets the initialization indicators, transactionally persists
+the complete CONFIG_DB generation, and then restarts services before committing.
+
+For a normal reload, `--persist` writes every host and namespace CONFIG_DB file inside the same
+generation transaction before services restart. Golden-native mutation requires service
+quiescence, so `-n` is rejected unless the command is validation-only. The `-f` option bypasses
+normal system-readiness checks.
 
 - Usage:
   ```
-  config load_golden_config [-y|--yes] [-n|--no_service_restart] [-f|--force] [--check-only | --migrate-only] [<filename>]
+  config load_golden_config [-y|--yes] [-n|--no_service_restart] [-f|--force]
+                            [--check-only | --migrate-only] [--persist] [<filename>]
   ```
 
 ### Loading configuration from minigraph (XML) file
