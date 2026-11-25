@@ -235,8 +235,8 @@ testData = {
              'pfc_config_asymmetric_all_masic': {'cmd': ['config', 'asymmetric',
                                                          'on', 'Ethernet0'],
                                                  'rc': 0,
-                                                 'cmp_args': [['asic0', 'PORT', 'Ethernet0', 'pfc_asym', 'on'],
-                                                              ['asic1', 'PORT', 'Ethernet0', 'pfc_asym', 'on']]
+                                                 'cmp_args': [['asic0', 'PORT', 'Ethernet0', 'pfc_asym', 'on']],
+                                                 'rc_msg': 'Cannot find interface Ethernet0'
                                                  },
              'pfc_config_asymmetric_invalid_all_masic': {'cmd': ['config', 'asymmetric',
                                                                  'onn', 'Ethernet0'],
@@ -245,6 +245,17 @@ testData = {
                                                                     '\'{on|off}\': \'onn\' is not '
                                                                     'one of \'on\', \'off\'')
                                                          },
+             'pfc_config_asymmetric_invalid_intf_one_masic': {'cmd': ['config', 'asymmetric',
+                                                                      'on', 'Ethernet1234',
+                                                                      '--namespace', 'asic0'],
+                                                              'rc': 0,
+                                                              'rc_msg': 'Cannot find interface Ethernet1234'
+                                                              },
+             'pfc_config_asymmetric_invalid_intf_all_masic': {'cmd': ['config', 'asymmetric',
+                                                                      'on', 'Ethernet1234'],
+                                                              'rc': 0,
+                                                              'rc_msg': 'Cannot find interface Ethernet1234'
+                                                              },
              'pfc_config_priority_one_masic': {'cmd': ['config', 'priority',
                                                        'on', 'Ethernet0', '5',
                                                        '--namespace', 'asic0'],

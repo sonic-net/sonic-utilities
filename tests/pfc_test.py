@@ -93,6 +93,10 @@ class TestPfc(TestPfcBase):
                       # namespace, table, key, field, expected_val
                       expected_cfgdb_entries=[('', 'PORT', 'Ethernet0', 'pfc_asym', 'on')])
 
+    def test_pfc_config_asymmetric_intf_fake(self):
+        self.executor(pfc.cli, ['config', 'asymmetric', 'on', 'Ethernet1234'],
+                      expected_output=pfc_cannot_find_intf)
+
     def test_pfc_config_priority(self):
         self.executor(pfc.cli, ['config', 'priority', 'on', 'Ethernet0', '5'],
                       # namespace, table, key, field, expected_val
