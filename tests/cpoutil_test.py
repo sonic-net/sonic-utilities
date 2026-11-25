@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import signal
 import sys
 import types
 from unittest import mock
@@ -2457,7 +2458,7 @@ FIRMWARE_INFO = {
     "Inactive Firmware": "1.1.0",
 }
 
-# FIRMWARE_INFO as `show fwversion --json` reports it, with the banks added.
+# FIRMWARE_INFO as `show fwversion --json` reports it, with the images added.
 FIRMWARE_INFO_JSON = {
     "Image A Version": "1.2.0",
     "Image B Version": "1.1.0",
@@ -2465,9 +2466,9 @@ FIRMWARE_INFO_JSON = {
     "Running Image": "A",
     "Committed Image": "A",
     "Active Firmware": "1.2.0",
-    "Active Bank": "A",
+    "Active Image": "A",
     "Inactive Firmware": "1.1.0",
-    "Inactive Bank": "B",
+    "Inactive Image": "B",
 }
 
 
@@ -2742,6 +2743,83 @@ class TestFirmwareCommands:
         log.log_error.assert_called_once_with(f"{kind} firmware run aborted on {kind}0")
         assert not endpoints[endpoint + "1"].run_firmware.called
 
+    @pytest.mark.parametrize("command, method, verb", TRANSFER_COMMANDS + ACTION_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_unavailable_target_does_not_stop_the_others(self, endpoints, image, monkeypatch, command, method,
+                                                         verb, endpoint, kind):
+        resource = OPTICAL_ENGINE if endpoint == "oe" else EXTERNAL_LASER_SOURCE
+        monkeypatch.delitem(cpoutil.cpo_object_map[resource], f"{endpoint}0")
+        arguments = ["firmware", command, endpoint, "all"]
+        if command in ("upgrade", "download"):
+            arguments += ["--raw", image]
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert f"Error: No CPO object is available for {kind}0" in result.output
+        assert f"{verb} {kind}1 firmware ... OK" in result.output
+        assert f"{kind} firmware {command} failed for {kind}0; completed for {kind}1" in result.output
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_not_implemented_after_progress_is_a_failure(self, endpoints, image, monkeypatch, endpoint, kind):
+        def blocks(file_path):
+            yield 128
+            raise NotImplementedError("CDB is not supported")
+
+        monkeypatch.setattr(endpoints[endpoint + "0"], "upgrade_firmware", blocks)
+        result = invoke_coverage(["firmware", "upgrade", endpoint, "0", "--raw", image])
+        assert result.exit_code != 0
+        assert f"Upgrading {kind}0 firmware failed after 128 bytes: CDB is not supported" in result.output
+        assert "not implemented for this platform" not in result.output
+
+    @pytest.mark.parametrize("command, method, verb", TRANSFER_COMMANDS + ACTION_COMMANDS)
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_error_text_is_one_line(self, endpoints, image, monkeypatch, command, method, verb, endpoint, kind):
+        log = mock.Mock()
+        monkeypatch.setattr(cpoutil, "log", log)
+
+        error = RuntimeError("CDB download failed. CDB Status: 69\n")
+
+        def blocks(file_path):
+            raise error
+            yield  # pragma: no cover - fails on its first block
+
+        if command in ("upgrade", "download"):
+            monkeypatch.setattr(endpoints[endpoint + "0"], method, blocks)
+            arguments = ["firmware", command, endpoint, "0", "--raw", image]
+        else:
+            getattr(endpoints[endpoint + "0"], method).side_effect = error
+            arguments = ["firmware", command, endpoint, "0"]
+        result = invoke_coverage(arguments)
+        assert result.exit_code != 0
+        assert f"{verb} {kind}0 firmware failed: CDB download failed. CDB Status: 69\nError:" in result.output
+        log.log_error.assert_called_once_with(
+            f"{kind} firmware {command} failed on {kind}0: {verb} {kind}0 firmware failed: "
+            "CDB download failed. CDB Status: 69")
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGHUP])
+    def test_termination_aborts_the_transfer(self, endpoints, image, monkeypatch, endpoint, kind, signum):
+        log = mock.Mock()
+        monkeypatch.setattr(cpoutil, "log", log)
+        handler = signal.getsignal(signum)
+        closed = []
+
+        def blocks(file_path):
+            try:
+                yield 64
+                # Deliver the signal as the handler cpoutil installed receives it.
+                signal.getsignal(signum)(signum, None)
+                yield 64  # pragma: no cover - the signal stops the transfer
+            finally:
+                closed.append(file_path)
+
+        monkeypatch.setattr(endpoints[endpoint + "0"], "download_firmware", blocks)
+        result = invoke_coverage(["firmware", "download", endpoint, "all", "--raw", image])
+        assert result.exit_code != 0
+        assert closed == [image]
+        log.log_error.assert_called_once_with(f"{kind} firmware download aborted on {kind}0")
+        assert endpoints[endpoint + "1"].calls == []
+        assert signal.getsignal(signum) == handler
+
 
 class TestFirmwareVersionCommands:
     endpoints = TestFirmwareCommands.endpoints
@@ -2757,8 +2835,8 @@ class TestFirmwareVersionCommands:
             "  Factory Image Version: 1.0.0",
             "  Running Image: A",
             "  Committed Image: A",
-            "  Active Firmware: 1.2.0 (Bank A)",
-            "  Inactive Firmware: 1.1.0 (Bank B)",
+            "  Active Firmware: 1.2.0 (Image A)",
+            "  Inactive Firmware: 1.1.0 (Image B)",
         ]
         endpoints[endpoint + "1"].get_firmware_info.assert_called_once_with()
         endpoints[endpoint + "0"].get_firmware_info.assert_not_called()
@@ -2769,10 +2847,10 @@ class TestFirmwareVersionCommands:
             FIRMWARE_INFO, **{"Running Image": "B", "Active Firmware": "1.1.0", "Inactive Firmware": "1.2.0"})
         result = invoke_coverage(["show", endpoint, "fwversion", "1"])
         assert result.exit_code == 0, result.output
-        assert "  Active Firmware: 1.1.0 (Bank B)\n  Inactive Firmware: 1.2.0 (Bank A)\n" in result.output
+        assert "  Active Firmware: 1.1.0 (Image B)\n  Inactive Firmware: 1.2.0 (Image A)\n" in result.output
         result = invoke_coverage(["show", endpoint, "fwversion", "1", "--json"])
         info = json.loads(result.output)[f"{endpoint}1"]
-        assert (info["Active Bank"], info["Inactive Bank"]) == ("B", "A")
+        assert (info["Active Image"], info["Inactive Image"]) == ("B", "A")
 
     @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
     def test_show_no_running_image(self, endpoints, endpoint, kind):
@@ -2781,10 +2859,10 @@ class TestFirmwareVersionCommands:
         result = invoke_coverage(["show", endpoint, "fwversion", "1"])
         assert result.exit_code == 0, result.output
         assert "  Active Firmware: N/A\n  Inactive Firmware: N/A\n" in result.output
-        assert "Bank" not in result.output
+        assert "(Image" not in result.output
         result = invoke_coverage(["show", endpoint, "fwversion", "1", "--json"])
         info = json.loads(result.output)[f"{endpoint}1"]
-        assert (info["Active Bank"], info["Inactive Bank"]) == ("N/A", "N/A")
+        assert (info["Active Image"], info["Inactive Image"]) == ("N/A", "N/A")
 
     @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
     def test_show_all(self, endpoints, endpoint, kind):
@@ -2830,7 +2908,7 @@ class TestFirmwareVersionCommands:
             f"{endpoint}1": FIRMWARE_INFO_JSON}
 
     @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
-    @pytest.mark.parametrize("returned", [None, "1.0"])
+    @pytest.mark.parametrize("returned", [None, "1.0", {}])
     def test_no_data_is_a_failure(self, endpoints, endpoint, kind, returned):
         endpoints[endpoint + "0"].get_firmware_info.return_value = returned
         result = invoke_coverage(["show", endpoint, "fwversion", "0"])
@@ -2845,6 +2923,23 @@ class TestFirmwareVersionCommands:
         result = invoke_coverage(["show", endpoint, "fwversion", "0"])
         assert result.exit_code != 0
         assert f"{kind}0 endpoint is unavailable" in result.output
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_unavailable_target_does_not_stop_the_others(self, endpoints, monkeypatch, endpoint, kind):
+        resource = OPTICAL_ENGINE if endpoint == "oe" else EXTERNAL_LASER_SOURCE
+        monkeypatch.delitem(cpoutil.cpo_object_map[resource], f"{endpoint}0")
+        result = invoke_coverage(["show", endpoint, "fwversion", "--json"])
+        assert result.exit_code != 0
+        assert f"Error: Failed to get {kind}0 firmware info: No CPO object is available for {kind}0" in result.output
+        assert json.loads(result.output[result.output.index("{"):result.output.rindex("}") + 1]) == {
+            f"{endpoint}1": FIRMWARE_INFO_JSON}
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_error_text_is_one_line(self, endpoints, endpoint, kind):
+        endpoints[endpoint + "0"].get_firmware_info.side_effect = RuntimeError("CDB status 0x45\n")
+        result = invoke_coverage(["show", endpoint, "fwversion", "0"])
+        assert result.exit_code != 0
+        assert f"Error: Failed to get {kind}0 firmware info: CDB status 0x45\nError:" in result.output
 
     @pytest.mark.parametrize("endpoint", ["oe", "els"])
     @pytest.mark.parametrize("index", ["7", "all"])

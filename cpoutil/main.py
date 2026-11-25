@@ -1,18 +1,17 @@
 """Command-line utility for Co-Packaged Optics devices."""
 
-import contextlib
-from contextlib import contextmanager
+from contextlib import closing, contextmanager, nullcontext
 import json
 import math
 import os
 import re
+import signal
 import sys
 
 import click
-from sonic_py_common import logger
 from tabulate import tabulate
 
-from sonic_py_common import multi_asic
+from sonic_py_common import logger, multi_asic
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.consts import CMIS_LANES_PER_BANK
 from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin
@@ -1331,6 +1330,81 @@ def show_interface_lane_status(port, json_output):
     print_lane_status_records(records, json_output)
 
 
+FIRMWARE_IMAGE_FIELDS = (
+    ("Active Firmware", "Active Image"),
+    ("Inactive Firmware", "Inactive Image"),
+)
+
+
+def _add_firmware_images(info):
+    """Add the image (A or B) of the active and inactive firmware, from the running image.
+
+    The image is N/A when the running image is not A or B, such as when the
+    versions come from the EEPROM.
+    """
+    running = info.get("Running Image")
+    if running in ("A", "B"):
+        images = {"Active Image": running, "Inactive Image": "B" if running == "A" else "A"}
+    else:
+        images = {"Active Image": "N/A", "Inactive Image": "N/A"}
+    result = {}
+    for name, value in info.items():
+        result[name] = value
+        for version_field, image_field in FIRMWARE_IMAGE_FIELDS:
+            if name == version_field:
+                result[image_field] = images[image_field]
+    return result
+
+
+def _firmware_info_lines(info):
+    """Return the text lines of one firmware info, with the image after each version."""
+    image_fields = dict(FIRMWARE_IMAGE_FIELDS)
+    lines = []
+    for name, value in info.items():
+        if name in image_fields.values():
+            continue
+        image = info.get(image_fields.get(name), "N/A")
+        if image != "N/A":
+            value = f"{value} (Image {image})"
+        lines.append(f"  {name}: {value}")
+    return lines
+
+
+def _show_firmware_version(resource_type, index, json_output):
+    """Display the firmware information of the selected OEs or ELSs.
+
+    A target that fails is reported and skipped; the command fails when any
+    target failed.
+    """
+    kind = FIRMWARE_ENDPOINTS[resource_type][1]
+    records = {}
+    failed = []
+    for resource_id in _firmware_resource_ids(resource_type, index):
+        label = _display_resource_id(resource_id)
+        try:
+            endpoint = _firmware_endpoint(resource_type, resource_id, label)
+            info = _call_hook(endpoint, "get_firmware_info", kind)
+            if not isinstance(info, dict) or not info:
+                raise CpoCommandError(f"{kind} get_firmware_info returned no data")
+        except Exception as exc:
+            error = f"Failed to get {label} firmware info: {_error_text(exc)}"
+        else:
+            records[resource_id] = _add_firmware_images(info)
+            continue
+        click.echo(f"Error: {error}", err=True)
+        failed.append(label)
+
+    if json_output:
+        click.echo(_json_records(records))
+    else:
+        for resource_id, info in _ordered_top_level(records).items():
+            click.echo(f"{_display_resource_id(resource_id)}:")
+            for line in _firmware_info_lines(info):
+                click.echo(line)
+    if failed:
+        raise click.ClickException(f"Failed to get {kind} firmware version for {', '.join(failed)}")
+
+
 @show.group("oe")
 def show_oe():
     """Display Optical Engine status."""
@@ -1395,6 +1469,17 @@ def show_oe_temperature(oe_index, json_output):
     except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("OE", "Temperature (C)"))
+
+
+@show_oe.command("fwversion")
+@click.argument("oe_index", required=False)
+@output_option
+def show_oe_fwversion(oe_index, json_output):
+    """Display the OE firmware versions.
+
+    OE_INDEX is an OE index; without it, every OE is shown.
+    """
+    _show_firmware_version(OPTICAL_ENGINE, oe_index, json_output)
 
 
 @show.group("els")
@@ -1472,6 +1557,17 @@ def show_els_temperature(els_index, json_output):
     except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Temperature (C)"))
+
+
+@show_els.command("fwversion")
+@click.argument("els_index", required=False)
+@output_option
+def show_els_fwversion(els_index, json_output):
+    """Display the ELS firmware versions.
+
+    ELS_INDEX is an ELS index; without it, every ELS is shown.
+    """
+    _show_firmware_version(EXTERNAL_LASER_SOURCE, els_index, json_output)
 
 
 def _require_success(result, action):
@@ -2280,28 +2376,46 @@ def write_eeprom_els(index, bank, page, offset, data):
         raise click.ClickException(str(exc))
 
 
-def main():
+def _error_text(exc):
+    """Return the text of an exception for a one-line error message."""
+    return str(exc).strip() or type(exc).__name__
+
+
+@contextmanager
+def _interrupt_on_termination():
+    """Turn SIGTERM and SIGHUP into KeyboardInterrupt while the block runs.
+
+    A firmware operation stopped by a lost session is then aborted and logged
+    like one stopped with Ctrl-C.
+    """
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt()
+
+    previous = {signum: signal.signal(signum, interrupt) for signum in (signal.SIGTERM, signal.SIGHUP)}
     try:
-        cli(standalone_mode=False)
-    except click.ClickException as exc:
-        exc.show()
-        return ERROR_INVALID_RESOURCE
-    except click.Abort:
-        # Ctrl-C: report it like click does in standalone mode.
-        click.echo("Aborted!", err=True)
-        return 1
-    return 0
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
-def _firmware_targets(resource_type, index):
-    """Resolve the OE or ELS objects selected by a firmware '<index>|all'."""
-    if str(index).strip().lower() == FIRMWARE_ALL:
-        index = None
-    return get_resource_cpo_objects(resource_type, index)
+def _firmware_resource_ids(resource_type, index):
+    """Resolve the OE or ELS ids selected by an index; None selects all.
+
+    An invalid index is fatal. A selected OE or ELS that is unavailable is
+    not: it fails as one target, in _firmware_endpoint().
+    """
+    try:
+        return cpo_mapping.resolve_resource_ids(index, resource_type)
+    except KeyError as exc:
+        raise click.ClickException(f"Invalid {resource_type} index '{index}'") from exc
 
 
-def _firmware_endpoint(resource_type, cpo, label):
-    """Return the OE or ELS endpoint of a CPO object."""
+def _firmware_endpoint(resource_type, resource_id, label):
+    """Return the OE or ELS endpoint of a selected OE or ELS."""
+    cpo = cpo_object_map[resource_type].get(resource_id)
+    if cpo is None:
+        raise CpoCommandError(f"No CPO object is available for {label}")
     endpoint = getattr(cpo, FIRMWARE_ENDPOINTS[resource_type][0], None)
     if endpoint is None:
         raise CpoCommandError(f"{label} endpoint is unavailable")
@@ -2323,17 +2437,20 @@ def _transfer_firmware(endpoint, kind, method, message, file_path):
             raise CpoCommandError(f"{message} failed")
         # Close an interrupted transfer now, so that the hook releases what
         # it holds.
-        closer = contextlib.closing(blocks) if hasattr(blocks, "close") else contextlib.nullcontext()
+        closer = closing(blocks) if hasattr(blocks, "close") else nullcontext()
         with closer, click.progressbar(length=image_size, label=message) as progress:
             for block_size in blocks:
                 bytes_written += block_size
                 progress.update(block_size)
     except NotImplementedError as exc:
-        raise CpoCommandError(f"{kind} {method} is not implemented for this platform") from exc
+        if not bytes_written:
+            raise CpoCommandError(f"{kind} {method} is not implemented for this platform") from exc
+        # Part of the operation is done: report it as a failure of the operation.
+        raise CpoCommandError(f"{message} failed after {bytes_written} bytes: {_error_text(exc)}") from exc
     except (CpoCommandError, click.Abort):
         raise
     except Exception as exc:
-        raise CpoCommandError(f"{message} failed: {exc}") from exc
+        raise CpoCommandError(f"{message} failed: {_error_text(exc)}") from exc
     return bytes_written
 
 
@@ -2342,37 +2459,38 @@ def _run_firmware_operation(resource_type, index, method, operation, file_path=N
 
     operation(endpoint, kind, label) runs on each target. A failed target does
     not stop the remaining ones; the command fails when any target failed and
-    names the targets that completed. An interruption (Ctrl-C) stops the
-    command; it is logged with the targets that completed, and re-raised.
+    names the targets that completed. An interruption (Ctrl-C, SIGTERM or
+    SIGHUP) stops the command; it is logged with the targets that completed,
+    and re-raised.
     """
     kind = FIRMWARE_ENDPOINTS[resource_type][1]
     name = f"{kind} firmware {method.split('_')[0]}"
-    try:
-        targets = _firmware_targets(resource_type, index)
-    except CpoCommandError as exc:
-        raise click.ClickException(str(exc))
+    if str(index).strip().lower() == FIRMWARE_ALL:
+        index = None
+    resource_ids = _firmware_resource_ids(resource_type, index)
 
     image = f" with {os.path.basename(file_path)} ({os.path.getsize(file_path)} bytes)" if file_path else ""
     completed = []
     failed = []
-    for resource_id, cpo in targets:
-        label = _display_resource_id(resource_id)
-        log.log_notice(f"{name} started on {label}{image}")
-        try:
-            operation(_firmware_endpoint(resource_type, cpo, label), kind, label)
-        except (KeyboardInterrupt, click.Abort):
-            message = f"{name} aborted on {label}"
-            if completed:
-                message += f"; completed for {', '.join(completed)}"
-            log.log_error(message)
-            raise
-        except CpoCommandError as exc:
-            log.log_error(f"{name} failed on {label}: {exc}")
-            click.echo(f"Error: {exc}", err=True)
-            failed.append(label)
-            continue
-        log.log_notice(f"{name} completed on {label}")
-        completed.append(label)
+    with _interrupt_on_termination():
+        for resource_id in resource_ids:
+            label = _display_resource_id(resource_id)
+            log.log_notice(f"{name} started on {label}{image}")
+            try:
+                operation(_firmware_endpoint(resource_type, resource_id, label), kind, label)
+            except (KeyboardInterrupt, click.Abort):
+                message = f"{name} aborted on {label}"
+                if completed:
+                    message += f"; completed for {', '.join(completed)}"
+                log.log_error(message)
+                raise
+            except CpoCommandError as exc:
+                log.log_error(f"{name} failed on {label}: {exc}")
+                click.echo(f"Error: {exc}", err=True)
+                failed.append(label)
+                continue
+            log.log_notice(f"{name} completed on {label}")
+            completed.append(label)
 
     if failed:
         message = f"{name} failed for {', '.join(failed)}"
@@ -2402,7 +2520,7 @@ def _firmware_action(resource_type, index, method, verb):
             except (CpoCommandError, click.Abort):
                 raise
             except Exception as exc:
-                raise CpoCommandError(f"{message} failed: {exc}") from exc
+                raise CpoCommandError(f"{message} failed: {_error_text(exc)}") from exc
 
         _run_action(message, call)
 
@@ -2538,106 +2656,17 @@ def firmware_commit_oe(oe_index):
     _firmware_action(OPTICAL_ENGINE, oe_index, "commit_firmware", "Committing")
 
 
-FIRMWARE_BANK_FIELDS = (
-    ("Active Firmware", "Active Bank"),
-    ("Inactive Firmware", "Inactive Bank"),
-)
-
-
-def _add_firmware_banks(info):
-    """Add the bank of the active and inactive firmware, from the running image.
-
-    The bank is N/A when the running image is not A or B, such as when the
-    versions come from the EEPROM.
-    """
-    running = info.get("Running Image")
-    if running in ("A", "B"):
-        banks = {"Active Bank": running, "Inactive Bank": "B" if running == "A" else "A"}
-    else:
-        banks = {"Active Bank": "N/A", "Inactive Bank": "N/A"}
-    result = {}
-    for name, value in info.items():
-        result[name] = value
-        for version_field, bank_field in FIRMWARE_BANK_FIELDS:
-            if name == version_field:
-                result[bank_field] = banks[bank_field]
-    return result
-
-
-def _firmware_info_lines(info):
-    """Return the text lines of one firmware info, with the bank after each version."""
-    bank_fields = dict(FIRMWARE_BANK_FIELDS)
-    lines = []
-    for name, value in info.items():
-        if name in bank_fields.values():
-            continue
-        bank = info.get(bank_fields.get(name), "N/A")
-        if bank != "N/A":
-            value = f"{value} (Bank {bank})"
-        lines.append(f"  {name}: {value}")
-    return lines
-
-
-def _show_firmware_version(resource_type, index, json_output):
-    """Display the firmware information of the selected OEs or ELSs.
-
-    A target that fails is reported and skipped; the command fails when any
-    target failed.
-    """
-    kind = FIRMWARE_ENDPOINTS[resource_type][1]
+def main():
     try:
-        targets = get_resource_cpo_objects(resource_type, index)
-    except CpoCommandError as exc:
-        raise click.ClickException(str(exc))
-
-    records = {}
-    failed = []
-    for resource_id, cpo in targets:
-        label = _display_resource_id(resource_id)
-        try:
-            endpoint = _firmware_endpoint(resource_type, cpo, label)
-            info = _call_hook(endpoint, "get_firmware_info", kind)
-            if not isinstance(info, dict):
-                raise CpoCommandError(f"{kind} get_firmware_info returned no data")
-        except Exception as exc:
-            error = f"Failed to get {label} firmware info: {exc}"
-        else:
-            records[resource_id] = _add_firmware_banks(info)
-            continue
-        click.echo(f"Error: {error}", err=True)
-        failed.append(label)
-
-    if json_output:
-        click.echo(_json_records(records))
-    else:
-        for resource_id, info in _ordered_top_level(records).items():
-            click.echo(f"{_display_resource_id(resource_id)}:")
-            for line in _firmware_info_lines(info):
-                click.echo(line)
-    if failed:
-        raise click.ClickException(f"Failed to get {kind} firmware version for {', '.join(failed)}")
-
-
-@show_oe.command("fwversion")
-@click.argument("oe_index", required=False)
-@output_option
-def show_oe_fwversion(oe_index, json_output):
-    """Display the OE firmware versions.
-
-    OE_INDEX is an OE index; without it, every OE is shown.
-    """
-    _show_firmware_version(OPTICAL_ENGINE, oe_index, json_output)
-
-
-@show_els.command("fwversion")
-@click.argument("els_index", required=False)
-@output_option
-def show_els_fwversion(els_index, json_output):
-    """Display the ELS firmware versions.
-
-    ELS_INDEX is an ELS index; without it, every ELS is shown.
-    """
-    _show_firmware_version(EXTERNAL_LASER_SOURCE, els_index, json_output)
+        cli(standalone_mode=False)
+    except click.ClickException as exc:
+        exc.show()
+        return ERROR_INVALID_RESOURCE
+    except click.Abort:
+        # Ctrl-C: report it like click does in standalone mode.
+        click.echo("Aborted!", err=True)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
