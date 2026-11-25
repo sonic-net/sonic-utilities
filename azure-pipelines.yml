@@ -75,8 +75,18 @@ stages:
         runVersion: 'latestFromBranch'
         runBranch: 'refs/heads/$(sourceBranch)'
         patterns: |
-          **/*.deb
-          **/*.whl
+          target/debs/trixie/libnl-3-200_*.deb
+          target/debs/trixie/libnl-genl-3-200_*.deb
+          target/debs/trixie/libnl-route-3-200_*.deb
+          target/debs/trixie/libnl-nf-3-200_*.deb
+          target/debs/trixie/libyang3_*.deb
+          target/debs/trixie/python3-libyang_*.deb
+          target/python-wheels/trixie/swsssdk-2.0.1-py3-none-any.whl
+          target/python-wheels/trixie/sonic_py_common-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_yang_mgmt-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_yang_models-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_config_engine-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_platform_common-1.0-py3-none-any.whl
       displayName: "Download artifacts from latest sonic-buildimage build"
 
     - script: |
@@ -249,8 +259,18 @@ stages:
         runVersion: 'latestFromBranch'
         runBranch: 'refs/heads/$(sourceBranch)'
         patterns: |
-          **/*.deb
-          **/*.whl
+          target/debs/trixie/libnl-3-200_*.deb
+          target/debs/trixie/libnl-genl-3-200_*.deb
+          target/debs/trixie/libnl-route-3-200_*.deb
+          target/debs/trixie/libnl-nf-3-200_*.deb
+          target/debs/trixie/libyang3_*.deb
+          target/debs/trixie/python3-libyang_*.deb
+          target/python-wheels/trixie/swsssdk-2.0.1-py3-none-any.whl
+          target/python-wheels/trixie/sonic_py_common-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_yang_mgmt-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_yang_models-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_config_engine-1.0-py3-none-any.whl
+          target/python-wheels/trixie/sonic_platform_common-1.0-py3-none-any.whl
       displayName: "Download artifacts from latest sonic-buildimage build"
 
     - script: |
