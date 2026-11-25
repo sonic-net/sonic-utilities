@@ -259,6 +259,58 @@ def test_config_warm_restart_disable_bgp_eoiu_multi_asic_one_asic(
             "bgp"]["bgp_eoiu"] == expected_value
 
 
+def test_config_warm_restart_bgp_eoiu_hold_timer(configdbconnector_mock, sonicv2connector_mock):
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["bgp_eoiu_hold_timer", "5"],
+    )
+    cfg_db = configdbconnector_mock()
+    assert result.exit_code == 0
+    assert cfg_db.get_table("WARM_RESTART")["bgp"]["eoiu_hold_timer"] == "5"
+
+
+def test_config_warm_restart_bgp_eoiu_hold_timer_multi_asic(configdbconnector_mock, sonicv2connector_mock, multi_asic):
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["bgp_eoiu_hold_timer", "5"],
+    )
+    assert result.exit_code == 0
+    for namespace in multi_asic["asic_namespaces"]:
+        cfg_db = configdbconnector_mock(namespace=namespace)
+        assert cfg_db.get_table("WARM_RESTART")["bgp"]["eoiu_hold_timer"] == "5"
+
+
+def test_config_warm_restart_bgp_eoiu_hold_timer_multi_asic_one_asic(
+        configdbconnector_mock, sonicv2connector_mock, multi_asic):
+    runner = CliRunner()
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], ["bgp_eoiu_hold_timer", "5"],
+    )
+    assert result.exit_code == 0
+    result = runner.invoke(
+        config_cli.commands["warm_restart"], [
+            "bgp_eoiu_hold_timer", "10", "-n", "asic1"],
+    )
+    assert result.exit_code == 0
+    for namespace in multi_asic["asic_namespaces"]:
+        expected_value = "10" if namespace == "asic1" else "5"
+        cfg_db = configdbconnector_mock(namespace=namespace)
+        assert cfg_db.get_table("WARM_RESTART")[
+            "bgp"]["eoiu_hold_timer"] == expected_value
+
+
+def test_config_warm_restart_bgp_eoiu_hold_timer_invalid_range(configdbconnector_mock, sonicv2connector_mock):
+    runner = CliRunner()
+    cfg_db = configdbconnector_mock()
+    for seconds in ["0", "3601"]:
+        result = runner.invoke(
+            config_cli.commands["warm_restart"], ["bgp_eoiu_hold_timer", seconds],
+        )
+        assert result.exit_code != 0
+        assert "bgp eoiu hold timer must be in range 1-3600" in result.output
+        assert "WARM_RESTART" not in cfg_db.dbs[cfg_db.CONFIG_DB]
+
+
 @pytest.fixture
 def setup_state_db(sonicv2connector_mock):
     state_db = sonicv2connector_mock()
@@ -403,10 +455,10 @@ def test_show_warm_restart_config(setup_state_db, setup_config_db):
         show_cli.commands["warm_restart"], ["config"],
     )
     expected_output = textwrap.dedent("""\
-        name    enable    timer_name       timer_duration    eoiu_enable
-        ------  --------  ---------------  ----------------  -------------
-        teamd   false     teamsyncd_timer  120               NULL
-        system  true      NULL             NULL              NULL
+        name    enable    timer_name       timer_duration    eoiu_enable    eoiu_hold_timer
+        ------  --------  ---------------  ----------------  -------------  -----------------
+        teamd   false     teamsyncd_timer  120               NULL           NULL
+        system  true      NULL             NULL              NULL           NULL
     """)
     assert result.exit_code == 0
     assert result.output == expected_output
@@ -422,32 +474,32 @@ def test_show_warm_restart_config_multi_asic(setup_state_db_multi_asic,
 
         For namespace global:
 
-        name    enable    timer_name    timer_duration    eoiu_enable
-        ------  --------  ------------  ----------------  -------------
+        name    enable    timer_name    timer_duration    eoiu_enable    eoiu_hold_timer
+        ------  --------  ------------  ----------------  -------------  -----------------
 
         For namespace asic0:
 
-        name    enable    timer_name         timer_duration  eoiu_enable
-        ------  --------  ---------------  ----------------  -------------
-        teamd   false     teamsyncd_timer               180  NULL
+        name    enable    timer_name         timer_duration  eoiu_enable    eoiu_hold_timer
+        ------  --------  ---------------  ----------------  -------------  -----------------
+        teamd   false     teamsyncd_timer               180  NULL           NULL
 
         For namespace asic1:
 
-        name    enable    timer_name         timer_duration  eoiu_enable
-        ------  --------  ---------------  ----------------  -------------
-        teamd   false     teamsyncd_timer               180  NULL
+        name    enable    timer_name         timer_duration  eoiu_enable    eoiu_hold_timer
+        ------  --------  ---------------  ----------------  -------------  -----------------
+        teamd   false     teamsyncd_timer               180  NULL           NULL
 
         For namespace asic2:
 
-        name    enable    timer_name         timer_duration  eoiu_enable
-        ------  --------  ---------------  ----------------  -------------
-        teamd   false     teamsyncd_timer               180  NULL
+        name    enable    timer_name         timer_duration  eoiu_enable    eoiu_hold_timer
+        ------  --------  ---------------  ----------------  -------------  -----------------
+        teamd   false     teamsyncd_timer               180  NULL           NULL
 
         For namespace asic3:
 
-        name    enable    timer_name         timer_duration  eoiu_enable
-        ------  --------  ---------------  ----------------  -------------
-        teamd   false     teamsyncd_timer               180  NULL
+        name    enable    timer_name         timer_duration  eoiu_enable    eoiu_hold_timer
+        ------  --------  ---------------  ----------------  -------------  -----------------
+        teamd   false     teamsyncd_timer               180  NULL           NULL
     """)
     assert result.exit_code == 0
     assert result.output == expected_output
@@ -461,9 +513,9 @@ def test_show_warm_restart_config_multi_asic_show_namespace(setup_state_db_multi
         show_cli.commands["warm_restart"], ["config"] + arguments,
     )
     expected_output = textwrap.dedent("""\
-        name    enable    timer_name         timer_duration  eoiu_enable
-        ------  --------  ---------------  ----------------  -------------
-        teamd   false     teamsyncd_timer               180  NULL
+        name    enable    timer_name         timer_duration  eoiu_enable    eoiu_hold_timer
+        ------  --------  ---------------  ----------------  -------------  -----------------
+        teamd   false     teamsyncd_timer               180  NULL           NULL
     """)
     assert result.exit_code == 0
     assert result.output == expected_output
