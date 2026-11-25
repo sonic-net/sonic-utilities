@@ -678,11 +678,12 @@ class TestPfcwd(object):
         assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == '400'
 
     @staticmethod
-    def _run_start_default_with_ports(db, pfc_ports, non_pfc_ports=(), extra_ports=()):
+    def _run_start_default_with_ports(db, pfc_ports, non_pfc_ports=(), extra_ports=(),
+                                      empty_pfc_ports=()):
         """Run start_default with a synthetic port layout.
 
         start_default scales its timers off the ports it actually configures, which are the
-        DEVICE_NEIGHBOR ports carrying a PORT_QOS_MAP 'pfc_enable'.
+        DEVICE_NEIGHBOR ports carrying a non-empty PORT_QOS_MAP 'pfc_enable'.
 
         Args:
             db (obj): Db instance to run against.
@@ -690,26 +691,34 @@ class TestPfcwd(object):
             non_pfc_ports (list): Ports in DEVICE_NEIGHBOR without pfc_enable, i.e. ports that
                 are candidates for configuration but get skipped.
             extra_ports (list): Ports present only in PORT, without pfc_enable.
+            empty_pfc_ports (list): Ports in DEVICE_NEIGHBOR whose pfc_enable and
+                pfcwd_sw_enable are empty strings, as lossy-only QoS templates render them.
         """
         import pfcwd.main as pfcwd
 
         original_get_table = db.cfgdb.get_table
         original_get_entry = db.cfgdb.get_entry
         no_pfc = list(non_pfc_ports) + list(extra_ports)
+        empty_pfc = {'pfc_enable': '', 'pfcwd_sw_enable': ''}
 
         def mock_get_table(table):
             if table == 'PORT':
-                return {port: {} for port in list(pfc_ports) + no_pfc}
+                return {port: {} for port in list(pfc_ports) + no_pfc + list(empty_pfc_ports)}
             if table == 'DEVICE_NEIGHBOR':
-                return {port: {} for port in list(pfc_ports) + list(non_pfc_ports)}
+                return {port: {} for port in
+                        list(pfc_ports) + list(non_pfc_ports) + list(empty_pfc_ports)}
             if table == 'PORT_QOS_MAP':
-                return {port: {'pfc_enable': '3,4'} for port in pfc_ports}
+                qos_map = {port: {'pfc_enable': '3,4'} for port in pfc_ports}
+                qos_map.update({port: dict(empty_pfc) for port in empty_pfc_ports})
+                return qos_map
             return original_get_table(table)
 
         def mock_get_entry(table, key):
             if table == 'PORT_QOS_MAP':
                 if key in pfc_ports:
                     return {'pfc_enable': '3,4'}
+                if key in empty_pfc_ports:
+                    return dict(empty_pfc)
                 if key in no_pfc:
                     return {}
             return original_get_entry(table, key)
@@ -789,6 +798,28 @@ class TestPfcwd(object):
         # It is still walked by the configuration loop, so it warns and gets no watchdog.
         assert "PFC is not enabled on port: {}".format(no_pfc) in result.output
         assert db.cfgdb.get_entry("PFC_WD", no_pfc) == {}
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_skips_neighbor_with_empty_pfc_enable(self, mock_os):
+        """A candidate whose pfc_enable is an empty string has PFC disabled on all queues.
+
+        Lossy-only QoS templates render pfc_enable and pfcwd_sw_enable as "". The port must be
+        skipped and not counted; on the 32/33 boundary, counting it would give 400ms instead of 200ms.
+        """
+        db = Db()
+        mock_os.geteuid.return_value = 0
+
+        pfc_ports = ['Ethernet%d' % (i * 4) for i in range(32)]
+        empty_pfc = 'Ethernet900'
+        result = self._run_start_default_with_ports(db, pfc_ports, empty_pfc_ports=[empty_pfc])
+        assert result.exit_code == 0
+
+        # 32 counted, not 33: (32-1)//32+1 = 1 -> 200ms.
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet0").get("detection_time") == '200'
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == '200'
+
+        assert "PFC is not enabled on port: {}".format(empty_pfc) in result.output
+        assert db.cfgdb.get_entry("PFC_WD", empty_pfc) == {}
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_history(self, mock_os):
