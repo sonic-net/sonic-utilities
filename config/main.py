@@ -74,6 +74,7 @@ from . import mclag
 from . import syslog
 from . import switchport
 from . import dns
+from . import dldd
 from . import bgp_cli
 from . import stp
 from . import evpn_mh
@@ -2010,6 +2011,9 @@ config.add_command(sed.sed)
 
 # DNS module
 config.add_command(dns.dns)
+
+# Device-local diagnosis configuration
+config.add_command(dldd.dldd)
 
 # Switchport module
 config.add_command(switchport.switchport)

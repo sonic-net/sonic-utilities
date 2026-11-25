@@ -340,7 +340,7 @@ def test_install_uses_resolved_swap_values(
     swap.assert_called_with(True, 3072, 8192, 1200)
 
 
-def _remove_with_prune(state="enabled", error=None, efivars_error=None):
+def _remove_with_prune(state="enabled", error=None, efivars_error=None, expected_exit=0):
     bootloader = Mock()
     bootloader.get_installed_images.side_effect = [["cur", "old"], ["cur"]]
     bootloader.get_current_image.return_value = "cur"
@@ -359,7 +359,7 @@ def _remove_with_prune(state="enabled", error=None, efivars_error=None):
             patch("sonic_installer.main.secure_boot_db.secure_boot_state", return_value=state) as boot_state, \
             patch("sonic_installer.main.secure_boot_db.prune_db_certificates", side_effect=after_removal) as prune:
         result = CliRunner().invoke(sonic_installer, ["remove", "-y", "old"])
-    assert result.exit_code == 0, (result.output, result.exception)
+    assert result.exit_code == expected_exit, (result.output, result.exception)
     bootloader.remove_image.assert_called_once_with("old")
     bootloader.is_secure_upgrade_image_verification_supported.assert_not_called()
     ensure_efivars.assert_called_once()
@@ -376,7 +376,7 @@ def test_remove_prunes_db_certs_without_flag():
     _, prune = _remove_with_prune()
     prune.assert_called_once()
     assert isinstance(prune.call_args.args[0], secure_boot_db.Config)
-    assert prune.call_args.kwargs == {"images": ["cur"], "commit": True}
+    assert prune.call_args.kwargs == {"images": ["cur"], "auto": True}
 
 
 @pytest.mark.parametrize("error", [
@@ -390,6 +390,14 @@ def test_remove_warns_when_prune_fails(error):
     assert "prune failed" in result.output
     assert str(error) in result.output
     assert "Verify db before rebooting" in result.output
+
+
+def test_remove_fails_when_db_update_was_attempted():
+    error = secure_boot_db.DbUpdateError("firmware restoration failed")
+    result, prune = _remove_with_prune(error=error, expected_exit=1)
+    prune.assert_called_once()
+    assert str(error) in result.output
+    assert "DO NOT REBOOT" in result.output
 
 
 @pytest.mark.parametrize("state", ["disabled", "unknown"])
@@ -428,7 +436,7 @@ def test_cleanup_prunes_only_when_images_were_removed(old_images):
     if old_images:
         assert operations == old_images + ["prune"]
         prune.assert_called_once()
-        assert prune.call_args.kwargs == {"images": ["cur", "next"], "commit": True}
+        assert prune.call_args.kwargs == {"images": ["cur", "next"], "auto": True}
     else:
         assert operations == []
         prune.assert_not_called()

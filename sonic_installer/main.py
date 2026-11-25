@@ -774,10 +774,10 @@ def get_fips(image):
 
 
 def prune_stale_db_certs(bootloader):
-    """ Trim the UEFI db to certificates that still sign an installed image.
+    """ Analyze db after removal; automatic pruning preserves unknown enrolled trust.
 
-    Best-effort and fail-closed: any problem skips pruning with a warning and never
-    affects the image removal that already happened.
+    Preflight failures skip pruning with a warning. Any failure after an attempted
+    firmware update is fatal, after all available restoration attempts complete.
     """
     try:
         config = secure_boot_db.Config.from_env()
@@ -791,8 +791,11 @@ def prune_stale_db_certs(bootloader):
         secure_boot_db.prune_db_certificates(
             config,
             images=bootloader.get_installed_images(),
-            commit=True,
+            auto=True,
         )
+    except secure_boot_db.DbUpdateError as e:
+        raise click.ClickException(f"Secure Boot db update failed: {e}. DO NOT REBOOT until db has been "
+                                   "verified and restored") from e
     except (secure_boot_db.ScriptError, OSError, subprocess.SubprocessError) as e:
         echo_and_log("Warning: Secure Boot db prune failed: {}. Verify db before rebooting".format(e),
                      LOG_WARN, fg="yellow")

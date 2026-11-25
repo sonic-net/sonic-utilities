@@ -1,4 +1,4 @@
-"""Prune the UEFI Secure Boot "db" down to the certificates that sign an installed SONiC image.
+"""Explicitly reset UEFI Secure Boot "db" to installed SONiC image signers.
 
 Strategy
   1. Read the current db and split it into X.509 certificates.
@@ -8,12 +8,13 @@ Strategy
   3. Map each used certificate to a reinstall .auth file by SHA-256 fingerprint.
   4. Safety gate: refuse unless every boot-chain binary keeps a db signer that can be reinstalled.
   5. Apply a signed "remove-all" .auth (empty db replacement), then append each selected
-     reinstall .auth. Every .auth is first verified against the enrolled KEK, so db is never
-     wiped by an update that firmware would refuse to follow up.
+     reinstall .auth. Every .auth is first verified against the enrolled KEK, but firmware
+     writes can still fail; reset and restoration are not atomic.
 
 The standalone command is a dry run unless --commit is given. Commit mode skips unsafe plans
-and plans with no stale certificates. "sonic-installer remove" and "cleanup" call
-prune_db_certificates directly with commit=True.
+and plans with no stale certificates. The SONiC scan cannot establish ownership of unused
+enrolled trust. "sonic-installer remove" and "cleanup" only analyze the plan, preserving db.
+Explicit --commit requires the operator to review trust for other firmware boot paths.
 
 Exit status: 0 on success (or a clean plan/skip), 2 on any error.
 """
@@ -98,6 +99,10 @@ class EfiAuthVariable2(ctypes.LittleEndianStructure):
 
 class ScriptError(Exception):
     """A fatal condition: reported as an error and exit status 2."""
+
+
+class DbUpdateError(ScriptError):
+    """A db update was attempted; restoration or verification did not complete safely."""
 
 
 @dataclass
@@ -453,7 +458,7 @@ def print_plan(config, plan, commit, verbose):
         lines += format_cert(cert)
         lines += [f"        via .auth : {auth}" if auth
                   else f"        via .auth : *** MISSING *** (no matching file in {config.auth_dir})", ""]
-    lines.append(f"db certificates that sign NO installed image and will be DROPPED ({len(plan.drop)}):")
+    lines.append(f"db certificates with NO signer match in the SONiC scan, DROPPED by --commit ({len(plan.drop)}):")
     if not plan.drop:
         lines.append("  (none)")
     for cert in plan.drop:
@@ -465,6 +470,10 @@ def print_plan(config, plan, commit, verbose):
             lines.append(f"  {binary} -> {names}")
         lines.append("")
     print("\n".join(lines))
+
+    warn("the SONiC scan does not establish ownership of enrolled db trust. "
+         "An explicit --commit resets the entire db, including trust for unscanned recovery, "
+         "option ROMs or other firmware boot paths and non-X.509 entries. Review before committing.")
 
     if plan.missing:
         warn(f"{len(plan.missing)} image-signing db cert(s) have NO matching .auth in {config.auth_dir} "
@@ -525,16 +534,25 @@ def update_db(config, auth, append):
 
 def apply_plan(config, plan, work, verbose=True):
     """Apply the validated updates and verify the resulting boot chain."""
+    failed = []
     if verbose:
         best_effort_print("Deleting all db certificates (applying remove-all .auth) ...")
-    if not update_db(config, config.remove_all_auth, append=False):
-        raise ScriptError(f"failed to apply remove-all .auth ({config.remove_all_auth}); "
-                          "db unchanged or partially modified -- verify before rebooting")
+    failure = f"failed to apply remove-all .auth ({config.remove_all_auth})"
+    try:
+        emptied = update_db(config, config.remove_all_auth, append=False)
+    except Exception as e:
+        emptied = False
+        failure += f": {e}"
+    if not emptied:
+        # A failed writer may already have modified db. Try every validated restore
+        # before reporting failure, even when the empty replacement did not succeed.
+        warn(failure + "; db may be partially modified; attempting all certificate restores")
+        failed.append(config.remove_all_auth)
     if verbose:
-        best_effort_print("  db emptied.")
+        if emptied:
+            best_effort_print("  db emptied.")
 
         best_effort_print(f"Reinstalling {len(plan.selected_auths)} image-signing certificate(s) ...")
-    failed = []
     for auth in plan.selected_auths:
         if verbose:
             best_effort_print(f"  appending: {auth}")
@@ -542,31 +560,37 @@ def apply_plan(config, plan, work, verbose=True):
         try:
             if update_db(config, auth, append=True):
                 continue
-        except (OSError, subprocess.SubprocessError) as e:
+        except Exception as e:
+            # Even an unexpected writer error must not abandon the remaining restores.
             failure += f": {e}"
         warn(failure)
         failed.append(auth)
 
     if verbose:
         best_effort_print("\nVerifying db after reinstall ...")
-    new_pems = [c.pem for c in read_efi_certificates(config, work, "db", "new-db")]
-    if verbose:
-        best_effort_print(f"  db now holds {len(new_pems)} certificate(s).")
-    broken = [
-        b for b in plan.boot_critical_binaries
-        if not any(succeeds(["sbverify", "--cert", str(p), str(b)]) for p in new_pems)
-    ]
+    try:
+        new_pems = [c.pem for c in read_efi_certificates(config, work, "db", "new-db")]
+        if verbose:
+            best_effort_print(f"  db now holds {len(new_pems)} certificate(s).")
+        broken = [
+            b for b in plan.boot_critical_binaries
+            if not any(succeeds(["sbverify", "--cert", str(p), str(b)]) for p in new_pems)
+        ]
+    except Exception as e:
+        # Any failed verification after a write must remain fatal to automatic callers.
+        raise DbUpdateError(f"could not verify db after attempted updates: {e}. "
+                            "DO NOT REBOOT until db has been verified and restored.") from e
     for binary in plan.boot_critical_binaries:
         if binary in broken:
             best_effort_print(f"  ERR {binary} does NOT verify against the new db", file=sys.stderr)
         elif verbose:
             best_effort_print(f"  OK  {binary} verifies against the new db")
     if broken:
-        raise ScriptError("CRITICAL: a boot-chain binary no longer verifies against db. DO NOT REBOOT with "
+        raise DbUpdateError("CRITICAL: a boot-chain binary no longer verifies against db. DO NOT REBOOT with "
                           "Secure Boot enforcing. Re-enroll a valid image-signing db certificate before rebooting.")
     if failed:
-        raise ScriptError("one or more reinstall .auth files failed to apply; "
-                          "review the warnings above before rebooting")
+        raise DbUpdateError("one or more db updates failed to apply. DO NOT REBOOT until db has been "
+                            "verified and any missing certificates have been restored.")
     best_effort_print(
         f"\nDone: db reset to {len(new_pems)} image-signing certificate(s); all boot-chain binaries verify.")
 
@@ -612,8 +636,10 @@ def defer_cancellation():
             raise SystemExit(128 + signum)
 
 
-def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, verbose=False):
-    """Analyze or prune db; commit mode modifies only safe plans with stale certificates."""
+def prune_db_certificates(config, *, images=None, commit=False, plan_only=False, auto=False, verbose=False):
+    """Analyze or explicitly reset db. The installer's automatic analysis is read-only."""
+    commit = commit and not (auto or plan_only)
+
     if os.geteuid() != 0:
         raise ScriptError(f"must be run as root (needs to read/write {config.efivars_dir} and {config.host_path})")
     if not config.auth_dir.is_dir() or not any(auth.is_file() for auth in config.auth_dir.glob("*.auth")):
@@ -623,19 +649,24 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         plan = analyze(config, work, images)
-        print_plan(config, plan, commit, verbose)
+        if not auto or verbose:
+            print_plan(config, plan, commit, verbose)
 
         if plan_only:
             print("Plan only - no changes made.")
             return 0
 
-        if commit:
+        if commit or auto:
             if not plan.used or plan.missing or plan.boot_chain_at_risk:
                 warn(f"Secure Boot db prune skipped (unsafe plan: used={len(plan.used)} "
                      f"missing={len(plan.missing)} essential_missing={plan.boot_critical_binaries_at_risk})")
                 return 0
             if not plan.drop:
                 print("No stale db certificates to prune.")
+                return 0
+            if auto:
+                warn("Secure Boot db prune skipped: the SONiC binary scan cannot establish ownership "
+                     "of unused enrolled trust; db is unchanged. Review an explicit --plan before --commit.")
                 return 0
             print(f"Pruning {len(plan.drop)} stale Secure Boot db certificate(s)...")
 
@@ -652,12 +683,21 @@ def prune_db_certificates(config, *, images=None, commit=False, plan_only=False,
 
         validate_updates(config, plan, work)
         completed = False
+        updates_attempted = False
         try:
             with defer_cancellation():
+                updates_attempted = True
                 apply_plan(config, plan, work)
                 completed = True
+        except DbUpdateError:
+            raise
+        except Exception as e:
+            if not updates_attempted:
+                raise
+            raise DbUpdateError(f"Secure Boot db update did not complete: {e}. "
+                                "DO NOT REBOOT until db has been verified and restored.") from e
         finally:
-            if not completed:
+            if updates_attempted and not completed:
                 warn("Secure Boot db update did not complete. DO NOT REBOOT until db has been "
                      "verified and any missing image-signing certificates have been restored.")
     return 0
@@ -667,7 +707,8 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog=PROG,
         description="Delete all UEFI 'db' certificates and reinstall only those that sign an installed "
-                    "SONiC image, using pre-existing signed .auth files. Dry run unless --commit.",
+                    "SONiC image, using pre-existing signed .auth files. Other enrolled trust may be lost. "
+                    "Dry run unless --commit.",
     )
     parser.add_argument("--auth-dir", help="directory of per-certificate reinstall .auth files "
                                            "(default: $SONIC_DB_AUTH_DIR or /host/db-auth)")
