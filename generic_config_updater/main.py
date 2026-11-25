@@ -38,6 +38,7 @@ from generic_config_updater.gu_common import (
     GenericConfigUpdaterError,
 )
 from sonic_py_common import multi_asic
+from utilities_common import port_mirror
 from utilities_common.general import load_db_config
 
 logger = logging.getLogger(__name__)
@@ -199,16 +200,6 @@ def validate_patch(patch_ops, all_running_config):
     Raises ``GenericConfigUpdaterError`` on unexpected failures.
     """
     try:
-        from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
-    except ImportError:
-        # In environments without sonic_yang_cfg_generator (e.g. minimal
-        # standalone venv), skip YANG validation.
-        logger.warning(
-            "sonic_yang_cfg_generator not available; skipping YANG validation"
-        )
-        return True
-
-    try:
         config = (
             json.loads(all_running_config)
             if isinstance(all_running_config, str)
@@ -218,12 +209,28 @@ def validate_patch(patch_ops, all_running_config):
             [copy.deepcopy(op) for op in patch_ops]
         )
         all_target_config = patch_copy.apply(config)
+        port_mirror.validate_sampling_config(all_target_config)
+    except Exception as e:
+        raise GenericConfigUpdaterError(
+            f"Validate json patch: {patch_ops} failed due to: {e}"
+        )
 
+    try:
+        from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
+    except ImportError:
+        # The system-level validation above is independent of YANG support.
+        logger.warning(
+            "sonic_yang_cfg_generator not available; skipping YANG validation"
+        )
+        return True
+
+    try:
         target_config = (
-            all_target_config.pop(HOST_NAMESPACE)
+            all_target_config[HOST_NAMESPACE]
             if multi_asic.is_multi_asic()
             else all_target_config
         )
+        target_config = copy.deepcopy(target_config)
         target_config.pop("bgpraw", None)
         if not SonicYangCfgDbGenerator().validate_config_db_json(
             target_config
@@ -232,7 +239,7 @@ def validate_patch(patch_ops, all_running_config):
 
         if multi_asic.is_multi_asic():
             for asic in multi_asic.get_namespace_list():
-                target_config = all_target_config.pop(asic)
+                target_config = copy.deepcopy(all_target_config[asic])
                 target_config.pop("bgpraw", None)
                 if not SonicYangCfgDbGenerator().validate_config_db_json(
                     target_config

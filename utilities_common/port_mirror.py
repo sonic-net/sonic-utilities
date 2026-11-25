@@ -1,9 +1,13 @@
 """Shared configuration checks for sampled port mirroring."""
+import re
+
 from sonic_py_common import multi_asic
 from swsscommon.swsscommon import ConfigDBConnector
 
 
 SAMPLE_TABLE = 'PORT_MIRROR_SAMPLE'
+SFLOW_TABLE = 'SFLOW'
+SFLOW_GLOBAL = 'global'
 EXCLUSION_ERROR = (
     'SFLOW global configuration and PORT_MIRROR_SAMPLE entries cannot coexist. '
     'Remove the conflicting configuration first; disabling it is not sufficient.'
@@ -29,6 +33,35 @@ def reject_sflow_global_with_sample_bindings(ctx, host_db):
     for database in config_databases(host_db).values():
         if database.get_keys(SAMPLE_TABLE):
             ctx.fail(EXCLUSION_ERROR)
+
+
+def reject_sample_bindings_with_sflow_global(ctx, databases):
+    """Reject a sampled binding write if global sFlow is configured."""
+    for database in databases.values():
+        if SFLOW_GLOBAL in database.get_keys(SFLOW_TABLE):
+            ctx.fail(EXCLUSION_ERROR)
+
+
+def validate_sampling_config(config):
+    """Validate chassis-wide sampling-mode ownership in a final config."""
+    if not isinstance(config, dict):
+        raise ValueError('Sampling configuration must be a JSON object.')
+
+    scoped_configs = [
+        value for scope, value in config.items()
+        if scope == 'localhost' or re.fullmatch(r'asic\d+', scope)
+    ]
+    configs = scoped_configs or [config]
+    has_sflow = any(
+        SFLOW_GLOBAL in scope_config.get(SFLOW_TABLE, {})
+        for scope_config in configs
+    )
+    has_sample_bindings = any(
+        bool(scope_config.get(SAMPLE_TABLE))
+        for scope_config in configs
+    )
+    if has_sflow and has_sample_bindings:
+        raise ValueError(EXCLUSION_ERROR)
 
 
 def validate_export_removal(ctx, databases, session_name):

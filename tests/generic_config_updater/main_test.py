@@ -241,6 +241,55 @@ class TestValidatePatch(unittest.TestCase):
             with self.assertRaises(GenericConfigUpdaterError):
                 gcu_main.validate_patch([], json.dumps({}))
 
+    def test_sampling_conflict_rejected_without_yang(self):
+        config = {
+            "SFLOW": {"global": {"admin_state": "down"}},
+            "PORT_MIRROR_SAMPLE": {
+                "Ethernet0|rx": {
+                    "mirror_session": "export1",
+                    "admin_state": "down",
+                }
+            },
+        }
+
+        with mock.patch.dict('sys.modules', {'sonic_yang_cfg_generator': None}):
+            with self.assertRaisesRegex(GenericConfigUpdaterError, "cannot coexist"):
+                gcu_main.validate_patch([], json.dumps(config))
+
+    def test_sampling_atomic_switch_allowed_without_yang(self):
+        config = {"SFLOW": {"global": {"admin_state": "down"}}}
+        patch = [
+            {"op": "remove", "path": "/SFLOW"},
+            {
+                "op": "add",
+                "path": "/PORT_MIRROR_SAMPLE",
+                "value": {
+                    "Ethernet0|rx": {
+                        "mirror_session": "export1",
+                        "admin_state": "down",
+                    }
+                },
+            },
+        ]
+
+        with mock.patch.dict('sys.modules', {'sonic_yang_cfg_generator': None}):
+            self.assertTrue(gcu_main.validate_patch(patch, json.dumps(config)))
+
+    def test_multiasic_sampling_conflict_rejected_across_scopes(self):
+        config = {
+            "localhost": {"SFLOW": {"global": {}}},
+            "asic0": {},
+            "asic1": {
+                "PORT_MIRROR_SAMPLE": {
+                    "Ethernet0|rx": {"mirror_session": "export1"}
+                }
+            },
+        }
+
+        with mock.patch.dict('sys.modules', {'sonic_yang_cfg_generator': None}):
+            with self.assertRaisesRegex(GenericConfigUpdaterError, "cannot coexist"):
+                gcu_main.validate_patch([], json.dumps(config))
+
     def test_multiasic_validates_all_asics(self):
         mock_generator = mock.Mock()
         mock_generator.validate_config_db_json.return_value = True
