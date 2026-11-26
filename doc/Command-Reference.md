@@ -10387,6 +10387,55 @@ While adding a new SPAN session, users need to configure the following fields th
   root@T1-2:~#
   ```
 
+**config mirror_session hwsflow**
+
+The ASIC builds and sends the sFlow datagrams of an HWSFLOW session. The session sets
+the collector, the sample rate and the truncate size. Bind source ports with
+`config mirror_session sample add`.
+
+- Usage:
+  ```
+  config mirror_session hwsflow add <session_name> <src_ip> <dst_ip> <dscp> <ttl> --sample_rate <N> [--truncate_size <bytes>] [--udp_src_port <port>] [--udp_dst_port <port>]
+  ```
+
+1) source IP address. It is also the agent address in the sFlow datagram.
+2) destination IP address of the collector.
+3) DSCP value of the datagrams.
+4) TTL value of the datagrams.
+5) Sample rate - Required. All bindings of the session sample one in every N packets. Valid range: 2..4294967295.
+6) optional - Truncate size in bytes. Valid range: 64..9216. Default: 128.
+7) optional - UDP source port of the datagrams. Default: 6343.
+8) optional - UDP destination port of the datagrams. Default: 6343.
+
+- Example:
+  ```
+  config mirror_session hwsflow add hws0 10.1.0.32 10.0.0.3 8 64 --sample_rate 1024 --truncate_size 128
+  config mirror_session sample add hws0 Ethernet0,PortChannel1001 rx
+  ```
+
+- The command fails when STATE_DB `SWITCH_CAPABILITY|switch` reports
+  `MIRROR_SESSION_HWSFLOW_CAPABLE`, `MIRROR_SESSION_SAMPLE_RATE_CAPABLE` or
+  `MIRROR_SESSION_TRUNCATION_CAPABLE` as `false`.
+- The session takes no GRE type, queue, policer, source port or direction.
+- An HWSFLOW session is not supported as an ACL mirror action.
+- An HWSFLOW session and explicit `SFLOW|global` configuration are mutually exclusive
+  system-wide. `hwsflow add` fails while `SFLOW|global` exists, and the global sFlow
+  commands fail while an HWSFLOW session exists.
+- Where STATE_DB reports `LAG_INGRESS_SAMPLE_MIRROR_CAPABLE` or
+  `LAG_EGRESS_SAMPLE_MIRROR_CAPABLE` as `true` for a requested direction, `sample add`
+  rejects a PortChannel member port. Bind the PortChannel.
+- To change the sample rate or the truncate size, remove the bindings and the session,
+  then add them again.
+
+`show mirror_session` lists HWSFLOW sessions in their own table when at least one exists:
+
+```text
+HWSFLOW Sessions
+Name    Status    SRC IP     DST IP      DSCP    TTL    UDP SRC Port    UDP DST Port    Sample Rate  Truncate Size    Monitor Port
+------  --------  ---------  --------  ------  -----  --------------  --------------  -------------  ---------------  --------------
+hws0    active    10.1.0.32  10.0.0.3       8     64            6343            6343           1024  128              Ethernet8
+```
+
 **config mirror_session sample**
 
 Create a destination-only ERSPAN export (no source port), then bind a front-panel
@@ -10402,24 +10451,26 @@ show mirror_session sample
 config mirror_session sample remove export1 Ethernet0 both
 ```
 
-While adding sampled ERSPAN bindings, users need to configure the following fields:
+While adding sampled bindings, users need to configure the following fields:
 
-1) Session name - An existing ERSPAN export session without source port configuration.
+1) Session name - An existing ERSPAN export session without source port configuration, or an existing HWSFLOW session.
 2) Source port list - One or more front-panel Ethernet ports or PortChannels, separated by commas.
 3) Direction - Mirror session direction for the specified source ports. (Supported rx/tx/both)
-4) Sample rate - Required sampling rate shared by the specified sources. Valid range: 2..4294967295.
-5) optional - Truncate size in bytes. Valid range: 64..9216. When omitted, no truncation is requested.
+4) Sample rate - Sampling rate shared by the specified sources. Valid range: 2..4294967295. Required for an ERSPAN session. HWSFLOW keeps sample rate at the session level.
+5) optional - Truncate size in bytes. Valid range: 64..9216. When omitted, no truncation is requested. HWSFLOW keeps truncate size at the session level.
 6) optional - Disabled. Create bindings with admin_state down instead of the CLI default up.
 
 - Usage:
   ```
-  config mirror_session sample add <session_name> <source-port-list> <direction> --sample_rate <N> [--truncate_size <bytes>] [--disabled]
+  config mirror_session sample add <session_name> <source-port-list> <direction> [--sample_rate <N>] [--truncate_size <bytes>] [--disabled]
   config mirror_session sample remove <session_name> <source-port-list> <direction>
   config mirror_session sample enable <session_name> <source-port-list> <direction>
   config mirror_session sample disable <session_name> <source-port-list> <direction>
   ```
 
-- `--sample_rate` is required, in range 2..4294967295. Zero and one are invalid.
+- `--sample_rate` is required for an ERSPAN session, in range 2..4294967295. Zero and one are invalid.
+- A binding on an HWSFLOW session takes neither `--sample_rate` nor `--truncate_size`.
+  `show mirror_session sample` reports the rate and the truncate size of its session.
 - All sources in `<source-port-list>` (for example, `Ethernet0,Ethernet4`) receive the same policy.
   Each source/direction is stored as a separate entry; a list is never stored in a key.
   Empty list elements, duplicate sources after alias resolution, and overlapping
@@ -10438,7 +10489,7 @@ While adding sampled ERSPAN bindings, users need to configure the following fiel
 - `both` creates separate `rx` and `tx` entries. Both are checked before writes;
   duplicate keys and overlapping PortChannel/member ownership are rejected.
 - PortChannels are stored as logical bindings, not expanded into member entries.
-- A binding must reference an existing ERSPAN session without a `src_port` field.
+- A binding must reference an existing ERSPAN or HWSFLOW session without a `src_port` field.
 - Removal checks references before deleting. `both` removes whichever matching
   directional entries exist, but rejects any mismatched reference without deletion.
   Every requested source must have at least one matching entry in the selected
@@ -10463,7 +10514,7 @@ While adding sampled ERSPAN bindings, users need to configure the following fiel
 `show mirror_session sample` reports configuration, one row per source/direction:
 
 ```text
-Sampled ERSPAN Bindings
+Sampled Mirror Bindings
 Source Port      Direction    Mirror Session    Admin State      Sample Rate  Truncate Size
 ---------------  -----------  ----------------  -------------  -------------  ---------------
 Ethernet0        rx           export1           up                      5000  128

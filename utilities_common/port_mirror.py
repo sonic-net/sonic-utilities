@@ -5,7 +5,7 @@ from swsscommon.swsscommon import ConfigDBConnector
 
 SAMPLE_TABLE = 'PORT_MIRROR_SAMPLE'
 EXCLUSION_ERROR = (
-    'SFLOW global configuration and PORT_MIRROR_SAMPLE entries cannot coexist. '
+    'SFLOW global configuration and sampled mirroring cannot coexist. '
     'Remove the conflicting configuration first; disabling it is not sufficient.'
 )
 
@@ -25,9 +25,10 @@ def config_databases(host_db=None, connector_factory=None):
 
 
 def reject_sflow_global_with_sample_bindings(ctx, host_db):
-    """Reject a global sFlow write if any sampled binding is configured."""
+    """Reject a global sFlow write if any sampled binding or HWSFLOW session is configured."""
     for database in config_databases(host_db).values():
-        if database.get_keys(SAMPLE_TABLE):
+        if database.get_keys(SAMPLE_TABLE) or any(
+                entry.get('type') == 'HWSFLOW' for entry in database.get_table('MIRROR_SESSION').values()):
             ctx.fail(EXCLUSION_ERROR)
 
 
