@@ -473,12 +473,13 @@ def _info_field_label(key):
     return key
 
 
-def _format_cpo_info(info):
+def _format_cpo_info(info, format_map=None):
     indent = " " * 8
     if not isinstance(info, dict):
         return ["{}EEPROM info: N/A".format(indent)]
 
     info = _combine_cable_info(info)
+    format_map = format_map or {}
     lines = []
     keys = sorted(
         info,
@@ -503,6 +504,8 @@ def _format_cpo_info(info):
             continue
         else:
             label = _info_field_label(key)
+            metadata = format_map.get(key, {}) if label == key and key not in CPO_INFO_FIELD_MAP else {}
+            label = metadata.get("label") or label
             value = info.get(key, "N/A")
 
         if value in (None, "N/A", "Unknown"):
@@ -517,6 +520,8 @@ def _format_cpo_info(info):
             value = _value_with_unit(value, "GHz")
         elif key in ("max_laser_bias", "min_laser_bias"):
             value = _value_with_unit(value, "mA")
+        elif metadata.get("unit"):
+            value = _value_with_unit(value, metadata["unit"])
         lines.append("{}{}: {}".format(indent, label, value))
     return lines
 
@@ -737,7 +742,8 @@ def _format_interface_dom(port_name, record, cpo=None):
     for endpoint, formatter in (("oe", _format_oe_dom), ("els", _format_els_dom)):
         data = record[endpoint]
         lines.append("    {}:".format(endpoint.upper()))
-        lines.extend(_format_cpo_info(data["info"]))
+        info_format_map = get_format_map("info", endpoint) if get_format_map else None
+        lines.extend(_format_cpo_info(data["info"], info_format_map))
         values = {}
         for section in ("dom", "thresholds"):
             if isinstance(data[section], dict):

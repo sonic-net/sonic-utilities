@@ -568,6 +568,10 @@ class TestDirectPlatformApiCommands(object):
         assert all(not key.startswith("els_") for key in thresholds)
 
     def test_dom_cmis_thresholds_handle_unknown_missing_and_extra_fields(self):
+        self.cpo.api.get_transceiver_info = mock.Mock(return_value={
+            "manufacturer": "Example OE", "vendor_limit": 4,
+        })
+        self.cpo.api.get_elsfp_info = mock.Mock(return_value={"vendor_limit": 2.5})
         self.cpo.api.get_elsfp_threshold_info = mock.Mock(return_value={
             "txpowerhighalarm": "Unknown", "txpowerlowalarm": "N/A",
             "txbiashighalarm": "20mA", "rxpowerhighalarm": "3.01dBm", "extra_limit": 7,
@@ -577,6 +581,13 @@ class TestDirectPlatformApiCommands(object):
             "vendor_voltage": "4V",
         })
         format_maps = {
+            "info": {
+                "oe": {
+                    "manufacturer": {"label": "Vendor Manufacturer"},
+                    "vendor_limit": {"label": "OE Limit", "unit": "V"},
+                },
+                "els": {"vendor_limit": {"label": "ELS Limit", "unit": "mA"}},
+            },
             "dom": {
                 "oe": {"vendor_voltage": {"label": "OE Rail", "unit": "V"}},
                 "els": {
@@ -599,6 +610,9 @@ class TestDirectPlatformApiCommands(object):
         assert "RxPowerHighAlarm: 3.01dBm\n" in els_section
         oe_section = result.output.split("    ELS:\n")[0]
         assert "OE Rail: 4V\n" in oe_section
+        assert "OE Limit: 4V\n" in oe_section
+        assert "Example OE" in oe_section and "Vendor Manufacturer" not in oe_section
+        assert "ELS Limit: 2.5mA\n" in els_section
         assert "AdditionalValues:" in els_section and "extra limit: 7mA\n" in els_section
         assert "ELS Rail: 2.5V\n" in els_section
         assert "ELS Spare: N/A\n" in els_section
@@ -607,6 +621,8 @@ class TestDirectPlatformApiCommands(object):
         result = invoke(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
         assert result.exit_code == 0, result.output
         record = json.loads(result.output)["Ethernet0"]
+        assert record["oe"]["info"]["vendor_limit"] == 4
+        assert record["els"]["info"]["vendor_limit"] == 2.5
         assert record["oe"]["dom"] == {"vendor_voltage": "4V"}
         assert record["els"]["thresholds"]["vendor_voltage"] == 2.5
         assert record["els"]["thresholds"]["vendor_missing"] is None
