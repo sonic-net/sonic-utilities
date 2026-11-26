@@ -278,13 +278,47 @@ class TestDirectPlatformApiCommands(object):
         else:
             assert float(result.output.splitlines()[-1].split()[-1]) == value
 
-    @pytest.mark.parametrize("index", [None, "0"])
-    def test_els_temperature_reports_missing_module_read(self, index):
-        args = ["show", "els", "temperature"] + ([index] if index is not None else [])
-        with mock.patch.object(self.cpo.api, "get_module_temperature", return_value=None):
-            result = invoke(args)
-        assert result.exit_code != 0
-        assert "ELSFP temperature is unavailable for 'els0'" in result.output
+    @pytest.mark.parametrize("resource, command, getter, healthy", [
+        ("els", "temperature", "get_module_temperature", 32.5),
+        ("els", "status", "get_module_state", "High power mode"),
+        ("els", "lpmode", "get_lpmode", False),
+        ("oe", "lpmode", "get_lpmode", True),
+    ])
+    @pytest.mark.parametrize("error", [None, OSError("read failed")])
+    def test_bulk_module_query_keeps_other_results(self, resource, command, getter, healthy, error):
+        broken, working = FakeCpo(), FakeCpo()
+        read = mock.Mock(return_value=None, side_effect=error)
+        setattr(broken if command == "lpmode" else broken.api, getter, read)
+        setattr(working if command == "lpmode" else working.api, getter, mock.Mock(return_value=healthy))
+        resources = [(resource + "0", broken), (resource + "1", working)]
+        with mock.patch.object(cpoutil, "get_resource_cpo_objects", return_value=resources):
+            result = invoke(["show", resource, command, "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output) == {resource + "0": None, resource + "1": healthy}
+
+    @pytest.mark.parametrize("command, getter, expected", [
+        (["presence"], "get_presence", {"els": "ELS0", "present": None}),
+        (["tx-disable"], "get_tx_disable", {"lane00": None, "lane01": None}),
+        (["speed", "application"], "get_application_advertisement", None),
+        (["lane-status"], "get_per_lane_state", None),
+    ])
+    def test_bulk_interface_query_keeps_other_results(self, command, getter, expected):
+        broken = FakeCpo()
+        target = broken if getter in ("get_presence", "get_tx_disable") else broken.api
+        setattr(target, getter, mock.Mock(side_effect=OSError("read failed")))
+        entries = [("Ethernet0", 1, broken, "Ethernet0"), ("Ethernet1", 1, self.cpo, "Ethernet1")]
+        with mock.patch.object(cpoutil, "get_port_cpo_entries", return_value=entries):
+            result = invoke(["show", "interface"] + command + ["--json"])
+        assert result.exit_code == 0, result.output
+        records = json.loads(result.output)
+        assert records["Ethernet1"]
+        if command == ["lane-status"]:
+            assert records["Ethernet0"]["Data Path State Indicator"]
+            assert records["Ethernet0"]["ELS Lane State"] == {}
+            assert records["Ethernet0"]["ELS Lane State Error"] == "N/A"
+            assert records["Ethernet1"]["ELS Lane State"]
+        else:
+            assert records["Ethernet0"] == expected
 
     @pytest.mark.parametrize("present", [True, False])
     def test_interface_presence_calls_cpo_instead_of_endpoints(self, present):
@@ -376,44 +410,35 @@ class TestDirectPlatformApiCommands(object):
                 ["ELS0", "N/A"], ["ELS1", "Off"], ["ELS2", "On"],
             ]
 
-    @pytest.mark.parametrize("command, value, displayed", [
+    @pytest.mark.parametrize("command, value, label", [
         ("lpmode", False, "Off"),
         ("status", "High power mode", "High power mode"),
         ("temperature", 32.5, "32.5"),
     ])
+    @pytest.mark.parametrize("presence", [True, None, OSError("read failed")])
     @pytest.mark.parametrize("json_output", [False, True])
-    @pytest.mark.parametrize("presence_supported", [True, False])
-    def test_els_queries_use_cpo_presence(self, command, value, displayed, json_output, presence_supported):
-        absent = mock.Mock(spec=["get_lpmode", "get_api"])
-        absent.get_lpmode.side_effect = AssertionError("lpmode read on absent ELS")
-        absent.get_api.side_effect = AssertionError("API access on absent ELS")
+    def test_els_queries_skip_absent_and_read_unknown_presence(self, command, value, label, presence, json_output):
+        absent = mock.Mock()
         absent_cpo = mock.Mock(elsfp=absent, get_presence=mock.Mock(return_value=False))
-        present = mock.Mock(spec=["get_lpmode", "get_api"])
-        present.get_lpmode.return_value = value
+        present = mock.Mock(get_lpmode=mock.Mock(return_value=value))
         present.get_api.return_value.get_module_state.return_value = value
         present.get_api.return_value.get_module_temperature.return_value = value
-        present_cpo = mock.Mock(elsfp=present, get_presence=mock.Mock(return_value=True))
-        if not presence_supported:
-            present_cpo.get_presence.side_effect = NotImplementedError
-        resources = [
-            ("els0", absent_cpo),
-            ("els1", present_cpo),
-        ]
-        arguments = ["show", "els", command]
-        if json_output:
-            arguments.append("--json")
+        present_cpo = mock.Mock(elsfp=present, get_presence=mock.Mock(return_value=presence))
+        if isinstance(presence, Exception):
+            present_cpo.get_presence.side_effect = presence
+        resources = [("els0", absent_cpo), ("els1", present_cpo)]
+        arguments = ["show", "els", command] + (["--json"] if json_output else [])
         with mock.patch.object(cpoutil, "get_resource_cpo_objects", return_value=resources):
             result = invoke(arguments)
         assert result.exit_code == 0, result.output
         absent_cpo.get_presence.assert_called_once_with()
         present_cpo.get_presence.assert_called_once_with()
-        absent.get_lpmode.assert_not_called()
-        absent.get_api.assert_not_called()
+        assert not absent.mock_calls
         if json_output:
             assert json.loads(result.output) == {"els0": None, "els1": value}
         else:
             assert any("ELS0" in line and "Not Present" in line for line in result.output.splitlines())
-            assert any("ELS1" in line and displayed in line for line in result.output.splitlines())
+            assert any("ELS1" in line and label in line for line in result.output.splitlines())
 
     def test_interface_dom_calls_public_oe_and_els_apis(self):
         result = invoke([
@@ -765,13 +790,22 @@ class TestDirectPlatformApiCommands(object):
             assert "DataPathActivated" in result.output
             assert "Not Present" in result.output
 
-    def test_lane_status_reads_els_when_cpo_presence_is_unsupported(self):
-        self.cpo.get_presence = mock.Mock(side_effect=NotImplementedError)
-        result = invoke(["show", "interface", "lane-status", "-p", "Ethernet0", "--json"])
-        assert result.exit_code == 0, result.output
-        record = json.loads(result.output)["Ethernet0"]
-        assert record["ELS Lane State"]
-        assert "ELS Lane State Error" not in record
+    @pytest.mark.parametrize("presence", [True, None, OSError("read failed")])
+    def test_lane_status_reads_els_when_cpo_presence_is_unknown(self, presence):
+        self.cpo.get_presence = mock.Mock(return_value=presence)
+        if isinstance(presence, Exception):
+            self.cpo.get_presence.side_effect = presence
+        result = invoke([
+            "show", "interface", "lane-status", "-p", "Ethernet0", "--json"
+        ])
+        values = json.loads(result.output)["Ethernet0"]
+        assert values["Data Path State Indicator"]["lane00"] == \
+            "DataPathActivated"
+        assert "ELS Status" not in values
+        assert values["ELS Lane State"] == {
+            "lane00": "Active",
+            "lane01": "Inactive",
+        }
 
     def test_els_lane_state_preserves_api_strings(self):
         with mock.patch.object(
@@ -830,8 +864,7 @@ class TestDirectPlatformApiCommands(object):
         els_api = mock.Mock(spec=["get_module_state"])
         els_api.get_module_state.side_effect = NotImplementedError(
             "Independent ELS module state is not implemented")
-        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api),
-                                  get_presence=mock.Mock(return_value=True))
+        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api))
         missing = invoke(["show", "els", "status", "0", "--json"])
         assert missing.exit_code != 0
         assert (

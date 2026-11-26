@@ -11,6 +11,7 @@ import click
 from tabulate import tabulate
 
 from sonic_py_common import multi_asic
+from sonic_py_common.logger import Logger
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.consts import CMIS_LANES_PER_BANK
 from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin
@@ -45,6 +46,9 @@ from cpoutil.mapping import CpoMapping, CpoMappingError
 from cpoutil.mapping import EXTERNAL_LASER_SOURCE, OPTICAL_ENGINE, PORT
 
 
+logger = Logger("cpoutil")
+
+
 ERROR_PERMISSIONS = 1
 ERROR_INVALID_RESOURCE = 3
 ELS_NOT_PRESENT = "Not Present"
@@ -65,6 +69,10 @@ cpo_object_map = {
 
 class CpoCommandError(RuntimeError):
     """Raised when a CPO resource or platform API is unavailable."""
+
+
+class CpoReadError(CpoCommandError):
+    """Raised when a platform query has no usable data for an endpoint."""
 
 
 UNRESOLVED_LASERS = "N/A (needs laser_to_asic_lane_mapping)"
@@ -285,7 +293,7 @@ def get_oe_api(cpo, label):
             "Failed to get {} API: {}".format(label, exc)
         ) from exc
     if api is None:
-        raise CpoCommandError("{} API is unavailable".format(label))
+        raise CpoReadError("{} API is unavailable".format(label))
     return api
 
 
@@ -302,12 +310,12 @@ def get_els_api(cpo, label):
             "Failed to get {} ELSFP API: {}".format(label, exc)
         ) from exc
     if api is None:
-        raise CpoCommandError("{} ELSFP API is unavailable".format(label))
+        raise CpoReadError("{} ELSFP API is unavailable".format(label))
     return api
 
 
 def get_cpo_presence(cpo, label, *, allow_unsupported=False):
-    """Read associated ELSFP presence through the CPO port object."""
+    """Read CPO presence, optionally treating unavailable presence as unknown."""
     try:
         present = cpo.get_presence()
     except (NotImplementedError, AttributeError) as exc:
@@ -317,10 +325,16 @@ def get_cpo_presence(cpo, label, *, allow_unsupported=False):
             "CPO presence is not implemented for '{}'".format(label)
         ) from exc
     except Exception as exc:
+        if allow_unsupported:
+            logger.log_warning("CPO presence unavailable for '{}': {}".format(label, exc))
+            return None
         raise CpoCommandError(
             "Failed to read CPO presence for '{}': {}".format(label, exc)
         ) from exc
     if not isinstance(present, bool):
+        if allow_unsupported:
+            logger.log_warning("Invalid CPO presence for '{}': {!r}".format(label, present))
+            return None
         raise CpoCommandError(
             "CPO presence API returned invalid data for '{}'".format(label)
         )
@@ -367,7 +381,7 @@ def _normalize_lane_values(values):
 
         ordered = [value for _, value in sorted(values.items(), key=lane_key)]
     else:
-        raise CpoCommandError("Expected per-lane data from platform API")
+        raise CpoReadError("Expected per-lane data from platform API")
     return {
         "lane{:02d}".format(index): value
         for index, value in enumerate(ordered)
@@ -381,7 +395,7 @@ def _select_lane_values(values, lane_positions):
     for lane in lane_positions:
         key = "lane{:02d}".format(lane)
         if key not in normalized:
-            raise CpoCommandError(
+            raise CpoReadError(
                 "Platform API did not return data for {}".format(key)
             )
         selected[key] = normalized[key]
@@ -402,7 +416,7 @@ def _select_els_laser_values(values, laser_ids, bank):
             )
         source_key = "lane{:02d}".format(local_lane)
         if source_key not in normalized:
-            raise CpoCommandError(
+            raise CpoReadError(
                 "Platform API did not return data for ELS laser {}".format(
                     laser
                 )
@@ -883,6 +897,9 @@ def print_application_records(records, json_output):
 
     rows = []
     for interface, values in records.items():
+        if values is None:
+            rows.append((interface, "N/A", "N/A", "N/A"))
+            continue
         advertisements = values.get("Application Advertisement", {})
         configured = values.get("Application Select Controls", {})
         active = values.get("Active Application Control Set", {})
@@ -1039,11 +1056,11 @@ def show_interface():
               help="Front-panel interface; omit to display all CPO interfaces.")
 @output_option
 def show_interface_presence(port, json_output):
-    """Display CPO virtual-module presence for each interface."""
+    """Display presence for each CPO interface."""
     records = {}
     try:
         for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-            present = get_cpo_presence(cpo, port_name)
+            present = get_cpo_presence(cpo, port_name, allow_unsupported=port is None)
             mapping = cpo_mapping.resolve_interface(logical_port, current_port_config)
             records[port_name] = {"els": mapping.els_name.upper(), "present": present}
     except (CpoMappingError, CpoCommandError) as exc:
@@ -1052,7 +1069,7 @@ def show_interface_presence(port, json_output):
         click.echo(_json_records(records))
     else:
         rows = [
-            (port_name, record["els"], "Present" if record["present"] else "Not present")
+            (port_name, record["els"], _display_value(record["present"], ("Present", "Not present")))
             for port_name, record in records.items()
         ]
         click.echo(tabulate(rows, headers=("Interface", "ELS", "Presence")))
@@ -1171,11 +1188,18 @@ def show_interface_tx_disable(port, json_output):
         with _eeprom_read_snapshot() as attach_snapshot:
             for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
                 lane_positions = cpo_mapping.lane_positions(logical_port, current_port_config)
-                attach_snapshot(getattr(cpo, "oe", None))
-                values = _select_lane_values(
-                    _call_vmodule(cpo, "get_tx_disable"), lane_positions
-                )
-                records[port_name] = values
+                attach_snapshot(cpo.oe)
+                try:
+                    records[port_name] = _select_lane_values(
+                        _call_vmodule(cpo, "get_tx_disable"), lane_positions
+                    )
+                except (AttributeError, CpoCommandError, NotImplementedError) as exc:
+                    if port is not None:
+                        raise
+                    logger.log_warning("{} Tx disable unavailable: {}".format(port_name, exc))
+                    records[port_name] = {
+                        "lane{:02d}".format(lane): None for lane in lane_positions
+                    }
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
@@ -1212,42 +1236,48 @@ def show_interface_speed_application(port, json_output):
     try:
         with _eeprom_read_snapshot() as attach_snapshot:
             for port_name, _, cpo, logical_port in get_port_cpo_entries(port):
-                api = get_oe_api(cpo, port_name)
-                attach_snapshot(cpo.oe, api)
-                advertisements = api.get_application_advertisement()
-                active_applications = api.get_active_apsel_hostlane()
-                if not isinstance(advertisements, dict) or not isinstance(
-                        active_applications, dict):
-                    raise CpoCommandError(
-                        "Speed APIs returned no data for '{}'".format(port_name)
-                    )
-
-                configured = []
-                active = []
-                for lane in range(api.NUM_CHANNELS):
-                    configured.append(api.get_application(lane))
-                    active_application = active_applications.get(
-                        "{}{}".format(
-                            consts.ACTIVE_APSEL_HOSTLANE, lane + 1
-                        ),
-                        "N/A",
-                    )
-                    active.append(active_application)
                 lane_positions = cpo_mapping.lane_positions(logical_port, current_port_config)
-                records[port_name] = {
-                    "Application Advertisement": advertisements,
-                    "Application Select Controls": _select_lane_values(
-                        configured, lane_positions
-                    ),
-                    "Active Application Control Set": _select_lane_values(
-                        active, lane_positions
-                    ),
-                }
+                try:
+                    api = get_oe_api(cpo, port_name)
+                    attach_snapshot(cpo.oe, api)
+                    advertisements = api.get_application_advertisement()
+                    active_applications = api.get_active_apsel_hostlane()
+                    if not isinstance(advertisements, dict) or not isinstance(
+                            active_applications, dict):
+                        raise CpoCommandError(
+                            "Speed APIs returned no data for '{}'".format(port_name)
+                        )
+
+                    configured = []
+                    active = []
+                    for lane in range(api.NUM_CHANNELS):
+                        configured.append(api.get_application(lane))
+                        active_application = active_applications.get(
+                            "{}{}".format(
+                                consts.ACTIVE_APSEL_HOSTLANE, lane + 1
+                            ),
+                            "N/A",
+                        )
+                        active.append(active_application)
+                    records[port_name] = {
+                        "Application Advertisement": advertisements,
+                        "Application Select Controls": _select_lane_values(
+                            configured, lane_positions
+                        ),
+                        "Active Application Control Set": _select_lane_values(
+                            active, lane_positions
+                        ),
+                    }
+                except (AttributeError, CpoCommandError, NotImplementedError, OSError) as exc:
+                    if port is not None:
+                        raise
+                    logger.log_warning("{} application unavailable: {}".format(port_name, exc))
+                    records[port_name] = None
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)
         )
-    except (CpoMappingError, CpoCommandError) as exc:
+    except (CpoMappingError, CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_application_records(records, json_output)
 
@@ -1278,11 +1308,16 @@ def show_interface_lane_status(port, json_output):
                     record["Data Path State Indicator"] = _select_lane_values(
                         oe_api.get_datapath_state(), context["lane_positions"]
                     )
-                except (NotImplementedError, AttributeError, CpoCommandError) as exc:
-                    if isinstance(exc, CpoCommandError) and not isinstance(
+                except (NotImplementedError, AttributeError, CpoCommandError, OSError) as exc:
+                    if isinstance(exc, (NotImplementedError, AttributeError)) or isinstance(
                             exc.__cause__, (NotImplementedError, AttributeError)):
+                        record["OE Datapath State Error"] = "Not supported"
+                    elif port is None and (isinstance(exc, (CpoReadError, OSError))
+                                           or isinstance(exc.__cause__, OSError)):
+                        logger.log_warning("{} OE Datapath State Error: {}".format(port_name, exc))
+                        record["OE Datapath State Error"] = "N/A"
+                    else:
                         raise
-                    record["OE Datapath State Error"] = "Not supported"
                 try:
                     if get_cpo_presence(cpo, record["ELS"], allow_unsupported=True) is False:
                         record["ELS Lane State Error"] = ELS_NOT_PRESENT
@@ -1292,13 +1327,18 @@ def show_interface_lane_status(port, json_output):
                         record["ELS Lane State"] = _select_els_laser_values(
                             els_api.get_per_lane_state(), laser_ids, els_api.xcvr_eeprom.mem_map.bank
                         )
-                except (NotImplementedError, AttributeError, CpoCommandError) as exc:
-                    if isinstance(exc, CpoCommandError) and not isinstance(
+                except (NotImplementedError, AttributeError, CpoCommandError, OSError) as exc:
+                    if isinstance(exc, (NotImplementedError, AttributeError)) or isinstance(
                             exc.__cause__, (NotImplementedError, AttributeError)):
+                        record["ELS Lane State Error"] = "Not supported"
+                    elif port is None and (isinstance(exc, (CpoReadError, OSError))
+                                           or isinstance(exc.__cause__, OSError)):
+                        logger.log_warning("{} ELS Lane State Error: {}".format(port_name, exc))
+                        record["ELS Lane State Error"] = "N/A"
+                    else:
                         raise
-                    record["ELS Lane State Error"] = "Not supported"
                 records[port_name] = record
-    except (CpoMappingError, CpoCommandError) as exc:
+    except (CpoMappingError, CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_lane_status_records(records, json_output)
 
@@ -1317,12 +1357,18 @@ def show_oe_lpmode(oe_index, json_output):
     try:
         for resource_id, cpo in get_resource_cpo_objects(
                 OPTICAL_ENGINE, oe_index):
-            lpmode = cpo.oe.get_lpmode()
-            if not isinstance(lpmode, bool):
-                raise CpoCommandError(
-                    "OE get_lpmode returned invalid data for '{}'".format(resource_id)
-                )
-            records[resource_id] = lpmode
+            try:
+                lpmode = cpo.oe.get_lpmode()
+                if not isinstance(lpmode, bool):
+                    raise CpoCommandError(
+                        "OE get_lpmode returned invalid data for '{}'".format(resource_id)
+                    )
+                records[resource_id] = lpmode
+            except (AttributeError, CpoCommandError, NotImplementedError, OSError) as exc:
+                if oe_index is not None:
+                    raise
+                logger.log_warning("{} low-power mode unavailable: {}".format(resource_id, exc))
+                records[resource_id] = None
     except (AttributeError, NotImplementedError) as exc:
         raise click.ClickException(
             "OE get_lpmode is not implemented for this platform"
@@ -1386,8 +1432,14 @@ def show_els_lpmode(els_index, json_output):
             if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
                 records[resource_id] = None if json_output else ELS_NOT_PRESENT
                 continue
-            lpmode = cpo.elsfp.get_lpmode()
-            records[resource_id] = lpmode if isinstance(lpmode, bool) else None
+            try:
+                lpmode = cpo.elsfp.get_lpmode()
+                records[resource_id] = lpmode if isinstance(lpmode, bool) else None
+            except (AttributeError, CpoCommandError, NotImplementedError, OSError) as exc:
+                if els_index is not None:
+                    raise
+                logger.log_warning("{} low-power mode unavailable: {}".format(resource_id, exc))
+                records[resource_id] = None
     except (AttributeError, NotImplementedError) as exc:
         raise click.ClickException(
             "ELS get_lpmode is not implemented for this platform"
@@ -1412,8 +1464,14 @@ def show_els_status(els_index, json_output):
             if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
                 records[resource_id] = None if json_output else ELS_NOT_PRESENT
                 continue
-            records[resource_id] = get_els_api(cpo, resource_id).get_module_state()
-    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
+            try:
+                records[resource_id] = get_els_api(cpo, resource_id).get_module_state()
+            except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
+                if els_index is not None:
+                    raise
+                logger.log_warning("{} module state unavailable: {}".format(resource_id, exc))
+                records[resource_id] = None
+    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records,
@@ -1434,16 +1492,14 @@ def show_els_temperature(els_index, json_output):
             if get_cpo_presence(cpo, resource_id, allow_unsupported=True) is False:
                 records[resource_id] = None if json_output else ELS_NOT_PRESENT
                 continue
-            api = get_els_api(cpo, resource_id)
-            temperature = api.get_module_temperature()
-            if temperature is None:
-                raise CpoCommandError(
-                    "ELSFP temperature is unavailable for '{}'".format(
-                        resource_id
-                    )
-                )
-            records[resource_id] = temperature
-    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError) as exc:
+            try:
+                records[resource_id] = get_els_api(cpo, resource_id).get_module_temperature()
+            except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
+                if els_index is not None:
+                    raise
+                logger.log_warning("{} temperature unavailable: {}".format(resource_id, exc))
+                records[resource_id] = None
+    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Temperature (C)"))
 

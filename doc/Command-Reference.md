@@ -17218,7 +17218,8 @@ Display CPO virtual-module presence by interface through the platform CPO object
 interfaces are skipped. An explicitly selected SFP interface directs users to
 sfputil. The ELS column identifies the associated ELS from the CPO topology;
 presence still describes the CPO virtual module. JSON uses interface names as
-keys, each containing an `els` name and a boolean `present` value.
+keys, each containing an `els` name and a boolean `present` value. In a query
+for all interfaces, unavailable presence is `N/A` in text and `null` in JSON.
 
 - Usage:
   ```
@@ -17236,6 +17237,10 @@ keys, each containing an `els` name and a boolean `present` value.
 **cpoutil show interface map|dom|tx-disable|speed|lane-status**
 
 These commands display per-interface CPO information. When `-p/--port` is omitted, all CPO interfaces are shown. `tx-disable` displays `Tx Disable Status` per lane: `true` means TX is disabled, and `false` means TX is enabled. JSON output keeps these values as booleans.
+
+For all-interface `tx-disable`, `speed application`, and `lane-status`
+queries, an unavailable readback displays `N/A` for the affected interface
+or endpoint. Other interfaces and endpoints continue to be listed.
 
 `show interface speed application` displays four columns: Interface, Lane, Configured Application, and Active Application. Each application is displayed as `AppSel: Host interface / Media interface`, using the complete descriptions returned by the public API. It does not infer a numeric link speed. JSON preserves the complete `Application Advertisement` and the per-lane AppSel IDs under `Application Select Controls` and `Active Application Control Set`. Breakout subports display only their own lanes.
 
