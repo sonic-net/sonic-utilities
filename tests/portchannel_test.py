@@ -156,6 +156,51 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert 'Invalid value for \'--fast-rate\'' in result.output
 
+    @pytest.mark.parametrize("lacp_mode", ["active", "passive", "Active", "PASSIVE"])
+    def test_add_portchannel_with_lacp_mode_adhoc_validation(self, lacp_mode):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0006", "--lacp-mode", lacp_mode], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        expected_active = 'true' if lacp_mode.lower() == 'active' else 'false'
+        entry = db.cfgdb.get_entry('PORTCHANNEL', 'PortChannel0006')
+        assert entry.get('active') == expected_active
+
+    @pytest.mark.parametrize("lacp_mode", ["auto", "static"])
+    def test_add_portchannel_with_invalid_lacp_mode(self, lacp_mode):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0006", "--lacp-mode", lacp_mode], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Invalid value for \'--lacp-mode\'' in result.output
+
+    def _add_portchannel(self, runner, obj, name, *options):
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               [name, *options], obj=obj)
+        assert result.exit_code == 0, result.output
+
+    def _entry(self, db, name):
+        return db.cfgdb.get_entry('PORTCHANNEL', name)
+
+    def test_portchannel_lacp_mode_default_active(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+        self._add_portchannel(runner, obj, "PortChannel0007")
+        assert self._entry(db, "PortChannel0007")['active'] == 'true'
+
     def test_add_portchannel_member_with_invalid_name(self):
         runner = CliRunner()
         db = Db()
