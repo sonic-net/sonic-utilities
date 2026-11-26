@@ -979,7 +979,6 @@ class TestHelperCoverage(object):
                     "ELS": "ELS0",
                     "ELS Lane State": {"lane00": "Active"},
                     "ELS Lasers": [0],
-                    "Shared ELS Lasers": [],
                 }
             },
             False,
@@ -1787,12 +1786,13 @@ class TestLaneStatusLaserAssociation:
         assert all(len(row) == 4 for row in lane_rows)  # Interface, Lane N, state
         laser_rows = [row for row in rows if row[1] == "ELS0"]
         assert laser_rows == [
-            ["Ethernet0", "ELS0", "0", "Active", "No"],
-            ["Ethernet0", "ELS0", "1", "Inactive", "No"],
-            ["Ethernet0", "ELS0", "2", "Disabled", "No"],
+            ["Ethernet0", "ELS0", "0", "Active"],
+            ["Ethernet0", "ELS0", "1", "Inactive"],
+            ["Ethernet0", "ELS0", "2", "Disabled"],
         ]
         assert result.output.count("OE datapath state:") == 1
         assert result.output.count("ELS lane state:") == 1
+        assert "Shared" not in result.output
         assert "ELS status:" not in result.output
 
     @pytest.mark.parametrize("json_output", [False, True])
@@ -1846,8 +1846,8 @@ class TestLaneStatusLaserAssociation:
         laser_rows = [line.split() for line in table.output.splitlines()
                       if line.startswith("Ethernet0") and "ELS0" in line]
         assert laser_rows == [
-            ["Ethernet0", "ELS0", "0", "Active", "No"],
-            ["Ethernet0", "ELS0", "1", "Inactive", "No"],
+            ["Ethernet0", "ELS0", "0", "Active"],
+            ["Ethernet0", "ELS0", "1", "Inactive"],
         ]
 
 

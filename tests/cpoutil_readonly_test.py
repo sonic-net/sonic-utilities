@@ -762,6 +762,7 @@ class TestDirectPlatformApiCommands(object):
         assert values["Data Path State Indicator"]["lane00"] == \
             "DataPathActivated"
         assert "ELS Status" not in values
+        assert "Shared ELS Lasers" not in values
         assert values["ELS Lane State"] == {
             "lane00": "Active",
             "lane01": "Inactive",

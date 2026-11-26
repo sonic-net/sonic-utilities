@@ -976,7 +976,6 @@ def print_lane_status_records(records, json_output):
         lane_states = values.get("Data Path State Indicator", {})
         lasers = values.get("ELS Lasers", [])
         els_lane_states = values.get("ELS Lane State", {})
-        shared = set(values.get("Shared ELS Lasers", []))
         els_id = values.get("ELS", "N/A")
         oe_error = values.get("OE Datapath State Error")
         els_error = values.get("ELS Lane State Error")
@@ -992,15 +991,14 @@ def print_lane_status_records(records, json_output):
         # ELS lasers and OE lanes are separate resources. Display each selected
         # laser once per interface, without guessing a lane-to-laser pairing.
         if els_error:
-            laser_rows.append((interface, els_id, "N/A", els_error, "N/A"))
+            laser_rows.append((interface, els_id, "N/A", els_error))
         elif lasers is None:
-            laser_rows.append((interface, els_id, UNRESOLVED_LASERS, "N/A", "N/A"))
+            laser_rows.append((interface, els_id, UNRESOLVED_LASERS, "N/A"))
         else:
             for laser in sorted(lasers):
                 laser_rows.append((
                     interface, els_id, laser,
                     els_lane_states.get("lane{:02d}".format(laser), "N/A"),
-                    "Yes" if laser in shared else "No",
                 ))
 
     click.echo("OE datapath state:")
@@ -1012,7 +1010,7 @@ def print_lane_status_records(records, json_output):
     click.echo("\nELS lane state:")
     click.echo(tabulate(
         laser_rows,
-        ("Interface", "ELS", "Laser", "ELS Lane State", "Shared"),
+        ("Interface", "ELS", "Laser", "ELS Lane State"),
         tablefmt="simple",
     ))
 
@@ -1322,7 +1320,6 @@ def show_interface_lane_status(port, json_output):
                     "ELS Lane State": {},
                     "ELS Lasers": list(laser_ids) if laser_ids is not None else None,
                     "Lane Lasers": _lane_lasers(context),
-                    "Shared ELS Lasers": list(context["shared_laser_ids"]),
                 }
                 try:
                     oe_api = get_oe_api(cpo, port_name)
