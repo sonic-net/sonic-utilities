@@ -27,6 +27,10 @@ YANG_DIR = "/usr/local/yang-models"
 CONFIG_DB_JSON_FILE = '/etc/sonic/confib_db.json'
 # TODO: Find a place for it on sonic switch.
 DEFAULT_CONFIG_DB_JSON_FILE = '/etc/sonic/port_breakout_config_db.json'
+# Static wait (seconds) between deleting a port's dependencies and the port
+# itself during breakout. The deps span many tables with no single DB key to
+# poll, so a short fixed delay lets them be consumed first.
+DPB_DEP_DELETE_WAIT_SEC = 1
 
 class ConfigMgmt():
     '''
@@ -449,11 +453,24 @@ class ConfigMgmtDPB(ConfigMgmt):
 
             # If we are here, then get ready to update the Config DB as below:
             # -- shutdown the ports,
+            # -- Update deletion of port dependencies in Config DB,
             # -- Update deletion of ports in Config DB,
             # -- verify Asic DB for port deletion,
             # -- then update addition of ports in config DB.
             self._shutdownIntf(delPorts)
-            self.writeConfigDB(delConfigToLoad)
+            # Delete dependencies (non-PORT tables) and the ports (PORT table) in
+            # two separate updates: a single combined update can race with teammgr
+            # re-setting attributes on a LAG member while orchagent is still
+            # processing the port delete, leaving the port in ASIC DB and failing
+            # the breakout.
+            depConfigToLoad = {table: data for table, data in delConfigToLoad.items() if table != 'PORT'}
+            portConfigToLoad = {table: data for table, data in delConfigToLoad.items() if table == 'PORT'}
+            if depConfigToLoad:
+                self.writeConfigDB(depConfigToLoad)
+                # Let the dependency deletions be consumed before deleting the ports.
+                tsleep(DPB_DEP_DELETE_WAIT_SEC)
+            if portConfigToLoad:
+                self.writeConfigDB(portConfigToLoad)
             # Verify in Asic DB,
             self._verifyAsicDB(db=dataBase, ports=delPorts, portMap=if_name_map, \
                 timeout=MAX_WAIT)
