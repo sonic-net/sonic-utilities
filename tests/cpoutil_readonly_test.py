@@ -303,6 +303,10 @@ class TestDirectPlatformApiCommands(object):
         (["lane-status"], "get_per_lane_state", None),
     ])
     def test_bulk_interface_query_keeps_other_results(self, command, getter, expected):
+        if command == ["lane-status"]:
+            # The healthy breakout needs a laser mapping to query ELS lane state.
+            with mock.patch.dict(CPO_DATA["devices"]["els0"], laser_to_asic_lane_mapping={"1": [1], "2": [2]}):
+                cpoutil.cpo_mapping = CpoMapping(CPO_DATA)
         broken = FakeCpo()
         target = broken if getter in ("get_presence", "get_tx_disable") else broken.api
         setattr(target, getter, mock.Mock(side_effect=OSError("read failed")))
