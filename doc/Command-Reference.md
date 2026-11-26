@@ -17276,10 +17276,10 @@ For a breakout subport, `map` and `lane-status` identify its ELS lasers only whe
   Ethernet0    Lane 2  DataPathActivated
 
   ELS lane state:
-  Interface    ELS    Laser  ELS Lane State    Shared
-  -----------  -----  -----  ----------------  --------
-  Ethernet0    ELS0       0  Output on         No
-  Ethernet0    ELS0       1  Output on         No
+  Interface    ELS    Laser  ELS Lane State
+  -----------  -----  -----  ----------------
+  Ethernet0    ELS0       0  Output on
+  Ethernet0    ELS0       1  Output on
   ```
 
 **cpoutil show oe lpmode|status|temperature**
