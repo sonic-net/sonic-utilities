@@ -7651,9 +7651,54 @@ def disable():
     """Disable IPv6 processing on interface"""
     pass
 
+
+# Shared helper functions for the use-link-local-only commands.
+def _get_ipv6_ll_intf_type(interface_name):
+    """Map an interface name (full or shortname) to its CONFIG_DB table."""
+    table_name = get_interface_table_name(interface_name)
+    if table_name in ("INTERFACE", "PORTCHANNEL_INTERFACE",
+                      "VLAN_INTERFACE", "VLAN_SUB_INTERFACE"):
+        return table_name
+    return ""
+
+
+def _validate_ipv6_ll_interface(ctx, db, interface_name, interface_type):
+    """Shared validation for IPv6 link-local enable/disable commands."""
+    if not interface_type:
+        ctx.fail("'interface_name' is not valid. Valid names "
+                 "[Ethernet/PortChannel/Vlan or subinterfaces in "
+                 "<parent>.<vlan-id> format]")
+
+    if interface_type == "VLAN_INTERFACE":
+        if not clicommon.is_valid_vlan_interface(db, interface_name):
+            ctx.fail("Interface name %s is invalid."
+                     " Please enter a valid interface name!!"
+                     % (interface_name))
+    else:
+        if interface_name_is_valid(db, interface_name) is False:
+            ctx.fail("Interface name %s is invalid."
+                     " Please enter a valid interface name!!"
+                     % (interface_name))
+
+    is_sub_intf = VLAN_SUB_INTERFACE_SEPARATOR in interface_name
+    if not is_sub_intf:
+        portchannel_member_table = db.get_table('PORTCHANNEL_MEMBER')
+        if interface_is_in_portchannel(portchannel_member_table,
+                                       interface_name):
+            ctx.fail("{} is configured as a member of portchannel."
+                     " Cannot configure the IPv6 link local mode!"
+                     .format(interface_name))
+
+        vlan_member_table = db.get_table('VLAN_MEMBER')
+        if interface_is_in_vlan(vlan_member_table, interface_name):
+            ctx.fail("{} is configured as a member of vlan."
+                     " Cannot configure the IPv6 link local mode!"
+                     .format(interface_name))
+
 #
 # 'config interface ipv6 enable use-link-local-only <interface-name>'
 #
+
 
 @enable.command('use-link-local-only')
 @click.pass_context
@@ -7667,34 +7712,8 @@ def enable_use_link_local_only(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    if interface_name.startswith("Ethernet"):
-        interface_type = "INTERFACE"
-    elif interface_name.startswith("PortChannel"):
-        interface_type = "PORTCHANNEL_INTERFACE"
-    elif interface_name.startswith("Vlan"):
-        interface_type = "VLAN_INTERFACE"
-    else:
-        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
-
-    if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE"):
-        if interface_name_is_valid(db, interface_name) is False:
-            ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
-
-    if (interface_type == "VLAN_INTERFACE"):
-        if not clicommon.is_valid_vlan_interface(db, interface_name):
-            ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
-
-    portchannel_member_table = db.get_table('PORTCHANNEL_MEMBER')
-
-    if interface_is_in_portchannel(portchannel_member_table, interface_name):
-        ctx.fail("{} is configured as a member of portchannel. Cannot configure the IPv6 link local mode!"
-                .format(interface_name))
-
-    vlan_member_table = db.get_table('VLAN_MEMBER')
-
-    if interface_is_in_vlan(vlan_member_table, interface_name):
-        ctx.fail("{} is configured as a member of vlan. Cannot configure the IPv6 link local mode!"
-                .format(interface_name))
+    interface_type = _get_ipv6_ll_intf_type(interface_name)
+    _validate_ipv6_ll_interface(ctx, db, interface_name, interface_type)
 
     interface_dict = db.get_table(interface_type)
     set_ipv6_link_local_only_on_interface(db, interface_dict, interface_type, interface_name, "enable")
@@ -7715,34 +7734,8 @@ def disable_use_link_local_only(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    interface_type = ""
-    if interface_name.startswith("Ethernet"):
-        interface_type = "INTERFACE"
-    elif interface_name.startswith("PortChannel"):
-        interface_type = "PORTCHANNEL_INTERFACE"
-    elif interface_name.startswith("Vlan"):
-        interface_type = "VLAN_INTERFACE"
-    else:
-        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
-
-    if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE"):
-        if interface_name_is_valid(db, interface_name) is False:
-            ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
-
-    if (interface_type == "VLAN_INTERFACE"):
-        if not clicommon.is_valid_vlan_interface(db, interface_name):
-            ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
-
-    portchannel_member_table = db.get_table('PORTCHANNEL_MEMBER')
-
-    if interface_is_in_portchannel(portchannel_member_table, interface_name):
-        ctx.fail("{} is configured as a member of portchannel. Cannot configure the IPv6 link local mode!"
-                .format(interface_name))
-
-    vlan_member_table = db.get_table('VLAN_MEMBER')
-    if interface_is_in_vlan(vlan_member_table, interface_name):
-        ctx.fail("{} is configured as a member of vlan. Cannot configure the IPv6 link local mode!"
-                .format(interface_name))
+    interface_type = _get_ipv6_ll_intf_type(interface_name)
+    _validate_ipv6_ll_interface(ctx, db, interface_name, interface_type)
 
     interface_dict = db.get_table(interface_type)
     set_ipv6_link_local_only_on_interface(db, interface_dict, interface_type, interface_name, "disable")
@@ -10518,6 +10511,10 @@ def set_ipv6_link_local_only_on_interface(config_db, interface_dict, interface_t
         config_db.mod_entry(interface_type, interface_name, {"ipv6_use_link_local_only": mode})
         return
 
+    if interface_type == "VLAN_SUB_INTERFACE":
+        config_db.mod_entry(interface_type, interface_name, {"ipv6_use_link_local_only": mode})
+        return
+
     # If we are disabling the ipv6 link local on an interface, and if no other interface
     # attributes/ip addresses are configured on the interface, delete the interface from the interface table
     exists = False
@@ -10615,7 +10612,7 @@ def disable_link_local(ctx):
 
     mode = "disable"
 
-    tables = ['INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE']
+    tables = ['INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_SUB_INTERFACE']
 
     for table_type in tables:
         table_dict = config_db.get_table(table_type)
