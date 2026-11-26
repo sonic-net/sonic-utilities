@@ -17407,7 +17407,7 @@ Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages
 
 **cpoutil firmware upgrade|download|run|commit**
 
-These commands manage OE and ELS firmware from a raw firmware binary through the platform's OE and ELS endpoints. An OE or ELS is selected by its index; `all` selects every OE or every ELS in the system. `upgrade` downloads the image to the inactive firmware image, runs it and commits it; `download`, `run` and `commit` perform one step each. Targets are processed in turn; a failure on one, including an OE or ELS that is unavailable, does not stop the others, and the command exits non-zero naming the failed and completed targets. Running new firmware may disrupt traffic on the ports the OE or ELS serves. A platform that does not implement a firmware operation reports it as not implemented. Each operation is logged to syslog with the target and, for `upgrade` and `download`, the image file name and size; an operation interrupted by Ctrl-C, SIGTERM or SIGHUP (for example a lost SSH session) is aborted and logged as aborted, with the targets that completed. `cpoutil` does not inspect the image; validating it is left to the OE or ELS during the download. Each step can be verified with `cpoutil show {oe|els} fwversion`.
+These commands manage OE and ELS firmware from a raw firmware binary through the platform's OE and ELS endpoints. An OE or ELS is selected by its index; `all` selects every OE or every ELS in the system. `upgrade` downloads the image to the inactive firmware image, runs it and commits it: its progress bar covers the download, and a line follows while it runs and commits the image; `download`, `run` and `commit` perform one step each. Targets are processed in turn; a failure on one, including an OE or ELS that is unavailable, does not stop the others, and the command exits non-zero naming the failed and completed targets. Running new firmware may disrupt traffic on the ports the OE or ELS serves. A platform that does not implement a firmware operation reports it as not implemented. Each operation is logged to syslog with the target and, for `upgrade` and `download`, the image file name and size; an operation interrupted by Ctrl-C, SIGTERM or SIGHUP (for example a lost SSH session) is aborted and logged as aborted (a session started with `nohup` keeps running), with the targets that completed. `cpoutil` does not inspect the image; validating it is left to the OE or ELS during the download. Each step can be verified with `cpoutil show {oe|els} fwversion`.
 
 - Usage:
   ```
@@ -17421,12 +17421,15 @@ These commands manage OE and ELS firmware from a raw firmware binary through the
   ```
   admin@sonic:~$ sudo cpoutil firmware upgrade els 0 --raw els_fw.bin
   Upgrading ELS0 firmware  [####################################]  100%
+  Upgrading ELS0 firmware: running and committing the new image ...
   Upgrading ELS0 firmware ... OK (262144 bytes)
 
   admin@sonic:~$ sudo cpoutil firmware upgrade oe all --raw oe_fw.bin
   Upgrading OE0 firmware  [####################################]  100%
+  Upgrading OE0 firmware: running and committing the new image ...
   Upgrading OE0 firmware ... OK (524288 bytes)
   Upgrading OE1 firmware  [####################################]  100%
+  Upgrading OE1 firmware: running and committing the new image ...
   Upgrading OE1 firmware ... OK (524288 bytes)
 
   admin@sonic:~$ sudo cpoutil firmware download els all --raw els_fw.bin

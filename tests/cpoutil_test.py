@@ -2800,6 +2800,8 @@ class TestFirmwareCommands:
     def test_termination_aborts_the_transfer(self, endpoints, image, monkeypatch, endpoint, kind, signum):
         log = mock.Mock()
         monkeypatch.setattr(cpoutil, "log", log)
+        dup2 = mock.Mock()
+        monkeypatch.setattr(cpoutil.os, "dup2", dup2)
         handler = signal.getsignal(signum)
         closed = []
 
@@ -2819,6 +2821,82 @@ class TestFirmwareCommands:
         log.log_error.assert_called_once_with(f"{kind} firmware download aborted on {kind}0")
         assert endpoints[endpoint + "1"].calls == []
         assert signal.getsignal(signum) == handler
+        # The terminal of a lost session is gone: SIGHUP sends the output to /dev/null.
+        if signum == signal.SIGHUP:
+            assert [args[1] for args, _ in dup2.call_args_list] == [1, 2]
+        else:
+            dup2.assert_not_called()
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_later_signals_do_not_interrupt_the_abort(self, endpoints, image, monkeypatch, endpoint, kind):
+        monkeypatch.setattr(cpoutil.os, "dup2", mock.Mock())
+        log = mock.Mock()
+        monkeypatch.setattr(cpoutil, "log", log)
+        aborted = []
+
+        def blocks(file_path):
+            try:
+                yield 64
+                signal.getsignal(signal.SIGHUP)(signal.SIGHUP, None)
+                yield 64  # pragma: no cover - the signal stops the transfer
+            finally:
+                # A lost session sends SIGHUP again, and SIGTERM may follow: both are ignored now.
+                assert signal.getsignal(signal.SIGHUP) == signal.SIG_IGN
+                assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+                aborted.append(file_path)
+
+        monkeypatch.setattr(endpoints[endpoint + "0"], "download_firmware", blocks)
+        result = invoke_coverage(["firmware", "download", endpoint, "0", "--raw", image])
+        assert result.exit_code != 0
+        assert aborted == [image]
+        log.log_error.assert_called_once_with(f"{kind} firmware download aborted on {kind}0")
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    @pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGHUP])
+    def test_ignored_signal_stays_ignored(self, endpoints, image, monkeypatch, endpoint, kind, signum):
+        handlers = []
+
+        def blocks(file_path):
+            handlers.append(signal.getsignal(signum))
+            yield 128
+
+        monkeypatch.setattr(endpoints[endpoint + "0"], "download_firmware", blocks)
+        previous = signal.signal(signum, signal.SIG_IGN)
+        try:
+            result = invoke_coverage(["firmware", "download", endpoint, "0", "--raw", image])
+            assert signal.getsignal(signum) == signal.SIG_IGN
+        finally:
+            signal.signal(signum, previous)
+        assert result.exit_code == 0, result.output
+        assert handlers == [signal.SIG_IGN]
+        assert f"Downloading {kind}0 firmware ... OK (128 bytes)" in result.output
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_progress_output_error_does_not_stop_the_transfer(self, endpoints, image, monkeypatch, endpoint, kind):
+        monkeypatch.setattr(click._termui_impl.ProgressBar, "update",
+                            mock.Mock(side_effect=OSError(5, "Input/output error")))
+        result = invoke_coverage(["firmware", "download", endpoint, "0", "--raw", image])
+        assert result.exit_code == 0, result.output
+        assert endpoints[endpoint + "0"].calls == [("download_firmware", image)]
+        assert f"Downloading {kind}0 firmware ... OK (128 bytes)" in result.output
+
+    @pytest.mark.parametrize("endpoint, kind", ENDPOINTS)
+    def test_upgrade_reports_the_run_and_commit(self, endpoints, image, monkeypatch, endpoint, kind):
+        steps = []
+
+        def upgrade(file_path):
+            yield 100
+            yield 28
+            steps.append("run and commit")
+
+        monkeypatch.setattr(endpoints[endpoint + "0"], "upgrade_firmware", upgrade)
+        result = invoke_coverage(["firmware", "upgrade", endpoint, "0", "--raw", image])
+        assert result.exit_code == 0, result.output
+        assert steps == ["run and commit"]
+        line = f"Upgrading {kind}0 firmware: running and committing the new image ..."
+        assert result.output.index(line) < result.output.index(f"Upgrading {kind}0 firmware ... OK (128 bytes)")
+        result = invoke_coverage(["firmware", "download", endpoint, "0", "--raw", image])
+        assert "running and committing" not in result.output
 
 
 class TestFirmwareVersionCommands:

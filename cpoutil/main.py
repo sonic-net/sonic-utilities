@@ -2381,17 +2381,42 @@ def _error_text(exc):
     return str(exc).strip() or type(exc).__name__
 
 
+def _detach_output():
+    """Send stdout and stderr to /dev/null, as the terminal of a lost session is gone.
+
+    Output to the closed terminal would otherwise fail with EIO.
+    """
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    try:
+        for fd in (1, 2):
+            os.dup2(devnull, fd)
+    finally:
+        os.close(devnull)
+
+
 @contextmanager
 def _interrupt_on_termination():
     """Turn SIGTERM and SIGHUP into KeyboardInterrupt while the block runs.
 
     A firmware operation stopped by a lost session is then aborted and logged
     like one stopped with Ctrl-C.
+    - A signal that is ignored, as under nohup, stays ignored.
+    - Only the first signal interrupts. A lost session sends SIGHUP more than
+      once (the shell, the kernel, sudo); the later ones are ignored, so that
+      they do not interrupt the abort.
+    - After SIGHUP, the output goes to /dev/null.
     """
     def interrupt(signum, frame):
+        for handled in previous:
+            signal.signal(handled, signal.SIG_IGN)
+        if signum == signal.SIGHUP:
+            _detach_output()
         raise KeyboardInterrupt()
 
-    previous = {signum: signal.signal(signum, interrupt) for signum in (signal.SIGTERM, signal.SIGHUP)}
+    previous = {}
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        if signal.getsignal(signum) != signal.SIG_IGN:
+            previous[signum] = signal.signal(signum, interrupt)
     try:
         yield
     finally:
@@ -2426,8 +2451,9 @@ def _transfer_firmware(endpoint, kind, method, message, file_path):
     """Call a firmware transfer hook that yields the bytes written per block.
 
     The hook raises on failure. Errors raised while its generator runs are
-    reported like errors raised by the call itself. Returns the number of
-    bytes written.
+    reported like errors raised by the call itself. The progress bar covers
+    the transfer of the image; upgrade_firmware() then runs and commits it
+    before its generator ends. Returns the number of bytes written.
     """
     image_size = os.path.getsize(file_path)
     bytes_written = 0
@@ -2438,10 +2464,21 @@ def _transfer_firmware(endpoint, kind, method, message, file_path):
         # Close an interrupted transfer now, so that the hook releases what
         # it holds.
         closer = closing(blocks) if hasattr(blocks, "close") else nullcontext()
-        with closer, click.progressbar(length=image_size, label=message) as progress:
+        with closer:
+            with click.progressbar(length=image_size, label=message) as progress:
+                for block_size in blocks:
+                    bytes_written += block_size
+                    try:
+                        progress.update(block_size)
+                    except OSError:
+                        # The terminal of a lost session is gone; the transfer goes on.
+                        pass
+                    if bytes_written >= image_size:
+                        break
+            if method == "upgrade_firmware":
+                click.echo(f"{message}: running and committing the new image ...")
             for block_size in blocks:
                 bytes_written += block_size
-                progress.update(block_size)
     except NotImplementedError as exc:
         if not bytes_written:
             raise CpoCommandError(f"{kind} {method} is not implemented for this platform") from exc
