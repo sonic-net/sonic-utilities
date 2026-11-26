@@ -1609,12 +1609,16 @@ class TestVmoduleControls:
     @pytest.mark.parametrize("command, method", [
         (["config", "interface", "tx-disable", "-p", "Ethernet0,Ethernet16", "true"], "tx_disable"),
     ])
-    def test_hardware_error_is_reported_with_completed_targets(self, vmodules, command, method):
-        getattr(vmodules[3], method).side_effect = OSError(5, "I2C read failed")
+    @pytest.mark.parametrize("error, message", [
+        (OSError(5, "I2C read failed"), "failed: [Errno 5] I2C read failed"),
+        (NotImplementedError(), "is not implemented for this platform"),
+    ])
+    def test_hook_error_is_reported_with_completed_targets(self, vmodules, command, method, error, message):
+        vmodules[3].tx_disable.side_effect = error
         result = invoke_coverage(command)
         assert result.exit_code != 0
-        assert not isinstance(result.exception, OSError)
-        assert "CPO {} failed: [Errno 5] I2C read failed".format(method) in result.output
+        assert isinstance(result.exception, SystemExit)
+        assert "CPO {} {}".format(method, message) in result.output
         assert "already applied to" in result.output
 
     def test_tx_disable_partial_failure_names_completed_targets(self, vmodules):
@@ -2434,8 +2438,9 @@ def test_endpoint_lpmode_query_uses_platform_hook(
     ("oe", "oe", "OE"), ("els", "elsfp", "ELS"),
 ])
 @pytest.mark.parametrize("failure", ["missing", "unimplemented", "hardware"])
+@pytest.mark.parametrize("selection", [[], ["0"]])
 def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
-        coverage_environment, monkeypatch, resource, selected_name, label, failure):
+        coverage_environment, monkeypatch, resource, selected_name, label, failure, selection):
     endpoint = mock.Mock(get_presence=mock.Mock(return_value=True))
     if failure == "missing":
         del endpoint.get_lpmode
@@ -2447,8 +2452,12 @@ def test_endpoint_lpmode_failures_do_not_fall_back_to_api(
     cpo = cpoutil.CpoBase(None, endpoint if selected_name == "oe" else mock.Mock(),
                           endpoint if selected_name == "elsfp" else mock.Mock())
     monkeypatch.setitem(cpoutil.cpo_object_map[resource], resource + "0", cpo)
-    result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
-    assert result.exit_code != 0
+    result = invoke_coverage(["show", resource, "lpmode", "--json"] + selection)
+    if failure == "hardware" and not selection:
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)[resource + "0"] is None
+    else:
+        assert result.exit_code == 1, result.output
     assert "Traceback" not in result.output
     if failure in ("missing", "unimplemented"):
         assert label + " get_lpmode is not implemented" in result.output

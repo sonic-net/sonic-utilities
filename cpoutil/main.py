@@ -284,8 +284,8 @@ def get_oe_api(cpo, label):
     """Get the public OE API from a CPO object."""
     try:
         api = cpo.oe.get_api()
-    except NotImplementedError as exc:
-        raise CpoCommandError(
+    except (AttributeError, NotImplementedError) as exc:
+        raise NotImplementedError(
             "{} API is not implemented".format(label)
         ) from exc
     except Exception as exc:
@@ -301,8 +301,8 @@ def get_els_api(cpo, label):
     """Get the public ELSFP API from a CPO object."""
     try:
         api = cpo.elsfp.get_api()
-    except NotImplementedError as exc:
-        raise CpoCommandError(
+    except (AttributeError, NotImplementedError) as exc:
+        raise NotImplementedError(
             "{} ELSFP API is not implemented".format(label)
         ) from exc
     except Exception as exc:
@@ -1037,7 +1037,10 @@ class CpoCommand(click.Command):
 
     def invoke(self, ctx):
         initialize_command_platform()
-        return super().invoke(ctx)
+        try:
+            return super().invoke(ctx)
+        except NotImplementedError as exc:
+            raise click.ClickException(str(exc) or "This functionality is not implemented") from exc
 
 
 class CpoGroup(click.Group):
@@ -1212,7 +1215,7 @@ def show_interface_tx_disable(port, json_output):
                     records[port_name] = _select_lane_values(
                         _call_vmodule(cpo, "get_tx_disable"), lane_positions
                     )
-                except (AttributeError, CpoCommandError, NotImplementedError) as exc:
+                except CpoCommandError as exc:
                     if port is not None:
                         raise
                     logger.log_warning("{} Tx disable unavailable: {}".format(port_name, exc))
@@ -1287,7 +1290,7 @@ def show_interface_speed_application(port, json_output):
                             active, lane_positions
                         ),
                     }
-                except (AttributeError, CpoCommandError, NotImplementedError, OSError) as exc:
+                except (CpoCommandError, OSError) as exc:
                     if port is not None:
                         raise
                     logger.log_warning("{} application unavailable: {}".format(port_name, exc))
@@ -1383,7 +1386,7 @@ def show_oe_lpmode(oe_index, json_output):
                         "OE get_lpmode returned invalid data for '{}'".format(resource_id)
                     )
                 records[resource_id] = lpmode
-            except (AttributeError, CpoCommandError, NotImplementedError, OSError) as exc:
+            except (CpoCommandError, OSError) as exc:
                 if oe_index is not None:
                     raise
                 logger.log_warning("{} low-power mode unavailable: {}".format(resource_id, exc))
@@ -1454,7 +1457,7 @@ def show_els_lpmode(els_index, json_output):
             try:
                 lpmode = cpo.elsfp.get_lpmode()
                 records[resource_id] = lpmode if isinstance(lpmode, bool) else None
-            except (AttributeError, CpoCommandError, NotImplementedError, OSError) as exc:
+            except (CpoCommandError, OSError) as exc:
                 if els_index is not None:
                     raise
                 logger.log_warning("{} low-power mode unavailable: {}".format(resource_id, exc))
@@ -1485,12 +1488,14 @@ def show_els_status(els_index, json_output):
                 continue
             try:
                 records[resource_id] = get_els_api(cpo, resource_id).get_module_state()
-            except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
+            except (CpoMappingError, CpoCommandError, OSError) as exc:
                 if els_index is not None:
                     raise
                 logger.log_warning("{} module state unavailable: {}".format(resource_id, exc))
                 records[resource_id] = None
-    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
+    except (AttributeError, NotImplementedError) as exc:
+        raise click.ClickException("This functionality is not implemented: {}".format(exc)) from exc
+    except (CpoMappingError, CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(
         records,
@@ -1513,12 +1518,14 @@ def show_els_temperature(els_index, json_output):
                 continue
             try:
                 records[resource_id] = get_els_api(cpo, resource_id).get_module_temperature()
-            except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
+            except (CpoMappingError, CpoCommandError, OSError) as exc:
                 if els_index is not None:
                     raise
                 logger.log_warning("{} temperature unavailable: {}".format(resource_id, exc))
                 records[resource_id] = None
-    except (CpoMappingError, CpoCommandError, NotImplementedError, AttributeError, OSError) as exc:
+    except (AttributeError, NotImplementedError) as exc:
+        raise click.ClickException("This functionality is not implemented: {}".format(exc)) from exc
+    except (CpoMappingError, CpoCommandError, OSError) as exc:
         raise click.ClickException(str(exc))
     print_records(records, json_output, ("ELS", "Temperature (C)"))
 
@@ -1557,11 +1564,11 @@ def _call_hook(target, method, label, *args):
     function = getattr(target, method, None)
     unsupported = "{} {} is not implemented for this platform".format(label, method)
     if not callable(function):
-        raise CpoCommandError(unsupported)
+        raise NotImplementedError(unsupported)
     try:
         return function(*args)
     except NotImplementedError as exc:
-        raise CpoCommandError(unsupported) from exc
+        raise NotImplementedError(unsupported) from exc
     except OSError as exc:
         # Hardware access errors are reported like any other failed control,
         # so a multi-target command can still name what it already applied.
@@ -1599,7 +1606,7 @@ def _run_vmodule_action(targets, verb, method, *args):
         message = "{} {} ({})".format(verb, label, ", ".join(affected_ports))
         try:
             _run_action(message, lambda cpo=cpo: _call_vmodule(cpo, method, *args))
-        except CpoCommandError as exc:
+        except (CpoCommandError, NotImplementedError) as exc:
             if completed:
                 raise CpoCommandError(
                     "{}; already applied to {}".format(exc, ", ".join(completed))
@@ -2094,7 +2101,7 @@ def _print_full_resource_eeprom(resource_type, index=None, bank=None):
             outputs.append(_format_full_eeprom(
                 resource_type, resource_id, cpo, banks
             ))
-        except CpoCommandError as exc:
+        except (CpoCommandError, NotImplementedError) as exc:
             if index is not None:
                 raise
             failed_resources.append(str(resource_id).upper())
@@ -2152,7 +2159,7 @@ def read_eeprom(ctx):
         initialize_command_platform()
         try:
             _print_all_eeprom()
-        except CpoCommandError as exc:
+        except (CpoCommandError, NotImplementedError) as exc:
             raise click.ClickException(str(exc))
 
 

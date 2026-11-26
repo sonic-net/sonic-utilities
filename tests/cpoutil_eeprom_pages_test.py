@@ -52,6 +52,20 @@ def test_declared_page_is_accessible(endpoints, operation, interface, target, pa
 
 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
+def test_eeprom_reports_unimplemented_endpoint_api(endpoints, operation):
+    cpo, _ = endpoints
+
+    def get_api():
+        raise NotImplementedError
+
+    cpo.elsfp.get_api = get_api
+    result = invoke_coverage(command(operation, 'els', False, 0xB4))
+    assert result.exit_code == 1, result.output
+    assert 'ELS0 ELSFP API is not implemented' in result.output
+    assert cpo.reads == [] and cpo.writes == []
+
+
+@pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
 @pytest.mark.parametrize('interface', [False, True])
 @pytest.mark.parametrize('offset', [0x00, 0x80, 0xFF])
 def test_els_lower_memory_mirror_uses_physical_upper_offsets(endpoints, monkeypatch, operation, interface, offset):

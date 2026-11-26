@@ -675,9 +675,14 @@ class TestDirectPlatformApiCommands(object):
         (NotImplementedError(), "get_tx_disable is not implemented"),
         (OSError("control read failed"), "get_tx_disable failed: control read failed"),
     ])
-    def test_interface_tx_disable_reports_hook_errors(self, error, message):
+    @pytest.mark.parametrize("selection", [[], ["-p", "Ethernet0"]])
+    def test_interface_tx_disable_reports_hook_errors(self, error, message, selection):
         self.cpo.get_tx_disable = mock.Mock(side_effect=error)
-        result = invoke(["show", "interface", "tx-disable", "-p", "Ethernet0"])
+        result = invoke(["show", "interface", "tx-disable"] + selection)
+        if not selection and isinstance(error, OSError):
+            assert result.exit_code == 0, result.output
+            assert "N/A" in result.output
+            return
         assert result.exit_code == 1, result.output
         assert message in result.output
 
@@ -692,6 +697,16 @@ class TestDirectPlatformApiCommands(object):
         assert values["Application Advertisement"] == {
             str(key): value for key, value in self.cpo.api.get_application_advertisement().items()
         }
+
+    @pytest.mark.parametrize("factory_failure", [False, True])
+    def test_interface_application_reports_unsupported_api_on_bulk_query(self, factory_failure):
+        if factory_failure:
+            self.cpo.oe = mock.Mock(get_api=mock.Mock(side_effect=NotImplementedError))
+        else:
+            self.cpo.api.get_application_advertisement = mock.Mock(side_effect=NotImplementedError)
+        result = invoke(["show", "interface", "speed", "application", "--json"])
+        assert result.exit_code == 1, result.output
+        assert "not implemented" in result.output
 
     def test_application_table_has_four_columns_and_full_interface_names(self):
         result = invoke(["show", "interface", "speed", "application", "-p", "Ethernet0"])
@@ -906,22 +921,24 @@ class TestDirectPlatformApiCommands(object):
         assert ("Expected per-lane data" in result.output
                 or "did not return data for ELS laser" in result.output)
 
-    def test_els_status_requires_independent_module_state(self):
-        els_api = mock.Mock(spec=["get_module_state"])
-        els_api.get_module_state.side_effect = NotImplementedError(
-            "Independent ELS module state is not implemented")
+    @pytest.mark.parametrize("command, method, value", [
+        ("status", "get_module_state", "ModuleReady"),
+        ("temperature", "get_module_temperature", 32.5),
+    ])
+    @pytest.mark.parametrize("selection", [[], ["0"]])
+    def test_els_query_reports_unsupported_hook(self, command, method, value, selection):
+        query = mock.Mock(side_effect=NotImplementedError("Unsupported ELS hook"))
+        els_api = mock.Mock(**{method: query})
         self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api))
-        missing = invoke(["show", "els", "status", "0", "--json"])
-        assert missing.exit_code != 0
-        assert (
-            "Independent ELS module state is not implemented"
-            in missing.output
-        )
+        args = ["show", "els", command, "--json"] + selection
+        missing = invoke(args)
+        assert missing.exit_code == 1, missing.output
+        assert "not implemented: Unsupported ELS hook" in missing.output
 
-        els_api.get_module_state.side_effect = None
-        els_api.get_module_state.return_value = "ModuleReady"
-        result = invoke(["show", "els", "status", "0", "--json"])
-        assert json.loads(result.output) == {"els0": "ModuleReady"}
+        query.side_effect = None
+        query.return_value = value
+        result = invoke(args)
+        assert json.loads(result.output) == {"els0": value}
 
     def test_temperature_keeps_measurement_precision(self):
         temperature = invoke(["show", "oe", "temperature", "0"])
