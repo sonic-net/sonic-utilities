@@ -13,6 +13,7 @@ log = logger.Logger("counterpoll")
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
 PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
 PORT_PHY_ATTR = "PORT_PHY_ATTR"
+GBPORT = "GBPORT"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
@@ -138,6 +139,47 @@ def port_disable(ctx):
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
+
+
+# Gearbox port counter commands
+@cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
+@click.pass_context
+def gbport(ctx, namespace):
+    """ Gearbox port counter commands """
+    ctx.obj = connect_to_db(namespace)
+
+
+@gbport.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 300000))
+@click.pass_context
+def gbport_interval(ctx, poll_interval):
+    """ Set gearbox port counter query interval """
+    port_info = {}
+    if poll_interval is not None:
+        port_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", GBPORT, port_info)
+
+
+@gbport.command(name='enable')
+@click.pass_context
+def gbport_enable(ctx):
+    """ Enable gearbox port counter query """
+    port_info = {}
+    port_info['FLEX_COUNTER_STATUS'] = ENABLE
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", GBPORT, port_info)
+
+
+@gbport.command(name='disable')
+@click.pass_context
+def gbport_disable(ctx):
+    """ Disable gearbox port counter query """
+    port_info = {}
+    port_info['FLEX_COUNTER_STATUS'] = DISABLE
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", GBPORT, port_info)
 
 
 # Port buffer drop counter commands
@@ -864,6 +906,7 @@ def show(namespace):
     queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'QUEUE')
     port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'PORT')
     port_drop_info = configdb.get_entry('FLEX_COUNTER_TABLE', PORT_BUFFER_DROP)
+    gbport_info = configdb.get_entry('FLEX_COUNTER_TABLE', GBPORT)
     port_phy_attr_info = configdb.get_entry('FLEX_COUNTER_TABLE', PORT_PHY_ATTR)
     rif_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'RIF')
     queue_wm_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'QUEUE_WATERMARK')
@@ -890,6 +933,9 @@ def show(namespace):
         data.append(["QUEUE_STAT", queue_info.get("POLL_INTERVAL", DEFLT_10_SEC), queue_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_info:
         data.append(["PORT_STAT", port_info.get("POLL_INTERVAL", DEFLT_1_SEC), port_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if gbport_info:
+        data.append(["GB_PORT_STAT", gbport_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                     gbport_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_drop_info:
         data.append([PORT_BUFFER_DROP, port_drop_info.get("POLL_INTERVAL", DEFLT_60_SEC), port_drop_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_phy_attr_info:
