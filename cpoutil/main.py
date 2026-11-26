@@ -529,7 +529,7 @@ def _append_dom_values(lines, values, value_map, unit_map, alignment=0):
         sorted_keys, values, value_map, unit_map, alignment).splitlines())
 
 
-def _format_oe_dom(dom_values):
+def _format_oe_dom(dom_values, format_map=None):
     indent = " " * 8
     values = dom_values if isinstance(dom_values, dict) else {}
     lines = ["{}ChannelMonitorValues:".format(indent)]
@@ -572,11 +572,11 @@ def _format_oe_dom(dom_values):
         CPO_DOM_MODULE_MONITOR_MAP,
         CPO_DOM_MODULE_THRESHOLD_MAP,
     )
-    _append_additional_dom_values(lines, values, displayed_keys)
+    _append_additional_dom_values(lines, values, displayed_keys, format_map)
     return lines
 
 
-def _format_els_dom(dom_values):
+def _format_els_dom(dom_values, format_map=None):
     """Format public ELSFP fields within their own endpoint section."""
     values = dom_values if isinstance(dom_values, dict) else {}
     indent = " " * 8
@@ -629,11 +629,12 @@ def _format_els_dom(dom_values):
         )
 
     displayed_keys = set(els_monitor_map).union(ELS_THRESHOLD_MAP, DOM_CHANNEL_THRESHOLD_MAP)
-    _append_additional_dom_values(lines, values, displayed_keys)
+    _append_additional_dom_values(lines, values, displayed_keys, format_map)
     return lines
 
 
-def _append_additional_dom_values(lines, values, displayed_keys):
+def _append_additional_dom_values(lines, values, displayed_keys, format_map):
+    format_map = format_map or {}
     additional_values = {
         key: value for key, value in values.items()
         if key not in displayed_keys and value != "N/A"
@@ -641,9 +642,13 @@ def _append_additional_dom_values(lines, values, displayed_keys):
     if additional_values:
         lines.append("        AdditionalValues:")
         for field, value in _flatten_record(additional_values):
-            lines.append("{}{}: {}".format(
-                " " * 16, _display_field(field), _display_value(value)
-            ))
+            metadata = format_map.get(field, {})
+            label = metadata.get("label") or _display_field(field)
+            unit = metadata.get("unit")
+            value = _display_value(value)
+            if unit and value != "N/A":
+                value = _value_with_unit(value, unit)
+            lines.append("{}{}: {}".format(" " * 16, label, value))
 
 
 @contextmanager
@@ -718,12 +723,17 @@ def _read_dom_section(failures, endpoint, section, read):
     return value
 
 
-def _format_interface_dom(port_name, record):
+def _format_interface_dom(port_name, record, cpo=None):
     if not record["present"]:
         return "{}: CPO EEPROM not detected".format(port_name)
     lines = ["{}: CPO EEPROM detected".format(port_name)]
     if record.get("read_errors"):
         lines.append("    Read errors: {}".format(", ".join(record["read_errors"])))
+    try:
+        get_format_map = cpo.get_platform_specific_format_map
+    except AttributeError:
+        # Older platform-common versions have no display metadata hook.
+        get_format_map = None
     for endpoint, formatter in (("oe", _format_oe_dom), ("els", _format_els_dom)):
         data = record[endpoint]
         lines.append("    {}:".format(endpoint.upper()))
@@ -732,7 +742,8 @@ def _format_interface_dom(port_name, record):
         for section in ("dom", "thresholds"):
             if isinstance(data[section], dict):
                 values.update(data[section])
-        lines.extend(formatter(values))
+        format_map = get_format_map("dom", endpoint) if get_format_map else None
+        lines.extend(formatter(values, format_map))
     return "\n".join(lines)
 
 
@@ -1131,7 +1142,8 @@ def show_interface_dom(port, json_output):
                 record = {"present": present, "oe": {}, "els": {}}
                 records[port_name] = record
                 if not present:
-                    output.append(_format_interface_dom(port_name, record))
+                    if not json_output:
+                        output.append(_format_interface_dom(port_name, record))
                     continue
                 oe_api = get_oe_api(cpo, port_name)
                 els_api = get_els_api(cpo, port_name)
@@ -1159,7 +1171,8 @@ def show_interface_dom(port, json_output):
                 if failures:
                     record["read_errors"] = failures
                     failed_ports.append("{} ({})".format(port_name, ", ".join(failures)))
-                output.append(_format_interface_dom(port_name, record))
+                if not json_output:
+                    output.append(_format_interface_dom(port_name, record, cpo))
     except (NotImplementedError, AttributeError) as exc:
         raise click.ClickException(
             "This functionality is not implemented: {}".format(exc)

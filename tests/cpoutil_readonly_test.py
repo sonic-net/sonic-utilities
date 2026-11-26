@@ -571,7 +571,25 @@ class TestDirectPlatformApiCommands(object):
         self.cpo.api.get_elsfp_threshold_info = mock.Mock(return_value={
             "txpowerhighalarm": "Unknown", "txpowerlowalarm": "N/A",
             "txbiashighalarm": "20mA", "rxpowerhighalarm": "3.01dBm", "extra_limit": 7,
+            "vendor_voltage": 2.5, "vendor_missing": None,
         })
+        self.cpo.api.get_transceiver_dom_real_value = mock.Mock(return_value={
+            "vendor_voltage": "4V",
+        })
+        format_maps = {
+            "dom": {
+                "oe": {"vendor_voltage": {"label": "OE Rail", "unit": "V"}},
+                "els": {
+                    "extra_limit": {"unit": "mA"},
+                    "vendor_voltage": {"label": "ELS Rail", "unit": "V"},
+                    "vendor_missing": {"label": "ELS Spare", "unit": "V"},
+                    "txbiashighalarm": {"label": "Vendor Bias", "unit": "V"},
+                },
+            },
+        }
+        self.cpo.get_platform_specific_format_map = mock.Mock(
+            side_effect=lambda category, endpoint: format_maps[category][endpoint],
+        )
         result = invoke(["show", "interface", "dom", "-p", "Ethernet0"])
         assert result.exit_code == 0, result.output
         els_section = result.output.split("    ELS:\n")[1]
@@ -579,7 +597,19 @@ class TestDirectPlatformApiCommands(object):
         assert "TxPowerLowAlarm:" not in els_section
         assert "TxBiasHighAlarm: 20mA\n" in els_section
         assert "RxPowerHighAlarm: 3.01dBm\n" in els_section
-        assert "AdditionalValues:" in els_section and "extra limit: 7" in els_section
+        oe_section = result.output.split("    ELS:\n")[0]
+        assert "OE Rail: 4V\n" in oe_section
+        assert "AdditionalValues:" in els_section and "extra limit: 7mA\n" in els_section
+        assert "ELS Rail: 2.5V\n" in els_section
+        assert "ELS Spare: N/A\n" in els_section
+        assert "Vendor Bias" not in els_section
+
+        result = invoke(["show", "interface", "dom", "-p", "Ethernet0", "--json"])
+        assert result.exit_code == 0, result.output
+        record = json.loads(result.output)["Ethernet0"]
+        assert record["oe"]["dom"] == {"vendor_voltage": "4V"}
+        assert record["els"]["thresholds"]["vendor_voltage"] == 2.5
+        assert record["els"]["thresholds"]["vendor_missing"] is None
 
     def test_interface_tx_disable_supports_breakout_name(self):
         result = invoke([
