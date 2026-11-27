@@ -130,6 +130,72 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert "Error: PortChannel0005 is not present." in result.output
 
+    def test_delete_portchannel_removes_stp_config(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0005"], obj=obj)
+        print(result.output)
+        assert result.exit_code == 0
+
+        # A row carrying non-default config survives VLAN membership changes, so
+        # deleting the interface is the only thing left that can remove it.
+        db.cfgdb.set_entry('STP_PORT', 'PortChannel0005',
+                           {'enabled': 'true', 'bpdu_guard': 'true'})
+        db.cfgdb.set_entry('STP_VLAN_PORT', ('Vlan1000', 'PortChannel0005'),
+                           {'path_cost': '200'})
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["del"],
+                               ["PortChannel0005"], obj=obj)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('PORTCHANNEL', 'PortChannel0005') == {}
+        assert db.cfgdb.get_entry('STP_PORT', 'PortChannel0005') == {}
+        assert db.cfgdb.get_entry('STP_VLAN_PORT', 'Vlan1000|PortChannel0005') == {}
+
+    def test_delete_portchannel_stp_cleanup_conflict_is_a_clean_error(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0005"], obj=obj)
+        assert result.exit_code == 0
+
+        with mock.patch("config.stp.interface_remove_stp",
+                        side_effect=JsonPatchConflict("STP_PORT write failed")):
+            result = runner.invoke(config.config.commands["portchannel"].commands["del"],
+                                   ["PortChannel0005"], obj=obj)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Could not remove the spanning-tree config of PortChannel0005" in result.output
+        assert "Traceback" not in result.output
+        # Nothing is deleted when the STP rows cannot be removed first.
+        assert db.cfgdb.get_entry('PORTCHANNEL', 'PortChannel0005') != {}
+
+    def test_delete_portchannel_without_stp_config(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"],
+                               ["PortChannel0005"], obj=obj)
+        print(result.output)
+        assert result.exit_code == 0
+
+        # A port channel that never joined a VLAN has no STP rows to clean up
+        result = runner.invoke(config.config.commands["portchannel"].commands["del"],
+                               ["PortChannel0005"], obj=obj)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('PORTCHANNEL', 'PortChannel0005') == {}
+        assert db.cfgdb.get_entry('STP_PORT', 'PortChannel0005') == {}
+
     @pytest.mark.parametrize("fast_rate", ["False", "True", "false", "true"])
     def test_add_portchannel_with_fast_rate_adhoc_validation(self, fast_rate):
         config.ADHOC_VALIDATION = True

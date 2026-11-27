@@ -169,8 +169,12 @@ def disable_stp_on_vlan_port(db, vlan, port):
     if stp.is_global_stp_enabled(db) is True:
         vlan_interface = str(vlan) + "|" + port
         db.set_entry('STP_VLAN_PORT', vlan_interface, None)
-        vlan_list_for_intf = stp.get_vlan_list_for_interface(db, port)
-        if len(vlan_list_for_intf) == 0:
+        # A customized row (e.g. bpdu_guard) must survive VLAN membership
+        # changes: once VLAN-less it is unreachable from the STP
+        # CLI, so drop it only while it still holds nothing but the
+        # auto-seeded defaults.
+        if len(stp.get_vlan_list_for_interface(db, port)) == 0 and \
+                db.get_entry('STP_PORT', port) == stp.STP_PORT_DEFAULT_FVS:
             db.set_entry('STP_PORT', port, None)
 
 
@@ -444,15 +448,18 @@ def del_vlan_member(ctx, vid, port, multiple, except_flag):
             if not clicommon.is_port_vlan_member(db.cfgdb, port, vlan):  # TODO: MISSING CONSTRAINT IN YANG MODEL
                 ctx.fail("{} is not a member of {}".format(port, vlan))
 
-            # If port is being made non-L2 port, disable STP
-            disable_stp_on_vlan_port(db.cfgdb, vlan, port)
-
             try:
                 db.cfgdb.set_entry('VLAN_MEMBER', (vlan, port), None)
                 delete_db_entry("DHCPv6_COUNTER_TABLE|{}".format(port), db.db, db.db.STATE_DB)
                 delete_db_entry("DHCP_COUNTER_TABLE|{}".format(port), db.db, db.db.STATE_DB)
             except JsonPatchConflict:
                 ctx.fail("{} invalid or does not exist, or {} is not a member of {}".format(vlan, port, vlan))
+
+            # If port is being made non-L2 port, disable STP. This has to run
+            # after the VLAN_MEMBER row is gone, because it counts the port's
+            # remaining VLANs to decide whether the STP_PORT row is still
+            # reachable - counting before the removal never reaches zero.
+            disable_stp_on_vlan_port(db.cfgdb, vlan, port)
 
 #
 # 'static-anycast-gateway' group ('config vlan static-anycast-gateway ...')

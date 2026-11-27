@@ -1763,3 +1763,120 @@ class TestVlan(object):
             assert result.exit_code != 0
 
         config.vlan.clicommon.run_command = origin_run_command_func
+
+
+class FakeStpConfigDb(object):
+    """Dict-backed stand-in exposing the ConfigDBConnector calls the STP/VLAN
+    helpers use, preserving set_entry whole-row-replace semantics."""
+    def __init__(self, tables):
+        self.tables = tables
+
+    def get_entry(self, table, key):
+        return dict(self.tables.get(table, {}).get(key, {}))
+
+    def set_entry(self, table, key, fvs):
+        if fvs is None:
+            self.tables.get(table, {}).pop(key, None)
+        else:
+            self.tables.setdefault(table, {})[key] = dict(fvs)
+
+    def mod_entry(self, table, key, fvs):
+        self.tables.setdefault(table, {}).setdefault(key, {}).update(fvs)
+
+    def get_table(self, table):
+        return self.tables.get(table, {})
+
+
+class TestStpPortSurvivesVlanMembership(object):
+    """VLAN membership changes must not destroy STP_PORT config."""
+
+    def _db(self, stp_port=None, vlan_members=()):
+        tables = {'STP': {'GLOBAL': {'mode': 'pvst'}},
+                  'VLAN_MEMBER': {m: {'tagging_mode': 'untagged'} for m in vlan_members}}
+        if stp_port is not None:
+            tables['STP_PORT'] = {'Ethernet4': dict(stp_port)}
+        return FakeStpConfigDb(tables)
+
+    def test_member_del_keeps_customized_row(self):
+        import config.vlan as config_vlan
+        import config.stp as config_stp
+        customized = dict(config_stp.STP_PORT_DEFAULT_FVS, bpdu_guard='true')
+        db = self._db(stp_port=customized)
+        config_vlan.disable_stp_on_vlan_port(db, 'Vlan100', 'Ethernet4')
+        assert db.get_entry('STP_PORT', 'Ethernet4') == customized
+
+    def test_member_del_drops_pristine_row(self):
+        import config.vlan as config_vlan
+        import config.stp as config_stp
+        db = self._db(stp_port=config_stp.STP_PORT_DEFAULT_FVS)
+        config_vlan.disable_stp_on_vlan_port(db, 'Vlan100', 'Ethernet4')
+        assert db.get_entry('STP_PORT', 'Ethernet4') == {}
+
+    def test_member_del_keeps_pristine_row_while_still_a_member(self):
+        import config.vlan as config_vlan
+        import config.stp as config_stp
+        db = self._db(stp_port=config_stp.STP_PORT_DEFAULT_FVS,
+                      vlan_members=[('Vlan200', 'Ethernet4')])
+        config_vlan.disable_stp_on_vlan_port(db, 'Vlan100', 'Ethernet4')
+        assert db.get_entry('STP_PORT', 'Ethernet4') == config_stp.STP_PORT_DEFAULT_FVS
+
+    def test_member_add_seeds_fresh_port(self):
+        import config.stp as config_stp
+        db = self._db()
+        config_stp.interface_enable_stp(db, 'Ethernet4')
+        assert db.get_entry('STP_PORT', 'Ethernet4') == config_stp.STP_PORT_DEFAULT_FVS
+
+    def test_member_add_keeps_customized_row(self):
+        import config.stp as config_stp
+        customized = dict(config_stp.STP_PORT_DEFAULT_FVS, bpdu_guard='true')
+        db = self._db(stp_port=customized)
+        config_stp.interface_enable_stp(db, 'Ethernet4')
+        assert db.get_entry('STP_PORT', 'Ethernet4') == customized
+
+    def test_member_add_completes_disabled_row_without_reenabling(self):
+        import config.stp as config_stp
+        db = self._db(stp_port={'enabled': 'false'})
+        config_stp.interface_enable_stp(db, 'Ethernet4')
+        entry = db.get_entry('STP_PORT', 'Ethernet4')
+        assert entry['enabled'] == 'false'
+        assert entry['bpdu_guard'] == 'false'
+        assert set(entry) == set(config_stp.STP_PORT_DEFAULT_FVS)
+
+    def test_cli_member_del_drops_pristine_row(self):
+        import config.stp as config_stp
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry('STP_PORT', 'Ethernet8', config_stp.STP_PORT_DEFAULT_FVS)
+
+        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
+                               ["1000", "Ethernet8"], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        # Ethernet8 was in Vlan1000 only, so the row has to go with the membership
+        assert db.cfgdb.get_entry('STP_PORT', 'Ethernet8') == {}
+
+    def test_cli_member_del_keeps_row_while_still_a_member(self):
+        import config.stp as config_stp
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.set_entry('VLAN', 'Vlan1001', {'vlanid': '1001'})
+        db.cfgdb.set_entry('VLAN_MEMBER', ('Vlan1001', 'Ethernet8'), {'tagging_mode': 'tagged'})
+        db.cfgdb.set_entry('STP_PORT', 'Ethernet8', config_stp.STP_PORT_DEFAULT_FVS)
+
+        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
+                               ["1000", "Ethernet8"], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('STP_PORT', 'Ethernet8') == config_stp.STP_PORT_DEFAULT_FVS
+
+    def test_cli_member_del_keeps_customized_row(self):
+        runner = CliRunner()
+        db = Db()
+        customized = db.cfgdb.get_entry('STP_PORT', 'Ethernet4')
+        assert customized.get('bpdu_guard') == 'true'
+
+        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
+                               ["1000", "Ethernet4"], obj=db)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry('STP_PORT', 'Ethernet4') == customized

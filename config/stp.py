@@ -289,16 +289,43 @@ def vlan_enable_stp(db, vlan_name):
             logging.warning("Exceeded maximum STP configurable VLAN instances for {}".format(vlan_name))
 
 
+STP_PORT_DEFAULT_FVS = {'enabled': 'true',
+                        'root_guard': 'false',
+                        'bpdu_guard': 'false',
+                        'bpdu_guard_do_disable': 'false',
+                        'portfast': 'false',
+                        'uplink_fast': 'false'
+                        }
+
+
+def seed_stp_port_defaults(db, interface_name, fvs):
+    # Seed only the absent fields: set_entry replaces the whole row, which
+    # would wipe existing config like bpdu_guard, and a port
+    # explicitly disabled via `spanning_tree interface disable` must not come
+    # back enabled on VLAN re-join.
+    entry = db.get_entry('STP_PORT', interface_name)
+    missing = {k: v for k, v in fvs.items() if k not in entry}
+    if missing:
+        db.mod_entry('STP_PORT', interface_name, missing)
+
+
 def interface_enable_stp(db, interface_name):
-    fvs = {'enabled': 'true',
-           'root_guard': 'false',
-           'bpdu_guard': 'false',
-           'bpdu_guard_do_disable': 'false',
-           'portfast': 'false',
-           'uplink_fast': 'false'
-           }
     if is_global_stp_enabled(db):
-        db.set_entry('STP_PORT', interface_name, fvs)
+        seed_stp_port_defaults(db, interface_name, STP_PORT_DEFAULT_FVS)
+
+
+def interface_remove_stp(db, interface_name):
+    # Drop every STP row keyed on an interface that is going away. Leaving a
+    # VLAN keeps a customized row (see disable_stp_on_vlan_port), but once the
+    # interface itself is deleted the row is unreachable from the STP CLI and
+    # would silently re-apply to a later interface of the same name.
+    # STP_VLAN_PORT leafrefs STP_PORT/ifname, so it has to go first.
+    for vlan_name in get_vlan_list_from_stp_vlan_intf_table(db, interface_name):
+        key = vlan_name + '|' + interface_name
+        if db.get_entry('STP_VLAN_PORT', key):
+            db.set_entry('STP_VLAN_PORT', key, None)
+    if db.get_entry('STP_PORT', interface_name):
+        db.set_entry('STP_PORT', interface_name, None)
 
 
 def is_vlan_configured_interface(db, interface_name):
@@ -359,24 +386,17 @@ def is_portchannel_member_port(db, interface_name):
 
 
 def enable_stp_for_interfaces(db):
-    fvs = {'enabled': 'true',
-           'root_guard': 'false',
-           'bpdu_guard': 'false',
-           'bpdu_guard_do_disable': 'false',
-           'portfast': 'false',
-           'uplink_fast': 'false'
-           }
     port_dict = natsorted(db.get_table('PORT'))
     intf_list_in_vlan_member_table = get_intf_list_in_vlan_member_table(db)
 
     for port_key in port_dict:
         if port_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_PORT', port_key, fvs)
+            seed_stp_port_defaults(db, port_key, STP_PORT_DEFAULT_FVS)
 
     po_ch_dict = natsorted(db.get_table('PORTCHANNEL'))
     for po_ch_key in po_ch_dict:
         if po_ch_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_PORT', po_ch_key, fvs)
+            seed_stp_port_defaults(db, po_ch_key, STP_PORT_DEFAULT_FVS)
 
 
 def is_global_stp_enabled(db):
@@ -1108,65 +1128,7 @@ def stp_interface_portfast_disable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, {'portfast': 'false'})
 
 
-# config spanning_tree interface edge_port
-# Only for MST
-
-@spanning_tree_interface.group('edge_port')
-@clicommon.pass_db
-def spanning_tree_interface_edge_port(_db):
-    """Configure STP edge_port for interface"""
-    pass
-
-# config spanning_tree interface edge_port enable <interface_name>
-# This should check the mode attribute in the STP global table.
-# If the mode is PVST, it should not allow configuring edge_port.
-
-
-@spanning_tree_interface_edge_port.command('enable')
-@click.argument('interface_name', metavar='<interface_name>', required=True)
-@clicommon.pass_db
-def stp_interface_edge_port_enable(_db, interface_name):
-    """Enable STP edge_port for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-
-    # Check if STP is enabled globally
-    check_if_global_stp_enabled(db, ctx)
-
-    # Get the global STP mode
-    current_mode = get_global_stp_mode(db)
-
-    # Ensure mode is MSTP, otherwise fail
-    if current_mode == "pvst":
-        ctx.fail("edge_port configuration is not supported in PVST mode. This command is only allowed in MSTP mode.")
-
-    # Validate the interface
-    check_if_stp_enabled_for_interface(ctx, db, interface_name)
-    check_if_interface_is_valid(ctx, db, interface_name)
-
-    # Enable edge_port for the interface
-    db.mod_entry('STP_PORT', interface_name, {'edge_port': 'true'})
-
-    click.echo(f"edge_port enabled on {interface_name} in MSTP mode.")
-
-
-# config spanning_tree interface edge_port disable <interface_name>
-# MST CONFIGURATION IN THE STP_PORT TABLE
-# It should the mode attribute in the STP global table
-# If the mode is PVST, then it should tell that the mode if PVST, and this cannot be done.
-
-
-@spanning_tree_interface_edge_port.command('disable')
-@click.argument('interface_name', metavar='<interface_name>', required=True)
-@clicommon.pass_db
-def stp_interface_edge_port_disable(_db, interface_name):
-    """Disable STP edge_port for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-    check_if_stp_enabled_for_interface(ctx, db, interface_name)
-    check_if_interface_is_valid(ctx, db, interface_name)
-    db.mod_entry('STP_PORT', interface_name, {'edge_port': 'false'})
-
+# edge_port is defined once, further down with the other MST commands.
 
 # STP interface root uplink_fast
 # config spanning_tree interface uplink_fast
@@ -1213,14 +1175,25 @@ def stp_interface_uplink_fast_disable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, {'uplink_fast': 'false'})
 
 
-# config spanning_tree interface link_type
+# config spanning_tree interface link_type {point-to-point|shared|auto} <ifname>
+# config spanning_tree interface link_type set {P2P|Shared-Lan|Auto} <ifname>
+#
+# Both spellings reach the same group. The YANG allows only auto, shared and
+# point-to-point, and only in MST mode.
+def _set_link_type(ctx, db, interface_name, value):
+    """Write one interface's link type, after checking it is allowed."""
+    if get_global_stp_mode(db) != "mst":
+        ctx.fail("Link type configuration is supported for MSTP only")
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'link_type': value})
+
+
 @spanning_tree_interface.group('link_type')
 @clicommon.pass_db
 def spanning_tree_interface_link_type(_db):
     """Configure STP link type for interface"""
     pass
-
-# config spanning_tree interface link_type point-to-point <interface_name>
 
 
 @spanning_tree_interface_link_type.command('point-to-point')
@@ -1228,40 +1201,48 @@ def spanning_tree_interface_link_type(_db):
 @clicommon.pass_db
 def stp_interface_link_type_point_to_point(_db, interface_name):
     """Configure STP link type as point-to-point for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-    check_if_stp_enabled_for_interface(ctx, db, interface_name)
-    check_if_interface_is_valid(ctx, db, interface_name)
-    db.mod_entry('STP_PORT', interface_name, {'link_type': 'point-to-point'})
+    _set_link_type(click.get_current_context(), _db.cfgdb, interface_name, 'point-to-point')
 
 
-# config spanning_tree interface link_type shared <interface_name>
 @spanning_tree_interface_link_type.command('shared')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
 def stp_interface_link_type_shared(_db, interface_name):
     """Configure STP link type as shared for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-    check_if_stp_enabled_for_interface(ctx, db, interface_name)
-    check_if_interface_is_valid(ctx, db, interface_name)
-    db.mod_entry('STP_PORT', interface_name, {'link_type': 'shared'})
+    _set_link_type(click.get_current_context(), _db.cfgdb, interface_name, 'shared')
 
 
-# config spanning_tree interface link_type auto <interface_name>
 @spanning_tree_interface_link_type.command('auto')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
 def stp_interface_link_type_auto(_db, interface_name):
     """Configure STP link type as auto for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-    current_mode = get_global_stp_mode(db)
-    if current_mode == "pvst":
-        ctx.fail("Link type configuration is not supported in PVST mode")
-    check_if_stp_enabled_for_interface(ctx, db, interface_name)
-    check_if_interface_is_valid(ctx, db, interface_name)
-    db.mod_entry('STP_PORT', interface_name, {'link_type': 'auto'})
+    _set_link_type(click.get_current_context(), _db.cfgdb, interface_name, 'auto')
+
+
+@spanning_tree_interface_link_type.command('set')
+@click.argument(
+    'link_type',
+    metavar='<P2P|Shared-Lan|Auto>',
+    required=True,
+    type=click.Choice(["P2P", "Shared-Lan", "Auto"], case_sensitive=False)
+)
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_link_type_set(_db, link_type, interface_name):
+    """Configure STP link type for interface"""
+    # P2P used to map to 'p2p', which the YANG rejects.
+    link_type_mapping = {
+        "P2P": "point-to-point",
+        "Shared-Lan": "shared",
+        "Auto": "auto",
+    }
+    _set_link_type(click.get_current_context(), _db.cfgdb, interface_name,
+                   link_type_mapping[link_type])
+
+
+# One group under two names, so the spellings cannot drift apart.
+spanning_tree_interface.add_command(spanning_tree_interface_link_type, 'link-type')
 
 
 ###############################################
@@ -1334,17 +1315,12 @@ def stp_interface_enable(_db, interface_name):
     ctx = click.get_current_context()
     db = _db.cfgdb
 
-    # Check and display the current STP mode
-    stp_global_entry = db.get_entry('STP_GLOBAL', 'GLOBAL')
-    current_mode = stp_global_entry.get('mode', 'none')
-    click.echo(f"Current STP mode: {current_mode}")
-    if current_mode == "none":
-        ctx.fail("Global STP is not enabled - first configure STP mode")
-
     check_if_global_stp_enabled(db, ctx)
     if is_stp_enabled_for_interface(db, interface_name):
         ctx.fail(f"STP is already enabled for {interface_name}")
     check_if_interface_is_valid(ctx, db, interface_name)
+
+    current_mode = get_global_stp_mode(db)
 
     # Set the common attributes
     fvs = {
@@ -1355,24 +1331,21 @@ def stp_interface_enable(_db, interface_name):
     }
 
     # Add mode-specific attributes
-    if current_mode == 'mstp':
+    if current_mode == 'mst':
         fvs.update({
             'edge_port': 'false',
-            'link_type': 'auto',
-            'portfast': 'false',
-            'uplink_fast': 'false'
+            'link_type': 'auto'
         })
-    elif current_mode == 'pvst':
+    else:
         fvs.update({
             'portfast': 'false',
             'uplink_fast': 'false'
         })
-    else:
-        click.echo("No STP mode selected. Please select a mode first.")
-        return
 
-    fvs = {'enabled': 'true'}
-    db.set_entry('STP_PORT', interface_name, fvs)
+    # Merge instead of set_entry: the row may carry operator config like
+    # bpdu_guard that a whole-row replace would wipe.
+    seed_stp_port_defaults(db, interface_name, fvs)
+    db.mod_entry('STP_PORT', interface_name, {'enabled': 'true'})
     click.echo(f"Mode {current_mode} is enabled for interface {interface_name}")
 
 
@@ -1386,20 +1359,15 @@ def stp_interface_disable(_db, interface_name):
     ctx = click.get_current_context()
     db = _db.cfgdb
 
-    # Check and display the current STP mode
-    stp_global_entry = db.get_entry('STP_GLOBAL', 'GLOBAL')
-    current_mode = stp_global_entry.get('mode', 'none')
-    click.echo(f"Current STP mode: {current_mode}")
-
     check_if_global_stp_enabled(db, ctx)
     check_if_interface_is_valid(ctx, db, interface_name)
 
-    # Clear all entries for the interface except the disable attribute
-    if current_mode in ['mstp', 'pvst']:
-        db.set_entry('STP_PORT', interface_name, {'enabled': 'false'})
-        click.echo(f"STP mode {current_mode} is disabled for {interface_name}")
-    else:
-        click.echo("No STP mode selected. Please select a mode first.")
+    current_mode = get_global_stp_mode(db)
+
+    # Flip only the enabled flag: a whole-row replace would wipe per-port
+    # config like bpdu_guard and root_guard.
+    db.mod_entry('STP_PORT', interface_name, {'enabled': 'false'})
+    click.echo(f"STP mode {current_mode} is disabled for {interface_name}")
 
 
 # config spanning_tree interface edge_port {enable|disable} <ifname>
@@ -1421,8 +1389,25 @@ def mstp_interface_edge_port(_db, state, interface_name):
 
 
 # config spanning_tree interface bpdu_guard {enable|disable} <ifname>
+def _seed_mode_defaults(db, interface_name):
+    """Seed the mode-specific STP_PORT fields, but only where they are absent.
+
+    They are defaults for a new row. Writing them every time would reset
+    operator config such as uplink_fast.
+    """
+    stp_mode = get_global_stp_mode(db)
+    if stp_mode == "pvst":
+        defaults = {'portfast': 'false', 'uplink_fast': 'false'}
+    elif stp_mode == "mstp":
+        defaults = {'edge_port': 'false', 'link_type': 'auto'}
+    else:
+        return
+    seed_stp_port_defaults(db, interface_name, defaults)
+
+
 # STP interface bpdu guard
-# config spanning_tree interface bpdu_guard
+# config spanning_tree interface bpdu_guard {enable|disable} <ifname>
+# Both spellings are registered against one group, so neither breaks.
 
 # STP interface bpdu guard
 @spanning_tree_interface.group(name='bpdu-guard')
@@ -1441,19 +1426,11 @@ def stp_interface_bpdu_guard_enable(_db, interface_name, shutdown):
     ctx = click.get_current_context()
     db = _db.cfgdb
     check_if_interface_is_valid(ctx, db, interface_name)
-    stp_mode = get_global_stp_mode(db)
-    fvs = {'bpdu_guard': 'true'}
-    if shutdown:
-        fvs['bpdu_guard_do_disable'] = 'true'
-    else:
-        fvs['bpdu_guard_do_disable'] = 'false'
-
-    if stp_mode == "pvst":
-        fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
-        fvs.update({'edge_port': 'false', 'link_type': 'auto'})
-
-    db.mod_entry('STP_PORT', interface_name, fvs)
+    _seed_mode_defaults(db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {
+        'bpdu_guard': 'true',
+        'bpdu_guard_do_disable': 'true' if shutdown else 'false',
+    })
 
 
 @spanning_tree_interface_bpdu_guard.command('disable')
@@ -1464,20 +1441,27 @@ def stp_interface_bpdu_guard_disable(_db, interface_name):
     ctx = click.get_current_context()
     db = _db.cfgdb
     check_if_interface_is_valid(ctx, db, interface_name)
-    stp_mode = get_global_stp_mode(db)
-    fvs = {'bpdu_guard': 'false', 'bpdu_guard_do_disable': 'false'}
+    _seed_mode_defaults(db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {
+        'bpdu_guard': 'false',
+        'bpdu_guard_do_disable': 'false',
+    })
 
-    if stp_mode == "pvst":
-        fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
-        fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
-    db.mod_entry('STP_PORT', interface_name, fvs)
+spanning_tree_interface.add_command(spanning_tree_interface_bpdu_guard, 'bpdu_guard')
 
 
 # config spanning_tree interface root_guard {enable|disable} <ifname>
 # This command allow enabling or disabling of root_guard on an interface.
+# Both spellings are accepted and share one group.
 # STP interface root guard
+def _set_root_guard(ctx, db, interface_name, enabled):
+    """Flip root guard on one interface, leaving the rest of the row alone."""
+    check_if_interface_is_valid(ctx, db, interface_name)
+    _seed_mode_defaults(db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'root_guard': 'true' if enabled else 'false'})
+
+
 @spanning_tree_interface.group('root_guard')
 @clicommon.pass_db
 def spanning_tree_interface_root_guard(_db):
@@ -1490,26 +1474,7 @@ def spanning_tree_interface_root_guard(_db):
 @clicommon.pass_db
 def stp_interface_root_guard_enable(_db, interface_name):
     """Enable STP root guard for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-    check_if_interface_is_valid(ctx, db, interface_name)
-
-    stp_mode = get_global_stp_mode(db)
-    fvs = {'root_guard': 'true'}
-
-    # Add mode-specific attributes
-    if stp_mode == "pvst":
-        fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
-        fvs.update({'edge_port': 'false', 'link_type': 'auto'})
-
-    db.mod_entry('STP_PORT', interface_name, fvs)
-
-
-@spanning_tree_interface.group('root-guard')
-def spanning_tree_interface_root_guard():
-    """Root guard subcommands under interface"""
-    pass
+    _set_root_guard(click.get_current_context(), _db.cfgdb, interface_name, True)
 
 
 @spanning_tree_interface_root_guard.command('disable')
@@ -1517,20 +1482,11 @@ def spanning_tree_interface_root_guard():
 @clicommon.pass_db
 def stp_interface_root_guard_disable(_db, interface_name):
     """Disable STP root guard for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-    check_if_interface_is_valid(ctx, db, interface_name)
+    _set_root_guard(click.get_current_context(), _db.cfgdb, interface_name, False)
 
-    stp_mode = get_global_stp_mode(db)
-    fvs = {'root_guard': 'false'}
 
-    # Add mode-specific attributes
-    if stp_mode == "pvst":
-        fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
-        fvs.update({'edge_port': 'false', 'link_type': 'auto'})
-
-    db.mod_entry('STP_PORT', interface_name, fvs)
+# One group under two names. Declaring it twice is what split them before.
+spanning_tree_interface.add_command(spanning_tree_interface_root_guard, 'root-guard')
 
 
 # config spanning_tree interface priority <ifname> <port_priority-value>
@@ -1619,59 +1575,6 @@ def stp_interface_cost(_db, interface_name, cost):
         db.set_entry('STP_PORT', interface_name, fvs)
     else:
         db.mod_entry('STP_PORT', interface_name, {'path_cost': cost})
-
-
-# config spanning_tree interface link-type {P2P|Shared-Lan|Auto} <ifname>
-# Specify configuring the interface at different link types.
-# Default : Auto
-# STP interface link-type
-@spanning_tree_interface.group('link-type')
-@clicommon.pass_db
-def spanning_tree_interface_link_type(_db):
-    """Configure STP link type for interface"""
-    pass
-
-
-@spanning_tree_interface_link_type.command('set')
-@click.argument(
-    'link_type',
-    metavar='<P2P|Shared-Lan|Auto>',
-    required=True,
-    type=click.Choice(["P2P", "Shared-Lan", "Auto"], case_sensitive=False)
-)
-@click.argument('interface_name', metavar='<interface_name>', required=True)
-@clicommon.pass_db
-def stp_interface_link_type_set(_db, link_type, interface_name):
-    """Configure STP link type for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-
-    # Ensure STP is enabled for the interface
-    check_if_stp_enabled_for_interface(ctx, db, interface_name)
-
-    # Validate interface
-    check_if_interface_is_valid(ctx, db, interface_name)
-
-    # Determine STP mode
-    stp_mode = get_global_stp_mode(db)
-
-    # Map link type options
-    link_type_mapping = {
-        "P2P": "p2p",
-        "Shared-Lan": "shared",
-        "Auto": "auto"
-    }
-
-    # Set appropriate link type
-    fvs = {'link_type': link_type_mapping[link_type]}
-
-    # Add PVST or MST-specific attributes
-    if stp_mode == "pvst":
-        fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mst":
-        fvs.update({'edge_port': 'false'})
-
-    db.mod_entry('STP_PORT', interface_name, fvs)
 
 
 # INSTANCE INTERFACE LEVEL COMMANDS
