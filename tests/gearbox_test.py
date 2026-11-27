@@ -1,11 +1,13 @@
 import sys
 import os
+import json
+import subprocess
 import importlib.machinery
 import importlib.util
 from contextlib import redirect_stdout
 from io import StringIO
 from click.testing import CliRunner
-from unittest import TestCase
+from unittest import TestCase, mock
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -14,6 +16,7 @@ sys.path.insert(0, test_path)
 sys.path.insert(0, modules_path)
 
 from .mock_tables import dbconnector
+from utilities_common.cli import UserCache  # noqa: E402
 
 import show.main as show
 
@@ -24,6 +27,16 @@ _gearboxutil_loader = importlib.machinery.SourceFileLoader(
 _gearboxutil_spec = importlib.util.spec_from_loader("gearboxutil", _gearboxutil_loader)
 gearboxutil = importlib.util.module_from_spec(_gearboxutil_spec)
 _gearboxutil_loader.exec_module(gearboxutil)
+
+
+def _gearbox_snapshot_path():
+    return os.path.join(UserCache("portstat").get_directory(), "gearbox")
+
+
+def _remove_gearbox_snapshot():
+    if os.path.exists(_gearbox_snapshot_path()):
+        os.remove(_gearbox_snapshot_path())
+
 
 class TestGearbox(TestCase):
     @classmethod
@@ -105,6 +118,8 @@ class TestInterfaceFecStats(TestCase):
     def setup_class(cls):
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         dbconnector.load_database_config()
+        # These tests expect lifetime values; drop any snapshot left by an earlier 'portstat -c'
+        _remove_gearbox_snapshot()
 
     def _capture(self, port_name=None, display_type='stats'):
         buf = StringIO()
@@ -179,6 +194,121 @@ class TestInterfaceFecStats(TestCase):
         # S1_TIMESTAMP is "0" (sentinel) and S2..S15 have no *_TIMESTAMP entry; all must render as N/A
         output = self._capture(port_name="Ethernet0", display_type='histogram')
         self.assertIn("N/A", output)
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+def _fec_rows(output):
+    """Return {'<port> <side>': [columns after the interface name]} from fec-stats output"""
+    rows = {}
+    for line in output.splitlines():
+        if line.startswith("Ethernet"):
+            tokens = line.split()
+            rows[" ".join(tokens[:2])] = tokens[2:]
+    return rows
+
+
+class TestGearboxCountersSinceClear(TestCase):
+    """'sonic-clear counters' (portstat -c) saves the gearbox FEC counters; gearboxutil shows them relative to it"""
+
+    @classmethod
+    def setup_class(cls):
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        dbconnector.load_database_config()
+
+    def setUp(self):
+        _remove_gearbox_snapshot()
+
+    def tearDown(self):
+        _remove_gearbox_snapshot()
+
+    def _show(self, display_type, port_name="Ethernet0"):
+        buf = StringIO()
+        with redirect_stdout(buf):
+            gearboxutil.InterfaceFecStats(port_name=port_name, display_type=display_type)
+        return buf.getvalue()
+
+    def _write_snapshot(self, ports, namespace=""):
+        with open(_gearbox_snapshot_path(), "w") as f:
+            json.dump({"time": "2026-11-17T10:00:00", "namespaces": {namespace: ports}}, f)
+
+    def test_no_snapshot_shows_lifetime_values(self):
+        output = self._show("stats")
+        self.assertNotIn("Last cached time", output)
+        system = _fec_rows(output)["Ethernet0 System"]
+        self.assertEqual(system[1], "1,234,567")
+        self.assertEqual(system[-1], "42")
+
+    def test_after_portstat_clear_counters_are_zero(self):
+        env = dict(os.environ, UTILITIES_UNIT_TESTING="2")
+        subprocess.run([sys.executable, os.path.join(scripts_path, "portstat"), "-c"],
+                       env=env, check=True, capture_output=True)
+
+        stats = self._show("stats")
+        self.assertIn("Last cached time was", stats)
+        for side, columns in _fec_rows(stats).items():
+            self.assertEqual(columns[1:4], ["0", "0", "0"], side)
+            self.assertEqual(columns[-1], "-1", side)
+
+        histogram = self._show("histogram")
+        bins = [line.split() for line in histogram.splitlines() if line.startswith("BIN")]
+        self.assertEqual(len(bins), 32)  # 16 bins x (system, line)
+        self.assertTrue(all(row[1] == "0" for row in bins))
+
+    def test_counters_since_snapshot(self):
+        # 100 corrected frames, and codewords in BIN0/BIN1, on the system side since the clear
+        self._write_snapshot({
+            "Ethernet0_system": {
+                "SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES": "1234467",
+                "SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES": "3",
+                "SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS": "1024",
+                "SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S0": "26751321840084",
+                "SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S1": "5600",
+            },
+        })
+        rows = _fec_rows(self._show("stats"))
+        self.assertEqual(rows["Ethernet0 System"][1:4], ["100", "0", "0"])
+        self.assertEqual(rows["Ethernet0 System"][-1], "1")
+        # A port missing from the snapshot is shown against zero
+        self.assertEqual(rows["Ethernet0 Line"][-1], "0")
+
+        system_histogram = self._show("histogram").split("Ethernet0 System")[1]
+        bin1 = next(line.split() for line in system_histogram.splitlines() if line.startswith("BIN1 "))
+        self.assertEqual(bin1[1], "78")
+
+    def test_snapshot_of_another_namespace_is_ignored(self):
+        self._write_snapshot({"Ethernet0_system": {}}, namespace="asic0")
+        self.assertNotIn("Last cached time", self._show("stats"))
+
+    def test_snapshot_of_selected_namespace_is_used(self):
+        # A namespace-aware gearboxutil sets InterfaceFecStats.namespace; that namespace's snapshot is used
+        self._write_snapshot({"Ethernet0_system": {"SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES": "1234467"}},
+                             namespace="asic0")
+        with mock.patch.object(gearboxutil.InterfaceFecStats, "namespace", "asic0", create=True):
+            output = self._show("stats")
+        self.assertIn("Last cached time", output)
+        self.assertEqual(_fec_rows(output)["Ethernet0 System"][1], "100")
+
+    def test_unreadable_snapshot_is_ignored(self):
+        with open(_gearbox_snapshot_path(), "w") as f:
+            f.write("not json")
+        self.assertNotIn("Last cached time", self._show("stats"))
+
+    def test_helpers(self):
+        self.assertEqual(gearboxutil.counter_diff("150", "100"), "50")
+        self.assertEqual(gearboxutil.counter_diff("100", None), "100")
+        self.assertEqual(gearboxutil.counter_diff("10", "100"), "0")
+        self.assertEqual(gearboxutil.counter_diff("N/A", "100"), "N/A")
+
+        def bins(values):
+            return {gearboxutil.FEC_HISTOGRAM_BINS[i]: v for i, v in enumerate(values)}
+        old = bins(["100"] * 16)
+        self.assertEqual(gearboxutil.get_fec_max_t_since_snapshot(bins(["100"] * 16), old, "5"), "-1")
+        self.assertEqual(gearboxutil.get_fec_max_t_since_snapshot(
+            bins(["200"] + ["100"] * 6 + ["101"] + ["100"] * 8), old, "5"), "7")
+        self.assertEqual(gearboxutil.get_fec_max_t_since_snapshot({}, old, "5"), "5")
 
     @classmethod
     def teardown_class(cls):

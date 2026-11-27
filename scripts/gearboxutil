@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import sys
 from datetime import datetime
@@ -22,6 +23,7 @@ except KeyError:
     pass
 
 from swsscommon.swsscommon import SonicV2Connector
+from utilities_common.cli import UserCache
 
 
 # ========================== Common gearbox-utils logic ==========================
@@ -244,6 +246,44 @@ FEC_HISTOGRAM_BINS = [f"SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{i}" for i in r
 # FEC Histogram timestamp format
 FEC_HISTOGRAM_TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+# Gearbox FEC counters saved by 'portstat -c' ('sonic-clear counters')
+GEARBOX_SNAPSHOT_FILE = "gearbox"
+DEFAULT_NAMESPACE = ""
+
+
+def load_counters_snapshot(namespace=DEFAULT_NAMESPACE):
+    """
+    Return (time, {port: {counter: value}}) saved by the last 'sonic-clear counters'
+    for the namespace, or (None, None) if there is none
+    """
+    path = os.path.join(UserCache(app_name="portstat").get_directory(), GEARBOX_SNAPSHOT_FILE)
+    try:
+        with open(path) as f:
+            snapshot = json.load(f)
+        return snapshot["time"], snapshot["namespaces"][namespace]
+    except (IOError, ValueError, KeyError, TypeError):
+        return None, None
+
+
+def counter_diff(new, old):
+    """Return new - old (clamped at 0, like portstat); a missing old value counts as 0"""
+    try:
+        return str(max(0, int(new) - int(old or 0)))
+    except (TypeError, ValueError):
+        return new
+
+
+def get_fec_max_t_since_snapshot(counters, old_counters, fallback):
+    """Return the highest FEC histogram bin that counted codewords since the snapshot, or -1"""
+    max_t = -1
+    for i, bin_name in enumerate(FEC_HISTOGRAM_BINS):
+        try:
+            if int(counters[bin_name]) - int(old_counters.get(bin_name, 0)) > 0:
+                max_t = i
+        except (KeyError, TypeError, ValueError):
+            return fallback
+    return str(max_t)
+
 class InterfaceFecStats(object):
 
     def __init__(self, port_name=None, display_type='stats'):
@@ -352,9 +392,9 @@ class InterfaceFecStats(object):
         else:
             return port_name, ''
 
-    def display_histogram_for_port(self, counters, port_name):
+    def display_histogram_for_port(self, counters, port_name, old_counters=None):
         """
-        Display FEC codeword error histogram for a port
+        Display FEC codeword error histogram for a port, relative to old_counters if given
         """
         base_name, side = self.extract_port_info(port_name)
         
@@ -364,6 +404,8 @@ class InterfaceFecStats(object):
         histogram_data = []
         for i, bin_name in enumerate(FEC_HISTOGRAM_BINS):
             value = counters.get(bin_name, '0')
+            if old_counters is not None:
+                value = counter_diff(value, old_counters.get(bin_name))
 
             timestamp_ms = counters.get(f'{bin_name}_TIMESTAMP')
             try:
@@ -389,6 +431,11 @@ class InterfaceFecStats(object):
             ports_to_display = self.get_matching_ports()
             if ports_to_display is None:
                 return
+
+            # self.namespace is set when gearboxutil reads a specific ASIC namespace
+            snapshot_time, snapshot = load_counters_snapshot(getattr(self, 'namespace', DEFAULT_NAMESPACE))
+            if snapshot is not None:
+                print(f"Last cached time was {snapshot_time}")
             
             # Display histogram for each port
             for port_name in natsorted(ports_to_display.keys()):
@@ -396,7 +443,8 @@ class InterfaceFecStats(object):
                 counters = self.get_counters_for_oid(oid)
                 
                 if counters:
-                    self.display_histogram_for_port(counters, port_name)
+                    old_counters = snapshot.get(port_name, {}) if snapshot is not None else None
+                    self.display_histogram_for_port(counters, port_name, old_counters)
                 else:
                     print(f"\n{port_name}")
                     print("No counter data available")
@@ -412,6 +460,11 @@ class InterfaceFecStats(object):
             ports_to_display = self.get_matching_ports()
             if ports_to_display is None:
                 return
+
+            # self.namespace is set when gearboxutil reads a specific ASIC namespace
+            snapshot_time, snapshot = load_counters_snapshot(getattr(self, 'namespace', DEFAULT_NAMESPACE))
+            if snapshot is not None:
+                print(f"Last cached time was {snapshot_time}")
             
             # Collect stats for each port
             table_data = []
@@ -419,22 +472,36 @@ class InterfaceFecStats(object):
                 oid = ports_to_display[port_name]
                 counters = self.get_counters_for_oid(oid)
                 rates = self.get_rates_for_oid(oid)
+                old_counters = snapshot.get(port_name, {}) if snapshot is not None else None
                 
                 base_name, side = self.extract_port_info(port_name)
 
                 iface = f"{base_name} {side}"
                 state = self.get_port_state(base_name, side)
 
+                fec_corr = counters.get('SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES', '0')
+                fec_uncorr = counters.get('SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES', '0')
+                fec_symbol_err = counters.get('SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS', '0')
+                if old_counters is not None:
+                    fec_corr = counter_diff(fec_corr, old_counters.get('SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES'))
+                    fec_uncorr = counter_diff(fec_uncorr,
+                                              old_counters.get('SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES'))
+                    fec_symbol_err = counter_diff(fec_symbol_err,
+                                                  old_counters.get('SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS'))
+
                 # Get counter values and format with commas
-                fec_corr = format_number_with_commas(counters.get('SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES', '0'))
-                fec_uncorr = format_number_with_commas(counters.get('SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES', '0'))
-                fec_symbol_err = format_number_with_commas(counters.get('SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS', '0'))
+                fec_corr = format_number_with_commas(fec_corr)
+                fec_uncorr = format_number_with_commas(fec_uncorr)
+                fec_symbol_err = format_number_with_commas(fec_symbol_err)
 
                 # Format BER values with 2 decimal places
                 fec_pre_ber = format_ber(rates.get('FEC_PRE_BER', '0'))
                 fec_post_ber = format_ber(rates.get('FEC_POST_BER', '0'))
                 fec_pre_ber_max = format_ber(rates.get('FEC_PRE_BER_MAX', 'N/A'))
                 fec_max_t = rates.get('FEC_MAX_T', '-1')
+                if old_counters is not None:
+                    # Highest bin hit since 'sonic-clear counters', not the lifetime value
+                    fec_max_t = get_fec_max_t_since_snapshot(counters, old_counters, fec_max_t)
 
                 table_data.append([
                     iface,

@@ -996,6 +996,68 @@ class TestPortStat(object):
         assert float(max_t['Ethernet8']) == 3
         remove_tmp_cnstat_file()
 
+    def test_reset_fec_rate_fields_gearbox(self):
+        # FEC_PRE_BER_MAX of the gearbox ports, in GB_COUNTERS_DB, is reset too.
+        portstat_script = self._load_portstat_script()
+        port_name_maps = {
+            'COUNTERS_DB': {'Ethernet0': 'oid:0x1000000000001'},
+            'GB_COUNTERS_DB': {'Ethernet0_system': 'oid:0x7000000000001',
+                               'Ethernet0_line': 'oid:0x7000000000002'},
+        }
+        redis_clients = {db_name: mock.MagicMock() for db_name in port_name_maps}
+
+        mock_db = mock.MagicMock()
+        mock_db.COUNTERS_DB = 'COUNTERS_DB'
+        mock_db.get_db_list.return_value = list(port_name_maps)
+        mock_db.get_all.side_effect = lambda db_name, key: port_name_maps[db_name]
+        mock_db.get_redis_client.side_effect = lambda db_name: redis_clients[db_name]
+
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['']
+        mock_portstat.get_db_client.return_value = mock_db
+
+        portstat_script._reset_fec_rate_fields(mock_portstat)
+
+        for db_name, port_name_map in port_name_maps.items():
+            calls = redis_clients[db_name].hdel.call_args_list
+            assert {call[0][0] for call in calls} == {'RATES:' + oid for oid in port_name_map.values()}
+            assert all(call[0][1] == ('FEC_PRE_BER_MAX',) for call in calls)
+
+    def test_clear_saves_gearbox_snapshot(self):
+        # portstat -c saves the gearbox FEC counters (both sides) for
+        # 'show gearbox interfaces fec-stats/fec-histogram'.
+        remove_tmp_cnstat_file()
+        return_code, _ = get_result_and_return_code(['portstat', '-c'])
+        assert return_code == 0
+
+        cache_dir = UserCache("portstat").get_directory()
+        with open(os.path.join(cache_dir, 'gearbox')) as f:
+            snapshot = json.load(f)
+        with open(os.path.join(cache_dir, 'portstat')) as f:
+            assert snapshot['time'] == json.load(f)['time']
+
+        ports = snapshot['namespaces']['']
+        assert set(ports) == {'Ethernet0_system', 'Ethernet0_line'}
+        system = ports['Ethernet0_system']
+        assert system['SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES'] == '1234567'
+        assert system['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S1'] == '5678'
+        assert all('TIMESTAMP' not in counter for counter in system)
+        remove_tmp_cnstat_file()
+
+    def test_clear_without_gearbox_removes_stale_gearbox_snapshot(self, tmp_path):
+        portstat_script = self._load_portstat_script()
+        stale = tmp_path / 'gearbox'
+        stale.write_text('{}')
+
+        mock_db = mock.MagicMock()
+        mock_db.get_db_list.return_value = ['COUNTERS_DB']
+        mock_portstat = mock.MagicMock()
+        mock_portstat.multi_asic.get_ns_list_based_on_options.return_value = ['']
+        mock_portstat.get_db_client.return_value = mock_db
+
+        portstat_script._save_gearbox_snapshot(mock_portstat, str(tmp_path), '2026-01-01T00:00:00')
+        assert not stale.exists()
+
     def test_clear_counters_cache_contains_fec_bins(self):
         # After portstat -c, the per-user snapshot cache must contain all 16
         # fec_binN fields for every port so that subsequent diffs in
