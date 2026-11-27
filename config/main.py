@@ -4199,22 +4199,26 @@ def clear():
 @click.pass_context
 @click.option(
     '--json-data', type=click.STRING,
-    help="json string with additional data, valid with --dry-run option"
+    help="With --dry_run, render from this json instead of CONFIG_DB"
 )
 @click.option(
     '--dry_run', type=click.STRING,
-    help="Dry run, writes config to the given file"
+    help="Dry run, writes the rendered config to the given file instead of CONFIG_DB"
 )
 def reload(ctx, dry_run, json_data):
     """Reload CBF configuration"""
     log.log_info("'cbf reload' executing...")
-    _clear_cbf()
+    if not dry_run:
+        _clear_cbf()
 
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
-    from_db = ['-d', '--write-to-db']
-    if dry_run:
-        from_db = ['--additional-data'] + [str(json_data)] if json_data else []
+    if not dry_run:
+        from_db = ['-d', '--write-to-db']
+    elif json_data:
+        from_db = ['--additional-data', str(json_data)]
+    else:
+        from_db = ['-d']
 
     namespace_list = [DEFAULT_NAMESPACE]
     if multi_asic.get_num_asics() > 1:
@@ -4288,11 +4292,11 @@ def _update_buffer_calculation_model(config_db, model):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.option(
     '--json-data', type=click.STRING,
-    help="json string with additional data, valid with --dry-run option"
+    help="With --dry_run, render from this json instead of CONFIG_DB"
 )
 @click.option(
     '--dry_run', type=click.STRING,
-    help="Dry run, writes config to the given file"
+    help="Dry run, writes the rendered config to the given file instead of CONFIG_DB"
 )
 def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose):
     status = True
@@ -4309,8 +4313,8 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
     from_db = ['-d']
-    if dry_run:
-        from_db = ['--additional-data'] + [str(json_data)] if json_data else []
+    if dry_run and json_data:
+        from_db = ['--additional-data', str(json_data)]
 
     namespace_list = [DEFAULT_NAMESPACE]
     if multi_asic.get_num_asics() > 1:
@@ -4342,10 +4346,11 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
         if not no_dynamic_buffer and asic_type in vendors_supporting_dynamic_buffer:
             buffer_template_file = os.path.join(hwsku_path, asic_id_suffix, "buffers_dynamic.json.j2")
-            buffer_model_updated |= _update_buffer_calculation_model(config_db, "dynamic")
+            if not dry_run:
+                buffer_model_updated |= _update_buffer_calculation_model(config_db, "dynamic")
         else:
             buffer_template_file = os.path.join(hwsku_path, asic_id_suffix, "buffers.json.j2")
-            if asic_type in vendors_supporting_dynamic_buffer:
+            if asic_type in vendors_supporting_dynamic_buffer and not dry_run:
                 buffer_model_updated |= _update_buffer_calculation_model(config_db, "traditional")
 
         if os.path.isfile(buffer_template_file):
@@ -4390,6 +4395,48 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
     if not status:
         sys.exit(1)
 
+
+def _qos_port_entry_keys(config_db, ports, tables_single_index, tables_multi_index):
+    """Return (table, key) of the CONFIG_DB entries a per-port QoS reload replaces"""
+    entry_keys = []
+    for table_name in tables_single_index:
+        for port in ports:
+            if config_db.get_entry(table_name, port):
+                entry_keys.append((table_name, port))
+
+    for table_name in tables_multi_index:
+        entries = config_db.get_keys(table_name)
+        for key in entries:
+            # Add support for chassis/multi-dut:
+            # on a single-dut, key = ('Ethernet136', '6')
+            # while on a chassis, key = ('str2-chassis-lcx-1', 'Asic0', 'Ethernet84', '5')
+            port = None
+            for element in key:
+                if element.startswith('Eth'):
+                    port = element
+                    break
+            assert port is not None, "Port is not found in config DB"
+            if port not in ports:
+                continue
+            entry_keys.append((table_name, '|'.join(key)))
+    return entry_keys
+
+
+def _config_db_snapshot_without(cmd_ns, entry_keys):
+    """Write CONFIG_DB minus entry_keys to a temp file and return its path"""
+    # Rendering into config-db merges the source data into the output, so a dry run must render
+    # from the data the real reload sees after deleting the port entries.
+    out, rc = clicommon.run_command([SONIC_CFGGEN_PATH] + cmd_ns + ['-d', '--print-data'], return_cmd=True)
+    if rc != 0:
+        sys.exit(rc)
+    data = json.loads(out)
+    for table_name, key in entry_keys:
+        data.get(table_name, {}).pop(key, None)
+    with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
+        json.dump(data, f)
+    return f.name
+
+
 def _qos_update_ports(ctx, ports, dry_run, json_data):
     """Reload QoS configuration"""
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
@@ -4414,10 +4461,7 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
         'BUFFER_PG',
         'BUFFER_QUEUE']
 
-    if json_data:
-        from_db = ['--additional-data'] + [json_data] if json_data else []
-    else:
-        from_db = ["-d"]
+    from_db = ['--additional-data', json_data] if json_data else ['-d']
 
     items_to_update = {}
     config_dbs = {}
@@ -4452,30 +4496,28 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
             click.secho("QoS definition template not found at {}".format(qos_template_file), fg="yellow")
             ctx.abort()
 
-        # Remove entries first
-        for table_name in tables_single_index:
-            for port in portset_to_handle:
-                if config_db.get_entry(table_name, port):
-                    config_db.set_entry(table_name, port, None)
-
-        for table_name in tables_multi_index:
-            entries = config_db.get_keys(table_name)
-            for key in entries:
-                # Add support for chassis/multi-dut:
-                # on a single-dut, key = ('Ethernet136', '6')
-                # while on a chassis, key = ('str2-chassis-lcx-1', 'Asic0', 'Ethernet84', '5')
-                for element in key:
-                    if element.startswith('Eth'):
-                        port = element
-                        break
-                assert port is not None, "Port is not found in config DB"
-                if not port in portset_to_handle:
-                    continue
-                config_db.set_entry(table_name, '|'.join(key), None)
-
+        port_entry_keys = _qos_port_entry_keys(
+            config_db, portset_to_handle, tables_single_index, tables_multi_index)
         cmd_ns = [] if ns is DEFAULT_NAMESPACE else ['-n', str(ns)]
-        command = [SONIC_CFGGEN_PATH] + cmd_ns + from_db + ['-t', '{},config-db'.format(buffer_template_file), '-t', '{},config-db'.format(qos_template_file), '-y', sonic_version_file, '--print-data']
-        jsonstr, _ = clicommon.run_command(command, display_cmd=False, return_cmd=True)
+        render_from = from_db
+        snapshot_file = None
+        if not dry_run:
+            for table_name, key in port_entry_keys:
+                config_db.set_entry(table_name, key, None)
+        elif not json_data:
+            snapshot_file = _config_db_snapshot_without(cmd_ns, port_entry_keys)
+            render_from = ['-j', snapshot_file]
+
+        command = [SONIC_CFGGEN_PATH] + cmd_ns + render_from + [
+            '-t', '{},config-db'.format(buffer_template_file),
+            '-t', '{},config-db'.format(qos_template_file),
+            '-y', sonic_version_file, '--print-data'
+        ]
+        try:
+            jsonstr, _ = clicommon.run_command(command, display_cmd=False, return_cmd=True)
+        finally:
+            if snapshot_file:
+                os.remove(snapshot_file)
 
         jsondict = json.loads(jsonstr)
         port_table = jsondict.get('PORT')

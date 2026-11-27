@@ -2016,8 +2016,8 @@ class TestConfigCbf(object):
         except OSError:
             pass
         result = runner.invoke(
-           config.config.commands["cbf"],
-             ["reload", "--dry_run", output_file]
+            config.config.commands["cbf"],
+            ["reload", "--dry_run", output_file, "--json-data", "{}"]
         )
         print(result.exit_code)
         print(result.output)
@@ -2028,6 +2028,27 @@ class TestConfigCbf(object):
             cwd, "cbf_config_input", "config_cbf.json"
         )
         assert filecmp.cmp(output_file, expected_result, shallow=False)
+
+    def test_cbf_reload_dry_run_reads_config_db_and_keeps_cbf(
+            self, get_cmd_module, setup_cbf_mock_apis,
+            setup_single_broadcom_asic, tmp_path):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        output_file = str(tmp_path / "cbf_config_output.json")
+        with mock.patch("config.main._clear_cbf") as mock_clear, \
+                mock.patch("utilities_common.cli.run_command") as mock_run:
+            result = runner.invoke(
+                config.config.commands["cbf"],
+                ["reload", "--dry_run", output_file]
+            )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_clear.assert_not_called()
+        command = mock_run.call_args_list[0][0][0]
+        assert "-d" in command
+        assert "--write-to-db" not in command
+        assert "--additional-data" not in command
 
     @classmethod
     def teardown_class(cls):
@@ -2067,7 +2088,7 @@ class TestConfigCbfMasic(object):
                 pass
         result = runner.invoke(
             config.config.commands["cbf"],
-            ["reload", "--dry_run", output_file]
+            ["reload", "--dry_run", output_file, "--json-data", "{}"]
         )
         print(result.exit_code)
         print(result.output)
@@ -2222,6 +2243,92 @@ class TestConfigQos(object):
             cwd, "qos_config_input", "update_qos.json"
         )
         assert filecmp.cmp(output_file, expected_result, shallow=False)
+
+    def test_qos_reload_dry_run_reads_config_db(
+            self, get_cmd_module, setup_qos_mock_apis,
+            setup_single_broadcom_asic, tmp_path):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        output_file = str(tmp_path / "qos_config_output.json")
+
+        def fake_run_command(command, display_cmd=False, return_cmd=False, **kwargs):
+            if return_cmd:
+                return "{}", 0
+
+        with mock.patch("utilities_common.cli.run_command", side_effect=fake_run_command) as mock_run, \
+                mock.patch("config.main._clear_qos") as mock_clear:
+            result = runner.invoke(
+                config.config.commands["qos"],
+                ["reload", "--dry_run", output_file]
+            )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_clear.assert_not_called()
+        render_command = mock_run.call_args_list[0][0][0]
+        assert "-d" in render_command
+        assert "--additional-data" not in render_command
+        for call_args in mock_run.call_args_list:
+            assert "--write-to-db" not in call_args[0][0]
+
+    def test_qos_update_dry_run_keeps_config_db(
+            self, get_cmd_module, setup_qos_mock_apis, tmp_path):
+        (config, show) = get_cmd_module
+        json_data = '{"DEVICE_METADATA": {"localhost": {}}, "PORT": {"Ethernet0": {}}}'
+        runner = CliRunner()
+        output_file = str(tmp_path / "qos_config_update.json")
+        cmd_vector = ["reload", "--ports", "Ethernet0", "--json-data", json_data, "--dry_run", output_file]
+        with mock.patch("config.main.ConfigDBConnector.set_entry") as mock_set_entry:
+            result = runner.invoke(config.config.commands["qos"], cmd_vector)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_set_entry.assert_not_called()
+
+    def test_qos_update_dry_run_renders_without_replaced_entries(
+            self, get_cmd_module, setup_qos_mock_apis, tmp_path):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        output_file = str(tmp_path / "qos_config_update.json")
+        config_db_dump = {
+            "PORT": {"Ethernet0": {}},
+            "PORT_QOS_MAP": {"Ethernet0": {"pfc_enable": "3,4"}},
+            "BUFFER_PG": {
+                "Ethernet0|0": {"profile": "ingress_lossy_profile"},
+                "Ethernet0|3-4": {"profile": "pg_lossless_100000_5m_profile"}
+            }
+        }
+        rendered = {"BUFFER_PG": {"Ethernet0|0": {"profile": "ingress_lossy_profile"}}}
+
+        def fake_cfggen(command, display_cmd=False, return_cmd=False, **kwargs):
+            if '-t' not in command:
+                return json.dumps(config_db_dump), 0
+            # Rendering into config-db passes the source data through to the output
+            with open(command[command.index('-j') + 1]) as f:
+                data = json.load(f)
+            for table, entries in rendered.items():
+                data.setdefault(table, {}).update(entries)
+            return json.dumps(data), 0
+
+        cmd_vector = ["reload", "--ports", "Ethernet0", "--dry_run", output_file]
+        with mock.patch("utilities_common.cli.run_command", side_effect=fake_cfggen), \
+                mock.patch("config.main.ConfigDBConnector.set_entry") as mock_set_entry:
+            result = runner.invoke(config.config.commands["qos"], cmd_vector)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_set_entry.assert_not_called()
+        with open(output_file) as f:
+            preview = json.load(f)
+        assert preview == {"BUFFER_PG": {"Ethernet0|0": {"profile": "ingress_lossy_profile"}}}
+
+    def test_qos_port_entry_keys_rejects_key_without_port(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        config_db = mock.Mock()
+        config_db.get_entry.return_value = {"profile": "p"}
+        config_db.get_keys.return_value = [("Asic0", "3")]
+        with pytest.raises(AssertionError, match="Port is not found"):
+            config._qos_port_entry_keys(config_db, {"Ethernet0"}, ["PORT_QOS_MAP"], ["BUFFER_PG"])
 
     @classmethod
     def teardown_class(cls):
