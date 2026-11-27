@@ -84,7 +84,14 @@ class WatermarkstatWrapper(object):
     def run(self, clear, persistent, wm_type, json_output):
         watermarkstat = Watermarkstat(self.db, self.multi_asic.current_namespace)
         if clear:
-            watermarkstat.send_clear_notification(("PERSISTENT" if persistent else "USER", wm_type.upper()))
+            table = "PERSISTENT" if persistent else "USER"
+            if wm_type == 'q_shared_all' and watermarkstat.all_queues_from_uc_mc:
+                # No SAI_QUEUE_TYPE_ALL queues: orchagent's Q_SHARED_ALL request would clear
+                # nothing, so clear the unicast and multicast queues that make up "all".
+                watermarkstat.send_clear_notification((table, 'Q_SHARED_UNI'))
+                watermarkstat.send_clear_notification((table, 'Q_SHARED_MULTI'))
+            else:
+                watermarkstat.send_clear_notification((table, wm_type.upper()))
         else:
             table_prefix = PERSISTENT_TABLE_PREFIX if persistent else USER_TABLE_PREFIX
             watermarkstat.print_all_stat(table_prefix, wm_type, json_output)
@@ -162,6 +169,14 @@ class Watermarkstat(object):
 
             elif get_queue_type(counter_queue_name_map[queue]) == QUEUE_TYPE_ALL:
                 self.port_all_queues_map[port][queue] = counter_queue_name_map[queue]
+
+        # Some platforms (e.g. DNX/VOQ, VS) never report queues of type SAI_QUEUE_TYPE_ALL.
+        # On those, "all queues" means every unicast and multicast queue of the port.
+        self.all_queues_from_uc_mc = not any(self.port_all_queues_map.values())
+        if self.all_queues_from_uc_mc:
+            for port in self.counter_port_name_map:
+                self.port_all_queues_map[port].update(self.port_uc_queues_map[port])
+                self.port_all_queues_map[port].update(self.port_mc_queues_map[port])
 
         # Get PGs for each port
         counter_pg_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_PG_NAME_MAP)
