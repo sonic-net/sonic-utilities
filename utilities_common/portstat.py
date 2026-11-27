@@ -212,10 +212,16 @@ def is_non_zero(value):
 
 
 class Portstat(object):
-    def __init__(self, namespace, display_option):
+    # Set by get_cnstat() when COUNTERS_PORT_NAME_MAP has entries, so a port
+    # skipped by intf_list is not reported as an empty map.
+    port_name_map_found = False
+
+    def __init__(self, namespace, display_option, intf_list=None):
         self.db = None
         self.namespace = namespace
         self.display_option = display_option
+        # Read counters only for these ports; None reads all of them.
+        self.intf_list = set(intf_list) if intf_list else None
         self.multi_asic = multi_asic_util.MultiAsic(display_option, namespace)
         if device_info.is_supervisor():
             self.db = SonicV2Connector(use_unix_socket_path=False)
@@ -409,7 +415,11 @@ class Portstat(object):
         counter_table = CounterTable(self.db.get_redis_client(self.db.COUNTERS_DB))
         if counter_port_name_map is None:
             return cnstat_dict, ratestat_dict
+        if counter_port_name_map:
+            self.port_name_map_found = True
         for port in self.sorted(counter_port_name_map):
+            if self.intf_list and port not in self.intf_list:
+                continue
             port_name = port.split(":")[0]
             if self.multi_asic.skip_display(constants.PORT_OBJ, port_name):
                 continue
@@ -445,7 +455,7 @@ class Portstat(object):
             Codewords are the difference against the cached snapshot (if any),
             so 'sonic-clear counters' resets the displayed values.
         """
-        if not any(key != 'time' for key in cnstat_new_dict):
+        if not self.port_name_map_found and not any(key != 'time' for key in cnstat_new_dict):
             print("FEC histogram counters are not available, COUNTERS_PORT_NAME_MAP is empty",
                   file=sys.stderr)
             sys.exit(1)

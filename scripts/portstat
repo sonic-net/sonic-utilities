@@ -157,7 +157,10 @@ Examples:
         namespace = None
         display_option = constants.DISPLAY_ALL
 
-    portstat = Portstat(namespace, display_option)
+    # Read only the ports asked for with -i. A saved snapshot is the
+    # baseline for every port, so -c still reads all of them.
+    portstat = Portstat(namespace, display_option,
+                        intf_list=None if save_fresh_stats else intf_list)
     cnstat_dict, ratestat_dict = portstat.get_cnstat_dict()
 
     # Now decide what information to display
