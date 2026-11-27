@@ -460,6 +460,39 @@ class TestSkuCreate(object):
         mock_print.assert_called_once_with("Platform Name ", "x86_64-mlnx_2700-r0", " is not valid, Exiting...", file=sys.stderr)
         assert e.value.code == 1
 
+    @pytest.mark.parametrize("indexed", [False, True])
+    @pytest.mark.parametrize("comment_prefix", ["# ", "#"])
+    def test_break_in_ini_optional_index(self, tmp_path, indexed, comment_prefix):
+        ini_file = tmp_path / "port_config.ini"
+        index_header = " index" if indexed else ""
+        first_index = " 1" if indexed else ""
+        second_index = " 2" if indexed else ""
+        header = f"{comment_prefix}name lanes alias{index_header} speed\n"
+        ini_file.write_text(
+            header
+            + "Ethernet0 0,1,2,3 etp1" + first_index + " 100000\n"
+            + "Ethernet4 4,5,6,7 etp2" + second_index + " 100000\n"
+        )
+
+        sku = sonic_sku_create.SkuCreate()
+        sku.bko_dict = sonic_sku_create.bko_dict_4
+        sku.break_in_ini(str(ini_file), "Ethernet0", "2x50")
+        sku.form_port_config_dict_from_ini(str(ini_file))
+
+        expected_rows = [
+            ["Ethernet0", "0,1", "etp1a", "1", "50000"],
+            ["Ethernet2", "2,3", "etp1b", "1", "50000"],
+            ["Ethernet4", "4,5,6,7", "etp2", "2", "100000"],
+        ]
+        if not indexed:
+            for row in expected_rows:
+                row.pop(3)
+
+        output = (tmp_path / "port_config.ini.new").read_text().splitlines()
+        assert output[0] == header.rstrip()
+        assert [line.split() for line in output[1:]] == expected_rows
+        assert [port[-1] for port in sku.portconfig_dict.values()] == ["50000", "50000", "100000"]
+
     @patch('builtins.print')
     def test_break_in_ini_invalid_port_split(self, mock_print):
         port_name = "Ethernet16"
