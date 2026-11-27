@@ -98,6 +98,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 
 SONIC_GENERATED_SERVICE_PATH = '/etc/sonic/generated_services.conf'
 SONIC_CFGGEN_PATH = '/usr/local/bin/sonic-cfggen'
+SONIC_CFGGEN_LITE_RS_PATH = '/usr/bin/sonic-cfggen-lite-rs'
 VLAN_SUB_INTERFACE_SEPARATOR = '.'
 ASIC_CONF_FILENAME = 'asic.conf'
 DEFAULT_CONFIG_DB_FILE = '/etc/sonic/config_db.json'
@@ -2063,9 +2064,9 @@ def save(db, filename):
                 file = "/etc/sonic/config_db{}.json".format(inst)
 
         if namespace is None:
-            command = "{} -d --print-data > {}".format(SONIC_CFGGEN_PATH, file)
+            command = "{} -d --print-data > {}".format(SONIC_CFGGEN_LITE_RS_PATH, file)
         else:
-            command = "{} -n {} -d --print-data > {}".format(SONIC_CFGGEN_PATH, namespace, file)
+            command = "{} -n {} -d --print-data > {}".format(SONIC_CFGGEN_LITE_RS_PATH, namespace, file)
 
         log.log_info("'save' executing...")
         clicommon.run_command(command, display_cmd=True, shell=True)

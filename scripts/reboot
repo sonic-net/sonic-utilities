@@ -38,9 +38,9 @@ fi
 
 REBOOT_USER=$(logname)
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
-ASIC_TYPE=$(sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)
-SUBTYPE=$(sonic-cfggen -d -v DEVICE_METADATA.localhost.subtype)
-ASAN=$(sonic-cfggen -y /etc/sonic/sonic_version.yml -v asan)
+ASIC_TYPE=$(sonic-cfggen-lite-rs -y /etc/sonic/sonic_version.yml -v asic_type)
+SUBTYPE=$(sonic-cfggen-lite-rs -d -v DEVICE_METADATA.localhost.subtype)
+ASAN=$(sonic-cfggen-lite-rs -y /etc/sonic/sonic_version.yml -v asan)
 VERBOSE=no
 EXIT_NEXT_IMAGE_NOT_EXISTS=4
 EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
