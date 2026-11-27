@@ -880,6 +880,13 @@ DOCKER_CONTAINER_LIST = [
     "mgmt-framework"
 ]
 
+# Apps such as fpmsyncd start their own warm-restart timer (120 seconds by
+# default) only after the restarted container has restored its state, so 180
+# seconds can expire before they reconcile. Match finalize-warmboot.sh, which
+# waits up to 5 minutes for the same reconciliation states.
+WARM_RESTART_RECONCILE_TIMEOUT_SECONDS = 300
+WARM_RESTART_RECONCILE_POLL_INTERVAL_SECONDS = 2
+
 # Upgrade docker image
 @sonic_installer.command('upgrade-docker')
 @click.option('-y', '--yes', is_flag=True, callback=abort_if_false,
@@ -1005,16 +1012,16 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
     state = ""
     # post warm restart specific procssing for swss, bgp and teamd dockers, wait for reconciliation state.
     if warm_app_names and (warm_configured is True or warm):
-        count = 0
+        max_polls = WARM_RESTART_RECONCILE_TIMEOUT_SECONDS // WARM_RESTART_RECONCILE_POLL_INTERVAL_SECONDS
         for warm_app_name in warm_app_names:
             state = ""
-            # Wait up to 180 seconds for reconciled state
-            while state != exp_state and count < 90:
+            count = 0
+            while state != exp_state and count < max_polls:
                 sys.stdout.write("\r  {}: ".format(warm_app_name))
                 sys.stdout.write("[%-s" % ('='*count))
                 sys.stdout.flush()
                 count += 1
-                time.sleep(2)
+                time.sleep(WARM_RESTART_RECONCILE_POLL_INTERVAL_SECONDS)
                 state = hget_warm_restart_table("STATE_DB", "WARM_RESTART_TABLE", warm_app_name, "state")
                 log.log_notice("%s reached %s state" % (warm_app_name, state))
             sys.stdout.write("]\n\r")

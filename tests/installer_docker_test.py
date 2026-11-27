@@ -153,3 +153,77 @@ def test_upgrade_docker_image_swss_check_failed(mock_popen):
         )
     assert 'RESTARTCHECK failed' in result.output
     assert result.exit_code != SUCCESS
+
+
+def _reconcile_after(polls_by_app):
+    """Return an hget mock that reports each app reconciled after the given number of polls."""
+    polls = {app: 0 for app in polls_by_app}
+
+    def mock_hget(db_name, table_name, warm_app_name, key):
+        if table_name == 'WARM_RESTART_ENABLE_TABLE':
+            return "false"
+        polls[warm_app_name] += 1
+        if polls_by_app[warm_app_name] is not None and polls[warm_app_name] >= polls_by_app[warm_app_name]:
+            return 'reconciled'
+        return 'restored'
+
+    return mock_hget
+
+
+@pytest.mark.parametrize("reconcile_poll, expected_exit_code, expected_polls", [
+    (100, SUCCESS, 100),
+    (None, 1, 150),
+])
+@patch('sonic_installer.main.get_container_image_name', MagicMock(return_value='docker-fpm-frr'))
+@patch('sonic_installer.main.get_container_image_id', MagicMock(return_value='1'))
+@patch('sonic_installer.main.validate_url_or_abort', MagicMock())
+@patch('sonic_installer.main.urlretrieve', MagicMock())
+@patch('os.path.isfile', MagicMock(return_value=True))
+@patch('sonic_installer.main.get_docker_tag_name', MagicMock(return_value='some_tag'))
+@patch('sonic_installer.main.run_command', MagicMock())
+@patch('sonic_installer.main.hdel_warm_restart_table', MagicMock())
+@patch('sonic_installer.main.time.sleep')
+@patch('sonic_installer.main.hget_warm_restart_table')
+def test_upgrade_docker_warm_reconcile_timeout(mock_hget, mock_sleep,
+                                               reconcile_poll, expected_exit_code, expected_polls):
+    mock_hget.side_effect = _reconcile_after({'bgp': reconcile_poll})
+
+    runner = CliRunner()
+    result = runner.invoke(
+            sonic_installer.sonic_installer.commands['upgrade-docker'],
+            ['-y', '--warm', 'bgp', 'http://']
+        )
+
+    assert result.exit_code == expected_exit_code
+    assert mock_sleep.call_count == expected_polls
+    assert all(call.args == (2,) for call in mock_sleep.call_args_list)
+    if expected_exit_code != SUCCESS:
+        assert 'bgp failed to reach reconciled state' in result.output
+
+
+@patch('sonic_installer.main.get_container_image_name', MagicMock(return_value='docker-orchagent'))
+@patch('sonic_installer.main.get_container_image_id', MagicMock(return_value='1'))
+@patch('sonic_installer.main.validate_url_or_abort', MagicMock())
+@patch('sonic_installer.main.urlretrieve', MagicMock())
+@patch('os.path.isfile', MagicMock(return_value=True))
+@patch('sonic_installer.main.get_docker_tag_name', MagicMock(return_value='some_tag'))
+@patch('sonic_installer.main.run_command', MagicMock())
+@patch('sonic_installer.main.hdel_warm_restart_table', MagicMock())
+@patch('sonic_installer.main.time.sleep')
+@patch("sonic_installer.main.subprocess.Popen")
+@patch('sonic_installer.main.hget_warm_restart_table')
+def test_upgrade_docker_warm_reconcile_timeout_per_app(mock_hget, mock_popen, mock_sleep):
+    mock_hget.side_effect = _reconcile_after({'orchagent': 80, 'neighsyncd': 80})
+    mock_proc = MagicMock()
+    mock_proc.communicate = MagicMock(return_value=(None, None))
+    mock_proc.returncode = 0
+    mock_popen.return_value = mock_proc
+
+    runner = CliRunner()
+    result = runner.invoke(
+            sonic_installer.sonic_installer.commands['upgrade-docker'],
+            ['-y', '--warm', 'swss', 'http://']
+        )
+
+    assert result.exit_code == SUCCESS
+    assert mock_sleep.call_count == 160
