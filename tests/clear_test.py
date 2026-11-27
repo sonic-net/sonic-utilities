@@ -8,6 +8,33 @@ class TestClear(object):
     def setup_method(self):
         print('SETUP')
 
+    @pytest.mark.parametrize('is_multi_asic', [False, True])
+    @patch('clear.main.run_command')
+    def test_clear_counters_all_asics(self, run_command, is_multi_asic):
+        with patch('clear.main.multi_asic.is_multi_asic', return_value=is_multi_asic):
+            result = CliRunner().invoke(clear.cli.commands['counters'])
+        assert result.exit_code == 0
+        run_command.assert_called_once_with(['portstat', '-c'])
+
+    @pytest.mark.parametrize('option', ['-n', '--namespace'])
+    @patch('clear.main.run_command')
+    def test_clear_counters_namespace(self, run_command, option):
+        with patch('clear.main.multi_asic.is_multi_asic', return_value=True), \
+                patch('clear.main.multi_asic.get_namespace_list', return_value=['asic0', 'asic1']):
+            result = CliRunner().invoke(clear.cli.commands['counters'], [option, 'asic1'])
+        assert result.exit_code == 0
+        run_command.assert_called_once_with(['portstat', '-c', '-n', 'asic1'])
+
+    @pytest.mark.parametrize('is_multi_asic', [False, True])
+    @patch('clear.main.run_command')
+    def test_clear_counters_invalid_namespace(self, run_command, is_multi_asic):
+        with patch('clear.main.multi_asic.is_multi_asic', return_value=is_multi_asic), \
+                patch('clear.main.multi_asic.get_namespace_list', return_value=['asic0', 'asic1']):
+            result = CliRunner().invoke(clear.cli.commands['counters'], ['-n', 'asic99'])
+        assert result.exit_code != 0
+        assert 'Invalid value' in result.output
+        run_command.assert_not_called()
+
     @patch('clear.main.run_command')
     def test_clear_pg_wm_hdrm(self, run_command):
         runner = CliRunner()

@@ -6084,6 +6084,13 @@ This command displays basic information about the gearbox phys configured on the
 
 This command displays FEC statistics for gearbox interfaces from the GB_COUNTERS_DB. Statistics are shown separately for each port's system side and line side. An optional port name argument filters output to a single port.
 
+`sonic-clear counters` saves a baseline for both sides of each gearbox port.
+`FEC_CORR`, `FEC_UNCORR`, and `FEC_SYMBOL_ERR` show counts since the same user's
+last clear. `FEC_MAX_T` is derived from histogram bins that counted codewords
+since that clear, when histogram data is available. `FEC_PRE_BER_MAX` restarts
+from the next polling interval; the current `FEC_PRE_BER` and `FEC_POST_BER`
+rates are unaffected.
+
 - Usage:
   ```
   show gearbox interfaces fec-stats [<port_name>]
@@ -6118,6 +6125,9 @@ This command displays FEC statistics for gearbox interfaces from the GB_COUNTERS
 **show gearbox interfaces fec-histogram**
 
 This command displays the FEC codeword error histogram for gearbox interfaces. Histogram bins (BIN0–BIN15) count codewords with a given number of symbol errors. An optional port name argument filters output to a single port.
+
+The histogram shows codewords since the same user's last `sonic-clear counters`.
+Before a baseline is saved, it displays the cumulative counters.
 
 - Usage:
   ```
@@ -6915,6 +6925,26 @@ The "detailed" subcommand is used to display more detailed interface counters. A
   ```
   admin@sonic:~$ sonic-clear counters
   ```
+
+  On multi-ASIC platforms, this clears interface counters, FEC histogram
+  baselines, and FEC_PRE_BER_MAX on all ASICs, including internal ports.
+  Use `-n` or `--namespace` to clear only one ASIC:
+
+  ```
+  admin@sonic:~$ sonic-clear counters --namespace asic0
+  ```
+
+  A namespace-specific clear preserves the counter baselines and FEC_PRE_BER_MAX
+  for other ASICs. The displayed last cached time records the most
+  recent clear operation in the shared cache.
+
+  This also saves separate system-side and line-side gearbox FEC baselines for
+  `show gearbox ... interfaces fec-stats` and `fec-histogram`, and resets
+  `FEC_PRE_BER_MAX` in GB_COUNTERS_DB for the selected ASICs. Cumulative hardware
+  and Redis counters continue counting. Display baselines are per user; the
+  running maximum reset affects all users. Gearbox baselines use the latest
+  published counters, so errors not yet published at clear time can appear
+  after the next polling update.
 
 - NOTE: Layer 3 interface counters can be cleared by the user with the following command:
 

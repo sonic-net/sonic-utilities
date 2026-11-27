@@ -260,22 +260,23 @@ def connect_config_db():
     return config_db
 
 def is_gearbox_configured():
-    """
-    Checks whether Gearbox is configured or not
-    """
-    app_db = SonicV2Connector()
+    """Check whether gearbox is configured in any ASIC namespace."""
     try:
-        app_db.connect(app_db.APPL_DB)
-
-        keys = app_db.keys(app_db.APPL_DB, '*')
-
-        # If any _GEARBOX_TABLE:phy:* records present in APPL_DB, then the gearbox is configured
-        if any(re.match(GEARBOX_TABLE_PHY_PATTERN, key) for key in keys):
-            return True
-        else:
-            return False
+        # This check runs during module import, before cli() initializes DB config.
+        load_db_config()
     except RuntimeError:
         return False
+
+    for namespace in multi_asic.get_namespace_list():
+        try:
+            app_db = SonicV2Connector(namespace=namespace)
+            app_db.connect(app_db.APPL_DB)
+            if app_db.keys(app_db.APPL_DB, GEARBOX_TABLE_PHY_PATTERN):
+                return True
+        except RuntimeError:
+            continue
+
+    return False
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 

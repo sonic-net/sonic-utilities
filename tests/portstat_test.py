@@ -13,6 +13,7 @@ import show.main as show
 
 from click.testing import CliRunner
 from utilities_common.cli import UserCache
+from utilities_common.gearbox_stats import GEARBOX_CACHE_KEY
 
 from .mock_tables import dbconnector
 from .utils import get_result_and_return_code
@@ -1009,7 +1010,8 @@ class TestPortStat(object):
         with open(cache_file, 'r') as f:
             cnstat_cached = json.load(f)
 
-        port_entries = [v for k, v in cnstat_cached.items() if k != 'time']
+        port_entries = [v for k, v in cnstat_cached.items()
+                        if k not in ('time', GEARBOX_CACHE_KEY)]
         assert port_entries, "cache contains no port entries"
         for entry in port_entries:
             for i in range(16):
@@ -1587,6 +1589,99 @@ class TestMultiAsicPortStat(object):
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         remove_tmp_cnstat_file()
+
+
+class TestPortstatNamespaceClear(object):
+    @pytest.mark.parametrize('namespace', [None, 'asic0', 'asic1'])
+    @pytest.mark.parametrize('existing_cache', [False, True])
+    @pytest.mark.parametrize('tag_name', [None, 'namespace_test'])
+    def test_clear_namespace_snapshot_and_fec_rates(self, tmp_path, namespace, existing_cache, tag_name):
+        portstat_script = TestPortStat._load_portstat_script()
+        current = {
+            'asic0': {
+                'Ethernet0': {'rx_ok': '100', 'fec_bin0': '1000'},
+                'Ethernet-BP0': {'rx_ok': '200', 'fec_bin0': '2000'},
+            },
+            'asic1': {'Ethernet4': {'rx_ok': '300', 'fec_bin0': '3000'}},
+        }
+        baseline = {
+            'time': 'previous clear',
+            'Ethernet0': {'rx_ok': '10', 'fec_bin0': '100'},
+            'Ethernet-BP0': {'rx_ok': '20', 'fec_bin0': '200'},
+            'Ethernet4': {'rx_ok': '30', 'fec_bin0': '300'},
+        }
+        cache_file = tmp_path / 'portstat'
+        if existing_cache:
+            cache_file.write_text(json.dumps(baseline))
+
+        namespaces = [namespace] if namespace is not None else ['asic0', 'asic1']
+        snapshot = {'time': 'new clear'}
+        for ns in namespaces:
+            snapshot.update(current[ns])
+
+        databases = {}
+        for ns, counters in current.items():
+            db = mock.MagicMock()
+            db.COUNTERS_DB = 'COUNTERS_DB'
+            db.get_all.return_value = {name: 'oid:{}'.format(i)
+                                       for i, name in enumerate(counters)}
+            databases[ns] = db
+
+        portstat = mock.MagicMock()
+        portstat.get_cnstat_dict.return_value = (snapshot, {})
+        portstat.multi_asic.get_ns_list_based_on_options.return_value = namespaces
+        portstat.get_db_client.side_effect = databases.__getitem__
+        cache = mock.MagicMock()
+        cache.get_directory.return_value = str(tmp_path)
+        argv = ['portstat', '-c']
+        if namespace is not None:
+            argv += ['-n', namespace]
+        if tag_name is not None:
+            argv += ['-t', tag_name]
+        with mock.patch.object(portstat_script, 'Portstat', return_value=portstat) as portstat_cls, \
+                mock.patch.object(portstat_script, 'UserCache', return_value=cache), \
+                mock.patch.object(portstat_script.sys, 'argv', argv):
+            with pytest.raises(SystemExit) as exit_info:
+                portstat_script.main()
+        assert exit_info.value.code == 0
+        portstat_cls.assert_called_once_with(namespace, 'all')
+
+        expected = dict(baseline) if namespace is not None and existing_cache else {}
+        expected.update(snapshot)
+        assert json.loads(cache_file.read_text()) == expected
+        expected_ns = namespaces if tag_name is None else []
+        # Snapshot reads also visit the selected ASICs, including tagged clears.
+        assert portstat.get_db_client.call_args_list == [
+            mock.call(ns) for ns in namespaces + expected_ns
+        ]
+        for ns, db in databases.items():
+            redis = db.get_redis_client.return_value
+            if ns in expected_ns:
+                assert redis.hdel.call_args_list == [
+                    mock.call('RATES:' + oid, ('FEC_PRE_BER_MAX',))
+                    for oid in db.get_all.return_value.values()
+                ]
+            else:
+                db.get_all.assert_not_called()
+                redis.hdel.assert_not_called()
+
+    @pytest.mark.parametrize('snapshot', ['{invalid json', '[]', 'null', '42', '"invalid"'])
+    def test_namespace_clear_preserves_unreadable_snapshot(self, tmp_path, snapshot):
+        portstat_script = TestPortStat._load_portstat_script()
+        cache_file = tmp_path / 'portstat'
+        cache_file.write_text(snapshot)
+        portstat = mock.MagicMock()
+        portstat.get_cnstat_dict.return_value = ({'Ethernet0': {'rx_ok': '100'}}, {})
+        cache = mock.MagicMock()
+        cache.get_directory.return_value = str(tmp_path)
+        with mock.patch.object(portstat_script, 'Portstat', return_value=portstat), \
+                mock.patch.object(portstat_script, 'UserCache', return_value=cache), \
+                mock.patch.object(portstat_script.sys, 'argv', ['portstat', '-c', '-n', 'asic0']):
+            with pytest.raises(SystemExit) as exit_info:
+                portstat_script.main()
+        assert 'Failed to read counter cache' in str(exit_info.value.code)
+        assert cache_file.read_text() == snapshot
+        portstat.get_db_client.assert_not_called()
 
 
 class TestPortstatGetDbClient(object):

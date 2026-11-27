@@ -249,6 +249,9 @@ def _reset_between_files():
     _CppDBConfig.load_sonic_db_config(db_config_path)
     _CppDBConfig.load_sonic_global_db_config(global_db_config_path)
 
+    # Rebuild show commands after restoring the topology and database configuration.
+    importlib.reload(sys.modules['show.main'])
+
     # Clear sonic_platform mocks injected by test files at module import time.
     # With --dist loadfile, xdist workers are reused; mocks from one file
     # (e.g. sfputil_test.py) can pollute subsequent files (e.g. watchdogutil_test.py).
