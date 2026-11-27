@@ -21,6 +21,10 @@
                     ]
                 }
             },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
+            },
             "ACL_TABLE": {
                 "DATAACL": {
                     "policy_desc": "DATAACL",
@@ -201,6 +205,10 @@
                     ]
                 }
             },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
+            },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
                     "type": "L3",
@@ -312,6 +320,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
             },
             "PORT": {
                 "Ethernet0": {
@@ -463,6 +475,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
             },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
@@ -650,6 +666,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan100": {},
+                "Vlan100|192.168.100.1/24": {}
             }
         },
         "patch": [
@@ -927,6 +947,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan100": {},
+                "Vlan100|192.168.100.1/24": {}
             }
         },
         "patch": [
@@ -1161,6 +1185,10 @@
                     ]
                 }
             },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
+            },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
                     "type": "L3",
@@ -1243,13 +1271,7 @@
             },
             "VLAN": {
                 "Vlan1000": {
-                    "vlanid": "1000",
-                    "dhcp_servers": [
-                        "192.0.0.1",
-                        "192.0.0.2",
-                        "192.0.0.3",
-                        "192.0.0.4"
-                    ]
+                    "vlanid": "1000"
                 }
             },
             "ACL_TABLE": {
@@ -1413,6 +1435,10 @@
                     ]
                 }
             },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
+            },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
                     "type": "L3",
@@ -1521,6 +1547,10 @@
                     ]
                 }
             },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
+            },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
                     "type": "L3",
@@ -1625,6 +1655,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
             },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
@@ -1733,6 +1767,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
             },
             "ACL_TABLE": {
                 "DATAACL": {
@@ -1897,6 +1935,10 @@
                     ]
                 }
             },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
+            },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
                     "type": "L3",
@@ -1999,6 +2041,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
             },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
@@ -2183,6 +2229,10 @@
                     ]
                 }
             },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {},
+                "Vlan1000|192.168.0.1/21": {}
+            },
             "ACL_TABLE": {
                 "NO-NSW-PACL-V4": {
                     "type": "L3",
@@ -2298,6 +2348,10 @@
                         "192.0.0.4"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan100": {},
+                "Vlan100|192.168.100.1/24": {}
             }
         },
         "patch": [

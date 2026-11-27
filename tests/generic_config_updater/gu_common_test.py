@@ -963,6 +963,8 @@ class TestPathAddressing(unittest.TestCase):
         # Arrange
         path = "/VLAN/Vlan1000"
         expected = [
+            "/VLAN_INTERFACE/Vlan1000",
+            "/VLAN_INTERFACE/Vlan1000|192.168.0.1~121",
             "/VLAN_MEMBER/Vlan1000|Ethernet0",
             "/VLAN_MEMBER/Vlan1000|Ethernet4",
             "/VLAN_MEMBER/Vlan1000|Ethernet8",
@@ -1030,6 +1032,8 @@ class TestPathAddressing(unittest.TestCase):
             "/ACL_TABLE/EVERFLOWV6/ports/0",
             "/ACL_TABLE/EVERFLOWV6/ports/1",
             "/ACL_TABLE/NO-NSW-PACL-V4/ports/0",
+            "/VLAN_INTERFACE/Vlan1000",
+            "/VLAN_INTERFACE/Vlan1000|192.168.0.1~121",
             "/VLAN_MEMBER/Vlan1000|Ethernet0",
             "/VLAN_MEMBER/Vlan1000|Ethernet4",
             "/VLAN_MEMBER/Vlan1000|Ethernet8",

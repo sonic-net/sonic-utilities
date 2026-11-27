@@ -32,6 +32,19 @@
                     ]
                 }
             ]
+        },
+        "sonic-vlan:VLAN_INTERFACE": {
+            "VLAN_INTERFACE_LIST": [
+                {
+                    "name": "Vlan1000"
+                }
+            ],
+            "VLAN_INTERFACE_IPPREFIX_LIST": [
+                {
+                    "name": "Vlan1000",
+                    "ip-prefix": "192.168.0.1/21"
+                }
+            ]
         }
     },
     "sonic-acl:sonic-acl": {
