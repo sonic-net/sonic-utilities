@@ -82,3 +82,44 @@ class TestNeighborAdvertiser(object):
                 'ttl_mode': 'pipe'
             }
         )
+
+    def test_reset_skips_when_mirror_session_missing(self):
+        config_db = mock.MagicMock()
+        config_db.get_entry.return_value = {}
+        with mock.patch.object(sys, 'argv', ['neighbor_advertiser', '-m', 'reset']), \
+                mock.patch.object(neighbor_advertiser, 'connect_config_db'), \
+                mock.patch.object(neighbor_advertiser, 'connect_app_db'), \
+                mock.patch.object(neighbor_advertiser, 'config_db', config_db), \
+                mock.patch.object(neighbor_advertiser.log, 'log_info') as mock_log_info, \
+                mock.patch.object(neighbor_advertiser, 'reset_mirror_tunnel') as mock_reset_mirror, \
+                mock.patch.object(neighbor_advertiser, 'reset_vxlan_tunnel') as mock_reset_vxlan:
+            with pytest.raises(SystemExit) as exc_info:
+                neighbor_advertiser.main()
+
+        assert exc_info.value.code == 0
+        config_db.get_entry.assert_called_once_with('MIRROR_SESSION', neighbor_advertiser.MIRROR_SESSION_NAME)
+        mock_log_info.assert_called_once_with(
+            'Mirror session {} does not exist, skipping reset'.format(neighbor_advertiser.MIRROR_SESSION_NAME)
+        )
+        mock_reset_mirror.assert_not_called()
+        mock_reset_vxlan.assert_not_called()
+
+    def test_reset_runs_when_mirror_session_exists(self):
+        config_db = mock.MagicMock()
+        config_db.get_entry.return_value = {'dst_ip': '10.1.1.2'}
+        call_order = mock.Mock()
+        with mock.patch.object(sys, 'argv', ['neighbor_advertiser', '-m', 'reset']), \
+                mock.patch.object(neighbor_advertiser, 'connect_config_db'), \
+                mock.patch.object(neighbor_advertiser, 'connect_app_db'), \
+                mock.patch.object(neighbor_advertiser, 'config_db', config_db), \
+                mock.patch.object(neighbor_advertiser, 'reset_mirror_tunnel', call_order.reset_mirror_tunnel), \
+                mock.patch.object(neighbor_advertiser, 'reset_vxlan_tunnel', call_order.reset_vxlan_tunnel):
+            with pytest.raises(SystemExit) as exc_info:
+                neighbor_advertiser.main()
+
+        assert exc_info.value.code == 0
+        config_db.get_entry.assert_called_once_with('MIRROR_SESSION', neighbor_advertiser.MIRROR_SESSION_NAME)
+        assert call_order.mock_calls == [
+            mock.call.reset_mirror_tunnel(),
+            mock.call.reset_vxlan_tunnel(),
+        ]
