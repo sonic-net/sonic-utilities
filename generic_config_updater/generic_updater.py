@@ -13,6 +13,7 @@ from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitte
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
 from sonic_py_common import multi_asic
+from . import reporting
 
 CHECKPOINTS_DIR = "/etc/sonic/checkpoints"
 CHECKPOINT_EXT = ".cp.json"
@@ -110,29 +111,36 @@ class PatchApplier:
 
         # Get old config
         self.logger.log_notice(f"{scope} getting current config db.")
-        old_config = self.config_wrapper.get_config_db_as_json()
+        with reporting.stage("config_read"):
+            old_config = self.config_wrapper.get_config_db_as_json()
+            reporting.remember_config(old_config)
 
         # Generate target config
         self.logger.log_notice(f"{scope}: simulating the target full config after applying the patch.")
-        target_config = self.patch_wrapper.simulate_config_db_patch(patch, old_config)
+        with reporting.stage("target_simulation"):
+            target_config = self.patch_wrapper.simulate_config_db_patch(patch, old_config)
+            reporting.remember_config(target_config)
 
         # Validate all JsonPatch operations on specified fields
         self.logger.log_notice(f"{scope}: validating all JsonPatch operations are permitted on the specified fields")
-        self.config_wrapper.validate_field_operation(old_config, target_config)
+        with reporting.stage("field_validation"):
+            self.config_wrapper.validate_field_operation(old_config, target_config)
 
         # Validate target config does not have empty tables since they do not show up in ConfigDb
         self.logger.log_notice(f"""{scope}: validating target config does not have empty tables,
                             since they do not show up in ConfigDb.""")
-        empty_tables = self.config_wrapper.get_empty_tables(target_config)
-        if empty_tables:  # if there are empty tables
-            empty_tables_txt = ", ".join(empty_tables)
-            raise EmptyTableError(f"{scope}: given patch is not valid because it will result in empty tables \
-                                which is not allowed in ConfigDb. \
-                                Table{'s' if len(empty_tables) != 1 else ''}: {empty_tables_txt}")
+        with reporting.stage("empty_table_validation"):
+            empty_tables = self.config_wrapper.get_empty_tables(target_config)
+            if empty_tables:  # if there are empty tables
+                empty_tables_txt = ", ".join(empty_tables)
+                raise EmptyTableError(f"{scope}: given patch is not valid because it will result in empty tables \
+                                    which is not allowed in ConfigDb. \
+                                    Table{'s' if len(empty_tables) != 1 else ''}: {empty_tables_txt}")
         # Generate list of changes to apply
         if sort:
             self.logger.log_notice(f"{scope}: sorting patch updates.")
-            changes = self.patchsorter.sort(patch, trace_io=trace_io)
+            with reporting.stage("sorting"):
+                changes = self.patchsorter.sort(patch, trace_io=trace_io)
         else:
             self.logger.log_notice(f"{scope}: converting patch to JsonChange.")
             changes = [JsonChange(jsonpatch.JsonPatch([element])) for element in patch]
@@ -145,17 +153,22 @@ class PatchApplier:
         self.logger.log_notice(f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} " \
                                f"in order{':' if changes_len > 0 else '.'}")
         current_config = old_config
-        for change in changes:
+        for index, change in enumerate(changes):
             self.logger.log_notice(f"  * {change}")
-            current_config = self.changeapplier.apply(current_config, change)
+            with reporting.scope(f"change_{index}"), reporting.stage("change_application"):
+                current_config = self.changeapplier.apply(current_config, change)
 
         # Validate config updated successfully
         self.logger.log_notice(f"{scope}: verifying patch updates are reflected on ConfigDB.")
-        new_config = self.config_wrapper.get_config_db_as_json()
-        self.changeapplier.remove_backend_tables_from_config(target_config)
-        self.changeapplier.remove_backend_tables_from_config(new_config)
-        if not (self.patch_wrapper.verify_same_json(target_config, new_config)):
-            raise GenericConfigUpdaterError(f"{scope}: after applying patch to config, there are still some parts not updated")
+        with reporting.stage("configdb_comparison"):
+            new_config = self.config_wrapper.get_config_db_as_json()
+            reporting.remember_config(new_config)
+            self.changeapplier.remove_backend_tables_from_config(target_config)
+            self.changeapplier.remove_backend_tables_from_config(new_config)
+            if not (self.patch_wrapper.verify_same_json(target_config, new_config)):
+                raise GenericConfigUpdaterError(
+                    f"{scope}: after applying patch to config, there are still some parts not updated"
+                )
 
         self.logger.log_notice(f"{scope} patch application completed.")
 

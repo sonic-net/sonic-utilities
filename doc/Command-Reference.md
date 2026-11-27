@@ -134,6 +134,7 @@
 * [LLDP](#lldp)
   * [LLDP show commands](#lldp-show-commands)
 * [Loading, Reloading And Saving Configuration](#loading-reloading-and-saving-configuration)
+  * [Applying a JSON patch with an error report](#applying-a-json-patch-with-an-error-report)
   * [Loading configuration from JSON file](#loading-configuration-from-json-file)
   * [Loading configuration from minigraph (XML) file](#loading-configuration-from-minigraph-xml-file)
   * [Reloading Configuration](#reloading-configuration)
@@ -9344,6 +9345,39 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#lldp)
 ## Loading, Reloading And Saving Configuration
 
 This section explains the commands that are used to load the configuration from either the ConfigDB or from the minigraph.
+
+### Applying a JSON patch with an error report
+
+**config apply-patch**
+
+Applies an RFC 6902 JSON patch through the Generic Config Updater (GCU).
+Use `--report-id` with a fresh UUID to request a structured report for this
+invocation. Reporting is disabled when this option is omitted.
+`--report-phase` accepts `precheck` or `apply` and defaults to `apply`.
+The phase is a reporting label only: `precheck` does not prevent writes.
+Use `--dry-run` to simulate a patch without changing ConfigDB.
+
+- Usage:
+  ```
+  config apply-patch <patch-file-path> [--dry-run] [--report-id <UUID>] [--report-phase precheck|apply]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config apply-patch patch.json --dry-run --report-id "$(python3 -c 'import uuid; print(uuid.uuid4())')"
+  ```
+
+The same reporting options are available for `gcu-standalone apply-patch`.
+Reports are written with private file permissions to
+`/host/sonic-upgrade-reports/gcu-<phase>.<UUID>.json`. A used or pending
+phase/UUID pair is rejected before patch execution. Do not retry a patch just
+because its report is missing or publication failed: configuration writes may
+already have occurred. Report retention and cleanup are managed separately.
+
+Reporting preserves the existing validation and application flow. A successful
+report does not certify service readiness or saved configuration. See
+[Opt-in GCU error reports](../README.md#opt-in-gcu-error-reports) for the report
+format, diagnostic limits and outcome semantics.
 
 ### Loading configuration from JSON file
 

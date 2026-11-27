@@ -1,7 +1,10 @@
 import json
 import os
 import shutil
+import tempfile
 import unittest
+import uuid
+from pathlib import Path
 
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, Mock, call, patch
@@ -10,12 +13,45 @@ from .gutest_helpers import create_side_effect_dict, create_side_effect_skipfirs
 import generic_config_updater.generic_updater as gu
 import generic_config_updater.patch_sorter as ps
 import generic_config_updater.change_applier as ca
+from generic_config_updater import reporting
 
 # import sys
 # sys.path.insert(0,'../../generic_config_updater')
 # import generic_updater as gu
 
 class TestPatchApplier(unittest.TestCase):
+    def test_report_distinguishes_final_comparison_failure_from_completed_changes(self):
+        patch_applier = self.__create_patch_applier(verified_same_config=False)
+        with tempfile.TemporaryDirectory() as directory:
+            report_id = str(uuid.uuid4())
+            with patch.object(reporting, "REPORT_DIRECTORY", directory):
+                with self.assertRaises(gu.GenericConfigUpdaterError):
+                    with reporting.report_session(report_id), reporting.stage("apply_patch"):
+                        patch_applier.apply(Files.MULTI_OPERATION_CONFIG_DB_PATCH)
+            report = json.loads((Path(directory) / f"gcu-apply.{report_id}.json").read_text())
+        stages = report["sonic_upgrade_report"]["stages"]
+        self.assertIn({"name": "change_0.change_application", "rc": "0"}, stages)
+        self.assertIn({"name": "configdb_comparison", "rc": "1"}, stages)
+        self.assertEqual("1", report["sonic_upgrade_summary"]["fault_code"])
+        self.assertEqual([], report["sonic_upgrade_report"]["health_checks"])
+
+    def test_reported_application_failure_does_not_run_final_comparison(self):
+        patch_applier = self.__create_patch_applier()
+        error = RuntimeError("synthetic write failure")
+        patch_applier.changeapplier.apply.side_effect = error
+        with tempfile.TemporaryDirectory() as directory:
+            report_id = str(uuid.uuid4())
+            with patch.object(reporting, "REPORT_DIRECTORY", directory):
+                with self.assertRaises(RuntimeError) as caught:
+                    with reporting.report_session(report_id), reporting.stage("apply_patch"):
+                        patch_applier.apply(Files.MULTI_OPERATION_CONFIG_DB_PATCH)
+            report = json.loads((Path(directory) / f"gcu-apply.{report_id}.json").read_text())
+        self.assertIs(error, caught.exception)
+        patch_applier.patch_wrapper.verify_same_json.assert_not_called()
+        self.assertIn({"name": "change_0.change_application", "rc": "1"},
+                      report["sonic_upgrade_report"]["stages"])
+        self.assertNotIn("configdb_comparison", str(report))
+
     def test_apply__invalid_patch_producing_empty_tables__failure(self):
         # Arrange
         patch_applier = self.__create_patch_applier(valid_patch_does_not_produce_empty_tables=False)

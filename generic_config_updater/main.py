@@ -24,6 +24,8 @@ import argparse
 import subprocess
 import threading
 import concurrent.futures
+from contextvars import copy_context
+import uuid
 
 import jsonpatch
 import jsonpointer
@@ -39,6 +41,7 @@ from generic_config_updater.gu_common import (
 )
 from sonic_py_common import multi_asic
 from utilities_common.general import load_db_config
+from generic_config_updater import reporting
 
 logger = logging.getLogger(__name__)
 
@@ -268,15 +271,16 @@ def apply_patch_for_scope(scope_changes, results, config_format,
     )
 
     try:
-        GenericUpdater(scope=scope).apply_patch(
-            jsonpatch.JsonPatch(changes),
-            config_format,
-            verbose,
-            dry_run,
-            ignore_non_yang_tables,
-            ignore_path,
-            trace_io=trace_io,
-        )
+        with reporting.scope(scope_for_log), reporting.stage("scope_application"):
+            GenericUpdater(scope=scope).apply_patch(
+                jsonpatch.JsonPatch(changes),
+                config_format,
+                verbose,
+                dry_run,
+                ignore_non_yang_tables,
+                ignore_path,
+                trace_io=trace_io,
+            )
         results[scope_for_log] = {"success": True, "message": "Success"}
         logger.info("apply-patch succeeded for %s", scope_for_log)
     except Exception as e:
@@ -326,30 +330,34 @@ def apply_patch_from_file(patch_file_path, config_format_name, verbose,
         On validation failure or any per-scope failure.
     """
     # 1. Read & validate patch file
-    with open(patch_file_path, 'r') as fh:
-        patch_json = json.loads(fh.read())
-
-    if not validate_patch_format(patch_json):
-        raise GenericConfigUpdaterError(
-            f"Invalid patch format in file: {patch_file_path}"
-        )
+    with reporting.stage("patch_input"):
+        with open(patch_file_path, 'r') as fh:
+            patch_json = json.loads(fh.read())
+        reporting.remember_patch(patch_json)
+        if not validate_patch_format(patch_json):
+            raise GenericConfigUpdaterError(
+                f"Invalid patch format in file: {patch_file_path}"
+            )
 
     patch_ops = patch_json
     config_format = ConfigFormat[config_format_name.upper()]
 
     # 2. Optional pre-processing (running-config fetch + YANG validation)
     if preprocess:
-        all_running_config = get_all_running_config()
-        patch_ops = append_emptytables_if_required(
-            patch_ops, all_running_config
-        )
-        patch_ops = filter_duplicate_patch_operations(
-            patch_ops, all_running_config
-        )
-        if not validate_patch(patch_ops, all_running_config):
-            raise GenericConfigUpdaterError(
-                f"Failed validating patch: {patch_ops}"
+        with reporting.stage("running_config"):
+            all_running_config = get_all_running_config()
+            reporting.remember_config(all_running_config)
+        with reporting.stage("preprocess"):
+            patch_ops = append_emptytables_if_required(
+                patch_ops, all_running_config
             )
+            patch_ops = filter_duplicate_patch_operations(
+                patch_ops, all_running_config
+            )
+            if not validate_patch(patch_ops, all_running_config):
+                raise GenericConfigUpdaterError(
+                    f"Failed validating patch: {patch_ops}"
+                )
 
     # 3. Build a JsonPatch and split by scope
     patch = jsonpatch.JsonPatch(patch_ops)
@@ -378,7 +386,8 @@ def apply_patch_from_file(patch_file_path, config_format_name, verbose,
                 for sc in changes_by_scope.items()
             ]
             futures = [
-                executor.submit(_apply_patch_wrapper, arg)
+                executor.submit(copy_context().run, _apply_patch_wrapper, arg)
+                if reporting.enabled() else executor.submit(_apply_patch_wrapper, arg)
                 for arg in arguments
             ]
             concurrent.futures.wait(futures)
@@ -520,17 +529,23 @@ def apply_patch(args):
         if getattr(args, 'path_trace', None):
             trace_file = open(args.path_trace, 'w')
 
-        apply_patch_from_file(
-            patch_file_path=args.patch_file,
-            config_format_name=args.format,
-            verbose=args.verbose,
-            dry_run=args.dry_run,
-            parallel=args.parallel,
-            ignore_non_yang_tables=args.ignore_non_yang_tables,
-            ignore_path=args.ignore_path,
-            preprocess=True,
-            trace_io=trace_file,
-        )
+        with reporting.report_session(
+            getattr(args, 'report_id', None),
+            getattr(args, 'report_phase', 'apply'),
+            failure_exit_code=1,
+        ):
+            with reporting.stage("dry_run" if args.dry_run else "apply_patch"):
+                apply_patch_from_file(
+                    patch_file_path=args.patch_file,
+                    config_format_name=args.format,
+                    verbose=args.verbose,
+                    dry_run=args.dry_run,
+                    parallel=args.parallel,
+                    ignore_non_yang_tables=args.ignore_non_yang_tables,
+                    ignore_path=args.ignore_path,
+                    preprocess=True,
+                    trace_io=trace_file,
+                )
 
         print_success("Patch applied successfully.")
     except Exception as ex:
@@ -714,6 +729,14 @@ Examples:
         default=None,
         help='Filename to write decision path trace for patch generation as JSON',
     )
+    p.add_argument(
+        '--report-id', type=uuid.UUID,
+        help='Publish an EHF report using a fresh UUID for this invocation',
+    )
+    p.add_argument(
+        '--report-phase', choices=['precheck', 'apply'], default='apply',
+        help='Reporting label only; does not change validation or application',
+    )
 
     # ---- replace ----
     p = subparsers.add_parser(
@@ -793,7 +816,7 @@ def main():
         return
 
     # Validate file paths if provided
-    if hasattr(args, 'patch_file') and args.patch_file:
+    if hasattr(args, 'patch_file') and args.patch_file and not getattr(args, 'report_id', None):
         if not os.path.exists(args.patch_file):
             print_error(f"Patch file not found: {args.patch_file}")
             sys.exit(1)
